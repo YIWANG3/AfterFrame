@@ -12,7 +12,7 @@ class BenchmarkDatasetTest(unittest.TestCase):
     def test_benchmark_dataset_reports_stage_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = root / "bench.mwcatalog"
+            catalog = root / "bench.afcatalog"
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { collapseRootPaths, mergeRoots, determineImportMode, formatPercent, progressNote } from "../utils/format";
 
 const PAGE_SIZE = 180;
-const THEME_STORAGE_KEY = "framebase-theme";
-const SIDEBAR_WIDTH_STORAGE_KEY = "framebase-sidebar-width";
-const INSPECTOR_WIDTH_STORAGE_KEY = "framebase-inspector-width";
+const THEME_STORAGE_KEY = "afterframe-theme";
+const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
+const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
 
 export default function useWorkspace() {
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "dark");
@@ -327,7 +327,6 @@ export default function useWorkspace() {
   }
 
   async function refreshAll({ nextStatus = status, collectionId = activeCollectionId, force = false } = {}) {
-    console.log("[refreshAll] starting, nextStatus:", nextStatus, "collectionId:", collectionId, "force:", force);
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
       window.mediaWorkspace.getInfo(),
       window.mediaWorkspace.getSummary(),
@@ -343,7 +342,6 @@ export default function useWorkspace() {
     setPreviewTask(nextPreviewTask);
     setEnrichmentTask(nextEnrichmentTask);
     await Promise.all([loadCollections(), loadBrowser({ nextStatus, collectionId, force })]);
-    console.log("[refreshAll] done");
   }
 
   async function startIncrementalImport({ rawDirs: nextRawDirs = [], exportDirs: nextExportDirs = [], fullCatalog = false }) {

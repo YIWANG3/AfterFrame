@@ -2,7 +2,7 @@
   "name": "media-workspace-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Framebase desktop shell",
+  "description": "AfterFrame desktop shell",
   "main": "electron/main.js",
   "scripts": {
     "start": "npm run dev",
@@ -17,8 +17,8 @@
     "dist:linux": "npm run build && electron-builder --linux"
   },
   "build": {
-    "appId": "com.framebase.desktop",
-    "productName": "Framebase",
+    "appId": "com.afterframe.app",
+    "productName": "AfterFrame",
     "directories": {
       "output": "release"
     },

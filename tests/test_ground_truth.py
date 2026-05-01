@@ -16,7 +16,7 @@ class GroundTruthExportTest(unittest.TestCase):
     def test_export_ground_truth_writes_review_csv(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()

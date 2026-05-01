@@ -3,13 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Framebase</title>
+    <title>AfterFrame</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Caveat:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Caveat:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   </head>
   <body class="bg-app text-app antialiased">
-    <div id="root"></div>
+    <div id="root">
+      <div id="splash" style="display:flex;align-items:center;justify-content:center;height:100vh;background:#101010">
+        <div style="font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:28px;font-weight:700;color:#e0e0e0;letter-spacing:0.04em;animation:af-pulse 1.6s ease-in-out infinite">AfterFrame</div>
+        <style>@keyframes af-pulse{0%,100%{opacity:1}50%{opacity:.3}}</style>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

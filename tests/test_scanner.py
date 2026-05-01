@@ -13,7 +13,7 @@ class ScannerTest(unittest.TestCase):
     def test_scan_raw_directory_reports_workers_and_indexes_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             raw_dir.mkdir()
             (raw_dir / "0Y1A6380.CR3").write_bytes(b"raw-binary-placeholder")
@@ -34,7 +34,7 @@ class ScannerTest(unittest.TestCase):
     def test_scan_raw_directory_recurses_nested_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             nested = raw_dir / "2025" / "250119 SD"
             nested.mkdir(parents=True)
@@ -54,7 +54,7 @@ class ScannerTest(unittest.TestCase):
     def test_enrich_raw_assets_upgrades_matcher_level_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             raw_dir.mkdir()
             raw_file = raw_dir / "0Y1A7001.CR3"

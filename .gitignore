@@ -14,19 +14,34 @@ design/
 *.sqlite3-wal
 *.sqlite3-journal
 tmp/
+log
+
+# editor/agent caches
 apps/desktop/.agents/
 apps/desktop/.claude/
 apps/desktop/.trae/
 apps/desktop/.windsurf/
 apps/desktop/skills/
 apps/desktop/skills-lock.json
+.vite/
+
+# catalogs
+*.afcatalog/
 *.mwcatalog/
+
+# large resources
 RESOURCES/
-design/
+
+# build artifacts
 .omx
 .omx/
 release/
+*.dmg
+*.zip
 services/sidecar/dist/
 services/sidecar/build/
 services/sidecar/*.spec
 services/sidecar/entry.py
+
+# env
+.env*

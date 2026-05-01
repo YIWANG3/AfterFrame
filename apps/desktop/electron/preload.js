@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("mediaWorkspace", {
+  isPackaged: ipcRenderer.sendSync("workspace:is-packaged"),
   getInfo: () => ipcRenderer.invoke("workspace:info"),
   getSummary: () => ipcRenderer.invoke("workspace:summary"),
   getCatalogRoots: () => ipcRenderer.invoke("workspace:roots"),

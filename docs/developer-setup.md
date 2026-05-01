@@ -19,7 +19,7 @@ The project treats the catalog as the primary product object.
 
 Current implementation includes:
 
-- `.mwcatalog` bundles with internal state, logs, and derived artifacts
+- `.afcatalog` bundles with internal state, logs, and derived artifacts
 - reference-based handling for source RAW files and processed exports
 - RAW scanning and metadata caching
 - export matching and reverse lookup
@@ -31,14 +31,14 @@ Current implementation includes:
 Initialize a catalog:
 
 ```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace init-catalog --catalog data/default.mwcatalog
+PYTHONPATH=services/sidecar/src python3 -m media_workspace init-catalog --catalog data/default.afcatalog
 ```
 
 Scan a RAW directory:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace scan-raw \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --raw-dir /path/to/raw-library
 ```
 
@@ -51,7 +51,7 @@ Backfill fuller RAW metadata later:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace enrich-raw \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --workers 8
 ```
 
@@ -59,7 +59,7 @@ Resolve a single export:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace resolve-export \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --path /path/to/export.jpg
 ```
 
@@ -67,7 +67,7 @@ Resolve an export directory in batch:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace resolve-export-batch \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --export-dir /path/to/exports
 ```
 
@@ -75,7 +75,7 @@ Run the polling export watcher:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace watch-export \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --export-dir /path/to/exports
 ```
 
@@ -83,7 +83,7 @@ Generate cached previews or proxies inside the catalog:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace generate-previews \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --kind preview \
   --asset-type export \
   --limit 200
@@ -93,14 +93,14 @@ List pending manual confirmations:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace list-pending \
-  --catalog data/default.mwcatalog
+  --catalog data/default.afcatalog
 ```
 
 Confirm a match:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace confirm-match \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --export-path /path/to/export.jpg \
   --raw-asset-id raw_1234567890abcdef
 ```
@@ -109,7 +109,7 @@ Export reviewed rows into a ground-truth CSV:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace export-ground-truth \
-  --catalog data/default.mwcatalog \
+  --catalog data/default.afcatalog \
   --status matched \
   --output-csv data/ground-truth/review-seed.csv
 ```
@@ -118,7 +118,7 @@ Run the repeatable benchmark workflow:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace benchmark-dataset \
-  --catalog data/benchmarks/resources-large.mwcatalog \
+  --catalog data/benchmarks/resources-large.afcatalog \
   --raw-dir RESOURCES/RAW \
   --export-dir RESOURCES/Export \
   --report-json data/benchmarks/resources-large.json
@@ -131,7 +131,7 @@ Run the desktop shell:
 ```bash
 cd apps/desktop
 npm install
-MEDIA_WORKSPACE_CATALOG=../../data/default.mwcatalog npm start
+MEDIA_WORKSPACE_CATALOG=../../data/default.afcatalog npm start
 ```
 
 The app is focused on local review, browsing, and inspection rather than cloud sync or multi-user workflow.

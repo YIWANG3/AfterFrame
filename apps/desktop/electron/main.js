@@ -42,10 +42,10 @@ const sidecarSrc = isPackaged
 // In packaged mode, there is no default — user must create or open a catalog.
 const scratchCatalogPath = isPackaged
   ? null
-  : path.join(rootDir, "data", "ui-import-scratch.mwcatalog");
+  : path.join(rootDir, "data", "ui-import-scratch.afcatalog");
 const reviewCatalogPath = isPackaged
   ? null
-  : path.join(rootDir, "data", "review-2026.mwcatalog");
+  : path.join(rootDir, "data", "review-2026.afcatalog");
 
 function resolveCatalogPath() {
   if (configuredCatalogPath) {
@@ -53,13 +53,20 @@ function resolveCatalogPath() {
       ? configuredCatalogPath
       : path.resolve(rootDir, configuredCatalogPath);
   }
+  // In packaged mode, try to restore last opened catalog
+  if (isPackaged) {
+    const settings = readAppSettings();
+    const last = settings.lastCatalogPath;
+    if (last && fs.existsSync(last)) return last;
+    return null;
+  }
   return scratchCatalogPath;
 }
 
 let currentCatalogPath = resolveCatalogPath();
 
 function getAppSettingsPath() {
-  return path.join(app.getPath("userData"), "framebase", "settings.json");
+  return path.join(app.getPath("userData"), "afterframe", "settings.json");
 }
 
 function readAppSettings() {
@@ -227,7 +234,7 @@ function normalizeCatalogPath(targetPath) {
     return null;
   }
   const resolved = path.isAbsolute(targetPath) ? targetPath : path.resolve(rootDir, targetPath);
-  return resolved.endsWith(".mwcatalog") ? resolved : `${resolved}.mwcatalog`;
+  return resolved.endsWith(".afcatalog") ? resolved : `${resolved}.afcatalog`;
 }
 
 function createCatalogAt(targetPath) {
@@ -728,10 +735,12 @@ function createWindow() {
     minWidth: 1080,
     minHeight: 720,
     backgroundColor: "#101010",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
   });
+  window.once("ready-to-show", () => window.show());
   window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     console.log(`[renderer:${level}] ${sourceId}:${line} ${message}`);
   });
@@ -762,7 +771,7 @@ function sendMenuAction(action) {
 function buildAppMenu() {
   const template = [
     {
-      label: "Framebase",
+      label: "AfterFrame",
       submenu: [
         { role: "about" },
         { type: "separator" },
@@ -863,11 +872,11 @@ ipcMain.handle("workspace:pick-catalog", async () => {
 
 ipcMain.handle("workspace:create-catalog", async () => {
   const defaultDir = isPackaged
-    ? path.join(app.getPath("documents"), "Framebase")
+    ? path.join(app.getPath("documents"), "AfterFrame")
     : path.join(rootDir, "data");
   const result = await dialog.showSaveDialog({
     title: "Create catalog",
-    defaultPath: path.join(defaultDir, "untitled.mwcatalog"),
+    defaultPath: path.join(defaultDir, "untitled.afcatalog"),
     buttonLabel: "Create Catalog",
   });
   if (result.canceled || !result.filePath) {
@@ -886,6 +895,10 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   currentCatalogPath = normalizeCatalogPath(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath;
   console.log("[ipc:switch-catalog] currentCatalogPath set to:", currentCatalogPath);
   await prepareCatalogPath();
+  // Persist last catalog path for next launch
+  if (currentCatalogPath) {
+    updateAppSettings((s) => ({ ...s, lastCatalogPath: currentCatalogPath }));
+  }
   return true;
 });
 
@@ -1129,7 +1142,7 @@ ipcMain.handle("workspace:process-and-save", async (_event, options) => {
 
     } else {
       // --- Fallback: two-step via temp file (kept as safety net) ---
-      tmpPath = path.join(os.tmpdir(), `framebase-orient-${Date.now()}.tiff`);
+      tmpPath = path.join(os.tmpdir(), `afterframe-orient-${Date.now()}.tiff`);
       const orientResult = await sharp(sourcePath, { limitInputPixels: false })
         .rotate()
         .tiff({ compression: "none" })
@@ -1221,6 +1234,8 @@ ipcMain.handle("workspace:delete-export-assets", async (_event, assetIds) => {
   }
   return await callSidecarJsonAsync(command) || [];
 });
+
+ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });
 
 ipcMain.handle("workspace:info", () => workspaceInfo());
 

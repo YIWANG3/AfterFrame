@@ -87,7 +87,7 @@ export default function Toolbar({
   };
 
   return (
-    <div className="relative z-50 flex h-11 items-center gap-1 border-b border-border/50 bg-chrome px-2.5">
+    <div className="relative z-50 flex h-11 items-center gap-1 bg-chrome px-2.5">
       <div className="relative">
         <IconButton onClick={() => setMenuOpen((c) => !c)}>
           <Plus className="h-4 w-4 stroke-[1.8]" />

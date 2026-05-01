@@ -100,7 +100,7 @@ def _infer_origin_stem(stem: str) -> tuple[str | None, str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="media_workspace")
-    parser.add_argument("--catalog", type=Path, default=Path("data/default.mwcatalog"))
+    parser.add_argument("--catalog", type=Path, default=Path("data/default.afcatalog"))
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--catalog", type=Path, default=argparse.SUPPRESS)
 

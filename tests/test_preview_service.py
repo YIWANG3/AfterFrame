@@ -12,7 +12,7 @@ from media_workspace.preview_service import PreviewService
 class PreviewServiceTest(unittest.TestCase):
     def test_output_path_shards_into_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            catalog = ensure_catalog(Path(temp_dir) / "demo.mwcatalog")
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
             service = PreviewService(catalog)
             output = service.output_path("raw_abcdef123456", "preview")
             self.assertEqual(output.parent, catalog.previews_dir / "ra")
@@ -21,7 +21,7 @@ class PreviewServiceTest(unittest.TestCase):
     @patch("media_workspace.preview_service.subprocess.run")
     def test_quicklook_render_moves_result_into_catalog(self, run_mock) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            catalog = ensure_catalog(Path(temp_dir) / "demo.mwcatalog")
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
             service = PreviewService(catalog)
             source = Path(temp_dir) / "sample.CR3"
             source.write_bytes(b"raw")

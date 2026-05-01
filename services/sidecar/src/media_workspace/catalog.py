@@ -39,8 +39,8 @@ class CatalogPaths:
 
 def resolve_catalog(catalog_path: Path) -> CatalogPaths:
     root = catalog_path.resolve()
-    if root.suffix != ".mwcatalog":
-        root = root.with_suffix(".mwcatalog")
+    if root.suffix != ".afcatalog":
+        root = root.with_suffix(".afcatalog")
     return CatalogPaths(root=root)
 
 

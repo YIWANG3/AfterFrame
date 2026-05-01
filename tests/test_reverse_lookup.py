@@ -27,7 +27,7 @@ class ReverseLookupTest(unittest.TestCase):
     def test_plain_files_resolve_by_stem_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()
@@ -63,7 +63,7 @@ class ReverseLookupTest(unittest.TestCase):
     def test_plain_files_without_stem_match_stay_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()
@@ -86,7 +86,7 @@ class ReverseLookupTest(unittest.TestCase):
     def test_batch_resolve_reports_status_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()
@@ -116,7 +116,7 @@ class ReverseLookupTest(unittest.TestCase):
     def test_img_sequence_without_matching_number_stays_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()
@@ -147,7 +147,7 @@ class ReverseLookupTest(unittest.TestCase):
     def test_export_path_reuses_existing_asset_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             export_dir = root / "exports"
             export_dir.mkdir()
 
@@ -174,7 +174,7 @@ class ReverseLookupTest(unittest.TestCase):
     def test_cleanup_orphan_export_assets_migrates_preview(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             export_dir = root / "exports"
             export_dir.mkdir()
 

@@ -542,7 +542,7 @@ export default function App() {
           await workspace.refreshAll?.();
         }}
       />
-      <DesignSystemPanel />
+      {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
     </div>
   );
 }

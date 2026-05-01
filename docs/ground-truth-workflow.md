@@ -13,7 +13,7 @@ Or export a reviewed seed file from a catalog:
 
 ```bash
 PYTHONPATH=services/sidecar/src python3 -m media_workspace export-ground-truth \
-  --catalog /path/to/review.mwcatalog \
+  --catalog /path/to/review.afcatalog \
   --status matched \
   --output-csv data/ground-truth/review-seed.csv
 ```

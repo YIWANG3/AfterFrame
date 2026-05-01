@@ -15,7 +15,7 @@ class JobsTest(unittest.TestCase):
     def test_create_update_and_list_jobs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             connection = connect(catalog.db_path)
             init_db(connection)
             set_catalog_path(connection, catalog.root)
@@ -32,7 +32,7 @@ class JobsTest(unittest.TestCase):
     def test_run_import_job_persists_phase_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             export_dir = root / "exports"
             raw_dir.mkdir()
@@ -61,7 +61,7 @@ class JobsTest(unittest.TestCase):
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.mwcatalog")
+            catalog = ensure_catalog(root / "demo.afcatalog")
             raw_dir = root / "raw"
             raw_dir.mkdir()
             raw_file = raw_dir / "0Y1A7001.CR3"

@@ -15,7 +15,7 @@
 
 ### Catalog and cleanup
 
-- The active review catalog is `data/review-2026.mwcatalog`.
+- The active review catalog is `data/review-2026.afcatalog`.
 - Export asset counting was fixed so the UI and CLI now report active export files instead of stale orphan rows.
 - Duplicate historical export assets were cleaned up.
 - Export paths now reuse the existing asset identity instead of creating a fresh asset row on refresh.
