@@ -74,7 +74,12 @@ export default function TextPanel({
                     ? "border-[rgb(var(--accent-color))] bg-[rgb(var(--accent-color)/0.08)]"
                     : "border-border/60 bg-app hover:border-border hover:bg-hover",
                 ].join(" ")}
-                onClick={() => current && update(current.id, applyPreset(current, p))}
+                onClick={() => {
+                  const nl = createDefaultLayer({ text: "New Title" });
+                  const styled = applyPreset(nl, p);
+                  onLayersChange([...layers, styled]);
+                  onSelectionChange(new Set([styled.id]));
+                }}
               >
                 <PresetPreview preset={p} />
                 <span className={[
@@ -218,7 +223,6 @@ export default function TextPanel({
                     <ShadowField label="Spread" value={current.shadowSpread} onChange={(v) => update(current.id, { shadowSpread: v })} min={0} max={50} />
                   </div>
                   <div className="mt-1.5 flex items-center gap-2 px-2">
-                    <span className="text-[10px] text-muted2">Color</span>
                     <ColorDot color={current.shadowColor} onChange={(c) => update(current.id, { shadowColor: c })} />
                     <span className="flex-1" />
                     <SliderRow label="" min={0} max={100} value={current.shadowOpacity} onChange={(v) => update(current.id, { shadowOpacity: v })} suffix="%" compact />
@@ -303,7 +307,7 @@ function Switch({ on, onToggle }) {
   return (
     <button
       type="button"
-      className={["relative h-[18px] w-8 rounded-full transition-colors", on ? "bg-[rgb(var(--accent-color))]" : "bg-panel2"].join(" ")}
+      className={["relative h-[18px] w-8 rounded-full transition-colors", on ? "bg-[rgb(var(--accent-color))]" : "bg-border"].join(" ")}
       onClick={onToggle}
     >
       <span className={["absolute top-[2px] left-[2px] h-[14px] w-[14px] rounded-full bg-white transition-transform", on ? "translate-x-[14px]" : ""].join(" ")} />
@@ -367,11 +371,37 @@ function SliderRow({ label, min, max, value, onChange, suffix, compact }) {
 }
 
 function NumInput({ value, min, max, onChange, className = "w-11" }) {
+  const ref = useRef(null);
+  const dragState = useRef(null);
+
+  const handleMouseDown = (e) => {
+    if (e.target === ref.current && document.activeElement !== ref.current) {
+      e.preventDefault();
+      dragState.current = { startX: e.clientX, startVal: value };
+      const onMove = (ev) => {
+        const dx = ev.clientX - dragState.current.startX;
+        const next = Math.min(max, Math.max(min, dragState.current.startVal + Math.round(dx)));
+        onChange(next);
+      };
+      const onUp = () => {
+        dragState.current = null;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    }
+  };
+
   return (
     <input
+      ref={ref}
       type="number" min={min} max={max} value={value}
-      onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value))))}
-      className={`hide-spinner rounded-md border border-border/60 bg-app px-1.5 py-0.5 text-center text-[11px] text-text outline-none focus:border-[rgb(var(--accent-color))] ${className}`}
+      onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
+      onFocus={(e) => e.target.select()}
+      onMouseDown={handleMouseDown}
+      style={{ cursor: "ew-resize" }}
+      className={`hide-spinner rounded-md border border-border/60 bg-app px-1.5 py-0.5 text-center text-[11px] text-text outline-none focus:border-[rgb(var(--accent-color))] focus:cursor-text ${className}`}
     />
   );
 }

@@ -99,6 +99,12 @@ export default function TextCanvas({
     onSelectionChange(new Set([layerId]));
   }, [onSelectionChange]);
 
+  const handleEditInput = useCallback((layerId, newText) => {
+    onLayersChange(layers.map((l) =>
+      l.id === layerId ? { ...l, text: newText } : l
+    ));
+  }, [layers, onLayersChange]);
+
   const handleEditBlur = useCallback((layerId, newText) => {
     setEditingId(null);
     if (newText !== undefined) {
@@ -138,6 +144,7 @@ export default function TextCanvas({
             onDragStart={(e, type) => startDrag(e, layer.id, type)}
             onDoubleClick={() => handleDoubleClick(layer.id)}
             onEditBlur={(text) => handleEditBlur(layer.id, text)}
+            onEditInput={(id, text) => handleEditInput(id, text)}
             onSelect={(e) => {
               e.stopPropagation();
               if (e.shiftKey) {
@@ -155,7 +162,7 @@ export default function TextCanvas({
   );
 }
 
-function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, onDragStart, onDoubleClick, onEditBlur, onSelect }) {
+function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, onDragStart, onDoubleClick, onEditBlur, onEditInput, onSelect }) {
   const editRef = useRef(null);
   const fontStyle = layer.italic ? "italic" : "normal";
   const fontWeight = layer.fontWeight ?? (layer.bold ? 700 : 400);
@@ -260,6 +267,7 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
             position: "relative",
             zIndex: 1,
           }}
+          onInput={(e) => onEditInput(layer.id, e.currentTarget.textContent || "")}
           onBlur={(e) => onEditBlur(e.currentTarget.textContent || "")}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {

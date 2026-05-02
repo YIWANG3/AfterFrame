@@ -97,9 +97,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset }) {
     return (
       <aside className="flex h-full items-center justify-center overflow-y-auto bg-chrome px-4">
         <div className="text-center">
-          <div className="mx-auto mb-2 h-px w-10 bg-border" />
           <div className="text-[12px] text-muted">Select an asset</div>
-          <div className="mx-auto mt-2 h-px w-10 bg-border" />
         </div>
       </aside>
     );
@@ -185,7 +183,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset }) {
                 {escapePathLabel(detail.export_path)}
               </button>
             </DetailRow>
-            <DetailRow label="Source">
+            <DetailRow label="RAW Source">
               {detail.raw_path ? (
                 <button
                   type="button"
@@ -197,8 +195,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset }) {
                 </button>
               ) : "Not linked"}
             </DetailRow>
-            <DetailRow label="Source file">{rawName || "—"}</DetailRow>
-            {exportMeta.software ? <DetailRow label="Software">{exportMeta.software}</DetailRow> : null}
+            {exportMeta.software ? <DetailRow label="Last edited by">{exportMeta.software}</DetailRow> : null}
           </Section>
 
           <Section title="Camera">

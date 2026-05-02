@@ -234,7 +234,9 @@ function normalizeCatalogPath(targetPath) {
     return null;
   }
   const resolved = path.isAbsolute(targetPath) ? targetPath : path.resolve(rootDir, targetPath);
-  return resolved.endsWith(".afcatalog") ? resolved : `${resolved}.afcatalog`;
+  if (resolved.endsWith(".afcatalog")) return resolved;
+  if (resolved.endsWith(".mwcatalog")) return resolved.replace(/\.mwcatalog$/, ".afcatalog");
+  return `${resolved}.afcatalog`;
 }
 
 function createCatalogAt(targetPath) {
@@ -734,13 +736,13 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 720,
-    backgroundColor: "#101010",
-    show: false,
+    backgroundColor: "#000000",
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
   });
-  window.once("ready-to-show", () => window.show());
+  // Window shows immediately with splash; React replaces it when ready.
   window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     console.log(`[renderer:${level}] ${sourceId}:${line} ${message}`);
   });

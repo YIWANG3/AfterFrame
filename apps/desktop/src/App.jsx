@@ -351,7 +351,7 @@ export default function App() {
         return;
       }
 
-      if (lightboxOpen && event.key.toLowerCase() === "e") {
+      if (event.key.toLowerCase() === "e" && (lightboxOpen || workspace.selectedAssetId)) {
         event.preventDefault();
         openEditor();
         return;

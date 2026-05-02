@@ -1488,6 +1488,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
         event.preventDefault();
         void handleQuickSave();
       }
+      if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && textSelectedIds.size > 0) {
+        event.preventDefault();
+        setTextLayers((prev) => prev.filter((l) => !textSelectedIds.has(l.id)));
+        setTextSelectedIds(new Set());
+        return;
+      }
       if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
         event.preventDefault();
         handleApply();
@@ -1508,7 +1514,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, transformedPreview]);
+  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, transformedPreview, tool, textSelectedIds]);
 
   if (!open) return null;
 

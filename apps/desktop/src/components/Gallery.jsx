@@ -212,7 +212,9 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
       <MenuItem icon={Eye} label="Reveal in Finder" shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
       <MenuItem icon={Trash2} label="Delete from Catalog" onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
 
-      <div className="my-1 border-t border-border/40" />
+      {(manualFolders.length > 0 || inActiveFolder) && (
+        <div className="my-1 border-t border-border/40" />
+      )}
 
       {manualFolders.length > 0 && (
         <MenuItem icon={FolderPlus} label="Add to Folder">
