@@ -35,6 +35,10 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![Text Editor](docs/assets/editor-text.png)
 
+- **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export
+
+![Collage](docs/assets/collage.png)
+
 ### AI Repaint (BYOK)
 Bring your own API key. AfterFrame does not bundle or proxy any AI service — you connect your own provider and all requests go directly from your machine to the API.
 

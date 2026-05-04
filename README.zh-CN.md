@@ -35,6 +35,10 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 ![文字编辑器](docs/assets/editor-text.png)
 
+- **拼图**：8 种布局模板，可调间距/内边距/圆角，自定义背景色，支持高分辨率导出
+
+![拼图](docs/assets/collage.png)
+
 ### AI 重绘（BYOK）
 自带 API Key 模式。AfterFrame 不内置也不代理任何 AI 服务 — 你自行配置 API 密钥，所有请求从你的电脑直连 API。
 
