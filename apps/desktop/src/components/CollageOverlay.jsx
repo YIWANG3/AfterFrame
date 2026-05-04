@@ -390,6 +390,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   const [exportWidth, setExportWidth] = useState(3000);
   const [exporting, setExporting] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [replaceIndex, setReplaceIndex] = useState(-1);
 
   // Initialize from items prop
   useEffect(() => {
@@ -521,6 +522,10 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
                   return next;
                 });
               }}
+              onReplace={(idx) => {
+                setReplaceIndex(idx);
+                setShowPicker(true);
+              }}
             />
           </div>
         </div>
@@ -557,8 +562,20 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
           excludeIds={excludeIds}
           collections={collections}
           summary={summary}
-          onAdd={(pickedItems) => { setImages((prev) => [...prev, ...pickedItems]); setShowPicker(false); }}
-          onClose={() => setShowPicker(false)}
+          onAdd={(pickedItems) => {
+            if (replaceIndex >= 0 && pickedItems.length > 0) {
+              setImages((prev) => {
+                const next = [...prev];
+                next[replaceIndex] = pickedItems[0];
+                return next;
+              });
+            } else {
+              setImages((prev) => [...prev, ...pickedItems]);
+            }
+            setShowPicker(false);
+            setReplaceIndex(-1);
+          }}
+          onClose={() => { setShowPicker(false); setReplaceIndex(-1); }}
         />
       )}
     </div>

@@ -83,10 +83,16 @@ export default function TextPanel({
                     : "border-border/60 bg-app hover:border-border hover:bg-hover",
                 ].join(" ")}
                 onClick={() => {
-                  const nl = createDefaultLayer({ text: "New Title" });
-                  const styled = applyPreset(nl, p);
-                  onLayersChange([...layers, styled]);
-                  onSelectionChange(new Set([styled.id]));
+                  if (current) {
+                    // Apply preset to selected layer
+                    update(current.id, { ...p.style, preset: p.name });
+                  } else {
+                    // No selection — create new layer
+                    const nl = createDefaultLayer({ text: "New Title" });
+                    const styled = applyPreset(nl, p);
+                    onLayersChange([...layers, styled]);
+                    onSelectionChange(new Set([styled.id]));
+                  }
                 }}
               >
                 <PresetPreview preset={p} />
@@ -458,7 +464,11 @@ function FontSelect({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [systemFonts, setSystemFonts] = useState([]);
   const [filter, setFilter] = useState("");
+  const [highlightIdx, setHighlightIdx] = useState(-1);
   const loadedRef = useRef(false);
+  const listRef = useRef(null);
+  const selectedRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (loadedRef.current) return;
@@ -490,6 +500,46 @@ function FontSelect({ value, onChange }) {
     ? allFonts.filter((f) => f.toLowerCase().includes(filter.toLowerCase()))
     : allFonts;
 
+  // Scroll to selected font when dropdown opens
+  useEffect(() => {
+    if (open && !filter && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: "center" });
+    }
+  }, [open]);
+
+  // Reset highlight when filter changes
+  useEffect(() => { setHighlightIdx(-1); }, [filter]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIdx((prev) => {
+        const next = Math.min(prev + 1, filtered.length - 1);
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter" && highlightIdx >= 0 && highlightIdx < filtered.length) {
+      e.preventDefault();
+      onChange(filtered[highlightIdx]);
+      setOpen(false);
+      setFilter("");
+      setHighlightIdx(-1);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setFilter("");
+      setHighlightIdx(-1);
+    }
+  };
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightIdx < 0 || !listRef.current) return;
+    const el = listRef.current.children[highlightIdx];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [highlightIdx]);
+
   return (
     <div className="relative">
       <button
@@ -505,25 +555,29 @@ function FontSelect({ value, onChange }) {
         <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-chrome shadow-lg">
           <div className="border-b border-border/60 px-2 py-1.5">
             <input
+              ref={inputRef}
               type="text"
               className="w-full bg-transparent text-[11px] text-text outline-none placeholder:text-muted2"
               placeholder="Search fonts…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={handleKeyDown}
               autoFocus
             />
           </div>
-          <div className="max-h-72 overflow-y-auto">
-            {filtered.map((family) => (
+          <div ref={listRef} className="max-h-72 overflow-y-auto">
+            {filtered.map((family, idx) => (
               <button
                 key={family}
+                ref={family === value && !filter ? selectedRef : undefined}
                 type="button"
                 className={[
-                  "flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[11px] transition-colors hover:bg-hover",
+                  "flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[11px] transition-colors",
+                  idx === highlightIdx ? "bg-hover" : "hover:bg-hover",
                   value === family ? "text-[rgb(var(--accent-color))]" : "text-text",
                 ].join(" ")}
                 style={{ fontFamily: `"${family}", sans-serif` }}
-                onClick={() => { onChange(family); setOpen(false); setFilter(""); }}
+                onClick={() => { onChange(family); setOpen(false); setFilter(""); setHighlightIdx(-1); }}
               >
                 <span className="flex-1">{family}</span>
                 <span className="text-muted">Aa</span>

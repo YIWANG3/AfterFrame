@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { localFileUrl } from "../../utils/format";
 
 function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
@@ -66,7 +66,7 @@ function computeCellRects(cells, canvasW, canvasH, gap, padding = 0) {
 }
 
 const CollageCanvas = forwardRef(function CollageCanvas(
-  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, onSwap },
+  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, onSwap, onReplace },
   ref,
 ) {
   const canvasRef = useRef(null);
@@ -193,9 +193,12 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   }
 
   // Pointer handlers — direct DOM, no React state during drag for performance
-  // Store onSwap in ref so handler always sees latest
+  // Store callbacks in refs so handler always sees latest
   const onSwapRef = useRef(onSwap);
   onSwapRef.current = onSwap;
+  const onReplaceRef = useRef(onReplace);
+  onReplaceRef.current = onReplace;
+  const [ctxMenu, setCtxMenu] = useState(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -269,17 +272,30 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       redraw();
     }
 
+    function onContextMenu(e) {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const idx = hitTest(px, py);
+      if (idx >= 0) {
+        setCtxMenu({ x: e.clientX, y: e.clientY, cellIndex: idx });
+      }
+    }
+
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("contextmenu", onContextMenu);
     return () => {
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerUp);
       canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("contextmenu", onContextMenu);
     };
   }, [template, gap, padding, exportWidth]); // re-bind when layout params change (for hitTest)
 
@@ -315,12 +331,41 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     },
   }), []);
 
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [ctxMenu]);
+
   return (
-    <canvas
-      ref={canvasRef}
-      className={className}
-      style={{ cursor: "grab", touchAction: "none" }}
-    />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={canvasRef}
+        className={className}
+        style={{ cursor: "grab", touchAction: "none" }}
+      />
+      {ctxMenu && (
+        <div
+          className="fixed z-[100] min-w-[120px] rounded-lg border border-border/60 bg-chrome py-1 shadow-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center px-3 py-1.5 text-left text-[12px] text-text transition-colors hover:bg-hover"
+            onClick={() => {
+              const idx = ctxMenu.cellIndex;
+              setCtxMenu(null);
+              onReplaceRef.current?.(idx);
+            }}
+          >
+            Replace
+          </button>
+        </div>
+      )}
+    </div>
   );
 });
 

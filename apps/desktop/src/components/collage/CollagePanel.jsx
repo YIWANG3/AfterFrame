@@ -16,9 +16,9 @@ const ASPECT_OPTIONS = [
 ];
 
 const BG_PRESETS = [
-  "#000000", "#1a1a1a", "#2c2c2c", "#3d3d3d",
-  "#ffffff", "#f5f0e8", "#0a1628", "#1e3a2f",
-  "#3b1a1a", "#1a1a2e", "#2d1b30", "#1b2d1e",
+  "#000000", "#2c2c2c", "#555555",
+  "#ffffff", "#f5f0e8", "#0a1628",
+  "#1e3a2f", "#3b1a1a", "#2d1b30",
 ];
 
 function PanelLabel({ children }) {

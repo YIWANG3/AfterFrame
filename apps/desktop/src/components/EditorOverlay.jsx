@@ -20,6 +20,7 @@ import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
+import { createDefaultLayer } from "./editor/textState";
 
 const PREVIEW_MAX_EDGE = 2200;
 const PANEL_WIDTH = 320;
@@ -596,6 +597,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
   const [textSelectedIds, setTextSelectedIds] = useState(new Set());
   const textHistoryRef = useRef([]);
   const textHistoryIndexRef = useRef(-1);
+  const textClipboardRef = useRef(null);
 
   const sourcePath = item?.export_path || item?.export_preview_path || item?.raw_preview_path || null;
   const sourceLabel = fileName(sourcePath) || item?.stem || "Selected asset";
@@ -1487,6 +1489,24 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void handleQuickSave();
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && textSelectedIds.size > 0) {
+        event.preventDefault();
+        const copied = textLayers.filter((l) => textSelectedIds.has(l.id)).map((l) => ({ ...l }));
+        if (copied.length > 0) textClipboardRef.current = copied;
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && tool === "text" && textClipboardRef.current?.length > 0) {
+        event.preventDefault();
+        const pasted = textClipboardRef.current.map((l) => {
+          const { id, ...rest } = l;
+          return createDefaultLayer({ ...rest, x: l.x + 0.02, y: l.y + 0.02 });
+        });
+        // Use latest textLayers from history ref to avoid stale closure
+        const currentLayers = textHistoryRef.current[textHistoryIndexRef.current] || [];
+        handleTextLayersChange([...currentLayers, ...pasted]);
+        setTextSelectedIds(new Set(pasted.map((p) => p.id)));
+        return;
       }
       if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && textSelectedIds.size > 0) {
         event.preventDefault();
