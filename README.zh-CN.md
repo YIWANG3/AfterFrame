@@ -105,6 +105,10 @@ docs/                  截图与开发文档
 ]
 ```
 
+## 构建方式
+
+本项目通过 [Claude Code](https://claude.ai/code) vibe coding 完成。
+
 ---
 
 实现细节请参阅 [docs/developer-setup.md](docs/developer-setup.md)。
