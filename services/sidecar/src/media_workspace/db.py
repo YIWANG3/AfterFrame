@@ -659,8 +659,8 @@ def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, comm
         """
         INSERT INTO assets (
             asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
-            fingerprint, file_size, modified_time, metadata_json
-        ) VALUES (?, 'raw', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fingerprint, file_size, modified_time, metadata_json, app_rating
+        ) VALUES (?, 'raw', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(asset_id) DO UPDATE SET
             canonical_path = excluded.canonical_path,
             stem = excluded.stem,
@@ -671,6 +671,7 @@ def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, comm
             file_size = excluded.file_size,
             modified_time = excluded.modified_time,
             metadata_json = excluded.metadata_json,
+            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
             exists_on_disk = 1,
             updated_at = CURRENT_TIMESTAMP
         """,
@@ -685,6 +686,7 @@ def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, comm
             metadata.file_size,
             metadata.modified_time,
             _json(asset_metadata),
+            metadata.rating,
         ),
     )
     connection.execute(
@@ -781,8 +783,8 @@ def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate,
         """
         INSERT INTO assets (
             asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
-            fingerprint, file_size, modified_time, metadata_json
-        ) VALUES (?, 'export', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fingerprint, file_size, modified_time, metadata_json, app_rating
+        ) VALUES (?, 'export', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(asset_id) DO UPDATE SET
             canonical_path = excluded.canonical_path,
             stem = excluded.stem,
@@ -793,6 +795,7 @@ def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate,
             file_size = excluded.file_size,
             modified_time = excluded.modified_time,
             metadata_json = excluded.metadata_json,
+            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
             exists_on_disk = 1,
             updated_at = CURRENT_TIMESTAMP
         """,
@@ -807,6 +810,7 @@ def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate,
             export.file_size,
             export.modified_time,
             _json(asset_metadata),
+            export.rating,
         ),
     )
     connection.execute(
@@ -1149,12 +1153,30 @@ def upsert_preview_entry(
         connection.commit()
 
 
+def _browse_order_clause(sort: str | None) -> str:
+    if sort == "name-desc":
+        return "assets.stem DESC, registry.export_path"
+    if sort == "imported-desc":
+        return "assets.created_at DESC, assets.stem"
+    if sort == "imported-asc":
+        return "assets.created_at ASC, assets.stem"
+    if sort == "captured-desc":
+        return "json_extract(assets.metadata_json, '$.capture_time') DESC, assets.stem"
+    if sort == "captured-asc":
+        return "json_extract(assets.metadata_json, '$.capture_time') ASC, assets.stem"
+    if sort == "rating-desc":
+        return "CASE WHEN assets.app_rating IS NULL OR assets.app_rating = 0 THEN 1 ELSE 0 END, assets.app_rating DESC, assets.stem"
+    # default: name-asc
+    return "assets.stem, registry.export_path"
+
+
 def list_export_assets(
     connection: sqlite3.Connection,
     status: str,
     limit: int = 120,
     offset: int = 0,
     search: str | None = None,
+    sort: str | None = None,
 ) -> list[sqlite3.Row]:
     if status == "matched":
         status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed')"
@@ -1228,7 +1250,7 @@ def list_export_assets(
            AND preview_hd_entries.status = 'ready'
         WHERE {status_clause}
           {search_clause}
-        ORDER BY assets.stem, registry.export_path
+        ORDER BY {_browse_order_clause(sort)}
         LIMIT ? OFFSET ?
         """,
         params,

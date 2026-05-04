@@ -1,78 +1,110 @@
-# Media Resource Management
+# AfterFrame
 
 [English](README.md) | **简体中文**
 
-一个本地优先的媒体资源工作台，用于浏览、整理和核对大规模照片与媒体资产。
+一个本地优先的摄影工作台，用于浏览、编辑和管理大规模照片库。
 
-这个项目面向经常处理大量导出文件的人，帮助你更快看清哪些内容已经关联、哪些还需要处理，以及每个资源的来源信息。
+AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化浏览、整理、裁剪、文字叠加和 AI 风格迁移功能 — 全部在一个应用内完成。
 
-![Media Resource Management 工作界面](docs/assets/media-resource-management-screenshot.png)
+## 下载
 
-## 产品能做什么
+从 [Releases](../../releases) 下载最新 `.dmg`。
 
-Media Resource Management 可以帮助你：
+> 仅支持 macOS（Apple Silicon）。未签名 — 首次打开前，请在终端运行 `sudo xattr -rd com.apple.quarantine /Applications/AfterFrame.app`，或前往系统设置 > 隐私与安全性中允许打开。
 
-- 将处理后的媒体素材集中到一个可视化工作台中
-- 一眼区分 **Matched** 与 **Unmatched** 资源
-- 以高密度图库视图快速浏览大规模素材库
-- 不离开工作台即可查看预览和文件详情
-- 为不同项目、客户或审核批次维护独立 catalog
+![AfterFrame — 浏览与检查](docs/assets/browse-grid.png)
 
-## 适用场景
+## 功能
 
-这个产品适合：
+### 浏览与整理
+- 网格、瓦片、对齐、瀑布流四种布局模式
+- 按导入时间、拍摄时间、评分或文件名排序
+- 智能集合和手动文件夹
+- 完整元数据检查器：EXIF、相机、镜头、曝光、日期
+- 星级评分（自动导入 Lightroom XMP 评分）
+- 虚拟滚动画廊，流畅处理 10,000+ 张图片
 
-- 管理 RAW 与导出 JPG 的摄影师
-- 审核大量交付文件的图片编辑
-- 需要整理导出后素材流程的工作室
-- 希望用更直观、更安静的方式替代逐文件夹检查的创意团队
+![灯箱浏览](docs/assets/lightbox.png)
 
-## 典型工作流
+### 编辑
+- **裁剪**：预设比例、旋转、翻转
 
-1. 为一个项目打开或创建 catalog。
-2. 添加源素材和处理后的导出文件。
-3. 让工作台自动整理并呈现可能的关联关系。
-4. 在一个界面中统一浏览全部内容。
-5. 重点处理仍需确认、审核或清理的资源。
+![裁剪编辑器](docs/assets/editor-crop.png)
 
-## 当前体验
+- **文字叠加**：系统字体、纯色/渐变填充、描边、阴影、背景、透明度、自动吸附居中线
 
-当前桌面端体验聚焦于高效的视觉审核：
+![文字编辑器](docs/assets/editor-text.png)
 
-- 用 **All Assets** 查看完整素材库
-- 用 **Matched** 和 **Unmatched** 快速分流
-- 用大画廊区域高效扫图
-- 用右侧检查面板查看预览、尺寸、格式和来源信息
-- 通过本地 catalog 工作流让每个工作空间保持独立、清晰
+### AI 重绘（BYOK）
+自带 API Key 模式。AfterFrame 不内置也不代理任何 AI 服务 — 你自行配置 API 密钥，所有请求从你的电脑直连 API。
 
-## 为什么强调本地优先
+- 支持 Gemini、GPT Image、即梦，或任意 OpenAI 兼容端点
+- 25 个内置风格提示词（油画、动漫、水彩、水墨、概念艺术等）
+- 并排和上下对比的前后效果预览
+- 每次重绘的版本历史记录
 
-你的媒体资源依然保留在自己的存储设备和工作环境中。
+![AI 重绘 — 前后对比](docs/assets/ai-repaint-compare.png)
 
-这意味着它更适合这类需求：
+### 素材库管理
+- 基于 Catalog 的工作流 — 每个项目一个 `.afcatalog`
+- 导入流水线：自动提取元数据与生成预览
+- 可选的 RAW 源文件索引与按文件名匹配
+- 本地优先：文件始终保留在你的硬盘上，不会上传
 
-- 希望源文件继续保留在自己的硬盘或移动存储中
-- 希望沿用现有的文件夹结构
-- 希望在审核阶段避免不必要的云端复杂度
-- 希望在不迁移全部素材系统的前提下，先获得一个清晰的审核工作台
+![浏览与检查面板](docs/assets/browse-inspector.png)
 
-## 仓库中包含什么
+## 快速开始
 
-这个仓库包含实现上述产品体验的内容：
+### 环境要求
+- macOS（Apple Silicon）
+- Python 3.10+（sidecar 服务，仅开发需要）
+- Node.js 18+（仅开发需要）
 
-- 桌面审核应用
-- catalog 与 workspace 示例
-- 导入与匹配服务
-- 相关文档、设计探索和测试
+### 开发环境
 
-## 项目状态
+```bash
+# 安装前端依赖
+cd apps/desktop
+npm install
 
-这是一个仍在早期、但已经具备可用方向的产品，核心目标很明确：
+# 启动开发服务器
+npm start
+```
 
-**让大规模媒体素材库更容易被审核、被核对、被信任。**
+### 构建
 
-当前范围有意保持克制，优先打磨浏览、匹配与检查体验，再逐步扩展到更复杂的工作流或协作能力。
+```bash
+# 构建 sidecar 二进制
+cd services/sidecar
+pyinstaller media-workspace.spec --distpath dist --noconfirm
+
+# 打包桌面应用
+cd apps/desktop
+npm run dist:mac
+```
+
+`.dmg` 文件位于 `apps/desktop/release/`。
+
+## 项目结构
+
+```
+apps/desktop/          Electron + React 桌面应用
+services/sidecar/      Python 后端（SQLite catalog、元数据、AI 重绘）
+RESOURCES/             AI 风格提示词库、设计资源
+docs/                  截图与开发文档
+```
+
+## 自定义
+
+### AI 风格提示词
+编辑 `~/Library/Application Support/afterframe/ai-styles.json` 即可添加或修改风格提示词，重启后生效。
+
+```json
+[
+  { "id": "my-style", "name": "我的风格", "prompt": "将这张照片转换为..." }
+]
+```
 
 ---
 
-如果你想查看实现说明或更深入的技术细节，请阅读 [docs/developer-setup.md](docs/developer-setup.md)。
+实现细节请参阅 [docs/developer-setup.md](docs/developer-setup.md)。

@@ -5,7 +5,7 @@ import {
   Download,
   FlipHorizontal2,
   FlipVertical2,
-  MoreHorizontal,
+
   Redo2,
   RotateCcw,
   RotateCw,
@@ -619,7 +619,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       ? { title: "AI Repaint", badge: null }
       : tool === "text"
         ? { title: "Text", badge: null }
-        : { title: "Other Tools", badge: null };
+        : { title: "", badge: null };
 
   function syncHistory(nextHistory, nextIndex) {
     historyRef.current = nextHistory;
@@ -1595,10 +1595,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
             {/* Non-rotating crop overlay — stays axis-aligned, z-10 above rotated image */}
             {showCropUi && cropRect ? (
               <div className="pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
-                <div className="pointer-events-none absolute inset-x-0 top-0" style={{ height: `${cropRect.y}px`, backgroundColor: "var(--crop-scrim)" }} />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ height: `${viewportSize.height - cropRect.y - cropRect.height}px`, backgroundColor: "var(--crop-scrim)" }} />
-                <div className="pointer-events-none absolute" style={{ left: 0, top: `${cropRect.y}px`, width: `${cropRect.x}px`, height: `${cropRect.height}px`, backgroundColor: "var(--crop-scrim)" }} />
-                <div className="pointer-events-none absolute" style={{ right: 0, top: `${cropRect.y}px`, width: `${viewportSize.width - cropRect.x - cropRect.width}px`, height: `${cropRect.height}px`, backgroundColor: "var(--crop-scrim)" }} />
+                <div className="pointer-events-none absolute inset-x-0 top-0" style={{ height: `${Math.max(0, cropRect.y)}px`, backgroundColor: "var(--crop-scrim)" }} />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ height: `${Math.max(0, viewportSize.height - cropRect.y - cropRect.height)}px`, backgroundColor: "var(--crop-scrim)" }} />
+                <div className="pointer-events-none absolute" style={{ left: 0, top: `${Math.max(0, cropRect.y)}px`, width: `${Math.max(0, cropRect.x)}px`, height: `${Math.min(cropRect.height, viewportSize.height - Math.max(0, cropRect.y))}px`, backgroundColor: "var(--crop-scrim)" }} />
+                <div className="pointer-events-none absolute" style={{ right: 0, top: `${Math.max(0, cropRect.y)}px`, width: `${Math.max(0, viewportSize.width - cropRect.x - cropRect.width)}px`, height: `${Math.min(cropRect.height, viewportSize.height - Math.max(0, cropRect.y))}px`, backgroundColor: "var(--crop-scrim)" }} />
 
                 <div
                   className="pointer-events-none absolute"
@@ -1763,13 +1763,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
                 canUndo={textHistoryIndexRef.current > 0}
                 canRedo={textHistoryIndexRef.current < textHistoryRef.current.length - 1}
               />
-            ) : tool !== "ai" ? (
-              <div className="px-4 py-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Other Tools</div>
-                <div className="mt-3 rounded-lg bg-app px-3 py-3 text-[12px] leading-6 text-muted">
-                  Crop is the active tool. Other tools stay grouped here until the crop workflow feels right.
-                </div>
-              </div>
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
@@ -1784,7 +1777,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
             <ToolTab active={tool === "crop"} icon={Crop} label="Crop" onClick={() => setTool("crop")} />
             <ToolTab active={tool === "text"} icon={Type} label="Text" onClick={() => setTool("text")} />
             <ToolTab active={tool === "ai"} icon={Sparkles} label="AI Repaint" onClick={() => setTool("ai")} />
-            <ToolTab active={tool === "other"} icon={MoreHorizontal} label="Other Tools" onClick={() => setTool("other")} />
           </div>
         </div>
 

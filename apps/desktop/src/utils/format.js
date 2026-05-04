@@ -123,20 +123,20 @@ export function hasIndexedSources(summary) {
   return Number(summary?.raw_assets ?? 0) > 0;
 }
 
-export function hasIndexedProcessedMedia(summary) {
+export function hasIndexedImages(summary) {
   return Number(summary?.export_assets ?? 0) > 0;
 }
 
 export function determineImportMode(summary, { rawDirs = [], exportDirs = [] }) {
   const hasRawInput = rawDirs.length > 0;
-  const hasProcessedInput = exportDirs.length > 0;
-  if (hasRawInput && hasProcessedInput) {
-    if (hasIndexedSources(summary) && !hasIndexedProcessedMedia(summary)) return "processed_with_sources";
-    if (!hasIndexedSources(summary) && hasIndexedProcessedMedia(summary)) return "source_with_media";
+  const hasImageInput = exportDirs.length > 0;
+  if (hasRawInput && hasImageInput) {
+    if (hasIndexedSources(summary) && !hasIndexedImages(summary)) return "processed_with_sources";
+    if (!hasIndexedSources(summary) && hasIndexedImages(summary)) return "source_with_media";
     return "combined";
   }
-  if (hasRawInput) return hasIndexedProcessedMedia(summary) ? "source_with_media" : "source_only";
-  if (hasProcessedInput) return hasIndexedSources(summary) ? "processed_with_sources" : "processed_only";
+  if (hasRawInput) return hasIndexedImages(summary) ? "source_with_media" : "source_only";
+  if (hasImageInput) return hasIndexedSources(summary) ? "processed_with_sources" : "processed_only";
   return "combined";
 }
 

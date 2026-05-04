@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +14,8 @@ import {
   Play,
   Sparkles,
   Images,
+  ArrowUpDown,
+  Check,
 } from "lucide-react";
 
 const DISPLAY_MODES = [
@@ -21,6 +23,16 @@ const DISPLAY_MODES = [
   { key: "tiles", icon: Grid2x2, tip: "Tiles" },
   { key: "justified", icon: LayoutDashboard, tip: "Justified" },
   { key: "waterfall", icon: Columns2, tip: "Waterfall" },
+];
+
+const SORT_OPTIONS = [
+  { value: "imported-desc", label: "Imported ↓" },
+  { value: "imported-asc", label: "Imported ↑" },
+  { value: "captured-desc", label: "Captured ↓" },
+  { value: "captured-asc", label: "Captured ↑" },
+  { value: "rating-desc", label: "Rating" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
 ];
 
 const MENU_SECTIONS = [
@@ -53,6 +65,61 @@ function IconButton({ children, className = "", ...props }) {
     >
       {children}
     </button>
+  );
+}
+
+function SortDropdown({ sort, setSort }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    function handleKey(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", handleDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("pointerdown", handleDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const current = SORT_OPTIONS.find((o) => o.value === sort);
+
+  return (
+    <div ref={ref} className="relative ml-1">
+      <button
+        type="button"
+        className="flex h-8 w-[100px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text outline-none transition-colors hover:border-border focus:border-accent/50"
+        onClick={() => setOpen((c) => !c)}
+      >
+        <span>{current?.label || "Sort"}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-[101] mt-1.5 min-w-[160px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={[
+                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-hover",
+                sort === opt.value ? "text-text" : "text-muted",
+              ].join(" ")}
+              onClick={() => { setSort(opt.value); setOpen(false); }}
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center">
+                {sort === opt.value && <Check className="h-3 w-3 text-accent" />}
+              </span>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -171,15 +238,7 @@ export default function Toolbar({
         />
       </label>
 
-      <select
-        value={sort}
-        onChange={(e) => setSort(e.target.value)}
-        className="ml-1 h-8 cursor-pointer rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50"
-      >
-        <option value="name-asc">Name A-Z</option>
-        <option value="name-desc">Name Z-A</option>
-        <option value="score-desc">Score</option>
-      </select>
+      <SortDropdown sort={sort} setSort={setSort} />
 
       <IconButton onClick={() => void refreshAll()} title="Refresh">
         <RotateCw className="h-3.5 w-3.5 stroke-[1.8]" />

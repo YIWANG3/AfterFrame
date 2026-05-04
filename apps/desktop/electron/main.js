@@ -53,13 +53,11 @@ function resolveCatalogPath() {
       ? configuredCatalogPath
       : path.resolve(rootDir, configuredCatalogPath);
   }
-  // In packaged mode, try to restore last opened catalog
-  if (isPackaged) {
-    const settings = readAppSettings();
-    const last = settings.lastCatalogPath;
-    if (last && fs.existsSync(last)) return last;
-    return null;
-  }
+  // Restore last opened catalog (works in both dev and packaged mode)
+  const settings = readAppSettings();
+  const last = settings.lastCatalogPath;
+  if (last && fs.existsSync(last)) return last;
+  // Fallback: dev mode uses scratch catalog, packaged mode has no default
   return scratchCatalogPath;
 }
 
@@ -616,7 +614,7 @@ async function startImportTask(options) {
     throw new Error("choose at least one Source file or folder");
   }
   if (needsProcessed && !exportDirs.length) {
-    throw new Error("choose at least one Processed Media file or folder");
+    throw new Error("choose at least one image folder");
   }
   const current = await latestJobStatus("import");
   if (current.running) {
@@ -965,13 +963,30 @@ ipcMain.handle("workspace:save-ai-preferences", async (_event, prefs) => {
   await updateAppSettings((settings) => ({ ...settings, aiPreferences: prefs }));
 });
 
+function getAiStylesPath() {
+  return path.join(app.getPath("userData"), "afterframe", "ai-styles.json");
+}
+
+function readAiStyles() {
+  try {
+    return JSON.parse(fs.readFileSync(getAiStylesPath(), "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+async function writeAiStyles(styles) {
+  const p = getAiStylesPath();
+  await fs.promises.mkdir(path.dirname(p), { recursive: true });
+  await fs.promises.writeFile(p, JSON.stringify(styles, null, 2) + "\n", "utf-8");
+}
+
 ipcMain.handle("workspace:get-ai-styles", () => {
-  const settings = readAppSettings();
-  return settings?.aiStyles ?? null;
+  return readAiStyles();
 });
 
 ipcMain.handle("workspace:save-ai-styles", async (_event, styles) => {
-  await updateAppSettings((settings) => ({ ...settings, aiStyles: styles }));
+  await writeAiStyles(styles);
 });
 
 ipcMain.handle("workspace:list-repaint-history", async (_event, assetPath) => {
@@ -1017,6 +1032,9 @@ ipcMain.handle("workspace:browse", async (_event, options) => {
   ];
   if (options.search) {
     command.push("--search", options.search);
+  }
+  if (options.sort) {
+    command.push("--sort", options.sort);
   }
   return await callSidecarJsonAsync(command) || [];
 });

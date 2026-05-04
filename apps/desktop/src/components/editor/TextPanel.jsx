@@ -1,5 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
+
+function hexToRgba(hex, alpha = 1) {
+  const h = (hex || "#000000").replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 import {
   Plus, Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
@@ -164,11 +172,11 @@ export default function TextPanel({
               )}
               {current.fillMode === "gradient" && (
                 <div className="mt-2 space-y-2">
-                  <div className="h-6 rounded" style={{ background: `linear-gradient(${current.gradientAngle}deg, ${current.gradientFrom}, ${current.gradientTo})` }} />
+                  <div className="h-6 rounded" style={{ background: `linear-gradient(${current.gradientAngle}deg, ${hexToRgba(current.gradientFrom, (current.gradientFromOpacity ?? 100) / 100)}, ${hexToRgba(current.gradientTo, (current.gradientToOpacity ?? 100) / 100)}), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 8px 8px` }} />
                   <SliderRow label="Angle" min={0} max={360} value={current.gradientAngle} onChange={(v) => update(current.id, { gradientAngle: v })} suffix="°" />
                   <div className="flex gap-3">
-                    <ColorDot label="From" color={current.gradientFrom} onChange={(c) => update(current.id, { gradientFrom: c })} />
-                    <ColorDot label="To" color={current.gradientTo} onChange={(c) => update(current.id, { gradientTo: c })} />
+                    <ColorDot label="From" color={current.gradientFrom} onChange={(c) => update(current.id, { gradientFrom: c })} opacity={(current.gradientFromOpacity ?? 100) / 100} onOpacityChange={(v) => update(current.id, { gradientFromOpacity: Math.round(v * 100) })} />
+                    <ColorDot label="To" color={current.gradientTo} onChange={(c) => update(current.id, { gradientTo: c })} opacity={(current.gradientToOpacity ?? 100) / 100} onOpacityChange={(v) => update(current.id, { gradientToOpacity: Math.round(v * 100) })} />
                   </div>
                 </div>
               )}
@@ -188,11 +196,7 @@ export default function TextPanel({
             </Section>
 
             {/* Background */}
-            <Section label="Background">
-              <div className="flex gap-1">
-                <ModeBtn active={current.bgMode === "none"} onClick={() => update(current.id, { bgMode: "none" })}>None</ModeBtn>
-                <ModeBtn active={current.bgMode === "solid"} onClick={() => update(current.id, { bgMode: "solid" })}>Solid</ModeBtn>
-              </div>
+            <Section label="Background" right={<Switch on={current.bgMode === "solid"} onToggle={() => update(current.id, { bgMode: current.bgMode === "solid" ? "none" : "solid" })} />}>
               {current.bgMode === "solid" && (
                 <>
                   <SwatchRow value={current.bgColor} onChange={(c) => update(current.id, { bgColor: c })} />
@@ -372,25 +376,33 @@ function SliderRow({ label, min, max, value, onChange, suffix, compact }) {
 
 function NumInput({ value, min, max, onChange, className = "w-11" }) {
   const ref = useRef(null);
-  const dragState = useRef(null);
+  const DRAG_THRESHOLD = 3;
 
   const handleMouseDown = (e) => {
-    if (e.target === ref.current && document.activeElement !== ref.current) {
-      e.preventDefault();
-      dragState.current = { startX: e.clientX, startVal: value };
-      const onMove = (ev) => {
-        const dx = ev.clientX - dragState.current.startX;
-        const next = Math.min(max, Math.max(min, dragState.current.startVal + Math.round(dx)));
-        onChange(next);
-      };
-      const onUp = () => {
-        dragState.current = null;
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    }
+    // If already focused (editing), let native input handle it
+    if (document.activeElement === ref.current) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startVal = value;
+    let dragging = false;
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      if (!dragging && Math.abs(dx) < DRAG_THRESHOLD) return;
+      dragging = true;
+      const next = Math.min(max, Math.max(min, startVal + Math.round(dx)));
+      onChange(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (!dragging) {
+        // Was a click, not a drag — focus the input for typing
+        ref.current?.focus();
+      }
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   };
 
   return (
@@ -451,9 +463,22 @@ function FontSelect({ value, onChange }) {
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    window.mediaWorkspace?.listSystemFonts?.().then((fonts) => {
-      if (Array.isArray(fonts)) setSystemFonts(fonts);
-    }).catch(() => {});
+    (async () => {
+      try {
+        // Prefer Chromium's queryLocalFonts (works in packaged Electron)
+        if (window.queryLocalFonts) {
+          const fontData = await window.queryLocalFonts();
+          const families = [...new Set(fontData.map((f) => f.family))].sort();
+          setSystemFonts(families);
+          return;
+        }
+      } catch {}
+      // Fallback to IPC
+      try {
+        const fonts = await window.mediaWorkspace?.listSystemFonts?.();
+        if (Array.isArray(fonts)) setSystemFonts(fonts);
+      } catch {}
+    })();
   }, []);
 
   const allFonts = [
@@ -488,8 +513,8 @@ function FontSelect({ value, onChange }) {
               autoFocus
             />
           </div>
-          <div className="max-h-48 overflow-y-auto">
-            {filtered.slice(0, 80).map((family) => (
+          <div className="max-h-72 overflow-y-auto">
+            {filtered.map((family) => (
               <button
                 key={family}
                 type="button"
@@ -514,22 +539,25 @@ function FontSelect({ value, onChange }) {
   );
 }
 
-function ColorDot({ label, color, onChange }) {
+function ColorDot({ label, color, onChange, opacity, onOpacityChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const hasAlpha = opacity != null && opacity < 1;
   return (
     <div className="flex items-center gap-1.5">
       {label && <span className="text-[10px] text-muted2">{label}</span>}
       <div
         ref={ref}
         className="h-5 w-5 cursor-pointer rounded border border-border/60"
-        style={{ background: color }}
+        style={{ background: hasAlpha ? `linear-gradient(${hexToRgba(color, opacity)}, ${hexToRgba(color, opacity)}), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 6px 6px` : color }}
         onClick={() => onChange && setOpen(!open)}
       />
       {open && onChange && (
         <ColorPickerPopover
           color={color}
           onChange={onChange}
+          opacity={opacity}
+          onOpacityChange={onOpacityChange}
           onClose={() => setOpen(false)}
           anchorEl={ref.current}
         />

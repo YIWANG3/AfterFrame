@@ -45,13 +45,13 @@ def _build_import_phases(mode: str, has_raw_dirs: bool, has_export_dirs: bool) -
     if mode == "source_only":
         return [{"key": "scan_sources", "label": "Index Sources", "progress": 1.0}]
     if mode == "processed_only":
-        phases = [{"key": "index_processed_media", "label": "Index Processed Media", "progress": 0.5}]
+        phases = [{"key": "index_processed_media", "label": "Index Images", "progress": 0.5}]
         if has_export_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
             phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
         return phases
     if mode == "processed_with_sources":
-        phases = [{"key": "match_processed_media", "label": "Match Processed Media", "progress": 0.5}]
+        phases = [{"key": "match_processed_media", "label": "Match with RAW", "progress": 0.5}]
         if has_export_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
             phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
@@ -59,7 +59,7 @@ def _build_import_phases(mode: str, has_raw_dirs: bool, has_export_dirs: bool) -
     if mode == "source_with_media":
         phases = [{"key": "scan_sources", "label": "Index Sources", "progress": 1 / 4}]
         if has_export_dirs:
-            phases.append({"key": "match_processed_media", "label": "Match Processed Media", "progress": 2 / 4})
+            phases.append({"key": "match_processed_media", "label": "Match with RAW", "progress": 2 / 4})
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 3 / 4})
             phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
         return phases
@@ -67,7 +67,7 @@ def _build_import_phases(mode: str, has_raw_dirs: bool, has_export_dirs: bool) -
     if has_raw_dirs:
         phases.append({"key": "scan_sources", "label": "Index Sources", "progress": 1 / 4})
     if has_export_dirs:
-        phases.append({"key": "match_processed_media", "label": "Match Processed Media", "progress": 2 / 4 if has_raw_dirs else 0.5})
+        phases.append({"key": "match_processed_media", "label": "Match with RAW", "progress": 2 / 4 if has_raw_dirs else 0.5})
         phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 3 / 4 if has_raw_dirs else 0.75})
         phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
     return phases

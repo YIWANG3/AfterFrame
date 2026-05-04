@@ -83,7 +83,7 @@ def list_openai_models(api_key: str, base_url: str = OPENAI_API_BASE) -> list[di
     results: list[dict[str, str]] = []
     for m in body.get("data", []):
         mid = m.get("id", "")
-        if "image" in mid or "dall-e" in mid or "gpt" in mid:
+        if "image" in mid or "dall-e" in mid:
             results.append({"id": mid, "name": mid})
     return results if results else OPENAI_FALLBACK_MODELS
 

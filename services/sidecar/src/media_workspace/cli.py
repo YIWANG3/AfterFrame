@@ -181,6 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     browse.add_argument("--limit", type=int, default=120)
     browse.add_argument("--offset", type=int, default=0)
     browse.add_argument("--search", default=None)
+    browse.add_argument("--sort", default=None)
 
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
@@ -696,7 +697,7 @@ def main() -> int:
 
     if args.command == "browse-exports":
         payload = []
-        for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search):
+        for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort):
             preview_path = None
             if row["preview_relative_path"]:
                 preview_path = str((catalog.root / row["preview_relative_path"]).resolve())

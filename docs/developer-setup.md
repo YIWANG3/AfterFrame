@@ -1,154 +1,112 @@
 # Developer Setup
 
-This document keeps the implementation-oriented setup and workflow details out of the customer-facing root `README.md`.
+Implementation-oriented setup and workflow details for AfterFrame contributors.
 
 ## Repository layout
 
-- `apps/desktop` — Electron desktop app for catalog browsing and review
-- `apps/lightbox-lab` — focused UI sandbox for image viewing experiments
-- `services/sidecar` — Python backend for catalog, scan, matching, registry, and background jobs
-- `tests` — smoke tests and workflow checks
-- `data` — sample catalogs and working datasets
-- `docs/current-plan.md` — current verified product and engineering status
-- `docs/ground-truth-workflow.md` — evaluation and review workflow notes
-- `docs/image-asset-model.md` — asset model details
-
-## Product architecture at a glance
-
-The project treats the catalog as the primary product object.
-
-Current implementation includes:
-
-- `.afcatalog` bundles with internal state, logs, and derived artifacts
-- reference-based handling for source RAW files and processed exports
-- RAW scanning and metadata caching
-- export matching and reverse lookup
-- persistent match confirmation storage
-- desktop review UI for browsing matched and unmatched assets
-
-## Backend quick start
-
-Initialize a catalog:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace init-catalog --catalog data/default.afcatalog
+```
+apps/desktop/          Electron + React desktop app (Vite, Tailwind)
+services/sidecar/      Python backend — catalog, metadata, AI repaint, background jobs
+tests/                 Smoke tests and workflow checks
+data/                  Sample catalogs and working datasets
+RESOURCES/             AI style prompt libraries, design mockups
+docs/                  Screenshots and developer docs
 ```
 
-Scan a RAW directory:
+## Architecture
 
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace scan-raw \
-  --catalog data/default.afcatalog \
-  --raw-dir /path/to/raw-library
-```
+AfterFrame is an Electron app with a Python sidecar process:
 
-The review-oriented fast path currently uses:
+- **Frontend**: React (JSX, no TypeScript), Tailwind CSS, Vite bundler
+- **Backend**: Python CLI invoked via `child_process` from Electron main process
+- **Storage**: SQLite database inside `.afcatalog` bundles
+- **IPC**: Electron main ↔ renderer via `ipcMain.handle` / `ipcRenderer.invoke`
+- **Sidecar communication**: JSON over stdout, one CLI invocation per request
 
-- `--fingerprint-mode=head-only`
-- `--metadata-profile=matcher`
+The catalog (`.afcatalog` directory) is the primary data object. It contains the SQLite database, preview caches, job logs, and derived artifacts. Source images are never copied — the catalog stores references to files on disk.
 
-Backfill fuller RAW metadata later:
+## Quick start
 
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace enrich-raw \
-  --catalog data/default.afcatalog \
-  --workers 8
-```
-
-Resolve a single export:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace resolve-export \
-  --catalog data/default.afcatalog \
-  --path /path/to/export.jpg
-```
-
-Resolve an export directory in batch:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace resolve-export-batch \
-  --catalog data/default.afcatalog \
-  --export-dir /path/to/exports
-```
-
-Run the polling export watcher:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace watch-export \
-  --catalog data/default.afcatalog \
-  --export-dir /path/to/exports
-```
-
-Generate cached previews or proxies inside the catalog:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace generate-previews \
-  --catalog data/default.afcatalog \
-  --kind preview \
-  --asset-type export \
-  --limit 200
-```
-
-List pending manual confirmations:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace list-pending \
-  --catalog data/default.afcatalog
-```
-
-Confirm a match:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace confirm-match \
-  --catalog data/default.afcatalog \
-  --export-path /path/to/export.jpg \
-  --raw-asset-id raw_1234567890abcdef
-```
-
-Export reviewed rows into a ground-truth CSV:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace export-ground-truth \
-  --catalog data/default.afcatalog \
-  --status matched \
-  --output-csv data/ground-truth/review-seed.csv
-```
-
-Run the repeatable benchmark workflow:
-
-```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace benchmark-dataset \
-  --catalog data/benchmarks/resources-large.afcatalog \
-  --raw-dir RESOURCES/RAW \
-  --export-dir RESOURCES/Export \
-  --report-json data/benchmarks/resources-large.json
-```
-
-## Desktop app
-
-Run the desktop shell:
+### Frontend
 
 ```bash
 cd apps/desktop
 npm install
+npm start
+```
+
+By default, the app opens the last used catalog. To force a specific catalog:
+
+```bash
 MEDIA_WORKSPACE_CATALOG=../../data/default.afcatalog npm start
 ```
 
-The app is focused on local review, browsing, and inspection rather than cloud sync or multi-user workflow.
+### Sidecar (Python backend)
 
-## Current implementation assumptions
+The desktop app calls the sidecar CLI automatically. For manual testing:
 
-The backend is intentionally conservative:
+```bash
+PYTHONPATH=services/sidecar/src python3 -m media_workspace --catalog data/default.afcatalog browse-exports --limit 10
+```
 
-- catalogs own cache artifacts, not the source RAW or export files
-- RAW identity is fingerprint-based, not path-based
-- confirmed matches persist in a registry
-- export watching is polling-based in the current phase
-- stable filename stems are a major matching signal
-- file-level metadata improves matching, but is not the only product assumption
+Common commands:
 
-## Notes for contributors
+```bash
+# Initialize a new catalog
+python3 -m media_workspace init-catalog --catalog data/new.afcatalog
 
-When updating customer-facing messaging, keep `README.md` high-level and product-oriented.
+# Scan RAW files
+python3 -m media_workspace scan-raw --catalog data/default.afcatalog --raw-dir /path/to/raws
 
-Put deeper implementation, setup, benchmarking, and workflow notes in `docs/` instead.
+# Generate previews
+python3 -m media_workspace generate-previews --catalog data/default.afcatalog --kind preview --asset-type export
+```
+
+### Building for distribution
+
+```bash
+# 1. Build sidecar binary
+cd services/sidecar
+pyinstaller media-workspace.spec --distpath dist --noconfirm
+
+# 2. Package desktop app
+cd apps/desktop
+npm run dist:mac
+```
+
+Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`
+
+## Key subsystems
+
+### Catalog & database (`db.py`)
+- SQLite with `assets`, `asset_files`, `collections`, `jobs` tables
+- `app_rating` populated from Lightroom XMP ratings on import
+- Server-side sorting and pagination for virtual-scroll gallery
+
+### Metadata extraction (`metadata.py`)
+- EXIF parsing via Pillow
+- XMP rating extraction from embedded XML
+- Camera, lens, exposure, GPS metadata
+
+### AI Repaint (`ai_repaint.py`)
+- BYOK model — user provides their own API keys
+- Supports Gemini, OpenAI, Jimeng, and OpenAI-compatible endpoints
+- API keys stored encrypted via Electron safeStorage
+- Style prompts stored in `~/Library/Application Support/afterframe/ai-styles.json`
+
+### Background jobs (`job_runner.py`)
+- Import pipeline: index images → extract metadata → match RAW sources
+- Enrichment: backfill full metadata for scanned assets
+- Preview generation: cached thumbnails inside the catalog
+
+## App settings
+
+Global settings (not per-catalog):
+- `~/Library/Application Support/afterframe/settings.json` — theme, sidebar width, last catalog path, AI provider config
+- `~/Library/Application Support/afterframe/ai-styles.json` — AI repaint style prompts
+
+## Notes
+
+- The app is not code-signed. Users need to bypass Gatekeeper on first launch.
+- Only Apple Silicon builds are tested. Intel may work but is not verified.
+- The sidecar binary is bundled inside the `.app` via electron-builder `extraResources`.

@@ -1,4 +1,44 @@
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, memo, useEffect } from "react";
+
+/* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
+   re-render so React never touches the DOM text. Initial content is set via
+   useEffect on mount; final text is read from the DOM on blur. */
+const EditableDiv = memo(function EditableDiv({ initialText, style, onDone, onCancel }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.textContent = initialText;
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount only
+
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      style={style}
+      onBlur={(e) => onDone(e.currentTarget.textContent || "")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    />
+  );
+}, () => true);
 
 const HANDLE_SIZE = 7;
 const ROT_HANDLE_DIST = 28;
@@ -16,9 +56,14 @@ export default function TextCanvas({
   const dragRef = useRef(null);
   const containerRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
+  const [snapLines, setSnapLines] = useState({ h: false, v: false });
 
   const handleBgPointerDown = useCallback((e) => {
     if (e.target === e.currentTarget) {
+      // Blur active contentEditable first so onBlur fires and saves the text
+      if (document.activeElement?.contentEditable === "true") {
+        document.activeElement.blur();
+      }
       onSelectionChange(new Set());
       setEditingId(null);
     }
@@ -56,8 +101,14 @@ export default function TextCanvas({
       const dy = me.clientY - drag.startY;
 
       if (drag.type === "move") {
-        const nx = drag.origX + dx / imageRect.width;
-        const ny = drag.origY + dy / imageRect.height;
+        let nx = drag.origX + dx / imageRect.width;
+        let ny = drag.origY + dy / imageRect.height;
+        const SNAP_THRESHOLD = 8 / imageRect.width; // ~8px snap zone
+        const snH = Math.abs(nx - 0.5) < SNAP_THRESHOLD;
+        const snV = Math.abs(ny - 0.5) < SNAP_THRESHOLD;
+        if (snH) nx = 0.5;
+        if (snV) ny = 0.5;
+        setSnapLines({ h: snH, v: snV });
         onLayersChange(layers.map((l) =>
           l.id === drag.layerId ? { ...l, x: nx, y: ny } : l
         ));
@@ -86,6 +137,7 @@ export default function TextCanvas({
 
     const onUp = () => {
       dragRef.current = null;
+      setSnapLines({ h: false, v: false });
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
@@ -158,6 +210,13 @@ export default function TextCanvas({
           />
         );
       })}
+      {/* Snap guide lines */}
+      {snapLines.h && (
+        <div style={{ position: "absolute", left: imageRect.x + imageRect.width * 0.5, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.6, pointerEvents: "none" }} />
+      )}
+      {snapLines.v && (
+        <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * 0.5, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.6, pointerEvents: "none" }} />
+      )}
     </div>
   );
 }
@@ -174,7 +233,9 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
 
   if (layer.fillMode === "gradient") {
     const angle = layer.gradientAngle;
-    backgroundImage = `linear-gradient(${angle}deg, ${layer.gradientFrom}, ${layer.gradientTo})`;
+    const fromAlpha = (layer.gradientFromOpacity ?? 100) / 100;
+    const toAlpha = (layer.gradientToOpacity ?? 100) / 100;
+    backgroundImage = `linear-gradient(${angle}deg, ${hexToRgba(layer.gradientFrom, fromAlpha)}, ${hexToRgba(layer.gradientTo, toAlpha)})`;
     webkitBackgroundClip = "text";
     webkitTextFillColor = "transparent";
     color = "transparent";
@@ -243,21 +304,9 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       )}
 
       {isEditing ? (
-        <div
-          ref={(el) => {
-            editRef.current = el;
-            if (el && !el.dataset.focused) {
-              el.dataset.focused = "1";
-              el.focus();
-              const range = document.createRange();
-              range.selectNodeContents(el);
-              const sel = window.getSelection();
-              sel.removeAllRanges();
-              sel.addRange(range);
-            }
-          }}
-          contentEditable
-          suppressContentEditableWarning
+        <EditableDiv
+          key={layer.id}
+          initialText={layer.text || ""}
           style={{
             ...textStyle,
             outline: "none",
@@ -267,21 +316,9 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
             position: "relative",
             zIndex: 1,
           }}
-          onInput={(e) => onEditInput(layer.id, e.currentTarget.textContent || "")}
-          onBlur={(e) => onEditBlur(e.currentTarget.textContent || "")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              e.currentTarget.blur();
-            }
-            if (e.key === "Escape") {
-              e.preventDefault();
-              onEditBlur(undefined);
-            }
-          }}
-        >
-          {layer.text || ""}
-        </div>
+          onDone={(text) => onEditBlur(text)}
+          onCancel={() => onEditBlur(undefined)}
+        />
       ) : (
         <div style={{ ...textStyle, pointerEvents: "none", position: "relative", zIndex: 1 }}>
           {layer.text || "\u00A0"}

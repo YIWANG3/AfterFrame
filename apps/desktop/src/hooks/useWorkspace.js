@@ -18,7 +18,7 @@ export default function useWorkspace() {
   const [items, setItems] = useState([]);
   const [detail, setDetail] = useState(null);
   const [status, setStatus] = useState("all");
-  const [sort, setSort] = useState("name-asc");
+  const [sort, setSort] = useState("imported-desc");
   const [query, setQuery] = useState("");
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [browserLoading, setBrowserLoading] = useState(false);
@@ -61,55 +61,23 @@ export default function useWorkspace() {
     localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
   }, [inspectorWidth]);
 
+  // Backend handles sorting; client only does local text filtering for instant feedback
   const filteredItems = useMemo(() => {
-    const roleRank = (item) => {
-      if (!item?.resource_set_id) return 0;
-      if (item.resource_role === "raw") return 0;
-      if (item.resource_role === "primary") return 1;
-      return 2;
-    };
-    const compareWithinSet = (left, right) =>
-      roleRank(left) - roleRank(right) ||
-      Number(left?.resource_sort_order ?? 0) - Number(right?.resource_sort_order ?? 0) ||
-      left.stem.localeCompare(right.stem);
-    let nextItems = [...items];
     const normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery) {
-      nextItems = nextItems.filter((item) =>
-        [
-          item.stem,
-          item.primary_stem,
-          item.export_path,
-          item.raw_path,
-          item.version_kind,
-          item.export_metadata?.camera_model,
-          item.raw_metadata?.camera_model,
-        ]
-          .some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery)),
-      );
-    }
-    if (sort === "name-desc") {
-      nextItems.sort((a, b) => {
-        const leftName = a.primary_stem || a.stem;
-        const rightName = b.primary_stem || b.stem;
-        return rightName.localeCompare(leftName) || compareWithinSet(a, b);
-      });
-    } else if (sort === "score-desc") {
-      nextItems.sort((a, b) => {
-        const scoreDelta = Number(b.score ?? 0) - Number(a.score ?? 0);
-        const leftName = a.primary_stem || a.stem;
-        const rightName = b.primary_stem || b.stem;
-        return scoreDelta || leftName.localeCompare(rightName) || compareWithinSet(a, b);
-      });
-    } else {
-      nextItems.sort((a, b) => {
-        const leftName = a.primary_stem || a.stem;
-        const rightName = b.primary_stem || b.stem;
-        return leftName.localeCompare(rightName) || compareWithinSet(a, b);
-      });
-    }
-    return nextItems;
-  }, [items, query, sort]);
+    if (!normalizedQuery) return items;
+    return items.filter((item) =>
+      [
+        item.stem,
+        item.primary_stem,
+        item.export_path,
+        item.raw_path,
+        item.version_kind,
+        item.export_metadata?.camera_model,
+        item.raw_metadata?.camera_model,
+      ]
+        .some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery)),
+    );
+  }, [items, query]);
 
   // Debounced server-side search: reload browser when query changes
   const searchTimerRef = useRef(null);
@@ -121,6 +89,12 @@ export default function useWorkspace() {
     }, 250);
     return () => clearTimeout(searchTimerRef.current);
   }, [query]);
+
+  // Reload from backend when sort changes
+  useEffect(() => {
+    if (!browserReady) return;
+    void loadBrowser({ force: true, sortKey: sort });
+  }, [sort]);
 
   const activeOverlay = useMemo(() => {
     const queuedRawCount = pendingImport.rawDirs.length;
@@ -173,7 +147,7 @@ export default function useWorkspace() {
     setDetail(payload);
   }
 
-  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false } = {}) {
+  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort } = {}) {
     console.log("[loadBrowser] called, browserLoading:", browserLoading, "force:", force, "append:", append, "browserHasMore:", browserHasMore);
     if (!force && (append ? browserLoadingMore || browserLoading || !browserHasMore : browserLoading)) {
       console.log("[loadBrowser] SKIPPED — guard triggered");
@@ -200,6 +174,7 @@ export default function useWorkspace() {
           limit: PAGE_SIZE,
           offset: nextOffset,
           search: search || undefined,
+          sort: sortKey || undefined,
         });
       }
       if (browserRequestIdRef.current !== requestId) return;
@@ -376,7 +351,7 @@ export default function useWorkspace() {
     setImportTask(task);
   }
 
-  async function addProcessedMedia() {
+  async function addImages() {
     const selected = await window.mediaWorkspace.pickDirectories("export");
     if (!selected.length) return;
     await window.mediaWorkspace.registerRoots("export", selected);
@@ -465,7 +440,7 @@ export default function useWorkspace() {
       } else if (action === "catalog:scratch") {
         await switchCatalog(null);
       } else if (action === "import:pick-export") {
-        await addProcessedMedia();
+        await addImages();
       } else if (action === "import:pick-source") {
         await addSources();
       } else if (action === "import:start") {
@@ -601,7 +576,7 @@ export default function useWorkspace() {
     loadMoreBrowser,
     refreshAll,
     activeOverlay,
-    addProcessedMedia,
+    addImages,
     addSources,
     switchCatalog,
     runImportPipeline,

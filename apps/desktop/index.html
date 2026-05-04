@@ -13,19 +13,7 @@
       <div id="splash" style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000000;flex-direction:column;gap:0">
         <!-- Logo (512px source, displayed at 128px) -->
         <img src="build/icon.png" style="width:192px;height:192px" alt="AfterFrame" />
-        <svg width="260" height="44" viewBox="0 0 260 44" style="margin-top:-12px" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="af-grad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#999"/>
-              <stop offset="40%" stop-color="#999"/>
-              <stop offset="50%" stop-color="#fff"/>
-              <stop offset="60%" stop-color="#999"/>
-              <stop offset="100%" stop-color="#999"/>
-              <animateTransform attributeName="gradientTransform" type="translate" from="-1 0" to="1 0" dur="2.4s" repeatCount="indefinite"/>
-            </linearGradient>
-          </defs>
-          <text x="130" y="34" text-anchor="middle" fill="url(#af-grad)" font-family="'Nanum Myeongjo', serif" font-size="32" font-weight="400" letter-spacing="0.02em">AfterFrame</text>
-        </svg>
+        <div style="margin-top:-12px;font-family:'Nanum Myeongjo',serif;font-size:32px;font-weight:400;letter-spacing:0.02em;color:#ffffff">AfterFrame</div>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>

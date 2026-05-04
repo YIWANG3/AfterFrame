@@ -420,7 +420,7 @@ export default function App() {
             sort={workspace.sort}
             setSort={workspace.setSort}
             refreshAll={workspace.refreshAll}
-            onAddProcessed={workspace.addProcessedMedia}
+            onAddProcessed={workspace.addImages}
             onAddSources={workspace.addSources}
             onRunImport={workspace.runImportPipeline}
             onRunEnrichment={workspace.runEnrichment}

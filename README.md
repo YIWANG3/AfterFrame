@@ -1,78 +1,110 @@
-# Media Resource Management
+# AfterFrame
 
 **English** | [简体中文](README.zh-CN.md)
 
-A local-first workspace for reviewing, organizing, and reconciling large photo and media libraries.
+A local-first photo workspace for browsing, editing, and managing large photography libraries.
 
-This project is designed for people who deal with big batches of exported files and need a faster way to understand what is already connected, what still needs attention, and where each asset came from.
+AfterFrame is built for photographers who work with thousands of exported images and want a fast, visual tool to browse, organize, crop, add text overlays, and experiment with AI-powered style transfer — all without leaving one app.
 
-![Media Resource Management workspace](docs/assets/media-resource-management-screenshot.png)
+## Download
 
-## What the product does
+Download the latest `.dmg` from [Releases](../../releases).
 
-Media Resource Management helps you:
+> macOS only (Apple Silicon). Not code-signed — on first launch, run `sudo xattr -rd com.apple.quarantine /Applications/AfterFrame.app` or open System Settings > Privacy & Security to allow it.
 
-- bring processed media into one visual workspace
-- separate **matched** and **unmatched** assets at a glance
-- review large libraries quickly in a dense browser layout
-- inspect previews and file details without leaving the workspace
-- keep separate catalogs for different jobs, clients, or review sessions
+![AfterFrame — Browse & Inspect](docs/assets/browse-grid.png)
 
-## Typical use cases
+## Features
 
-This product is a good fit for:
+### Browse & Organize
+- Grid, tiles, justified, and waterfall layout modes
+- Sort by imported time, captured time, rating, or name
+- Smart collections and manual folders
+- Full metadata inspector: EXIF, camera, lens, exposure, dates
+- Star rating system (imports Lightroom XMP ratings)
+- Virtual-scroll gallery that handles 10,000+ images smoothly
 
-- photographers managing RAW files and exported JPGs
-- editors reviewing large delivery folders
-- studios cleaning up import workflows after export
-- creative teams who want a calmer, more visual alternative to folder-by-folder checking
+![Lightbox](docs/assets/lightbox.png)
 
-## Typical workflow
+### Edit
+- **Crop** with preset aspect ratios, rotation, and flip
 
-1. Open or create a catalog for a project.
-2. Add source media and processed exports.
-3. Let the workspace organize and surface likely relationships.
-4. Browse everything in one place.
-5. Focus on the assets that still need review, confirmation, or cleanup.
+![Crop Editor](docs/assets/editor-crop.png)
 
-## Current experience
+- **Text Overlay** with system fonts, solid/gradient fill, stroke, shadow, background, opacity, and snap-to-center guides
 
-The current desktop experience is centered on fast visual review:
+![Text Editor](docs/assets/editor-text.png)
 
-- **All Assets** view for the full library
-- **Matched** and **Unmatched** views for quick triage
-- a large gallery for scanning many images quickly
-- a right-hand inspector for preview, dimensions, file type, and source details
-- a local catalog-based workflow so each workspace stays self-contained
+### AI Repaint (BYOK)
+Bring your own API key. AfterFrame does not bundle or proxy any AI service — you connect your own provider and all requests go directly from your machine to the API.
 
-## Why local-first matters
+- Supports Gemini, GPT Image, Jimeng, or any OpenAI-compatible endpoint
+- 25 built-in style prompts (oil painting, anime, watercolor, ink, concept art, and more)
+- Side-by-side and stacked before/after comparison
+- Version history for every repaint
 
-Your media stays tied to your own storage and working environment.
+![AI Repaint — Before & After](docs/assets/ai-repaint-compare.png)
 
-That means the product is aimed at people who care about:
+### Library Management
+- Catalog-based workflow — one `.afcatalog` per project
+- Import pipeline with automatic metadata extraction and preview generation
+- Optional RAW source indexing and matching by filename
+- Local-first: your files stay on your drives, nothing is uploaded
 
-- keeping source files on their own drives
-- working with existing folder structures
-- avoiding unnecessary cloud complexity during review
-- maintaining a clear review workspace without moving everything into a new system first
+![Browse with Inspector](docs/assets/browse-inspector.png)
 
-## What this repository contains
+## Getting Started
 
-This repository includes the product work behind that experience:
+### Requirements
+- macOS (Apple Silicon)
+- Python 3.10+ (for the sidecar service, development only)
+- Node.js 18+ (development only)
 
-- the desktop review app
-- catalog and workspace examples
-- import and matching services
-- supporting docs, design exploration, and tests
+### Development
 
-## Project status
+```bash
+# Install frontend dependencies
+cd apps/desktop
+npm install
 
-This is an early but usable product direction focused on one core promise:
+# Start dev server
+npm start
+```
 
-**make large media libraries easier to review, reconcile, and trust.**
+### Build
 
-The current scope is intentionally narrow. It prioritizes browsing, matching, and inspection before expanding into broader workflow or collaboration features.
+```bash
+# Build sidecar binary
+cd services/sidecar
+pyinstaller media-workspace.spec --distpath dist --noconfirm
+
+# Package desktop app
+cd apps/desktop
+npm run dist:mac
+```
+
+The `.dmg` will be in `apps/desktop/release/`.
+
+## Project Structure
+
+```
+apps/desktop/          Electron + React desktop app
+services/sidecar/      Python backend (SQLite catalog, metadata, AI repaint)
+RESOURCES/             AI style prompt libraries, design assets
+docs/                  Screenshots and developer docs
+```
+
+## Customization
+
+### AI Style Prompts
+Edit `~/Library/Application Support/afterframe/ai-styles.json` to add or modify style prompts. Changes take effect on restart.
+
+```json
+[
+  { "id": "my-style", "name": "My Style", "prompt": "Transform this photo into..." }
+]
+```
 
 ---
 
-If you are looking for implementation notes or deeper technical details, see [docs/developer-setup.md](docs/developer-setup.md).
+For implementation details, see [docs/developer-setup.md](docs/developer-setup.md).
