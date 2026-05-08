@@ -51,13 +51,14 @@ export function createDefaultLayer(overrides = {}) {
     bgMode: "none",
     bgColor: "#000000",
     bgOpacity: 80,
-    bgPadH: 25,
-    bgPadV: 15,
+    bgPadTop: 15,
+    bgPadRight: 25,
+    bgPadBottom: 15,
+    bgPadLeft: 25,
     shadow: false,
     shadowX: 0,
     shadowY: 4,
     shadowBlur: 8,
-    shadowSpread: 0,
     shadowColor: "#000000",
     shadowOpacity: 60,
     x: 0.5,
@@ -66,6 +67,14 @@ export function createDefaultLayer(overrides = {}) {
     preset: null,
     ...overrides,
   };
+}
+
+export function getBgPadding(layer) {
+  const top = layer.bgPadTop ?? layer.bgPadV ?? 15;
+  const bottom = layer.bgPadBottom ?? layer.bgPadV ?? 15;
+  const left = layer.bgPadLeft ?? layer.bgPadH ?? 25;
+  const right = layer.bgPadRight ?? layer.bgPadH ?? 25;
+  return { top, right, bottom, left };
 }
 
 export function applyPreset(layer, preset) {

@@ -12,11 +12,11 @@ import {
   Plus, Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw,
+  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink,
 } from "lucide-react";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
-  createDefaultLayer, applyPreset, cloneLayers,
+  createDefaultLayer, applyPreset, cloneLayers, getBgPadding,
 } from "./textState";
 import {
   alignLeft, alignCenterH, alignRight,
@@ -42,6 +42,15 @@ export default function TextPanel({
   const update = useCallback((id, patch) => {
     onLayersChange(layers.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }, [layers, onLayersChange]);
+
+  const [vPadLinked, setVPadLinked] = useState(true);
+  const [hPadLinked, setHPadLinked] = useState(true);
+  useEffect(() => {
+    if (!current) return;
+    const pad = getBgPadding(current);
+    setVPadLinked(pad.top === pad.bottom);
+    setHPadLinked(pad.left === pad.right);
+  }, [current?.id]);
 
   const addLayer = () => {
     const nl = createDefaultLayer();
@@ -207,17 +216,44 @@ export default function TextPanel({
                 <>
                   <SwatchRow value={current.bgColor} onChange={(c) => update(current.id, { bgColor: c })} />
                   <SliderRow label="Opacity" min={0} max={100} value={current.bgOpacity} onChange={(v) => update(current.id, { bgOpacity: v })} suffix="%" />
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] text-muted2">Padding</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-muted2">H</span>
-                      <NumInput value={current.bgPadH ?? 25} min={0} max={80} onChange={(v) => update(current.id, { bgPadH: v })} className="w-10" />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-muted2">V</span>
-                      <NumInput value={current.bgPadV ?? 15} min={0} max={80} onChange={(v) => update(current.id, { bgPadV: v })} className="w-10" />
-                    </div>
-                  </div>
+                  {(() => {
+                    const pad = getBgPadding(current);
+                    const setTop = (v) => update(current.id, vPadLinked ? { bgPadTop: v, bgPadBottom: v } : { bgPadTop: v });
+                    const setBottom = (v) => update(current.id, vPadLinked ? { bgPadTop: v, bgPadBottom: v } : { bgPadBottom: v });
+                    const setLeft = (v) => update(current.id, hPadLinked ? { bgPadLeft: v, bgPadRight: v } : { bgPadLeft: v });
+                    const setRight = (v) => update(current.id, hPadLinked ? { bgPadLeft: v, bgPadRight: v } : { bgPadRight: v });
+                    const toggleV = () => {
+                      const next = !vPadLinked;
+                      setVPadLinked(next);
+                      if (next && pad.top !== pad.bottom) update(current.id, { bgPadBottom: pad.top });
+                    };
+                    const toggleH = () => {
+                      const next = !hPadLinked;
+                      setHPadLinked(next);
+                      if (next && pad.left !== pad.right) update(current.id, { bgPadRight: pad.left });
+                    };
+                    return (
+                      <div className="mt-2">
+                        <div className="mb-1 text-[10px] text-muted2">Padding</div>
+                        <div className="flex items-stretch gap-3">
+                          <PairedFields
+                            leftLabel="T" leftValue={pad.top} onLeftChange={setTop}
+                            rightLabel="B" rightValue={pad.bottom} onRightChange={setBottom}
+                            min={-50} max={80}
+                            linked={vPadLinked} onToggleLink={toggleV}
+                            linkTitle={vPadLinked ? "Unlink top/bottom" : "Link top/bottom"}
+                          />
+                          <PairedFields
+                            leftLabel="L" leftValue={pad.left} onLeftChange={setLeft}
+                            rightLabel="R" rightValue={pad.right} onRightChange={setRight}
+                            min={-50} max={80}
+                            linked={hPadLinked} onToggleLink={toggleH}
+                            linkTitle={hPadLinked ? "Unlink left/right" : "Link left/right"}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </Section>
@@ -226,16 +262,19 @@ export default function TextPanel({
             <Section label="Shadow" right={<Switch on={current.shadow} onToggle={() => update(current.id, { shadow: !current.shadow })} />}>
               {current.shadow && (
                 <>
-                  <div className="flex gap-2 rounded-md bg-app p-2">
-                    <ShadowField label="X" value={current.shadowX} onChange={(v) => update(current.id, { shadowX: v })} min={-50} max={50} />
-                    <ShadowField label="Y" value={current.shadowY} onChange={(v) => update(current.id, { shadowY: v })} min={-50} max={50} />
-                    <ShadowField label="Blur" value={current.shadowBlur} onChange={(v) => update(current.id, { shadowBlur: v })} min={0} max={100} />
-                    <ShadowField label="Spread" value={current.shadowSpread} onChange={(v) => update(current.id, { shadowSpread: v })} min={0} max={50} />
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-2 px-2">
-                    <ColorDot color={current.shadowColor} onChange={(c) => update(current.id, { shadowColor: c })} />
-                    <span className="flex-1" />
-                    <SliderRow label="" min={0} max={100} value={current.shadowOpacity} onChange={(v) => update(current.id, { shadowOpacity: v })} suffix="%" compact />
+                  <div className="mt-2 flex items-stretch gap-2">
+                    <div className="flex flex-col items-center gap-1">
+                      <ColorDot
+                        color={current.shadowColor}
+                        onChange={(c) => update(current.id, { shadowColor: c })}
+                        opacity={(current.shadowOpacity ?? 60) / 100}
+                        onOpacityChange={(v) => update(current.id, { shadowOpacity: Math.round(v * 100) })}
+                      />
+                      <span className="text-[10px] text-muted2">Color</span>
+                    </div>
+                    <StackedField label="X" value={current.shadowX} min={-50} max={50} onChange={(v) => update(current.id, { shadowX: v })} />
+                    <StackedField label="Y" value={current.shadowY} min={-50} max={50} onChange={(v) => update(current.id, { shadowY: v })} />
+                    <StackedField label="Blur" value={current.shadowBlur} min={0} max={100} onChange={(v) => update(current.id, { shadowBlur: v })} />
                   </div>
                 </>
               )}
@@ -424,12 +463,54 @@ function NumInput({ value, min, max, onChange, className = "w-11" }) {
   );
 }
 
-function ShadowField({ label, value, onChange, min, max }) {
+function StackedField({ label, value, onChange, min, max }) {
   return (
-    <div className="flex-1">
-      <label className="mb-1 block text-[10px] text-muted2">{label}</label>
+    <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
       <NumInput value={value} min={min} max={max} onChange={onChange} className="w-full" />
+      <span className="text-[10px] text-muted2">{label}</span>
     </div>
+  );
+}
+
+function PairedFields({
+  leftLabel, leftValue, onLeftChange,
+  rightLabel, rightValue, onRightChange,
+  min, max,
+  linked, onToggleLink, linkTitle,
+}) {
+  return (
+    <div className="flex flex-1 min-w-0 flex-col gap-1">
+      <div className="flex items-stretch gap-2">
+        <NumInput value={leftValue} min={min} max={max} onChange={onLeftChange} className="flex-1 min-w-0" />
+        <NumInput value={rightValue} min={min} max={max} onChange={onRightChange} className="flex-1 min-w-0" />
+      </div>
+      <div className="relative flex items-center">
+        <span className="flex-1 text-center text-[10px] text-muted2">{leftLabel}</span>
+        <span className="flex-1 text-center text-[10px] text-muted2">{rightLabel}</span>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-auto">
+            <LinkBtn linked={linked} onClick={onToggleLink} title={linkTitle} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LinkBtn({ linked, onClick, title }) {
+  const Icon = linked ? Link : Unlink;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={[
+        "flex h-5 w-5 items-center justify-center rounded transition-colors",
+        linked ? "text-[rgb(var(--accent-color))] hover:bg-[rgb(var(--accent-color)/0.12)]" : "text-muted2 hover:bg-hover hover:text-text",
+      ].join(" ")}
+    >
+      <Icon className="h-3 w-3" />
+    </button>
   );
 }
 

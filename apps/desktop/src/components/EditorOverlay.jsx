@@ -20,7 +20,7 @@ import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
-import { createDefaultLayer } from "./editor/textState";
+import { createDefaultLayer, getBgPadding } from "./editor/textState";
 
 const PREVIEW_MAX_EDGE = 2200;
 const PANEL_WIDTH = 320;
@@ -698,10 +698,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
 
       // Background
       if (layer.bgMode === "solid") {
-        const padH = fontSize * (layer.bgPadH ?? 25) / 100;
-        const padV = fontSize * (layer.bgPadV ?? 15) / 100;
+        const pad = getBgPadding(layer);
+        const padT = (fontSize * pad.top) / 100;
+        const padR = (fontSize * pad.right) / 100;
+        const padB = (fontSize * pad.bottom) / 100;
+        const padL = (fontSize * pad.left) / 100;
         ctx.fillStyle = hexToRgba(layer.bgColor, layer.bgOpacity / 100);
-        ctx.fillRect(-tw / 2 - padH, -th / 2 - padV, tw + padH * 2, th + padV * 2);
+        ctx.fillRect(-tw / 2 - padL, -th / 2 - padT, tw + padL + padR, th + padT + padB);
       }
 
       // Shadow

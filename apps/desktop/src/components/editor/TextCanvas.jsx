@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, memo, useEffect } from "react";
+import { getBgPadding } from "./textState";
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
    re-render so React never touches the DOM text. Initial content is set via
@@ -290,18 +291,25 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       }}
     >
       {/* Background */}
-      {layer.bgMode === "solid" && (
-        <div
-          style={{
-            position: "absolute",
-            inset: `-${fontSize * (layer.bgPadV ?? 15) / 100}px -${fontSize * (layer.bgPadH ?? 25) / 100}px`,
-            backgroundColor: hexToRgba(layer.bgColor, layer.bgOpacity / 100),
-            borderRadius: 0,
-            pointerEvents: "none",
-            zIndex: 0,
-          }}
-        />
-      )}
+      {layer.bgMode === "solid" && (() => {
+        const pad = getBgPadding(layer);
+        const t = (fontSize * pad.top) / 100;
+        const r = (fontSize * pad.right) / 100;
+        const b = (fontSize * pad.bottom) / 100;
+        const l = (fontSize * pad.left) / 100;
+        return (
+          <div
+            style={{
+              position: "absolute",
+              inset: `${-t}px ${-r}px ${-b}px ${-l}px`,
+              backgroundColor: hexToRgba(layer.bgColor, layer.bgOpacity / 100),
+              borderRadius: 0,
+              pointerEvents: "none",
+              zIndex: 0,
+            }}
+          />
+        );
+      })()}
 
       {isEditing ? (
         <EditableDiv
