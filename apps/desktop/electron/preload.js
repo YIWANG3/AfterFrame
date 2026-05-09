@@ -47,6 +47,10 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   setAssetRating: (assetIds, rating) => ipcRenderer.invoke("workspace:set-asset-rating", assetIds, rating),
   browseCollection: (collectionId, options) => ipcRenderer.invoke("workspace:browse-collection", collectionId, options),
   listSystemFonts: () => ipcRenderer.invoke("workspace:list-system-fonts"),
+  computeDepth: (options) => ipcRenderer.invoke("workspace:compute-depth", options),
+  getDepthModel: () => ipcRenderer.invoke("workspace:get-depth-model"),
+  pickDepthModel: () => ipcRenderer.invoke("workspace:pick-depth-model"),
+  resetDepthModel: () => ipcRenderer.invoke("workspace:reset-depth-model"),
   onMenuAction: (callback) => {
     ipcRenderer.removeAllListeners("workspace:menu-action");
     ipcRenderer.on("workspace:menu-action", (_event, action) => callback(action));

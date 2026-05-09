@@ -28,6 +28,7 @@ export const PRESETS = [
 export function createDefaultLayer(overrides = {}) {
   return {
     id: `text-${nextId++}`,
+    type: "text",
     text: "New Text",
     fontFamily: "Plus Jakarta Sans",
     fontSize: 120,
@@ -65,6 +66,9 @@ export function createDefaultLayer(overrides = {}) {
     y: 0.5,
     rotation: 0,
     preset: null,
+    // Depth occlusion: 1.0 = always in front (no occlusion); lower = sits deeper
+    // in the scene. Pixels with depth > zPosition occlude the text.
+    zPosition: 1.0,
     ...overrides,
   };
 }

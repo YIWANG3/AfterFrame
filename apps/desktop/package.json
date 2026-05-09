@@ -1,6 +1,6 @@
 {
   "name": "afterframe",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "AfterFrame desktop shell",
   "main": "electron/main.js",
@@ -30,6 +30,11 @@
       {
         "from": "../../services/sidecar/dist/media-workspace",
         "to": "sidecar/media-workspace"
+      },
+      {
+        "from": "native",
+        "to": "native",
+        "filter": ["**/*"]
       }
     ],
     "asar": true,

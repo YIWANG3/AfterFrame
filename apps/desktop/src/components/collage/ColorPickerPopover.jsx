@@ -208,47 +208,111 @@ function OpacitySlider({ hue, sat, val, opacity, onChange }) {
   );
 }
 
-export default function ColorPickerPopover({ color, onChange, onClose, anchorEl, opacity: opacityProp, onOpacityChange }) {
+export default function ColorPickerPopover({
+  color, onChange, onClose, anchorEl,
+  opacity: opacityProp, onOpacityChange, presets,
+  // Gradient-paint extension. When availableModes includes "gradient",
+  // the picker shows mode tabs at the top. When mode === "gradient",
+  // the picker shows a stops bar + angle controls and edits the active stop.
+  availableModes,
+  mode = "solid",
+  onModeChange,
+  gradient,
+  onGradientChange,
+}) {
   const popoverRef = useRef(null);
   const hueRef = useRef(0);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  // Init HSV from incoming hex
-  const initial = hexToHsv(color || "#000000");
+  const [activeStop, setActiveStop] = useState(0); // 0 = from, 1 = to
+  const isGradient = mode === "gradient";
+  const showTabs = Array.isArray(availableModes) && availableModes.length > 1;
+
+  // What color/opacity the SV-square + hue + hex currently edit.
+  // - solid mode: the prop color/opacity
+  // - gradient mode: the active stop's color/opacity
+  const effectiveColor = isGradient && gradient
+    ? (activeStop === 0 ? (gradient.from || "#000000") : (gradient.to || "#000000"))
+    : (color || "#000000");
+  const effectiveOpacity = isGradient && gradient
+    ? (activeStop === 0 ? (gradient.fromOpacity ?? 1) : (gradient.toOpacity ?? 1))
+    : (opacityProp ?? 1);
+
+  // Init HSV from effective color
+  const initial = hexToHsv(effectiveColor);
   if (initial.s > 0.01 || initial.v > 0.01) hueRef.current = initial.h;
 
   const [hsv, setHsv] = useState({ h: hueRef.current, s: initial.s, v: initial.v });
-  const [hexDraft, setHexDraft] = useState((color || "#000000").replace("#", "").toUpperCase());
-  const [localOpacity, setLocalOpacity] = useState(opacityProp ?? 1);
+  const [hexDraft, setHexDraft] = useState(effectiveColor.replace("#", "").toUpperCase());
+  const [localOpacity, setLocalOpacity] = useState(effectiveOpacity);
   const [pos, setPos] = useState(null);
 
-  const hasExternalOpacity = onOpacityChange != null;
-  const opacity = hasExternalOpacity ? (opacityProp ?? 1) : localOpacity;
-  const setOpacity = hasExternalOpacity ? onOpacityChange : setLocalOpacity;
+  const opacity = effectiveOpacity != null ? effectiveOpacity : localOpacity;
 
-  // Position near anchor
+  function emitColorChange(hex) {
+    if (isGradient && onGradientChange) {
+      onGradientChange(activeStop === 0 ? { from: hex } : { to: hex });
+    } else if (onChange) {
+      onChange(hex);
+    }
+  }
+  function emitOpacityChange(op) {
+    if (isGradient && onGradientChange) {
+      onGradientChange(activeStop === 0 ? { fromOpacity: op } : { toOpacity: op });
+    } else if (onOpacityChange) {
+      onOpacityChange(op);
+    } else {
+      setLocalOpacity(op);
+    }
+  }
+  const setOpacity = emitOpacityChange;
+
+  // When the externally-driven effective color changes (mode flip, stop switch,
+  // parent updated the value), re-sync the internal HSV so the SV square reflects it.
+  useEffect(() => {
+    const next = hexToHsv(effectiveColor);
+    if (next.s > 0.01 || next.v > 0.01) hueRef.current = next.h;
+    setHsv({ h: hueRef.current, s: next.s, v: next.v });
+    setHexDraft(effectiveColor.replace("#", "").toUpperCase());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveColor]);
+
+  // Position near anchor — try left of, then right of, then above, then below.
+  // Pick the first candidate that fits entirely in the viewport. Fall back to
+  // clamping if none fit (very small viewport).
   useLayoutEffect(() => {
     if (!anchorEl) return;
     const rect = anchorEl.getBoundingClientRect();
     const popW = 240;
-    const popH = 310;
-    let top = rect.top - popH - 8;
-    let left = rect.left;
-    // Fall back below if not enough space above
-    if (top < 8) top = rect.bottom + 8;
-    // Clamp horizontal
-    if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
-    if (left < 8) left = 8;
-    setPos({ top, left });
-  }, [anchorEl]);
-
-  // Sync hex draft when hsv changes internally
-  useEffect(() => {
-    const hex = hsvToHex(hsv.h, hsv.s, hsv.v);
-    setHexDraft(hex.replace("#", "").toUpperCase());
-    onChange(hex);
-  }, [hsv.h, hsv.s, hsv.v]);
+    const popH = isGradient ? 400 : 310;
+    const m = 8; // viewport margin
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const centerY = rect.top + rect.height / 2 - popH / 2;
+    const centerX = rect.left + rect.width / 2 - popW / 2;
+    // Preference order: above the anchor (away from inspector below), then
+    // left of anchor (into the canvas area), then below, then right.
+    const candidates = [
+      { left: centerX,                top: rect.top - popH - m }, // above
+      { left: rect.left - popW - m,  top: centerY },             // left of anchor
+      { left: centerX,                top: rect.bottom + m },     // below
+      { left: rect.right + m,         top: centerY },             // right of anchor
+    ];
+    const fits = (c) =>
+      c.left >= m && c.left + popW <= vw - m &&
+      c.top >= m && c.top + popH <= vh - m;
+    let chosen = candidates.find(fits);
+    if (!chosen) {
+      // Clamp the "left of anchor" candidate as fallback
+      const c = candidates[0];
+      chosen = {
+        left: Math.max(m, Math.min(vw - popW - m, c.left)),
+        top: Math.max(m, Math.min(vh - popH - m, c.top)),
+      };
+    }
+    setPos(chosen);
+  }, [anchorEl, isGradient]);
 
   // Click outside — delay registration by one frame to avoid catching the opening click
   useEffect(() => {
@@ -277,11 +341,17 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
       if (s > 0.01 || v > 0.01) hueRef.current = prev.h;
       return { h: prev.h, s, v };
     });
+    const hex = hsvToHex(hueRef.current, s, v);
+    setHexDraft(hex.replace("#", "").toUpperCase());
+    emitColorChange(hex);
   }
 
   function onHueChange(h) {
     hueRef.current = h;
     setHsv((prev) => ({ ...prev, h }));
+    const hex = hsvToHex(h, hsv.s, hsv.v);
+    setHexDraft(hex.replace("#", "").toUpperCase());
+    emitColorChange(hex);
   }
 
   function onHexCommit() {
@@ -290,6 +360,7 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
       const parsed = hexToHsv(`#${cleaned}`);
       if (parsed.s > 0.01 || parsed.v > 0.01) hueRef.current = parsed.h;
       setHsv({ h: hueRef.current, s: parsed.s, v: parsed.v });
+      emitColorChange(`#${cleaned.toLowerCase()}`);
     } else {
       // Revert to current
       setHexDraft(hsvToHex(hsv.h, hsv.s, hsv.v).replace("#", "").toUpperCase());
@@ -308,9 +379,11 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
         const parsed = hexToHsv(result.sRGBHex);
         if (parsed.s > 0.01 || parsed.v > 0.01) hueRef.current = parsed.h;
         setHsv({ h: hueRef.current, s: parsed.s, v: parsed.v });
+        emitColorChange(result.sRGBHex);
       }
     } catch { /* user cancelled */ }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGradient, activeStop]);
 
   if (!pos) return null;
 
@@ -321,6 +394,71 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
       style={{ top: pos.top, left: pos.left, width: 240 }}
     >
       <div className="space-y-3">
+        {showTabs && (
+          <div className="flex gap-1 rounded-md bg-app p-0.5">
+            {availableModes.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onModeChange?.(m)}
+                className={[
+                  "flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors",
+                  mode === m
+                    ? "bg-panel text-text shadow-sm"
+                    : "text-muted2 hover:text-text",
+                ].join(" ")}
+              >
+                {m === "solid" ? "Solid" : m === "gradient" ? "Linear" : m}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {isGradient && gradient && (
+          <>
+            <div className="flex items-center gap-2">
+              <GradientStopsBar
+                gradient={gradient}
+                activeStop={activeStop}
+                onSelectStop={setActiveStop}
+              />
+              <button
+                type="button"
+                title="Reverse stops"
+                onClick={() => onGradientChange?.({
+                  from: gradient.to,
+                  fromOpacity: gradient.toOpacity,
+                  to: gradient.from,
+                  toOpacity: gradient.fromOpacity,
+                })}
+                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-border/60 bg-app text-muted hover:bg-hover hover:text-text"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={360}
+                step={1}
+                value={Math.round(gradient.angle ?? 0)}
+                onChange={(e) => onGradientChange?.({ angle: Number(e.target.value) })}
+                className="flex-1 accent-[rgb(var(--accent-color))]"
+              />
+              <input
+                type="number"
+                value={Math.round(gradient.angle ?? 0)}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v)) onGradientChange?.({ angle: ((v % 360) + 360) % 360 });
+                }}
+                className="hide-spinner w-12 h-6 rounded border border-border/60 bg-app px-1.5 text-center text-[11px] text-text outline-none"
+              />
+            </div>
+          </>
+        )}
+
         <SatBrightArea hue={hsv.h} sat={hsv.s} val={hsv.v} onChange={onSBChange} />
         <HueSlider hue={hsv.h} onChange={onHueChange} />
         <OpacitySlider hue={hsv.h} sat={hsv.s} val={hsv.v} opacity={opacity} onChange={setOpacity} />
@@ -329,12 +467,12 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
         <div className="flex items-center gap-1.5">
           {/* Preview swatch with checkerboard behind for transparency */}
           <div
-            className="h-7 w-7 shrink-0 rounded border border-border"
+            className="h-6 w-6 shrink-0 rounded border border-border"
             style={{
               background: `linear-gradient(rgba(${cr},${cg},${cb},${opacity}), rgba(${cr},${cg},${cb},${opacity})), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 8px 8px`,
             }}
           />
-          <div className="flex flex-1 items-center rounded border border-border/60 bg-app px-2 py-1">
+          <div className="flex h-6 flex-1 items-center rounded border border-border/60 bg-app px-2">
             <span className="text-[11px] text-muted2">#</span>
             <input
               type="text"
@@ -343,11 +481,11 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
               onBlur={onHexCommit}
               onKeyDown={(e) => { if (e.key === "Enter") onHexCommit(); }}
               maxLength={6}
-              className="ml-0.5 w-full bg-transparent text-[12px] text-text outline-none"
+              className="ml-0.5 w-full bg-transparent text-[11px] text-text outline-none"
               spellCheck={false}
             />
           </div>
-          <div className="flex w-[52px] items-center rounded border border-border/60 bg-app px-1.5 py-1">
+          <div className="flex h-6 w-[52px] items-center rounded border border-border/60 bg-app px-1.5">
             <input
               type="text"
               value={`${Math.round(opacity * 100)}`}
@@ -356,7 +494,7 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
                 if (!isNaN(v)) setOpacity(Math.max(0, Math.min(1, v / 100)));
               }}
               onBlur={() => {}}
-              className="w-full bg-transparent text-center text-[12px] text-text outline-none"
+              className="w-full bg-transparent text-center text-[11px] text-text outline-none"
               spellCheck={false}
             />
             <span className="text-[10px] text-muted2">%</span>
@@ -364,7 +502,7 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
           {window.EyeDropper && (
             <button
               type="button"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border/60 bg-app transition-colors hover:bg-hover"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border/60 bg-app transition-colors hover:bg-hover"
               title="Pick color from screen"
               onClick={pickFromScreen}
             >
@@ -374,8 +512,86 @@ export default function ColorPickerPopover({ color, onChange, onClose, anchorEl,
             </button>
           )}
         </div>
+
+        {/* Optional preset swatches */}
+        {Array.isArray(presets) && presets.length > 0 && (
+          <div className="border-t border-border/60 pt-2">
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">Presets</div>
+            <div className="flex flex-wrap gap-1.5">
+              {presets.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => onChange(p)}
+                  className={[
+                    "h-[20px] w-[20px] rounded-full border-2 transition-all hover:scale-110",
+                    color?.toLowerCase() === p.toLowerCase()
+                      ? "border-[rgb(var(--accent-color))] shadow-[0_0_0_1.5px_rgb(var(--accent-color))]"
+                      : "border-transparent",
+                  ].join(" ")}
+                  style={{ background: p }}
+                  title={p}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
   );
 }
+
+// ── Gradient sub-components ─────────────────────────────────
+
+function GradientStopsBar({ gradient, activeStop, onSelectStop }) {
+  const fromCss = hexToRgba(gradient.from || "#000000", gradient.fromOpacity ?? 1);
+  const toCss = hexToRgba(gradient.to || "#ffffff", gradient.toOpacity ?? 1);
+  // Stop handles sit INSIDE the bar (not protruding) and are a thin vertical
+  // line with a soft outline — visible enough to grab, never visually noisy.
+  const Handle = ({ side, isActive, onClick }) => {
+    const stopCss = side === "left" ? fromCss : toCss;
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Edit ${side === "left" ? "start" : "end"} stop`}
+        className={[
+          "absolute top-0 bottom-0 rounded-[2px] cursor-pointer transition-[width] duration-100",
+          isActive ? "w-3" : "w-2",
+        ].join(" ")}
+        style={{
+          [side]: "2px",
+          background: stopCss,
+          // Always neutral white + dark double-outline so handles read on any
+          // gradient color. Active is signalled by being slightly WIDER, not
+          // by a coloured ring (which collides with the brand accent).
+          boxShadow: isActive
+            ? "0 0 0 1.5px rgba(255,255,255,1), inset 0 0 0 1px rgba(0,0,0,0.35)"
+            : "0 0 0 1px rgba(255,255,255,0.85), inset 0 0 0 1px rgba(0,0,0,0.25)",
+        }}
+      />
+    );
+  };
+  return (
+    <div className="relative h-6 flex-1">
+      <div
+        className="absolute inset-0 rounded"
+        style={{
+          background: `linear-gradient(90deg, ${fromCss}, ${toCss}), repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%) 50% / 6px 6px`,
+        }}
+      />
+      <Handle side="left" isActive={activeStop === 0} onClick={(e) => { e.stopPropagation(); onSelectStop(0); }} />
+      <Handle side="right" isActive={activeStop === 1} onClick={(e) => { e.stopPropagation(); onSelectStop(1); }} />
+    </div>
+  );
+}
+
+function hexToRgba(hex, alpha) {
+  const h = (hex || "#000000").replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+

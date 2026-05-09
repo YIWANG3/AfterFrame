@@ -35,6 +35,10 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 ![文字编辑器](docs/assets/editor-text.png)
 
+- **深度感知文字**：本地 CoreML 深度推理（Depth Anything V2），让文字像 iPhone 锁屏壁纸一样落在主体后面。支持选择自定义模型，偏好设置自动持久化
+
+![深度感知文字](docs/assets/editor-text-depth.png)
+
 - **拼图**：8 种布局模板，可调间距/内边距/圆角，自定义背景色，支持高分辨率导出
 
 ![拼图](docs/assets/collage.png)

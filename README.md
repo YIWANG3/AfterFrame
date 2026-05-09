@@ -35,6 +35,10 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![Text Editor](docs/assets/editor-text.png)
 
+- **Depth-aware Text** — on-device CoreML depth inference (Depth Anything V2) lets text sit behind subjects in the scene, iPhone-wallpaper style. Bring your own model via the model picker; preference is persisted
+
+![Depth-aware Text](docs/assets/editor-text-depth.png)
+
 - **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export
 
 ![Collage](docs/assets/collage.png)

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, memo, useEffect } from "react";
+import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
 import { getBgPadding } from "./textState";
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
@@ -53,6 +53,9 @@ export default function TextCanvas({
   onSelectionChange,
   onLayersChange,
   tool,
+  depthFieldCanvas,
+  depthFieldVersion,
+  depthFeather = 0.08,
 }) {
   const dragRef = useRef(null);
   const containerRef = useRef(null);
@@ -126,10 +129,15 @@ export default function TextCanvas({
           l.id === drag.layerId ? { ...l, rotation: deg } : l
         ));
       } else if (drag.type === "resize") {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const sign = (dx + dy) > 0 ? 1 : -1;
-        const sc = 1 + (sign * dist) / 200;
-        const newSize = Math.round(Math.max(12, Math.min(400, drag.origFontSize * sc)));
+        // Use distance from text center: pulling pointer AWAY from center
+        // grows the text (regardless of which handle was grabbed); pushing
+        // toward center shrinks it.
+        const cx = imageRect.x + layer.x * imageRect.width;
+        const cy = imageRect.y + layer.y * imageRect.height;
+        const startDist = Math.hypot(drag.startX - cx, drag.startY - cy);
+        const curDist = Math.hypot(me.clientX - cx, me.clientY - cy);
+        const ratio = startDist > 0 ? curDist / startDist : 1;
+        const newSize = Math.round(Math.max(8, Math.min(2000, drag.origFontSize * ratio)));
         onLayersChange(layers.map((l) =>
           l.id === drag.layerId ? { ...l, fontSize: newSize } : l
         ));
@@ -167,6 +175,37 @@ export default function TextCanvas({
     }
   }, [layers, onLayersChange]);
 
+  // Cache mask data URLs by zPosition; invalidates when depth field or feather changes.
+  const maskCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather]);
+  const getMaskUrl = useCallback((zPosition) => {
+    if (!depthFieldCanvas || zPosition == null || zPosition >= 1) return null;
+    const key = zPosition.toFixed(3);
+    if (maskCache.has(key)) return maskCache.get(key);
+    const dW = depthFieldCanvas.width;
+    const dH = depthFieldCanvas.height;
+    const data = depthFieldCanvas.getContext("2d").getImageData(0, 0, dW, dH).data;
+    const lo = Math.max(0, zPosition - depthFeather / 2);
+    const hi = Math.min(1, zPosition + depthFeather / 2);
+    const out = document.createElement("canvas");
+    out.width = dW; out.height = dH;
+    const oCtx = out.getContext("2d");
+    const id = oCtx.createImageData(dW, dH);
+    for (let i = 0; i < dW * dH; i++) {
+      const d = data[i * 4] / 255;
+      let a;
+      if (d <= lo) a = 1;
+      else if (d >= hi) a = 0;
+      else a = 1 - (d - lo) / (hi - lo);
+      const p = i * 4;
+      id.data[p] = 255; id.data[p + 1] = 255; id.data[p + 2] = 255;
+      id.data[p + 3] = Math.round(a * 255);
+    }
+    oCtx.putImageData(id, 0, 0);
+    const url = out.toDataURL();
+    maskCache.set(key, url);
+    return url;
+  }, [depthFieldCanvas, depthFieldVersion, depthFeather, maskCache]);
+
   if (tool !== "text" || !imageRect) return null;
 
   const scale = imageRect.width / 1920;
@@ -180,35 +219,56 @@ export default function TextCanvas({
     >
       {layers.map((layer) => {
         const fontSize = layer.fontSize * scale;
-        const px = imageRect.x + layer.x * imageRect.width;
-        const py = imageRect.y + layer.y * imageRect.height;
+        // Image-relative coords inside the per-layer mask wrapper
+        const px = layer.x * imageRect.width;
+        const py = layer.y * imageRect.height;
         const isSelected = selectedIds.has(layer.id);
+        const maskUrl = getMaskUrl(layer.zPosition);
+        const wrapperStyle = {
+          position: "absolute",
+          left: `${imageRect.x}px`,
+          top: `${imageRect.y}px`,
+          width: `${imageRect.width}px`,
+          height: `${imageRect.height}px`,
+          overflow: "visible",
+          ...(maskUrl
+            ? {
+                WebkitMaskImage: `url(${maskUrl})`,
+                maskImage: `url(${maskUrl})`,
+                WebkitMaskSize: "100% 100%",
+                maskSize: "100% 100%",
+                WebkitMaskRepeat: "no-repeat",
+                maskRepeat: "no-repeat",
+              }
+            : {}),
+        };
 
         return (
-          <TextLayerEl
-            key={layer.id}
-            layer={layer}
-            fontSize={fontSize}
-            scale={scale}
-            px={px}
-            py={py}
-            isSelected={isSelected}
-            isEditing={editingId === layer.id}
-            onDragStart={(e, type) => startDrag(e, layer.id, type)}
-            onDoubleClick={() => handleDoubleClick(layer.id)}
-            onEditBlur={(text) => handleEditBlur(layer.id, text)}
-            onEditInput={(id, text) => handleEditInput(id, text)}
-            onSelect={(e) => {
-              e.stopPropagation();
-              if (e.shiftKey) {
-                const next = new Set(selectedIds);
-                next.has(layer.id) ? next.delete(layer.id) : next.add(layer.id);
-                onSelectionChange(next);
-              } else if (!selectedIds.has(layer.id)) {
-                onSelectionChange(new Set([layer.id]));
-              }
-            }}
-          />
+          <div key={layer.id} style={wrapperStyle}>
+            <TextLayerEl
+              layer={layer}
+              fontSize={fontSize}
+              scale={scale}
+              px={px}
+              py={py}
+              isSelected={isSelected}
+              isEditing={editingId === layer.id}
+              onDragStart={(e, type) => startDrag(e, layer.id, type)}
+              onDoubleClick={() => handleDoubleClick(layer.id)}
+              onEditBlur={(text) => handleEditBlur(layer.id, text)}
+              onEditInput={(id, text) => handleEditInput(id, text)}
+              onSelect={(e) => {
+                e.stopPropagation();
+                if (e.shiftKey) {
+                  const next = new Set(selectedIds);
+                  next.has(layer.id) ? next.delete(layer.id) : next.add(layer.id);
+                  onSelectionChange(next);
+                } else if (!selectedIds.has(layer.id)) {
+                  onSelectionChange(new Set([layer.id]));
+                }
+              }}
+            />
+          </div>
         );
       })}
       {/* Snap guide lines */}
@@ -242,9 +302,14 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
     color = "transparent";
   }
 
-  const shadow = layer.shadow
+  const shadowParts = layer.shadow
     ? `${layer.shadowX * scale}px ${layer.shadowY * scale}px ${layer.shadowBlur * scale}px ${hexToRgba(layer.shadowColor, layer.shadowOpacity / 100)}`
-    : "none";
+    : null;
+  // CSS text-shadow paints UNDER the foreground glyph fill, but with
+  // background-clip: text + transparent foreground (gradient fill) the shadow
+  // can show through the transparent areas. drop-shadow operates on the actual
+  // rendered output, so it always paints behind the gradient text.
+  const useDropShadow = layer.fillMode === "gradient" && shadowParts;
 
   const strokeWidth = layer.strokeEnabled && layer.strokeWidth > 0
     ? layer.strokeWidth * scale : 0;
@@ -258,15 +323,29 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
     backgroundImage,
     WebkitBackgroundClip: webkitBackgroundClip,
     WebkitTextFillColor: webkitTextFillColor,
-    textShadow: shadow,
+    textShadow: !useDropShadow && shadowParts ? shadowParts : "none",
+    filter: useDropShadow ? `drop-shadow(${shadowParts})` : undefined,
     opacity: layer.opacity / 100,
     whiteSpace: "nowrap",
     lineHeight: 1.2,
-    textDecoration: layer.underline ? "underline" : "none",
-    textDecorationColor: layer.fillMode === "gradient" ? layer.gradientFrom : undefined,
+    textDecorationLine: layer.underline ? "underline" : "none",
+    // Always set an explicit color: in gradient mode `color` becomes "transparent",
+    // which would also make text-decoration invisible if it inherits from color.
+    textDecorationColor: layer.underline
+      ? (layer.fillMode === "gradient"
+          ? (layer.gradientFrom || "#ffffff")
+          : layer.fillColor)
+      : undefined,
+    textDecorationThickness: layer.underline ? `${Math.max(2, fontSize * 0.04)}px` : undefined,
+    textUnderlineOffset: layer.underline ? `${Math.max(2, fontSize * 0.06)}px` : undefined,
     paintOrder: strokeWidth > 0 ? "stroke fill" : undefined,
     WebkitTextStrokeWidth: strokeWidth > 0 ? `${strokeWidth * 2}px` : undefined,
-    WebkitTextStrokeColor: strokeWidth > 0 ? layer.strokeColor : undefined,
+    // When stroke mode is gradient we render the actual stroke via an SVG overlay
+    // (CSS -webkit-text-stroke doesn't support gradients). Set color to transparent
+    // here so the HTML stroke doesn't paint over the SVG one.
+    WebkitTextStrokeColor: strokeWidth > 0
+      ? (layer.strokeMode === "gradient" ? "transparent" : layer.strokeColor)
+      : undefined,
   };
 
   return (
@@ -291,18 +370,26 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       }}
     >
       {/* Background */}
-      {layer.bgMode === "solid" && (() => {
+      {(layer.bgMode === "solid" || layer.bgMode === "gradient") && (() => {
         const pad = getBgPadding(layer);
         const t = (fontSize * pad.top) / 100;
         const r = (fontSize * pad.right) / 100;
         const b = (fontSize * pad.bottom) / 100;
         const l = (fontSize * pad.left) / 100;
+        const bgOp = (layer.bgOpacity ?? 100) / 100;
+        const bgStyle = layer.bgMode === "gradient"
+          ? {
+              backgroundImage: `linear-gradient(${layer.bgGradAngle ?? 90}deg, ${hexToRgba(layer.bgGradFrom ?? layer.bgColor ?? "#000", ((layer.bgGradFromOpacity ?? 100) / 100) * bgOp)}, ${hexToRgba(layer.bgGradTo ?? "#fff", ((layer.bgGradToOpacity ?? 100) / 100) * bgOp)})`,
+            }
+          : {
+              backgroundColor: hexToRgba(layer.bgColor, bgOp),
+            };
         return (
           <div
             style={{
               position: "absolute",
               inset: `${-t}px ${-r}px ${-b}px ${-l}px`,
-              backgroundColor: hexToRgba(layer.bgColor, layer.bgOpacity / 100),
+              ...bgStyle,
               borderRadius: 0,
               pointerEvents: "none",
               zIndex: 0,
@@ -331,6 +418,45 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
         <div style={{ ...textStyle, pointerEvents: "none", position: "relative", zIndex: 1 }}>
           {layer.text || "\u00A0"}
         </div>
+      )}
+
+      {/* SVG stroke gradient overlay \u2014 CSS WebkitTextStroke doesn't support gradients,
+          so when stroke mode is gradient we render an SVG <text> behind the HTML one
+          with stroke="url(#grad)". The HTML text on top covers the inner half of the
+          stroke (paint-order trick), giving an outer-only gradient stroke. */}
+      {!isEditing && layer.strokeEnabled && layer.strokeMode === "gradient" && layer.strokeWidth > 0 && (
+        <svg
+          aria-hidden
+          style={{
+            position: "absolute", left: 0, top: 0, width: "100%", height: "100%",
+            overflow: "visible", pointerEvents: "none", zIndex: 0,
+          }}
+        >
+          <defs>
+            <linearGradient
+              id={`stroke-grad-${layer.id}`}
+              gradientUnits="objectBoundingBox"
+              gradientTransform={`rotate(${(layer.strokeGradAngle ?? 90) - 90} 0.5 0.5)`}
+            >
+              <stop offset="0" stopColor={layer.strokeGradFrom || layer.strokeColor} stopOpacity={(layer.strokeGradFromOpacity ?? 100) / 100} />
+              <stop offset="1" stopColor={layer.strokeGradTo || "#000000"} stopOpacity={(layer.strokeGradToOpacity ?? 100) / 100} />
+            </linearGradient>
+          </defs>
+          <text
+            x="50%" y="50%"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontFamily={`"${layer.fontFamily}", sans-serif`}
+            fontSize={fontSize}
+            fontWeight={fontWeight}
+            fontStyle={fontStyle}
+            stroke={`url(#stroke-grad-${layer.id})`}
+            strokeWidth={layer.strokeWidth * scale * 2}
+            strokeLinejoin="round"
+            fill="transparent"
+            paintOrder="stroke"
+          >{layer.text || ""}</text>
+        </svg>
       )}
 
       {isSelected && !isEditing && (

@@ -21,6 +21,12 @@ import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
 import { createDefaultLayer, getBgPadding } from "./editor/textState";
+import {
+  isTextLayer,
+  getTextLayers,
+  moveLayerBy,
+  removeLayerById,
+} from "./editor/layerStack";
 
 const PREVIEW_MAX_EDGE = 2200;
 const PANEL_WIDTH = 320;
@@ -113,6 +119,49 @@ function releaseCanvasImage(source) {
   if (typeof HTMLImageElement !== "undefined" && source instanceof HTMLImageElement) return;
   source.width = 0;
   source.height = 0;
+}
+
+// Build an alpha-only mask canvas at the requested output size.
+// White (alpha 255) where the depth field is < zPosition (text shows through);
+// black where depth is > zPosition (text is hidden behind nearer pixels).
+// `depthCanvas` is the 518×392 grayscale depth field (R=G=B=depth, 0=far, 255=near).
+function buildDepthMaskCanvas(depthCanvas, outW, outH, zPosition, feather) {
+  const dW = depthCanvas.width;
+  const dH = depthCanvas.height;
+  const dCtx = depthCanvas.getContext("2d");
+  const data = dCtx.getImageData(0, 0, dW, dH).data;
+  const z = Math.max(0, Math.min(1, zPosition));
+  const f = Math.max(0, Math.min(0.5, feather));
+  const lo = z - f / 2;
+  const hi = z + f / 2;
+  // Build mask at depth resolution then upsample with canvas
+  const small = document.createElement("canvas");
+  small.width = dW;
+  small.height = dH;
+  const sCtx = small.getContext("2d");
+  const out = sCtx.createImageData(dW, dH);
+  for (let i = 0; i < dW * dH; i++) {
+    const d = data[i * 4] / 255; // 0..1, near=1
+    let alpha;
+    if (d <= lo) alpha = 1;
+    else if (d >= hi) alpha = 0;
+    else alpha = 1 - (d - lo) / (hi - lo);
+    const p = i * 4;
+    out.data[p] = 255;
+    out.data[p + 1] = 255;
+    out.data[p + 2] = 255;
+    out.data[p + 3] = Math.round(alpha * 255);
+  }
+  sCtx.putImageData(out, 0, 0);
+  // Upscale to output size using canvas (smooth bilinear)
+  const big = document.createElement("canvas");
+  big.width = outW;
+  big.height = outH;
+  const bCtx = big.getContext("2d");
+  bCtx.imageSmoothingEnabled = true;
+  bCtx.imageSmoothingQuality = "high";
+  bCtx.drawImage(small, 0, 0, outW, outH);
+  return big;
 }
 
 function buildTransformedCanvas(source, width, height, rotationDeg, flipX, flipY) {
@@ -570,6 +619,7 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
 export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
   const viewportRef = useRef(null);
   const imageCanvasRef = useRef(null);
+  const depthOverlayCanvasRef = useRef(null);
   const sourceImageRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
   const pointerStateRef = useRef(null);
@@ -593,11 +643,52 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
   const [saving, setSaving] = useState(false);
   const [activeInteraction, setActiveInteraction] = useState(null);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
-  const [textLayers, setTextLayers] = useState([]);
-  const [textSelectedIds, setTextSelectedIds] = useState(new Set());
-  const textHistoryRef = useRef([]);
-  const textHistoryIndexRef = useRef(-1);
+  const [layers, setLayers] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const layerHistoryRef = useRef([[]]);
+  const layerHistoryIndexRef = useRef(0);
   const textClipboardRef = useRef(null);
+  // Scene-level depth: one Depth Anything V2 inference per source image,
+  // cached as both an Image (for visualization) and a Canvas (for pixel reads).
+  const [depthGenerating, setDepthGenerating] = useState(false);
+  const [depthError, setDepthError] = useState(null);
+  const [depthSourcePath, setDepthSourcePath] = useState(null); // path of the depth PNG on disk
+  const depthFieldImageRef = useRef(null);   // HTMLImageElement
+  const depthFieldCanvasRef = useRef(null);  // OffscreenCanvas-style canvas at 518x392
+  const [depthFieldVersion, setDepthFieldVersion] = useState(0); // bumps when depth changes
+  const [depthFeather, setDepthFeather] = useState(0.08);        // global, 0..0.5
+  const [depthMapVisible, setDepthMapVisible] = useState(false); // debug overlay toggle
+  const [depthModel, setDepthModel] = useState(null);            // { path, name, isCustom, bundledPath }
+
+  useEffect(() => {
+    if (!window.mediaWorkspace?.getDepthModel) return;
+    window.mediaWorkspace.getDepthModel().then(setDepthModel).catch(() => {});
+  }, []);
+
+  async function handlePickDepthModel() {
+    if (!window.mediaWorkspace?.pickDepthModel) return;
+    try {
+      const next = await window.mediaWorkspace.pickDepthModel();
+      if (next) {
+        setDepthModel(next);
+        // Force-regenerate so the new model's output replaces the cached one.
+        if (sourcePath) await handleComputeDepth({ force: true });
+      }
+    } catch (err) {
+      setDepthError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleResetDepthModel() {
+    if (!window.mediaWorkspace?.resetDepthModel) return;
+    try {
+      const next = await window.mediaWorkspace.resetDepthModel();
+      setDepthModel(next);
+      if (sourcePath) await handleComputeDepth({ force: true });
+    } catch (err) {
+      setDepthError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   const sourcePath = item?.export_path || item?.export_preview_path || item?.raw_preview_path || null;
   const sourceLabel = fileName(sourcePath) || item?.stem || "Selected asset";
@@ -645,32 +736,99 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
     return snapshot;
   }
 
-  function handleTextLayersChange(nextLayers) {
+  function commitLayers(nextLayers) {
     const snap = nextLayers.map((l) => ({ ...l }));
-    textHistoryRef.current = textHistoryRef.current.slice(0, textHistoryIndexRef.current + 1);
-    textHistoryRef.current.push(snap);
-    textHistoryIndexRef.current = textHistoryRef.current.length - 1;
-    setTextLayers(snap);
+    layerHistoryRef.current = layerHistoryRef.current.slice(0, layerHistoryIndexRef.current + 1);
+    layerHistoryRef.current.push(snap);
+    layerHistoryIndexRef.current = layerHistoryRef.current.length - 1;
+    setLayers(snap);
   }
-  function textUndo() {
-    if (textHistoryIndexRef.current <= 0) return;
-    textHistoryIndexRef.current--;
-    setTextLayers(textHistoryRef.current[textHistoryIndexRef.current]);
+  function layerUndo() {
+    if (layerHistoryIndexRef.current <= 0) return;
+    layerHistoryIndexRef.current--;
+    setLayers(layerHistoryRef.current[layerHistoryIndexRef.current]);
   }
-  function textRedo() {
-    if (textHistoryIndexRef.current >= textHistoryRef.current.length - 1) return;
-    textHistoryIndexRef.current++;
-    setTextLayers(textHistoryRef.current[textHistoryIndexRef.current]);
+  function layerRedo() {
+    if (layerHistoryIndexRef.current >= layerHistoryRef.current.length - 1) return;
+    layerHistoryIndexRef.current++;
+    setLayers(layerHistoryRef.current[layerHistoryIndexRef.current]);
   }
-  function textReset() {
-    handleTextLayersChange([]);
-    setTextSelectedIds(new Set());
+  function layerReset() {
+    commitLayers([]);
+    setSelectedIds(new Set());
+    clearSceneDepth();
   }
-  function textResetHard() {
-    setTextLayers([]);
-    setTextSelectedIds(new Set());
-    textHistoryRef.current = [[]];
-    textHistoryIndexRef.current = 0;
+  function layerResetHard() {
+    setLayers([]);
+    setSelectedIds(new Set());
+    layerHistoryRef.current = [[]];
+    layerHistoryIndexRef.current = 0;
+    clearSceneDepth();
+  }
+
+  function handleMoveLayer(id, direction) {
+    commitLayers(moveLayerBy(layers, id, direction));
+  }
+
+  function handleDeleteLayer(id) {
+    commitLayers(removeLayerById(layers, id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function clearSceneDepth() {
+    depthFieldImageRef.current = null;
+    depthFieldCanvasRef.current = null;
+    setDepthSourcePath(null);
+    setDepthFieldVersion((v) => v + 1);
+  }
+
+  async function loadDepthFromPath(fieldPath) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error("Failed to load depth field"));
+      img.src = localFileUrl(fieldPath);
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    depthFieldImageRef.current = img;
+    depthFieldCanvasRef.current = canvas;
+    setDepthSourcePath(fieldPath);
+    setDepthFieldVersion((v) => v + 1);
+  }
+
+  async function handleComputeDepth({ force = false } = {}) {
+    if (!sourcePath) {
+      setDepthError("No source image.");
+      return;
+    }
+    if (!window.mediaWorkspace?.computeDepth) {
+      setDepthError("Depth API unavailable.");
+      return;
+    }
+    setDepthGenerating(true);
+    setDepthError(null);
+    try {
+      const result = await window.mediaWorkspace.computeDepth({ sourcePath, force });
+      if (!result?.outputPath) throw new Error("Empty result");
+      await loadDepthFromPath(result.outputPath);
+    } catch (err) {
+      setDepthError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDepthGenerating(false);
+    }
+  }
+
+  function handleClearDepth() {
+    clearSceneDepth();
+    setDepthError(null);
   }
 
   function drawTextLayersOnCanvas(ctx, canvasWidth, canvasHeight, layersToRender) {
@@ -697,13 +855,25 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       else if (layer.align === "right") alignOffsetX = -tw / 2;
 
       // Background
-      if (layer.bgMode === "solid") {
+      if (layer.bgMode === "solid" || layer.bgMode === "gradient") {
         const pad = getBgPadding(layer);
         const padT = (fontSize * pad.top) / 100;
         const padR = (fontSize * pad.right) / 100;
         const padB = (fontSize * pad.bottom) / 100;
         const padL = (fontSize * pad.left) / 100;
-        ctx.fillStyle = hexToRgba(layer.bgColor, layer.bgOpacity / 100);
+        const bgOp = (layer.bgOpacity ?? 100) / 100;
+        if (layer.bgMode === "gradient") {
+          const angle = ((layer.bgGradAngle ?? 90) * Math.PI) / 180;
+          const halfDiag = (Math.abs(Math.cos(angle)) * (tw + padL + padR) + Math.abs(Math.sin(angle)) * (th + padT + padB)) / 2;
+          const gx = Math.cos(angle) * halfDiag;
+          const gy = Math.sin(angle) * halfDiag;
+          const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
+          grad.addColorStop(0, hexToRgba(layer.bgGradFrom ?? layer.bgColor ?? "#000", ((layer.bgGradFromOpacity ?? 100) / 100) * bgOp));
+          grad.addColorStop(1, hexToRgba(layer.bgGradTo ?? "#fff", ((layer.bgGradToOpacity ?? 100) / 100) * bgOp));
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle = hexToRgba(layer.bgColor, bgOp);
+        }
         ctx.fillRect(-tw / 2 - padL, -th / 2 - padT, tw + padL + padR, th + padT + padB);
       }
 
@@ -731,7 +901,17 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
 
       // Outer stroke: draw stroke first (2x width), then fill on top to cover inner half
       if (layer.strokeEnabled && layer.strokeWidth > 0) {
-        ctx.strokeStyle = layer.strokeColor;
+        if (layer.strokeMode === "gradient") {
+          const angle = ((layer.strokeGradAngle ?? 90) * Math.PI) / 180;
+          const gx = Math.cos(angle) * tw / 2;
+          const gy = Math.sin(angle) * tw / 2;
+          const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
+          grad.addColorStop(0, hexToRgba(layer.strokeGradFrom ?? layer.strokeColor, (layer.strokeGradFromOpacity ?? 100) / 100));
+          grad.addColorStop(1, hexToRgba(layer.strokeGradTo ?? "#000", (layer.strokeGradToOpacity ?? 100) / 100));
+          ctx.strokeStyle = grad;
+        } else {
+          ctx.strokeStyle = layer.strokeColor;
+        }
         ctx.lineWidth = layer.strokeWidth * scale * 2;
         ctx.lineJoin = "round";
         ctx.strokeText(layer.text || " ", alignOffsetX, 0);
@@ -745,7 +925,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
   }
 
   function handleTextApply() {
-    if (!sourceImage || textLayers.length === 0) return;
+    const textOnly = getTextLayers(layers);
+    if (!sourceImage || textOnly.length === 0) return;
     const { width: sw, height: sh } = getSourceDimensions(sourceImage);
     const composite = document.createElement("canvas");
     composite.width = sw;
@@ -755,7 +936,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(sourceImage, 0, 0, sw, sh);
 
-    drawTextLayersOnCanvas(ctx, sw, sh, textLayers);
+    drawTextLayersOnCanvas(ctx, sw, sh, textOnly);
 
     composite.naturalWidth = sw;
     composite.naturalHeight = sh;
@@ -770,7 +951,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
     quickSavePathRef.current = null;
     syncHistory([], -1);
     applyState(BASE_STATE);
-    textResetHard();
+    layerResetHard();
     setMessage("Text applied");
   }
 
@@ -783,12 +964,25 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
     setLoadState("loading");
     setSourceImage(null);
     setPreviewSource(null);
+    setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
     nativeSaveSourcePathRef.current = sourcePath;
     syncHistory([], -1);
     applyState(BASE_STATE);
-    textResetHard();
+    layerResetHard();
+
+    // Auto-load cached depth if it exists for this source image. Same image
+    // (path + size + mtime) hits the cache; no ML inference.
+    if (window.mediaWorkspace?.computeDepth) {
+      window.mediaWorkspace.computeDepth({ sourcePath, checkOnly: true })
+        .then((cached) => {
+          if (active && cached?.outputPath) {
+            loadDepthFromPath(cached.outputPath).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
 
     // Release previous source image canvas memory
     const prevSource = sourceImageRef.current;
@@ -1233,6 +1427,22 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
     context.drawImage(transformedPreview, 0, 0);
   }, [transformedPreview, imageRect]);
 
+  // Paint the depth field into a display canvas with the SAME intrinsic dimensions
+  // as the source canvas. This way the two canvases share identical
+  // intrinsic-to-CSS scaling and stay pixel-aligned at any zoom.
+  useEffect(() => {
+    if (!depthMapVisible) return;
+    const canvas = depthOverlayCanvasRef.current;
+    const depthCanvas = depthFieldCanvasRef.current;
+    if (!canvas || !depthCanvas || !transformedPreview) return;
+    canvas.width = transformedPreview.width;
+    canvas.height = transformedPreview.height;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(depthCanvas, 0, 0, canvas.width, canvas.height);
+  }, [depthMapVisible, depthFieldVersion, transformedPreview]);
+
+
   function handleUndo() {
     if (historyIndexRef.current <= 0) return;
     const nextIndex = historyIndexRef.current - 1;
@@ -1293,8 +1503,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
     try {
       const normalized = getNormalizedCrop();
 
-      // Try native sharp processing (full resolution) — skip if text layers exist
-      if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePathRef.current && textLayers.length === 0) {
+      // Try native sharp processing (full resolution) — skip if any overlay layers exist
+      if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePathRef.current && layers.length === 0) {
         try {
           await window.mediaWorkspace.processAndSave({
             sourcePath: nativeSaveSourcePathRef.current,
@@ -1359,26 +1569,38 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
         exportRect.height,
       );
 
-      // Composite text layers onto the output canvas
-      if (textLayers.length > 0) {
-        // Text layer coordinates are relative to the source image (pre-transform).
-        // We need to map them to the cropped output.
-        // For simplicity, draw text relative to the output canvas dimensions.
-        // The text x/y are normalized (0-1) relative to the source, so we need to
-        // adjust for crop offset and scale.
-        const fullW = transformedFull.width;
-        const fullH = transformedFull.height;
-        for (const layer of textLayers) {
-          // Map layer position from full-image coords to cropped output coords
-          const absX = layer.x * fullW - exportRect.x;
-          const absY = layer.y * fullH - exportRect.y;
-          const mappedLayer = {
-            ...layer,
-            x: absX / exportRect.width,
-            y: absY / exportRect.height,
-          };
+      // Walk text layers in stack order. Each one is rendered to a temp canvas,
+      // optionally masked by the scene depth field (per-text zPosition), then
+      // composited onto the final output.
+      const fullW = transformedFull.width;
+      const fullH = transformedFull.height;
+      const sceneDepth = depthFieldCanvasRef.current;
+      for (const layer of layers) {
+        if (!isTextLayer(layer)) continue;
+        const absX = layer.x * fullW - exportRect.x;
+        const absY = layer.y * fullH - exportRect.y;
+        const mappedLayer = {
+          ...layer,
+          x: absX / exportRect.width,
+          y: absY / exportRect.height,
+        };
+        const useDepth = sceneDepth && layer.zPosition != null && layer.zPosition < 1;
+        if (!useDepth) {
           drawTextLayersOnCanvas(context, exportRect.width, exportRect.height, [mappedLayer]);
+          continue;
         }
+        // Render text on a temp canvas, then mask with depth
+        const tmp = document.createElement("canvas");
+        tmp.width = exportRect.width;
+        tmp.height = exportRect.height;
+        drawTextLayersOnCanvas(tmp.getContext("2d"), exportRect.width, exportRect.height, [mappedLayer]);
+        const mask = buildDepthMaskCanvas(sceneDepth, exportRect.width, exportRect.height, layer.zPosition, depthFeather);
+        const t = tmp.getContext("2d");
+        t.globalCompositeOperation = "destination-in";
+        t.drawImage(mask, 0, 0);
+        context.drawImage(tmp, 0, 0);
+        releaseCanvasImage(mask);
+        releaseCanvasImage(tmp);
       }
 
       const blob = await canvasToBlob(outputCanvas, inferMimeType(savePath));
@@ -1493,9 +1715,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
         event.preventDefault();
         void handleQuickSave();
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && textSelectedIds.size > 0) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && selectedIds.size > 0) {
         event.preventDefault();
-        const copied = textLayers.filter((l) => textSelectedIds.has(l.id)).map((l) => ({ ...l }));
+        const copied = layers.filter((l) => isTextLayer(l) && selectedIds.has(l.id)).map((l) => ({ ...l }));
         if (copied.length > 0) textClipboardRef.current = copied;
         return;
       }
@@ -1505,16 +1727,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
           const { id, ...rest } = l;
           return createDefaultLayer({ ...rest, x: l.x + 0.02, y: l.y + 0.02 });
         });
-        // Use latest textLayers from history ref to avoid stale closure
-        const currentLayers = textHistoryRef.current[textHistoryIndexRef.current] || [];
-        handleTextLayersChange([...currentLayers, ...pasted]);
-        setTextSelectedIds(new Set(pasted.map((p) => p.id)));
+        const currentLayers = layerHistoryRef.current[layerHistoryIndexRef.current] || [];
+        commitLayers([...currentLayers, ...pasted]);
+        setSelectedIds(new Set(pasted.map((p) => p.id)));
         return;
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && textSelectedIds.size > 0) {
+      if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && selectedIds.size > 0) {
         event.preventDefault();
-        setTextLayers((prev) => prev.filter((l) => !textSelectedIds.has(l.id)));
-        setTextSelectedIds(new Set());
+        commitLayers(layers.filter((l) => !selectedIds.has(l.id)));
+        setSelectedIds(new Set());
         return;
       }
       if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
@@ -1537,7 +1758,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, transformedPreview, tool, textSelectedIds]);
+  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, transformedPreview, tool, selectedIds, layers]);
 
   if (!open) return null;
 
@@ -1603,17 +1824,45 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
                 }}
                 onPointerDown={beginImagePan}
               />
+
+              {/* Show depth map (debug overlay) — a canvas mirror of the source canvas.
+                  Same intrinsic dimensions, same CSS rect, same parent transform → the two
+                  share an identical compositor box and stay pixel-aligned at any zoom. */}
+              {depthMapVisible && depthFieldImageRef.current && (
+                <canvas
+                  ref={depthOverlayCanvasRef}
+                  className="pointer-events-none absolute block select-none"
+                  style={{
+                    left: `${imageRect.x}px`,
+                    top: `${imageRect.y}px`,
+                    width: `${imageRect.width}px`,
+                    height: `${imageRect.height}px`,
+                    opacity: 0.7,
+                  }}
+                />
+              )}
             </div>
 
-            {/* Text overlay canvas */}
-            <TextCanvas
-              layers={textLayers}
-              selectedIds={textSelectedIds}
-              imageRect={imageRect}
-              onSelectionChange={setTextSelectedIds}
-              onLayersChange={handleTextLayersChange}
-              tool={tool}
-            />
+            {/* Layer stack — text groups + depth layers, in user-defined order.
+                Wrappers use zIndex: auto so DOM order = paint order; later siblings paint on top.
+                The side panel (z=20) and crop overlay (z=10) stay above the entire stack
+                regardless of how many layers the user adds. */}
+            <div className="absolute inset-0 isolate">
+              <TextCanvas
+                layers={layers}
+                selectedIds={selectedIds}
+                imageRect={imageRect}
+                onSelectionChange={setSelectedIds}
+                onLayersChange={(updated) => {
+                  const byId = new Map(updated.map((l) => [l.id, l]));
+                  commitLayers(layers.map((l) => byId.get(l.id) || l));
+                }}
+                tool={tool}
+                depthFieldCanvas={depthFieldCanvasRef.current}
+                depthFieldVersion={depthFieldVersion}
+                depthFeather={depthFeather}
+              />
+            </div>
 
             {/* Non-rotating crop overlay — stays axis-aligned, z-10 above rotated image */}
             {showCropUi && cropRect ? (
@@ -1775,16 +2024,30 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
               </>
             ) : tool === "text" ? (
               <TextPanel
-                layers={textLayers}
-                selectedIds={textSelectedIds}
-                onLayersChange={handleTextLayersChange}
-                onSelectionChange={setTextSelectedIds}
+                layers={layers}
+                selectedIds={selectedIds}
+                onLayersChange={commitLayers}
+                onSelectionChange={setSelectedIds}
                 onApply={handleTextApply}
-                onReset={textReset}
-                onUndo={textUndo}
-                onRedo={textRedo}
-                canUndo={textHistoryIndexRef.current > 0}
-                canRedo={textHistoryIndexRef.current < textHistoryRef.current.length - 1}
+                onReset={layerReset}
+                onUndo={layerUndo}
+                onRedo={layerRedo}
+                canUndo={layerHistoryIndexRef.current > 0}
+                canRedo={layerHistoryIndexRef.current < layerHistoryRef.current.length - 1}
+                onMoveLayer={handleMoveLayer}
+                onDeleteLayer={handleDeleteLayer}
+                hasSceneDepth={!!depthSourcePath}
+                depthGenerating={depthGenerating}
+                depthError={depthError}
+                onComputeDepth={handleComputeDepth}
+                onClearDepth={handleClearDepth}
+                depthFeather={depthFeather}
+                onDepthFeatherChange={setDepthFeather}
+                depthMapVisible={depthMapVisible}
+                onToggleDepthMap={setDepthMapVisible}
+                depthModel={depthModel}
+                onPickDepthModel={handlePickDepthModel}
+                onResetDepthModel={handleResetDepthModel}
               />
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
@@ -1797,9 +2060,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
             className="pointer-events-auto flex w-12 flex-col items-center gap-2 rounded-xl border border-border/60 bg-chrome/95 p-1.5 shadow-overlay backdrop-blur-xl"
             data-editor-wheel-scope="toolbar"
           >
-            <ToolTab active={tool === "crop"} icon={Crop} label="Crop" onClick={() => setTool("crop")} />
+            <ToolTab active={tool === "crop"} icon={Crop} label="Crop" onClick={() => { setTool("crop"); setDepthMapVisible(false); }} />
             <ToolTab active={tool === "text"} icon={Type} label="Text" onClick={() => setTool("text")} />
-            <ToolTab active={tool === "ai"} icon={Sparkles} label="AI Repaint" onClick={() => setTool("ai")} />
+            <ToolTab active={tool === "ai"} icon={Sparkles} label="AI Repaint" onClick={() => { setTool("ai"); setDepthMapVisible(false); }} />
           </div>
         </div>
 
