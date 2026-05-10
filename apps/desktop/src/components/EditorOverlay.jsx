@@ -42,6 +42,7 @@ import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useLayerHistory } from "./editor/state/useLayerHistory";
+import { useSceneDepth } from "./editor/state/useSceneDepth";
 import {
   isTextLayer,
   isStickerLayer,
@@ -536,25 +537,36 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const textClipboardRef = useRef(null);
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
-  const [depthGenerating, setDepthGenerating] = useState(false);
-  const [depthError, setDepthError] = useState(null);
-  const [depthSourcePath, setDepthSourcePath] = useState(null); // path of the depth PNG on disk
-  const depthFieldImageRef = useRef(null);   // HTMLImageElement
-  const depthFieldCanvasRef = useRef(null);  // OffscreenCanvas-style canvas at 518x392
-  const [depthFieldVersion, setDepthFieldVersion] = useState(0); // bumps when depth changes
-  const [depthFeather, setDepthFeather] = useState(0.08);        // global, 0..0.5
-  const [depthMapVisible, setDepthMapVisible] = useState(false); // debug overlay toggle
+  const sourcePath = item?.export_path || item?.export_preview_path || item?.raw_preview_path || null;
+  const depth = useSceneDepth({ sourcePath });
+  const {
+    generating: depthGenerating,
+    error: depthError,
+    setError: setDepthError,
+    sourcePathOnDisk: depthSourcePath,
+    fieldImageRef: depthFieldImageRef,
+    fieldCanvasRef: depthFieldCanvasRef,
+    version: depthFieldVersion,
+    feather: depthFeather,
+    setFeather: setDepthFeather,
+    mapVisible: depthMapVisible,
+    setMapVisible: setDepthMapVisible,
+  } = depth;
+  const clearSceneDepth = depth.clear;
+  const loadDepthFromPath = depth.loadFromPath;
+  const handleComputeDepth = depth.compute;
+  const handleClearDepth = depth.clearAll;
+
   const stickerImageCache = useStickerImageCache(layers);
   const sticker = useStickerRegion(item?.asset_id);
 
   const { depthModel, pickDepthModel: handlePickDepthModel, resetDepthModel: handleResetDepthModel } =
     useDepthModel({
-      sourcePath: item?.export_path || item?.export_preview_path || item?.raw_preview_path || null,
+      sourcePath,
       onComputeDepth: (opts) => handleComputeDepth(opts),
       onError: setDepthError,
     });
 
-  const sourcePath = item?.export_path || item?.export_preview_path || item?.raw_preview_path || null;
   const sourceLabel = fileName(sourcePath) || item?.stem || "Selected asset";
   const {
     aspectKey,
@@ -627,58 +639,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       next.delete(id);
       return next;
     });
-  }
-
-  function clearSceneDepth() {
-    depthFieldImageRef.current = null;
-    depthFieldCanvasRef.current = null;
-    setDepthSourcePath(null);
-    setDepthFieldVersion((v) => v + 1);
-  }
-
-  async function loadDepthFromPath(fieldPath) {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = () => reject(new Error("Failed to load depth field"));
-      img.src = localFileUrl(fieldPath);
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    canvas.getContext("2d").drawImage(img, 0, 0);
-    depthFieldImageRef.current = img;
-    depthFieldCanvasRef.current = canvas;
-    setDepthSourcePath(fieldPath);
-    setDepthFieldVersion((v) => v + 1);
-  }
-
-  async function handleComputeDepth({ force = false } = {}) {
-    if (!sourcePath) {
-      setDepthError("No source image.");
-      return;
-    }
-    if (!window.mediaWorkspace?.computeDepth) {
-      setDepthError("Depth API unavailable.");
-      return;
-    }
-    setDepthGenerating(true);
-    setDepthError(null);
-    try {
-      const result = await window.mediaWorkspace.computeDepth({ sourcePath, force });
-      if (!result?.outputPath) throw new Error("Empty result");
-      await loadDepthFromPath(result.outputPath);
-    } catch (err) {
-      setDepthError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setDepthGenerating(false);
-    }
-  }
-
-  function handleClearDepth() {
-    clearSceneDepth();
-    setDepthError(null);
   }
 
   // Thin wrapper around the pure layer renderer that supplies the sticker
