@@ -44,6 +44,7 @@ import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useLayerHistory } from "./editor/state/useLayerHistory";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
+import { useViewportWheel } from "./editor/state/useViewportWheel";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
@@ -958,101 +959,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     }
   }
 
-  const handleWheelRef = useRef(null);
-  handleWheelRef.current = { transformedPreview, placement };
+  useViewportWheel({
+    viewportRef,
+    open,
+    transformedPreview,
+    placement,
+    editorStateRef,
+    recordState,
+  });
 
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) {
-      console.warn("[Editor] setup wheel: viewportRef is null!");
-      return undefined;
-    }
-    console.log("[Editor] setup wheel attached to viewport", el);
-    function onWheel(event) {
-      if (
-        event.target instanceof Element &&
-        event.target.closest("[data-editor-wheel-scope='panel'], [data-editor-wheel-scope='toolbar']")
-      ) {
-        return;
-      }
-      console.log("[Editor] onWheel RAW - deltaX:", event.deltaX, "deltaY:", event.deltaY, "ctrl:", event.ctrlKey);
-      const { transformedPreview: tp, placement: pl } = handleWheelRef.current || {};
-      if (!tp || !pl) {
-        console.log("[Editor] onWheel aborted: missing tp or pl");
-        return;
-      }
-      event.preventDefault();
-      const current = editorStateRef.current;
-      if (!current.cropRect) {
-        console.log("[Editor] onWheel aborted: missing cropRect");
-        return;
-      }
-
-      const isZoom = event.ctrlKey || event.metaKey || Math.abs(event.deltaY) > Math.abs(event.deltaX);
-
-      if (isZoom) {
-        // --- WORKSPACE ZOOM (Anchored to crop box center) ---
-        const factor = event.deltaY > 0 ? 0.94 : 1.06;
-        const proposedCropW = current.cropRect.width * factor;
-        const proposedCropH = current.cropRect.height * factor;
-        if (proposedCropW < MIN_CROP_SIZE || proposedCropH < MIN_CROP_SIZE) return;
-
-        const pt = {
-          x: current.cropRect.x + current.cropRect.width / 2,
-          y: current.cropRect.y + current.cropRect.height / 2,
-        };
-        
-        let nextZoom = current.imageZoom * factor;
-        if (nextZoom > MAX_IMAGE_ZOOM) {
-          const adjFactor = MAX_IMAGE_ZOOM / current.imageZoom;
-          nextZoom = MAX_IMAGE_ZOOM;
-          if (adjFactor <= 1) return;
-        }
-
-        const nextCrop = {
-          x: pt.x + (current.cropRect.x - pt.x) * factor,
-          y: pt.y + (current.cropRect.y - pt.y) * factor,
-          width: proposedCropW,
-          height: proposedCropH,
-        };
-
-        const oldCenterX = pl.centerX + current.imageOffsetX;
-        const oldCenterY = pl.centerY + current.imageOffsetY;
-        const newCenterX = pt.x + (oldCenterX - pt.x) * factor;
-        const newCenterY = pt.y + (oldCenterY - pt.y) * factor;
-
-        const next = clampImagePlacement(
-          {
-            ...current,
-            imageZoom: nextZoom,
-            cropRect: nextCrop,
-            imageOffsetX: newCenterX - pl.centerX,
-            imageOffsetY: newCenterY - pl.centerY,
-          },
-          tp,
-          pl,
-        );
-        recordState(next);
-      } else {
-        // --- IMAGE PAN (Trackpad Scroll) ---
-        const dx = -event.deltaX;
-        const dy = -event.deltaY;
-
-        const next = clampImagePlacement(
-          {
-            ...current,
-            imageOffsetX: current.imageOffsetX + dx,
-            imageOffsetY: current.imageOffsetY + dy,
-          },
-          tp,
-          pl,
-        );
-        recordState(next);
-      }
-    }
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [open]);
 
   useEffect(() => {
     if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
