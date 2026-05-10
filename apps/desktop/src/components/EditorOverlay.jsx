@@ -24,6 +24,19 @@ import TextCanvas from "./editor/TextCanvas";
 import StickerPanel from "./editor/StickerPanel";
 import { createDefaultLayer, getBgPadding } from "./editor/textState";
 import {
+  hexToRgba,
+  getSourceDimensions,
+  releaseCanvasImage,
+  buildPreviewSource,
+  buildDepthMaskCanvas,
+  buildTransformedCanvas,
+  deriveEditedFileName,
+  replaceFileName,
+  inferMimeType,
+  canvasToBlob,
+} from "./editor/render/canvasHelpers";
+import { drawLayersOnCanvas } from "./editor/render/drawLayers";
+import {
   isTextLayer,
   isStickerLayer,
   getTextLayers,
@@ -58,14 +71,6 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function hexToRgba(hex, alpha = 1) {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 function rectEquals(a, b) {
   if (!a || !b) return a === b;
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
@@ -90,133 +95,6 @@ function stateEquals(a, b) {
     a.imageOffsetY === b.imageOffsetY &&
     rectEquals(a.cropRect, b.cropRect)
   );
-}
-
-function buildPreviewSource(image) {
-  const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(image);
-  const maxEdge = Math.max(sourceWidth, sourceHeight);
-  const scale = maxEdge > PREVIEW_MAX_EDGE ? PREVIEW_MAX_EDGE / maxEdge : 1;
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  canvas.naturalWidth = width;
-  canvas.naturalHeight = height;
-  const context = canvas.getContext("2d");
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(image, 0, 0, width, height);
-  return canvas;
-}
-
-function getSourceDimensions(source) {
-  return {
-    width: Number(source?.naturalWidth || source?.width || 0),
-    height: Number(source?.naturalHeight || source?.height || 0),
-  };
-}
-
-function releaseCanvasImage(source) {
-  if (!source || typeof source.width !== "number") return;
-  if (typeof HTMLImageElement !== "undefined" && source instanceof HTMLImageElement) return;
-  source.width = 0;
-  source.height = 0;
-}
-
-// Build an alpha-only mask canvas at the requested output size.
-// White (alpha 255) where the depth field is < zPosition (text shows through);
-// black where depth is > zPosition (text is hidden behind nearer pixels).
-// `depthCanvas` is the 518×392 grayscale depth field (R=G=B=depth, 0=far, 255=near).
-function buildDepthMaskCanvas(depthCanvas, outW, outH, zPosition, feather) {
-  const dW = depthCanvas.width;
-  const dH = depthCanvas.height;
-  const dCtx = depthCanvas.getContext("2d");
-  const data = dCtx.getImageData(0, 0, dW, dH).data;
-  const z = Math.max(0, Math.min(1, zPosition));
-  const f = Math.max(0, Math.min(0.5, feather));
-  const lo = z - f / 2;
-  const hi = z + f / 2;
-  // Build mask at depth resolution then upsample with canvas
-  const small = document.createElement("canvas");
-  small.width = dW;
-  small.height = dH;
-  const sCtx = small.getContext("2d");
-  const out = sCtx.createImageData(dW, dH);
-  for (let i = 0; i < dW * dH; i++) {
-    const d = data[i * 4] / 255; // 0..1, near=1
-    let alpha;
-    if (d <= lo) alpha = 1;
-    else if (d >= hi) alpha = 0;
-    else alpha = 1 - (d - lo) / (hi - lo);
-    const p = i * 4;
-    out.data[p] = 255;
-    out.data[p + 1] = 255;
-    out.data[p + 2] = 255;
-    out.data[p + 3] = Math.round(alpha * 255);
-  }
-  sCtx.putImageData(out, 0, 0);
-  // Upscale to output size using canvas (smooth bilinear)
-  const big = document.createElement("canvas");
-  big.width = outW;
-  big.height = outH;
-  const bCtx = big.getContext("2d");
-  bCtx.imageSmoothingEnabled = true;
-  bCtx.imageSmoothingQuality = "high";
-  bCtx.drawImage(small, 0, 0, outW, outH);
-  return big;
-}
-
-function buildTransformedCanvas(source, width, height, rotationDeg, flipX, flipY) {
-  const radians = (rotationDeg * Math.PI) / 180;
-  const absCos = Math.abs(Math.cos(radians));
-  const absSin = Math.abs(Math.sin(radians));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(width * absCos + height * absSin));
-  canvas.height = Math.max(1, Math.round(width * absSin + height * absCos));
-  const context = canvas.getContext("2d");
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.translate(canvas.width / 2, canvas.height / 2);
-  context.rotate(radians);
-  context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-  context.drawImage(source, -width / 2, -height / 2, width, height);
-  return canvas;
-}
-
-function deriveEditedFileName(sourcePath, preferredExt = null) {
-  const originalName = fileName(sourcePath || "image.jpg");
-  const dotIndex = originalName.lastIndexOf(".");
-  const stem = dotIndex > 0 ? originalName.slice(0, dotIndex) : originalName;
-  const originalExt = dotIndex > 0 ? originalName.slice(dotIndex + 1).toLowerCase() : "";
-  const ext = preferredExt || (["jpg", "jpeg", "png", "webp"].includes(originalExt) ? originalExt : "jpg");
-  return `${stem}_edited.${ext}`;
-}
-
-function replaceFileName(targetPath, nextFileName) {
-  if (!targetPath) return nextFileName;
-  const slashIndex = Math.max(targetPath.lastIndexOf("/"), targetPath.lastIndexOf("\\"));
-  if (slashIndex < 0) return nextFileName;
-  return `${targetPath.slice(0, slashIndex + 1)}${nextFileName}`;
-}
-
-function inferMimeType(filePath) {
-  const normalized = String(filePath || "").toLowerCase();
-  if (normalized.endsWith(".png")) return "image/png";
-  if (normalized.endsWith(".webp")) return "image/webp";
-  return "image/jpeg";
-}
-
-function canvasToBlob(canvas, mimeType) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-        return;
-      }
-      reject(new Error("Failed to encode canvas"));
-    }, mimeType, mimeType === "image/png" ? undefined : 0.92);
-  });
 }
 
 function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false }) {
@@ -973,210 +851,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setDepthError(null);
   }
 
+  // Thin wrapper around the pure layer renderer that supplies the sticker
+  // image cache from our closure.
   function drawTextLayersOnCanvas(ctx, canvasWidth, canvasHeight, layersToRender) {
-    const scale = canvasWidth / 1920;
-    for (const layer of layersToRender) {
-      const px = layer.x * canvasWidth;
-      const py = layer.y * canvasHeight;
-
-      // Sticker layer — drawImage with shadow + opacity + rotation + runtime outline
-      if (layer.type === "sticker") {
-        const img = stickerImageCache.get(layer.stickerPath);
-        if (!img || !img.complete || img.naturalWidth === 0) continue;
-        const widthPx = (layer.scale ?? 0.4) * canvasWidth;
-        const aspect = img.naturalHeight / img.naturalWidth;
-        const heightPx = widthPx * aspect;
-        const outlineW = (layer.outlineWidth || 0);
-        // Outline width in source-space scaled to display: outlineWidth is "px
-        // at sticker natural resolution", so we scale by widthPx/naturalWidth.
-        const outlinePx = outlineW > 0
-          ? outlineW * (widthPx / img.naturalWidth)
-          : 0;
-
-        ctx.save();
-        ctx.translate(px, py);
-        if (layer.rotation) ctx.rotate((layer.rotation * Math.PI) / 180);
-        ctx.globalAlpha = (layer.opacity ?? 100) / 100;
-        if (layer.shadow) {
-          ctx.shadowColor = hexToRgba(layer.shadowColor, (layer.shadowOpacity ?? 60) / 100);
-          ctx.shadowBlur = (layer.shadowBlur || 0) * scale;
-          ctx.shadowOffsetX = (layer.shadowX || 0) * scale;
-          ctx.shadowOffsetY = (layer.shadowY || 0) * scale;
-        }
-
-        // Composite outline onto an offscreen canvas (so the canvas-level shadow
-        // is applied to the COMBINED outline+sticker silhouette, not separate halos).
-        const pad = Math.ceil(outlinePx) + 4;
-        const offW = Math.ceil(widthPx + pad * 2);
-        const offH = Math.ceil(heightPx + pad * 2);
-        const off = document.createElement("canvas");
-        off.width = offW;
-        off.height = offH;
-        const offCtx = off.getContext("2d");
-
-        if (outlinePx > 0) {
-          // Stamp source img at offsets along a circle to dilate the alpha,
-          // then tint to outline color via source-in compositing.
-          const maskCanvas = document.createElement("canvas");
-          maskCanvas.width = offW;
-          maskCanvas.height = offH;
-          const mCtx = maskCanvas.getContext("2d");
-          const stamps = 24;
-          for (let i = 0; i < stamps; i++) {
-            const ang = (i / stamps) * Math.PI * 2;
-            mCtx.drawImage(
-              img,
-              pad + Math.cos(ang) * outlinePx,
-              pad + Math.sin(ang) * outlinePx,
-              widthPx,
-              heightPx,
-            );
-          }
-          mCtx.globalCompositeOperation = "source-in";
-          mCtx.fillStyle = layer.outlineColor || "#ffffff";
-          mCtx.fillRect(0, 0, offW, offH);
-          offCtx.drawImage(maskCanvas, 0, 0);
-        }
-        offCtx.drawImage(img, pad, pad, widthPx, heightPx);
-
-        ctx.drawImage(off, -widthPx / 2 - pad, -heightPx / 2 - pad);
-        ctx.restore();
-        continue;
-      }
-
-      ctx.save();
-      ctx.translate(px, py);
-      if (layer.rotation) ctx.rotate((layer.rotation * Math.PI) / 180);
-
-      const fontStyle = layer.italic ? "italic" : "normal";
-      const fontWeight = layer.fontWeight ?? (layer.bold ? 700 : 400);
-      const fontSize = layer.fontSize * scale;
-      ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${layer.fontFamily}", sans-serif`;
-      ctx.textAlign = layer.align;
-      ctx.textBaseline = "middle";
-
-      const metrics = ctx.measureText(layer.text || " ");
-      const tw = metrics.width;
-      const th = fontSize * 1.2;
-      let alignOffsetX = 0;
-      if (layer.align === "left") alignOffsetX = tw / 2;
-      else if (layer.align === "right") alignOffsetX = -tw / 2;
-
-      // Background
-      if (layer.bgMode === "solid" || layer.bgMode === "gradient") {
-        const pad = getBgPadding(layer);
-        const padT = (fontSize * pad.top) / 100;
-        const padR = (fontSize * pad.right) / 100;
-        const padB = (fontSize * pad.bottom) / 100;
-        const padL = (fontSize * pad.left) / 100;
-        const bgOp = (layer.bgOpacity ?? 100) / 100;
-        if (layer.bgMode === "gradient") {
-          // Match CSS linear-gradient convention: 0deg = up, 90deg = right.
-          // Direction vector for a CSS angle θ is (sin θ, -cos θ).
-          const angleRad = ((layer.bgGradAngle ?? 90) * Math.PI) / 180;
-          const dx = Math.sin(angleRad);
-          const dy = -Math.cos(angleRad);
-          const halfDiag = (Math.abs(dx) * (tw + padL + padR) + Math.abs(dy) * (th + padT + padB)) / 2;
-          const gx = dx * halfDiag;
-          const gy = dy * halfDiag;
-          const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
-          grad.addColorStop(0, hexToRgba(layer.bgGradFrom ?? layer.bgColor ?? "#000", ((layer.bgGradFromOpacity ?? 100) / 100) * bgOp));
-          grad.addColorStop(1, hexToRgba(layer.bgGradTo ?? "#fff", ((layer.bgGradToOpacity ?? 100) / 100) * bgOp));
-          ctx.fillStyle = grad;
-        } else {
-          ctx.fillStyle = hexToRgba(layer.bgColor, bgOp);
-        }
-        ctx.fillRect(-tw / 2 - padL, -th / 2 - padT, tw + padL + padR, th + padT + padB);
-      }
-
-      // Compose stroke + fill on an offscreen canvas (NO shadow), then blit
-      // onto the main canvas with shadow enabled. This makes the shadow source
-      // the merged glyph silhouette (matching CSS text-shadow + paint-order),
-      // instead of just the stroke ring.
-      const strokeLW = (layer.strokeEnabled && layer.strokeWidth > 0) ? layer.strokeWidth * scale * 2 : 0;
-      const ascent = fontSize * 0.85;
-      const descent = fontSize * 0.35;
-      const padX = Math.ceil(strokeLW + 4);
-      const padY = Math.ceil(strokeLW + 4);
-      const offW = Math.ceil(tw + padX * 2);
-      const offH = Math.ceil(ascent + descent + padY * 2);
-
-      const off = document.createElement("canvas");
-      off.width = offW;
-      off.height = offH;
-      const offCtx = off.getContext("2d");
-      offCtx.font = ctx.font;
-      offCtx.textAlign = layer.align;
-      offCtx.textBaseline = "middle";
-      offCtx.imageSmoothingQuality = "high";
-
-      // Origin inside the offscreen canvas. textAlign anchors x; baseline=middle anchors y.
-      let offX;
-      if (layer.align === "left") offX = padX;
-      else if (layer.align === "right") offX = offW - padX;
-      else offX = offW / 2;
-      const offY = offH / 2;
-
-      // Stroke (drawn first under fill, paint-order: stroke fill)
-      if (strokeLW > 0) {
-        if (layer.strokeMode === "gradient") {
-          const angleRad = ((layer.strokeGradAngle ?? 90) * Math.PI) / 180;
-          const dx = Math.sin(angleRad);
-          const dy = -Math.cos(angleRad);
-          const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
-          const gx = dx * halfDiag;
-          const gy = dy * halfDiag;
-          const grad = offCtx.createLinearGradient(offX - gx, offY - gy, offX + gx, offY + gy);
-          grad.addColorStop(0, hexToRgba(layer.strokeGradFrom ?? layer.strokeColor, (layer.strokeGradFromOpacity ?? 100) / 100));
-          grad.addColorStop(1, hexToRgba(layer.strokeGradTo ?? "#000", (layer.strokeGradToOpacity ?? 100) / 100));
-          offCtx.strokeStyle = grad;
-        } else {
-          offCtx.strokeStyle = layer.strokeColor;
-        }
-        offCtx.lineWidth = strokeLW;
-        offCtx.lineJoin = "round";
-        offCtx.strokeText(layer.text || " ", offX, offY);
-      }
-
-      // Fill
-      if (layer.fillMode === "gradient") {
-        const angleRad = (layer.gradientAngle * Math.PI) / 180;
-        const dx = Math.sin(angleRad);
-        const dy = -Math.cos(angleRad);
-        const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
-        const gx = dx * halfDiag;
-        const gy = dy * halfDiag;
-        const grad = offCtx.createLinearGradient(offX - gx, offY - gy, offX + gx, offY + gy);
-        grad.addColorStop(0, hexToRgba(layer.gradientFrom, (layer.gradientFromOpacity ?? 100) / 100));
-        grad.addColorStop(1, hexToRgba(layer.gradientTo, (layer.gradientToOpacity ?? 100) / 100));
-        offCtx.fillStyle = grad;
-      } else {
-        offCtx.fillStyle = hexToRgba(layer.fillColor, (layer.fillOpacity ?? 100) / 100);
-      }
-      offCtx.fillText(layer.text || " ", offX, offY);
-
-      // Now paint onto the main canvas with shadow enabled (if any).
-      ctx.globalAlpha = layer.opacity / 100;
-      if (layer.shadow) {
-        ctx.shadowColor = hexToRgba(layer.shadowColor, layer.shadowOpacity / 100);
-        ctx.shadowBlur = layer.shadowBlur * scale;
-        ctx.shadowOffsetX = layer.shadowX * scale;
-        ctx.shadowOffsetY = layer.shadowY * scale;
-      }
-      // Position: alignOffsetX + 0 (after the ctx.translate(px, py)) was the
-      // anchor for the glyph's baseline-middle. The offscreen origin (offX, offY)
-      // corresponds to that anchor — drawImage at (alignOffsetX - offX, -offY).
-      ctx.drawImage(off, alignOffsetX - offX, -offY);
-      if (layer.shadow) {
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-      }
-
-      ctx.restore();
-    }
+    drawLayersOnCanvas(ctx, canvasWidth, canvasHeight, layersToRender, stickerImageCache);
   }
+
 
   function handleTextApply() {
     const renderable = layers.filter((l) => isTextLayer(l) || isStickerLayer(l));
