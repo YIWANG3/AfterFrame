@@ -10,6 +10,8 @@ const sharp = require("sharp");
 const { findSwiftRuntime } = require("./ipc/swiftRuntime");
 const stickerIpc = require("./ipc/stickers");
 const depthIpc = require("./ipc/depth");
+const collectionsIpc = require("./ipc/collections");
+const aiIpc = require("./ipc/ai");
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "media", privileges: { standard: false, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -932,89 +934,13 @@ ipcMain.handle("workspace:preview-status", async () => {
 
 ipcMain.handle("workspace:preview-start", (_event, kind) => startPreviewTask(kind || "preview"));
 
-ipcMain.handle("workspace:ai-repaint-status", async () => {
-  if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
-  try { return await latestJobStatus("ai_repaint"); } catch { return formatJobStatus(null); }
-});
-
-ipcMain.handle("workspace:ai-repaint-start", (_event, options) => startAiRepaintTask(options));
-
-ipcMain.handle("workspace:list-ai-models", async (_event, providerId, providerType) => {
-  const instanceId = String(providerId || "");
-  const typeKey = String(providerType || "nanobanana");
-  const providerConfig = await getStoredProviderConfigWithMigration(instanceId);
-  let apiKey = providerConfig?.token || null;
-  let baseUrl = null;
-  if (typeKey === "openai_compatible" && apiKey) {
-    try {
-      const parsed = JSON.parse(apiKey);
-      apiKey = parsed.token || null;
-      baseUrl = parsed.base_url || null;
-    } catch (_) { /* plain string token */ }
-  }
-  if (!apiKey) return [];
-  try {
-    const cmd = ["list-ai-models", "--provider", typeKey, "--api-key", apiKey];
-    if (baseUrl) cmd.push("--base-url", baseUrl);
-    return await callSidecarJsonAsync(cmd) || [];
-  } catch (err) {
-    console.error("[list-ai-models] error:", err.message);
-    return [];
-  }
-});
-
-ipcMain.handle("workspace:get-ai-preferences", () => {
-  const settings = readAppSettings();
-  return settings?.aiPreferences ?? {};
-});
-
-ipcMain.handle("workspace:save-ai-preferences", async (_event, prefs) => {
-  await updateAppSettings((settings) => ({ ...settings, aiPreferences: prefs }));
-});
-
-function getAiStylesPath() {
-  return path.join(app.getPath("userData"), "afterframe", "ai-styles.json");
-}
-
-function readAiStyles() {
-  try {
-    return JSON.parse(fs.readFileSync(getAiStylesPath(), "utf-8"));
-  } catch {
-    return null;
-  }
-}
-
-async function writeAiStyles(styles) {
-  const p = getAiStylesPath();
-  await fs.promises.mkdir(path.dirname(p), { recursive: true });
-  await fs.promises.writeFile(p, JSON.stringify(styles, null, 2) + "\n", "utf-8");
-}
-
-ipcMain.handle("workspace:get-ai-styles", () => {
-  return readAiStyles();
-});
-
-ipcMain.handle("workspace:save-ai-styles", async (_event, styles) => {
-  await writeAiStyles(styles);
-});
-
-ipcMain.handle("workspace:list-repaint-history", async (_event, assetPath) => {
-  if (!assetPath) return [];
-  return await callSidecarJsonAsync(["list-repaint-history", "--asset-path", String(assetPath)]) || [];
-});
-
-ipcMain.handle("workspace:get-ai-provider-token", async (_event, provider) => {
-  return await getStoredProviderConfigWithMigration(String(provider || "")) || {};
-});
-
-ipcMain.handle("workspace:set-ai-provider-token", async (_event, provider, token) => {
-  const next = await setStoredProviderConfig(String(provider || ""), { token: String(token || "") });
-  return next || {};
-});
-
-ipcMain.handle("workspace:delete-ai-provider-token", async (_event, provider) => {
-  await deleteStoredProviderConfig(String(provider || ""));
-  return { provider: String(provider || ""), configured: false };
+aiIpc.register({
+  app, ipcMain,
+  callSidecarJsonAsync,
+  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  readAppSettings, updateAppSettings,
+  getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
+  startAiRepaintTask, latestJobStatus, formatJobStatus,
 });
 
 ipcMain.handle("workspace:pending", async () => {
@@ -1270,73 +1196,10 @@ ipcMain.handle("workspace:info", () => workspaceInfo());
 
 // --- Collections ---
 
-ipcMain.handle("workspace:list-collections", async () => {
-  if (!currentCatalogPath || !catalogHasDb()) return [];
-  try {
-    return await callSidecarJsonAsync(["list-collections"]) || [];
-  } catch (err) {
-    console.warn("[workspace:list-collections] sidecar error:", err.message);
-    return [];
-  }
-});
-
-ipcMain.handle("workspace:create-collection", async (_event, name, kind) => {
-  return await callSidecarJsonAsync(["create-collection", "--name", name, "--kind", kind || "manual"]);
-});
-
-ipcMain.handle("workspace:update-collection", async (_event, collectionId, updates) => {
-  const command = ["update-collection", "--collection-id", collectionId];
-  if (updates.name != null) {
-    command.push("--name", updates.name);
-  }
-  if (updates.rulesJson != null) {
-    command.push("--rules-json", updates.rulesJson);
-  }
-  if (updates.sortOrder != null) {
-    command.push("--sort-order", String(updates.sortOrder));
-  }
-  return await callSidecarJsonAsync(command);
-});
-
-ipcMain.handle("workspace:delete-collection", async (_event, collectionId) => {
-  return await callSidecarJsonAsync(["delete-collection", "--collection-id", collectionId]);
-});
-
-ipcMain.handle("workspace:collection-add-items", async (_event, collectionId, assetIds) => {
-  const command = ["collection-add-items", "--collection-id", collectionId];
-  for (const id of assetIds) {
-    command.push("--asset-id", id);
-  }
-  return await callSidecarJsonAsync(command);
-});
-
-ipcMain.handle("workspace:collection-remove-items", async (_event, collectionId, assetIds) => {
-  const command = ["collection-remove-items", "--collection-id", collectionId];
-  for (const id of assetIds) {
-    command.push("--asset-id", id);
-  }
-  return await callSidecarJsonAsync(command);
-});
-
-ipcMain.handle("workspace:set-asset-rating", async (_event, assetIds, rating) => {
-  const command = ["set-asset-rating", "--rating", String(rating)];
-  for (const id of assetIds || []) {
-    command.push("--asset-id", id);
-  }
-  return await callSidecarJsonAsync(command);
-});
-
-ipcMain.handle("workspace:browse-collection", async (_event, collectionId, options) => {
-  if (!currentCatalogPath || !catalogHasDb()) return [];
-  return await callSidecarJsonAsync([
-    "browse-collection",
-    "--collection-id",
-    collectionId,
-    "--limit",
-    String(options?.limit || 120),
-    "--offset",
-    String(options?.offset || 0),
-  ]) || [];
+collectionsIpc.register({
+  ipcMain,
+  callSidecarJsonAsync,
+  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
 });
 
 ipcMain.handle("workspace:list-system-fonts", async () => {
