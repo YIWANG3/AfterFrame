@@ -38,11 +38,24 @@ import {
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { saveEditedImage } from "./editor/render/saveImage";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
+import CropOverlay from "./editor/components/CropOverlay";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useLayerHistory } from "./editor/state/useLayerHistory";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
+import {
+  PANEL_WIDTH,
+  PANEL_GAP,
+  CANVAS_SIDE_PADDING,
+  MIN_IMAGE_ZOOM,
+  MAX_IMAGE_ZOOM,
+  getStageBounds,
+  getBasePlacement,
+  getMinZoomForCrop,
+  getImageRect,
+  clampImagePlacement,
+} from "./editor/imageMath";
 import {
   isTextLayer,
   isStickerLayer,
@@ -52,14 +65,6 @@ import {
 } from "./editor/layerStack";
 
 const PREVIEW_MAX_EDGE = 2200;
-const PANEL_WIDTH = 320;
-const PANEL_GAP = 24;
-const CANVAS_SIDE_PADDING = 48;
-const HANDLE_LENGTH = 24;
-const HANDLE_THICKNESS = 3;
-const EDGE_HANDLE_LENGTH = 24;
-const MIN_IMAGE_ZOOM = 0.72;
-const MAX_IMAGE_ZOOM = 20;
 const MIN_FREE_ANGLE = -45;
 const MAX_FREE_ANGLE = 45;
 const BASE_STATE = {
@@ -142,64 +147,6 @@ function ToolTab({ active, icon: Icon, label, onClick }) {
   );
 }
 
-function getStageBounds(viewportSize) {
-  return {
-    width: Math.max(200, viewportSize.width - PANEL_WIDTH - PANEL_GAP - CANVAS_SIDE_PADDING * 2),
-    height: Math.max(200, viewportSize.height - 140),
-  };
-}
-
-function getBasePlacement(viewportSize, transformedPreview) {
-  if (!transformedPreview) return null;
-  const stage = getStageBounds(viewportSize);
-  const fitScale = Math.min(
-    stage.width / transformedPreview.width,
-    stage.height / transformedPreview.height,
-  ) * 0.94;
-  const centerX = CANVAS_SIDE_PADDING + stage.width / 2 - 26;
-  const centerY = viewportSize.height / 2 - 30;
-  return { fitScale, centerX, centerY };
-}
-
-function getMinZoomForCrop(cropRect, transformedPreview, placement) {
-  if (!cropRect || !transformedPreview || !placement) return 0;
-  return Math.max(
-    cropRect.width / (transformedPreview.width * placement.fitScale),
-    cropRect.height / (transformedPreview.height * placement.fitScale),
-  );
-}
-
-function getImageRect(state, transformedPreview, placement) {
-  if (!state || !transformedPreview || !placement) return null;
-  const zoom = state.imageZoom;
-  const width = transformedPreview.width * placement.fitScale * zoom;
-  const height = transformedPreview.height * placement.fitScale * zoom;
-  return {
-    x: placement.centerX - width / 2 + state.imageOffsetX,
-    y: placement.centerY - height / 2 + state.imageOffsetY,
-    width,
-    height,
-  };
-}
-
-function clampImagePlacement(state, transformedPreview, placement) {
-  if (!state.cropRect || !transformedPreview || !placement) return state;
-  const minZoom = getMinZoomForCrop(state.cropRect, transformedPreview, placement);
-  const imageZoom = clamp(state.imageZoom, minZoom, MAX_IMAGE_ZOOM);
-  const width = transformedPreview.width * placement.fitScale * imageZoom;
-  const height = transformedPreview.height * placement.fitScale * imageZoom;
-  const minOffsetX = state.cropRect.x + state.cropRect.width - (placement.centerX + width / 2);
-  const maxOffsetX = state.cropRect.x - (placement.centerX - width / 2);
-  const minOffsetY = state.cropRect.y + state.cropRect.height - (placement.centerY + height / 2);
-  const maxOffsetY = state.cropRect.y - (placement.centerY - height / 2);
-  return {
-    ...state,
-    imageZoom,
-    imageOffsetX: clamp(state.imageOffsetX, minOffsetX, maxOffsetX),
-    imageOffsetY: clamp(state.imageOffsetY, minOffsetY, maxOffsetY),
-  };
-}
-
 function createInitialSnapshot(viewportSize, transformedPreview) {
   const placement = getBasePlacement(viewportSize, transformedPreview);
   const baseState = {
@@ -278,32 +225,6 @@ function symmetricResize(cropRect, handle, point, aspect) {
 }
 
 const MIN_CROP_SIZE = 48;
-
-const HANDLE_SPECS = [
-  { key: "nw", type: "corner", mode: "resize", style: { left: -1, top: -1 }, cursor: "nwse-resize" },
-  { key: "ne", type: "corner", mode: "resize", style: { right: -1, top: -1, transform: "scaleX(-1)" }, cursor: "nesw-resize" },
-  { key: "sw", type: "corner", mode: "resize", style: { left: -1, bottom: -1, transform: "scaleY(-1)" }, cursor: "nesw-resize" },
-  { key: "se", type: "corner", mode: "resize", style: { right: -1, bottom: -1, transform: "scale(-1,-1)" }, cursor: "nwse-resize" },
-  { key: "n", type: "edge-x", mode: "resize", style: { left: "50%", top: -1, transform: "translateX(-50%)" }, cursor: "ns-resize" },
-  { key: "s", type: "edge-x", mode: "resize", style: { left: "50%", bottom: -1, transform: "translateX(-50%) scaleY(-1)" }, cursor: "ns-resize" },
-  { key: "w", type: "edge-y", mode: "resize", style: { left: -1, top: "50%", transform: "translateY(-50%)" }, cursor: "ew-resize" },
-  { key: "e", type: "edge-y", mode: "resize", style: { right: -1, top: "50%", transform: "translateY(-50%) scaleX(-1)" }, cursor: "ew-resize" },
-];
-
-function HandleVisual({ type }) {
-  if (type === "corner") {
-    return (
-      <>
-        <div className="absolute left-0 top-0 bg-white" style={{ width: `${HANDLE_LENGTH}px`, height: `${HANDLE_THICKNESS}px` }} />
-        <div className="absolute left-0 top-0 bg-white" style={{ width: `${HANDLE_THICKNESS}px`, height: `${HANDLE_LENGTH}px` }} />
-      </>
-    );
-  }
-  if (type === "edge-x") {
-    return <div className="absolute left-1/2 top-0 -translate-x-1/2 bg-white" style={{ width: `${EDGE_HANDLE_LENGTH}px`, height: `${HANDLE_THICKNESS}px` }} />;
-  }
-  return <div className="absolute left-0 top-1/2 -translate-y-1/2 bg-white" style={{ width: `${HANDLE_THICKNESS}px`, height: `${EDGE_HANDLE_LENGTH}px` }} />;
-}
 
 function getAspectPreviewBox(aspectKey) {
   const aspect = getAspectRatio(aspectKey, 1);
@@ -1530,48 +1451,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               />
             )}
 
-            {/* Non-rotating crop overlay — stays axis-aligned, z-10 above rotated image */}
-            {showCropUi && cropRect ? (
-              <div className="pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
-                <div className="pointer-events-none absolute inset-x-0 top-0" style={{ height: `${Math.max(0, cropRect.y)}px`, backgroundColor: "var(--crop-scrim)" }} />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ height: `${Math.max(0, viewportSize.height - cropRect.y - cropRect.height)}px`, backgroundColor: "var(--crop-scrim)" }} />
-                <div className="pointer-events-none absolute" style={{ left: 0, top: `${Math.max(0, cropRect.y)}px`, width: `${Math.max(0, cropRect.x)}px`, height: `${Math.min(cropRect.height, viewportSize.height - Math.max(0, cropRect.y))}px`, backgroundColor: "var(--crop-scrim)" }} />
-                <div className="pointer-events-none absolute" style={{ right: 0, top: `${Math.max(0, cropRect.y)}px`, width: `${Math.max(0, viewportSize.width - cropRect.x - cropRect.width)}px`, height: `${Math.min(cropRect.height, viewportSize.height - Math.max(0, cropRect.y))}px`, backgroundColor: "var(--crop-scrim)" }} />
-
-                <div
-                  className="pointer-events-none absolute"
-                  style={{
-                    left: `${cropRect.x}px`,
-                    top: `${cropRect.y}px`,
-                    width: `${cropRect.width}px`,
-                    height: `${cropRect.height}px`,
-                    border: "1.5px solid rgba(255,255,255,0.9)",
-                  }}
-                >
-                  <div className="pointer-events-none absolute inset-y-0" style={{ left: "33.333%", width: "1.5px", backgroundColor: "rgba(255,255,255,0.6)" }} />
-                  <div className="pointer-events-none absolute inset-y-0" style={{ left: "66.666%", width: "1.5px", backgroundColor: "rgba(255,255,255,0.6)" }} />
-                  <div className="pointer-events-none absolute inset-x-0" style={{ top: "33.333%", height: "1.5px", backgroundColor: "rgba(255,255,255,0.6)" }} />
-                  <div className="pointer-events-none absolute inset-x-0" style={{ top: "66.666%", height: "1.5px", backgroundColor: "rgba(255,255,255,0.6)" }} />
-
-                  {HANDLE_SPECS.map((handle) => (
-                    <div
-                      key={handle.key}
-                      className="pointer-events-auto absolute"
-                      style={{
-                        ...handle.style,
-                        zIndex: 20,
-                        width: `${HANDLE_LENGTH}px`,
-                        height: `${HANDLE_LENGTH}px`,
-                        cursor: handle.cursor,
-                      }}
-                      onPointerDown={(event) => beginCropResize(handle.key, event)}
-                    >
-                      <HandleVisual type={handle.type} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+            {showCropUi && (
+              <CropOverlay
+                cropRect={cropRect}
+                viewportSize={viewportSize}
+                onBeginResize={beginCropResize}
+              />
+            )}
           </>
         ) : null}
 
