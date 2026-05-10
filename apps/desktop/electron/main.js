@@ -17,6 +17,13 @@ const browseIpc = require("./ipc/browse");
 const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 
+// Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
+// directory so E2E tests get a clean catalog/settings/sticker library per run.
+// Must happen before any code reads app.getPath("userData").
+if (process.env.AFTERFRAME_USER_DATA) {
+  app.setPath("userData", process.env.AFTERFRAME_USER_DATA);
+}
+
 protocol.registerSchemesAsPrivileged([
   { scheme: "media", privileges: { standard: false, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);

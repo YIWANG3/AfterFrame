@@ -14,7 +14,9 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "e2e": "npm run build && playwright test",
+    "e2e:only": "playwright test"
   },
   "build": {
     "appId": "com.afterframe.app",
@@ -34,7 +36,9 @@
       {
         "from": "native",
         "to": "native",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,
@@ -89,6 +93,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",

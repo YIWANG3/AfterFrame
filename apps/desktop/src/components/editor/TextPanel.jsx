@@ -341,14 +341,23 @@ export default function TextPanel({
             {/* Stroke */}
             <Section label="Stroke" right={<Switch on={current.strokeEnabled} onToggle={() => update(current.id, { strokeEnabled: !current.strokeEnabled })} />}>
               {current.strokeEnabled && (
-                <>
-                  <PaintRow
-                    paint={paintFromFields(current, "stroke")}
-                    availableModes={["solid", "gradient"]}
-                    onUpdate={(patch) => update(current.id, paintToFields(patch, "stroke"))}
-                  />
-                  <SliderRow label="Width" min={0} max={20} value={current.strokeWidth ?? 0} onChange={(v) => update(current.id, { strokeWidth: v })} />
-                </>
+                <PaintRow
+                  paint={paintFromFields(current, "stroke")}
+                  availableModes={["solid", "gradient"]}
+                  onUpdate={(patch) => update(current.id, paintToFields(patch, "stroke"))}
+                  trailing={
+                    <>
+                      <NumInput
+                        value={current.strokeWidth ?? 0}
+                        min={0}
+                        max={20}
+                        onChange={(v) => update(current.id, { strokeWidth: v })}
+                        className="w-10 h-6"
+                      />
+                      <span className="text-[10px] text-muted2">px</span>
+                    </>
+                  }
+                />
               )}
             </Section>
 

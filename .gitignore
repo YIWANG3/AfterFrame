@@ -46,5 +46,10 @@ services/sidecar/entry.py
 # analysis
 analysis/
 
+# playwright
+apps/desktop/e2e/.artifacts/
+apps/desktop/playwright-report/
+apps/desktop/test-results/
+
 # env
 .env*
