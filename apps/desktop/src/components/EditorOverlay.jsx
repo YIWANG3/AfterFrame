@@ -36,6 +36,10 @@ import {
   canvasToBlob,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
+import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
+import { useStickerImageCache } from "./editor/state/useStickerImageCache";
+import { useStickerRegion } from "./editor/state/useStickerRegion";
+import { useDepthModel } from "./editor/state/useDepthModel";
 import {
   isTextLayer,
   isStickerLayer,
@@ -116,119 +120,6 @@ function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = 
     </button>
   );
 }
-
-function StickerRegionOverlay({ imageRect, region, drag, onDragChange, onCommit }) {
-  // Drag state holds normalized 0..1 coords against the image rect.
-  // We render whichever is active: drag (in-progress) > region (committed).
-  const overlayRef = useRef(null);
-
-  function clientToImageNorm(clientX, clientY) {
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
-    const x = (clientX - rect.left) / rect.width;
-    const y = (clientY - rect.top) / rect.height;
-    return { x: clamp01(x), y: clamp01(y) };
-  }
-
-  function handlePointerDown(e) {
-    // Ignore if click started inside an existing region (let user re-draw by clicking outside)
-    e.preventDefault();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    const start = clientToImageNorm(e.clientX, e.clientY);
-    onDragChange({ start, current: start });
-  }
-  function handlePointerMove(e) {
-    if (!drag) return;
-    const current = clientToImageNorm(e.clientX, e.clientY);
-    onDragChange({ ...drag, current });
-  }
-  function handlePointerUp(e) {
-    if (!drag) return;
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-    const { start, current } = drag;
-    const x = Math.min(start.x, current.x);
-    const y = Math.min(start.y, current.y);
-    const w = Math.abs(current.x - start.x);
-    const h = Math.abs(current.y - start.y);
-    onCommit({ x, y, w, h });
-  }
-
-  // Active rect to render (in image-rect-relative %)
-  let active = null;
-  if (drag) {
-    const { start, current } = drag;
-    active = {
-      x: Math.min(start.x, current.x),
-      y: Math.min(start.y, current.y),
-      w: Math.abs(current.x - start.x),
-      h: Math.abs(current.y - start.y),
-    };
-  } else if (region) {
-    active = region;
-  }
-
-  return (
-    <div
-      ref={overlayRef}
-      className="absolute"
-      style={{
-        left: `${imageRect.x}px`,
-        top: `${imageRect.y}px`,
-        width: `${imageRect.width}px`,
-        height: `${imageRect.height}px`,
-        zIndex: 9,
-        cursor: "crosshair",
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    >
-      {active && active.w > 0.001 && active.h > 0.001 && (
-        <>
-          {/* dim 4 strips around the rect */}
-          <div className="pointer-events-none absolute inset-x-0 top-0" style={{ height: `${active.y * 100}%`, backgroundColor: "rgba(0,0,0,0.4)" }} />
-          <div className="pointer-events-none absolute inset-x-0" style={{ top: `${(active.y + active.h) * 100}%`, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }} />
-          <div className="pointer-events-none absolute" style={{ left: 0, width: `${active.x * 100}%`, top: `${active.y * 100}%`, height: `${active.h * 100}%`, backgroundColor: "rgba(0,0,0,0.4)" }} />
-          <div className="pointer-events-none absolute" style={{ left: `${(active.x + active.w) * 100}%`, right: 0, top: `${active.y * 100}%`, height: `${active.h * 100}%`, backgroundColor: "rgba(0,0,0,0.4)" }} />
-          {/* rect border */}
-          <div
-            className="pointer-events-none absolute"
-            style={{
-              left: `${active.x * 100}%`,
-              top: `${active.y * 100}%`,
-              width: `${active.w * 100}%`,
-              height: `${active.h * 100}%`,
-              border: "1.5px dashed rgb(var(--accent-color))",
-            }}
-          />
-          {/* corner markers */}
-          {[
-            [active.x, active.y],
-            [active.x + active.w, active.y],
-            [active.x, active.y + active.h],
-            [active.x + active.w, active.y + active.h],
-          ].map(([cx, cy], i) => (
-            <div
-              key={i}
-              className="pointer-events-none absolute"
-              style={{
-                left: `calc(${cx * 100}% - 4px)`,
-                top: `calc(${cy * 100}% - 4px)`,
-                width: 8, height: 8,
-                background: "rgb(var(--accent-color))",
-                border: "1.5px solid #fff",
-                borderRadius: 2,
-              }}
-            />
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-function clamp01(n) { return Math.max(0, Math.min(1, n)); }
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -652,61 +543,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const [depthFieldVersion, setDepthFieldVersion] = useState(0); // bumps when depth changes
   const [depthFeather, setDepthFeather] = useState(0.08);        // global, 0..0.5
   const [depthMapVisible, setDepthMapVisible] = useState(false); // debug overlay toggle
-  const [depthModel, setDepthModel] = useState(null);            // { path, name, isCustom, bundledPath }
-  const [stickerRegion, setStickerRegion] = useState(null);       // { x, y, w, h } 0..1 normalized
-  const [stickerDrag, setStickerDrag] = useState(null);            // in-progress marquee draw
+  const stickerImageCache = useStickerImageCache(layers);
+  const sticker = useStickerRegion(item?.asset_id);
 
-  // Reset the sticker detection region whenever the editor opens a different
-  // image — old marquees from previous images shouldn't carry over.
-  useEffect(() => {
-    setStickerRegion(null);
-    setStickerDrag(null);
-  }, [item?.asset_id]);
-
-  // Cache decoded sticker images so the export pipeline can drawImage them
-  // synchronously. Populated whenever a sticker layer references a path that
-  // hasn't been loaded yet.
-  const stickerImageCache = useRef(new Map()).current;
-  useEffect(() => {
-    for (const layer of layers) {
-      if (layer.type === "sticker" && layer.stickerPath && !stickerImageCache.has(layer.stickerPath)) {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.src = localFileUrl(layer.stickerPath);
-        stickerImageCache.set(layer.stickerPath, img);
-      }
-    }
-  }, [layers, stickerImageCache]);
-
-  useEffect(() => {
-    if (!window.mediaWorkspace?.getDepthModel) return;
-    window.mediaWorkspace.getDepthModel().then(setDepthModel).catch(() => {});
-  }, []);
-
-  async function handlePickDepthModel() {
-    if (!window.mediaWorkspace?.pickDepthModel) return;
-    try {
-      const next = await window.mediaWorkspace.pickDepthModel();
-      if (next) {
-        setDepthModel(next);
-        // Force-regenerate so the new model's output replaces the cached one.
-        if (sourcePath) await handleComputeDepth({ force: true });
-      }
-    } catch (err) {
-      setDepthError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function handleResetDepthModel() {
-    if (!window.mediaWorkspace?.resetDepthModel) return;
-    try {
-      const next = await window.mediaWorkspace.resetDepthModel();
-      setDepthModel(next);
-      if (sourcePath) await handleComputeDepth({ force: true });
-    } catch (err) {
-      setDepthError(err instanceof Error ? err.message : String(err));
-    }
-  }
+  const { depthModel, pickDepthModel: handlePickDepthModel, resetDepthModel: handleResetDepthModel } =
+    useDepthModel({
+      sourcePath: item?.export_path || item?.export_preview_path || item?.raw_preview_path || null,
+      onComputeDepth: (opts) => handleComputeDepth(opts),
+      onError: setDepthError,
+    });
 
   const sourcePath = item?.export_path || item?.export_preview_path || item?.raw_preview_path || null;
   const sourceLabel = fileName(sourcePath) || item?.stem || "Selected asset";
@@ -1831,14 +1676,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             {tool === "sticker" && imageRect && (
               <StickerRegionOverlay
                 imageRect={imageRect}
-                region={stickerRegion}
-                drag={stickerDrag}
-                onDragChange={setStickerDrag}
-                onCommit={(rect) => {
-                  setStickerDrag(null);
-                  if (rect && rect.w > 0.02 && rect.h > 0.02) setStickerRegion(rect);
-                  else setStickerRegion(null);
-                }}
+                region={sticker.region}
+                drag={sticker.drag}
+                onDragChange={sticker.setDrag}
+                onCommit={sticker.commit}
               />
             )}
 
@@ -2033,8 +1874,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   sourcePath={sourcePath}
                   sourceLabel={sourceLabel}
                   pushToast={pushToast}
-                  region={stickerRegion}
-                  onClearRegion={() => setStickerRegion(null)}
+                  region={sticker.region}
+                  onClearRegion={sticker.clear}
                 />
               </div>
             ) : null}
