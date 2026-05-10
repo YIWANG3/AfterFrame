@@ -36,10 +36,12 @@ import {
   canvasToBlob,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
+import { saveEditedImage } from "./editor/render/saveImage";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
+import { useLayerHistory } from "./editor/state/useLayerHistory";
 import {
   isTextLayer,
   isStickerLayer,
@@ -528,10 +530,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const [saving, setSaving] = useState(false);
   const [activeInteraction, setActiveInteraction] = useState(null);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
-  const [layers, setLayers] = useState([]);
+  const layerHistory = useLayerHistory();
+  const { layers, setLayers, historyRef: layerHistoryRef, indexRef: layerHistoryIndexRef } = layerHistory;
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const layerHistoryRef = useRef([[]]);
-  const layerHistoryIndexRef = useRef(0);
   const textClipboardRef = useRef(null);
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
@@ -601,33 +602,17 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     return snapshot;
   }
 
-  function commitLayers(nextLayers) {
-    const snap = nextLayers.map((l) => ({ ...l }));
-    layerHistoryRef.current = layerHistoryRef.current.slice(0, layerHistoryIndexRef.current + 1);
-    layerHistoryRef.current.push(snap);
-    layerHistoryIndexRef.current = layerHistoryRef.current.length - 1;
-    setLayers(snap);
-  }
-  function layerUndo() {
-    if (layerHistoryIndexRef.current <= 0) return;
-    layerHistoryIndexRef.current--;
-    setLayers(layerHistoryRef.current[layerHistoryIndexRef.current]);
-  }
-  function layerRedo() {
-    if (layerHistoryIndexRef.current >= layerHistoryRef.current.length - 1) return;
-    layerHistoryIndexRef.current++;
-    setLayers(layerHistoryRef.current[layerHistoryIndexRef.current]);
-  }
+  const commitLayers = layerHistory.commit;
+  const layerUndo = layerHistory.undo;
+  const layerRedo = layerHistory.redo;
   function layerReset() {
-    commitLayers([]);
+    layerHistory.reset();
     setSelectedIds(new Set());
     clearSceneDepth();
   }
   function layerResetHard() {
-    setLayers([]);
+    layerHistory.resetHard();
     setSelectedIds(new Set());
-    layerHistoryRef.current = [[]];
-    layerHistoryIndexRef.current = 0;
     clearSceneDepth();
   }
 
@@ -1280,122 +1265,24 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setSaving(true);
     setMessage("");
     try {
-      const normalized = getNormalizedCrop();
-
-      // Try native sharp processing (full resolution) — skip if any overlay layers exist
-      if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePathRef.current && layers.length === 0) {
-        try {
-          await window.mediaWorkspace.processAndSave({
-            sourcePath: nativeSaveSourcePathRef.current,
-            savePath,
-            quarterTurns,
-            freeAngle,
-            flipX,
-            flipY,
-            crop: normalized,
-            quality: 92,
-          });
-
-          // Auto-import into catalog. Editor stays open; toast surfaces the
-          // saved path + Show in Finder, then auto-dismisses after 20s.
-          await window.mediaWorkspace.quickRegister?.(savePath, sourcePath);
-          onSaveComplete?.(savePath);
-          return;
-        } catch (nativeError) {
-          console.error("[Editor] Native sharp save failed, falling back to canvas export:", nativeError);
-          console.error("[Editor] sourcePath was:", sourcePath);
-        }
-      }
-
-      // Fallback: canvas-based processing (limited to sourceImage resolution)
-      if (!sourceImage || !transformedPreview) {
-        throw new Error("Image not loaded");
-      }
-      const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
-      const transformedFull = buildTransformedCanvas(
+      await saveEditedImage({
+        savePath,
+        sourcePath,
         sourceImage,
-        sourceWidth,
-        sourceHeight,
+        transformedPreview,
         rotationDeg,
+        quarterTurns,
+        freeAngle,
         flipX,
         flipY,
-      );
-
-      const exportRect = normalized
-        ? {
-            x: Math.round(normalized.x * transformedFull.width),
-            y: Math.round(normalized.y * transformedFull.height),
-            width: Math.max(1, Math.round(normalized.width * transformedFull.width)),
-            height: Math.max(1, Math.round(normalized.height * transformedFull.height)),
-          }
-        : { x: 0, y: 0, width: transformedFull.width, height: transformedFull.height };
-
-      const outputCanvas = document.createElement("canvas");
-      outputCanvas.width = exportRect.width;
-      outputCanvas.height = exportRect.height;
-      const context = outputCanvas.getContext("2d");
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = "high";
-      context.drawImage(
-        transformedFull,
-        exportRect.x,
-        exportRect.y,
-        exportRect.width,
-        exportRect.height,
-        0,
-        0,
-        exportRect.width,
-        exportRect.height,
-      );
-
-      // Walk text layers in stack order. Each one is rendered to a temp canvas,
-      // optionally masked by the scene depth field (per-text zPosition), then
-      // composited onto the final output.
-      const fullW = transformedFull.width;
-      const fullH = transformedFull.height;
-      const sceneDepth = depthFieldCanvasRef.current;
-      for (const layer of layers) {
-        if (!isTextLayer(layer) && !isStickerLayer(layer)) continue;
-        const absX = layer.x * fullW - exportRect.x;
-        const absY = layer.y * fullH - exportRect.y;
-        // Sticker scale is fraction of source image width — when we crop the
-        // export to a sub-rect, rescale so the visible sticker stays the same
-        // physical size on disk.
-        const scaleAdjust = isStickerLayer(layer)
-          ? { scale: (layer.scale ?? 0.4) * (fullW / exportRect.width) }
-          : null;
-        const mappedLayer = {
-          ...layer,
-          x: absX / exportRect.width,
-          y: absY / exportRect.height,
-          ...(scaleAdjust || {}),
-        };
-        const useDepth = sceneDepth && layer.zPosition != null && layer.zPosition < 1;
-        if (!useDepth) {
-          drawTextLayersOnCanvas(context, exportRect.width, exportRect.height, [mappedLayer]);
-          continue;
-        }
-        // Render text on a temp canvas, then mask with depth
-        const tmp = document.createElement("canvas");
-        tmp.width = exportRect.width;
-        tmp.height = exportRect.height;
-        drawTextLayersOnCanvas(tmp.getContext("2d"), exportRect.width, exportRect.height, [mappedLayer]);
-        const mask = buildDepthMaskCanvas(sceneDepth, exportRect.width, exportRect.height, layer.zPosition, depthFeather);
-        const t = tmp.getContext("2d");
-        t.globalCompositeOperation = "destination-in";
-        t.drawImage(mask, 0, 0);
-        context.drawImage(tmp, 0, 0);
-        releaseCanvasImage(mask);
-        releaseCanvasImage(tmp);
-      }
-
-      const blob = await canvasToBlob(outputCanvas, inferMimeType(savePath));
-      await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), sourcePath);
-      releaseCanvasImage(transformedFull);
-      releaseCanvasImage(outputCanvas);
-
-      // Auto-import into catalog. Stay open after save; toast surfaces path.
-      await window.mediaWorkspace.quickRegister?.(savePath, sourcePath);
+        normalizedCrop: getNormalizedCrop(),
+        layers,
+        depthFieldCanvas: depthFieldCanvasRef.current,
+        depthFeather,
+        drawLayersToCtx: drawTextLayersOnCanvas,
+        nativeSaveSourcePath: nativeSaveSourcePathRef.current,
+        isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer),
+      });
       onSaveComplete?.(savePath);
     } catch (error) {
       pushToast?.({
