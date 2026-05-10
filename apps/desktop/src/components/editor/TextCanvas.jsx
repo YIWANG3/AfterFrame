@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
 import { getBgPadding } from "./textState";
+import { localFileUrl } from "../../utils/format";
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
    re-render so React never touches the DOM text. Initial content is set via
@@ -90,12 +91,14 @@ export default function TextCanvas({
     dragRef.current = {
       type,
       layerId,
+      layerType: layer.type || "text",
       startX,
       startY,
       origX: layer.x,
       origY: layer.y,
       origRotation: layer.rotation,
       origFontSize: layer.fontSize,
+      origScale: layer.scale,
     };
 
     const onMove = (me) => {
@@ -129,18 +132,26 @@ export default function TextCanvas({
           l.id === drag.layerId ? { ...l, rotation: deg } : l
         ));
       } else if (drag.type === "resize") {
-        // Use distance from text center: pulling pointer AWAY from center
-        // grows the text (regardless of which handle was grabbed); pushing
+        // Use distance from layer center: pulling pointer AWAY from center
+        // grows the layer (regardless of which handle was grabbed); pushing
         // toward center shrinks it.
         const cx = imageRect.x + layer.x * imageRect.width;
         const cy = imageRect.y + layer.y * imageRect.height;
         const startDist = Math.hypot(drag.startX - cx, drag.startY - cy);
         const curDist = Math.hypot(me.clientX - cx, me.clientY - cy);
         const ratio = startDist > 0 ? curDist / startDist : 1;
-        const newSize = Math.round(Math.max(8, Math.min(2000, drag.origFontSize * ratio)));
-        onLayersChange(layers.map((l) =>
-          l.id === drag.layerId ? { ...l, fontSize: newSize } : l
-        ));
+
+        if (drag.layerType === "sticker") {
+          const newScale = Math.max(0.02, Math.min(2.0, drag.origScale * ratio));
+          onLayersChange(layers.map((l) =>
+            l.id === drag.layerId ? { ...l, scale: newScale } : l
+          ));
+        } else {
+          const newSize = Math.round(Math.max(8, Math.min(2000, drag.origFontSize * ratio)));
+          onLayersChange(layers.map((l) =>
+            l.id === drag.layerId ? { ...l, fontSize: newSize } : l
+          ));
+        }
       }
     };
 
@@ -218,7 +229,6 @@ export default function TextCanvas({
       onPointerDown={handleBgPointerDown}
     >
       {layers.map((layer) => {
-        const fontSize = layer.fontSize * scale;
         // Image-relative coords inside the per-layer mask wrapper
         const px = layer.x * imageRect.width;
         const py = layer.y * imageRect.height;
@@ -233,7 +243,7 @@ export default function TextCanvas({
           overflow: "visible",
           // The wrapper covers the full image rect (so the depth mask aligns),
           // but it's transparent — without `none`, the topmost wrapper would
-          // swallow clicks on text layers below it. Inner TextLayerEl re-enables
+          // swallow clicks on text layers below it. Inner layer els re-enable
           // pointer events explicitly.
           pointerEvents: "none",
           ...(maskUrl
@@ -248,31 +258,46 @@ export default function TextCanvas({
             : {}),
         };
 
+        const onSelect = (e) => {
+          e.stopPropagation();
+          if (e.shiftKey) {
+            const next = new Set(selectedIds);
+            next.has(layer.id) ? next.delete(layer.id) : next.add(layer.id);
+            onSelectionChange(next);
+          } else if (!selectedIds.has(layer.id)) {
+            onSelectionChange(new Set([layer.id]));
+          }
+        };
+
         return (
           <div key={layer.id} style={wrapperStyle}>
-            <TextLayerEl
-              layer={layer}
-              fontSize={fontSize}
-              scale={scale}
-              px={px}
-              py={py}
-              isSelected={isSelected}
-              isEditing={editingId === layer.id}
-              onDragStart={(e, type) => startDrag(e, layer.id, type)}
-              onDoubleClick={() => handleDoubleClick(layer.id)}
-              onEditBlur={(text) => handleEditBlur(layer.id, text)}
-              onEditInput={(id, text) => handleEditInput(id, text)}
-              onSelect={(e) => {
-                e.stopPropagation();
-                if (e.shiftKey) {
-                  const next = new Set(selectedIds);
-                  next.has(layer.id) ? next.delete(layer.id) : next.add(layer.id);
-                  onSelectionChange(next);
-                } else if (!selectedIds.has(layer.id)) {
-                  onSelectionChange(new Set([layer.id]));
-                }
-              }}
-            />
+            {layer.type === "sticker" ? (
+              <StickerLayerEl
+                layer={layer}
+                scale={scale}
+                px={px}
+                py={py}
+                imageWidth={imageRect.width}
+                isSelected={isSelected}
+                onDragStart={(e, type) => startDrag(e, layer.id, type)}
+                onSelect={onSelect}
+              />
+            ) : (
+              <TextLayerEl
+                layer={layer}
+                fontSize={layer.fontSize * scale}
+                scale={scale}
+                px={px}
+                py={py}
+                isSelected={isSelected}
+                isEditing={editingId === layer.id}
+                onDragStart={(e, type) => startDrag(e, layer.id, type)}
+                onDoubleClick={() => handleDoubleClick(layer.id)}
+                onEditBlur={(text) => handleEditBlur(layer.id, text)}
+                onEditInput={(id, text) => handleEditInput(id, text)}
+                onSelect={onSelect}
+              />
+            )}
           </div>
         );
       })}
@@ -470,6 +495,89 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       {isSelected && !isEditing && (
         <SelectionOverlay onDragStart={onDragStart} />
       )}
+    </div>
+  );
+}
+
+function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragStart, onSelect }) {
+  // `scale` (the global preview/export scale) is *not* used to size the
+  // sticker — sticker size is `layer.scale * imageWidth`, then scaled to the
+  // current preview by virtue of being inside the imageRect-sized wrapper.
+  const widthPx = (layer.scale || 0.4) * imageWidth;
+  const aspect = layer.naturalHeight && layer.naturalWidth
+    ? layer.naturalHeight / layer.naturalWidth
+    : 1;
+  const heightPx = widthPx * aspect;
+
+  // Shadow as drop-shadow (works on the alpha PNG)
+  const shadow = layer.shadow
+    ? `drop-shadow(${layer.shadowX * scale}px ${layer.shadowY * scale}px ${layer.shadowBlur * scale}px ${hexToRgba(layer.shadowColor, layer.shadowOpacity / 100)})`
+    : undefined;
+
+  // Runtime outline via SVG feMorphology — dilate alpha → flood color → composite under the source.
+  // outlineWidth is in image-px (matches sticker scale) so it grows with zoom.
+  const outlineWidth = layer.outlineWidth || 0;
+  const hasOutline = outlineWidth > 0;
+  const filterId = `sticker-outline-${layer.id}`;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: `${px}px`,
+        top: `${py}px`,
+        width: `${widthPx}px`,
+        height: `${heightPx}px`,
+        transform: `translate(-50%, -50%) rotate(${layer.rotation || 0}deg)`,
+        cursor: "move",
+        userSelect: "none",
+        zIndex: isSelected ? 2 : 1,
+        opacity: layer.opacity / 100,
+        filter: shadow,
+        pointerEvents: "auto",
+      }}
+      onPointerDown={(e) => {
+        onSelect(e);
+        onDragStart(e, "move");
+      }}
+    >
+      {hasOutline ? (
+        <svg
+          viewBox={`0 0 ${Math.max(1, layer.naturalWidth || widthPx)} ${Math.max(1, layer.naturalHeight || heightPx)}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="block h-full w-full"
+          style={{ overflow: "visible", pointerEvents: "none" }}
+        >
+          <defs>
+            <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
+              <feMorphology in="SourceAlpha" operator="dilate" radius={outlineWidth} result="dilated" />
+              <feFlood floodColor={layer.outlineColor || "#ffffff"} result="floodColor" />
+              <feComposite in="floodColor" in2="dilated" operator="in" result="outline" />
+              <feMerge>
+                <feMergeNode in="outline" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <image
+            href={localFileUrl(layer.stickerPath)}
+            x="0" y="0"
+            width={Math.max(1, layer.naturalWidth || widthPx)}
+            height={Math.max(1, layer.naturalHeight || heightPx)}
+            preserveAspectRatio="xMidYMid meet"
+            filter={`url(#${filterId})`}
+          />
+        </svg>
+      ) : (
+        <img
+          src={localFileUrl(layer.stickerPath)}
+          alt=""
+          draggable={false}
+          className="block h-full w-full select-none"
+          style={{ objectFit: "contain", pointerEvents: "none" }}
+        />
+      )}
+      {isSelected && <SelectionOverlay onDragStart={onDragStart} />}
     </div>
   );
 }

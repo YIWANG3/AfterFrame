@@ -62,6 +62,13 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getDepthModel: () => ipcRenderer.invoke("workspace:get-depth-model"),
   pickDepthModel: () => ipcRenderer.invoke("workspace:pick-depth-model"),
   resetDepthModel: () => ipcRenderer.invoke("workspace:reset-depth-model"),
+  // Sticker extraction & library
+  stickerList: () => ipcRenderer.invoke("workspace:sticker-list"),
+  stickerDetect: (options) => ipcRenderer.invoke("workspace:sticker-detect", options),
+  stickerSave: (options) => ipcRenderer.invoke("workspace:sticker-save", options),
+  stickerDelete: (id) => ipcRenderer.invoke("workspace:sticker-delete", id),
+  stickerToggleStar: (id) => ipcRenderer.invoke("workspace:sticker-toggle-star", id),
+  stickerCleanupScratch: (dir) => ipcRenderer.invoke("workspace:sticker-cleanup-scratch", dir),
   onMenuAction: (callback) => {
     ipcRenderer.removeAllListeners("workspace:menu-action");
     ipcRenderer.on("workspace:menu-action", (_event, action) => callback(action));

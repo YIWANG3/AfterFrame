@@ -9,6 +9,7 @@ import {
   Redo2,
   RotateCcw,
   RotateCw,
+  Cannabis,
   Sparkles,
   Type,
   Undo2,
@@ -20,9 +21,11 @@ import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
+import StickerPanel from "./editor/StickerPanel";
 import { createDefaultLayer, getBgPadding } from "./editor/textState";
 import {
   isTextLayer,
+  isStickerLayer,
   getTextLayers,
   moveLayerBy,
   removeLayerById,
@@ -235,6 +238,119 @@ function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = 
     </button>
   );
 }
+
+function StickerRegionOverlay({ imageRect, region, drag, onDragChange, onCommit }) {
+  // Drag state holds normalized 0..1 coords against the image rect.
+  // We render whichever is active: drag (in-progress) > region (committed).
+  const overlayRef = useRef(null);
+
+  function clientToImageNorm(clientX, clientY) {
+    const rect = overlayRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    return { x: clamp01(x), y: clamp01(y) };
+  }
+
+  function handlePointerDown(e) {
+    // Ignore if click started inside an existing region (let user re-draw by clicking outside)
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const start = clientToImageNorm(e.clientX, e.clientY);
+    onDragChange({ start, current: start });
+  }
+  function handlePointerMove(e) {
+    if (!drag) return;
+    const current = clientToImageNorm(e.clientX, e.clientY);
+    onDragChange({ ...drag, current });
+  }
+  function handlePointerUp(e) {
+    if (!drag) return;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    const { start, current } = drag;
+    const x = Math.min(start.x, current.x);
+    const y = Math.min(start.y, current.y);
+    const w = Math.abs(current.x - start.x);
+    const h = Math.abs(current.y - start.y);
+    onCommit({ x, y, w, h });
+  }
+
+  // Active rect to render (in image-rect-relative %)
+  let active = null;
+  if (drag) {
+    const { start, current } = drag;
+    active = {
+      x: Math.min(start.x, current.x),
+      y: Math.min(start.y, current.y),
+      w: Math.abs(current.x - start.x),
+      h: Math.abs(current.y - start.y),
+    };
+  } else if (region) {
+    active = region;
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      className="absolute"
+      style={{
+        left: `${imageRect.x}px`,
+        top: `${imageRect.y}px`,
+        width: `${imageRect.width}px`,
+        height: `${imageRect.height}px`,
+        zIndex: 9,
+        cursor: "crosshair",
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      {active && active.w > 0.001 && active.h > 0.001 && (
+        <>
+          {/* dim 4 strips around the rect */}
+          <div className="pointer-events-none absolute inset-x-0 top-0" style={{ height: `${active.y * 100}%`, backgroundColor: "rgba(0,0,0,0.4)" }} />
+          <div className="pointer-events-none absolute inset-x-0" style={{ top: `${(active.y + active.h) * 100}%`, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }} />
+          <div className="pointer-events-none absolute" style={{ left: 0, width: `${active.x * 100}%`, top: `${active.y * 100}%`, height: `${active.h * 100}%`, backgroundColor: "rgba(0,0,0,0.4)" }} />
+          <div className="pointer-events-none absolute" style={{ left: `${(active.x + active.w) * 100}%`, right: 0, top: `${active.y * 100}%`, height: `${active.h * 100}%`, backgroundColor: "rgba(0,0,0,0.4)" }} />
+          {/* rect border */}
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: `${active.x * 100}%`,
+              top: `${active.y * 100}%`,
+              width: `${active.w * 100}%`,
+              height: `${active.h * 100}%`,
+              border: "1.5px dashed rgb(var(--accent-color))",
+            }}
+          />
+          {/* corner markers */}
+          {[
+            [active.x, active.y],
+            [active.x + active.w, active.y],
+            [active.x, active.y + active.h],
+            [active.x + active.w, active.y + active.h],
+          ].map(([cx, cy], i) => (
+            <div
+              key={i}
+              className="pointer-events-none absolute"
+              style={{
+                left: `calc(${cx * 100}% - 4px)`,
+                top: `calc(${cy * 100}% - 4px)`,
+                width: 8, height: 8,
+                background: "rgb(var(--accent-color))",
+                border: "1.5px solid #fff",
+                borderRadius: 2,
+              }}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+function clamp01(n) { return Math.max(0, Math.min(1, n)); }
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -659,6 +775,30 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const [depthFeather, setDepthFeather] = useState(0.08);        // global, 0..0.5
   const [depthMapVisible, setDepthMapVisible] = useState(false); // debug overlay toggle
   const [depthModel, setDepthModel] = useState(null);            // { path, name, isCustom, bundledPath }
+  const [stickerRegion, setStickerRegion] = useState(null);       // { x, y, w, h } 0..1 normalized
+  const [stickerDrag, setStickerDrag] = useState(null);            // in-progress marquee draw
+
+  // Reset the sticker detection region whenever the editor opens a different
+  // image — old marquees from previous images shouldn't carry over.
+  useEffect(() => {
+    setStickerRegion(null);
+    setStickerDrag(null);
+  }, [item?.asset_id]);
+
+  // Cache decoded sticker images so the export pipeline can drawImage them
+  // synchronously. Populated whenever a sticker layer references a path that
+  // hasn't been loaded yet.
+  const stickerImageCache = useRef(new Map()).current;
+  useEffect(() => {
+    for (const layer of layers) {
+      if (layer.type === "sticker" && layer.stickerPath && !stickerImageCache.has(layer.stickerPath)) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = localFileUrl(layer.stickerPath);
+        stickerImageCache.set(layer.stickerPath, img);
+      }
+    }
+  }, [layers, stickerImageCache]);
 
   useEffect(() => {
     if (!window.mediaWorkspace?.getDepthModel) return;
@@ -712,7 +852,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       ? { title: "AI Repaint", badge: null }
       : tool === "text"
         ? { title: "Text", badge: null }
-        : { title: "", badge: null };
+        : tool === "sticker"
+          ? { title: "Sticker", badge: null }
+          : { title: "", badge: null };
 
   function syncHistory(nextHistory, nextIndex) {
     historyRef.current = nextHistory;
@@ -836,6 +978,72 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     for (const layer of layersToRender) {
       const px = layer.x * canvasWidth;
       const py = layer.y * canvasHeight;
+
+      // Sticker layer — drawImage with shadow + opacity + rotation + runtime outline
+      if (layer.type === "sticker") {
+        const img = stickerImageCache.get(layer.stickerPath);
+        if (!img || !img.complete || img.naturalWidth === 0) continue;
+        const widthPx = (layer.scale ?? 0.4) * canvasWidth;
+        const aspect = img.naturalHeight / img.naturalWidth;
+        const heightPx = widthPx * aspect;
+        const outlineW = (layer.outlineWidth || 0);
+        // Outline width in source-space scaled to display: outlineWidth is "px
+        // at sticker natural resolution", so we scale by widthPx/naturalWidth.
+        const outlinePx = outlineW > 0
+          ? outlineW * (widthPx / img.naturalWidth)
+          : 0;
+
+        ctx.save();
+        ctx.translate(px, py);
+        if (layer.rotation) ctx.rotate((layer.rotation * Math.PI) / 180);
+        ctx.globalAlpha = (layer.opacity ?? 100) / 100;
+        if (layer.shadow) {
+          ctx.shadowColor = hexToRgba(layer.shadowColor, (layer.shadowOpacity ?? 60) / 100);
+          ctx.shadowBlur = (layer.shadowBlur || 0) * scale;
+          ctx.shadowOffsetX = (layer.shadowX || 0) * scale;
+          ctx.shadowOffsetY = (layer.shadowY || 0) * scale;
+        }
+
+        // Composite outline onto an offscreen canvas (so the canvas-level shadow
+        // is applied to the COMBINED outline+sticker silhouette, not separate halos).
+        const pad = Math.ceil(outlinePx) + 4;
+        const offW = Math.ceil(widthPx + pad * 2);
+        const offH = Math.ceil(heightPx + pad * 2);
+        const off = document.createElement("canvas");
+        off.width = offW;
+        off.height = offH;
+        const offCtx = off.getContext("2d");
+
+        if (outlinePx > 0) {
+          // Stamp source img at offsets along a circle to dilate the alpha,
+          // then tint to outline color via source-in compositing.
+          const maskCanvas = document.createElement("canvas");
+          maskCanvas.width = offW;
+          maskCanvas.height = offH;
+          const mCtx = maskCanvas.getContext("2d");
+          const stamps = 24;
+          for (let i = 0; i < stamps; i++) {
+            const ang = (i / stamps) * Math.PI * 2;
+            mCtx.drawImage(
+              img,
+              pad + Math.cos(ang) * outlinePx,
+              pad + Math.sin(ang) * outlinePx,
+              widthPx,
+              heightPx,
+            );
+          }
+          mCtx.globalCompositeOperation = "source-in";
+          mCtx.fillStyle = layer.outlineColor || "#ffffff";
+          mCtx.fillRect(0, 0, offW, offH);
+          offCtx.drawImage(maskCanvas, 0, 0);
+        }
+        offCtx.drawImage(img, pad, pad, widthPx, heightPx);
+
+        ctx.drawImage(off, -widthPx / 2 - pad, -heightPx / 2 - pad);
+        ctx.restore();
+        continue;
+      }
+
       ctx.save();
       ctx.translate(px, py);
       if (layer.rotation) ctx.rotate((layer.rotation * Math.PI) / 180);
@@ -881,34 +1089,36 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         ctx.fillRect(-tw / 2 - padL, -th / 2 - padT, tw + padL + padR, th + padT + padB);
       }
 
-      // Shadow
-      if (layer.shadow) {
-        ctx.shadowColor = hexToRgba(layer.shadowColor, layer.shadowOpacity / 100);
-        ctx.shadowBlur = layer.shadowBlur * scale;
-        ctx.shadowOffsetX = layer.shadowX * scale;
-        ctx.shadowOffsetY = layer.shadowY * scale;
-      }
+      // Compose stroke + fill on an offscreen canvas (NO shadow), then blit
+      // onto the main canvas with shadow enabled. This makes the shadow source
+      // the merged glyph silhouette (matching CSS text-shadow + paint-order),
+      // instead of just the stroke ring.
+      const strokeLW = (layer.strokeEnabled && layer.strokeWidth > 0) ? layer.strokeWidth * scale * 2 : 0;
+      const ascent = fontSize * 0.85;
+      const descent = fontSize * 0.35;
+      const padX = Math.ceil(strokeLW + 4);
+      const padY = Math.ceil(strokeLW + 4);
+      const offW = Math.ceil(tw + padX * 2);
+      const offH = Math.ceil(ascent + descent + padY * 2);
 
-      // Fill
-      ctx.globalAlpha = layer.opacity / 100;
-      if (layer.fillMode === "gradient") {
-        // CSS angle convention + project bbox onto axis + per-stop opacity
-        const angleRad = (layer.gradientAngle * Math.PI) / 180;
-        const dx = Math.sin(angleRad);
-        const dy = -Math.cos(angleRad);
-        const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
-        const gx = dx * halfDiag;
-        const gy = dy * halfDiag;
-        const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
-        grad.addColorStop(0, hexToRgba(layer.gradientFrom, (layer.gradientFromOpacity ?? 100) / 100));
-        grad.addColorStop(1, hexToRgba(layer.gradientTo, (layer.gradientToOpacity ?? 100) / 100));
-        ctx.fillStyle = grad;
-      } else {
-        ctx.fillStyle = hexToRgba(layer.fillColor, (layer.fillOpacity ?? 100) / 100);
-      }
+      const off = document.createElement("canvas");
+      off.width = offW;
+      off.height = offH;
+      const offCtx = off.getContext("2d");
+      offCtx.font = ctx.font;
+      offCtx.textAlign = layer.align;
+      offCtx.textBaseline = "middle";
+      offCtx.imageSmoothingQuality = "high";
 
-      // Outer stroke: draw stroke first (2x width), then fill on top to cover inner half
-      if (layer.strokeEnabled && layer.strokeWidth > 0) {
+      // Origin inside the offscreen canvas. textAlign anchors x; baseline=middle anchors y.
+      let offX;
+      if (layer.align === "left") offX = padX;
+      else if (layer.align === "right") offX = offW - padX;
+      else offX = offW / 2;
+      const offY = offH / 2;
+
+      // Stroke (drawn first under fill, paint-order: stroke fill)
+      if (strokeLW > 0) {
         if (layer.strokeMode === "gradient") {
           const angleRad = ((layer.strokeGradAngle ?? 90) * Math.PI) / 180;
           const dx = Math.sin(angleRad);
@@ -916,28 +1126,61 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
           const gx = dx * halfDiag;
           const gy = dy * halfDiag;
-          const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
+          const grad = offCtx.createLinearGradient(offX - gx, offY - gy, offX + gx, offY + gy);
           grad.addColorStop(0, hexToRgba(layer.strokeGradFrom ?? layer.strokeColor, (layer.strokeGradFromOpacity ?? 100) / 100));
           grad.addColorStop(1, hexToRgba(layer.strokeGradTo ?? "#000", (layer.strokeGradToOpacity ?? 100) / 100));
-          ctx.strokeStyle = grad;
+          offCtx.strokeStyle = grad;
         } else {
-          ctx.strokeStyle = layer.strokeColor;
+          offCtx.strokeStyle = layer.strokeColor;
         }
-        ctx.lineWidth = layer.strokeWidth * scale * 2;
-        ctx.lineJoin = "round";
-        ctx.strokeText(layer.text || " ", alignOffsetX, 0);
-        ctx.shadowColor = "transparent";
+        offCtx.lineWidth = strokeLW;
+        offCtx.lineJoin = "round";
+        offCtx.strokeText(layer.text || " ", offX, offY);
       }
 
-      ctx.fillText(layer.text || " ", alignOffsetX, 0);
+      // Fill
+      if (layer.fillMode === "gradient") {
+        const angleRad = (layer.gradientAngle * Math.PI) / 180;
+        const dx = Math.sin(angleRad);
+        const dy = -Math.cos(angleRad);
+        const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
+        const gx = dx * halfDiag;
+        const gy = dy * halfDiag;
+        const grad = offCtx.createLinearGradient(offX - gx, offY - gy, offX + gx, offY + gy);
+        grad.addColorStop(0, hexToRgba(layer.gradientFrom, (layer.gradientFromOpacity ?? 100) / 100));
+        grad.addColorStop(1, hexToRgba(layer.gradientTo, (layer.gradientToOpacity ?? 100) / 100));
+        offCtx.fillStyle = grad;
+      } else {
+        offCtx.fillStyle = hexToRgba(layer.fillColor, (layer.fillOpacity ?? 100) / 100);
+      }
+      offCtx.fillText(layer.text || " ", offX, offY);
+
+      // Now paint onto the main canvas with shadow enabled (if any).
+      ctx.globalAlpha = layer.opacity / 100;
+      if (layer.shadow) {
+        ctx.shadowColor = hexToRgba(layer.shadowColor, layer.shadowOpacity / 100);
+        ctx.shadowBlur = layer.shadowBlur * scale;
+        ctx.shadowOffsetX = layer.shadowX * scale;
+        ctx.shadowOffsetY = layer.shadowY * scale;
+      }
+      // Position: alignOffsetX + 0 (after the ctx.translate(px, py)) was the
+      // anchor for the glyph's baseline-middle. The offscreen origin (offX, offY)
+      // corresponds to that anchor — drawImage at (alignOffsetX - offX, -offY).
+      ctx.drawImage(off, alignOffsetX - offX, -offY);
+      if (layer.shadow) {
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
 
       ctx.restore();
     }
   }
 
   function handleTextApply() {
-    const textOnly = getTextLayers(layers);
-    if (!sourceImage || textOnly.length === 0) return;
+    const renderable = layers.filter((l) => isTextLayer(l) || isStickerLayer(l));
+    if (!sourceImage || renderable.length === 0) return;
     const { width: sw, height: sh } = getSourceDimensions(sourceImage);
     const composite = document.createElement("canvas");
     composite.width = sw;
@@ -947,7 +1190,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(sourceImage, 0, 0, sw, sh);
 
-    drawTextLayersOnCanvas(ctx, sw, sh, textOnly);
+    drawTextLayersOnCanvas(ctx, sw, sh, renderable);
 
     composite.naturalWidth = sw;
     composite.naturalHeight = sh;
@@ -1587,13 +1830,20 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       const fullH = transformedFull.height;
       const sceneDepth = depthFieldCanvasRef.current;
       for (const layer of layers) {
-        if (!isTextLayer(layer)) continue;
+        if (!isTextLayer(layer) && !isStickerLayer(layer)) continue;
         const absX = layer.x * fullW - exportRect.x;
         const absY = layer.y * fullH - exportRect.y;
+        // Sticker scale is fraction of source image width — when we crop the
+        // export to a sub-rect, rescale so the visible sticker stays the same
+        // physical size on disk.
+        const scaleAdjust = isStickerLayer(layer)
+          ? { scale: (layer.scale ?? 0.4) * (fullW / exportRect.width) }
+          : null;
         const mappedLayer = {
           ...layer,
           x: absX / exportRect.width,
           y: absY / exportRect.height,
+          ...(scaleAdjust || {}),
         };
         const useDepth = sceneDepth && layer.zPosition != null && layer.zPosition < 1;
         if (!useDepth) {
@@ -1896,6 +2146,22 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               </div>
             )}
 
+            {/* Sticker region — drag-to-draw marquee for limiting subject detection
+                to a sub-rect when VisionKit can't find the subject in the full frame. */}
+            {tool === "sticker" && imageRect && (
+              <StickerRegionOverlay
+                imageRect={imageRect}
+                region={stickerRegion}
+                drag={stickerDrag}
+                onDragChange={setStickerDrag}
+                onCommit={(rect) => {
+                  setStickerDrag(null);
+                  if (rect && rect.w > 0.02 && rect.h > 0.02) setStickerRegion(rect);
+                  else setStickerRegion(null);
+                }}
+              />
+            )}
+
             {/* Non-rotating crop overlay — stays axis-aligned, z-10 above rotated image */}
             {showCropUi && cropRect ? (
               <div className="pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
@@ -2081,6 +2347,16 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 onPickDepthModel={handlePickDepthModel}
                 onResetDepthModel={handleResetDepthModel}
               />
+            ) : tool === "sticker" ? (
+              <div className="flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden">
+                <StickerPanel
+                  sourcePath={sourcePath}
+                  sourceLabel={sourceLabel}
+                  pushToast={pushToast}
+                  region={stickerRegion}
+                  onClearRegion={() => setStickerRegion(null)}
+                />
+              </div>
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
@@ -2094,6 +2370,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           >
             <ToolTab active={tool === "crop"} icon={Crop} label="Crop" onClick={() => { setTool("crop"); setDepthMapVisible(false); }} />
             <ToolTab active={tool === "text"} icon={Type} label="Text" onClick={() => setTool("text")} />
+            <ToolTab active={tool === "sticker"} icon={Cannabis} label="Sticker" onClick={() => { setTool("sticker"); setDepthMapVisible(false); }} />
             <ToolTab active={tool === "ai"} icon={Sparkles} label="AI Repaint" onClick={() => { setTool("ai"); setDepthMapVisible(false); }} />
           </div>
         </div>

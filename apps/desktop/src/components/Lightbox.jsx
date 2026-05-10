@@ -349,22 +349,26 @@ export default function Lightbox({
           </div>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
-          <ActionPill
-            icon={Pencil}
-            label="Edit"
-            shortcut="E"
-            onClick={(event) => {
-              event.stopPropagation();
-              onEdit?.(currentItem);
-            }}
-          />
-          <ActionPill
-            icon={SwatchBook}
-            label="Proof"
-            shortcut="P"
-            active={proofMode}
-            onClick={onToggleProof}
-          />
+          {onEdit && (
+            <ActionPill
+              icon={Pencil}
+              label="Edit"
+              shortcut="E"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEdit(currentItem);
+              }}
+            />
+          )}
+          {onToggleProof && (
+            <ActionPill
+              icon={SwatchBook}
+              label="Proof"
+              shortcut="P"
+              active={proofMode}
+              onClick={onToggleProof}
+            />
+          )}
           <OverlayButton onClick={onClose}>
             <X className="h-4 w-4" />
           </OverlayButton>

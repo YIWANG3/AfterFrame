@@ -214,3 +214,19 @@ select {
 .hide-spinner {
   -moz-appearance: textfield;
 }
+
+/* Transparent checkerboard background — used to indicate alpha channel,
+   especially in the sticker library grid where each thumbnail is a PNG with
+   transparency. */
+.bg-checker {
+  background-color: rgb(var(--panel-bg));
+  background-image:
+    linear-gradient(45deg, var(--checker-stripe) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-stripe) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-stripe) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-stripe) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+:root { --checker-stripe: rgba(255, 255, 255, 0.05); }
+:root[data-theme="light"] { --checker-stripe: rgba(0, 0, 0, 0.06); }

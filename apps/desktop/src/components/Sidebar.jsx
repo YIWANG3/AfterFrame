@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis } from "lucide-react";
 import { baseName, formatTimestamp, navItems } from "../utils/format";
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
@@ -50,6 +50,8 @@ export default function Sidebar({
   onRenameCollection,
   onDeleteCollection,
   onAddToCollection,
+  onOpenStickerBrowser,
+  stickerMode = false,
 }) {
   const browse = navItems(summary);
   const rootSummary = [];
@@ -101,7 +103,7 @@ export default function Sidebar({
         <div className="space-y-1">
           {browse.map((item) => {
             const Icon = ICON_MAP[item.icon];
-            const active = !activeCollectionId && item.key === status;
+            const active = !activeCollectionId && !stickerMode && item.key === status;
             return (
               <button
                 key={item.key}
@@ -125,6 +127,21 @@ export default function Sidebar({
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={(e) => { e.currentTarget.blur(); onOpenStickerBrowser?.(); }}
+            className={[
+              "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+              stickerMode
+                ? "bg-selected text-text"
+                : "text-muted hover:bg-hover/70 hover:text-text",
+            ].join(" ")}
+          >
+            <span className="flex items-center gap-2.5">
+              <Cannabis className={`h-4 w-4 stroke-[1.6] ${stickerMode ? "text-accent" : ""}`} />
+              <span className="text-[13px]">Stickers</span>
+            </span>
+          </button>
         </div>
 
         <div>

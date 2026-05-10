@@ -73,6 +73,44 @@ export function createDefaultLayer(overrides = {}) {
   };
 }
 
+// Sticker layer — image overlay sourced from the sticker library. Shares
+// position / rotation / opacity / shadow / depth with text layers; everything
+// font-related is N/A.
+export function createStickerLayer({ stickerPath, naturalWidth, naturalHeight, sourceLabel }, overrides = {}) {
+  return {
+    id: `sticker-${nextId++}`,
+    type: "sticker",
+    stickerPath,
+    naturalWidth: naturalWidth || 0,
+    naturalHeight: naturalHeight || 0,
+    sourceLabel: sourceLabel || null,
+    x: 0.5,
+    y: 0.5,
+    // `scale` here is "size relative to image width" — 0..1 — so a sticker added
+    // to a 4000px image starts at 4000 * scale wide. Lets stickers feel similar
+    // sized regardless of source image dimensions.
+    scale: 0.4,
+    rotation: 0,
+    opacity: 100,
+    shadow: false,
+    shadowX: 0,
+    shadowY: 8,
+    shadowBlur: 20,
+    shadowColor: "#000000",
+    shadowOpacity: 60,
+    // Runtime outline — stacks on top of whatever was baked into the PNG.
+    // 0 = no extra outline.
+    outlineWidth: 0,
+    outlineColor: "#ffffff",
+    zPosition: 1.0,
+    ...overrides,
+  };
+}
+
+export function isStickerLayer(layer) {
+  return layer && layer.type === "sticker";
+}
+
 export function getBgPadding(layer) {
   const top = layer.bgPadTop ?? layer.bgPadV ?? 15;
   const bottom = layer.bgPadBottom ?? layer.bgPadV ?? 15;

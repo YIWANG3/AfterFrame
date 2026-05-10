@@ -11,6 +11,13 @@ export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+// Display label for a sticker — user-given name first, then source filename,
+// then internal filename. Used by all sticker UI surfaces so they stay in sync.
+export function stickerLabel(sticker) {
+  if (!sticker) return "";
+  return sticker.name || sticker.sourceLabel || sticker.filename || "";
+}
+
 export function fileName(value) {
   if (!value) return "";
   const normalized = String(value).replaceAll("\\", "/");

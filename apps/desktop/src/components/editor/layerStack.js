@@ -4,11 +4,15 @@
 
 export const LAYER_TYPES = {
   TEXT: "text",
-  // Future: STICKER: "sticker"
+  STICKER: "sticker",
 };
 
 export function isTextLayer(layer) {
   return layer && (!layer.type || layer.type === LAYER_TYPES.TEXT);
+}
+
+export function isStickerLayer(layer) {
+  return layer && layer.type === LAYER_TYPES.STICKER;
 }
 
 export function getTextLayers(layers) {
@@ -40,5 +44,6 @@ export function cloneLayerStack(layers) {
 
 export function layerLabel(layer) {
   if (isTextLayer(layer)) return layer.text?.trim() || "Empty";
+  if (isStickerLayer(layer)) return layer.sourceLabel || "Sticker";
   return "Layer";
 }

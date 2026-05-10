@@ -8,16 +8,23 @@ function hexToRgba(hex, alpha = 1) {
   const b = parseInt(h.substring(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+
+function mediaUrlFor(filePath) {
+  if (!filePath) return "";
+  if (filePath.startsWith("media://")) return filePath;
+  const encoded = filePath.split("/").map((seg) => encodeURIComponent(seg)).join("/");
+  return `media://${encoded}`;
+}
 import {
   Plus, Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw,
+  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X,
 } from "lucide-react";
-import { isTextLayer, layerLabel } from "./layerStack";
+import { isTextLayer, isStickerLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
-  createDefaultLayer, applyPreset, cloneLayers, getBgPadding,
+  createDefaultLayer, createStickerLayer, applyPreset, cloneLayers, getBgPadding,
 } from "./textState";
 import {
   alignLeft, alignCenterH, alignRight,
@@ -56,11 +63,13 @@ export default function TextPanel({
   const selectedText = selected.filter(isTextLayer);
   const current = selected.length === 1 ? selected[0] : null;
   const currentIsText = isTextLayer(current);
-  // Inspector always shows text controls. If no text is selected, fall back to the
-  // topmost text layer so the panel layout never collapses (avoids jumpy UX).
+  const currentIsSticker = isStickerLayer(current);
+  // Inspector always shows text controls when applicable. If no text is selected
+  // and no sticker is selected, fall back to the topmost text layer so the panel
+  // layout never collapses (avoids jumpy UX).
   const editTarget = currentIsText
     ? current
-    : (layers.filter(isTextLayer).slice(-1)[0] || null);
+    : (currentIsSticker ? null : (layers.filter(isTextLayer).slice(-1)[0] || null));
 
   const update = useCallback((id, patch) => {
     onLayersChange(layers.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -79,6 +88,19 @@ export default function TextPanel({
     const nl = createDefaultLayer();
     onLayersChange([...layers, nl]);
     onSelectionChange(new Set([nl.id]));
+  };
+
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const handleAddSticker = (sticker) => {
+    const nl = createStickerLayer({
+      stickerPath: sticker.path,
+      naturalWidth: sticker.width,
+      naturalHeight: sticker.height,
+      sourceLabel: sticker.name || sticker.sourceLabel,
+    });
+    onLayersChange([...layers, nl]);
+    onSelectionChange(new Set([nl.id]));
+    setStickerPickerOpen(false);
   };
 
   const deleteLayer = (id) => {
@@ -100,7 +122,8 @@ export default function TextPanel({
 
   return (
     <>
-      <div className="max-h-[calc(100vh-10rem)] overflow-y-auto">
+      <div className="relative h-[calc(100vh-10rem)]">
+      <div className="h-full overflow-y-auto">
         {/* Presets */}
         <Section label="Presets">
           <div className="grid grid-cols-4 gap-1.5">
@@ -237,9 +260,16 @@ export default function TextPanel({
           </div>
         </Section>
 
-        {/* Layers — text only */}
+        {/* Layers — text + sticker */}
         <Section label="Layers" action={
-          <IconBtn icon={Type} title="Add text layer" onClick={addLayer} />
+          <div className="flex items-center gap-0.5">
+            <IconBtn
+              icon={Cannabis}
+              title={stickerPickerOpen ? "Hide sticker picker" : "Add sticker layer"}
+              onClick={() => setStickerPickerOpen((v) => !v)}
+            />
+            <IconBtn icon={Type} title="Add text layer" onClick={addLayer} />
+          </div>
         }>
           <LayerList
             layers={layers}
@@ -250,6 +280,14 @@ export default function TextPanel({
           />
           {selectedText.length >= 2 && <AlignBar layers={selectedText} onLayersChange={onLayersChange} allLayers={layers} />}
         </Section>
+
+        {currentIsSticker && current && (
+          <StickerLayerInspector
+            layer={current}
+            update={update}
+            hasSceneDepth={hasSceneDepth}
+          />
+        )}
 
         {editTarget && (() => {
           // Alias so the rest of the inspector keeps reading `current` —
@@ -391,6 +429,13 @@ export default function TextPanel({
           );
         })()}
       </div>
+      {stickerPickerOpen && (
+        <StickerPickerModal
+          onPick={(s) => handleAddSticker(s)}
+          onClose={() => setStickerPickerOpen(false)}
+        />
+      )}
+      </div>
 
       {/* Footer */}
       <div className="flex items-center gap-1 border-t border-border/60 px-3 py-2">
@@ -485,7 +530,7 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
     <div className="flex flex-col gap-0.5">
       {display.map((l) => {
         const isSelected = selectedIds.has(l.id);
-        const TypeIcon = Type;
+        const TypeIcon = isStickerLayer(l) ? Cannabis : Type;
         const showLineAbove = overInfo?.id === l.id && overInfo.position === "above";
         const showLineBelow = overInfo?.id === l.id && overInfo.position === "below";
         return (
@@ -1128,3 +1173,161 @@ function AlignBar({ layers, onLayersChange, allLayers }) {
     </div>
   );
 }
+
+/* ─── Sticker layer inspector ─────────────────────────────── */
+
+function StickerLayerInspector({ layer, update, hasSceneDepth }) {
+  const hasOutline = (layer.outlineWidth || 0) > 0;
+  return (
+    <>
+      <Section label="Transform">
+        <SliderRow label="Size" min={2} max={200} value={Math.round((layer.scale ?? 0.4) * 100)} onChange={(v) => update(layer.id, { scale: v / 100 })} suffix="%" />
+        <SliderRow label="Opacity" min={0} max={100} value={layer.opacity ?? 100} onChange={(v) => update(layer.id, { opacity: v })} suffix="%" />
+      </Section>
+
+      {hasSceneDepth && (
+        <Section label="Depth Position">
+          <SliderRow min={0} max={100} value={Math.round((layer.zPosition ?? 1) * 100)} onChange={(v) => update(layer.id, { zPosition: v / 100 })} suffix="%" compact />
+        </Section>
+      )}
+
+      {/* Outline — shape mirrors the text Stroke section: PaintRow + Width slider */}
+      <Section label="Outline" right={
+        <Switch on={hasOutline} onToggle={() => update(layer.id, { outlineWidth: hasOutline ? 0 : 8 })} />
+      }>
+        {hasOutline && (
+          <>
+            <PaintRow
+              paint={{
+                mode: "solid",
+                color: layer.outlineColor || "#ffffff",
+                opacity: 1,
+                gradient: { from: "#fff", fromOpacity: 1, to: "#000", toOpacity: 1, angle: 90 },
+              }}
+              availableModes={["solid"]}
+              onUpdate={(patch) => {
+                if (patch.color !== undefined) update(layer.id, { outlineColor: patch.color });
+              }}
+            />
+            <SliderRow label="Width" min={1} max={64} value={layer.outlineWidth} onChange={(v) => update(layer.id, { outlineWidth: v })} />
+          </>
+        )}
+      </Section>
+
+      {/* Shadow — identical structure to text Shadow section */}
+      <Section label="Shadow" right={
+        <Switch on={layer.shadow} onToggle={() => update(layer.id, { shadow: !layer.shadow })} />
+      }>
+        {layer.shadow && (
+          <div className="mt-2 flex items-stretch gap-2">
+            <StackedColorField
+              label="Color"
+              color={layer.shadowColor}
+              onChange={(c) => update(layer.id, { shadowColor: c })}
+              opacity={(layer.shadowOpacity ?? 60) / 100}
+              onOpacityChange={(v) => update(layer.id, { shadowOpacity: Math.round(v * 100) })}
+              presets={COLOR_SWATCHES}
+            />
+            <StackedField label="X" value={layer.shadowX} min={-50} max={50} onChange={(v) => update(layer.id, { shadowX: v })} />
+            <StackedField label="Y" value={layer.shadowY} min={-50} max={50} onChange={(v) => update(layer.id, { shadowY: v })} />
+            <StackedField label="Blur" value={layer.shadowBlur} min={0} max={100} onChange={(v) => update(layer.id, { shadowBlur: v })} />
+          </div>
+        )}
+      </Section>
+    </>
+  );
+}
+
+/* ─── Sticker library picker modal ────────────────────────── */
+
+function StickerPickerModal({ onPick, onClose }) {
+  const [stickers, setStickers] = useState([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await window.mediaWorkspace?.stickerList?.();
+        if (!cancelled) setStickers(list || []);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const filtered = !query.trim()
+    ? stickers
+    : stickers.filter((s) => {
+        const q = query.trim().toLowerCase();
+        return (s.name || "").toLowerCase().includes(q) ||
+               (s.sourceLabel || "").toLowerCase().includes(q);
+      });
+
+  // Rendered absolutely inside the TextPanel — so it overlays *just* the panel,
+  // doesn't block the canvas/toolbar, and stays open while the user adds
+  // multiple stickers in a row (click sticker → layer added → picker stays).
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col bg-chrome/97 backdrop-blur-sm">
+      <div className="px-3 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Pick a sticker</div>
+          <button
+            type="button"
+            className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
+            onClick={onClose}
+            title="Done"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search…"
+          autoFocus
+          className="mt-3 h-7 w-full rounded-md border border-border/60 bg-app px-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto border-t border-border/60 px-3 py-3">
+        {loading ? (
+          <div className="grid place-items-center py-12 text-[11px] text-muted">Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div className="grid place-items-center py-12 text-center text-[10px] leading-relaxed text-muted2">
+            {query ? "No matches" : "No stickers in library — switch to the Sticker tool to make one."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {filtered.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onPick(s)}
+                className="group flex flex-col text-left"
+                title={s.name || s.sourceLabel || s.filename}
+              >
+                <div className="aspect-square overflow-hidden rounded-md border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
+                  <img
+                    src={mediaUrlFor(s.path)}
+                    alt=""
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="mt-1 truncate px-0.5 text-[9px] text-muted2">{s.name || s.sourceLabel || "—"}</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

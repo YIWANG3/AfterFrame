@@ -11,6 +11,7 @@ import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
+import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
 
@@ -30,6 +31,33 @@ export default function App() {
   const [selectionAnchorId, setSelectionAnchorId] = useState(null);
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
+  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers"
+  const stickerView = useStickerView();
+
+  // Sticker items, shaped for Lightbox/Inspector consumers.
+  const stickerItemsForLightbox = useMemo(() => {
+    const q = (stickerView.query || "").trim().toLowerCase();
+    const list = q
+      ? stickerView.stickers.filter((s) =>
+          (s.name || "").toLowerCase().includes(q) ||
+          (s.sourceLabel || "").toLowerCase().includes(q) ||
+          (s.sourcePath || "").toLowerCase().includes(q),
+        )
+      : stickerView.stickers;
+    return list.map((s) => ({
+      asset_id: s.id,
+      export_path: s.path,
+      export_preview_path: s.path,
+      raw_preview_path: s.path,
+      stem: s.name || s.sourceLabel || s.filename,
+      export_metadata: { width: s.width, height: s.height },
+    }));
+  }, [stickerView.stickers, stickerView.query]);
+
+  const stickerLightboxIndex = useMemo(() => {
+    if (!stickerView.selected) return 0;
+    return Math.max(0, stickerItemsForLightbox.findIndex((it) => it.asset_id === stickerView.selected.id));
+  }, [stickerItemsForLightbox, stickerView.selected]);
   const resizeSidebar = usePaneResize(workspace.setSidebarWidth, 200, 360);
   const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -420, -240);
   const currentItems = workspace.filteredItems;
@@ -397,9 +425,43 @@ export default function App() {
       if (shouldIgnoreKey(event)) return;
 
       if (event.code === "Space") {
+        if (viewMode === "stickers") {
+          if (!stickerView.selected) return;
+          event.preventDefault();
+          setLightboxOpen((current) => !current);
+          return;
+        }
         if (!workspace.selectedAssetId) return;
         event.preventDefault();
         setLightboxOpen((current) => !current);
+        return;
+      }
+
+      if (viewMode === "stickers") {
+        // Linear arrow navigation through the filtered sticker list (works
+        // both with the lightbox open and in the grid view).
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp" ||
+            event.key === "ArrowRight" || event.key === "ArrowDown") {
+          if (!stickerItemsForLightbox.length) return;
+          event.preventDefault();
+          const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+          const cur = stickerView.selected
+            ? stickerItemsForLightbox.findIndex((it) => it.asset_id === stickerView.selected.id)
+            : -1;
+          const next = cur < 0
+            ? (dir === 1 ? 0 : stickerItemsForLightbox.length - 1)
+            : (cur + dir + stickerItemsForLightbox.length) % stickerItemsForLightbox.length;
+          const item = stickerItemsForLightbox[next];
+          const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
+          if (sticker) stickerView.setSelected(sticker);
+          return;
+        }
+        // Esc closes lightbox (handled here so we don't fall through to asset logic)
+        if (event.key === "Escape" && lightboxOpen) {
+          event.preventDefault();
+          setLightboxOpen(false);
+          return;
+        }
         return;
       }
 
@@ -450,6 +512,7 @@ export default function App() {
           summary={workspace.summary}
           status={workspace.status}
           setStatus={(next) => {
+            setViewMode("assets");
             const baseHistory = history.slice(0, historyIndex + 1);
             const nextHistory = baseHistory[baseHistory.length - 1] === next ? baseHistory : [...baseHistory, next];
             const nextIndex = nextHistory.length - 1;
@@ -460,98 +523,135 @@ export default function App() {
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
-          onSelectCollection={workspace.selectCollection}
+          onSelectCollection={(id) => { setViewMode("assets"); workspace.selectCollection(id); }}
           onClearCollection={workspace.clearCollection}
           onCreateCollection={workspace.createCollection}
           onRenameCollection={workspace.renameCollection}
           onDeleteCollection={workspace.deleteCollection}
           onAddToCollection={workspace.addToCollection}
+          stickerMode={viewMode === "stickers"}
+          onOpenStickerBrowser={() => {
+            setViewMode("stickers");
+            workspace.clearCollection?.({ reload: false });
+            stickerView.refresh();
+          }}
         /> : <div className="bg-chrome" />}
 
         <section
           className="relative flex min-w-0 min-h-0 flex-col overflow-hidden bg-app"
-          onDragOver={handleGalleryDragOver}
-          onDragLeave={handleGalleryDragLeave}
-          onDrop={handleGalleryDrop}
+          onDragOver={viewMode === "assets" ? handleGalleryDragOver : undefined}
+          onDragLeave={viewMode === "assets" ? handleGalleryDragLeave : undefined}
+          onDrop={viewMode === "assets" ? handleGalleryDrop : undefined}
         >
-          <Toolbar
-            title={workspace.activeCollectionId
-              ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
-              : filterTitle(workspace.status)}
-            query={workspace.query}
-            setQuery={workspace.setQuery}
-            sort={workspace.sort}
-            setSort={workspace.setSort}
-            refreshAll={workspace.refreshAll}
-            onAddProcessed={workspace.addImages}
-            onAddSources={workspace.addSources}
-            onRunImport={workspace.runImportPipeline}
-            onRunEnrichment={workspace.runEnrichment}
-            onRunPreviews={workspace.runPreviewGeneration}
-            onBack={() => {
-              if (historyIndex <= 0) return;
-              const nextIndex = historyIndex - 1;
-              const next = history[nextIndex];
-              setHistoryIndex(nextIndex);
-              workspace.setStatus(next);
-              void workspace.refreshAll({ nextStatus: next, collectionId: null });
-            }}
-            onForward={() => {
-              if (historyIndex >= history.length - 1) return;
-              const nextIndex = historyIndex + 1;
-              const next = history[nextIndex];
-              setHistoryIndex(nextIndex);
-              workspace.setStatus(next);
-              void workspace.refreshAll({ nextStatus: next, collectionId: null });
-            }}
-            canGoBack={historyIndex > 0}
-            canGoForward={historyIndex < history.length - 1}
-            displayMode={displayMode}
-            setDisplayMode={setDisplayMode}
-            thumbSize={thumbSize}
-            setThumbSize={setThumbSize}
-          />
-          <div className="min-h-0 flex-1 overflow-hidden">
-              <Gallery
-                items={currentItems}
-                selectedAssetId={workspace.selectedAssetId}
-                selectedAssetIds={selectedAssetIds}
-                onSelect={handleItemSelect}
-                onOpen={openLightboxForItem}
-                onSelectMany={handleSelectionGroup}
-                onContextSelect={handleContextSelect}
-                onClearSelection={clearSelection}
-                onPrepareDragSelection={prepareDragSelection}
-                onLayoutItemsChange={setLayoutItems}
-                loading={workspace.browserLoading}
-                browserReady={workspace.browserReady}
-                loadingMore={workspace.browserLoadingMore}
-                hasMore={workspace.browserHasMore}
-                onLoadMore={workspace.loadMoreBrowser}
-                displayMode={displayMode}
-                thumbSize={thumbSize}
-                totalCount={Number(workspace.summary?.export_assets ?? 0)}
-                collections={workspace.collections}
-                activeCollectionId={workspace.activeCollectionId}
-                onAddToCollection={workspace.addToCollection}
-                onRemoveFromCollection={workspace.removeFromCollection}
-                onDeleteFromCatalog={workspace.deleteExportAssets}
-                onEdit={openEditor}
-                onCompare={handleCompare}
-                onCollage={handleCollage}
+          {viewMode === "stickers" ? (
+            <>
+              <StickerToolbar
+                count={stickerView.stickers.length}
+                query={stickerView.query}
+                setQuery={stickerView.setQuery}
               />
-          </div>
-          {dropActive && (
-            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-app/85 backdrop-blur-sm">
-              <div className="rounded-xl border-2 border-dashed border-[rgb(var(--accent-color))] bg-chrome/90 px-8 py-6 text-center shadow-overlay">
-                <div className="text-[15px] font-medium text-text">Drop to import</div>
-                <div className="mt-1 text-[12px] text-muted2">Files and folders will be added to the catalog</div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <StickerGallery
+                  stickers={stickerView.stickers}
+                  query={stickerView.query}
+                  selectedId={stickerView.selected?.id || null}
+                  onSelect={stickerView.setSelected}
+                  onDelete={stickerView.handleDelete}
+                  loading={stickerView.loading}
+                />
               </div>
-            </div>
+            </>
+          ) : (
+            <>
+              <Toolbar
+                title={workspace.activeCollectionId
+                  ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
+                  : filterTitle(workspace.status)}
+                query={workspace.query}
+                setQuery={workspace.setQuery}
+                sort={workspace.sort}
+                setSort={workspace.setSort}
+                refreshAll={workspace.refreshAll}
+                onAddProcessed={workspace.addImages}
+                onAddSources={workspace.addSources}
+                onRunImport={workspace.runImportPipeline}
+                onRunEnrichment={workspace.runEnrichment}
+                onRunPreviews={workspace.runPreviewGeneration}
+                onBack={() => {
+                  if (historyIndex <= 0) return;
+                  const nextIndex = historyIndex - 1;
+                  const next = history[nextIndex];
+                  setHistoryIndex(nextIndex);
+                  workspace.setStatus(next);
+                  void workspace.refreshAll({ nextStatus: next, collectionId: null });
+                }}
+                onForward={() => {
+                  if (historyIndex >= history.length - 1) return;
+                  const nextIndex = historyIndex + 1;
+                  const next = history[nextIndex];
+                  setHistoryIndex(nextIndex);
+                  workspace.setStatus(next);
+                  void workspace.refreshAll({ nextStatus: next, collectionId: null });
+                }}
+                canGoBack={historyIndex > 0}
+                canGoForward={historyIndex < history.length - 1}
+                displayMode={displayMode}
+                setDisplayMode={setDisplayMode}
+                thumbSize={thumbSize}
+                setThumbSize={setThumbSize}
+              />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <Gallery
+                  items={currentItems}
+                  selectedAssetId={workspace.selectedAssetId}
+                  selectedAssetIds={selectedAssetIds}
+                  onSelect={handleItemSelect}
+                  onOpen={openLightboxForItem}
+                  onSelectMany={handleSelectionGroup}
+                  onContextSelect={handleContextSelect}
+                  onClearSelection={clearSelection}
+                  onPrepareDragSelection={prepareDragSelection}
+                  onLayoutItemsChange={setLayoutItems}
+                  loading={workspace.browserLoading}
+                  browserReady={workspace.browserReady}
+                  loadingMore={workspace.browserLoadingMore}
+                  hasMore={workspace.browserHasMore}
+                  onLoadMore={workspace.loadMoreBrowser}
+                  displayMode={displayMode}
+                  thumbSize={thumbSize}
+                  totalCount={Number(workspace.summary?.export_assets ?? 0)}
+                  collections={workspace.collections}
+                  activeCollectionId={workspace.activeCollectionId}
+                  onAddToCollection={workspace.addToCollection}
+                  onRemoveFromCollection={workspace.removeFromCollection}
+                  onDeleteFromCatalog={workspace.deleteExportAssets}
+                  onEdit={openEditor}
+                  onCompare={handleCompare}
+                  onCollage={handleCollage}
+                />
+              </div>
+              {dropActive && (
+                <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-app/85 backdrop-blur-sm">
+                  <div className="rounded-xl border-2 border-dashed border-[rgb(var(--accent-color))] bg-chrome/90 px-8 py-6 text-center shadow-overlay">
+                    <div className="text-[15px] font-medium text-text">Drop to import</div>
+                    <div className="mt-1 text-[12px] text-muted2">Files and folders will be added to the catalog</div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </section>
 
-        {showInspector ? <Inspector detail={workspace.detail} onRatingChange={applyRating} onSelectAsset={selectSingle} /> : <div className="bg-chrome" />}
+        {showInspector ? (
+          viewMode === "stickers" ? (
+            <StickerInspector
+              sticker={stickerView.selected}
+              onStar={stickerView.handleStar}
+            />
+          ) : (
+            <Inspector detail={workspace.detail} onRatingChange={applyRating} onSelectAsset={selectSingle} />
+          )
+        ) : <div className="bg-chrome" />}
 
         {showSidebar ? (
           <div
@@ -575,16 +675,23 @@ export default function App() {
       <ImportOverlay overlay={workspace.activeOverlay} />
       <Lightbox
         open={lightboxOpen}
-        items={currentItems}
-        currentIndex={Math.max(selectedIndex, 0)}
-        proofMode={proofMode}
-        onToggleProof={() => setProofMode((current) => !current)}
-        onEdit={openEditor}
+        items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
+        currentIndex={viewMode === "stickers" ? stickerLightboxIndex : Math.max(selectedIndex, 0)}
+        proofMode={viewMode === "stickers" ? false : proofMode}
+        onToggleProof={viewMode === "stickers" ? undefined : (() => setProofMode((current) => !current))}
+        onEdit={viewMode === "stickers" ? undefined : openEditor}
         onClose={() => {
           setProofMode(false);
           setLightboxOpen(false);
         }}
-        onIndexChange={selectByIndex}
+        onIndexChange={viewMode === "stickers"
+          ? (idx) => {
+              const item = stickerItemsForLightbox[idx];
+              const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
+              if (sticker) stickerView.setSelected(sticker);
+            }
+          : selectByIndex
+        }
       />
       <EditorOverlay
         open={!!editorItem}

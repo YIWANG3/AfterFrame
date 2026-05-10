@@ -1507,6 +1507,206 @@ ipcMain.handle("workspace:reset-depth-model", async () => {
   };
 });
 
+// ---- Sticker extraction & library ----------------------------------------
+
+const stickerExtractScriptPath = isPackaged
+  ? path.join(process.resourcesPath, "native", "extract-sticker.swift")
+  : path.join(__dirname, "..", "native", "extract-sticker.swift");
+
+const stickerLibraryDir = path.join(app.getPath("userData"), "stickers");
+try { fs.mkdirSync(stickerLibraryDir, { recursive: true }); } catch (_) {}
+
+function stickerManifestPath() {
+  return path.join(stickerLibraryDir, "library.json");
+}
+
+function readStickerLibrary() {
+  try {
+    return JSON.parse(fs.readFileSync(stickerManifestPath(), "utf-8"));
+  } catch {
+    return { stickers: [] };
+  }
+}
+
+let _stickerWriteQueue = Promise.resolve();
+async function writeStickerLibrary(data) {
+  await fs.promises.mkdir(stickerLibraryDir, { recursive: true });
+  await fs.promises.writeFile(stickerManifestPath(), `${JSON.stringify(data, null, 2)}\n`, "utf-8");
+}
+function updateStickerLibrary(mutate) {
+  _stickerWriteQueue = _stickerWriteQueue.then(async () => {
+    const lib = readStickerLibrary();
+    const next = mutate(lib) || lib;
+    await writeStickerLibrary(next);
+    return next;
+  });
+  return _stickerWriteQueue;
+}
+
+ipcMain.handle("workspace:sticker-list", () => {
+  const lib = readStickerLibrary();
+  return Array.isArray(lib.stickers) ? lib.stickers : [];
+});
+
+// Run swift segmentation on an image, return manifest + extracted instance PNG paths.
+// Callers are responsible for cleaning up the temp dir if they don't promote
+// the instances into the permanent library.
+//
+// Optional `region` (normalized 0..1 {x, y, w, h}) constrains detection to a
+// crop of the source — useful when VisionKit can't find a small subject in a
+// wide scene but succeeds when the subject fills more of the frame.
+ipcMain.handle("workspace:sticker-detect", async (_event, options) => {
+  if (process.platform !== "darwin") {
+    throw new Error("Sticker extraction requires macOS.");
+  }
+  const sourcePath = String(options?.sourcePath || "");
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    throw new Error(`Source not found: ${sourcePath}`);
+  }
+  if (!fs.existsSync(stickerExtractScriptPath)) {
+    throw new Error(`Sticker script missing at ${stickerExtractScriptPath}`);
+  }
+
+  // Per-call scratch dir so concurrent calls don't trample each other.
+  const scratchDir = path.join(
+    app.getPath("temp"),
+    `afterframe-sticker-${crypto.randomBytes(6).toString("hex")}`,
+  );
+  fs.mkdirSync(scratchDir, { recursive: true });
+
+  // If a region is provided, crop the source to that rect first and feed swift
+  // the cropped image. The resulting sticker PNG is naturally the cropped
+  // subject — that's what the user wants.
+  let inputForSwift = sourcePath;
+  const region = options?.region;
+  if (region && Number.isFinite(region.x) && Number.isFinite(region.w) && region.w > 0 && region.h > 0) {
+    const croppedPath = path.join(scratchDir, "cropped.png");
+    const meta = await sharp(sourcePath, { limitInputPixels: false }).metadata();
+    const sw = meta.width || 0;
+    const sh = meta.height || 0;
+    const cropX = Math.max(0, Math.round(region.x * sw));
+    const cropY = Math.max(0, Math.round(region.y * sh));
+    const cropW = Math.min(sw - cropX, Math.round(region.w * sw));
+    const cropH = Math.min(sh - cropY, Math.round(region.h * sh));
+    if (cropW < 32 || cropH < 32) {
+      throw new Error("Selection is too small.");
+    }
+    await sharp(sourcePath, { limitInputPixels: false })
+      .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
+      .png()
+      .toFile(croppedPath);
+    inputForSwift = croppedPath;
+  }
+
+  const runtime = findSwiftRuntime();
+  const env = { ...process.env };
+  if (runtime.developerDir) env.DEVELOPER_DIR = runtime.developerDir;
+
+  await new Promise((resolve, reject) => {
+    const child = spawn(runtime.binary, [stickerExtractScriptPath, inputForSwift, scratchDir], { env });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) reject(new Error(stderr.trim() || `Extraction failed (exit ${code}).`));
+      else resolve();
+    });
+  });
+
+  const manifestPath = path.join(scratchDir, "manifest.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+  } catch {
+    throw new Error("Extraction produced no manifest");
+  }
+  const instances = (manifest.instances || []).map((entry) => ({
+    ...entry,
+    absolutePath: path.join(scratchDir, entry.filename),
+  }));
+  return {
+    scratchDir,
+    sourcePath,
+    sourceWidth: manifest.sourceWidth,
+    sourceHeight: manifest.sourceHeight,
+    instances,
+  };
+});
+
+// Promote a finished sticker (PNG bytes) into the permanent library and return
+// its catalog entry. The renderer bakes outline into the PNG before sending.
+ipcMain.handle("workspace:sticker-save", async (_event, options) => {
+  const buffer = options?.bytes;
+  if (!buffer) throw new Error("Missing sticker bytes");
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  const sha = crypto.createHash("sha1").update(bytes).digest("hex");
+  const filename = `${sha}.png`;
+  const fullPath = path.join(stickerLibraryDir, filename);
+  await fs.promises.writeFile(fullPath, bytes);
+
+  const entry = {
+    id: sha,
+    filename,
+    path: fullPath,
+    name: options?.name || null,
+    width: Number(options?.width) || null,
+    height: Number(options?.height) || null,
+    sourcePath: options?.sourcePath || null,
+    sourceLabel: options?.sourceLabel || null,
+    instanceIndex: Number.isFinite(options?.instanceIndex) ? options.instanceIndex : 0,
+    outlineWidth: Number(options?.outlineWidth) || 0,
+    outlineColor: options?.outlineColor || "#ffffff",
+    starred: false,
+    createdAt: new Date().toISOString(),
+  };
+  await updateStickerLibrary((lib) => {
+    const stickers = Array.isArray(lib.stickers) ? lib.stickers : [];
+    // Dedupe by id (same content). Move to front if already present.
+    const filtered = stickers.filter((s) => s.id !== sha);
+    return { ...lib, stickers: [entry, ...filtered] };
+  });
+  return entry;
+});
+
+ipcMain.handle("workspace:sticker-delete", async (_event, stickerId) => {
+  if (!stickerId) return false;
+  let removed = null;
+  await updateStickerLibrary((lib) => {
+    const stickers = Array.isArray(lib.stickers) ? lib.stickers : [];
+    removed = stickers.find((s) => s.id === stickerId) || null;
+    return { ...lib, stickers: stickers.filter((s) => s.id !== stickerId) };
+  });
+  if (removed?.path) {
+    try { await fs.promises.unlink(removed.path); } catch (_) {}
+  }
+  return !!removed;
+});
+
+ipcMain.handle("workspace:sticker-toggle-star", async (_event, stickerId) => {
+  let next = null;
+  await updateStickerLibrary((lib) => {
+    const stickers = Array.isArray(lib.stickers) ? lib.stickers : [];
+    const updated = stickers.map((s) => {
+      if (s.id !== stickerId) return s;
+      next = { ...s, starred: !s.starred };
+      return next;
+    });
+    return { ...lib, stickers: updated };
+  });
+  return next;
+});
+
+ipcMain.handle("workspace:sticker-cleanup-scratch", async (_event, scratchDir) => {
+  if (!scratchDir) return false;
+  if (!scratchDir.includes("afterframe-sticker-")) return false; // safety
+  try {
+    await fs.promises.rm(scratchDir, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 // ---- External "Open With…" / dock-icon drop import ------------------------
 // macOS fires `open-file` once per dropped file. We batch them in a 50ms window
 // then push the list to the renderer. If the window isn't ready yet (cold
