@@ -753,6 +753,11 @@ function createWindow() {
   window.webContents.on("preload-error", (_event, preloadPath, error) => {
     console.error(`[renderer:preload-error] ${preloadPath}`, error);
   });
+  window.webContents.on("did-finish-load", () => {
+    // Cold-launch via dock drop arrives before any window exists, so the
+    // open-file events sit in `pendingExternalImports` until we're ready.
+    if (pendingExternalImports.length) flushExternalImports();
+  });
   if (devServerUrl) {
     window.loadURL(devServerUrl);
     return;
@@ -1500,6 +1505,35 @@ ipcMain.handle("workspace:reset-depth-model", async () => {
     isCustom: false,
     bundledPath: bundledDepthModelPath,
   };
+});
+
+// ---- External "Open With…" / dock-icon drop import ------------------------
+// macOS fires `open-file` once per dropped file. We batch them in a 50ms window
+// then push the list to the renderer. If the window isn't ready yet (cold
+// launch via dock drop), we queue and flush after `did-finish-load`.
+let pendingExternalImports = [];
+let externalImportFlushTimer = null;
+function queueExternalImport(filePath) {
+  if (!filePath) return;
+  pendingExternalImports.push(filePath);
+  if (externalImportFlushTimer) clearTimeout(externalImportFlushTimer);
+  externalImportFlushTimer = setTimeout(flushExternalImports, 50);
+}
+function flushExternalImports() {
+  externalImportFlushTimer = null;
+  if (!pendingExternalImports.length) return;
+  const win = BrowserWindow.getAllWindows()[0];
+  if (!win || !win.webContents || win.webContents.isLoading()) {
+    // Try again once the window is ready.
+    return;
+  }
+  const paths = pendingExternalImports.slice();
+  pendingExternalImports = [];
+  win.webContents.send("workspace:external-import", paths);
+}
+app.on("open-file", (event, filePath) => {
+  event.preventDefault();
+  queueExternalImport(filePath);
 });
 
 app.whenReady().then(() => {

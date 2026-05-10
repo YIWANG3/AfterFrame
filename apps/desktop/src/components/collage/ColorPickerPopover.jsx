@@ -239,9 +239,11 @@ export default function ColorPickerPopover({
     ? (activeStop === 0 ? (gradient.fromOpacity ?? 1) : (gradient.toOpacity ?? 1))
     : (opacityProp ?? 1);
 
-  // Init HSV from effective color
+  // Init HSV from effective color. Only carry hue across if the color is
+  // chromatic (s > threshold); for grayscale colors hue is meaningless and
+  // would otherwise reset to red.
   const initial = hexToHsv(effectiveColor);
-  if (initial.s > 0.01 || initial.v > 0.01) hueRef.current = initial.h;
+  if (initial.s > 0.01) hueRef.current = initial.h;
 
   const [hsv, setHsv] = useState({ h: hueRef.current, s: initial.s, v: initial.v });
   const [hexDraft, setHexDraft] = useState(effectiveColor.replace("#", "").toUpperCase());
@@ -272,7 +274,7 @@ export default function ColorPickerPopover({
   // parent updated the value), re-sync the internal HSV so the SV square reflects it.
   useEffect(() => {
     const next = hexToHsv(effectiveColor);
-    if (next.s > 0.01 || next.v > 0.01) hueRef.current = next.h;
+    if (next.s > 0.01) hueRef.current = next.h;
     setHsv({ h: hueRef.current, s: next.s, v: next.v });
     setHexDraft(effectiveColor.replace("#", "").toUpperCase());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -338,7 +340,9 @@ export default function ColorPickerPopover({
 
   function onSBChange(s, v) {
     setHsv((prev) => {
-      if (s > 0.01 || v > 0.01) hueRef.current = prev.h;
+      // Keep hueRef in sync with the visible hue whenever the user picks any
+      // chromatic point. (At s=0 hue is meaningless; don't overwrite.)
+      if (s > 0.01) hueRef.current = prev.h;
       return { h: prev.h, s, v };
     });
     const hex = hsvToHex(hueRef.current, s, v);
@@ -358,7 +362,7 @@ export default function ColorPickerPopover({
     const cleaned = hexDraft.replace("#", "").trim();
     if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {
       const parsed = hexToHsv(`#${cleaned}`);
-      if (parsed.s > 0.01 || parsed.v > 0.01) hueRef.current = parsed.h;
+      if (parsed.s > 0.01) hueRef.current = parsed.h;
       setHsv({ h: hueRef.current, s: parsed.s, v: parsed.v });
       emitColorChange(`#${cleaned.toLowerCase()}`);
     } else {

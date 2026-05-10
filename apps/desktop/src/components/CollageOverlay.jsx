@@ -451,7 +451,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
       const firstSrc = images[0]?.export_path || null;
       await window.mediaWorkspace?.saveImage?.(savePath, buffer, firstSrc);
       await window.mediaWorkspace?.quickRegister?.(savePath, firstSrc, sourceAssetIds);
-      onExportComplete?.();
+      onExportComplete?.(savePath);
     } catch (err) {
       console.error("[Collage] export failed:", err);
     } finally {

@@ -1,6 +1,17 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("mediaWorkspace", {
+  // Resolve the absolute filesystem path of a dropped File (Electron 30+).
+  // Gallery drag-and-drop uses this to translate `dataTransfer.files` entries
+  // into paths the importer can ingest.
+  getPathForFile: (file) => {
+    try { return webUtils.getPathForFile(file); } catch { return null; }
+  },
+  // Listen for files dropped on the dock icon / Finder "Open With" / open-files.
+  onExternalImport: (callback) => {
+    ipcRenderer.removeAllListeners("workspace:external-import");
+    ipcRenderer.on("workspace:external-import", (_event, paths) => callback(paths));
+  },
   isPackaged: ipcRenderer.sendSync("workspace:is-packaged"),
   getInfo: () => ipcRenderer.invoke("workspace:info"),
   getSummary: () => ipcRenderer.invoke("workspace:summary"),

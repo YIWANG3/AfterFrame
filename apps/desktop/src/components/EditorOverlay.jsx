@@ -616,7 +616,7 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
   );
 }
 
-export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
+export default function EditorOverlay({ open, item, onClose, onSaveComplete, pushToast }) {
   const viewportRef = useRef(null);
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
@@ -863,10 +863,14 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
         const padL = (fontSize * pad.left) / 100;
         const bgOp = (layer.bgOpacity ?? 100) / 100;
         if (layer.bgMode === "gradient") {
-          const angle = ((layer.bgGradAngle ?? 90) * Math.PI) / 180;
-          const halfDiag = (Math.abs(Math.cos(angle)) * (tw + padL + padR) + Math.abs(Math.sin(angle)) * (th + padT + padB)) / 2;
-          const gx = Math.cos(angle) * halfDiag;
-          const gy = Math.sin(angle) * halfDiag;
+          // Match CSS linear-gradient convention: 0deg = up, 90deg = right.
+          // Direction vector for a CSS angle θ is (sin θ, -cos θ).
+          const angleRad = ((layer.bgGradAngle ?? 90) * Math.PI) / 180;
+          const dx = Math.sin(angleRad);
+          const dy = -Math.cos(angleRad);
+          const halfDiag = (Math.abs(dx) * (tw + padL + padR) + Math.abs(dy) * (th + padT + padB)) / 2;
+          const gx = dx * halfDiag;
+          const gy = dy * halfDiag;
           const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
           grad.addColorStop(0, hexToRgba(layer.bgGradFrom ?? layer.bgColor ?? "#000", ((layer.bgGradFromOpacity ?? 100) / 100) * bgOp));
           grad.addColorStop(1, hexToRgba(layer.bgGradTo ?? "#fff", ((layer.bgGradToOpacity ?? 100) / 100) * bgOp));
@@ -888,12 +892,16 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       // Fill
       ctx.globalAlpha = layer.opacity / 100;
       if (layer.fillMode === "gradient") {
-        const angle = (layer.gradientAngle * Math.PI) / 180;
-        const gx = Math.cos(angle) * tw / 2;
-        const gy = Math.sin(angle) * tw / 2;
+        // CSS angle convention + project bbox onto axis + per-stop opacity
+        const angleRad = (layer.gradientAngle * Math.PI) / 180;
+        const dx = Math.sin(angleRad);
+        const dy = -Math.cos(angleRad);
+        const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
+        const gx = dx * halfDiag;
+        const gy = dy * halfDiag;
         const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
-        grad.addColorStop(0, layer.gradientFrom);
-        grad.addColorStop(1, layer.gradientTo);
+        grad.addColorStop(0, hexToRgba(layer.gradientFrom, (layer.gradientFromOpacity ?? 100) / 100));
+        grad.addColorStop(1, hexToRgba(layer.gradientTo, (layer.gradientToOpacity ?? 100) / 100));
         ctx.fillStyle = grad;
       } else {
         ctx.fillStyle = hexToRgba(layer.fillColor, (layer.fillOpacity ?? 100) / 100);
@@ -902,9 +910,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       // Outer stroke: draw stroke first (2x width), then fill on top to cover inner half
       if (layer.strokeEnabled && layer.strokeWidth > 0) {
         if (layer.strokeMode === "gradient") {
-          const angle = ((layer.strokeGradAngle ?? 90) * Math.PI) / 180;
-          const gx = Math.cos(angle) * tw / 2;
-          const gy = Math.sin(angle) * tw / 2;
+          const angleRad = ((layer.strokeGradAngle ?? 90) * Math.PI) / 180;
+          const dx = Math.sin(angleRad);
+          const dy = -Math.cos(angleRad);
+          const halfDiag = (Math.abs(dx) * tw + Math.abs(dy) * th) / 2;
+          const gx = dx * halfDiag;
+          const gy = dy * halfDiag;
           const grad = ctx.createLinearGradient(-gx, -gy, gx, gy);
           grad.addColorStop(0, hexToRgba(layer.strokeGradFrom ?? layer.strokeColor, (layer.strokeGradFromOpacity ?? 100) / 100));
           grad.addColorStop(1, hexToRgba(layer.strokeGradTo ?? "#000", (layer.strokeGradToOpacity ?? 100) / 100));
@@ -1517,10 +1528,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
             quality: 92,
           });
 
-          // Auto-import into catalog
+          // Auto-import into catalog. Editor stays open; toast surfaces the
+          // saved path + Show in Finder, then auto-dismisses after 20s.
           await window.mediaWorkspace.quickRegister?.(savePath, sourcePath);
           onSaveComplete?.(savePath);
-          onClose?.();
           return;
         } catch (nativeError) {
           console.error("[Editor] Native sharp save failed, falling back to canvas export:", nativeError);
@@ -1608,12 +1619,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
       releaseCanvasImage(transformedFull);
       releaseCanvasImage(outputCanvas);
 
-      // Auto-import into catalog
+      // Auto-import into catalog. Stay open after save; toast surfaces path.
       await window.mediaWorkspace.quickRegister?.(savePath, sourcePath);
       onSaveComplete?.(savePath);
-      onClose?.();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to save image");
+      pushToast?.({
+        title: "Save failed",
+        message: error instanceof Error ? error.message : "Failed to save image",
+        ttl: 20_000,
+      });
     } finally {
       setSaving(false);
     }
@@ -1770,17 +1784,33 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
           {!stateEquals(editorState, baseSnapshotRef.current || BASE_STATE) ? (
             <span className="text-[11px] text-muted2/60">Edited</span>
           ) : null}
+          {(() => {
+            if (!sourceImage || !imageRect) return null;
+            const radians = (rotationDeg * Math.PI) / 180;
+            const absCos = Math.abs(Math.cos(radians));
+            const absSin = Math.abs(Math.sin(radians));
+            const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
+            const nativeWidth = sourceWidth * absCos + sourceHeight * absSin;
+            const scale = nativeWidth / imageRect.width;
+            const dims = `${sourceWidth} × ${sourceHeight}`;
+            if (!showCropUi || !cropRect) {
+              return <span className="text-[11px] text-muted2/60">· {dims}</span>;
+            }
+            const cropW = Math.round(cropRect.width * scale);
+            const cropH = Math.round(cropRect.height * scale);
+            return <span className="text-[11px] text-muted2/60">· {dims} · Crop {cropW} × {cropH}</span>;
+          })()}
         </div>
         <div className="absolute right-3 flex items-center gap-1">
           <button
             type="button"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)]"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)] disabled:opacity-60"
             onClick={() => void handleExport()}
             disabled={saving || loadState !== "ready"}
             title="Save image"
           >
             <Download className="h-3.5 w-3.5" />
-            Save
+            {saving ? "Saving…" : "Save"}
           </button>
           <button
             type="button"
@@ -1847,22 +1877,24 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
                 Wrappers use zIndex: auto so DOM order = paint order; later siblings paint on top.
                 The side panel (z=20) and crop overlay (z=10) stay above the entire stack
                 regardless of how many layers the user adds. */}
-            <div className="absolute inset-0 isolate">
-              <TextCanvas
-                layers={layers}
-                selectedIds={selectedIds}
-                imageRect={imageRect}
-                onSelectionChange={setSelectedIds}
-                onLayersChange={(updated) => {
-                  const byId = new Map(updated.map((l) => [l.id, l]));
-                  commitLayers(layers.map((l) => byId.get(l.id) || l));
-                }}
-                tool={tool}
-                depthFieldCanvas={depthFieldCanvasRef.current}
-                depthFieldVersion={depthFieldVersion}
-                depthFeather={depthFeather}
-              />
-            </div>
+            {tool === "text" && (
+              <div className="absolute inset-0 isolate">
+                <TextCanvas
+                  layers={layers}
+                  selectedIds={selectedIds}
+                  imageRect={imageRect}
+                  onSelectionChange={setSelectedIds}
+                  onLayersChange={(updated) => {
+                    const byId = new Map(updated.map((l) => [l.id, l]));
+                    commitLayers(layers.map((l) => byId.get(l.id) || l));
+                  }}
+                  tool={tool}
+                  depthFieldCanvas={depthFieldCanvasRef.current}
+                  depthFieldVersion={depthFieldVersion}
+                  depthFeather={depthFeather}
+                />
+              </div>
+            )}
 
             {/* Non-rotating crop overlay — stays axis-aligned, z-10 above rotated image */}
             {showCropUi && cropRect ? (
@@ -2079,30 +2111,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete }) {
         ) : null}
 
         {/* Compare overlay rendered outside viewport */}
-      </div>
-
-      <div className="flex h-8 shrink-0 items-center justify-between border-t border-border/60 bg-chrome px-3 text-[11px] text-muted">
-        <div>
-          {(() => {
-            if (!sourceImage || !imageRect) return "Preparing preview";
-            const radians = (rotationDeg * Math.PI) / 180;
-            const absCos = Math.abs(Math.cos(radians));
-            const absSin = Math.abs(Math.sin(radians));
-            const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
-            const nativeWidth = sourceWidth * absCos + sourceHeight * absSin;
-            const scale = nativeWidth / imageRect.width;
-
-            const nativeOrigW = sourceWidth;
-            const nativeOrigH = sourceHeight;
-
-            if (!showCropUi || !cropRect) return `${nativeOrigW} × ${nativeOrigH} original`;
-
-            const cropW = Math.round(cropRect.width * scale);
-            const cropH = Math.round(cropRect.height * scale);
-            return `${nativeOrigW} × ${nativeOrigH} original · Crop ${cropW} × ${cropH}`;
-          })()}
-        </div>
-        <div>{saving ? "Saving…" : message || " "}</div>
       </div>
 
       {compareState?.afterPath && sourcePath ? (

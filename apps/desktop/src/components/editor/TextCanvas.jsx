@@ -231,6 +231,11 @@ export default function TextCanvas({
           width: `${imageRect.width}px`,
           height: `${imageRect.height}px`,
           overflow: "visible",
+          // The wrapper covers the full image rect (so the depth mask aligns),
+          // but it's transparent — without `none`, the topmost wrapper would
+          // swallow clicks on text layers below it. Inner TextLayerEl re-enables
+          // pointer events explicitly.
+          pointerEvents: "none",
           ...(maskUrl
             ? {
                 WebkitMaskImage: `url(${maskUrl})`,
@@ -358,6 +363,9 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
         cursor: isEditing ? "text" : "move",
         userSelect: isEditing ? "text" : "none",
         zIndex: isSelected ? 2 : 1,
+        // Re-enable pointer events; the parent wrapper sets pointerEvents: none
+        // so clicks pass through transparent areas to layers below.
+        pointerEvents: "auto",
       }}
       onPointerDown={(e) => {
         if (isEditing) { e.stopPropagation(); return; }

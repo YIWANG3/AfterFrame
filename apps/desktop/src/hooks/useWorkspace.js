@@ -353,7 +353,11 @@ export default function useWorkspace() {
 
   async function addImages() {
     const selected = await window.mediaWorkspace.pickDirectories("export");
-    if (!selected.length) return;
+    await addImagesFromPaths(selected);
+  }
+
+  async function addImagesFromPaths(selected) {
+    if (!selected || !selected.length) return;
     await window.mediaWorkspace.registerRoots("export", selected);
     const nextRoots = mergeRoots(exportDirs, selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "export", path }))]);
@@ -577,6 +581,7 @@ export default function useWorkspace() {
     refreshAll,
     activeOverlay,
     addImages,
+    addImagesFromPaths,
     addSources,
     switchCatalog,
     runImportPipeline,

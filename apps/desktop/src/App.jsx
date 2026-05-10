@@ -12,6 +12,7 @@ import EditorOverlay from "./components/EditorOverlay";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import DesignSystemPanel from "./components/DesignSystemPanel";
+import ToastStack, { useToasts } from "./components/Toast";
 
 export default function App() {
   const workspace = useWorkspace();
@@ -43,6 +44,63 @@ export default function App() {
     () => currentItems.findIndex((item) => item.asset_id === workspace.selectedAssetId),
     [currentItems, workspace.selectedAssetId],
   );
+
+  const [dropActive, setDropActive] = useState(false);
+  const { toasts, pushToast, dismissToast } = useToasts();
+
+  // Drag-and-drop import: works for files dropped from Finder onto the gallery,
+  // and (via main.js `open-file`) for files dropped onto the dock icon.
+  useEffect(() => {
+    if (!window.mediaWorkspace?.onExternalImport) return;
+    window.mediaWorkspace.onExternalImport((paths) => {
+      if (paths?.length) workspace.addImagesFromPaths(paths);
+    });
+  }, [workspace.addImagesFromPaths]);
+
+  // Block the browser's default behavior on file drops anywhere outside the
+  // gallery drop zone — without this, dropping a file on the sidebar/inspector
+  // would navigate away from the app and replace the UI with a file preview.
+  useEffect(() => {
+    function block(e) {
+      // The gallery's own handler runs first and sets dropEffect="copy" then
+      // calls preventDefault. Only intercept if no descendant claimed it.
+      if (e.defaultPrevented) return;
+      if (e.dataTransfer?.types?.includes?.("Files")) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+      }
+    }
+    window.addEventListener("dragover", block);
+    window.addEventListener("drop", block);
+    return () => {
+      window.removeEventListener("dragover", block);
+      window.removeEventListener("drop", block);
+    };
+  }, []);
+
+  function handleGalleryDragOver(event) {
+    if (event.dataTransfer?.types?.includes?.("Files")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      if (!dropActive) setDropActive(true);
+    }
+  }
+  function handleGalleryDragLeave(event) {
+    // Only deactivate when the cursor leaves the section entirely.
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    setDropActive(false);
+  }
+  function handleGalleryDrop(event) {
+    setDropActive(false);
+    if (!event.dataTransfer?.files?.length) return;
+    event.preventDefault();
+    const paths = [];
+    for (const file of event.dataTransfer.files) {
+      const p = window.mediaWorkspace?.getPathForFile?.(file) || file.path;
+      if (p) paths.push(p);
+    }
+    if (paths.length) workspace.addImagesFromPaths(paths);
+  }
 
   const layoutStyle = {
     gridTemplateColumns: [
@@ -410,7 +468,12 @@ export default function App() {
           onAddToCollection={workspace.addToCollection}
         /> : <div className="bg-chrome" />}
 
-        <section className="flex min-w-0 min-h-0 flex-col overflow-hidden bg-app">
+        <section
+          className="relative flex min-w-0 min-h-0 flex-col overflow-hidden bg-app"
+          onDragOver={handleGalleryDragOver}
+          onDragLeave={handleGalleryDragLeave}
+          onDrop={handleGalleryDrop}
+        >
           <Toolbar
             title={workspace.activeCollectionId
               ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
@@ -478,6 +541,14 @@ export default function App() {
                 onCollage={handleCollage}
               />
           </div>
+          {dropActive && (
+            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-app/85 backdrop-blur-sm">
+              <div className="rounded-xl border-2 border-dashed border-[rgb(var(--accent-color))] bg-chrome/90 px-8 py-6 text-center shadow-overlay">
+                <div className="text-[15px] font-medium text-text">Drop to import</div>
+                <div className="mt-1 text-[12px] text-muted2">Files and folders will be added to the catalog</div>
+              </div>
+            </div>
+          )}
         </section>
 
         {showInspector ? <Inspector detail={workspace.detail} onRatingChange={applyRating} onSelectAsset={selectSingle} /> : <div className="bg-chrome" />}
@@ -519,8 +590,21 @@ export default function App() {
         open={!!editorItem}
         item={editorItem}
         onClose={() => setEditorItem(null)}
-        onSaveComplete={async () => {
+        pushToast={pushToast}
+        onSaveComplete={async (savePath) => {
           await workspace.refreshAll?.();
+          if (savePath) {
+            pushToast({
+              title: "Saved",
+              message: savePath,
+              ttl: 20_000,
+              actions: [{
+                label: "Show in Finder",
+                primary: true,
+                onClick: () => window.mediaWorkspace?.revealPath?.(savePath),
+              }],
+            });
+          }
         }}
       />
       {compareState && (
@@ -538,11 +622,24 @@ export default function App() {
         collections={workspace.collections}
         summary={workspace.summary}
         onClose={() => setCollageItems(null)}
-        onExportComplete={async () => {
+        onExportComplete={async (savePath) => {
           await workspace.refreshAll?.();
+          if (savePath) {
+            pushToast({
+              title: "Collage exported",
+              message: savePath,
+              ttl: 20_000,
+              actions: [{
+                label: "Show in Finder",
+                primary: true,
+                onClick: () => window.mediaWorkspace?.revealPath?.(savePath),
+              }],
+            });
+          }
         }}
       />
       {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

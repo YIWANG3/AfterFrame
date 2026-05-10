@@ -887,7 +887,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
             { path: outputPath, timestamp: Date.now(), prompt: task.result.prompt || "" },
             ...prev,
           ]);
-          onRepaintComplete?.();
+          onRepaintComplete?.(outputPath);
           refreshHistory();
         }
       }

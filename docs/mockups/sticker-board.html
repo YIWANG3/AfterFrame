@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AfterFrame — Sticker tool mockup</title>
+<style>
+  :root {
+    --void: #08090a;
+    --surface-1: #0f1011;
+    --surface-2: #161718;
+    --surface-3: #1e1f21;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.12);
+
+    --brass: #d4a755;
+    --brass-dim: rgba(212,167,85,0.10);
+    --brass-fg: #111;
+
+    --text: #f0f1f2;
+    --muted: #b0b4ba;
+    --muted2: #6e7279;
+    --muted3: #484b52;
+
+    --topbar: 44px;
+    --tab-w: 44px;
+    --panel-w: 320px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--void); color: var(--text); font: 12px/1.4 -apple-system, "Helvetica Neue", sans-serif; overflow: hidden; }
+
+  /* ───────── Top bar ───────── */
+  .topbar {
+    position: fixed; inset: 0 0 auto 0; height: var(--topbar);
+    background: var(--surface-1); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px; gap: 10px;
+    z-index: 100;
+  }
+  .topbar .name { color: var(--muted); }
+  .topbar .name strong { color: var(--text); font-weight: 500; }
+  .topbar .badge { font-size: 10px; color: var(--muted3); }
+  .topbar .spacer { flex: 1; }
+  .topbar .pill {
+    height: 28px; padding: 0 12px; border-radius: 6px;
+    background: var(--brass-dim); color: var(--brass);
+    border: 0; font-size: 11px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .topbar .icon-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: transparent; color: var(--muted2); border: 0;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .topbar .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+
+  /* ───────── 3-col layout: tools | canvas | panel ───────── */
+  .stage {
+    position: fixed; inset: var(--topbar) 0 0 0;
+    display: grid; grid-template-columns: 1fr var(--panel-w) var(--tab-w);
+  }
+
+  /* ───────── Canvas (left, fills space) ───────── */
+  .canvas-area {
+    background: var(--void);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; padding: 40px;
+  }
+  .canvas-area::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+  .canvas {
+    width: 480px; height: 600px;
+    background: linear-gradient(160deg, #2d1b3d 0%, #5b2952 35%, #b54865 75%, #f0a875 100%);
+    border-radius: 4px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    position: relative; overflow: hidden;
+  }
+  .sticker {
+    position: absolute; cursor: move;
+    filter: drop-shadow(0 8px 20px rgba(0,0,0,0.45));
+    user-select: none;
+  }
+  .sticker.s1 { font-size: 220px; left: 45%; top: 45%; transform: translate(-50%, -50%); }
+  .sticker.s2 { font-size: 110px; right: 30px; top: 60px; transform: rotate(8deg); }
+  .sticker.s3 { font-size: 80px; left: 24px; bottom: 100px; transform: rotate(-12deg); }
+  .sticker.s4 { font-size: 60px; right: 40px; bottom: 130px; transform: rotate(5deg); }
+  .sticker.selected {
+    outline: 1.5px dashed var(--brass);
+    outline-offset: 6px;
+  }
+  .canvas .title {
+    position: absolute; left: 50%; top: 18%; transform: translate(-50%, -50%);
+    font: 600 64px/1 "Helvetica Neue", sans-serif; letter-spacing: 0.04em;
+    color: #f5e8c8; text-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+  .canvas .subtitle {
+    position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+    font: 500 13px/1 "Helvetica Neue", sans-serif; letter-spacing: 0.32em;
+    color: rgba(255,255,255,0.72);
+  }
+  .handles { position: absolute; inset: 0; pointer-events: none; }
+  .handle {
+    position: absolute; width: 9px; height: 9px;
+    background: var(--brass); border: 1.5px solid #fff;
+    border-radius: 2px;
+  }
+
+  /* ───────── Right panel ───────── */
+  .panel {
+    background: var(--surface-1); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel-head {
+    padding: 10px 12px 8px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-head h2 {
+    font-size: 11px; color: var(--muted); letter-spacing: 0.06em;
+    text-transform: uppercase; font-weight: 500;
+  }
+  .panel-head .count { font-size: 10px; color: var(--muted3); margin-left: auto; }
+
+  /* segmented tabs */
+  .seg { display: grid; grid-template-columns: 1fr 1fr; padding: 8px 12px 8px; gap: 4px; }
+  .seg button {
+    height: 28px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--muted2); font-size: 11px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .seg button.active { background: var(--surface-3); color: var(--text); }
+  .seg button:hover:not(.active) { color: var(--muted); }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+
+  /* search + library */
+  .search {
+    width: 100%; height: 26px; padding: 0 8px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 11px;
+    margin-bottom: 12px; outline: none;
+  }
+  .group h3 {
+    font-size: 9px; color: var(--muted3); text-transform: uppercase;
+    letter-spacing: 0.08em; padding: 4px 0 6px; font-weight: 500;
+  }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
+  .thumb {
+    aspect-ratio: 1; border-radius: 6px;
+    background-color: var(--surface-2);
+    background-image:
+      linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+    border: 1px solid var(--border);
+    cursor: grab; position: relative; overflow: hidden;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .thumb:hover { border-color: var(--brass); transform: translateY(-1px); }
+  .thumb .glyph {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+  }
+  .thumb .star { position: absolute; top: 4px; right: 4px; font-size: 9px; color: var(--brass); }
+
+  /* CREATE tab styles */
+  .section { margin-bottom: 14px; }
+  .section h4 {
+    font-size: 9px; color: var(--muted3); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 8px; font-weight: 500;
+  }
+  .radio-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; cursor: pointer; font-size: 12px; color: var(--muted); }
+  .radio-row input { accent-color: var(--brass); }
+  .radio-row.active { color: var(--text); }
+
+  .btn {
+    width: 100%; height: 32px; border: 1px solid var(--border-strong);
+    border-radius: 6px; background: var(--surface-2); color: var(--text);
+    font-size: 11px; cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn:hover { background: var(--surface-3); border-color: var(--brass); }
+  .btn.primary {
+    background: var(--brass); color: var(--brass-fg); border: 0; font-weight: 500;
+  }
+  .btn.primary:hover { background: #e0b966; }
+
+  /* detected instances */
+  .instances {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px;
+  }
+  .ins {
+    aspect-ratio: 1; border-radius: 6px;
+    background-color: var(--surface-2);
+    background-image:
+      linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+    border: 1.5px solid var(--border);
+    cursor: pointer; position: relative;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .ins.active { border-color: var(--brass); }
+  .ins .num { position: absolute; top: 2px; left: 4px; font-size: 9px; color: var(--muted2); }
+
+  /* preview */
+  .preview {
+    aspect-ratio: 1; border-radius: 8px; margin-bottom: 12px; position: relative;
+    background-color: #1a1b1d;
+    background-image:
+      linear-gradient(45deg, rgba(255,255,255,0.03) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(255,255,255,0.03) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.03) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.03) 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .preview .subj {
+    font-size: 140px;
+    /* white outline simulation via text-shadow */
+    text-shadow:
+      8px 0 0 white, -8px 0 0 white, 0 8px 0 white, 0 -8px 0 white,
+      6px 6px 0 white, -6px -6px 0 white, 6px -6px 0 white, -6px 6px 0 white,
+      0 12px 24px rgba(0,0,0,0.6);
+  }
+
+  /* slider */
+  .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 11px; }
+  .slider-row label { color: var(--muted2); width: 56px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .slider-row .track {
+    flex: 1; height: 3px; background: var(--surface-3); border-radius: 2px; position: relative;
+  }
+  .slider-row .knob {
+    position: absolute; width: 12px; height: 12px; background: var(--muted);
+    border-radius: 50%; top: 50%; transform: translate(-50%, -50%);
+  }
+  .slider-row .num {
+    width: 38px; height: 22px; padding: 0 6px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text); font-size: 11px;
+    display: flex; align-items: center; justify-content: flex-end;
+  }
+
+  .swatch-row { display: flex; align-items: center; gap: 6px; margin: 8px 0; }
+  .swatch-row label { color: var(--muted2); width: 56px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .swatch { width: 22px; height: 22px; border-radius: 4px; border: 1.5px solid var(--border-strong); cursor: pointer; }
+  .swatch.active { box-shadow: 0 0 0 1.5px var(--brass), 0 0 0 3px var(--surface-1); }
+
+  .toggle-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 11px; }
+  .toggle-row label { color: var(--muted); flex: 1; }
+  .toggle {
+    width: 28px; height: 16px; background: var(--surface-3); border-radius: 8px;
+    position: relative; cursor: pointer;
+  }
+  .toggle.on { background: var(--brass); }
+  .toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 12px; height: 12px; background: #fff; border-radius: 50%;
+    transition: transform 0.15s;
+  }
+  .toggle.on::after { transform: translateX(12px); }
+
+  /* ───────── Tool rail (right edge) ───────── */
+  .toolrail {
+    background: var(--surface-1); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 0;
+  }
+  .tool {
+    width: 32px; height: 32px; border-radius: 6px;
+    background: transparent; border: 0; color: var(--muted2);
+    font-size: 14px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .tool:hover { background: var(--surface-3); color: var(--text); }
+  .tool.active { background: var(--brass-dim); color: var(--brass); }
+
+  /* footer ─────────── */
+  .footer {
+    border-top: 1px solid var(--border); padding: 10px 12px;
+    display: flex; gap: 8px; align-items: center;
+  }
+
+  /* ─────── two side-by-side mockup variants ─────── */
+  .annotation {
+    position: fixed; bottom: 12px; left: 12px; z-index: 200;
+    background: rgba(0,0,0,0.7); padding: 6px 10px; border-radius: 6px;
+    color: var(--muted); font-size: 11px;
+    backdrop-filter: blur(20px);
+  }
+  .switcher {
+    position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 200;
+    display: flex; gap: 4px; background: rgba(0,0,0,0.7); padding: 4px; border-radius: 6px;
+    backdrop-filter: blur(20px);
+  }
+  .switcher button {
+    height: 26px; padding: 0 12px; border: 0; border-radius: 4px;
+    background: transparent; color: var(--muted); font-size: 11px; cursor: pointer;
+  }
+  .switcher button.active { background: var(--surface-3); color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="name"><strong>Japan 2026 — Cover</strong> <span class="badge">· 4032 × 5040</span></div>
+  <div class="spacer"></div>
+  <button class="icon-btn">↶</button>
+  <button class="icon-btn">↷</button>
+  <button class="pill">⬇️ Save</button>
+  <button class="icon-btn">✕</button>
+</div>
+
+<!-- Variant switcher -->
+<div class="switcher">
+  <button class="active" onclick="setMode('lib')">Library tab</button>
+  <button onclick="setMode('create')">Create new tab</button>
+</div>
+
+<div class="stage">
+
+  <!-- ───────── Canvas (with stickers + text already on it) ───────── -->
+  <main class="canvas-area">
+    <div class="canvas">
+      <div class="title">JAPAN</div>
+      <div class="sticker s2">🗻</div>
+      <div class="sticker s1 selected">🏮
+        <div class="handles">
+          <div class="handle" style="left:-5px;top:-5px"></div>
+          <div class="handle" style="right:-5px;top:-5px"></div>
+          <div class="handle" style="left:-5px;bottom:-5px"></div>
+          <div class="handle" style="right:-5px;bottom:-5px"></div>
+          <div class="handle" style="left:50%;top:-5px;transform:translateX(-50%)"></div>
+          <div class="handle" style="left:50%;bottom:-5px;transform:translateX(-50%)"></div>
+          <div class="handle" style="left:-5px;top:50%;transform:translateY(-50%)"></div>
+          <div class="handle" style="right:-5px;top:50%;transform:translateY(-50%)"></div>
+        </div>
+      </div>
+      <div class="sticker s3">🌸</div>
+      <div class="sticker s4">⛩️</div>
+      <div class="subtitle">SPRING · 2026</div>
+    </div>
+  </main>
+
+  <!-- ───────── Right panel — switches between Library / Create ───────── -->
+  <aside class="panel">
+    <div class="panel-head">
+      <h2>Sticker</h2>
+      <span class="count" id="count">23 in library</span>
+    </div>
+
+    <div class="seg">
+      <button id="tab-lib" class="active" onclick="setMode('lib')">Library</button>
+      <button id="tab-create" onclick="setMode('create')">Create new</button>
+    </div>
+
+    <!-- LIBRARY tab content -->
+    <div id="view-lib" class="scroll">
+      <input class="search" placeholder="Search stickers…">
+      <div class="group">
+        <h3>Today · Tokyo trip</h3>
+        <div class="grid">
+          <div class="thumb"><div class="glyph">🗻</div><div class="star">★</div></div>
+          <div class="thumb"><div class="glyph">🏮</div></div>
+          <div class="thumb"><div class="glyph">🍜</div></div>
+          <div class="thumb"><div class="glyph">⛩️</div></div>
+          <div class="thumb"><div class="glyph">🌸</div><div class="star">★</div></div>
+          <div class="thumb"><div class="glyph">🍣</div></div>
+        </div>
+      </div>
+      <div class="group">
+        <h3>Yesterday</h3>
+        <div class="grid">
+          <div class="thumb"><div class="glyph">🚄</div></div>
+          <div class="thumb"><div class="glyph">🎌</div></div>
+          <div class="thumb"><div class="glyph">🍡</div></div>
+        </div>
+      </div>
+      <div class="group">
+        <h3>Last week</h3>
+        <div class="grid">
+          <div class="thumb"><div class="glyph">🐱</div></div>
+          <div class="thumb"><div class="glyph">🌃</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE tab content -->
+    <div id="view-create" class="scroll" style="display: none;">
+
+      <div class="section">
+        <h4>Source</h4>
+        <label class="radio-row active">
+          <input type="radio" name="src" checked> Use current image
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="src"> Pick from catalog…
+        </label>
+        <button class="btn" style="margin-top:6px">🔍 Detect subjects</button>
+      </div>
+
+      <div class="section">
+        <h4>Detected (3)</h4>
+        <div class="instances">
+          <div class="ins active"><span class="num">1</span>👤</div>
+          <div class="ins"><span class="num">2</span>👤</div>
+          <div class="ins"><span class="num">3</span>🐱</div>
+          <div class="ins" style="border-style:dashed;background:transparent;color:var(--muted3)">+</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h4>Preview</h4>
+        <div class="preview">
+          <span class="subj">👤</span>
+        </div>
+
+        <div class="slider-row">
+          <label>Outline</label>
+          <div class="track"><div class="knob" style="left:30%"></div></div>
+          <div class="num">8</div>
+        </div>
+        <div class="swatch-row">
+          <label>Color</label>
+          <div class="swatch active" style="background:#fff"></div>
+          <div class="swatch" style="background:#000"></div>
+          <div class="swatch" style="background:var(--brass)"></div>
+          <div class="swatch" style="background:#e3344c"></div>
+          <div class="swatch" style="background:transparent;border-style:dashed">+</div>
+        </div>
+      </div>
+
+      <button class="btn primary">✓ Save sticker</button>
+      <p style="margin-top:8px;font-size:10px;color:var(--muted3);text-align:center;line-height:1.5">
+        Saves to library only.<br>
+        To use it on a photo, switch to the Text tool → ➕ Sticker.
+      </p>
+
+    </div>
+  </aside>
+
+  <!-- Tool rail -->
+  <aside class="toolrail">
+    <button class="tool" title="Crop">⬚</button>
+    <button class="tool" title="Text">T</button>
+    <button class="tool" title="AI Repaint">✨</button>
+    <button class="tool active" title="Sticker">🩹</button>
+  </aside>
+
+</div>
+
+<div class="annotation">Sticker tool active · click switcher above to flip between Library and Create-new tabs</div>
+
+<script>
+  function setMode(mode) {
+    const lib = document.getElementById('view-lib');
+    const create = document.getElementById('view-create');
+    const tabLib = document.getElementById('tab-lib');
+    const tabCreate = document.getElementById('tab-create');
+    const switcherBtns = document.querySelectorAll('.switcher button');
+    if (mode === 'lib') {
+      lib.style.display = ''; create.style.display = 'none';
+      tabLib.classList.add('active'); tabCreate.classList.remove('active');
+      switcherBtns[0].classList.add('active'); switcherBtns[1].classList.remove('active');
+      document.getElementById('count').textContent = '23 in library';
+    } else {
+      lib.style.display = 'none'; create.style.display = '';
+      tabCreate.classList.add('active'); tabLib.classList.remove('active');
+      switcherBtns[1].classList.add('active'); switcherBtns[0].classList.remove('active');
+      document.getElementById('count').textContent = 'Make a new sticker';
+    }
+  }
+</script>
+
+</body>
+</html>
