@@ -54,7 +54,10 @@ export async function saveEditedImage(ctx) {
         crop: normalizedCrop,
         quality: 92,
       });
-      await window.mediaWorkspace.quickRegister?.(savePath, sourcePath);
+      // Catalog registration is a nice-to-have — if it fails (no catalog
+      // loaded, sidecar down) we still consider the save successful.
+      try { await window.mediaWorkspace.quickRegister?.(savePath, sourcePath); }
+      catch (e) { console.warn("[saveImage] quickRegister skipped:", e?.message || e); }
       return;
     } catch (nativeError) {
       console.error("[saveImage] Native sharp save failed, falling back to canvas:", nativeError);
@@ -137,5 +140,6 @@ export async function saveEditedImage(ctx) {
   releaseCanvasImage(transformedFull);
   releaseCanvasImage(outputCanvas);
 
-  await window.mediaWorkspace.quickRegister?.(savePath, sourcePath);
+  try { await window.mediaWorkspace.quickRegister?.(savePath, sourcePath); }
+  catch (e) { console.warn("[saveImage] quickRegister skipped:", e?.message || e); }
 }

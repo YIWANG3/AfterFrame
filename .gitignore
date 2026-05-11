@@ -28,6 +28,8 @@ apps/desktop/skills-lock.json
 # catalogs
 *.afcatalog/
 *.mwcatalog/
+# ...except the seeded E2E test catalog
+!apps/desktop/e2e/fixtures/test-catalog.afcatalog/
 
 # large resources
 RESOURCES/

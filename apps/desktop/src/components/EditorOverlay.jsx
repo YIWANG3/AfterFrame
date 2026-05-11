@@ -1057,6 +1057,23 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     };
   }
 
+  // Test backdoor — let E2E specs trigger save to a known path without
+  // driving the native save-as dialog. Registered while the editor is open.
+  useEffect(() => {
+    if (!open) return;
+    window.__afterframeTest = {
+      ...(window.__afterframeTest || {}),
+      saveAs: (path) => executeSave(path),
+      getSaving: () => saving,
+    };
+    return () => {
+      if (window.__afterframeTest) {
+        delete window.__afterframeTest.saveAs;
+        delete window.__afterframeTest.getSaving;
+      }
+    };
+  }, [open, saving]);
+
   async function executeSave(savePath) {
     setSaving(true);
     setMessage("");

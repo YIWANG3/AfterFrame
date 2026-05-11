@@ -8,27 +8,34 @@ const os = require("node:os");
 const { _electron: electron } = require("@playwright/test");
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
+const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.afcatalog");
 
 /**
  * Launch the packaged-style Electron app pointing at a temp userData dir.
  * @param {object} opts
  * @param {string} [opts.testName] - used to prefix the temp dir for debugging
+ * @param {boolean} [opts.withCatalog=true] - load the seeded e2e catalog
+ *   (10 gradient images). Set false for tests that want a blank-state app.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
-async function launchApp({ testName = "e2e" } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
   // Fresh userData so each run starts from a clean slate
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
+
+  const env = {
+    ...process.env,
+    AFTERFRAME_USER_DATA: userDataDir,
+    NODE_ENV: "test",
+  };
+  if (withCatalog) {
+    // main.js reads MEDIA_WORKSPACE_CATALOG to skip the catalog picker
+    env.MEDIA_WORKSPACE_CATALOG = SEEDED_CATALOG;
+  }
 
   const app = await electron.launch({
     args: [REPO_DESKTOP_DIR],
     cwd: REPO_DESKTOP_DIR,
-    env: {
-      ...process.env,
-      // Electron app reads ELECTRON_USER_DATA_OVERRIDE when set (we'll
-      // teach main.js to honor it in a follow-up if needed)
-      AFTERFRAME_USER_DATA: userDataDir,
-      NODE_ENV: "test",
-    },
+    env,
   });
   const window = await app.firstWindow();
   return { app, window, userDataDir };
