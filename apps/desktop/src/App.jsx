@@ -32,6 +32,24 @@ export default function App() {
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
   const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers"
+
+  // Test backdoor — exposed to Playwright via window.__afterframeTest.
+  // Lets E2E specs open the editor with an arbitrary file path without
+  // needing a catalog seeded. Namespaced so collision risk is zero, and
+  // there's no UI affordance in production to discover/trigger it.
+  useEffect(() => {
+    window.__afterframeTest = {
+      openEditor(pathOrItem) {
+        const item = typeof pathOrItem === "string"
+          ? { export_path: pathOrItem, stem: pathOrItem.split("/").pop() }
+          : pathOrItem;
+        setEditorItem(item);
+      },
+      closeEditor() { setEditorItem(null); },
+      getViewMode() { return viewMode; },
+      getEditorOpen() { return !!editorItem; },
+    };
+  }, [viewMode, editorItem]);
   const stickerView = useStickerView();
 
   // Sticker items, shaped for Lightbox/Inspector consumers.
