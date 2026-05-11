@@ -39,6 +39,10 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 ![深度感知文字](docs/assets/editor-text-depth.png)
 
+- **贴纸**：一键从任意照片中抠出主体（macOS 14+ 使用 VisionKit），存入按 catalog 隔离的贴纸库，可选描边与阴影；再把贴纸作为图层放到其他照片上，深度、不透明度、旋转控件与文字图层共用一套
+
+![贴纸库](docs/assets/sticker-library.png)
+
 - **拼图**：8 种布局模板，可调间距/内边距/圆角，自定义背景色，支持高分辨率导出
 
 ![拼图](docs/assets/collage.png)

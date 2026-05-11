@@ -39,6 +39,10 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![Depth-aware Text](docs/assets/editor-text-depth.png)
 
+- **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, and rotation controls as text layers
+
+![Sticker Library](docs/assets/sticker-library.png)
+
 - **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export
 
 ![Collage](docs/assets/collage.png)
