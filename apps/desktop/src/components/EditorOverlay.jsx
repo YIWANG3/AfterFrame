@@ -1065,14 +1065,30 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       ...(window.__afterframeTest || {}),
       saveAs: (path) => executeSave(path),
       getSaving: () => saving,
+      addTextLayer: (text) => {
+        const nl = createDefaultLayer({ text: text || "Test Text", x: 0.5, y: 0.5 });
+        const next = [...layers, nl];
+        commitLayers(next);
+        setSelectedIds(new Set([nl.id]));
+        // Return the post-add count so the test doesn't have to wait for a
+        // React re-render before reading state.
+        return { id: nl.id, count: next.length };
+      },
+      getLayerCount: () => layers.length,
+      getTool: () => tool,
+      setTool: (t) => setTool(t),
     };
     return () => {
       if (window.__afterframeTest) {
         delete window.__afterframeTest.saveAs;
         delete window.__afterframeTest.getSaving;
+        delete window.__afterframeTest.addTextLayer;
+        delete window.__afterframeTest.getLayerCount;
+        delete window.__afterframeTest.getTool;
+        delete window.__afterframeTest.setTool;
       }
     };
-  }, [open, saving]);
+  }, [open, saving, layers, tool]);
 
   async function executeSave(savePath) {
     setSaving(true);

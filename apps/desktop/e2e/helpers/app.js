@@ -27,9 +27,14 @@ async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
     AFTERFRAME_USER_DATA: userDataDir,
     NODE_ENV: "test",
   };
+
+  // Copy the seeded catalog into a tmp dir so save/import tests can't
+  // contaminate the version-controlled fixture between runs.
+  let workCatalog = null;
   if (withCatalog) {
-    // main.js reads MEDIA_WORKSPACE_CATALOG to skip the catalog picker
-    env.MEDIA_WORKSPACE_CATALOG = SEEDED_CATALOG;
+    workCatalog = path.join(userDataDir, "test-catalog.afcatalog");
+    fs.cpSync(SEEDED_CATALOG, workCatalog, { recursive: true });
+    env.MEDIA_WORKSPACE_CATALOG = workCatalog;
   }
 
   const app = await electron.launch({
@@ -38,7 +43,7 @@ async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
     env,
   });
   const window = await app.firstWindow();
-  return { app, window, userDataDir };
+  return { app, window, userDataDir, catalogDir: workCatalog };
 }
 
 async function closeApp(app, userDataDir) {
