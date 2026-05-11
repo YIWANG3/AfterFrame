@@ -341,22 +341,13 @@ export default function TextPanel({
             {/* Stroke */}
             <Section label="Stroke" right={<Switch on={current.strokeEnabled} onToggle={() => update(current.id, { strokeEnabled: !current.strokeEnabled })} />}>
               {current.strokeEnabled && (
-                <PaintRow
+                <StrokeFieldRow
                   paint={paintFromFields(current, "stroke")}
                   availableModes={["solid", "gradient"]}
-                  onUpdate={(patch) => update(current.id, paintToFields(patch, "stroke"))}
-                  trailing={
-                    <>
-                      <NumInput
-                        value={current.strokeWidth ?? 0}
-                        min={0}
-                        max={20}
-                        onChange={(v) => update(current.id, { strokeWidth: v })}
-                        className="w-10 h-6"
-                      />
-                      <span className="text-[10px] text-muted2">px</span>
-                    </>
-                  }
+                  onPaintUpdate={(patch) => update(current.id, paintToFields(patch, "stroke"))}
+                  width={current.strokeWidth}
+                  maxWidth={50}
+                  onWidthChange={(v) => update(current.id, { strokeWidth: v })}
                 />
               )}
             </Section>
@@ -417,21 +408,7 @@ export default function TextPanel({
             {/* Shadow */}
             <Section label="Shadow" right={<Switch on={current.shadow} onToggle={() => update(current.id, { shadow: !current.shadow })} />}>
               {current.shadow && (
-                <>
-                  <div className="mt-2 flex items-stretch gap-2">
-                    <StackedColorField
-                      label="Color"
-                      color={current.shadowColor}
-                      onChange={(c) => update(current.id, { shadowColor: c })}
-                      opacity={(current.shadowOpacity ?? 60) / 100}
-                      onOpacityChange={(v) => update(current.id, { shadowOpacity: Math.round(v * 100) })}
-                      presets={COLOR_SWATCHES}
-                    />
-                    <StackedField label="X" value={current.shadowX} min={-50} max={50} onChange={(v) => update(current.id, { shadowX: v })} />
-                    <StackedField label="Y" value={current.shadowY} min={-50} max={50} onChange={(v) => update(current.id, { shadowY: v })} />
-                    <StackedField label="Blur" value={current.shadowBlur} min={0} max={100} onChange={(v) => update(current.id, { shadowBlur: v })} />
-                  </div>
-                </>
+                <ShadowFieldRow layer={current} onChange={(patch) => update(current.id, patch)} />
               )}
             </Section>
           </>
@@ -1099,6 +1076,52 @@ function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChan
   );
 }
 
+// Shared stroke/outline row — PaintRow with a trailing px NumInput. Used for
+// both the text Stroke section and the sticker Outline section so visual
+// changes only need to happen here.
+function StrokeFieldRow({ paint, availableModes, onPaintUpdate, width, maxWidth, onWidthChange }) {
+  return (
+    <PaintRow
+      paint={paint}
+      availableModes={availableModes}
+      onUpdate={onPaintUpdate}
+      trailing={
+        <>
+          <NumInput
+            value={width ?? 0}
+            min={0}
+            max={maxWidth}
+            onChange={onWidthChange}
+            className="w-10 h-6"
+          />
+          <span className="text-[10px] text-muted2">px</span>
+        </>
+      }
+    />
+  );
+}
+
+// Shared shadow row — color picker + X/Y/Blur stacked fields. Used by both
+// text and sticker shadows (field names are identical: shadowColor/X/Y/Blur/
+// shadowOpacity). Caller passes the layer and a patch-style onChange.
+function ShadowFieldRow({ layer, onChange }) {
+  return (
+    <div className="mt-2 flex items-stretch gap-2">
+      <StackedColorField
+        label="Color"
+        color={layer.shadowColor}
+        onChange={(c) => onChange({ shadowColor: c })}
+        opacity={(layer.shadowOpacity ?? 60) / 100}
+        onOpacityChange={(v) => onChange({ shadowOpacity: Math.round(v * 100) })}
+        presets={COLOR_SWATCHES}
+      />
+      <StackedField label="X" value={layer.shadowX} min={-50} max={50} onChange={(v) => onChange({ shadowX: v })} />
+      <StackedField label="Y" value={layer.shadowY} min={-50} max={50} onChange={(v) => onChange({ shadowY: v })} />
+      <StackedField label="Blur" value={layer.shadowBlur} min={0} max={100} onChange={(v) => onChange({ shadowBlur: v })} />
+    </div>
+  );
+}
+
 function ColorDot({ label, color, onChange, opacity, onOpacityChange, presets }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -1200,47 +1223,34 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
         </Section>
       )}
 
-      {/* Outline — shape mirrors the text Stroke section: PaintRow + Width slider */}
+      {/* Outline — same shape as text Stroke (StrokeFieldRow handles both) */}
       <Section label="Outline" right={
         <Switch on={hasOutline} onToggle={() => update(layer.id, { outlineWidth: hasOutline ? 0 : 8 })} />
       }>
         {hasOutline && (
-          <>
-            <PaintRow
-              paint={{
-                mode: "solid",
-                color: layer.outlineColor || "#ffffff",
-                opacity: 1,
-                gradient: { from: "#fff", fromOpacity: 1, to: "#000", toOpacity: 1, angle: 90 },
-              }}
-              availableModes={["solid"]}
-              onUpdate={(patch) => {
-                if (patch.color !== undefined) update(layer.id, { outlineColor: patch.color });
-              }}
-            />
-            <SliderRow label="Width" min={1} max={64} value={layer.outlineWidth} onChange={(v) => update(layer.id, { outlineWidth: v })} />
-          </>
+          <StrokeFieldRow
+            paint={{
+              mode: "solid",
+              color: layer.outlineColor || "#ffffff",
+              opacity: 1,
+              gradient: { from: "#fff", fromOpacity: 1, to: "#000", toOpacity: 1, angle: 90 },
+            }}
+            availableModes={["solid"]}
+            onPaintUpdate={(patch) => {
+              if (patch.color !== undefined) update(layer.id, { outlineColor: patch.color });
+            }}
+            width={layer.outlineWidth}
+            maxWidth={200}
+            onWidthChange={(v) => update(layer.id, { outlineWidth: v })}
+          />
         )}
       </Section>
 
-      {/* Shadow — identical structure to text Shadow section */}
       <Section label="Shadow" right={
         <Switch on={layer.shadow} onToggle={() => update(layer.id, { shadow: !layer.shadow })} />
       }>
         {layer.shadow && (
-          <div className="mt-2 flex items-stretch gap-2">
-            <StackedColorField
-              label="Color"
-              color={layer.shadowColor}
-              onChange={(c) => update(layer.id, { shadowColor: c })}
-              opacity={(layer.shadowOpacity ?? 60) / 100}
-              onOpacityChange={(v) => update(layer.id, { shadowOpacity: Math.round(v * 100) })}
-              presets={COLOR_SWATCHES}
-            />
-            <StackedField label="X" value={layer.shadowX} min={-50} max={50} onChange={(v) => update(layer.id, { shadowX: v })} />
-            <StackedField label="Y" value={layer.shadowY} min={-50} max={50} onChange={(v) => update(layer.id, { shadowY: v })} />
-            <StackedField label="Blur" value={layer.shadowBlur} min={0} max={100} onChange={(v) => update(layer.id, { shadowBlur: v })} />
-          </div>
+          <ShadowFieldRow layer={layer} onChange={(patch) => update(layer.id, patch)} />
         )}
       </Section>
     </>
@@ -1325,7 +1335,7 @@ function StickerPickerModal({ onPick, onClose }) {
               >
                 <div className="aspect-square overflow-hidden rounded-md border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
                   <img
-                    src={mediaUrlFor(s.path)}
+                    src={mediaUrlFor(s.thumbPath || s.path)}
                     alt=""
                     className="h-full w-full object-contain"
                   />
