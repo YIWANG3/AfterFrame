@@ -9,6 +9,8 @@ const crypto = require("crypto");
 const { spawn } = require("child_process");
 const sharp = require("sharp");
 
+const THUMB_MAX_EDGE = 512;
+
 function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
   const stickerExtractScriptPath = isPackaged
     ? path.join(process.resourcesPath, "native", "extract-sticker.swift")
@@ -19,6 +21,27 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
 
   function manifestPath() {
     return path.join(stickerLibraryDir, "library.json");
+  }
+  function thumbFilenameFor(sha) { return `${sha}_thumb.png`; }
+  function thumbPathFor(sha) { return path.join(stickerLibraryDir, thumbFilenameFor(sha)); }
+
+  // Generate a 512px-max-edge thumbnail next to the full sticker. Stickers
+  // smaller than the cap are copied as-is so the renderer never has to fall
+  // back to the full file for grid views.
+  async function generateThumb(fullPath, sha) {
+    const outPath = thumbPathFor(sha);
+    const meta = await sharp(fullPath, { limitInputPixels: false }).metadata();
+    const w = meta.width || 0;
+    const h = meta.height || 0;
+    if (w <= THUMB_MAX_EDGE && h <= THUMB_MAX_EDGE) {
+      await fs.promises.copyFile(fullPath, outPath);
+    } else {
+      await sharp(fullPath, { limitInputPixels: false })
+        .resize({ width: THUMB_MAX_EDGE, height: THUMB_MAX_EDGE, fit: "inside", withoutEnlargement: true })
+        .png({ compressionLevel: 8 })
+        .toFile(outPath);
+    }
+    return { filename: thumbFilenameFor(sha), path: outPath };
   }
   function readLibrary() {
     try {
@@ -43,9 +66,30 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
     return writeQueue;
   }
 
-  ipcMain.handle("workspace:sticker-list", () => {
+  // Lazy backfill: any entry missing a thumb (or whose thumb file vanished)
+  // gets one generated and the manifest is rewritten once at the end.
+  ipcMain.handle("workspace:sticker-list", async () => {
     const lib = readLibrary();
-    return Array.isArray(lib.stickers) ? lib.stickers : [];
+    const stickers = Array.isArray(lib.stickers) ? lib.stickers : [];
+    let dirty = false;
+    for (const s of stickers) {
+      const expected = thumbPathFor(s.id);
+      const has = s.thumbPath && fs.existsSync(s.thumbPath);
+      if (has) continue;
+      if (!s.path || !fs.existsSync(s.path)) continue; // orphan entry — skip
+      try {
+        const thumb = await generateThumb(s.path, s.id);
+        s.thumbFilename = thumb.filename;
+        s.thumbPath = thumb.path;
+        dirty = true;
+      } catch (err) {
+        console.warn("[stickers] thumb backfill failed for", s.id, err?.message || err);
+      }
+    }
+    if (dirty) {
+      await updateLibrary(() => ({ ...lib, stickers }));
+    }
+    return stickers;
   });
 
   // Run swift segmentation, return manifest + extracted instance PNG paths.
@@ -140,10 +184,22 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
     const fullPath = path.join(stickerLibraryDir, filename);
     await fs.promises.writeFile(fullPath, bytes);
 
+    let thumbFilename = null;
+    let thumbPath = null;
+    try {
+      const thumb = await generateThumb(fullPath, sha);
+      thumbFilename = thumb.filename;
+      thumbPath = thumb.path;
+    } catch (err) {
+      console.warn("[stickers] thumb generation failed for", sha, err?.message || err);
+    }
+
     const entry = {
       id: sha,
       filename,
       path: fullPath,
+      thumbFilename,
+      thumbPath,
       name: options?.name || null,
       width: Number(options?.width) || null,
       height: Number(options?.height) || null,
@@ -174,6 +230,11 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
     });
     if (removed?.path) {
       try { await fs.promises.unlink(removed.path); } catch (_) {}
+    }
+    if (removed?.thumbPath) {
+      try { await fs.promises.unlink(removed.thumbPath); } catch (_) {}
+    } else if (removed?.id) {
+      try { await fs.promises.unlink(thumbPathFor(removed.id)); } catch (_) {}
     }
     return !!removed;
   });

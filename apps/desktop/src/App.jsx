@@ -456,20 +456,42 @@ export default function App() {
       }
 
       if (viewMode === "stickers") {
-        // Linear arrow navigation through the filtered sticker list (works
-        // both with the lightbox open and in the grid view).
+        // Arrow navigation. In the lightbox we stay linear (single image
+        // pager). In the grid we measure column count from the DOM so
+        // up/down jump rows the same way Gallery does.
         if (event.key === "ArrowLeft" || event.key === "ArrowUp" ||
             event.key === "ArrowRight" || event.key === "ArrowDown") {
           if (!stickerItemsForLightbox.length) return;
           event.preventDefault();
-          const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+          const list = stickerItemsForLightbox;
           const cur = stickerView.selected
-            ? stickerItemsForLightbox.findIndex((it) => it.asset_id === stickerView.selected.id)
+            ? list.findIndex((it) => it.asset_id === stickerView.selected.id)
             : -1;
-          const next = cur < 0
-            ? (dir === 1 ? 0 : stickerItemsForLightbox.length - 1)
-            : (cur + dir + stickerItemsForLightbox.length) % stickerItemsForLightbox.length;
-          const item = stickerItemsForLightbox[next];
+          let next;
+          if (lightboxOpen) {
+            const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+            next = cur < 0
+              ? (dir === 1 ? 0 : list.length - 1)
+              : (cur + dir + list.length) % list.length;
+          } else {
+            const isHoriz = event.key === "ArrowLeft" || event.key === "ArrowRight";
+            const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+            if (isHoriz) {
+              next = cur < 0 ? (dir === 1 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, cur + dir));
+            } else {
+              const grid = document.querySelector("[data-sticker-grid='true']");
+              let cols = 1;
+              if (grid) {
+                const cards = grid.querySelectorAll("[data-sticker-card]");
+                if (cards.length > 0) {
+                  const firstTop = cards[0].offsetTop;
+                  cols = Array.from(cards).filter((el) => Math.abs(el.offsetTop - firstTop) < 2).length || 1;
+                }
+              }
+              next = cur < 0 ? 0 : Math.max(0, Math.min(list.length - 1, cur + dir * cols));
+            }
+          }
+          const item = list[next];
           const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
           if (sticker) stickerView.setSelected(sticker);
           return;

@@ -249,6 +249,22 @@ export default function Lightbox({
     const height = event.currentTarget.naturalHeight;
     if (!width || !height) return;
     setNaturalSize({ width, height });
+    applyInitialFit(width, height);
+    setLoadState("ready");
+    // Cached images fire onLoad synchronously during render before refs commit,
+    // so the first computeFit may see a null viewport and fall back to scale=1
+    // (the image then displays at natural size — huge for ultra-wide stickers).
+    // Re-fit on the next frame once layout has settled.
+    requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      applyInitialFit(width, height);
+    });
+  }
+
+  function applyInitialFit(width, height) {
     const fit = computeFit(width, height);
     fitScaleRef.current = fit.scale;
     setFitScale(fit.scale);
@@ -258,7 +274,6 @@ export default function Lightbox({
       imageRef.current.style.transform = `translate3d(${fit.tx}px, ${fit.ty}px, 0) scale(${fit.scale})`;
       imageRef.current.style.visibility = "visible";
     }
-    setLoadState("ready");
   }
 
   function handleImageError() {

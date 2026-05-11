@@ -58,6 +58,7 @@ export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete
     <div className="h-full overflow-y-auto p-4">
       <div
         className="grid"
+        data-sticker-grid="true"
         style={{
           gridTemplateColumns: `repeat(auto-fill, minmax(${THUMB_MIN}px, 1fr))`,
           gap: `${GAP}px`,
@@ -96,6 +97,7 @@ function StickerCard({ sticker, selected, onSelect, onContextMenu }) {
   return (
     <button
       type="button"
+      data-sticker-card={sticker.id}
       onClick={onSelect}
       onContextMenu={onContextMenu}
       draggable
@@ -116,7 +118,7 @@ function StickerCard({ sticker, selected, onSelect, onContextMenu }) {
         ].join(" ")}
       >
         <img
-          src={localFileUrl(sticker.path)}
+          src={localFileUrl(sticker.thumbPath || sticker.path)}
           alt=""
           className="h-full w-full object-contain p-2"
           draggable={false}
@@ -240,7 +242,7 @@ export function StickerInspector({ sticker, onStar }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <div className="relative mb-4 flex h-[200px] items-center justify-center overflow-hidden rounded bg-checker">
           <img
-            src={localFileUrl(sticker.path)}
+            src={localFileUrl(sticker.thumbPath || sticker.path)}
             alt=""
             className="max-h-full max-w-full object-contain"
             draggable={false}

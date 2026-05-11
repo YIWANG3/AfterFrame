@@ -159,7 +159,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
         ].join(" ")}
       >
         <img
-          src={localFileUrl(sticker.path)}
+          src={localFileUrl(sticker.thumbPath || sticker.path)}
           alt=""
           className="h-full w-full object-contain"
           draggable
