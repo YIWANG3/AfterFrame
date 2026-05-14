@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon } from "lucide-react";
 import { baseName, formatTimestamp, navItems } from "../utils/format";
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
@@ -51,6 +51,7 @@ export default function Sidebar({
   onDeleteCollection,
   onAddToCollection,
   onOpenStickerBrowser,
+  onOpenSettings,
   stickerMode = false,
 }) {
   const browse = navItems(summary);
@@ -268,6 +269,19 @@ export default function Sidebar({
           </div>
         </div>
       </nav>
+
+      {/* Bottom: Settings — global, always accessible */}
+      <div className="mt-2 border-t border-border/40 pt-2">
+        <button
+          type="button"
+          onClick={() => onOpenSettings?.()}
+          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-muted transition-colors hover:bg-hover/70 hover:text-text"
+          title="Settings (⌘,)"
+        >
+          <SettingsIcon className="h-4 w-4 stroke-[1.6]" />
+          <span className="text-[13px]">Settings</span>
+        </button>
+      </div>
     </aside>
   );
 }

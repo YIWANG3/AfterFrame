@@ -9,6 +9,7 @@ import Inspector from "./components/Inspector";
 import ImportOverlay from "./components/ImportOverlay";
 import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
+import SettingsOverlay from "./components/SettingsOverlay";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
@@ -25,6 +26,7 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editorItem, setEditorItem] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [proofMode, setProofMode] = useState(false);
   const [layoutItems, setLayoutItems] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -438,6 +440,13 @@ export default function App() {
     }
 
     function handleKeyDown(event) {
+      // Cmd+, opens Settings — handled before the modifier early-return
+      // since this shortcut REQUIRES the modifier.
+      if ((event.metaKey || event.ctrlKey) && event.key === "," && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        setSettingsOpen((open) => !open);
+        return;
+      }
       if (editorItem) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (shouldIgnoreKey(event)) return;
@@ -575,6 +584,7 @@ export default function App() {
             workspace.clearCollection?.({ reload: false });
             stickerView.refresh();
           }}
+          onOpenSettings={() => setSettingsOpen(true)}
         /> : <div className="bg-chrome" />}
 
         <section
@@ -689,7 +699,13 @@ export default function App() {
               onStar={stickerView.handleStar}
             />
           ) : (
-            <Inspector detail={workspace.detail} onRatingChange={applyRating} onSelectAsset={selectSingle} />
+            <Inspector
+              detail={workspace.detail}
+              onRatingChange={applyRating}
+              onSelectAsset={selectSingle}
+              pushToast={pushToast}
+              onTagFilter={(tag) => pushToast?.({ title: "Tag filter", message: `Filtering by "${tag}" — coming soon.`, ttl: 2500 })}
+            />
           )
         ) : <div className="bg-chrome" />}
 
@@ -732,6 +748,10 @@ export default function App() {
             }
           : selectByIndex
         }
+      />
+      <SettingsOverlay
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
       <EditorOverlay
         open={!!editorItem}

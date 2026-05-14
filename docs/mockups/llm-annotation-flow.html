@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AfterFrame — Settings + Auto-annotation Flow Mockup v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --void:#08090a; --surface-1:#0f1011; --surface-2:#161718; --surface-3:#1e1f21; --surface-4:#26272a;
+    --panel-border:rgba(255,255,255,0.06);
+    --brass:#d4a755; --brass-dim:rgba(212,167,85,0.10); --brass-hover:#e0b966;
+    --text-primary:#f0f1f2; --text-secondary:#b0b4ba; --text-tertiary:#6e7279; --text-quaternary:#484b52;
+    --ai-purple:#a78bfa; --ai-purple-dim:rgba(167,139,250,0.12);
+    --green:#34d399; --green-dim:rgba(52,211,153,0.10);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'DM Sans', system-ui, sans-serif;
+    background:#050608; color:var(--text-secondary);
+    padding:48px 24px 96px;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  code { font-family:'SF Mono', Menlo, monospace; font-size:11px; color:var(--text-primary); }
+  .page { max-width:1280px; margin:0 auto; }
+  .page-header { margin-bottom:48px; }
+  .page-title { font-size:24px; color:var(--text-primary); font-weight:600; letter-spacing:-0.01em; }
+  .page-sub { font-size:13px; color:var(--text-tertiary); margin-top:6px; }
+
+  .scene { margin-bottom:64px; }
+  .scene-label {
+    font-size:11px; color:var(--text-tertiary); text-transform:uppercase;
+    letter-spacing:0.12em; margin-bottom:14px; display:flex; align-items:center; gap:8px;
+  }
+  .scene-num {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:20px; height:20px; border-radius:50%;
+    background:var(--brass-dim); color:var(--brass);
+    font-size:11px; font-weight:600;
+  }
+  .scene-title { color:var(--text-primary); }
+  .scene-note { font-size:12px; color:var(--text-tertiary); margin-top:10px; line-height:1.6; padding-left:28px; }
+  .scene-note .reuse { color:var(--green); }
+  .scene-note .new { color:var(--brass); }
+  .scene-note .note { color:var(--ai-purple); }
+
+  .frame {
+    border-radius:12px; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    background:var(--void);
+  }
+
+  /* ───────── Common settings modal ───────── */
+  .settings-frame { height:680px; display:flex; position:relative; }
+  .settings-backdrop {
+    position:absolute; inset:0; background:rgba(5,6,8,0.6); backdrop-filter:blur(2px);
+    z-index:1;
+  }
+  .settings-bg-app { display:flex; width:100%; opacity:0.3; pointer-events:none; }
+  .settings-bg-sidebar { width:230px; background:var(--surface-1); border-right:1px solid var(--panel-border); }
+  .settings-bg-gallery { flex:1; background:var(--void); }
+
+  .settings-modal {
+    position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+    width:880px; height:620px;
+    background:var(--surface-1);
+    border:1px solid var(--panel-border); border-radius:12px;
+    z-index:5;
+    box-shadow:0 30px 80px rgba(0,0,0,0.8);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  .settings-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px; border-bottom:1px solid var(--panel-border);
+  }
+  .settings-title { font-size:14px; color:var(--text-primary); font-weight:600; }
+  .settings-x {
+    width:24px; height:24px; border-radius:5px; background:transparent;
+    border:none; color:var(--text-tertiary); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .settings-x:hover { background:rgba(255,255,255,0.04); color:var(--text-primary); }
+
+  .settings-body { display:flex; flex:1; overflow:hidden; }
+  .settings-nav {
+    width:160px; background:var(--surface-1);
+    border-right:1px solid var(--panel-border);
+    padding:10px 8px;
+  }
+  .settings-nav-item {
+    width:100%; text-align:left; padding:7px 10px;
+    background:transparent; border:none; color:var(--text-secondary);
+    font-size:12px; font-family:inherit; cursor:pointer;
+    border-radius:5px; display:flex; align-items:center; gap:8px;
+    margin-bottom:2px;
+  }
+  .settings-nav-item:hover { background:rgba(255,255,255,0.03); color:var(--text-primary); }
+  .settings-nav-item.active { background:var(--brass-dim); color:var(--brass); }
+  .settings-nav-item svg { width:14px; height:14px; flex-shrink:0; }
+
+  .settings-content {
+    flex:1; padding:22px 28px; overflow-y:auto;
+    background:var(--surface-1);
+  }
+
+  .group {
+    margin-bottom:24px;
+    background:var(--surface-2); border-radius:8px;
+    border:1px solid var(--panel-border);
+    overflow:hidden;
+  }
+  .group:last-child { margin-bottom:0; }
+  .group-header {
+    padding:12px 16px; border-bottom:1px solid var(--panel-border);
+    background:var(--surface-2);
+  }
+  .group-title {
+    font-size:11px; color:var(--text-primary); font-weight:600;
+    letter-spacing:0.02em; display:flex; align-items:center; gap:8px;
+  }
+  .group-title-badge {
+    font-size:8px; padding:2px 5px; border-radius:3px;
+    background:var(--ai-purple-dim); color:var(--ai-purple); font-weight:600;
+    text-transform:uppercase; letter-spacing:0.06em;
+  }
+  .group-sub { font-size:11px; color:var(--text-tertiary); margin-top:3px; line-height:1.5; }
+  .group-body { padding:6px 16px; }
+
+  .field-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 0;
+    border-bottom:1px solid rgba(255,255,255,0.03);
+    gap:16px;
+  }
+  .field-row:last-child { border-bottom:none; }
+  .field-info { flex:1; min-width:0; }
+  .field-label { font-size:12px; color:var(--text-secondary); }
+  .field-hint { font-size:11px; color:var(--text-tertiary); margin-top:3px; line-height:1.5; }
+  .field-hint code { background:var(--surface-3); padding:1px 4px; border-radius:3px; }
+
+  .select {
+    height:28px; padding:0 24px 0 10px;
+    background:var(--surface-3); border:1px solid var(--panel-border);
+    border-radius:5px; font-size:12px; color:var(--text-primary);
+    font-family:inherit; min-width:200px;
+    appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236e7279' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat:no-repeat; background-position:right 8px center;
+    cursor:pointer;
+  }
+
+  .text-input {
+    height:28px; padding:0 10px;
+    background:var(--surface-3); border:1px solid var(--panel-border);
+    border-radius:5px; font-size:12px; color:var(--text-primary);
+    font-family:'SF Mono', Menlo, monospace; outline:none;
+    width:240px;
+  }
+  .text-input:focus { border-color:var(--brass); }
+  .key-input-wrap { display:flex; gap:6px; align-items:center; }
+
+  .btn-sm {
+    height:28px; padding:0 12px;
+    border-radius:5px; font-size:11px; font-weight:500;
+    border:1px solid var(--panel-border); background:var(--surface-3);
+    color:var(--text-secondary); cursor:pointer;
+    font-family:inherit; display:flex; align-items:center; gap:6px;
+  }
+  .btn-sm:hover { background:var(--surface-4); color:var(--text-primary); }
+  .btn-sm.brass { background:var(--brass); color:var(--void); border-color:var(--brass); font-weight:600; }
+  .btn-sm.brass:hover { background:var(--brass-hover); }
+  .btn-sm.test-ok { color:var(--green); border-color:var(--green-dim); background:var(--green-dim); }
+  .btn-sm.test-ok:hover { background:var(--green-dim); color:var(--green); }
+
+  /* Toggle */
+  .toggle {
+    width:30px; height:18px; border-radius:9px; background:var(--surface-4);
+    position:relative; cursor:pointer; transition:background 0.15s;
+    flex-shrink:0;
+  }
+  .toggle.on { background:var(--brass); }
+  .toggle::after {
+    content:''; position:absolute; top:2px; left:2px;
+    width:14px; height:14px; border-radius:50%; background:#fff;
+    transition:left 0.15s;
+  }
+  .toggle.on::after { left:14px; }
+
+  /* Privacy callout — sits beneath the API key row */
+  .privacy-callout {
+    margin:8px 0 4px;
+    background:var(--ai-purple-dim);
+    border-left:2px solid var(--ai-purple);
+    padding:9px 12px; border-radius:0 6px 6px 0;
+    font-size:11px; color:var(--text-secondary); line-height:1.55;
+  }
+  .privacy-callout strong { color:var(--ai-purple); font-weight:600; }
+
+  /* Multi-chip */
+  .chip-row { display:flex; gap:6px; flex-shrink:0; }
+  .chip {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 10px; border-radius:14px; cursor:pointer;
+    background:var(--surface-3); border:1px solid var(--panel-border);
+    font-size:11px; color:var(--text-secondary);
+    transition:all 0.1s;
+  }
+  .chip:hover { background:var(--surface-4); }
+  .chip.on { background:var(--brass-dim); color:var(--brass); border-color:var(--brass); }
+  .chip.on::before {
+    content:''; width:5px; height:5px; border-radius:50%; background:var(--brass);
+  }
+
+  /* ───────── Inspector ───────── */
+  .inspector-frame { display:flex; height:560px; }
+  .inspector-mini-app {
+    flex:1; background:var(--void);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .photo-card {
+    width:480px; height:500px; border-radius:6px;
+    background:linear-gradient(135deg, #ff7e5f 0%, #feb47b 30%, #faab78 55%, #5b6e9e 90%);
+    position:relative; overflow:hidden;
+    box-shadow:0 4px 30px rgba(0,0,0,0.5);
+  }
+  .photo-card::after {
+    content:''; position:absolute; left:30px; right:30px; bottom:30px;
+    height:90px; background:linear-gradient(to top, rgba(0,0,0,0.3), transparent);
+  }
+  .filename-tag {
+    position:absolute; bottom:14px; left:18px;
+    font-size:11px; color:rgba(255,255,255,0.7);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .inspector-pane {
+    width:340px; background:var(--surface-1);
+    border-left:1px solid var(--panel-border);
+    overflow-y:auto;
+    padding:16px;
+  }
+  .insp-asset-name { font-size:13px; color:var(--text-primary); font-weight:500; margin-bottom:2px; }
+  .insp-asset-meta { font-size:10px; color:var(--text-tertiary); margin-bottom:16px; font-variant-numeric:tabular-nums; }
+
+  .insp-section { margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--panel-border); }
+  .insp-section:last-child { border-bottom:none; }
+  .insp-section-head {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .insp-section-title {
+    font-size:10px; color:var(--text-tertiary); text-transform:uppercase;
+    letter-spacing:0.1em; display:flex; align-items:center; gap:6px;
+  }
+  .insp-section-title svg { width:11px; height:11px; }
+
+  .ai-badge {
+    font-size:8px; padding:2px 5px; border-radius:3px;
+    background:var(--ai-purple-dim); color:var(--ai-purple); font-weight:600;
+    text-transform:uppercase; letter-spacing:0.06em;
+    display:inline-flex; align-items:center; gap:3px;
+  }
+  .ai-badge::before { content:''; width:4px; height:4px; border-radius:50%; background:var(--ai-purple); }
+
+  .caption-text { font-size:12px; color:var(--text-primary); line-height:1.6; }
+
+  /* Flat tag style — no reused/new distinction */
+  .tag-cloud { display:flex; flex-wrap:wrap; gap:4px; }
+  .tag {
+    display:inline-flex; align-items:center;
+    padding:3px 9px; border-radius:11px;
+    background:var(--surface-3); color:var(--text-secondary);
+    font-size:10px; cursor:pointer;
+    border:1px solid transparent;
+    transition:all 0.1s;
+  }
+  .tag:hover { background:var(--surface-4); color:var(--text-primary); border-color:var(--panel-border); }
+
+  .kv-row { display:flex; align-items:flex-start; gap:10px; font-size:11px; margin-bottom:5px; }
+  .kv-label { color:var(--text-tertiary); min-width:54px; }
+  .kv-val { color:var(--text-secondary); flex:1; line-height:1.5; }
+  .conf-pill {
+    display:inline-flex; align-items:center;
+    padding:1px 5px; border-radius:3px; font-size:9px;
+    background:var(--surface-3); color:var(--text-tertiary);
+    margin-left:4px;
+  }
+
+  /* ───────── Batch ───────── */
+  .batch-frame { height:540px; position:relative; }
+  .batch-gallery {
+    height:100%; background:var(--void); padding:20px;
+    display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;
+    align-content:start;
+  }
+  .batch-card {
+    aspect-ratio:1; border-radius:5px;
+    background:linear-gradient(135deg, #2a3a4a, #5a7a8a);
+    position:relative; border:2px solid transparent;
+  }
+  .batch-card.selected { border-color:var(--brass); box-shadow:0 0 0 1px var(--brass); }
+  .batch-card:nth-child(2) { background:linear-gradient(135deg, #6e4a3a, #c89568); }
+  .batch-card:nth-child(3) { background:linear-gradient(135deg, #3a2a4a, #7a5a8a); }
+  .batch-card:nth-child(4) { background:linear-gradient(135deg, #2a4a3a, #5a8a7a); }
+  .batch-card:nth-child(5) { background:linear-gradient(135deg, #4a4a2a, #8a8a5a); }
+  .batch-card:nth-child(6) { background:linear-gradient(135deg, #2a3a4a, #4a6a7a); }
+  .batch-card:nth-child(7) { background:linear-gradient(135deg, #3a3a3a, #6a6a6a); }
+  .batch-card:nth-child(8) { background:linear-gradient(135deg, #4a2a3a, #8a5a6a); }
+  .batch-card:nth-child(9) { background:linear-gradient(135deg, #2a4a4a, #5a8a8a); }
+  .batch-card:nth-child(10) { background:linear-gradient(135deg, #4a3a2a, #8a7a5a); }
+  .batch-card .check {
+    position:absolute; top:6px; right:6px;
+    width:14px; height:14px; border-radius:50%; background:var(--brass);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .batch-card .check svg { width:10px; height:10px; color:var(--void); }
+
+  .batch-dim {
+    position:absolute; inset:0; background:rgba(5,6,8,0.75); backdrop-filter:blur(3px);
+    z-index:2;
+  }
+  .batch-confirm {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:460px; background:var(--surface-1);
+    border:1px solid var(--panel-border); border-radius:12px;
+    z-index:5; padding:22px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.8);
+  }
+  .bc-title { font-size:14px; color:var(--text-primary); font-weight:600; }
+  .bc-sub { font-size:12px; color:var(--text-tertiary); margin-top:4px; margin-bottom:16px; }
+  .bc-info-grid {
+    background:var(--surface-2); border-radius:8px; padding:12px 14px;
+    margin-bottom:16px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .bc-info-row { display:flex; justify-content:space-between; font-size:11px; }
+  .bc-info-row .l { color:var(--text-tertiary); }
+  .bc-info-row .r { color:var(--text-primary); font-weight:500; }
+  .bc-info-row .r.skip { color:var(--text-tertiary); }
+  .bc-options {
+    display:flex; align-items:center; gap:8px;
+    padding:10px 0 16px;
+    font-size:11px; color:var(--text-secondary);
+    cursor:pointer;
+  }
+  .bc-checkbox {
+    width:15px; height:15px; border-radius:3px;
+    border:1px solid var(--panel-border); background:var(--surface-3);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .bc-checkbox.on { background:var(--brass); border-color:var(--brass); }
+  .bc-checkbox.on::after {
+    content:''; width:9px; height:5px; border:2px solid var(--void); border-top:0; border-right:0;
+    transform:rotate(-45deg) translate(1px, -1px);
+  }
+  .bc-options .hint { color:var(--text-tertiary); }
+  .bc-actions { display:flex; justify-content:flex-end; gap:8px; }
+
+  /* Library + About scenes */
+  .library-card {
+    background:var(--surface-3); border-radius:6px; padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .library-card:last-child { margin-bottom:0; }
+  .lib-card-info .name { font-size:12px; color:var(--text-primary); font-weight:500; }
+  .lib-card-info .path { font-size:10px; color:var(--text-tertiary); margin-top:2px; font-family:'SF Mono', Menlo, monospace; }
+  .lib-card-info .stats { font-size:10px; color:var(--text-tertiary); margin-top:3px; }
+
+  .cache-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 0;
+    border-bottom:1px solid rgba(255,255,255,0.03);
+  }
+  .cache-row:last-child { border-bottom:none; }
+  .cache-info { display:flex; align-items:center; gap:10px; }
+  .cache-bar-wrap { width:140px; height:5px; background:var(--surface-3); border-radius:3px; overflow:hidden; }
+  .cache-bar { height:100%; background:var(--brass); border-radius:3px; }
+  .cache-size { font-size:11px; color:var(--text-tertiary); font-variant-numeric:tabular-nums; min-width:60px; }
+
+  /* About */
+  .about-hero {
+    display:flex; align-items:center; gap:18px;
+    padding:8px 0 20px;
+    border-bottom:1px solid var(--panel-border);
+    margin-bottom:20px;
+  }
+  .about-logo {
+    width:64px; height:64px; border-radius:14px;
+    background:linear-gradient(135deg, var(--brass), #b88a3a);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--void); font-size:30px; font-weight:700;
+    box-shadow:0 4px 16px rgba(212,167,85,0.3);
+  }
+  .about-name { font-size:18px; color:var(--text-primary); font-weight:600; letter-spacing:-0.01em; }
+  .about-tagline { font-size:12px; color:var(--text-tertiary); margin-top:3px; }
+  .about-version { font-size:11px; color:var(--text-secondary); margin-top:8px; font-variant-numeric:tabular-nums; }
+  .about-version .latest { color:var(--green); margin-left:6px; }
+
+  .about-link-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 0;
+    border-bottom:1px solid rgba(255,255,255,0.03);
+  }
+  .about-link-row:last-child { border-bottom:none; }
+  .about-link-row .l { font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:8px; }
+  .about-link-row .l svg { width:14px; height:14px; color:var(--text-tertiary); }
+  .about-link-row .r {
+    font-size:11px; color:var(--brass); font-family:inherit;
+    background:none; border:none; cursor:pointer;
+    display:flex; align-items:center; gap:4px;
+  }
+  .about-link-row .r:hover { color:var(--brass-hover); }
+  .about-link-row .r svg { width:11px; height:11px; }
+  .about-credit {
+    margin-top:20px; padding-top:16px;
+    border-top:1px solid var(--panel-border);
+    font-size:11px; color:var(--text-tertiary); line-height:1.6;
+  }
+  .about-credit a { color:var(--brass); text-decoration:none; }
+
+  .icon { stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">Settings + Auto-annotation — v3</div>
+    <div class="page-sub">6 scenes. All four Settings tabs covered. Updates are manual via GitHub. Annotation has custom prompt + tag/caption caps.</div>
+  </div>
+
+  <!-- ═══════════════════════════ SCENE 1 ═══════════════════════════ -->
+  <div class="scene">
+    <div class="scene-label">
+      <span class="scene-num">1</span>
+      <span class="scene-title">Settings — AI tab (annotation + repaint in one place)</span>
+    </div>
+    <div class="frame">
+      <div class="settings-frame">
+        <div class="settings-bg-app">
+          <div class="settings-bg-sidebar"></div>
+          <div class="settings-bg-gallery"></div>
+        </div>
+        <div class="settings-backdrop"></div>
+
+        <div class="settings-modal">
+          <div class="settings-header">
+            <div class="settings-title">Settings</div>
+            <button class="settings-x"><svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+
+          <div class="settings-body">
+            <div class="settings-nav">
+              <button class="settings-nav-item">
+                <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                General
+              </button>
+              <button class="settings-nav-item active">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l8 4"/></svg>
+                AI
+              </button>
+              <button class="settings-nav-item">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Library
+              </button>
+              <button class="settings-nav-item">
+                <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                About
+              </button>
+            </div>
+
+            <div class="settings-content">
+              <!-- ── Annotation group ── -->
+              <div class="group">
+                <div class="group-header">
+                  <div class="group-title">
+                    Auto-annotation
+                    <span class="group-title-badge">New</span>
+                  </div>
+                  <div class="group-sub">Generate captions, tags, and location guesses for your photos. Off until you add a key.</div>
+                </div>
+                <div class="group-body">
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Provider</div>
+                    </div>
+                    <select class="select">
+                      <optgroup label="First-party APIs">
+                        <option>Anthropic (Claude)</option>
+                        <option>OpenAI (GPT-4o)</option>
+                        <option>Google (Gemini)</option>
+                      </optgroup>
+                      <optgroup label="Other (OpenAI-compatible)" selected>
+                        <option selected>Ollama (local)</option>
+                        <option>Custom endpoint…</option>
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  <!-- Host URL — shown only for Other / OpenAI-compatible providers -->
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Host URL</div>
+                      <div class="field-hint">OpenAI-compatible <code>/v1</code> endpoint. Defaults to Ollama's local server.</div>
+                    </div>
+                    <input type="text" class="text-input" value="http://localhost:11434/v1" style="width:280px; font-family:'SF Mono', Menlo, monospace;" />
+                  </div>
+
+                  <div class="field-row" style="flex-direction:column; align-items:stretch; gap:0;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px;">
+                      <div class="field-info">
+                        <div class="field-label">API key</div>
+                        <div class="field-hint">Leave empty for local-only providers like Ollama.</div>
+                      </div>
+                      <div class="key-input-wrap">
+                        <input type="password" class="text-input" placeholder="(none for Ollama)" style="color:var(--text-quaternary);" />
+                        <button class="btn-sm">Test</button>
+                      </div>
+                    </div>
+                    <div class="privacy-callout">
+                      <strong>Where your images go</strong> — when you trigger annotation, AfterFrame uploads a 512px-max-edge JPEG directly from your machine to the selected provider. For <strong>Ollama (local)</strong> the image never leaves your machine; for cloud providers it goes straight to their API with no proxy on our side. EXIF GPS is stripped from the upload either way.
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Model</div>
+                    </div>
+                    <select class="select">
+                      <option>claude-sonnet-4-5  (best quality)</option>
+                      <option>claude-haiku-4-5   (cheap)</option>
+                    </select>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Auto-annotate on import</div>
+                      <div class="field-hint">Off by default. When on, every imported asset is annotated as part of the import pipeline.</div>
+                    </div>
+                    <div class="toggle"></div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Tag languages</div>
+                      <div class="field-hint">Both selected means each photo gets tags in English and 中文, so search hits across users.</div>
+                    </div>
+                    <div class="chip-row">
+                      <span class="chip on">English</span>
+                      <span class="chip on">中文</span>
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Max tags per image</div>
+                      <div class="field-hint">Hard cap. The model sees this and trims its own output.</div>
+                    </div>
+                    <input type="number" class="text-input" value="10" style="width:70px; text-align:right; font-family:inherit;" />
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Max description length</div>
+                      <div class="field-hint">Characters. Short captions read better in the inspector and search.</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <input type="number" class="text-input" value="200" style="width:70px; text-align:right; font-family:inherit;" />
+                      <span style="font-size:10px; color:var(--text-tertiary);">chars</span>
+                    </div>
+                  </div>
+
+                  <div class="field-row" style="flex-direction:column; align-items:stretch; gap:0;">
+                    <div style="padding-bottom:8px;">
+                      <div class="field-label">Custom instructions</div>
+                      <div class="field-hint">Appended to every prompt. Use this to bias toward your taste — e.g. "prefer style/mood tags over generic objects", or "tag camera era for vintage photos".</div>
+                    </div>
+                    <textarea class="text-input" rows="3" style="width:100%; font-family:inherit; height:auto; padding:8px 10px; resize:vertical;" placeholder="Optional…">Prefer style and mood tags (e.g. cinematic, melancholic, vibrant) alongside subject tags. Skip generic ones like "photo" or "image".</textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── Repaint group (moved from inline editor panel) ── -->
+              <div class="group">
+                <div class="group-header">
+                  <div class="group-title">AI Repaint</div>
+                  <div class="group-sub">Image-to-image style transfer. Used by the AI Repaint tool in the editor.</div>
+                </div>
+                <div class="group-body">
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Provider</div>
+                    </div>
+                    <select class="select">
+                      <optgroup label="Image generation APIs">
+                        <option>Gemini 2.5 Flash Image</option>
+                        <option>GPT Image (gpt-image-1)</option>
+                        <option>Jimeng (即梦)</option>
+                      </optgroup>
+                      <optgroup label="Other (OpenAI-compatible)">
+                        <option>Custom endpoint…</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">API key</div>
+                    </div>
+                    <div class="key-input-wrap">
+                      <input type="password" class="text-input" placeholder="Add key…" style="color:var(--text-quaternary);" />
+                      <button class="btn-sm">Test</button>
+                    </div>
+                  </div>
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Default model</div>
+                      <div class="field-hint">Used unless you override it in the editor.</div>
+                    </div>
+                    <select class="select">
+                      <option>gemini-2.5-flash-image</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-note">
+      <span class="reuse">Reuse:</span> token store from existing AI Repaint IPC ([ai.js:93]) for both providers; <code>Section</code>-style group cards from editor panels.
+      <br><span class="new">Add:</span> <code>SettingsOverlay.jsx</code> with tab nav + two grouped cards per tab. AI Repaint config gets migrated here (the inline editor panel becomes a thin link "Configure providers in Settings").
+      <br><span class="note">Ollama placement:</span> nested under "Other (OpenAI-compatible)" via <code>&lt;optgroup&gt;</code> so it doesn't compete visually with first-party services.
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SCENE 2 ═══════════════════════════ -->
+  <div class="scene">
+    <div class="scene-label">
+      <span class="scene-num">2</span>
+      <span class="scene-title">Settings — General tab</span>
+    </div>
+    <div class="frame">
+      <div class="settings-frame">
+        <div class="settings-bg-app">
+          <div class="settings-bg-sidebar"></div>
+          <div class="settings-bg-gallery"></div>
+        </div>
+        <div class="settings-backdrop"></div>
+
+        <div class="settings-modal">
+          <div class="settings-header">
+            <div class="settings-title">Settings</div>
+            <button class="settings-x"><svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+
+          <div class="settings-body">
+            <div class="settings-nav">
+              <button class="settings-nav-item active">
+                <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                General
+              </button>
+              <button class="settings-nav-item">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l8 4"/></svg>
+                AI
+              </button>
+              <button class="settings-nav-item">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Library
+              </button>
+              <button class="settings-nav-item">
+                <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                About
+              </button>
+            </div>
+
+            <div class="settings-content">
+              <div class="group">
+                <div class="group-header">
+                  <div class="group-title">Appearance</div>
+                </div>
+                <div class="group-body">
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Theme</div>
+                    </div>
+                    <select class="select">
+                      <option>Dark</option>
+                      <option>System</option>
+                    </select>
+                  </div>
+                  <div class="field-row">
+                    <div class="field-info">
+                      <div class="field-label">Accent color</div>
+                    </div>
+                    <div class="chip-row">
+                      <span class="chip on" style="background:rgba(212,167,85,0.15); color:#d4a755; border-color:#d4a755;">Brass</span>
+                      <span class="chip" style="background:rgba(96,165,250,0.10); color:#60a5fa;">Blue</span>
+                      <span class="chip" style="background:rgba(167,139,250,0.10); color:#a78bfa;">Purple</span>
+                      <span class="chip" style="background:rgba(52,211,153,0.10); color:#34d399;">Green</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-note">
+      <span class="reuse">Reuse:</span> the same modal shell as scene 1 — only the content area swaps.
+      <br><span class="new">Add:</span> persistence layer for these (settings.json under userData), pretty trivial.
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SCENE 3 ═══════════════════════════ -->
+  <div class="scene">
+    <div class="scene-label">
+      <span class="scene-num">3</span>
+      <span class="scene-title">Inspector — annotations (flat tags, no metadata clutter)</span>
+    </div>
+    <div class="frame">
+      <div class="inspector-frame">
+        <div class="inspector-mini-app">
+          <div class="photo-card">
+            <div class="filename-tag">DSC_4221.jpg · 4032 × 6048 · 14.2 MB</div>
+          </div>
+        </div>
+        <div class="inspector-pane">
+          <div class="insp-asset-name">DSC_4221.jpg</div>
+          <div class="insp-asset-meta">Captured 2026-05-08 18:34 · f/2.8 · 1/200s · ISO 100</div>
+
+          <div class="insp-section">
+            <div class="insp-section-head">
+              <span class="insp-section-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                Description
+              </span>
+              <span class="ai-badge">AI</span>
+            </div>
+            <div class="caption-text">
+              A couple silhouetted on a beach at golden hour, with warm orange and pink hues filling the sky. Soft waves wash up the sand in the foreground.
+            </div>
+          </div>
+
+          <div class="insp-section">
+            <div class="insp-section-head">
+              <span class="insp-section-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                Tags
+              </span>
+              <span class="ai-badge">AI</span>
+            </div>
+            <div class="tag-cloud">
+              <span class="tag">sunset</span>
+              <span class="tag">beach</span>
+              <span class="tag">silhouette</span>
+              <span class="tag">couple</span>
+              <span class="tag">golden hour</span>
+              <span class="tag">warm tones</span>
+              <span class="tag">ocean</span>
+              <span class="tag">rule of thirds</span>
+              <span class="tag">夕阳</span>
+              <span class="tag">海滩</span>
+              <span class="tag">剪影</span>
+              <span class="tag">三分法</span>
+            </div>
+          </div>
+
+          <div class="insp-section">
+            <div class="insp-section-head">
+              <span class="insp-section-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Location
+              </span>
+              <span class="ai-badge">AI · guess</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-label">Country</span>
+              <span class="kv-val">United States <span class="conf-pill">82%</span></span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-label">Region</span>
+              <span class="kv-val">California coast <span class="conf-pill">68%</span></span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-label">Landmark</span>
+              <span class="kv-val" style="color:var(--text-quaternary)">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-note">
+      <span class="reuse">Reuse:</span> Inspector layout + AI badge pattern.
+      <br><span class="new">Add:</span> 3 inspector sections (Description / Tags / Location). Tags are <strong>flat</strong> — one style, click to filter the gallery. No "reused vs new" distinction shown; merging happens silently behind the scenes.
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SCENE 4 ═══════════════════════════ -->
+  <div class="scene">
+    <div class="scene-label">
+      <span class="scene-num">4</span>
+      <span class="scene-title">Batch annotate — confirm only, no cost preview</span>
+    </div>
+    <div class="frame">
+      <div class="batch-frame">
+        <div class="batch-gallery">
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card selected"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div></div>
+          <div class="batch-card"></div>
+          <div class="batch-card"></div>
+        </div>
+        <div class="batch-dim"></div>
+        <div class="batch-confirm">
+          <div class="bc-title">Annotate 8 selected assets?</div>
+          <div class="bc-sub">Images will be uploaded to Anthropic at 512px max edge.</div>
+
+          <div class="bc-info-grid">
+            <div class="bc-info-row">
+              <span class="l">Provider</span>
+              <span class="r">Anthropic · claude-sonnet-4-5</span>
+            </div>
+            <div class="bc-info-row">
+              <span class="l">Selected</span>
+              <span class="r">10 — <span class="skip">2 already annotated</span></span>
+            </div>
+            <div class="bc-info-row">
+              <span class="l">Will annotate</span>
+              <span class="r">8 assets</span>
+            </div>
+          </div>
+
+          <div class="bc-options">
+            <span class="bc-checkbox"></span>
+            <span>Include the 2 already-annotated assets <span class="hint">(overwrites existing)</span></span>
+          </div>
+
+          <div class="bc-actions">
+            <button class="btn-sm">Cancel</button>
+            <button class="btn-sm brass">Annotate 8</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-note">
+      <span class="reuse">Reuse:</span> gallery selection state + import-style progress bar after confirm.
+      <br><span class="new">Add:</span> <code>AnnotateConfirmDialog.jsx</code> — facts only, no cost projection, no time estimate. <span class="note">Re-annotate all 10</span> overrides skip-existing (useful after switching models).
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SCENE 5: Library tab ═══════════════════════════ -->
+  <div class="scene">
+    <div class="scene-label">
+      <span class="scene-num">5</span>
+      <span class="scene-title">Settings — Library tab</span>
+    </div>
+    <div class="frame">
+      <div class="settings-frame">
+        <div class="settings-bg-app">
+          <div class="settings-bg-sidebar"></div>
+          <div class="settings-bg-gallery"></div>
+        </div>
+        <div class="settings-backdrop"></div>
+
+        <div class="settings-modal">
+          <div class="settings-header">
+            <div class="settings-title">Settings</div>
+            <button class="settings-x"><svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="settings-body">
+            <div class="settings-nav">
+              <button class="settings-nav-item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> General</button>
+              <button class="settings-nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l8 4"/></svg> AI</button>
+              <button class="settings-nav-item active"><svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Library</button>
+              <button class="settings-nav-item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> About</button>
+            </div>
+
+            <div class="settings-content">
+              <!-- Current catalog -->
+              <div class="group">
+                <div class="group-header">
+                  <div class="group-title">Current catalog</div>
+                </div>
+                <div class="group-body" style="padding-top:12px;">
+                  <div class="library-card">
+                    <div class="lib-card-info">
+                      <div class="name">general.afcatalog</div>
+                      <div class="path">~/Pictures/AfterFrame/general.afcatalog</div>
+                      <div class="stats">464 assets · 1.2 GB · last opened 2 min ago</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                      <button class="btn-sm">Reveal</button>
+                      <button class="btn-sm">Re-index</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recent catalogs -->
+              <div class="group">
+                <div class="group-header">
+                  <div class="group-title">Recent catalogs</div>
+                  <div class="group-sub">Quick-open from the file menu, or drag any <code>.afcatalog</code> onto the dock icon.</div>
+                </div>
+                <div class="group-body" style="padding-top:12px;">
+                  <div class="library-card">
+                    <div class="lib-card-info">
+                      <div class="name">travel-2026.afcatalog</div>
+                      <div class="path">~/Pictures/AfterFrame/travel-2026.afcatalog</div>
+                      <div class="stats">1,247 assets · 4.8 GB</div>
+                    </div>
+                    <button class="btn-sm">Open</button>
+                  </div>
+                  <div class="library-card">
+                    <div class="lib-card-info">
+                      <div class="name">ui-import-scratch.afcatalog</div>
+                      <div class="path">~/Pictures/AfterFrame/ui-import-scratch.afcatalog</div>
+                      <div class="stats">38 assets · 142 MB</div>
+                    </div>
+                    <button class="btn-sm">Open</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Cache management -->
+              <div class="group">
+                <div class="group-header">
+                  <div class="group-title">Cache & storage</div>
+                  <div class="group-sub">All caches live under <code>~/Library/Application Support/AfterFrame</code>.</div>
+                </div>
+                <div class="group-body">
+                  <div class="cache-row">
+                    <span class="field-label">Preview thumbnails</span>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <span class="cache-size" style="text-align:right;">412 MB</span>
+                      <button class="btn-sm">Clear</button>
+                    </div>
+                  </div>
+                  <div class="cache-row">
+                    <span class="field-label">Depth maps</span>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <span class="cache-size" style="text-align:right;">158 MB</span>
+                      <button class="btn-sm">Clear</button>
+                    </div>
+                  </div>
+                  <div class="cache-row">
+                    <span class="field-label">Sticker library</span>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <span class="cache-size" style="text-align:right;">22 stickers · 118 MB</span>
+                      <button class="btn-sm">Reveal</button>
+                    </div>
+                  </div>
+                  <div class="cache-row">
+                    <span class="field-label">AI Repaint history</span>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <span class="cache-size" style="text-align:right;">52 MB</span>
+                      <button class="btn-sm">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-note">
+      <span class="reuse">Reuse:</span> existing catalog-open / re-index sidecar commands; cache directories already managed by IPC handlers.
+      <br><span class="new">Add:</span> a "list cache sizes" IPC for the bars; everything else is wiring existing functions to UI.
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SCENE 6: About tab ═══════════════════════════ -->
+  <div class="scene">
+    <div class="scene-label">
+      <span class="scene-num">6</span>
+      <span class="scene-title">Settings — About tab</span>
+    </div>
+    <div class="frame">
+      <div class="settings-frame">
+        <div class="settings-bg-app">
+          <div class="settings-bg-sidebar"></div>
+          <div class="settings-bg-gallery"></div>
+        </div>
+        <div class="settings-backdrop"></div>
+
+        <div class="settings-modal">
+          <div class="settings-header">
+            <div class="settings-title">Settings</div>
+            <button class="settings-x"><svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="settings-body">
+            <div class="settings-nav">
+              <button class="settings-nav-item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> General</button>
+              <button class="settings-nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l8 4"/></svg> AI</button>
+              <button class="settings-nav-item"><svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Library</button>
+              <button class="settings-nav-item active"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> About</button>
+            </div>
+
+            <div class="settings-content">
+              <div class="about-hero">
+                <div class="about-logo">A</div>
+                <div>
+                  <div class="about-name">AfterFrame</div>
+                  <div class="about-tagline">A local-first photo workspace for photographers.</div>
+                  <div class="about-version">0.1.4 · arm64 <span class="latest">— latest on GitHub</span></div>
+                </div>
+              </div>
+
+              <div class="group" style="margin-bottom:18px;">
+                <div class="group-body">
+                  <div class="about-link-row">
+                    <span class="l">
+                      <svg class="icon" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                      GitHub repository
+                    </span>
+                    <button class="r">github.com/YIWANG3/AfterFrame <svg class="icon" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+                  </div>
+                  <div class="about-link-row">
+                    <span class="l">
+                      <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Check for updates
+                    </span>
+                    <button class="r">Open Releases <svg class="icon" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+                  </div>
+                  <div class="about-link-row">
+                    <span class="l">
+                      <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                      License
+                    </span>
+                    <button class="r">MIT <svg class="icon" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+                  </div>
+                  <div class="about-link-row">
+                    <span class="l">
+                      <svg class="icon" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                      Report an issue
+                    </span>
+                    <button class="r">Open issue tracker <svg class="icon" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="about-credit">
+                Updates are <strong style="color:var(--text-secondary);">not automatic</strong> — when a new version ships, download the <code>.dmg</code> from <a href="#">GitHub Releases</a> and drag it over the old <code>Applications/AfterFrame.app</code>. Your catalogs and settings are kept under <code>~/Library/Application Support/AfterFrame</code> and persist across updates.
+                <br><br>
+                Built with <a href="#">Claude Code</a>. Sticker extraction uses Apple VisionKit; depth-aware text uses Depth Anything V2.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-note">
+      <span class="reuse">Reuse:</span> nothing — purely informational.
+      <br><span class="new">Add:</span> static content + 4 external-link buttons that call <code>shell.openExternal</code>. Update check just opens the Releases page; no version comparison logic.
+    </div>
+  </div>
+
+  <!-- Footprint -->
+  <div class="page-header" style="margin-top:48px; padding-top:32px; border-top:1px solid var(--panel-border);">
+    <div class="page-title" style="font-size:18px;">Implementation footprint</div>
+    <div style="margin-top:14px; font-size:12px; color:var(--text-secondary); line-height:1.7;">
+      <strong style="color:var(--green);">Reuse:</strong>
+      token store ([ai.js]), Section / Switch / Select primitives, Inspector layout, import-job progress.
+      <br><br>
+      <strong style="color:var(--brass);">New files:</strong>
+      <code>SettingsOverlay.jsx</code> (4 tabs),
+      <code>AnnotationsSection.jsx</code> (Description / Tags / Location in inspector),
+      <code>AnnotateConfirmDialog.jsx</code>,
+      <code>electron/ipc/annotation.js</code>,
+      <code>electron/ipc/settings.js</code> (persist general settings to <code>settings.json</code>),
+      sidecar adapter for each provider.
+      <br><br>
+      <strong style="color:var(--text-primary);">Schema additions:</strong>
+      <code>asset_ai_annotations</code> table (caption / tags_json / location_json / raw / created_at — no cost/quality columns),
+      <code>asset_tags</code> table (asset_id + tag, indexed on tag).
+      <br><br>
+      <strong style="color:var(--ai-purple);">Tag reuse pipeline (silent, no UI):</strong>
+      before each request, inject the top-200 most-used tags into the prompt; after the response, fuzzy-merge near-duplicates against the existing tag set before insert. User never sees a "reused" indicator — it just works.
+      <br><br>
+      <strong style="color:var(--text-primary);">Migration:</strong>
+      existing AI Repaint provider config (currently configured inline in the editor panel) moves to Settings → AI → "AI Repaint" group. The editor panel keeps a small "Open in Settings" link.
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, Star, Copy, Layers } from "lucide-react";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
+import AnnotationsSection from "./AnnotationsSection";
 
 function StarRating({ value = 0, onChange }) {
   const [hover, setHover] = useState(0);
@@ -85,7 +86,7 @@ function ThumbnailStrip({ items, icon: Icon, onSelect }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onSelectAsset }) {
+export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, pushToast }) {
   const [localRating, setLocalRating] = useState(null);
   const currentAssetId = detail?.asset_id || detail?.export_path || null;
 
@@ -171,6 +172,13 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset }) {
             <DetailRow label="Size">{fileSize}</DetailRow>
             <DetailRow label="Type">{formatValue}</DetailRow>
           </Section>
+
+          <AnnotationsSection
+            assetId={detail.asset_id}
+            imagePath={detail.export_path || detail.export_preview_path || detail.raw_preview_path}
+            onTagClick={onTagFilter}
+            pushToast={pushToast}
+          />
 
           <Section title="Source">
             <DetailRow label="Asset">

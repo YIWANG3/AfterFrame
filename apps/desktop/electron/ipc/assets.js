@@ -8,6 +8,14 @@ function register({ ipcMain, shell, callSidecarJsonAsync }) {
     return true;
   });
 
+  ipcMain.handle("workspace:open-external", (_event, url) => {
+    if (!url || typeof url !== "string") return false;
+    // Only allow http(s) so a misuse can't, e.g., launch file:// or javascript:.
+    if (!/^https?:\/\//i.test(url)) return false;
+    shell.openExternal(url);
+    return true;
+  });
+
   ipcMain.handle("workspace:quick-register", async (_event, exportPath, originPath, collageSourceIds) => {
     if (!exportPath) return null;
     const command = ["quick-register", "--export-path", exportPath];

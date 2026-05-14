@@ -16,6 +16,7 @@ const jobsIpc = require("./ipc/jobs");
 const browseIpc = require("./ipc/browse");
 const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
+const annotationIpc = require("./ipc/annotation");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -938,6 +939,14 @@ aiIpc.register({
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
   startAiRepaintTask, latestJobStatus, formatJobStatus,
+});
+
+annotationIpc.register({
+  ipcMain,
+  callSidecarJsonAsync,
+  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  readAppSettings, updateAppSettings,
+  getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
 });
 
 browseIpc.register({

@@ -1,0 +1,412 @@
+"""LLM auto-annotation: caption, tags, and location guess for an image.
+
+Single-asset path (no job system) — keeps it simple for the MVP. Batch can
+build on top by looping with a job for progress.
+
+Providers:
+    - anthropic            (Claude 4.5 family, vision via messages API)
+    - openai               (GPT-4o family)
+    - google               (Gemini vision)
+    - openai_compatible    (Ollama or any OpenAI-compatible /v1 endpoint)
+
+Schema written:
+    asset_ai_annotations   one row per asset, latest only
+    asset_tags             flat tag table, one row per (asset, tag)
+"""
+
+from __future__ import annotations
+
+import base64
+import io
+import json
+import re
+import sqlite3
+from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import urllib.request
+import urllib.error
+
+try:
+    from PIL import Image  # noqa: F401 — needed for image preprocessing
+except ImportError as exc:  # pragma: no cover
+    raise SystemExit("Pillow is required for annotation. Install: pip install Pillow") from exc
+
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+THUMB_MAX_EDGE = 512
+JPEG_QUALITY = 85
+HTTP_TIMEOUT = 60
+DEFAULT_MAX_TAGS = 10
+DEFAULT_MAX_CAPTION_CHARS = 200
+SCHEMA_VERSION = 1
+
+# How many existing tags to inject into the prompt as "prefer these"
+TAG_REUSE_HINT_LIMIT = 200
+
+
+# ── Result type ──────────────────────────────────────────────────────────────
+
+@dataclass
+class AnnotationResult:
+    caption: str
+    tags: list[str]
+    location: Optional[dict[str, Any]]  # {"country", "region", "landmark", "confidence"}
+    detected_text: Optional[str]
+    raw_response: str
+    provider: str
+    model: str
+
+
+# ── Image preprocessing ──────────────────────────────────────────────────────
+
+def encode_image_for_llm(image_path: Path, max_edge: int = THUMB_MAX_EDGE) -> tuple[str, str]:
+    """Resize, strip EXIF, JPEG-encode, base64. Returns (b64_data, mime_type)."""
+    img = Image.open(image_path)
+    img = img.convert("RGB")  # strips alpha + drops most EXIF
+    w, h = img.size
+    if max(w, h) > max_edge:
+        scale = max_edge / max(w, h)
+        img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    return base64.b64encode(buf.getvalue()).decode("ascii"), "image/jpeg"
+
+
+# ── Prompt construction ──────────────────────────────────────────────────────
+
+def build_system_prompt(
+    *,
+    languages: list[str],
+    max_tags: int,
+    max_caption_chars: int,
+    existing_tags: list[str],
+    custom_instructions: Optional[str],
+) -> str:
+    lang_clause = (
+        "Generate tags in BOTH English and 中文 (each tag in only one language, never mixed)."
+        if "en" in languages and "zh" in languages
+        else "Generate tags in English." if "en" in languages
+        else "Generate tags in 中文 (Simplified Chinese)."
+    )
+
+    tag_pool = ""
+    if existing_tags:
+        sample = existing_tags[:TAG_REUSE_HINT_LIMIT]
+        tag_pool = (
+            "\n\nThis library already uses these tags. PREFER reusing them when "
+            "they fit; only invent a new tag if no existing one matches:\n"
+            + ", ".join(sample)
+        )
+
+    extra = f"\n\nAdditional instructions from the user:\n{custom_instructions.strip()}" if custom_instructions else ""
+
+    return f"""You are an image annotator for a photo management app. Look at the image and produce a JSON object with:
+
+- "caption": one or two sentences describing the photo. Max {max_caption_chars} characters.
+- "tags": an array of up to {max_tags} short tags. {lang_clause} Lowercase. No leading hashes.
+- "location": an object {{"country": str|null, "region": str|null, "landmark": str|null, "confidence": 0..100}} guessing where the photo was taken. Use null fields when uncertain. Confidence is your overall confidence in the guess.
+- "detected_text": any prominent text visible in the image (signs, labels, captions), or null.
+
+Respond with ONLY the JSON object, no commentary.{tag_pool}{extra}"""
+
+
+# ── Anthropic adapter ────────────────────────────────────────────────────────
+
+def call_anthropic(
+    *,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    image_b64: str,
+    image_mime: str,
+) -> str:
+    """Call Anthropic Messages API with vision. Returns the assistant text content."""
+    body = {
+        "model": model,
+        "max_tokens": 1024,
+        "system": system_prompt,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": image_mime, "data": image_b64},
+                    },
+                    {"type": "text", "text": "Annotate this image as instructed."},
+                ],
+            }
+        ],
+    }
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Anthropic API HTTP {e.code}: {detail}") from e
+
+    blocks = payload.get("content", [])
+    for b in blocks:
+        if b.get("type") == "text":
+            return b.get("text", "")
+    raise RuntimeError(f"Anthropic returned no text block: {payload!r}")
+
+
+# ── OpenAI-compatible adapter (covers OpenAI + Ollama + custom) ──────────────
+
+def call_openai_compatible(
+    *,
+    base_url: str,
+    api_key: Optional[str],
+    model: str,
+    system_prompt: str,
+    image_b64: str,
+    image_mime: str,
+) -> str:
+    body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_b64}"}},
+                    {"type": "text", "text": "Annotate this image as instructed."},
+                ],
+            },
+        ],
+        "max_tokens": 1024,
+    }
+    headers = {"content-type": "application/json"}
+    if api_key:
+        headers["authorization"] = f"Bearer {api_key}"
+    base_url = base_url.rstrip("/")
+    url = f"{base_url}/chat/completions"
+    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenAI-compatible API HTTP {e.code} at {url}: {detail}") from e
+    choices = payload.get("choices", [])
+    if not choices:
+        raise RuntimeError(f"No choices returned: {payload!r}")
+    return choices[0].get("message", {}).get("content", "")
+
+
+# ── Response parsing ─────────────────────────────────────────────────────────
+
+JSON_OBJ_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def parse_llm_json(text: str) -> dict[str, Any]:
+    """Extract the first {...} JSON object from the model's response."""
+    text = text.strip()
+    # Strip markdown code fences if present.
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\n", "", text)
+        text = re.sub(r"\n```$", "", text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = JSON_OBJ_RE.search(text)
+        if not match:
+            raise
+        return json.loads(match.group(0))
+
+
+# ── Tag fuzzy-merge ──────────────────────────────────────────────────────────
+
+def normalize_tag(tag: str) -> str:
+    """Lowercase, strip, collapse whitespace. Used as the equality key."""
+    return re.sub(r"\s+", " ", tag.lower().strip())
+
+
+def merge_with_existing_tags(connection: sqlite3.Connection, raw_tags: list[str]) -> list[str]:
+    """Map LLM tags to existing-library tags where possible.
+
+    Strategy: case-insensitive exact match first. If no hit, return as-is.
+    Levenshtein/stem-based fuzzy is intentionally NOT implemented in v1 — exact
+    match plus the "prefer these" prompt hint covers the common cases without
+    surprise rewrites.
+    """
+    rows = connection.execute("SELECT tag FROM asset_tags GROUP BY tag").fetchall()
+    by_norm = {normalize_tag(r["tag"]): r["tag"] for r in rows}
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_tags:
+        norm = normalize_tag(raw)
+        if not norm:
+            continue
+        canonical = by_norm.get(norm, raw.strip())
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        out.append(canonical)
+    return out
+
+
+# ── Top-level annotate entry point ───────────────────────────────────────────
+
+def annotate(
+    *,
+    image_path: Path,
+    provider: str,
+    api_key: Optional[str],
+    model: str,
+    base_url: Optional[str] = None,
+    languages: Optional[list[str]] = None,
+    max_tags: int = DEFAULT_MAX_TAGS,
+    max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
+    custom_instructions: Optional[str] = None,
+    existing_tags: Optional[list[str]] = None,
+) -> AnnotationResult:
+    """Run a single-asset annotation. Pure: no DB writes; caller persists."""
+    languages = languages or ["en", "zh"]
+    existing_tags = existing_tags or []
+
+    image_b64, mime = encode_image_for_llm(image_path)
+    system = build_system_prompt(
+        languages=languages,
+        max_tags=max_tags,
+        max_caption_chars=max_caption_chars,
+        existing_tags=existing_tags,
+        custom_instructions=custom_instructions,
+    )
+
+    if provider == "anthropic":
+        if not api_key:
+            raise RuntimeError("Anthropic provider requires an API key")
+        text = call_anthropic(api_key=api_key, model=model, system_prompt=system, image_b64=image_b64, image_mime=mime)
+    elif provider in ("openai", "openai_compatible"):
+        url = base_url or "https://api.openai.com/v1"
+        text = call_openai_compatible(base_url=url, api_key=api_key, model=model, system_prompt=system, image_b64=image_b64, image_mime=mime)
+    else:
+        raise RuntimeError(f"Unsupported provider for annotation: {provider}")
+
+    parsed = parse_llm_json(text)
+
+    caption = str(parsed.get("caption") or "").strip()[:max_caption_chars]
+    raw_tags = parsed.get("tags") or []
+    if not isinstance(raw_tags, list):
+        raw_tags = []
+    tags = [str(t).strip() for t in raw_tags if str(t).strip()][:max_tags]
+
+    location = parsed.get("location")
+    if not isinstance(location, dict):
+        location = None
+
+    detected_text = parsed.get("detected_text")
+    if not isinstance(detected_text, str):
+        detected_text = None
+
+    return AnnotationResult(
+        caption=caption,
+        tags=tags,
+        location=location,
+        detected_text=detected_text,
+        raw_response=text,
+        provider=provider,
+        model=model,
+    )
+
+
+# ── Persistence ──────────────────────────────────────────────────────────────
+
+def save_annotation(connection: sqlite3.Connection, asset_id: str, result: AnnotationResult) -> dict[str, Any]:
+    """Write annotation + tags. Replaces any existing annotation for the asset."""
+    now = datetime.now(timezone.utc).isoformat()
+    merged_tags = merge_with_existing_tags(connection, result.tags)
+
+    connection.execute(
+        """
+        INSERT INTO asset_ai_annotations
+            (asset_id, provider, model, schema_version, caption, tags_json,
+             location_json, detected_text, raw_response, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(asset_id) DO UPDATE SET
+            provider = excluded.provider,
+            model = excluded.model,
+            schema_version = excluded.schema_version,
+            caption = excluded.caption,
+            tags_json = excluded.tags_json,
+            location_json = excluded.location_json,
+            detected_text = excluded.detected_text,
+            raw_response = excluded.raw_response,
+            updated_at = excluded.updated_at
+        """,
+        (
+            asset_id,
+            result.provider,
+            result.model,
+            SCHEMA_VERSION,
+            result.caption,
+            json.dumps(merged_tags, ensure_ascii=False),
+            json.dumps(result.location, ensure_ascii=False) if result.location else None,
+            result.detected_text,
+            result.raw_response,
+            now,
+            now,
+        ),
+    )
+
+    # Replace AI-sourced tag rows for this asset (preserve user-source tags).
+    connection.execute("DELETE FROM asset_tags WHERE asset_id = ? AND source = 'ai'", (asset_id,))
+    for tag in merged_tags:
+        connection.execute(
+            "INSERT OR IGNORE INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, 'ai', ?)",
+            (asset_id, tag, now),
+        )
+    connection.commit()
+
+    return get_annotation(connection, asset_id) or {}
+
+
+def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[dict[str, Any]]:
+    row = connection.execute(
+        """
+        SELECT asset_id, provider, model, schema_version, caption, tags_json,
+               location_json, detected_text, created_at, updated_at
+        FROM asset_ai_annotations
+        WHERE asset_id = ?
+        """,
+        (asset_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "asset_id": row["asset_id"],
+        "provider": row["provider"],
+        "model": row["model"],
+        "schema_version": row["schema_version"],
+        "caption": row["caption"],
+        "tags": json.loads(row["tags_json"] or "[]"),
+        "location": json.loads(row["location_json"]) if row["location_json"] else None,
+        "detected_text": row["detected_text"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def list_top_tags(connection: sqlite3.Connection, limit: int = TAG_REUSE_HINT_LIMIT) -> list[str]:
+    """Most-used tags first, for prompt reuse hints."""
+    rows = connection.execute(
+        "SELECT tag, COUNT(*) AS uses FROM asset_tags GROUP BY tag ORDER BY uses DESC, tag ASC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [r["tag"] for r in rows]

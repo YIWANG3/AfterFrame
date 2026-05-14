@@ -7,6 +7,10 @@ name = "media-workspace-sidecar"
 version = "0.1.0"
 description = "Local-first asset graph, metadata cache, and reverse lookup sidecar"
 requires-python = ">=3.11"
+dependencies = [
+    # Image preprocessing for LLM annotation (resize + JPEG re-encode).
+    "Pillow>=10.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

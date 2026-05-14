@@ -328,6 +328,24 @@ def build_parser() -> argparse.ArgumentParser:
     repaint.add_argument("--aspect-ratio")
     repaint.add_argument("--image-size", choices=["1K", "2K", "4K"])
 
+    annotate_p = subparsers.add_parser("annotate-asset", parents=[common])
+    annotate_p.add_argument("--asset-id", required=True)
+    annotate_p.add_argument("--image", type=Path, required=True)
+    annotate_p.add_argument("--provider", choices=["anthropic", "openai", "openai_compatible"], required=True)
+    annotate_p.add_argument("--model", required=True)
+    annotate_p.add_argument("--api-key")
+    annotate_p.add_argument("--base-url")
+    annotate_p.add_argument("--languages", default="en,zh", help="Comma-separated tag languages, e.g. 'en' or 'en,zh'")
+    annotate_p.add_argument("--max-tags", type=int, default=10)
+    annotate_p.add_argument("--max-caption-chars", type=int, default=200)
+    annotate_p.add_argument("--custom-instructions")
+
+    get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
+    get_annotation_p.add_argument("--asset-id", required=True)
+
+    list_tags_p = subparsers.add_parser("list-tags", parents=[common])
+    list_tags_p.add_argument("--limit", type=int, default=200)
+
     return parser
 
 
@@ -547,6 +565,38 @@ def main() -> int:
                 image_size=args.image_size,
             )
         print(json.dumps(asdict(payload), indent=2))
+        return 0
+
+    if args.command == "annotate-asset":
+        from . import annotation as _annotation
+        langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
+        existing = _annotation.list_top_tags(connection)
+        result = _annotation.annotate(
+            image_path=args.image,
+            provider=args.provider,
+            api_key=args.api_key,
+            model=args.model,
+            base_url=args.base_url,
+            languages=langs,
+            max_tags=args.max_tags,
+            max_caption_chars=args.max_caption_chars,
+            custom_instructions=args.custom_instructions,
+            existing_tags=existing,
+        )
+        saved = _annotation.save_annotation(connection, args.asset_id, result)
+        print(json.dumps(saved, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "get-annotation":
+        from . import annotation as _annotation
+        payload = _annotation.get_annotation(connection, args.asset_id)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "list-tags":
+        from . import annotation as _annotation
+        tags = _annotation.list_top_tags(connection, limit=args.limit)
+        print(json.dumps(tags, ensure_ascii=False))
         return 0
 
     if args.command == "init-catalog":

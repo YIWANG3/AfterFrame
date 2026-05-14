@@ -198,4 +198,32 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_collection_items_asset ON collection_items(asset_id)",
+    """
+    CREATE TABLE IF NOT EXISTS asset_ai_annotations (
+        asset_id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        schema_version INTEGER NOT NULL DEFAULT 1,
+        caption TEXT,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        location_json TEXT,
+        detected_text TEXT,
+        raw_response TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS asset_tags (
+        asset_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'ai',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (asset_id, tag),
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag)",
+    "CREATE INDEX IF NOT EXISTS idx_asset_tags_asset ON asset_tags(asset_id)",
 ]
