@@ -346,6 +346,16 @@ def build_parser() -> argparse.ArgumentParser:
     list_tags_p = subparsers.add_parser("list-tags", parents=[common])
     list_tags_p.add_argument("--limit", type=int, default=200)
 
+    test_conn_p = subparsers.add_parser("annotation-test-connection", parents=[common])
+    test_conn_p.add_argument("--provider", choices=["anthropic", "openai", "openai_compatible"], required=True)
+    test_conn_p.add_argument("--api-key")
+    test_conn_p.add_argument("--base-url")
+
+    list_anno_models_p = subparsers.add_parser("annotation-list-models", parents=[common])
+    list_anno_models_p.add_argument("--provider", choices=["anthropic", "openai", "openai_compatible"], required=True)
+    list_anno_models_p.add_argument("--api-key")
+    list_anno_models_p.add_argument("--base-url")
+
     return parser
 
 
@@ -373,6 +383,31 @@ def main() -> int:
             args.report_json.parent.mkdir(parents=True, exist_ok=True)
             args.report_json.write_text(rendered + "\n", encoding="utf-8")
         print(rendered)
+        return 0
+
+    # Catalog-free commands (no DB connection required) — must run before
+    # ensure_catalog() so users can configure providers without a catalog open.
+    if args.command == "annotation-test-connection":
+        from . import annotation as _annotation
+        result = _annotation.test_connection(
+            provider=args.provider,
+            api_key=args.api_key,
+            base_url=args.base_url,
+        )
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+
+    if args.command == "annotation-list-models":
+        from . import annotation as _annotation
+        try:
+            models = _annotation.list_models(
+                provider=args.provider,
+                api_key=args.api_key,
+                base_url=args.base_url,
+            )
+            print(json.dumps({"ok": True, "models": models}, ensure_ascii=False))
+        except Exception as e:  # noqa: BLE001
+            print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
         return 0
 
     catalog = ensure_catalog(args.catalog)

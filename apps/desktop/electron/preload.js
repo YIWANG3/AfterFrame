@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   annotateAsset: (options) => ipcRenderer.invoke("workspace:annotate-asset", options),
   getAnnotation: (assetId) => ipcRenderer.invoke("workspace:get-annotation", assetId),
   listTags: (limit) => ipcRenderer.invoke("workspace:list-tags", limit),
+  testAnnotationConnection: (options) => ipcRenderer.invoke("workspace:test-annotation-connection", options),
+  listAnnotationModels: (options) => ipcRenderer.invoke("workspace:list-annotation-models", options),
   getAiRepaintStatus: () => ipcRenderer.invoke("workspace:ai-repaint-status"),
   startAiRepaint: (options) => ipcRenderer.invoke("workspace:ai-repaint-start", options),
   listAiModels: (providerId, providerType) => ipcRenderer.invoke("workspace:list-ai-models", providerId, providerType),

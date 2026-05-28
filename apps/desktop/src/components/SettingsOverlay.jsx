@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Settings as SettingsIcon, Brain, FolderOpen, Info } from "lucide-react";
+import { X, Brain, FolderOpen, Info } from "lucide-react";
 import AnnotationSettings from "./settings/AnnotationSettings";
-import GeneralSettings from "./settings/GeneralSettings";
 import LibrarySettings from "./settings/LibrarySettings";
 import AboutSettings from "./settings/AboutSettings";
 
@@ -11,7 +10,6 @@ import AboutSettings from "./settings/AboutSettings";
    backdrop, centered modal, ESC + backdrop click close. */
 
 const TABS = [
-  { id: "general", label: "General", icon: SettingsIcon },
   { id: "ai", label: "AI", icon: Brain },
   { id: "library", label: "Library", icon: FolderOpen },
   { id: "about", label: "About", icon: Info },
@@ -41,7 +39,7 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
     >
       <div
         ref={modalRef}
-        className="flex w-[880px] max-w-[95vw] max-h-[88vh] flex-col overflow-hidden rounded-xl border border-border bg-chrome shadow-overlay"
+        className="flex w-[880px] max-w-[95vw] h-[680px] max-h-[88vh] flex-col overflow-hidden rounded-xl border border-border bg-chrome shadow-overlay"
       >
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-5">
           <span className="text-[14px] font-semibold text-text">Settings</span>
@@ -78,7 +76,6 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
             {tab === "ai" && <AnnotationSettings />}
-            {tab === "general" && <GeneralSettings />}
             {tab === "library" && <LibrarySettings />}
             {tab === "about" && <AboutSettings />}
           </div>

@@ -1,26 +1,55 @@
 // Inspector block showing AI annotations (caption / tags / location) and
-// the per-asset "Annotate with AI" trigger. Loads via IPC, refreshes when
-// the user clicks annotate.
+// the per-asset "Annotate with AI" trigger. Reads from the shared annotation
+// store so:
+//   - flipping providers in Settings updates the button state instantly
+//   - revisiting an already-loaded asset is synchronous (no flicker)
 
-import { useCallback, useEffect, useState } from "react";
-import { Sparkles, Tag as TagIcon, MapPin, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { Sparkles, RotateCcw, ChevronRight } from "lucide-react";
+import {
+  subscribe,
+  getVersion,
+  getHasProvider,
+  refreshProviders,
+  getCachedAnnotation,
+  setCachedAnnotation,
+  fetchAnnotation as fetchAnnotationFromStore,
+} from "./annotation/annotationStore";
 
-function Section({ title, badge, action, children }) {
+function SectionLabel({ title, badge }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">
+      {title}
+      {badge && (
+        <span className="inline-flex items-center gap-1 rounded-sm bg-accent/15 px-1 py-px text-[8px] font-semibold tracking-wider text-accent">
+          <span className="h-[3px] w-[3px] rounded-full bg-accent" />
+          {badge}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Section({ title, badge, action, collapsible = false, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="mt-4 border-b border-border/40 pb-3 last:border-b-0">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">
-          {title}
-          {badge && (
-            <span className="inline-flex items-center gap-1 rounded-sm bg-accent/15 px-1 py-px text-[8px] font-semibold tracking-wider text-accent">
-              <span className="h-[3px] w-[3px] rounded-full bg-accent" />
-              {badge}
-            </span>
-          )}
-        </span>
+      <div className="flex items-center justify-between">
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex flex-1 items-center gap-1 text-left"
+          >
+            <ChevronRight className={`h-3 w-3 shrink-0 text-muted2 transition-transform ${open ? "rotate-90" : ""}`} />
+            <SectionLabel title={title} badge={badge} />
+          </button>
+        ) : (
+          <SectionLabel title={title} badge={badge} />
+        )}
         {action}
       </div>
-      {children}
+      {(!collapsible || open) && <div className="mt-1.5">{children}</div>}
     </div>
   );
 }
@@ -34,32 +63,42 @@ function ConfidencePill({ value }) {
   );
 }
 
+// Subscribe to store version, then pull live values via getters. Snapshot is
+// a stable number — React only re-renders when notify() bumps the version.
+function useAnnotationState(assetId) {
+  useSyncExternalStore(subscribe, getVersion, getVersion);
+  const cached = getCachedAnnotation(assetId);
+  return {
+    hp: getHasProvider(),
+    ann: cached === undefined ? null : cached,
+    known: cached !== undefined,
+  };
+}
+
 export default function AnnotationsSection({
   assetId,
   imagePath,
   onTagClick,
   pushToast,
 }) {
-  const [annotation, setAnnotation] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const { hp: hasProvider, ann: annotation, known } = useAnnotationState(assetId);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchAnnotation = useCallback(async () => {
-    if (!assetId) { setAnnotation(null); return; }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await window.mediaWorkspace?.getAnnotation?.(assetId);
-      setAnnotation(result || null);
-    } catch (e) {
-      setError(e?.message || "Failed to load annotation");
-    } finally {
-      setLoading(false);
-    }
-  }, [assetId]);
+  // Kick off any missing data fetches. Provider probe runs once on mount;
+  // annotation fetch runs whenever we land on an assetId we haven't cached.
+  useEffect(() => {
+    if (hasProvider === null) void refreshProviders();
+  }, [hasProvider]);
 
-  useEffect(() => { void fetchAnnotation(); }, [fetchAnnotation]);
+  useEffect(() => {
+    setError(null);
+    if (assetId && !known) {
+      void fetchAnnotationFromStore(assetId).catch((e) => {
+        setError(e?.message || "Failed to load annotation");
+      });
+    }
+  }, [assetId, known]);
 
   const run = useCallback(async () => {
     if (!assetId || !imagePath) return;
@@ -67,20 +106,27 @@ export default function AnnotationsSection({
     setError(null);
     try {
       const settings = (await window.mediaWorkspace?.getAnnotationSettings?.()) || {};
-      const provider = settings.provider || "anthropic";
-      const model = settings.model || "claude-sonnet-4-5";
+      const providers = Array.isArray(settings.providers) ? settings.providers : [];
+      const active = providers.find((p) => p.id === settings.activeProviderId) || providers[0];
+      if (!active) {
+        throw new Error("No provider configured. Open Settings → AI to add one.");
+      }
+      // Sidecar adapters only know two: anthropic + openai_compatible. OpenAI
+      // and Google route through openai_compatible (URL inferred at the sidecar).
+      const sidecarProvider = active.type === "anthropic" ? "anthropic" : "openai_compatible";
       const result = await window.mediaWorkspace?.annotateAsset?.({
         assetId,
         imagePath,
-        provider,
-        model,
-        baseUrl: settings.hostUrl || null,
+        providerId: active.id,
+        provider: sidecarProvider,
+        model: active.model,
+        baseUrl: active.baseUrl || null,
         languages: settings.languages || ["en", "zh"],
         maxTags: settings.maxTags || 10,
         maxCaptionChars: settings.maxCaptionChars || 200,
         customInstructions: settings.customInstructions || null,
       });
-      setAnnotation(result || null);
+      setCachedAnnotation(assetId, result || null);
       pushToast?.({ title: "Annotated", message: "AI annotation saved.", ttl: 3500 });
     } catch (e) {
       const msg = e?.message || "Annotation failed";
@@ -91,26 +137,28 @@ export default function AnnotationsSection({
     }
   }, [assetId, imagePath, pushToast]);
 
-  if (loading && !annotation) {
-    return (
-      <Section title="AI">
-        <div className="text-[11px] text-muted2">Loading…</div>
-      </Section>
-    );
-  }
-
-  // No annotation yet — single CTA.
+  // No annotation (or still unknown): show the CTA. Layout is stable across
+  // unknown→known transitions so switching assets doesn't flicker.
   if (!annotation) {
+    const providerKnown = hasProvider !== null;
+    const enabled = providerKnown && hasProvider && !running && !!imagePath;
     return (
       <Section title="AI">
         <button
           type="button"
           onClick={run}
-          disabled={running || !imagePath}
+          disabled={!enabled}
+          title={providerKnown && !hasProvider ? "Configure a provider in Settings → AI" : undefined}
           className={[
-            "flex w-full items-center justify-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-3 py-1.5",
-            "text-[11px] font-medium text-accent transition-colors",
-            running ? "cursor-not-allowed opacity-60" : "hover:bg-accent/20",
+            "flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-1.5",
+            "text-[11px] font-medium transition-colors",
+            !enabled && providerKnown && !hasProvider
+              ? "cursor-not-allowed border-border/40 bg-app text-muted2"
+              : running
+                ? "cursor-not-allowed border-accent/40 bg-accent/10 text-accent opacity-60"
+                : enabled
+                  ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
+                  : "cursor-not-allowed border-border/40 bg-app text-muted2 opacity-60",
           ].join(" ")}
         >
           <Sparkles className="h-3 w-3" />
@@ -118,7 +166,9 @@ export default function AnnotationsSection({
         </button>
         {error && <div className="mt-2 text-[10px] text-error">{error}</div>}
         <div className="mt-2 text-[10px] leading-snug text-muted2">
-          Generates a caption, tags, and a location guess. Configure your provider in Settings → AI.
+          {providerKnown && !hasProvider
+            ? "Configure your provider in Settings → AI to enable annotation."
+            : "Generates a caption, tags, and a location guess."}
         </div>
       </Section>
     );
@@ -132,15 +182,17 @@ export default function AnnotationsSection({
       <Section
         title="Description"
         badge="AI"
+        collapsible
         action={
           <button
             type="button"
             onClick={run}
-            disabled={running}
-            title="Re-annotate"
-            className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text disabled:opacity-50"
+            disabled={running || !hasProvider}
+            title={!hasProvider ? "Configure a provider in Settings → AI" : "Re-analyze this image"}
+            className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium text-muted2 transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RotateCcw className={`h-3 w-3 ${running ? "animate-spin" : ""}`} />
+            {running ? "Analyzing…" : "Analyze again"}
           </button>
         }
       >
@@ -152,7 +204,7 @@ export default function AnnotationsSection({
       </Section>
 
       {annotation.tags?.length > 0 && (
-        <Section title="Tags" badge={`AI · ${annotation.tags.length}`}>
+        <Section title="Tags" badge={`AI · ${annotation.tags.length}`} collapsible>
           <div className="flex flex-wrap gap-1">
             {annotation.tags.map((t) => (
               <button
@@ -170,7 +222,7 @@ export default function AnnotationsSection({
       )}
 
       {hasLoc && (
-        <Section title="Location" badge="AI · guess">
+        <Section title="Location" badge="AI · guess" collapsible>
           {loc.country && (
             <div className="flex items-start gap-2 text-[11px]">
               <span className="min-w-[50px] text-muted2">Country</span>

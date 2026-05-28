@@ -52,7 +52,9 @@ function register({
     if (!opts.provider) throw new Error("provider is required");
     if (!opts.model) throw new Error("model is required");
 
-    const ns = `annotation:${opts.provider}`;
+    // providerId is the multi-config namespace key. Falls back to provider type
+    // so single-config callers (older code path) keep working.
+    const ns = `annotation:${opts.providerId || opts.provider}`;
     const stored = await getStoredProviderConfigWithMigration(ns) || {};
     const apiKey = opts.apiKey || stored.token || null;
 
@@ -85,6 +87,45 @@ function register({
     if (!catalogHasDb) return [];
     const n = Number.isFinite(limit) ? Math.max(1, Math.min(1000, limit)) : 200;
     return await callSidecarJsonAsync(["list-tags", "--limit", String(n)]) || [];
+  });
+
+  // Catalog-independent — works even when no catalog is open. Used by the
+  // Settings panel for "Test connection" and "Fetch models" buttons.
+  ipcMain.handle("workspace:test-annotation-connection", async (_event, options) => {
+    const opts = options || {};
+    if (!opts.provider) return { ok: false, error: "provider is required" };
+
+    const ns = `annotation:${opts.providerId || opts.provider}`;
+    const stored = await getStoredProviderConfigWithMigration(ns) || {};
+    const apiKey = opts.apiKey || stored.token || "";
+
+    const args = ["annotation-test-connection", "--provider", String(opts.provider)];
+    if (apiKey) args.push("--api-key", apiKey);
+    if (opts.baseUrl) args.push("--base-url", String(opts.baseUrl));
+    try {
+      return await callSidecarJsonAsync(args);
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+
+  ipcMain.handle("workspace:list-annotation-models", async (_event, options) => {
+    const opts = options || {};
+    if (!opts.provider) return { ok: false, error: "provider is required", models: [] };
+
+    const ns = `annotation:${opts.providerId || opts.provider}`;
+    const stored = await getStoredProviderConfigWithMigration(ns) || {};
+    const apiKey = opts.apiKey || stored.token || "";
+
+    const args = ["annotation-list-models", "--provider", String(opts.provider)];
+    if (apiKey) args.push("--api-key", apiKey);
+    if (opts.baseUrl) args.push("--base-url", String(opts.baseUrl));
+    try {
+      const result = await callSidecarJsonAsync(args);
+      return result || { ok: false, error: "no result", models: [] };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err), models: [] };
+    }
   });
 }
 

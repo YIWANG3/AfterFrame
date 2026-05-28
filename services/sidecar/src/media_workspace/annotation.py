@@ -34,6 +34,13 @@ try:
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("Pillow is required for annotation. Install: pip install Pillow") from exc
 
+try:
+    from pillow_heif import register_heif_opener
+
+    register_heif_opener()  # lets PIL.Image.open handle HEIC/HEIF
+except ImportError:  # pragma: no cover — HEIC support is optional
+    pass
+
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -410,3 +417,78 @@ def list_top_tags(connection: sqlite3.Connection, limit: int = TAG_REUSE_HINT_LI
         (limit,),
     ).fetchall()
     return [r["tag"] for r in rows]
+
+
+# ── Provider health checks + model listing ───────────────────────────────────
+
+ANTHROPIC_MODELS = ["claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-5"]
+
+
+def test_connection(*, provider: str, api_key: Optional[str], base_url: Optional[str] = None) -> dict[str, Any]:
+    """Send a minimal request to verify reachability + auth. Returns {ok, error?, info?}."""
+    try:
+        if provider == "anthropic":
+            if not api_key:
+                return {"ok": False, "error": "API key required for Anthropic."}
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=json.dumps({
+                    "model": "claude-haiku-4-5",
+                    "max_tokens": 1,
+                    "messages": [{"role": "user", "content": "hi"}],
+                }).encode("utf-8"),
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp.read()
+            return {"ok": True, "info": "Reachable, key accepted."}
+        elif provider in ("openai", "openai_compatible"):
+            url = (base_url or "https://api.openai.com/v1").rstrip("/") + "/models"
+            headers = {}
+            if api_key:
+                headers["authorization"] = f"Bearer {api_key}"
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            count = len(payload.get("data") or [])
+            return {"ok": True, "info": f"Reachable. Endpoint exposes {count} models."}
+        else:
+            return {"ok": False, "error": f"Unsupported provider: {provider}"}
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        return {"ok": False, "error": f"HTTP {e.code}: {detail[:200] or e.reason}"}
+    except urllib.error.URLError as e:
+        return {"ok": False, "error": f"Cannot reach endpoint: {e.reason}"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def list_models(*, provider: str, api_key: Optional[str], base_url: Optional[str] = None) -> list[dict[str, str]]:
+    """Return [{id, label}] for the provider. Local providers proxy /v1/models."""
+    if provider == "anthropic":
+        # Anthropic has no public list-models endpoint — use a curated set.
+        return [{"id": m, "label": m} for m in ANTHROPIC_MODELS]
+
+    if provider in ("openai", "openai_compatible"):
+        url = (base_url or "https://api.openai.com/v1").rstrip("/") + "/models"
+        headers = {}
+        if api_key:
+            headers["authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        out: list[dict[str, str]] = []
+        for entry in payload.get("data") or []:
+            mid = entry.get("id")
+            if not mid:
+                continue
+            out.append({"id": mid, "label": mid})
+        out.sort(key=lambda m: m["id"])
+        return out
+
+    raise RuntimeError(f"Unsupported provider for list_models: {provider}")
