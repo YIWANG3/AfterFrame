@@ -1048,6 +1048,33 @@ app.on("open-file", (event, filePath) => {
 });
 
 app.whenReady().then(() => {
+  // Chromium cannot decode HEIC/HEIF, so when the original is requested directly
+  // (lightbox, editor, depth) we transcode it to a full-res JPEG on the fly with
+  // macOS `sips` and cache the result on disk, keyed by path + mtime + size.
+  const HEIC_RE = /\.(heic|heif)$/i;
+  const heicCacheDir = path.join(os.tmpdir(), "afterframe-heic-cache");
+
+  function transcodeHeicToJpeg(srcPath) {
+    try {
+      const stat = fs.statSync(srcPath);
+      const key = crypto
+        .createHash("md5")
+        .update(`${srcPath}:${stat.mtimeMs}:${stat.size}`)
+        .digest("hex");
+      const outPath = path.join(heicCacheDir, `${key}.jpg`);
+      if (fs.existsSync(outPath)) return outPath;
+      fs.mkdirSync(heicCacheDir, { recursive: true });
+      const result = spawnSync("sips", ["-s", "format", "jpeg", srcPath, "--out", outPath], {
+        timeout: 30000,
+      });
+      if (result.status === 0 && fs.existsSync(outPath)) return outPath;
+      console.error("[media] sips HEIC transcode failed:", result.stderr?.toString());
+    } catch (err) {
+      console.error("[media] HEIC transcode error:", err);
+    }
+    return null;
+  }
+
   protocol.handle("media", (request) => {
     const raw = request.url.slice("media://".length);
     const filePath = raw.split("/").map((seg) => decodeURIComponent(seg)).join(path.sep);
@@ -1056,6 +1083,11 @@ app.whenReady().then(() => {
     const existsOnDisk = fs.existsSync(resolved);
     if (!inCatalog && !existsOnDisk) {
       return new Response("forbidden", { status: 403 });
+    }
+    if (existsOnDisk && HEIC_RE.test(resolved)) {
+      const jpeg = transcodeHeicToJpeg(resolved);
+      if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
+      // Fall through to original on failure (will surface the load error).
     }
     return net.fetch(pathToFileURL(resolved).toString());
   });

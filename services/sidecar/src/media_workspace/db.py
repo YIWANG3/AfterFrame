@@ -2003,6 +2003,13 @@ def delete_export_asset_from_catalog(
         else:
             connection.execute("DELETE FROM resource_sets WHERE set_id = ?", (set_id,))
 
+    # Any remaining resource_set_items rows that point at this asset as their
+    # version parent would otherwise leave a dangling FK once the asset row is
+    # gone, so detach them before the final delete.
+    connection.execute(
+        "UPDATE resource_set_items SET parent_asset_id = NULL WHERE parent_asset_id = ?",
+        (asset_id,),
+    )
     connection.execute("DELETE FROM collection_items WHERE asset_id = ?", (asset_id,))
     connection.execute(
         "DELETE FROM export_lookup_registry WHERE export_asset_id = ? OR raw_asset_id = ?",
@@ -2012,6 +2019,9 @@ def delete_export_asset_from_catalog(
         "DELETE FROM asset_links WHERE parent_asset_id = ? OR child_asset_id = ?",
         (asset_id, asset_id),
     )
+    # Defensive: clear any other tables keyed by this asset_id (raw cache should
+    # not hold an export asset, but stale rows must not block deletion).
+    connection.execute("DELETE FROM raw_metadata_cache WHERE raw_asset_id = ?", (asset_id,))
     connection.execute("DELETE FROM asset_files WHERE asset_id = ?", (asset_id,))
     connection.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))
 

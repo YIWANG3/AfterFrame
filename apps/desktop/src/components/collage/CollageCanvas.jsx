@@ -1,5 +1,23 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { localFileUrl } from "../../utils/format";
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 5;
+const SNAP_THRESHOLD = 8; // display px
+
+function getDrawSize(img, cellW, cellH, zoom) {
+  const imgAspect = img.naturalWidth / img.naturalHeight;
+  const cellAspect = cellW / cellH;
+  let drawW, drawH;
+  if (imgAspect > cellAspect) {
+    drawH = cellH * zoom;
+    drawW = drawH * imgAspect;
+  } else {
+    drawW = cellW * zoom;
+    drawH = drawW / imgAspect;
+  }
+  return { drawW, drawH };
+}
 
 function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
   const { x, y, w, h } = cellRect;
@@ -12,16 +30,7 @@ function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
     ctx.rect(x, y, w, h);
     ctx.clip();
   }
-  const imgAspect = img.naturalWidth / img.naturalHeight;
-  const cellAspect = w / h;
-  let drawW, drawH;
-  if (imgAspect > cellAspect) {
-    drawH = h * zoom;
-    drawW = drawH * imgAspect;
-  } else {
-    drawW = w * zoom;
-    drawH = drawW / imgAspect;
-  }
+  const { drawW, drawH } = getDrawSize(img, w, h, zoom);
   const drawX = x + (w - drawW) / 2 + pan.x;
   const drawY = y + (h - drawH) / 2 + pan.y;
   ctx.drawImage(img, drawX, drawY, drawW, drawH);
@@ -43,30 +52,76 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function uniqueSortedBreakpoints(values, tol = 0.001) {
+  const arr = [...values].sort((a, b) => a - b);
+  const out = [];
+  for (const v of arr) {
+    if (out.length === 0 || Math.abs(v - out[out.length - 1]) > tol) out.push(v);
+  }
+  return out;
+}
+
+function findBreakIndex(breakpoints, v, tol = 0.001) {
+  for (let i = 0; i < breakpoints.length; i++) {
+    if (Math.abs(breakpoints[i] - v) < tol) return i;
+  }
+  return -1;
+}
+
+function computeTracks(breakpoints, innerSize, gap) {
+  // CSS-Grid style: reserve (N-1)*gap total, distribute remaining space
+  // proportionally to each track's ratio. Tracks with equal ratio end up
+  // at equal pixel size regardless of position — no shrinkage on inner cells.
+  const N = breakpoints.length - 1;
+  const totalGap = Math.max(0, (N - 1) * gap);
+  const effective = Math.max(0, innerSize - totalGap);
+  const tracks = [];
+  let cursor = 0;
+  for (let i = 0; i < N; i++) {
+    const ratio = breakpoints[i + 1] - breakpoints[i];
+    const size = Math.max(0, ratio * effective);
+    tracks.push({ start: cursor, size });
+    cursor += size + gap;
+  }
+  return tracks;
+}
+
 function computeCellRects(cells, canvasW, canvasH, gap, padding = 0) {
-  const innerW = canvasW - padding * 2;
-  const innerH = canvasH - padding * 2;
+  const innerW = Math.max(0, canvasW - padding * 2);
+  const innerH = Math.max(0, canvasH - padding * 2);
+  const xVals = [0, 1];
+  const yVals = [0, 1];
+  for (const c of cells) {
+    xVals.push(c.x, c.x + c.w);
+    yVals.push(c.y, c.y + c.h);
+  }
+  const xBreaks = uniqueSortedBreakpoints(xVals);
+  const yBreaks = uniqueSortedBreakpoints(yVals);
+  const xTracks = computeTracks(xBreaks, innerW, gap);
+  const yTracks = computeTracks(yBreaks, innerH, gap);
   return cells.map((cell) => {
-    const rawX = cell.x * innerW + padding;
-    const rawY = cell.y * innerH + padding;
-    const rawW = cell.w * innerW;
-    const rawH = cell.h * innerH;
-    const halfGap = gap / 2;
-    const isLeft = cell.x === 0;
-    const isRight = Math.abs(cell.x + cell.w - 1) < 0.001;
-    const isTop = cell.y === 0;
-    const isBottom = Math.abs(cell.y + cell.h - 1) < 0.001;
+    const sx = findBreakIndex(xBreaks, cell.x);
+    const ex = findBreakIndex(xBreaks, cell.x + cell.w);
+    const sy = findBreakIndex(yBreaks, cell.y);
+    const ey = findBreakIndex(yBreaks, cell.y + cell.h);
+    const xStart = xTracks[sx].start;
+    const yStart = yTracks[sy].start;
+    const xEnd = xTracks[ex - 1].start + xTracks[ex - 1].size;
+    const yEnd = yTracks[ey - 1].start + yTracks[ey - 1].size;
     return {
-      x: rawX + (isLeft ? 0 : halfGap),
-      y: rawY + (isTop ? 0 : halfGap),
-      w: rawW - (isLeft ? 0 : halfGap) - (isRight ? 0 : halfGap),
-      h: rawH - (isTop ? 0 : halfGap) - (isBottom ? 0 : halfGap),
+      x: padding + xStart,
+      y: padding + yStart,
+      w: xEnd - xStart,
+      h: yEnd - yStart,
     };
   });
 }
 
+export const COLLAGE_ZOOM_MIN = MIN_ZOOM;
+export const COLLAGE_ZOOM_MAX = MAX_ZOOM;
+
 const CollageCanvas = forwardRef(function CollageCanvas(
-  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, onSwap, onReplace },
+  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, onSwap, onReplace, onSelectionChange, onSelectedStateChange },
   ref,
 ) {
   const canvasRef = useRef(null);
@@ -74,6 +129,28 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   const cellStatesRef = useRef([]); // { pan: {x,y}, zoom }
   const rafRef = useRef(0);
   const dragRef = useRef(null);
+  const [selectedIdx, setSelectedIdx] = useState(-1);
+  const [snapGuides, setSnapGuides] = useState({ x: false, y: false });
+
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  const onSelectedStateChangeRef = useRef(onSelectedStateChange);
+  onSelectedStateChangeRef.current = onSelectedStateChange;
+
+  // Emit selection changes to parent
+  useEffect(() => {
+    onSelectionChangeRef.current?.(selectedIdx);
+    if (selectedIdx >= 0) {
+      const state = cellStatesRef.current[selectedIdx];
+      if (state) onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
+    }
+  }, [selectedIdx]);
+
+  function emitSelectedState() {
+    if (selectedIdx < 0) return;
+    const state = cellStatesRef.current[selectedIdx];
+    if (state) onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
+  }
   // Store latest props in refs so redraw/handlers always see current values
   const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth });
   propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth };
@@ -87,17 +164,12 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       next.push(prev[i] || { pan: { x: 0, y: 0 }, zoom: 1 });
     }
     cellStatesRef.current = next;
+    if (selectedIdx >= count) setSelectedIdx(-1);
   }, [template, images.length]);
 
-  // Preview uses small thumbnails for speed; export uses full-res
   function getPreviewSrc(item) {
     if (!item) return null;
     return item.preview_hd_path || item.export_preview_hd_path || item.preview_path || item.export_preview_path || item.export_path;
-  }
-
-  function getExportSrc(item) {
-    if (!item) return null;
-    return item.export_path || item.export_preview_path || item.preview_path;
   }
 
   function redraw() {
@@ -111,10 +183,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     const displayH = canvas.clientHeight;
     if (displayW === 0 || displayH === 0) return;
 
-    // Scale params from export-space to display-space
     const scale = displayW / (ew || 3000);
 
-    // Only resize backing store when dimensions actually change
     const needW = Math.round(displayW * dpr);
     const needH = Math.round(displayH * dpr);
     if (canvas.width !== needW || canvas.height !== needH) {
@@ -145,6 +215,43 @@ const CollageCanvas = forwardRef(function CollageCanvas(
         ctx.restore();
       }
     }
+
+    // Selection ring
+    if (selectedIdx >= 0 && selectedIdx < cellRects.length) {
+      const r = cellRects[selectedIdx];
+      ctx.save();
+      const accentRaw = getComputedStyle(canvas).getPropertyValue("--accent-color").trim() || "210 160 90";
+      const accent = accentRaw.replace(/\s+/g, ",");
+      ctx.strokeStyle = `rgb(${accent})`;
+      ctx.lineWidth = 2;
+      if (displayBr > 0) {
+        roundRectPath(ctx, r.x + 1, r.y + 1, r.w - 2, r.h - 2, Math.max(0, displayBr - 1));
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      }
+      // Snap guides
+      if (snapGuides.x || snapGuides.y) {
+        ctx.strokeStyle = `rgba(${accent},0.7)`;
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        if (snapGuides.x) {
+          const cx = r.x + r.w / 2;
+          ctx.beginPath();
+          ctx.moveTo(cx, r.y);
+          ctx.lineTo(cx, r.y + r.h);
+          ctx.stroke();
+        }
+        if (snapGuides.y) {
+          const cy = r.y + r.h / 2;
+          ctx.beginPath();
+          ctx.moveTo(r.x, cy);
+          ctx.lineTo(r.x + r.w, cy);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
   }
 
   function scheduleRedraw() {
@@ -154,6 +261,9 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       redraw();
     });
   }
+
+  // Redraw on selection changes / guide changes
+  useEffect(() => { scheduleRedraw(); }, [selectedIdx, snapGuides.x, snapGuides.y]);
 
   // Load images
   useEffect(() => {
@@ -192,8 +302,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     return -1;
   }
 
-  // Pointer handlers — direct DOM, no React state during drag for performance
-  // Store callbacks in refs so handler always sees latest
+  // Pointer handlers
   const onSwapRef = useRef(onSwap);
   onSwapRef.current = onSwap;
   const onReplaceRef = useRef(onReplace);
@@ -209,12 +318,26 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
       const idx = hitTest(px, py);
-      if (idx < 0) return;
+      if (idx < 0) {
+        setSelectedIdx(-1);
+        return;
+      }
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = "grabbing";
       const state = cellStatesRef.current[idx] || { pan: { x: 0, y: 0 }, zoom: 1 };
-      dragRef.current = { idx, startX: e.clientX, startY: e.clientY, startPan: { x: state.pan.x, y: state.pan.y }, moved: false };
+      dragRef.current = {
+        idx,
+        startX: e.clientX,
+        startY: e.clientY,
+        startPan: { x: state.pan.x, y: state.pan.y },
+        moved: false,
+        shift: e.shiftKey,
+      };
+      // Selection always follows the cell being interacted with — snap guides,
+      // panel controls and slider all track the dragged cell, not whatever
+      // was selected before.
+      if (idx !== selectedIdx) setSelectedIdx(idx);
     }
 
     function onPointerMove(e) {
@@ -223,11 +346,21 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
       if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
-      // Pan within the origin cell
-      cellStatesRef.current[d.idx] = {
-        ...cellStatesRef.current[d.idx],
-        pan: { x: d.startPan.x + dx, y: d.startPan.y + dy },
-      };
+      if (!d.moved) return;
+
+      const state = cellStatesRef.current[d.idx];
+      let newPan = { x: d.startPan.x + dx, y: d.startPan.y + dy };
+
+      // Snap to center (hold Shift to bypass)
+      const useSnap = !e.shiftKey;
+      let gx = false, gy = false;
+      if (useSnap) {
+        if (Math.abs(newPan.x) < SNAP_THRESHOLD) { newPan.x = 0; gx = true; }
+        if (Math.abs(newPan.y) < SNAP_THRESHOLD) { newPan.y = 0; gy = true; }
+      }
+      if (gx !== snapGuides.x || gy !== snapGuides.y) setSnapGuides({ x: gx, y: gy });
+
+      state.pan = newPan;
       redraw();
     }
 
@@ -239,23 +372,32 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       if (canvas.hasPointerCapture(e.pointerId)) {
         canvas.releasePointerCapture(e.pointerId);
       }
-      if (!d.moved) return;
-      // Check if released over a different cell → swap
+      setSnapGuides({ x: false, y: false });
+
+      if (!d.moved) {
+        // Click → select
+        setSelectedIdx(d.idx);
+        return;
+      }
+
+      // Released over a different cell → swap
       const rect = canvas.getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
       const targetIdx = hitTest(px, py);
       if (targetIdx >= 0 && targetIdx !== d.idx) {
-        // Revert the pan we applied during drag
         cellStatesRef.current[d.idx] = {
           ...cellStatesRef.current[d.idx],
           pan: { x: d.startPan.x, y: d.startPan.y },
         };
-        // Swap cell states too
         const tmp = cellStatesRef.current[d.idx];
         cellStatesRef.current[d.idx] = cellStatesRef.current[targetIdx] || { pan: { x: 0, y: 0 }, zoom: 1 };
         cellStatesRef.current[targetIdx] = tmp;
         onSwapRef.current?.(d.idx, targetIdx);
+      } else {
+        // Dragged within same cell → keep selection on it
+        if (selectedIdx === d.idx) emitSelectedState();
+        else setSelectedIdx(d.idx);
       }
     }
 
@@ -264,11 +406,27 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const rect = canvas.getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
-      const idx = hitTest(px, py);
+      // Prefer selected cell so pinch zooms what the panel slider controls,
+      // even if cursor drifts. Fall back to hit-test.
+      const idx = selectedIdx >= 0 ? selectedIdx : hitTest(px, py);
       if (idx < 0) return;
-      const factor = e.deltaY > 0 ? 0.94 : 1.06;
+      // Mac trackpad pinch fires wheel with ctrlKey=true and small deltaY.
+      // Use exponential factor for smooth, proportional response.
+      const isPinch = e.ctrlKey;
+      let factor;
+      if (isPinch) {
+        factor = Math.exp(-e.deltaY * 0.01);
+      } else if (e.shiftKey) {
+        factor = e.deltaY > 0 ? 0.985 : 1.015;
+      } else {
+        factor = e.deltaY > 0 ? 0.94 : 1.06;
+      }
       const state = cellStatesRef.current[idx] || { pan: { x: 0, y: 0 }, zoom: 1 };
-      cellStatesRef.current[idx] = { ...state, zoom: Math.max(0.5, Math.min(5, state.zoom * factor)) };
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom * factor));
+      cellStatesRef.current[idx] = { ...state, zoom: newZoom };
+      // Auto-select the cell being pinched, so the slider tracks it
+      if (idx !== selectedIdx) setSelectedIdx(idx);
+      else if (idx === selectedIdx) emitSelectedState();
       redraw();
     }
 
@@ -297,10 +455,61 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [template, gap, padding, exportWidth]); // re-bind when layout params change (for hitTest)
+  }, [template, gap, padding, exportWidth, selectedIdx, snapGuides.x, snapGuides.y]);
 
-  // Export at target resolution
+  // Keyboard: arrows nudge selected cell pan, esc deselects
+  useEffect(() => {
+    if (selectedIdx < 0) return;
+    function onKey(e) {
+      if (e.key === "Escape") {
+        setSelectedIdx(-1);
+        return;
+      }
+      const step = e.shiftKey ? 1 : 8;
+      let dx = 0, dy = 0;
+      if (e.key === "ArrowLeft") dx = -step;
+      else if (e.key === "ArrowRight") dx = step;
+      else if (e.key === "ArrowUp") dy = -step;
+      else if (e.key === "ArrowDown") dy = step;
+      else return;
+      e.preventDefault();
+      const state = cellStatesRef.current[selectedIdx];
+      if (!state) return;
+      state.pan = { x: state.pan.x + dx, y: state.pan.y + dy };
+      emitSelectedState();
+      redraw();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedIdx]);
+
+  // Export at target resolution + cell controls for panel
   useImperativeHandle(ref, () => ({
+    setSelectedZoom(z) {
+      if (selectedIdx < 0) return;
+      const state = cellStatesRef.current[selectedIdx];
+      if (!state) return;
+      state.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+      emitSelectedState();
+      redraw();
+    },
+    centerSelected() {
+      if (selectedIdx < 0) return;
+      const state = cellStatesRef.current[selectedIdx];
+      if (!state) return;
+      state.pan = { x: 0, y: 0 };
+      emitSelectedState();
+      redraw();
+    },
+    resetSelected() {
+      if (selectedIdx < 0) return;
+      cellStatesRef.current[selectedIdx] = { pan: { x: 0, y: 0 }, zoom: 1 };
+      emitSelectedState();
+      redraw();
+    },
+    deselect() {
+      setSelectedIdx(-1);
+    },
     async exportToBlob(targetWidth = 3000) {
       const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs, exportWidth: ew } = propsRef.current;
       if (!tmpl?.cells) return null;
@@ -312,7 +521,6 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       ctx.fillStyle = bg || "#000000";
       ctx.fillRect(0, 0, targetWidth, targetH);
 
-      // Params are in export-space, use directly at export resolution
       const displayW = canvasRef.current?.clientWidth || 800;
       const panScale = targetWidth / displayW;
       const cellRects = computeCellRects(tmpl.cells, targetWidth, targetH, g, p || 0);
@@ -329,7 +537,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       }
       return new Promise((resolve) => offscreen.toBlob(resolve, "image/jpeg", 0.92));
     },
-  }), []);
+  }), [selectedIdx]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -346,6 +554,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
         className={className}
         style={{ cursor: "grab", touchAction: "none" }}
       />
+
       {ctxMenu && (
         <div
           className="fixed z-[100] min-w-[120px] rounded-lg border border-border/60 bg-chrome py-1 shadow-menu"

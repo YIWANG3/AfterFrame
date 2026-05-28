@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Crosshair, RotateCcw, Minus } from "lucide-react";
 import { getTemplatesForCount } from "./collageTemplates";
 import { fileName, localFileUrl } from "../../utils/format";
 import ColorPickerPopover from "./ColorPickerPopover";
@@ -52,6 +52,12 @@ export default function CollagePanel({
   exportWidth,
   onExportWidthChange,
   onAddImages,
+  selectedCellIdx = -1,
+  selectedCellZoom = 1,
+  onSelectedZoomChange,
+  onCenterSelected,
+  onResetSelected,
+  onDeselect,
 }) {
   const templates = useMemo(() => getTemplatesForCount(images.length), [images.length]);
   const [showCustomColor, setShowCustomColor] = useState(false);
@@ -141,6 +147,78 @@ export default function CollagePanel({
           Add images
         </button>
       </Section>
+
+      {selectedCellIdx >= 0 && (
+        <div className="border-b border-border/60 bg-app/40 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <PanelLabel>Cell {selectedCellIdx + 1}</PanelLabel>
+            <button
+              type="button"
+              className="rounded p-0.5 text-muted2 hover:bg-hover hover:text-text"
+              onClick={onDeselect}
+              title="Deselect (Esc)"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="mt-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] text-muted">Zoom</div>
+              <div className="text-[11px] tabular-nums text-muted2">{selectedCellZoom.toFixed(2)}×</div>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <button
+                type="button"
+                title="Zoom out"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
+                onClick={() => onSelectedZoomChange?.(Math.max(0.5, selectedCellZoom / 1.05))}
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <input
+                type="range"
+                min={0.5}
+                max={5}
+                step={0.01}
+                value={selectedCellZoom}
+                onChange={(e) => onSelectedZoomChange?.(Number(e.target.value))}
+                className="min-w-0 flex-1 accent-[rgb(var(--accent-color))]"
+              />
+              <button
+                type="button"
+                title="Zoom in"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
+                onClick={() => onSelectedZoomChange?.(Math.min(5, selectedCellZoom * 1.05))}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex gap-1.5">
+            <button
+              type="button"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-app py-1.5 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
+              onClick={onCenterSelected}
+              title="Center image in cell"
+            >
+              <Crosshair className="h-3 w-3" />
+              Center
+            </button>
+            <button
+              type="button"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-app py-1.5 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
+              onClick={onResetSelected}
+              title="Reset position and zoom"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset
+            </button>
+          </div>
+          <div className="mt-2 text-[10px] leading-relaxed text-muted2">
+            Drag in canvas to pan · pinch to zoom · Shift to bypass snap
+          </div>
+        </div>
+      )}
 
       <Section label="Layout">
         <div className="grid grid-cols-5 gap-0.5">

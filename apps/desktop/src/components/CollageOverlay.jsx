@@ -391,6 +391,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   const [exporting, setExporting] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [replaceIndex, setReplaceIndex] = useState(-1);
+  const [selectedCellIdx, setSelectedCellIdx] = useState(-1);
+  const [selectedCellState, setSelectedCellState] = useState({ pan: { x: 0, y: 0 }, zoom: 1 });
 
   // Initialize from items prop
   useEffect(() => {
@@ -526,6 +528,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
                 setReplaceIndex(idx);
                 setShowPicker(true);
               }}
+              onSelectionChange={setSelectedCellIdx}
+              onSelectedStateChange={setSelectedCellState}
             />
           </div>
         </div>
@@ -553,6 +557,12 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             exportWidth={exportWidth}
             onExportWidthChange={setExportWidth}
             onAddImages={() => setShowPicker(true)}
+            selectedCellIdx={selectedCellIdx}
+            selectedCellZoom={selectedCellState.zoom}
+            onSelectedZoomChange={(z) => canvasRef.current?.setSelectedZoom(z)}
+            onCenterSelected={() => canvasRef.current?.centerSelected()}
+            onResetSelected={() => canvasRef.current?.resetSelected()}
+            onDeselect={() => canvasRef.current?.deselect()}
           />
         </div>
       </div>

@@ -43,7 +43,7 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![Sticker Library](docs/assets/sticker-library.png)
 
-- **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export
+- **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
 
 ![Collage](docs/assets/collage.png)
 
@@ -61,6 +61,7 @@ Bring your own API key. AfterFrame does not bundle or proxy any AI service — y
 - Catalog-based workflow — one `.afcatalog` per project
 - Import pipeline with automatic metadata extraction and preview generation
 - Optional RAW source indexing and matching by filename
+- HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
 - Local-first: your files stay on your drives, nothing is uploaded
 
 ![Browse with Inspector](docs/assets/browse-inspector.png)
