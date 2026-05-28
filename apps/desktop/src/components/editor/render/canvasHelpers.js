@@ -56,8 +56,11 @@ export function buildDepthMaskCanvas(depthCanvas, outW, outH, zPosition, feather
   const data = dCtx.getImageData(0, 0, dW, dH).data;
   const z = Math.max(0, Math.min(1, zPosition));
   const f = Math.max(0, Math.min(0.5, feather));
-  const lo = z - f / 2;
-  const hi = z + f / 2;
+  // Clamp the feather window to [0,1] so the ramp doesn't extend past the
+  // valid depth range — otherwise pixels at depth 0 (or 1) land in the middle
+  // of the ramp and get partial alpha. Must match TextCanvas.getMaskUrl.
+  const lo = Math.max(0, z - f / 2);
+  const hi = Math.min(1, z + f / 2);
   const small = document.createElement("canvas");
   small.width = dW;
   small.height = dH;

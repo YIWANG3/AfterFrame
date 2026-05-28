@@ -582,7 +582,28 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(sourceImage, 0, 0, sw, sh);
 
-    drawTextLayersOnCanvas(ctx, sw, sh, renderable);
+    // Composite layers with depth-mask awareness — must match the export path
+    // in saveImage.js, otherwise Apply bakes text in front of foreground objects
+    // even when zPosition < 1 places it behind them.
+    const depthCanvas = depthFieldCanvasRef.current;
+    for (const layer of renderable) {
+      const useDepth = depthCanvas && layer.zPosition != null && layer.zPosition < 1;
+      if (!useDepth) {
+        drawTextLayersOnCanvas(ctx, sw, sh, [layer]);
+        continue;
+      }
+      const tmp = document.createElement("canvas");
+      tmp.width = sw;
+      tmp.height = sh;
+      drawTextLayersOnCanvas(tmp.getContext("2d"), sw, sh, [layer]);
+      const mask = buildDepthMaskCanvas(depthCanvas, sw, sh, layer.zPosition, depthFeather);
+      const tctx = tmp.getContext("2d");
+      tctx.globalCompositeOperation = "destination-in";
+      tctx.drawImage(mask, 0, 0);
+      ctx.drawImage(tmp, 0, 0);
+      releaseCanvasImage(mask);
+      releaseCanvasImage(tmp);
+    }
 
     composite.naturalWidth = sw;
     composite.naturalHeight = sh;
