@@ -947,6 +947,7 @@ annotationIpc.register({
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
+  createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
 });
 
 browseIpc.register({

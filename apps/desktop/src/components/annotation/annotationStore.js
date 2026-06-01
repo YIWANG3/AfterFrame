@@ -79,6 +79,35 @@ export function setCachedAnnotation(assetId, value) {
   notify();
 }
 
+// Drop all cached per-asset annotations (e.g. after a batch job) so the next
+// view re-fetches fresh results from the catalog.
+export function invalidateAnnotations() {
+  if (annotationCache.size === 0) return;
+  annotationCache.clear();
+  notify();
+}
+
+// ── Batch annotation job ──────────────────────────────────────────────────
+// scope: "all" | "selection" | "collection". onlyMissing defaults true
+// (skip already-annotated); pass false to re-annotate.
+export async function countAnnotationTargets(opts = {}) {
+  const res = await window.mediaWorkspace?.countAnnotationTargets?.(opts);
+  return Number(res?.count || 0);
+}
+
+export async function startAnnotationJob(opts = {}) {
+  return await window.mediaWorkspace?.startAnnotationJob?.({
+    scope: opts.scope || "all",
+    onlyMissing: opts.onlyMissing !== false,
+    assetIds: Array.isArray(opts.assetIds) ? opts.assetIds : null,
+    collectionId: opts.collectionId || null,
+  });
+}
+
+export async function getAnnotationJobStatus() {
+  return await window.mediaWorkspace?.getAnnotationJobStatus?.();
+}
+
 export async function fetchAnnotation(assetId) {
   if (!assetId) return null;
   if (annotationInflight.has(assetId)) return annotationInflight.get(assetId);

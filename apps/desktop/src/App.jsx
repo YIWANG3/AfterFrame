@@ -15,6 +15,7 @@ import CollageOverlay from "./components/CollageOverlay";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
+import useAnnotationJob from "./components/annotation/useAnnotationJob";
 
 export default function App() {
   const workspace = useWorkspace();
@@ -95,6 +96,7 @@ export default function App() {
 
   const [dropActive, setDropActive] = useState(false);
   const { toasts, pushToast, dismissToast } = useToasts();
+  const { job: annotationJob, annotate: runAnnotation } = useAnnotationJob(pushToast);
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
@@ -627,6 +629,8 @@ export default function App() {
                 onRunImport={workspace.runImportPipeline}
                 onRunEnrichment={workspace.runEnrichment}
                 onRunPreviews={workspace.runPreviewGeneration}
+                onAnnotateMissing={() => runAnnotation(null, { scope: "all", onlyMissing: true })}
+                onAnnotateAll={() => runAnnotation(null, { scope: "all", onlyMissing: false })}
                 onBack={() => {
                   if (historyIndex <= 0) return;
                   const nextIndex = historyIndex - 1;
@@ -678,6 +682,7 @@ export default function App() {
                   onEdit={openEditor}
                   onCompare={handleCompare}
                   onCollage={handleCollage}
+                  onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
                 />
               </div>
               {dropActive && (
@@ -806,6 +811,22 @@ export default function App() {
         }}
       />
       {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
+      {annotationJob && (
+        <div className="fixed bottom-4 right-4 z-[12000] w-64 rounded-lg border border-border/60 bg-chrome/95 p-3 shadow-overlay backdrop-blur-sm">
+          <div className="flex items-center justify-between text-[11px] font-medium text-text">
+            <span>{annotationJob.running ? "Annotating with AI…" : "Annotation finished"}</span>
+            <span className="tabular-nums text-muted2">
+              {annotationJob.total ? `${annotationJob.processed}/${annotationJob.total}` : ""}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-app">
+            <div
+              className="h-full rounded-full bg-[rgb(var(--accent-color))] transition-[width] duration-300"
+              style={{ width: `${Math.round((annotationJob.progress || 0) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

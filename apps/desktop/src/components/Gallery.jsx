@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2 } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles } from "lucide-react";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
 
@@ -158,7 +158,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, onAddTo, onRemoveFrom, onReveal, onEdit, onDeleteFromCatalog, onCompare, onCollage, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, onAddTo, onRemoveFrom, onReveal, onEdit, onDeleteFromCatalog, onCompare, onCollage, onAnnotate, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     function handlePointerDown(e) {
@@ -209,6 +209,22 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
       {assetIds?.length >= 2 && (
         <MenuItem icon={LayoutGrid} label="Collage" onClick={() => { onCollage?.(assetIds); onClose(); }} />
       )}
+      <MenuItem icon={Sparkles} label="Annotate with AI">
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
+        >
+          Annotate {assetIds?.length > 1 ? `${assetIds.length} selected` : "this"} (skip done)
+        </button>
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
+        >
+          Re-annotate (overwrite)
+        </button>
+      </MenuItem>
       <MenuItem icon={Eye} label="Reveal in Finder" shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
       <MenuItem icon={Trash2} label="Delete from Catalog" onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
 
@@ -376,6 +392,7 @@ export default function Gallery({
   onEdit,
   onCompare,
   onCollage,
+  onAnnotate,
 }) {
   const containerRef = useRef(null);
   const scrollRafRef = useRef(0);
@@ -756,6 +773,7 @@ export default function Gallery({
           onEdit={onEdit}
           onCompare={onCompare}
           onCollage={onCollage}
+          onAnnotate={(ids, opts) => onAnnotate?.(ids, opts)}
           onClose={closeContextMenu}
         />
       )}

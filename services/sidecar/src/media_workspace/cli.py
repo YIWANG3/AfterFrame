@@ -249,17 +249,17 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
 
     get_job_parser = subparsers.add_parser("get-job", parents=[common])
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     run_import_job_parser = subparsers.add_parser("run-import-job", parents=[common])
@@ -357,6 +357,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--max-caption-chars", type=int, default=200)
     run_annotation_job_parser.add_argument("--custom-instructions")
     run_annotation_job_parser.add_argument("--limit", type=int)
+
+    annotation_count_p = subparsers.add_parser("annotation-count", parents=[common])
+    annotation_count_p.add_argument("--asset-type", choices=["raw", "export"], default="export")
+    annotation_count_p.add_argument("--reannotate", action="store_true")
+    annotation_count_p.add_argument("--asset-ids")
+    annotation_count_p.add_argument("--collection-id")
 
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
@@ -662,6 +668,19 @@ def main() -> int:
             limit=args.limit,
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "annotation-count":
+        from .db import count_assets_for_annotation
+        asset_ids = [s.strip() for s in (args.asset_ids or "").split(",") if s.strip()] or None
+        count = count_assets_for_annotation(
+            connection,
+            asset_type=args.asset_type,
+            only_missing=not args.reannotate,
+            asset_ids=asset_ids,
+            collection_id=args.collection_id or None,
+        )
+        print(json.dumps({"count": count}, ensure_ascii=False))
         return 0
 
     if args.command == "get-annotation":
