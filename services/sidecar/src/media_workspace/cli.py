@@ -54,7 +54,7 @@ from .db import (
 )
 from .evaluation import evaluate_ground_truth
 from .ground_truth import export_ground_truth
-from .job_runner import run_ai_repaint_job, run_enrichment_job, run_import_job, run_preview_job
+from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_preview_job
 from .preview_service import PreviewService
 from .metadata import extract_export_candidate
 from .models import MatchDecision
@@ -340,6 +340,24 @@ def build_parser() -> argparse.ArgumentParser:
     annotate_p.add_argument("--max-caption-chars", type=int, default=200)
     annotate_p.add_argument("--custom-instructions")
 
+    run_annotation_job_parser = subparsers.add_parser("run-annotation-job", parents=[common])
+    run_annotation_job_parser.add_argument("--job-id", required=True)
+    run_annotation_job_parser.add_argument("--provider", choices=["anthropic", "openai", "openai_compatible"], required=True)
+    run_annotation_job_parser.add_argument("--model", required=True)
+    run_annotation_job_parser.add_argument("--api-key")
+    run_annotation_job_parser.add_argument("--base-url")
+    run_annotation_job_parser.add_argument("--asset-type", choices=["raw", "export"], default="export")
+    # only-missing defaults ON ("annotate all" skips already-annotated); pass
+    # --reannotate to overwrite existing annotations.
+    run_annotation_job_parser.add_argument("--reannotate", action="store_true")
+    run_annotation_job_parser.add_argument("--asset-ids", help="Comma-separated asset_ids to scope the batch (multi-select).")
+    run_annotation_job_parser.add_argument("--collection-id", help="Scope the batch to a collection/folder.")
+    run_annotation_job_parser.add_argument("--languages", default="en,zh")
+    run_annotation_job_parser.add_argument("--max-tags", type=int, default=10)
+    run_annotation_job_parser.add_argument("--max-caption-chars", type=int, default=200)
+    run_annotation_job_parser.add_argument("--custom-instructions")
+    run_annotation_job_parser.add_argument("--limit", type=int)
+
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
 
@@ -620,6 +638,30 @@ def main() -> int:
         )
         saved = _annotation.save_annotation(connection, args.asset_id, result)
         print(json.dumps(saved, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "run-annotation-job":
+        langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
+        asset_ids = [s.strip() for s in (args.asset_ids or "").split(",") if s.strip()] or None
+        payload = run_annotation_job(
+            connection,
+            catalog_path=args.catalog,
+            job_id=args.job_id,
+            provider=args.provider,
+            api_key=args.api_key,
+            model=args.model,
+            base_url=args.base_url,
+            asset_type=args.asset_type,
+            only_missing=not args.reannotate,
+            asset_ids=asset_ids,
+            collection_id=args.collection_id or None,
+            languages=langs,
+            max_tags=args.max_tags,
+            max_caption_chars=args.max_caption_chars,
+            custom_instructions=args.custom_instructions,
+            limit=args.limit,
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "get-annotation":

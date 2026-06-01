@@ -455,6 +455,97 @@ def run_preview_job(
         raise
 
 
+def run_annotation_job(
+    connection,
+    catalog_path: Path,
+    job_id: str,
+    *,
+    provider: str,
+    api_key: str | None,
+    model: str,
+    base_url: str | None = None,
+    asset_type: str | None = "export",
+    only_missing: bool = True,
+    asset_ids: list[str] | None = None,
+    collection_id: str | None = None,
+    languages: list[str] | None = None,
+    max_tags: int = 10,
+    max_caption_chars: int = 200,
+    custom_instructions: str | None = None,
+    limit: int | None = None,
+) -> dict[str, object]:
+    from . import annotation as _annotation
+    from .db import list_assets_for_annotation
+
+    catalog = ensure_catalog(catalog_path)
+    payload = {
+        "kind": "annotation",
+        "provider": provider,
+        "model": model,
+        "only_missing": only_missing,
+        "phase": "annotate",
+        "phase_label": "Annotate with AI",
+        "phase_index": 0,
+        "phase_count": 1,
+    }
+    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
+    try:
+        assets = list_assets_for_annotation(
+            connection,
+            asset_type=asset_type,
+            only_missing=only_missing,
+            asset_ids=asset_ids,
+            collection_id=collection_id,
+            limit=limit,
+        )
+
+        def annotation_progress(update: dict[str, int]) -> None:
+            update_job(
+                connection,
+                job_id,
+                payload=payload,
+                result={"current_phase": _phase_result({"key": "annotate", "label": "Annotate with AI"}, update)},
+                progress=_fraction(int(update.get("processed", 0)), int(update.get("total", 0))),
+                commit=True,
+            )
+
+        result = _annotation.annotate_batch(
+            connection,
+            catalog.root,
+            assets,
+            provider=provider,
+            api_key=api_key,
+            model=model,
+            base_url=base_url,
+            languages=languages,
+            max_tags=max_tags,
+            max_caption_chars=max_caption_chars,
+            custom_instructions=custom_instructions,
+            progress_callback=annotation_progress,
+        )
+        update_job(
+            connection,
+            job_id,
+            status="succeeded",
+            payload={**payload, "phase": None, "phase_label": None},
+            result={**result, "current_phase": None},
+            progress=1.0,
+            error_text=None,
+        )
+        return result
+    except Exception as error:
+        update_job(
+            connection,
+            job_id,
+            status="failed",
+            payload=payload,
+            result={},
+            progress=0.0,
+            error_text=str(error),
+        )
+        raise
+
+
 def run_ai_repaint_job(
     connection,
     catalog_path: Path,

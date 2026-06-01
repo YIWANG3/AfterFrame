@@ -21,10 +21,11 @@ import io
 import json
 import re
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional, Sequence
 
 import urllib.request
 import urllib.error
@@ -382,6 +383,102 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
     connection.commit()
 
     return get_annotation(connection, asset_id) or {}
+
+
+# ── Batch annotation ─────────────────────────────────────────────────────────
+
+def _batch_image_path(catalog_root: Path, row: sqlite3.Row) -> Path:
+    """Pick the best on-disk image to send to the LLM for a batch row.
+
+    Prefer a generated preview JPEG (already downsized + sidesteps HEIC/RAW
+    decode), falling back to the original canonical file. The LLM encoder
+    downsizes again to THUMB_MAX_EDGE either way.
+    """
+    keys = row.keys() if hasattr(row, "keys") else []
+    for rel_key in ("preview_hd_relative_path", "preview_relative_path"):
+        rel = row[rel_key] if rel_key in keys else None
+        if rel:
+            candidate = catalog_root / rel
+            if candidate.exists():
+                return candidate
+    return Path(row["canonical_path"])
+
+
+def annotate_batch(
+    connection: sqlite3.Connection,
+    catalog_root: Path,
+    assets: Sequence[sqlite3.Row],
+    *,
+    provider: str,
+    api_key: Optional[str],
+    model: str,
+    base_url: Optional[str] = None,
+    languages: Optional[list[str]] = None,
+    max_tags: int = DEFAULT_MAX_TAGS,
+    max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
+    custom_instructions: Optional[str] = None,
+    progress_callback: Optional[Callable[[dict[str, int]], None]] = None,
+    max_workers: int = 3,
+) -> dict[str, Any]:
+    """Annotate many assets concurrently.
+
+    Mirrors PreviewService.generate_batch: the network-bound annotate() runs in
+    worker threads (no DB access), while every DB write (save_annotation) happens
+    on the calling thread as futures complete — keeps the sqlite connection
+    single-threaded. Per-asset failures are collected, not fatal.
+    """
+    total = len(assets)
+    succeeded = 0
+    failed = 0
+    processed = 0
+    errors: list[dict[str, str]] = []
+    # Fetch the tag-reuse hint once and share it across all workers.
+    existing_tags = list_top_tags(connection)
+
+    def report() -> None:
+        if progress_callback:
+            progress_callback({
+                "processed": processed,
+                "total": total,
+                "succeeded": succeeded,
+                "failed": failed,
+            })
+
+    report()
+    if total == 0:
+        return {"total": 0, "succeeded": 0, "failed": 0, "errors": []}
+
+    def work(row: sqlite3.Row) -> AnnotationResult:
+        image_path = _batch_image_path(catalog_root, row)
+        return annotate(
+            image_path=image_path,
+            provider=provider,
+            api_key=api_key,
+            model=model,
+            base_url=base_url,
+            languages=languages,
+            max_tags=max_tags,
+            max_caption_chars=max_caption_chars,
+            custom_instructions=custom_instructions,
+            existing_tags=existing_tags,
+        )
+
+    with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+        futures = {pool.submit(work, row): row for row in assets}
+        for future in as_completed(futures):
+            row = futures[future]
+            try:
+                result = future.result()
+                save_annotation(connection, str(row["asset_id"]), result)
+                succeeded += 1
+            except Exception as exc:  # noqa: BLE001 — one bad asset must not kill the batch
+                failed += 1
+                if len(errors) < 50:
+                    errors.append({"asset_id": str(row["asset_id"]), "error": f"{type(exc).__name__}: {exc}"})
+            processed += 1
+            report()
+
+    return {"total": total, "succeeded": succeeded, "failed": failed, "errors": errors}
 
 
 def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[dict[str, Any]]:

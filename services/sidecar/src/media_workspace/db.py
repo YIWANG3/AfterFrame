@@ -1125,6 +1125,83 @@ def list_assets_for_preview(
     return connection.execute("\n".join(query), params).fetchall()
 
 
+def list_assets_for_annotation(
+    connection: sqlite3.Connection,
+    *,
+    asset_type: str | None = "export",
+    only_missing: bool = True,
+    asset_ids: list[str] | None = None,
+    collection_id: str | None = None,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    """Assets eligible for AI annotation, with their best preview path.
+
+    - only_missing=True restricts to assets that have NO annotation row yet
+      (the default for "annotate all" / "annotate un-annotated").
+    - asset_ids scopes to an explicit selection (multi-select right-click).
+    - collection_id scopes to a folder/collection.
+    Returns rows with asset_id, canonical_path, extension, and ready preview
+    relative paths (preview-hd preferred) for the batch encoder.
+    """
+    joins = [
+        "LEFT JOIN preview_entries AS hd ON hd.asset_id = assets.asset_id AND hd.kind = 'preview-hd' AND hd.status = 'ready'",
+        "LEFT JOIN preview_entries AS sd ON sd.asset_id = assets.asset_id AND sd.kind = 'preview' AND sd.status = 'ready'",
+        "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id",
+    ]
+    where = ["assets.exists_on_disk = 1"]
+    params: list[object] = []
+
+    if collection_id:
+        joins.append("JOIN collection_items AS ci ON ci.asset_id = assets.asset_id")
+        where.append("ci.collection_id = ?")
+        params.append(collection_id)
+    if asset_type:
+        where.append("assets.asset_type = ?")
+        params.append(asset_type)
+    if only_missing:
+        where.append("anno.asset_id IS NULL")
+    if asset_ids:
+        placeholders = ",".join("?" for _ in asset_ids)
+        where.append(f"assets.asset_id IN ({placeholders})")
+        params.extend(asset_ids)
+
+    sql = f"""
+        SELECT
+            assets.asset_id,
+            assets.canonical_path,
+            assets.extension,
+            hd.relative_path AS preview_hd_relative_path,
+            sd.relative_path AS preview_relative_path
+        FROM assets
+        {' '.join(joins)}
+        WHERE {' AND '.join(where)}
+        ORDER BY assets.asset_type, assets.stem
+    """
+    if limit is not None:
+        sql += "\n        LIMIT ?"
+        params.append(limit)
+    return connection.execute(sql, params).fetchall()
+
+
+def count_assets_for_annotation(
+    connection: sqlite3.Connection,
+    *,
+    asset_type: str | None = "export",
+    only_missing: bool = True,
+    asset_ids: list[str] | None = None,
+    collection_id: str | None = None,
+) -> int:
+    """How many assets a batch-annotation job would process (for UI counts)."""
+    rows = list_assets_for_annotation(
+        connection,
+        asset_type=asset_type,
+        only_missing=only_missing,
+        asset_ids=asset_ids,
+        collection_id=collection_id,
+    )
+    return len(rows)
+
+
 def upsert_preview_entry(
     connection: sqlite3.Connection,
     asset_id: str,
