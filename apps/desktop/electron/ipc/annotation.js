@@ -11,7 +11,50 @@ function register({
   getStoredProviderConfigWithMigration,
   setStoredProviderConfig,
   deleteStoredProviderConfig,
+  createJob,
+  launchSidecarJob,
+  latestJobStatus,
+  formatJobStatus,
 }) {
+  // Resolve the active annotation provider + its API key from saved settings.
+  // Mirrors the single-asset resolution in AnnotationsSection: anthropic stays
+  // anthropic; every other type routes through the openai_compatible adapter.
+  async function resolveActiveProvider() {
+    const settings = readAppSettings()?.aiAnnotation || {};
+    const providers = Array.isArray(settings.providers) ? settings.providers : [];
+    const active = providers.find((p) => p.id === settings.activeProviderId) || providers[0];
+    if (!active) throw new Error("No AI provider configured. Open Settings → AI to add one.");
+
+    const sidecarProvider = active.type === "anthropic" ? "anthropic" : "openai_compatible";
+    const ns = `annotation:${active.id || active.type}`;
+    const stored = (await getStoredProviderConfigWithMigration(ns)) || {};
+    let apiKey = stored.token || null;
+    let baseUrl = active.baseUrl || null;
+    // openai_compatible may store the token as JSON {base_url, token}
+    if (sidecarProvider === "openai_compatible" && apiKey) {
+      try {
+        const parsed = JSON.parse(apiKey);
+        apiKey = parsed.token || apiKey;
+        baseUrl = parsed.base_url || baseUrl;
+      } catch (_) { /* plain token */ }
+    }
+    if (sidecarProvider === "anthropic" && !apiKey) {
+      throw new Error("No API key configured for the active provider.");
+    }
+    return { settings, active, sidecarProvider, apiKey, baseUrl };
+  }
+
+  function annotationArgsFromSettings(settings) {
+    const args = [];
+    if (Array.isArray(settings.languages) && settings.languages.length) {
+      args.push("--languages", settings.languages.join(","));
+    }
+    if (Number.isFinite(settings.maxTags)) args.push("--max-tags", String(settings.maxTags));
+    if (Number.isFinite(settings.maxCaptionChars)) args.push("--max-caption-chars", String(settings.maxCaptionChars));
+    if (settings.customInstructions) args.push("--custom-instructions", String(settings.customInstructions));
+    return args;
+  }
+
   // ── Settings (annotation-specific subtree under aiAnnotation) ────────────
   ipcMain.handle("workspace:get-annotation-settings", async () => {
     const settings = readAppSettings();
@@ -73,6 +116,70 @@ function register({
     if (opts.customInstructions) args.push("--custom-instructions", String(opts.customInstructions));
 
     return await callSidecarJsonAsync(args);
+  });
+
+  // ── Batch annotation job ──────────────────────────────────────────────────
+  // scope: "all" | "selection" | "collection"
+  //   selection → opts.assetIds (multi-select)
+  //   collection → opts.collectionId (folder)
+  // onlyMissing (default true) skips already-annotated assets; pass false to
+  // re-annotate. Reads provider + annotation options from saved settings.
+  ipcMain.handle("workspace:annotation-start", async (_event, options) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb()) throw new Error("Open a catalog before annotating assets.");
+
+    const current = await latestJobStatus("annotation");
+    if (current.running) return current;
+
+    const opts = options || {};
+    const { settings, sidecarProvider, active, apiKey, baseUrl } = await resolveActiveProvider();
+
+    const onlyMissing = opts.onlyMissing !== false;
+    const assetIds = Array.isArray(opts.assetIds) ? opts.assetIds.filter(Boolean) : [];
+    const collectionId = opts.collectionId || null;
+
+    const job = await createJob("annotation", {
+      provider: sidecarProvider,
+      model: active.model,
+      scope: opts.scope || "all",
+      only_missing: onlyMissing,
+      asset_count: assetIds.length || null,
+      collection_id: collectionId,
+    });
+
+    const args = [
+      "run-annotation-job",
+      "--job-id", job.job_id,
+      "--provider", String(sidecarProvider),
+      "--model", String(active.model || ""),
+    ];
+    if (apiKey) args.push("--api-key", apiKey);
+    if (baseUrl) args.push("--base-url", baseUrl);
+    if (!onlyMissing) args.push("--reannotate");
+    if (assetIds.length) args.push("--asset-ids", assetIds.join(","));
+    if (collectionId) args.push("--collection-id", String(collectionId));
+    args.push(...annotationArgsFromSettings(settings));
+
+    launchSidecarJob(args);
+    return formatJobStatus(job);
+  });
+
+  ipcMain.handle("workspace:annotation-status", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
+    try { return await latestJobStatus("annotation"); } catch { return formatJobStatus(null); }
+  });
+
+  ipcMain.handle("workspace:annotation-count", async (_event, options) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb()) return { count: 0 };
+    const opts = options || {};
+    const args = ["annotation-count"];
+    if (opts.onlyMissing === false) args.push("--reannotate");
+    if (Array.isArray(opts.assetIds) && opts.assetIds.length) args.push("--asset-ids", opts.assetIds.filter(Boolean).join(","));
+    if (opts.collectionId) args.push("--collection-id", String(opts.collectionId));
+    const res = await callSidecarJsonAsync(args);
+    return res || { count: 0 };
   });
 
   ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {

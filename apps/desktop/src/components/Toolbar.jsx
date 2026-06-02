@@ -16,6 +16,7 @@ import {
   Images,
   ArrowUpDown,
   Check,
+  Tags,
 } from "lucide-react";
 
 const DISPLAY_MODES = [
@@ -49,6 +50,13 @@ const MENU_SECTIONS = [
       { label: "Run Import Pipeline", icon: Play, action: "import" },
       { label: "Run Enrichment", icon: Sparkles, action: "enrichment" },
       { label: "Generate Previews", icon: Images, action: "previews" },
+    ],
+  },
+  {
+    label: "AI Annotation",
+    items: [
+      { label: "Annotate Un-annotated", icon: Tags, action: "annotateMissing" },
+      { label: "Re-annotate All", icon: Tags, action: "annotateAll" },
     ],
   },
 ];
@@ -135,6 +143,8 @@ export default function Toolbar({
   onRunImport,
   onRunEnrichment,
   onRunPreviews,
+  onAnnotateMissing,
+  onAnnotateAll,
   onBack,
   onForward,
   canGoBack,
@@ -151,6 +161,8 @@ export default function Toolbar({
     import: onRunImport,
     enrichment: onRunEnrichment,
     previews: onRunPreviews,
+    annotateMissing: onAnnotateMissing,
+    annotateAll: onAnnotateAll,
   };
 
   return (
