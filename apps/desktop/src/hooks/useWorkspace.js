@@ -587,6 +587,7 @@ export default function useWorkspace() {
     runImportPipeline,
     runEnrichment,
     runPreviewGeneration,
+    importTask,
     collections,
     activeCollectionId,
     selectCollection,

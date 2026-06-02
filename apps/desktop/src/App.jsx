@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { filterTitle } from "./utils/format";
 import useWorkspace from "./hooks/useWorkspace";
 import usePaneResize from "./hooks/usePaneResize";
@@ -97,6 +97,24 @@ export default function App() {
   const [dropActive, setDropActive] = useState(false);
   const { toasts, pushToast, dismissToast } = useToasts();
   const { job: annotationJob, annotate: runAnnotation } = useAnnotationJob(pushToast);
+
+  // Auto-annotate on import: when the import pipeline finishes and the user
+  // enabled the setting, kick off a batch annotation of newly-imported
+  // (un-annotated) assets. runAnnotation no-ops if nothing qualifies or no
+  // provider is configured.
+  const prevImportRunningRef = useRef(false);
+  useEffect(() => {
+    const running = !!workspace.importTask?.running;
+    if (prevImportRunningRef.current && !running) {
+      void (async () => {
+        try {
+          const s = await window.mediaWorkspace?.getAnnotationSettings?.();
+          if (s?.autoOnImport) runAnnotation(null, { scope: "all", onlyMissing: true });
+        } catch { /* ignore */ }
+      })();
+    }
+    prevImportRunningRef.current = running;
+  }, [workspace.importTask?.running, runAnnotation]);
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
@@ -579,6 +597,7 @@ export default function App() {
           onCreateCollection={workspace.createCollection}
           onRenameCollection={workspace.renameCollection}
           onDeleteCollection={workspace.deleteCollection}
+          onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
           onAddToCollection={workspace.addToCollection}
           stickerMode={viewMode === "stickers"}
           onOpenStickerBrowser={() => {

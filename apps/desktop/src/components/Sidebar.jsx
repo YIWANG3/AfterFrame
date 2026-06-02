@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles } from "lucide-react";
 import { baseName, formatTimestamp, navItems } from "../utils/format";
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
@@ -49,6 +49,7 @@ export default function Sidebar({
   onCreateCollection,
   onRenameCollection,
   onDeleteCollection,
+  onAnnotateCollection,
   onAddToCollection,
   onOpenStickerBrowser,
   onOpenSettings,
@@ -241,6 +242,14 @@ export default function Sidebar({
                       {col.item_count || 0}
                     </span>
                     <span className="hidden gap-0.5 group-hover:flex">
+                      <button
+                        type="button"
+                        className="rounded-md p-0.5 text-muted2 hover:text-text"
+                        title="Annotate un-annotated in this folder"
+                        onClick={(e) => { e.stopPropagation(); onAnnotateCollection?.(col.collection_id); }}
+                      >
+                        <Sparkles className="h-3 w-3" />
+                      </button>
                       <button
                         type="button"
                         className="rounded-md p-0.5 text-muted2 hover:text-text"
