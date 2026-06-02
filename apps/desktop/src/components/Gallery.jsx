@@ -135,7 +135,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
           <ChevronRight className="h-3 w-3 text-muted2" />
         </button>
         {subOpen && (
-          <div className="absolute left-full top-0 z-50 ml-1 min-w-[160px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu">
+          <div className="absolute left-full top-0 z-50 ml-1 w-max min-w-[160px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu">
             {children}
           </div>
         )}
@@ -212,17 +212,17 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
       <MenuItem icon={Sparkles} label="Annotate with AI">
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
         >
-          Annotate {assetIds?.length > 1 ? `${assetIds.length} selected` : "this"} (skip done)
+          Annotate{assetIds?.length > 1 ? ` ${assetIds.length}` : ""} (skip done)
         </button>
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
         >
-          Re-annotate (overwrite)
+          Re-annotate{assetIds?.length > 1 ? ` ${assetIds.length}` : ""}
         </button>
       </MenuItem>
       <MenuItem icon={Eye} label="Reveal in Finder" shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
@@ -705,6 +705,13 @@ export default function Gallery({
       onScroll={handleScroll}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
+        // React portals (the context menu) bubble events through the React tree,
+        // not the DOM tree — so a click inside the portaled menu would otherwise
+        // reach here and start a marquee that clears the selection on pointerup.
+        // Ignore any pointerdown whose real DOM target is outside this container.
+        if (containerRef.current && event.target instanceof Node && !containerRef.current.contains(event.target)) {
+          return;
+        }
         if (event.target instanceof Element && event.target.closest("[data-gallery-item='true']")) {
           return;
         }

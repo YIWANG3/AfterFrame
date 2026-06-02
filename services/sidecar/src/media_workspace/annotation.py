@@ -86,6 +86,33 @@ def encode_image_for_llm(image_path: Path, max_edge: int = THUMB_MAX_EDGE) -> tu
 
 # ── Prompt construction ──────────────────────────────────────────────────────
 
+def _has_cjk(text: str) -> bool:
+    """True if the string contains any CJK ideograph — our heuristic for a
+    Chinese tag vs an English one."""
+    return any("一" <= ch <= "鿿" for ch in text)
+
+
+def filter_tags_by_language(tags: list[str], languages: list[str]) -> list[str]:
+    """Keep only tags whose language is among the selected ones.
+
+    The tag-reuse pool would otherwise leak Chinese tags from earlier
+    bilingual runs into an English-only request (and vice versa), since the
+    model is told to PREFER reusing them.
+    """
+    want_en = "en" in languages
+    want_zh = "zh" in languages
+    if want_en and want_zh:
+        return tags
+    out: list[str] = []
+    for tag in tags:
+        is_zh = _has_cjk(tag)
+        if is_zh and want_zh:
+            out.append(tag)
+        elif not is_zh and want_en:
+            out.append(tag)
+    return out
+
+
 def build_system_prompt(
     *,
     languages: list[str],
@@ -103,12 +130,13 @@ def build_system_prompt(
 
     tag_pool = ""
     if existing_tags:
-        sample = existing_tags[:TAG_REUSE_HINT_LIMIT]
-        tag_pool = (
-            "\n\nThis library already uses these tags. PREFER reusing them when "
-            "they fit; only invent a new tag if no existing one matches:\n"
-            + ", ".join(sample)
-        )
+        sample = filter_tags_by_language(existing_tags, languages)[:TAG_REUSE_HINT_LIMIT]
+        if sample:
+            tag_pool = (
+                "\n\nThis library already uses these tags. PREFER reusing them when "
+                "they fit; only invent a new tag if no existing one matches:\n"
+                + ", ".join(sample)
+            )
 
     extra = f"\n\nAdditional instructions from the user:\n{custom_instructions.strip()}" if custom_instructions else ""
 
