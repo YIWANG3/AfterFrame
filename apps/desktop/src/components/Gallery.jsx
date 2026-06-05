@@ -680,7 +680,7 @@ export default function Gallery({
   // has cached data (e.g. switching back to a previously-loaded status), keep
   // showing it and let the new data swap in seamlessly — avoids the
   // grid → spinner → grid double-flicker when navigating between views.
-  if (!items.length && (loading || !browserReady || totalCount > 0)) {
+  if (!items.length && (loading || !browserReady)) {
     return (
       <div className="flex h-full items-center justify-center text-muted">
         <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />

@@ -13,7 +13,21 @@ function register({ ipcMain, callSidecarJsonAsync, getCatalogState }) {
     ];
     if (options.search) command.push("--search", options.search);
     if (options.sort) command.push("--sort", options.sort);
+    if (options.filters && Object.keys(options.filters).length) {
+      command.push("--filters", JSON.stringify(options.filters));
+    }
     return await callSidecarJsonAsync(command) || [];
+  });
+
+  ipcMain.handle("workspace:facet-values", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return null;
+    try {
+      return await callSidecarJsonAsync(["facet-values"]);
+    } catch (err) {
+      console.warn("[workspace:facet-values] sidecar error:", err.message);
+      return null;
+    }
   });
 
   ipcMain.handle("workspace:detail", async (_event, exportPath) => {

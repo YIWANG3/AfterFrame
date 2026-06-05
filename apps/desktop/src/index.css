@@ -133,6 +133,114 @@ input[type="range"]::-webkit-slider-thumb:hover {
   opacity: 1;
 }
 
+/* Hide the native number-input spin buttons (filter range value boxes). */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner {
+  -moz-appearance: textfield;
+}
+
+/* Thin scrollbar for in-popover lists, hugging the right edge. */
+.popover-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+/* react-calendar dark theme (filter bar date range). Overrides the library's
+   default light Calendar.css. Navigation (month→year→decade drill-down) is
+   plain DOM, so it's fully styleable — no native dropdowns. */
+.cal-dark.react-calendar {
+  width: 280px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  line-height: 1.3;
+}
+.cal-dark .react-calendar__navigation {
+  height: 32px;
+  margin-bottom: 6px;
+}
+.cal-dark .react-calendar__navigation button {
+  min-width: 28px;
+  background: none;
+  color: rgb(var(--text-color));
+  font-size: 12px;
+  border-radius: 6px;
+}
+.cal-dark .react-calendar__navigation button:enabled:hover,
+.cal-dark .react-calendar__navigation button:enabled:focus {
+  background: rgb(var(--hover-bg));
+}
+.cal-dark .react-calendar__navigation button:disabled {
+  background: none;
+  opacity: 0.35;
+}
+.cal-dark .react-calendar__navigation__label {
+  font-weight: 600;
+}
+.cal-dark .react-calendar__month-view__weekdays {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgb(var(--muted-text-2));
+  text-transform: none;
+}
+.cal-dark .react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none;
+}
+.cal-dark .react-calendar__tile {
+  padding: 6px 4px;
+  font-size: 12px;
+  color: rgb(var(--text-color));
+  background: none;
+  border-radius: 0;
+}
+.cal-dark .react-calendar__tile:enabled:hover,
+.cal-dark .react-calendar__tile:enabled:focus {
+  background: rgb(var(--hover-bg));
+}
+.cal-dark .react-calendar__tile:disabled {
+  background: none;
+  opacity: 0.3;
+}
+.cal-dark .react-calendar__month-view__days__day--neighboringMonth {
+  opacity: 0.35;
+}
+.cal-dark .react-calendar__tile--now {
+  color: rgb(var(--accent-color));
+  font-weight: 600;
+}
+/* Range highlight: a soft accent tint (same hue, lighter) — not the heavy
+   full-strength fill. Endpoints are a touch stronger. Connected bar with the
+   outer corners rounded; middle stays square so corners read consistently. */
+/* Range highlight: a soft accent tint (same hue, lighter), all square corners
+   for a clean connected block. Endpoints a touch stronger. */
+.cal-dark .react-calendar__tile--range {
+  background: rgb(var(--accent-color) / 0.16);
+  color: rgb(var(--text-color));
+  border-radius: 0;
+}
+.cal-dark .react-calendar__tile--rangeStart,
+.cal-dark .react-calendar__tile--rangeEnd,
+.cal-dark .react-calendar__tile--active,
+.cal-dark .react-calendar__tile--hasActive {
+  background: rgb(var(--accent-color) / 0.34);
+  color: rgb(var(--text-color));
+  font-weight: 600;
+  border-radius: 0;
+}
+.rdp-dark .rdp-chevron {
+  fill: rgb(var(--muted-text));
+}
+.rdp-dark .rdp-button_previous:hover .rdp-chevron,
+.rdp-dark .rdp-button_next:hover .rdp-chevron {
+  fill: rgb(var(--text-color));
+}
+.rdp-dark .rdp-outside {
+  opacity: 0.35;
+}
+
 ::-webkit-scrollbar {
   width: 14px;
   height: 14px;

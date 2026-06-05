@@ -182,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
     browse.add_argument("--offset", type=int, default=0)
     browse.add_argument("--search", default=None)
     browse.add_argument("--sort", default=None)
+    # Structured facet filters (all optional, AND-combined). Passed as a single
+    # JSON object to keep the surface small and forward-compatible.
+    browse.add_argument("--filters", default=None, help="JSON object of facet filters")
+
+    subparsers.add_parser("facet-values", parents=[common])
 
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
@@ -841,9 +846,15 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
+    if args.command == "facet-values":
+        from .db import get_facet_values
+        print(json.dumps(get_facet_values(connection), ensure_ascii=False))
+        return 0
+
     if args.command == "browse-exports":
+        facet_filters = json.loads(args.filters) if args.filters else None
         payload = []
-        for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort):
+        for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
             preview_path = None
             if row["preview_relative_path"]:
                 preview_path = str((catalog.root / row["preview_relative_path"]).resolve())

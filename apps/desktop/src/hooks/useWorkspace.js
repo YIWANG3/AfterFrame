@@ -20,6 +20,8 @@ export default function useWorkspace() {
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("imported-desc");
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({}); // structured facet filters
+  const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [browserLoading, setBrowserLoading] = useState(false);
   const [browserReady, setBrowserReady] = useState(false);
@@ -96,6 +98,18 @@ export default function useWorkspace() {
     void loadBrowser({ force: true, sortKey: sort });
   }, [sort]);
 
+  // Reload when structured facet filters change
+  useEffect(() => {
+    if (!browserReady) return;
+    void loadBrowser({ force: true, facetFilters: filters });
+  }, [filters]);
+
+  // Refresh facet options when the catalog/library changes
+  useEffect(() => {
+    if (!browserReady) return;
+    void window.mediaWorkspace?.getFacetValues?.().then(setFacetValues).catch(() => {});
+  }, [browserReady, summary?.export_assets]);
+
   const activeOverlay = useMemo(() => {
     const queuedRawCount = pendingImport.rawDirs.length;
     const queuedExportCount = pendingImport.exportDirs.length;
@@ -147,7 +161,7 @@ export default function useWorkspace() {
     setDetail(payload);
   }
 
-  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort } = {}) {
+  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort, facetFilters = filters } = {}) {
     console.log("[loadBrowser] called, browserLoading:", browserLoading, "force:", force, "append:", append, "browserHasMore:", browserHasMore);
     if (!force && (append ? browserLoadingMore || browserLoading || !browserHasMore : browserLoading)) {
       console.log("[loadBrowser] SKIPPED — guard triggered");
@@ -175,6 +189,7 @@ export default function useWorkspace() {
           offset: nextOffset,
           search: search || undefined,
           sort: sortKey || undefined,
+          filters: facetFilters && Object.keys(facetFilters).length ? facetFilters : undefined,
         });
       }
       if (browserRequestIdRef.current !== requestId) return;
@@ -203,7 +218,7 @@ export default function useWorkspace() {
   }
 
   async function loadMoreBrowser() {
-    await loadBrowser({ nextStatus: status, append: true, search: query.trim() || undefined });
+    await loadBrowser({ nextStatus: status, append: true, search: query.trim() || undefined, facetFilters: filters });
   }
 
   async function loadCollections() {
@@ -572,6 +587,9 @@ export default function useWorkspace() {
     setSort,
     query,
     setQuery,
+    filters,
+    setFilters,
+    facetValues,
     browserLoading,
     browserReady,
     browserLoadingMore,

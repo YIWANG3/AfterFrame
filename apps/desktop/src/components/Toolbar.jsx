@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   Check,
   Tags,
+  SlidersHorizontal,
 } from "lucide-react";
 
 const DISPLAY_MODES = [
@@ -153,6 +154,9 @@ export default function Toolbar({
   setDisplayMode,
   thumbSize,
   setThumbSize,
+  showFilters,
+  onToggleFilters,
+  filterCount = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const actionMap = {
@@ -251,6 +255,21 @@ export default function Toolbar({
       </label>
 
       <SortDropdown sort={sort} setSort={setSort} />
+
+      <div className="relative">
+        <IconButton
+          onClick={onToggleFilters}
+          className={showFilters || filterCount > 0 ? "bg-selected text-accent" : ""}
+          title="Filters"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5 stroke-[1.8]" />
+        </IconButton>
+        {filterCount > 0 && (
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-semibold text-black">
+            {filterCount}
+          </span>
+        )}
+      </div>
 
       <IconButton onClick={() => void refreshAll()} title="Refresh">
         <RotateCw className="h-3.5 w-3.5 stroke-[1.8]" />

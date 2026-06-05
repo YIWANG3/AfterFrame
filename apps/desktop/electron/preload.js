@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   startPreviewGeneration: (kind) => ipcRenderer.invoke("workspace:preview-start", kind),
   getPending: () => ipcRenderer.invoke("workspace:pending"),
   browseExports: (options) => ipcRenderer.invoke("workspace:browse", options),
+  getFacetValues: () => ipcRenderer.invoke("workspace:facet-values"),
   getAssetDetail: (exportPath) => ipcRenderer.invoke("workspace:detail", exportPath),
   getAssetDetailById: (assetId) => ipcRenderer.invoke("workspace:detail-by-id", assetId),
   revealPath: (targetPath) => ipcRenderer.invoke("workspace:reveal", targetPath),

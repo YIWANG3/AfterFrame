@@ -12,6 +12,7 @@ import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
+import FilterBar from "./components/FilterBar";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
@@ -35,6 +36,7 @@ export default function App() {
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
   const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers"
+  const [showFilters, setShowFilters] = useState(false);
 
   // Test backdoor — exposed to Playwright via window.__afterframeTest.
   // Lets E2E specs open the editor with an arbitrary file path without
@@ -642,7 +644,7 @@ export default function App() {
                 setQuery={workspace.setQuery}
                 sort={workspace.sort}
                 setSort={workspace.setSort}
-                refreshAll={workspace.refreshAll}
+                refreshAll={() => workspace.refreshAll({ force: true })}
                 onAddProcessed={workspace.addImages}
                 onAddSources={workspace.addSources}
                 onRunImport={workspace.runImportPipeline}
@@ -672,7 +674,17 @@ export default function App() {
                 setDisplayMode={setDisplayMode}
                 thumbSize={thumbSize}
                 setThumbSize={setThumbSize}
+                showFilters={showFilters}
+                onToggleFilters={() => setShowFilters((v) => !v)}
+                filterCount={Object.keys(workspace.filters || {}).length}
               />
+              {showFilters && (
+                <FilterBar
+                  facetValues={workspace.facetValues}
+                  filters={workspace.filters}
+                  onChange={workspace.setFilters}
+                />
+              )}
               <div className="min-h-0 flex-1 overflow-hidden">
                 <Gallery
                   items={currentItems}

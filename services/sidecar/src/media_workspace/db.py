@@ -11,7 +11,7 @@ from .models import ExportCandidate, MatchDecision, RawMetadata
 from .schema import SCHEMA_STATEMENTS
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -24,6 +24,30 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return connection
 
 
+# Searchable facet columns derived from assets.metadata_json. VIRTUAL generated
+# columns compute on read (no storage, auto-synced with metadata_json) and can
+# be indexed — giving fast facet filters without denormalizing or backfilling.
+_FACET_COLUMNS = [
+    ("meta_capture_time", "TEXT", "$.capture_time"),
+    ("meta_camera_model", "TEXT", "$.camera_model"),
+    ("meta_lens_model", "TEXT", "$.lens_model"),
+    ("meta_iso", "INTEGER", "$.iso"),
+    ("meta_aperture", "REAL", "$.aperture"),
+    ("meta_shutter", "REAL", "$.shutter_speed"),
+    ("meta_focal", "REAL", "$.focal_length"),
+    ("meta_width", "INTEGER", "$.width"),
+    ("meta_height", "INTEGER", "$.height"),
+]
+_FACET_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_assets_meta_camera ON assets(meta_camera_model)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_meta_lens ON assets(meta_lens_model)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_meta_iso ON assets(meta_iso)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_meta_aperture ON assets(meta_aperture)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_meta_focal ON assets(meta_focal)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_meta_capture_time ON assets(meta_capture_time)",
+]
+
+
 def init_db(connection: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         connection.execute(statement)
@@ -32,6 +56,16 @@ def init_db(connection: sqlite3.Connection) -> None:
     _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")
     _ensure_column(connection, "raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'")
     _ensure_column(connection, "jobs", "result_json", "TEXT NOT NULL DEFAULT '{}'")
+    # Searchable facet columns + indexes (idempotent; VIRTUAL generated columns).
+    for name, sql_type, json_path in _FACET_COLUMNS:
+        _ensure_column(
+            connection,
+            "assets",
+            name,
+            f"{sql_type} GENERATED ALWAYS AS (json_extract(metadata_json, '{json_path}')) VIRTUAL",
+        )
+    for index_sql in _FACET_INDEXES:
+        connection.execute(index_sql)
     connection.execute(
         """
         INSERT INTO catalog_info (catalog_id, catalog_path, schema_version)
@@ -46,9 +80,11 @@ def init_db(connection: sqlite3.Connection) -> None:
 
 
 def _ensure_column(connection: sqlite3.Connection, table_name: str, column_name: str, column_spec: str) -> None:
+    # table_xinfo (not table_info) lists VIRTUAL generated columns too, so this
+    # stays idempotent for generated facet columns across repeated init_db runs.
     columns = {
         row["name"]
-        for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        for row in connection.execute(f"PRAGMA table_xinfo({table_name})").fetchall()
     }
     if column_name in columns:
         return
@@ -1247,6 +1283,55 @@ def _browse_order_clause(sort: str | None) -> str:
     return "assets.stem, registry.export_path"
 
 
+def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
+    """Build AND-combined WHERE fragments + params from a structured facet dict.
+
+    Recognized keys: camera, lens (exact), iso_min/iso_max, aperture_min/max,
+    focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
+    rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags).
+    Unknown/empty keys are ignored.
+    """
+    if not filters:
+        return "", []
+    clauses: list[str] = []
+    params: list[object] = []
+
+    def add(clause: str, *vals: object) -> None:
+        clauses.append(clause)
+        params.extend(vals)
+
+    if filters.get("camera"):
+        add("assets.meta_camera_model = ?", filters["camera"])
+    if filters.get("lens"):
+        add("assets.meta_lens_model = ?", filters["lens"])
+    for key, col in (("iso", "meta_iso"), ("aperture", "meta_aperture"),
+                     ("focal", "meta_focal"), ("shutter", "meta_shutter")):
+        lo, hi = filters.get(f"{key}_min"), filters.get(f"{key}_max")
+        if lo is not None:
+            add(f"assets.{col} >= ?", lo)
+        if hi is not None:
+            add(f"assets.{col} <= ?", hi)
+    if filters.get("date_from"):
+        add("date(assets.meta_capture_time) >= date(?)", filters["date_from"])
+    if filters.get("date_to"):
+        add("date(assets.meta_capture_time) <= date(?)", filters["date_to"])
+    if filters.get("rating_min") is not None:
+        add("assets.app_rating >= ?", filters["rating_min"])
+    orientation = filters.get("orientation")
+    if orientation == "portrait":
+        add("assets.meta_height > assets.meta_width")
+    elif orientation == "landscape":
+        add("assets.meta_width > assets.meta_height")
+    elif orientation == "square":
+        add("assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL")
+    if filters.get("tag"):
+        add("EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = assets.asset_id AND t.tag = ?)", filters["tag"])
+
+    if not clauses:
+        return "", []
+    return "AND " + " AND ".join(clauses), params
+
+
 def list_export_assets(
     connection: sqlite3.Connection,
     status: str,
@@ -1254,6 +1339,7 @@ def list_export_assets(
     offset: int = 0,
     search: str | None = None,
     sort: str | None = None,
+    filters: dict | None = None,
 ) -> list[sqlite3.Row]:
     if status == "matched":
         status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed')"
@@ -1271,9 +1357,17 @@ def list_export_assets(
     params: list[object] = []
     search_clause = ""
     if search:
-        search_clause = "AND (assets.stem LIKE ? OR registry.export_path LIKE ?)"
+        # Match filename/path AND camera/lens (camera was only filtered
+        # client-side before, so it broke on pagination).
+        search_clause = (
+            "AND (assets.stem LIKE ? OR registry.export_path LIKE ? "
+            "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ?)"
+        )
         like_pattern = f"%{search}%"
-        params.extend([like_pattern, like_pattern])
+        params.extend([like_pattern, like_pattern, like_pattern, like_pattern])
+
+    facet_clause, facet_params = _facet_clauses(filters)
+    params.extend(facet_params)
     params.extend([limit, offset])
 
     return connection.execute(
@@ -1327,11 +1421,44 @@ def list_export_assets(
            AND preview_hd_entries.status = 'ready'
         WHERE {status_clause}
           {search_clause}
+          {facet_clause}
         ORDER BY {_browse_order_clause(sort)}
         LIMIT ? OFFSET ?
         """,
         params,
     ).fetchall()
+
+
+def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
+    """Available facet options for building the filter bar.
+
+    Returns distinct cameras/lenses with counts, numeric min/max for the range
+    sliders, and the capture-time span — all scoped to export assets.
+    """
+    base = "FROM assets WHERE asset_type = 'export'"
+
+    def value_counts(col: str) -> list[dict[str, object]]:
+        rows = connection.execute(
+            f"SELECT assets.{col} AS v, COUNT(*) AS c {base} AND assets.{col} IS NOT NULL "
+            f"AND assets.{col} != '' GROUP BY assets.{col} ORDER BY c DESC"
+        ).fetchall()
+        return [{"value": r["v"], "count": r["c"]} for r in rows]
+
+    def min_max(col: str) -> dict[str, object]:
+        r = connection.execute(
+            f"SELECT MIN(assets.{col}) AS lo, MAX(assets.{col}) AS hi {base} AND assets.{col} IS NOT NULL"
+        ).fetchone()
+        return {"min": r["lo"], "max": r["hi"]}
+
+    return {
+        "cameras": value_counts("meta_camera_model"),
+        "lenses": value_counts("meta_lens_model"),
+        "iso": min_max("meta_iso"),
+        "aperture": min_max("meta_aperture"),
+        "focal": min_max("meta_focal"),
+        "shutter": min_max("meta_shutter"),
+        "capture_time": min_max("meta_capture_time"),
+    }
 
 
 def get_duplicate_assets(connection: sqlite3.Connection, asset_id: str) -> list[sqlite3.Row]:
