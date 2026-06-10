@@ -182,6 +182,20 @@ function register({
     return res || { count: 0 };
   });
 
+  ipcMain.handle("workspace:add-asset-tag", async (_event, assetId, tag) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb()) throw new Error("Open a catalog first.");
+    if (!assetId || !tag) return null;
+    return await callSidecarJsonAsync(["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
+  });
+
+  ipcMain.handle("workspace:remove-asset-tag", async (_event, assetId, tag) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb()) throw new Error("Open a catalog first.");
+    if (!assetId || !tag) return null;
+    return await callSidecarJsonAsync(["remove-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
+  });
+
   ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb) return null;

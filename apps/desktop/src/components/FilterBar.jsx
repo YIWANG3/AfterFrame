@@ -77,9 +77,38 @@ function Popover({ label, active, summary, children, width = 220 }) {
   );
 }
 
-function ListPopover({ label, value, options, onSelect }) {
+function ListPopover({ label, value, options, onSelect, searchable, onSearch }) {
+  const [q, setQ] = useState("");
+  const [remote, setRemote] = useState(null);
+
+  // When onSearch is provided, typing queries the backend (debounced) so the
+  // list stays bounded no matter how many distinct values exist.
+  useEffect(() => {
+    if (!onSearch) return undefined;
+    const term = q.trim();
+    if (!term) { setRemote(null); return undefined; }
+    const t = setTimeout(async () => {
+      try { setRemote(await onSearch(term)); } catch { setRemote([]); }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q, onSearch]);
+
+  let shown;
+  if (onSearch) shown = q.trim() ? (remote || []) : options;
+  else if (searchable && q) shown = options.filter((o) => String(o.value).toLowerCase().includes(q.toLowerCase()));
+  else shown = options;
+
   return (
     <Popover label={label} active={!!value} summary={value} width={200}>
+      {(searchable || onSearch) && (
+        <input
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={`Search ${label.toLowerCase()}…`}
+          className="mb-1.5 w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+        />
+      )}
       <div className="popover-scroll -mr-2 max-h-[280px] overflow-y-auto pr-1">
         <button
           type="button"
@@ -89,7 +118,7 @@ function ListPopover({ label, value, options, onSelect }) {
           <span className="flex h-3 w-3 items-center justify-center">{!value && <Check className="h-3 w-3 text-accent" />}</span>
           Any {label}
         </button>
-        {options.map((opt) => (
+        {shown.map((opt) => (
           <button
             key={opt.value}
             type="button"
@@ -248,6 +277,7 @@ export default function FilterBar({ facetValues, filters, onChange }) {
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
   const lenses = facetValues?.lenses || [];
+  const tags = facetValues?.tags || [];
   const activeCount = Object.keys(f).length;
 
   return (
@@ -257,6 +287,15 @@ export default function FilterBar({ facetValues, filters, onChange }) {
       )}
       {lenses.length > 0 && (
         <ListPopover label="Lens" value={f.lens} options={lenses} onSelect={(v) => onChange(setOrDelete(f, "lens", v))} />
+      )}
+      {tags.length > 0 && (
+        <ListPopover
+          label="Tag"
+          value={f.tag}
+          options={tags}
+          onSearch={(q) => window.mediaWorkspace?.searchFacet?.({ field: "tag", q, limit: 60 })}
+          onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
+        />
       )}
 
       <RangePopover label="ISO" bounds={facetValues?.iso} step={50} minKey="iso_min" maxKey="iso_max" filters={f} onChange={onChange} />

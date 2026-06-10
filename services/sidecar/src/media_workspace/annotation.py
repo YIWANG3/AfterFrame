@@ -535,6 +535,64 @@ def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[di
     }
 
 
+def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, source: str = "user", commit: bool = True) -> Optional[dict[str, Any]]:
+    """Manually add a tag to an asset. Keeps tags_json (display) and asset_tags
+    (search/filter) in sync. Creates a minimal annotation row if none exists."""
+    tag = (tag or "").strip()
+    if not tag:
+        return get_annotation(connection, asset_id)
+    now = datetime.now(timezone.utc).isoformat()
+    norm = normalize_tag(tag)
+    connection.execute(
+        "INSERT OR IGNORE INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, ?, ?)",
+        (asset_id, tag, source, now),
+    )
+    row = connection.execute("SELECT tags_json FROM asset_ai_annotations WHERE asset_id = ?", (asset_id,)).fetchone()
+    if row is not None:
+        tags = json.loads(row["tags_json"] or "[]")
+        if norm not in {normalize_tag(t) for t in tags}:
+            tags.append(tag)
+            connection.execute(
+                "UPDATE asset_ai_annotations SET tags_json = ?, updated_at = ? WHERE asset_id = ?",
+                (json.dumps(tags, ensure_ascii=False), now, asset_id),
+            )
+    else:
+        connection.execute(
+            """
+            INSERT INTO asset_ai_annotations
+                (asset_id, provider, model, schema_version, caption, tags_json,
+                 location_json, detected_text, raw_response, created_at, updated_at)
+            VALUES (?, 'user', 'manual', ?, '', ?, NULL, NULL, NULL, ?, ?)
+            """,
+            (asset_id, SCHEMA_VERSION, json.dumps([tag], ensure_ascii=False), now, now),
+        )
+    if commit:
+        connection.commit()
+    return get_annotation(connection, asset_id)
+
+
+def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> Optional[dict[str, Any]]:
+    """Remove a tag from an asset (both tags_json and asset_tags)."""
+    tag = (tag or "").strip()
+    if not tag:
+        return get_annotation(connection, asset_id)
+    norm = normalize_tag(tag)
+    connection.execute(
+        "DELETE FROM asset_tags WHERE asset_id = ? AND LOWER(TRIM(tag)) = ?",
+        (asset_id, norm),
+    )
+    row = connection.execute("SELECT tags_json FROM asset_ai_annotations WHERE asset_id = ?", (asset_id,)).fetchone()
+    if row is not None:
+        tags = [t for t in json.loads(row["tags_json"] or "[]") if normalize_tag(t) != norm]
+        connection.execute(
+            "UPDATE asset_ai_annotations SET tags_json = ?, updated_at = ? WHERE asset_id = ?",
+            (json.dumps(tags, ensure_ascii=False), datetime.now(timezone.utc).isoformat(), asset_id),
+        )
+    if commit:
+        connection.commit()
+    return get_annotation(connection, asset_id)
+
+
 def list_top_tags(connection: sqlite3.Connection, limit: int = TAG_REUSE_HINT_LIMIT) -> list[str]:
     """Most-used tags first, for prompt reuse hints."""
     rows = connection.execute(

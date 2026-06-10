@@ -188,6 +188,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("facet-values", parents=[common])
 
+    search_facet_p = subparsers.add_parser("search-facet", parents=[common])
+    search_facet_p.add_argument("--field", choices=["tag", "camera", "lens"], required=True)
+    search_facet_p.add_argument("--q", default="")
+    search_facet_p.add_argument("--limit", type=int, default=50)
+
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
     detail_group.add_argument("--asset-id")
@@ -371,6 +376,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
+
+    add_tag_p = subparsers.add_parser("add-asset-tag", parents=[common])
+    add_tag_p.add_argument("--asset-id", required=True)
+    add_tag_p.add_argument("--tag", required=True)
+
+    remove_tag_p = subparsers.add_parser("remove-asset-tag", parents=[common])
+    remove_tag_p.add_argument("--asset-id", required=True)
+    remove_tag_p.add_argument("--tag", required=True)
 
     list_tags_p = subparsers.add_parser("list-tags", parents=[common])
     list_tags_p.add_argument("--limit", type=int, default=200)
@@ -694,6 +707,18 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
+    if args.command == "add-asset-tag":
+        from . import annotation as _annotation
+        payload = _annotation.add_asset_tag(connection, args.asset_id, args.tag)
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0
+
+    if args.command == "remove-asset-tag":
+        from . import annotation as _annotation
+        payload = _annotation.remove_asset_tag(connection, args.asset_id, args.tag)
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0
+
     if args.command == "list-tags":
         from . import annotation as _annotation
         tags = _annotation.list_top_tags(connection, limit=args.limit)
@@ -849,6 +874,11 @@ def main() -> int:
     if args.command == "facet-values":
         from .db import get_facet_values
         print(json.dumps(get_facet_values(connection), ensure_ascii=False))
+        return 0
+
+    if args.command == "search-facet":
+        from .db import search_facet_values
+        print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit), ensure_ascii=False))
         return 0
 
     if args.command == "browse-exports":

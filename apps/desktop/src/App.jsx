@@ -740,7 +740,11 @@ export default function App() {
               onRatingChange={applyRating}
               onSelectAsset={selectSingle}
               pushToast={pushToast}
-              onTagFilter={(tag) => pushToast?.({ title: "Tag filter", message: `Filtering by "${tag}" — coming soon.`, ttl: 2500 })}
+              onTagFilter={(tag) => {
+                if (!tag) return;
+                workspace.setFilters({ ...(workspace.filters || {}), tag });
+                setShowFilters(true);
+              }}
             />
           )
         ) : <div className="bg-chrome" />}

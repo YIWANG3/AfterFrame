@@ -332,6 +332,9 @@ export default function useWorkspace() {
     setPreviewTask(nextPreviewTask);
     setEnrichmentTask(nextEnrichmentTask);
     await Promise.all([loadCollections(), loadBrowser({ nextStatus, collectionId, force })]);
+    // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
+    // bar stays in sync after imports/annotation without a full reload.
+    void window.mediaWorkspace?.getFacetValues?.().then(setFacetValues).catch(() => {});
   }
 
   async function startIncrementalImport({ rawDirs: nextRawDirs = [], exportDirs: nextExportDirs = [], fullCatalog = false }) {

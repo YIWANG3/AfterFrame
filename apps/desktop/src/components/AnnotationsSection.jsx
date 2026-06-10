@@ -5,7 +5,7 @@
 //   - revisiting an already-loaded asset is synchronous (no flicker)
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { Sparkles, RotateCcw, ChevronRight } from "lucide-react";
+import { Sparkles, RotateCcw, ChevronRight, X, Plus } from "lucide-react";
 import {
   subscribe,
   getVersion,
@@ -75,6 +75,74 @@ function useAnnotationState(assetId) {
   };
 }
 
+// Inline tag adder: type to search existing tags (server-side, scales to many)
+// or Enter to add a brand-new one.
+function TagAdder({ onAdd, existing }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const t = setTimeout(async () => {
+      const res = (await window.mediaWorkspace?.searchFacet?.({ field: "tag", q: q.trim(), limit: 8 })) || [];
+      const have = new Set((existing || []).map((x) => String(x).toLowerCase()));
+      setSuggestions(res.filter((r) => !have.has(String(r.value).toLowerCase())));
+    }, 180);
+    return () => clearTimeout(t);
+  }, [q, open, existing]);
+
+  function commit(tag) {
+    const v = (tag ?? q).trim();
+    if (v) onAdd(v);
+    setQ("");
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
+      >
+        <Plus className="h-2.5 w-2.5" /> Add
+      </button>
+    );
+  }
+  return (
+    <div className="relative">
+      <input
+        autoFocus
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          else if (e.key === "Escape") { setQ(""); setOpen(false); }
+        }}
+        placeholder="Add tag…"
+        className="w-28 rounded-md border border-accent/50 bg-app px-2 py-[2px] text-[10px] text-text outline-none placeholder:text-muted2"
+      />
+      {suggestions.length > 0 && (
+        <div className="absolute left-0 top-full z-50 mt-1 max-h-44 w-44 overflow-y-auto rounded-md border border-border/60 bg-chrome py-1 shadow-overlay">
+          {suggestions.map((s) => (
+            <button
+              key={s.value}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); commit(s.value); }}
+              className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[10px] text-muted hover:bg-hover hover:text-text"
+            >
+              <span className="truncate">{s.value}</span>
+              <span className="shrink-0 text-[9px] tabular-nums text-muted2">{s.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AnnotationsSection({
   assetId,
   imagePath,
@@ -136,6 +204,26 @@ export default function AnnotationsSection({
       setRunning(false);
     }
   }, [assetId, imagePath, pushToast]);
+
+  const addTag = useCallback(async (tag) => {
+    if (!assetId || !tag) return;
+    try {
+      const updated = await window.mediaWorkspace?.addAssetTag?.(assetId, tag);
+      setCachedAnnotation(assetId, updated || null);
+    } catch (e) {
+      pushToast?.({ title: "Couldn't add tag", message: e?.message || "Failed", ttl: 4000, tone: "error" });
+    }
+  }, [assetId, pushToast]);
+
+  const removeTag = useCallback(async (tag) => {
+    if (!assetId || !tag) return;
+    try {
+      const updated = await window.mediaWorkspace?.removeAssetTag?.(assetId, tag);
+      setCachedAnnotation(assetId, updated || null);
+    } catch (e) {
+      pushToast?.({ title: "Couldn't remove tag", message: e?.message || "Failed", ttl: 4000, tone: "error" });
+    }
+  }, [assetId, pushToast]);
 
   // No annotation (or still unknown): show the CTA. Layout is stable across
   // unknown→known transitions so switching assets doesn't flicker.
@@ -203,23 +291,34 @@ export default function AnnotationsSection({
         )}
       </Section>
 
-      {annotation.tags?.length > 0 && (
-        <Section title="Tags" badge={`AI · ${annotation.tags.length}`} collapsible>
-          <div className="flex flex-wrap gap-1">
-            {annotation.tags.map((t) => (
+      <Section title="Tags" badge={annotation.tags?.length ? `${annotation.tags.length}` : undefined} collapsible>
+        <div className="flex flex-wrap items-center gap-1">
+          {(annotation.tags || []).map((t) => (
+            <span
+              key={t}
+              className="group/tag inline-flex items-center rounded-md border border-transparent bg-app px-2 py-[2px] text-[10px] text-muted transition-colors hover:border-border hover:text-text"
+            >
               <button
-                key={t}
                 type="button"
                 onClick={() => onTagClick?.(t)}
                 title={`Filter by "${t}"`}
-                className="inline-flex items-center rounded-full border border-transparent bg-app px-2 py-[2px] text-[10px] text-muted transition-colors hover:border-border hover:bg-hover hover:text-text"
+                className="hover:text-text"
               >
                 {t}
               </button>
-            ))}
-          </div>
-        </Section>
-      )}
+              <button
+                type="button"
+                onClick={() => removeTag(t)}
+                title="Remove tag"
+                className="ml-0.5 hidden rounded p-px text-muted2 transition-colors hover:text-red-400 group-hover/tag:inline-flex"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+          <TagAdder onAdd={addTag} existing={annotation.tags || []} />
+        </div>
+      </Section>
 
       {hasLoc && (
         <Section title="Location" badge="AI · guess" collapsible>

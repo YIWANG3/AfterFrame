@@ -30,6 +30,22 @@ function register({ ipcMain, callSidecarJsonAsync, getCatalogState }) {
     }
   });
 
+  ipcMain.handle("workspace:search-facet", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return [];
+    const opts = options || {};
+    if (!opts.field) return [];
+    const args = ["search-facet", "--field", String(opts.field)];
+    if (opts.q) args.push("--q", String(opts.q));
+    if (opts.limit) args.push("--limit", String(opts.limit));
+    try {
+      return await callSidecarJsonAsync(args) || [];
+    } catch (err) {
+      console.warn("[workspace:search-facet] sidecar error:", err.message);
+      return [];
+    }
+  });
+
   ipcMain.handle("workspace:detail", async (_event, exportPath) => {
     return await callSidecarJsonAsync(["asset-detail", "--export-path", exportPath]);
   });

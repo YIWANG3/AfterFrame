@@ -1357,14 +1357,17 @@ def list_export_assets(
     params: list[object] = []
     search_clause = ""
     if search:
-        # Match filename/path AND camera/lens (camera was only filtered
-        # client-side before, so it broke on pagination).
+        # Full-text-ish search across filename/path, camera/lens, and the AI
+        # annotation (caption, detected OCR text, tags). LIKE is plenty fast at
+        # this scale; FTS5 can replace it later if libraries grow very large.
         search_clause = (
             "AND (assets.stem LIKE ? OR registry.export_path LIKE ? "
-            "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ?)"
+            "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
+            "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
+            "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
         )
         like_pattern = f"%{search}%"
-        params.extend([like_pattern, like_pattern, like_pattern, like_pattern])
+        params.extend([like_pattern] * 7)
 
     facet_clause, facet_params = _facet_clauses(filters)
     params.extend(facet_params)
@@ -1397,6 +1400,8 @@ def list_export_assets(
         FROM export_lookup_registry AS registry
         JOIN assets
             ON assets.asset_id = registry.export_asset_id
+        LEFT JOIN asset_ai_annotations AS anno
+            ON anno.asset_id = assets.asset_id
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
         LEFT JOIN resource_set_items AS rsi
@@ -1450,15 +1455,72 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
         ).fetchone()
         return {"min": r["lo"], "max": r["hi"]}
 
+    # Only the most-used tags for the default dropdown; the rest are reachable
+    # via server-side search (search_facet_values) so this stays bounded even
+    # with thousands of tags.
+    tag_rows = connection.execute(
+        """
+        SELECT t.tag AS v, COUNT(*) AS c
+        FROM asset_tags AS t
+        JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'export'
+        GROUP BY t.tag
+        ORDER BY c DESC, t.tag
+        LIMIT 60
+        """
+    ).fetchall()
+
     return {
         "cameras": value_counts("meta_camera_model"),
         "lenses": value_counts("meta_lens_model"),
+        "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
         "iso": min_max("meta_iso"),
         "aperture": min_max("meta_aperture"),
         "focal": min_max("meta_focal"),
         "shutter": min_max("meta_shutter"),
         "capture_time": min_max("meta_capture_time"),
     }
+
+
+def search_facet_values(
+    connection: sqlite3.Connection,
+    field: str,
+    q: str = "",
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    """Server-side facet search, so a dropdown never loads more than `limit`
+    rows regardless of how many distinct values exist. Matches substring,
+    ordered by frequency."""
+    like = f"%{q}%" if q else "%"
+    if field == "tag":
+        rows = connection.execute(
+            """
+            SELECT t.tag AS v, COUNT(*) AS c
+            FROM asset_tags AS t
+            JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'export'
+            WHERE t.tag LIKE ?
+            GROUP BY t.tag
+            ORDER BY c DESC, t.tag
+            LIMIT ?
+            """,
+            (like, limit),
+        ).fetchall()
+    elif field in ("camera", "lens"):
+        col = "meta_camera_model" if field == "camera" else "meta_lens_model"
+        rows = connection.execute(
+            f"""
+            SELECT assets.{col} AS v, COUNT(*) AS c
+            FROM assets
+            WHERE asset_type = 'export' AND assets.{col} IS NOT NULL
+              AND assets.{col} != '' AND assets.{col} LIKE ?
+            GROUP BY assets.{col}
+            ORDER BY c DESC
+            LIMIT ?
+            """,
+            (like, limit),
+        ).fetchall()
+    else:
+        return []
+    return [{"value": r["v"], "count": r["c"]} for r in rows]
 
 
 def get_duplicate_assets(connection: sqlite3.Connection, asset_id: str) -> list[sqlite3.Row]:
