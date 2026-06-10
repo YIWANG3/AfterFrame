@@ -26,6 +26,11 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![Lightbox](docs/assets/lightbox.png)
 
+### Search & Filter
+- Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
+- Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, and star rating — combined live
+- Tag filtering: click any tag in the inspector, or pick from a searchable tag list (server-side search, scales to thousands of tags)
+
 ### Edit
 - **Crop** with preset aspect ratios, rotation, and flip
 
@@ -56,6 +61,15 @@ Bring your own API key. AfterFrame does not bundle or proxy any AI service — y
 - Version history for every repaint
 
 ![AI Repaint — Before & After](docs/assets/ai-repaint-compare.png)
+
+### AI Auto-Annotation (BYOK)
+Generate a caption, tags, and a location guess for your photos with your own LLM provider (Anthropic, OpenAI, or any OpenAI-compatible endpoint). As with AI Repaint, requests go directly from your machine to the API.
+
+- Annotate one photo, a multi-selection, a whole folder, or every un-annotated asset — all as tracked background jobs with live progress
+- Optional auto-annotate on import
+- Bilingual tags (English / 中文), with configurable tag count and caption length
+- Hand-edit per-photo tags — remove a wrong one or add your own (with the same tag search)
+- Results power Search & Filter above; HEIC / RAW inputs handled
 
 ### Library Management
 - Catalog-based workflow — one `.afcatalog` per project
