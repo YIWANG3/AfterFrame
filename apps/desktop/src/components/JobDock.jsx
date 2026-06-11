@@ -6,11 +6,16 @@
 import { JOB_META, jobLine } from "./ActivityCenter";
 import { Activity } from "lucide-react";
 
-export default function JobDock({ jobs, queuedNote, onCancel }) {
+// `inline` skips the fixed positioning so the dock can live inside a shared
+// bottom-corner container (alongside the ToastStack) without overlapping it.
+export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) {
   const list = jobs || [];
   if (!list.length) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-[11000] flex w-72 flex-col gap-2">
+    <div className={[
+      "flex w-[340px] flex-col gap-2",
+      inline ? "" : "fixed bottom-4 right-4 z-[11000]",
+    ].join(" ")}>
       {list.map((job) => {
         const meta = JOB_META[job.jobType] || { label: job.jobType, icon: Activity };
         const Icon = meta.icon;
@@ -19,8 +24,10 @@ export default function JobDock({ jobs, queuedNote, onCancel }) {
         return (
           <div
             key={job.jobId}
-            className="rounded-lg border border-border/60 bg-chrome/95 p-3 shadow-overlay backdrop-blur-sm"
+            className="relative overflow-hidden rounded-lg border border-border bg-panel2 p-3 pl-4 shadow-overlay ring-1 ring-black/40"
           >
+            {/* Accent edge so the card reads as "activity" against any panel */}
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
             <div className="flex items-center gap-2">
               <Icon className="h-3.5 w-3.5 shrink-0 text-accent" />
               <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-text">

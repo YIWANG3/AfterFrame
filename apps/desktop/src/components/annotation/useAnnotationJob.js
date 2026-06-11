@@ -49,7 +49,8 @@ export default function useAnnotationJob(pushToast, pokeJobs) {
 
     try {
       const status = await startAnnotationJob(payload);
-      pushToast?.({ title: "Annotating…", message: `${count} image${count > 1 ? "s" : ""} queued.`, ttl: 3000 });
+      // No start toast — the JobDock progress card appears immediately and
+      // a duplicate notification would just stack on top of it.
       pokeJobs?.(status?.jobId ? { jobId: status.jobId, jobType: "annotation" } : undefined);
     } catch (e) {
       pushToast?.({ title: "Couldn't start annotation", message: e?.message || "Failed to start.", ttl: 6000, tone: "error" });

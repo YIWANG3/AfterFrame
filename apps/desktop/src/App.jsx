@@ -795,7 +795,12 @@ export default function App() {
         ) : null}
       </div>
 
-      <JobDock jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} />
+      {/* Single bottom-right surface: running-job cards stacked above
+          transient toasts — no overlap between the two. */}
+      <div className="fixed bottom-4 right-4 z-[20000] flex flex-col items-end gap-2">
+        <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} />
+        <ToastStack inline toasts={toasts} onDismiss={dismissToast} />
+      </div>
       <Lightbox
         open={lightboxOpen}
         items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
@@ -873,7 +878,6 @@ export default function App() {
         }}
       />
       {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
-      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

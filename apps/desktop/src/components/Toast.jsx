@@ -29,10 +29,15 @@ export function useToasts() {
   return { toasts, pushToast, dismissToast };
 }
 
-export default function ToastStack({ toasts, onDismiss }) {
+// `inline` skips the fixed positioning so the stack can live inside a shared
+// bottom-corner container (alongside the JobDock) without overlapping it.
+export default function ToastStack({ toasts, onDismiss, inline = false }) {
   if (!toasts?.length) return null;
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[20000] flex flex-col-reverse gap-2">
+    <div className={[
+      "pointer-events-none flex flex-col-reverse gap-2",
+      inline ? "" : "fixed bottom-4 right-4 z-[20000]",
+    ].join(" ")}>
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={() => onDismiss(t.id)} />
       ))}
