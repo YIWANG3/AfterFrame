@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles } from "lucide-react";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
@@ -256,7 +256,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
   );
 }
 
-function CardContent({
+const CardContent = memo(function CardContent({
   item,
   selected,
   onSelect,
@@ -279,7 +279,7 @@ function CardContent({
       type="button"
       onClick={(event) => onSelect(item.asset_id, event)}
       onDoubleClick={() => onOpen?.(item.asset_id)}
-      onContextMenu={onContextMenu}
+      onContextMenu={(event) => onContextMenu(event, item)}
       onDragStart={(event) => {
         const payload = onPrepareDragSelection?.(item.asset_id) || {
           assetIds: [item.asset_id],
@@ -363,7 +363,7 @@ function CardContent({
       ) : null}
     </button>
   );
-}
+});
 
 export default function Gallery({
   items,
@@ -398,6 +398,17 @@ export default function Gallery({
   const scrollRafRef = useRef(0);
   const [contextMenu, setContextMenu] = useState(null);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  // CardContent is memoized; parent callbacks change identity every render
+  // (inline closures in App), so route them through a ref behind stable
+  // wrappers — otherwise the memo never bails and every poll tick re-renders
+  // every visible card.
+  const cardHandlersRef = useRef({});
+  cardHandlersRef.current = { onSelect, onOpen, onPrepareDragSelection, openContextMenu };
+  const stableOnSelect = useCallback((id, event) => cardHandlersRef.current.onSelect?.(id, event), []);
+  const stableOnOpen = useCallback((id) => cardHandlersRef.current.onOpen?.(id), []);
+  const stableOnPrepareDrag = useCallback((id) => cardHandlersRef.current.onPrepareDragSelection?.(id), []);
+  const stableOnContextMenu = useCallback((event, item) => cardHandlersRef.current.openContextMenu?.(event, item), []);
   const [containerWidth, setContainerWidth] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -739,10 +750,10 @@ export default function Gallery({
               <CardContent
                 item={item}
                 selected={selectedIdSet.has(item.asset_id)}
-                onSelect={onSelect}
-                onOpen={onOpen}
-                onContextMenu={(event) => openContextMenu(event, item)}
-                onPrepareDragSelection={onPrepareDragSelection}
+                onSelect={stableOnSelect}
+                onOpen={stableOnOpen}
+                onContextMenu={stableOnContextMenu}
+                onPrepareDragSelection={stableOnPrepareDrag}
                 width={entry.width}
                 height={imgHeight}
                 fit={fit}

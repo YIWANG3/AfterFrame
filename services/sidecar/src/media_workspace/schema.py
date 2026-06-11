@@ -171,6 +171,11 @@ SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_raw_cache_stem_key ON raw_metadata_cache(stem_key)",
     "CREATE INDEX IF NOT EXISTS idx_raw_cache_capture_time ON raw_metadata_cache(capture_time)",
     "CREATE INDEX IF NOT EXISTS idx_registry_status ON export_lookup_registry(match_status)",
+    # browse_collection and origin-binding lookups join on export_asset_id
+    "CREATE INDEX IF NOT EXISTS idx_registry_export_asset ON export_lookup_registry(export_asset_id)",
+    # The browse query LEFT JOINs preview_entries twice on (asset_id, kind) —
+    # without this index SQLite builds a transient index on every browse call.
+    "CREATE INDEX IF NOT EXISTS idx_preview_entries_asset ON preview_entries(asset_id, kind)",
     "CREATE INDEX IF NOT EXISTS idx_resource_sets_primary ON resource_sets(primary_asset_id)",
     "CREATE INDEX IF NOT EXISTS idx_resource_set_items_asset ON resource_set_items(asset_id)",
     "CREATE INDEX IF NOT EXISTS idx_resource_set_items_parent ON resource_set_items(parent_asset_id)",

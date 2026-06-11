@@ -564,7 +564,15 @@ def main(argv: list[str] | None = None) -> int:
     init_db(connection)
     if fresh_db:
         set_catalog_path(connection, catalog.root)
+    try:
+        return _dispatch(parser, args, catalog, connection)
+    finally:
+        # Serve mode re-enters main() per request — without an explicit close
+        # each request would leak a WAL/SHM file handle until GC.
+        connection.close()
 
+
+def _dispatch(parser, args, catalog, connection) -> int:
     if args.command == "get-provider-token":
         payload = get_app_setting(connection, _provider_token_key(args.provider))
         print(json.dumps(payload or {}, indent=2))

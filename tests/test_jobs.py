@@ -52,11 +52,11 @@ class JobsTest(unittest.TestCase):
             with patch("media_workspace.job_runner.PreviewService.generate_batch", return_value={"generated": 1, "skipped": 0, "failed": 0}):
                 result = run_import_job(connection, catalog.root, job["job_id"], [raw_dir], [export_dir])
 
-            self.assertEqual(len(result["phase_results"]), 3)
+            self.assertEqual(len(result["phase_results"]), 4)  # scan, match, preview, preview-hd
             recorded = get_job(connection, job["job_id"])
             self.assertEqual(recorded["status"], "succeeded")
             self.assertEqual(recorded["progress"], 1.0)
-            self.assertEqual(len(recorded["result"]["phase_results"]), 3)
+            self.assertEqual(len(recorded["result"]["phase_results"]), 4)
 
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -108,6 +108,7 @@ def register_export_file(
     export_path: Path,
     origin_path: Optional[Path] = None,
     collage_source_ids: Optional[list[str]] = None,
+    version_kind: str = "derived",
 ) -> dict:
     """Register a finished file as an export asset (ported from quick-register).
 
@@ -177,7 +178,7 @@ def register_export_file(
             connection,
             asset_id,
             origin_asset_id=origin_asset_id,
-            version_kind="derived" if origin_asset_id else "import",
+            version_kind=version_kind if origin_asset_id else "import",
             commit=True,
         )
 

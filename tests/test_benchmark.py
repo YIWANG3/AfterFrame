@@ -55,7 +55,9 @@ class BenchmarkDatasetTest(unittest.TestCase):
             self.assertNotIn("generate_previews", result["stages"])
             self.assertEqual(result["summary"]["raw_assets"], 1)
             self.assertEqual(result["summary"]["export_assets"], 1)
-            self.assertEqual(result["summary"]["confirmed_matches"], 1)
+            # Stem-only match lands in pending (auto-bind threshold 0.9).
+            self.assertEqual(result["summary"]["confirmed_matches"], 0)
+            self.assertEqual(result["summary"]["pending_matches"], 1)
             self.assertEqual(result["evaluation"]["correct_match"], 1)
 
 

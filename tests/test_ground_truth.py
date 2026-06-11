@@ -40,13 +40,16 @@ class GroundTruthExportTest(unittest.TestCase):
             resolve_export(connection, unmatched_export)
 
             output_csv = root / "truth.csv"
-            result = export_ground_truth(connection, output_csv, statuses=["matched", "unmatched"])
+            result = export_ground_truth(
+                connection, output_csv, statuses=["matched", "pending", "unmatched"]
+            )
 
             self.assertEqual(result["rows"], 2)
             with output_csv.open("r", encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
 
-            self.assertTrue(rows[0]["notes"].startswith("reviewed-match-v0;score="))
+            # Stem-only match is pending under the 0.9 auto-bind threshold.
+            self.assertTrue(rows[0]["notes"].startswith("review-pending;score="))
             self.assertTrue(rows[0]["raw_path"])
             self.assertEqual(rows[1]["raw_path"], "")
             self.assertEqual(rows[1]["notes"], "reviewed-unmatched-v0;score=0.00")

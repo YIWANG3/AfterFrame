@@ -87,8 +87,14 @@ export function seedAnnotations(items) {
   let changed = false;
   for (const item of items) {
     if (!item?.asset_id || item.annotation === undefined) continue;
-    annotationCache.set(item.asset_id, item.annotation || null);
-    changed = true;
+    const next = item.annotation || null;
+    const prev = annotationCache.get(item.asset_id);
+    // Only mark changed on real differences — otherwise every browse page
+    // re-renders all subscribers for identical data.
+    if (prev === undefined || JSON.stringify(prev) !== JSON.stringify(next)) {
+      changed = true;
+    }
+    annotationCache.set(item.asset_id, next);
   }
   if (changed) notify();
 }

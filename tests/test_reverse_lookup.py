@@ -50,7 +50,10 @@ class ReverseLookupTest(unittest.TestCase):
             self.assertEqual(scan_result["indexed"], 1)
 
             decision = resolve_export(connection, export_file)
-            self.assertEqual(decision.status, "auto_bound")
+            # Stem-only matches (no metadata corroboration) score 0.88, below
+            # the 0.9 auto-bind threshold (commit 879ecb6) — they now require
+            # user confirmation instead of binding silently.
+            self.assertEqual(decision.status, "pending_confirmation")
             self.assertIsNotNone(decision.raw_asset_id)
 
             registry = get_registry(connection, export_file)
@@ -110,7 +113,7 @@ class ReverseLookupTest(unittest.TestCase):
             result = resolve_export_batch(connection, [export_dir])
 
             self.assertEqual(result["processed"], 2)
-            self.assertEqual(result["status_counts"]["auto_bound"], 1)
+            self.assertEqual(result["status_counts"]["pending_confirmation"], 1)
             self.assertEqual(result["status_counts"]["unmatched"], 1)
 
     def test_img_sequence_without_matching_number_stays_unmatched(self) -> None:

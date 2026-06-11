@@ -109,13 +109,18 @@ async function writeAppSettings(settings) {
  * All callers that modify settings MUST use this to avoid race conditions.
  */
 function updateAppSettings(mutateFn) {
-  _settingsWriteQueue = _settingsWriteQueue.then(async () => {
+  const run = _settingsWriteQueue.then(async () => {
     const settings = readAppSettings();
     const next = mutateFn(settings);
     await writeAppSettings(next);
     return next;
   });
-  return _settingsWriteQueue;
+  // Callers get the real result/rejection, but the queue itself reseeds from a
+  // settled promise — one failed write must not poison every later write.
+  _settingsWriteQueue = run.catch((err) => {
+    console.error("[settings] write failed:", err?.message || err);
+  });
+  return run;
 }
 
 function encryptToken(plaintext) {
@@ -342,6 +347,21 @@ function ensureResidentSidecar() {
     }
   });
   spawned.stderr.on("data", (d) => console.warn("[sidecar:resident:stderr]", String(d).slice(0, 300)));
+  // Async spawn failures (ENOENT etc.) arrive as 'error' events, not throws —
+  // without a handler they'd crash the whole main process.
+  spawned.on("error", (err) => {
+    console.warn("[sidecar:resident] process error:", err.message);
+    for (const entry of state.pending.values()) {
+      clearTimeout(entry.timer);
+      entry.reject(new Error(`resident sidecar error: ${err.message}`));
+    }
+    state.pending.clear();
+    if (residentSidecar === state) residentSidecar = null;
+  });
+  // Late EPIPE on stdin (child died mid-write) is likewise an async event.
+  spawned.stdin.on("error", (err) => {
+    console.warn("[sidecar:resident] stdin error:", err.message);
+  });
   spawned.on("exit", (code) => {
     console.warn("[sidecar:resident] exited with code", code);
     for (const entry of state.pending.values()) {
@@ -379,6 +399,10 @@ function callSidecarResident(command, timeoutMs) {
 }
 
 async function callSidecarAsync(command, timeoutMs = 30000) {
+  // Bind the call to the catalog it was issued against: a catalog switch
+  // mid-flight rejects resident requests, and retrying via one-shot would
+  // silently rebuild --catalog against the NEW path — wrong-library writes.
+  const issuedCatalogPath = currentCatalogPath;
   const residentPromise = callSidecarResident(command, timeoutMs);
   if (residentPromise) {
     try {
@@ -387,8 +411,14 @@ async function callSidecarAsync(command, timeoutMs = 30000) {
       // Genuine timeouts propagate (the command itself hung); transport-level
       // failures (process died, stopped) retry once via one-shot spawn.
       if (/timed out after/.test(err.message)) throw err;
+      if (currentCatalogPath !== issuedCatalogPath) {
+        throw new Error(`catalog switched while command was in flight: ${command[0]}`);
+      }
       console.warn("[sidecar:resident] falling back to one-shot:", err.message);
     }
+  }
+  if (currentCatalogPath !== issuedCatalogPath) {
+    throw new Error(`catalog switched while command was in flight: ${command[0]}`);
   }
   return callSidecarOneShot(command, timeoutMs);
 }
@@ -656,10 +686,13 @@ function formatJobStatus(job) {
       finishedAt: null,
       exitCode: null,
       phase: null,
+      phaseLabel: null,
       phaseIndex: 0,
       phaseCount: 0,
       rawDirs: [],
       exportDirs: [],
+      mode: null,
+      kind: null,
       phaseResults: [],
       progress: 0,
       result: null,

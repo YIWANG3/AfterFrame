@@ -8,6 +8,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from .models import ExportCandidate, MatchDecision, RawMetadata
+
+# Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
+_UNSET = object()
 from .schema import SCHEMA_STATEMENTS
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
@@ -577,7 +580,7 @@ def update_job(
     payload: dict[str, object] | None = None,
     result: dict[str, object] | None = None,
     progress: float | None = None,
-    error_text: str | None = None,
+    error_text: object = _UNSET,
     commit: bool = True,
 ) -> dict[str, object]:
     assignments: list[str] = ["updated_at = CURRENT_TIMESTAMP"]
@@ -594,7 +597,9 @@ def update_job(
     if progress is not None:
         assignments.append("progress = ?")
         params.append(progress)
-    if error_text is not None:
+    if error_text is not _UNSET:
+        # None is a meaningful value here: success paths pass error_text=None
+        # to CLEAR a stale error from a previous failed run of the same job id.
         assignments.append("error_text = ?")
         params.append(error_text)
     params.append(job_id)

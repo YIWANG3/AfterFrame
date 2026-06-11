@@ -695,93 +695,22 @@ def run_ai_repaint_job(
                     image_size=image_size,
                 )
 
-        candidate = extract_export_candidate(Path(result.output_path), fingerprint_mode="head-only")
-        asset_id = upsert_export_asset(connection, candidate, commit=True)
-        origin_asset_id = None
-        if origin_path:
-            origin_row = connection.execute(
-                "SELECT asset_id FROM asset_files WHERE path = ?",
-                (str(origin_path.resolve()),),
-            ).fetchone()
-            origin_asset_id = str(origin_row["asset_id"]) if origin_row else None
+        # Shared register pipeline (asset upsert → raw-binding inheritance →
+        # resource-set attach → previews). Replaces a hand-copied version that
+        # had drifted: preview failures here used to fail the whole job even
+        # though the asset was already committed.
+        from .derived import register_export_file
 
-        match_status = "unmatched"
-        match_score = 0.0
-        raw_asset_id = None
-        if origin_path:
-            origin = str(origin_path.resolve())
-            origin_row = connection.execute(
-                """
-                SELECT registry.raw_asset_id, registry.score
-                FROM asset_files
-                JOIN export_lookup_registry AS registry ON registry.export_asset_id = asset_files.asset_id
-                WHERE asset_files.path = ?
-                  AND registry.raw_asset_id IS NOT NULL
-                """,
-                (origin,),
-            ).fetchone()
-            if origin_row:
-                raw_asset_id = origin_row[0]
-                match_score = origin_row[1] or 1.0
-                match_status = "auto_bound"
-
-        if not raw_asset_id:
-            decision = resolve_export(connection, Path(result.output_path), thresholds=Thresholds(), refresh=True)
-            match_status = decision.status
-            match_score = decision.score
-            raw_asset_id = decision.raw_asset_id
-        else:
-            reg_decision = MatchDecision(
-                export_asset_id=asset_id,
-                export_path=Path(result.output_path),
-                status=match_status,
-                score=match_score,
-                raw_asset_id=raw_asset_id,
-                feature_vector={},
-            )
-            upsert_registry(connection, reg_decision, commit=True)
-
-        attach_asset_to_resource_set(
+        register_payload = register_export_file(
             connection,
-            asset_id,
-            origin_asset_id=origin_asset_id,
+            ensure_catalog(catalog_path),
+            Path(result.output_path),
+            origin_path=origin_path,
             version_kind="ai_repaint",
-            commit=True,
         )
-
-        preview_service = PreviewService(ensure_catalog(catalog_path))
-        row = connection.execute(
-            """
-            SELECT asset_id, asset_type, canonical_path, extension,
-                   json_extract(metadata_json, '$.width') AS width,
-                   json_extract(metadata_json, '$.height') AS height
-            FROM assets WHERE asset_id = ?
-            """,
-            (asset_id,),
-        ).fetchone()
-        if row:
-            preview_result = preview_service.generate_for_row(row, kind="preview", force=False)
-            upsert_preview_entry(
-                connection,
-                asset_id,
-                "preview",
-                preview_result.relative_path,
-                preview_result.width,
-                preview_result.height,
-                preview_result.status,
-                commit=True,
-            )
-            preview_hd_result = preview_service.generate_for_row(row, kind="preview-hd", force=False)
-            upsert_preview_entry(
-                connection,
-                asset_id,
-                "preview-hd",
-                preview_hd_result.relative_path,
-                preview_hd_result.width,
-                preview_hd_result.height,
-                preview_hd_result.status,
-                commit=True,
-            )
+        asset_id = register_payload["asset_id"]
+        match_status = register_payload["match_status"]
+        match_score = register_payload["score"]
 
         final_result = {
             "provider": result.provider,

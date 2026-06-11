@@ -142,6 +142,7 @@ export default function App() {
 
   // Mirror the current selection to the main process so the MCP get_selection
   // tool can answer "these photos" instantly.
+  const lastSelectionSentRef = useRef("");
   useEffect(() => {
     const ids = selectedIds.length
       ? selectedIds
@@ -150,6 +151,11 @@ export default function App() {
       .map((id) => itemById.get(id))
       .filter(Boolean)
       .map((item) => ({ asset_id: item.asset_id, stem: item.stem, export_path: item.export_path }));
+    // itemById is rebuilt on every items mutation (paging, polls, rating
+    // edits) — only ship the IPC when the selection payload actually changed.
+    const serialized = JSON.stringify(payload);
+    if (serialized === lastSelectionSentRef.current) return;
+    lastSelectionSentRef.current = serialized;
     window.mediaWorkspace?.reportSelection?.(payload);
   }, [selectedIds, workspace.selectedAssetId, itemById]);
 
@@ -266,6 +272,14 @@ export default function App() {
       deduped.push(id);
     }
     const nextPrimary = primaryId && itemById.has(primaryId) ? primaryId : deduped[0] || null;
+    // Marquee drags call this on every pointermove — bail when nothing changed.
+    if (
+      nextPrimary === workspace.selectedAssetId &&
+      deduped.length === selectedIds.length &&
+      deduped.every((id, i) => id === selectedIds[i])
+    ) {
+      return;
+    }
     setSelectedIds(deduped);
     setSelectionAnchorId(anchorId && itemById.has(anchorId) ? anchorId : nextPrimary);
     workspace.setSelectedAssetId(nextPrimary);
@@ -665,8 +679,7 @@ export default function App() {
             const nextIndex = nextHistory.length - 1;
             setHistory(nextHistory);
             setHistoryIndex(nextIndex);
-            workspace.setStatus(next);
-            void workspace.refreshAll({ nextStatus: next, collectionId: null });
+            workspace.setStatusFilter(next);
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}

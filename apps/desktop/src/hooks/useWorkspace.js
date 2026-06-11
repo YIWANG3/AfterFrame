@@ -40,6 +40,7 @@ export default function useWorkspace() {
   const [activeJobs, setActiveJobs] = useState([]);
   const [lastFinishedJob, setLastFinishedJob] = useState(null);
   const jobsTimerRef = useRef(null);
+  const lastJobsJsonRef = useRef("");
   const jobsPollingRef = useRef(false);
   const knownActiveRef = useRef(new Map()); // jobId -> { jobId, jobType, kind }
   const pendingImportRef = useRef(null);
@@ -141,10 +142,8 @@ export default function useWorkspace() {
     setDetail(payload);
   }
 
-  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort, facetFilters = filters } = {}) {
-    console.log("[loadBrowser] called, browserLoading:", browserLoading, "force:", force, "append:", append, "browserHasMore:", browserHasMore);
+  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort, facetFilters = filters, preserveView = false } = {}) {
     if (!force && (append ? browserLoadingMore || browserLoading || !browserHasMore : browserLoading)) {
-      console.log("[loadBrowser] SKIPPED — guard triggered");
       return;
     }
     const requestId = browserRequestIdRef.current + 1;
@@ -156,16 +155,20 @@ export default function useWorkspace() {
     }
     try {
       const nextOffset = append ? browserOffset : 0;
+      // Background refreshes (preserveView) re-fetch everything the user has
+      // already paged through, so their scroll position and selection survive
+      // instead of being reset to page 1.
+      const pageLimit = preserveView ? Math.max(PAGE_SIZE, browserOffset) : PAGE_SIZE;
       let payload;
       if (collectionId) {
         payload = await window.mediaWorkspace.browseCollection(collectionId, {
-          limit: PAGE_SIZE,
+          limit: pageLimit,
           offset: nextOffset,
         });
       } else {
         payload = await window.mediaWorkspace.browseExports({
           status: nextStatus,
-          limit: PAGE_SIZE,
+          limit: pageLimit,
           offset: nextOffset,
           search: search || undefined,
           sort: sortKey || undefined,
@@ -175,18 +178,20 @@ export default function useWorkspace() {
       if (browserRequestIdRef.current !== requestId) return;
       seedAnnotations(payload);
       setBrowserOffset(nextOffset + payload.length);
-      setBrowserHasMore(payload.length === PAGE_SIZE);
+      setBrowserHasMore(payload.length === (append ? PAGE_SIZE : pageLimit));
       if (append) {
         setItems((current) => [...current, ...payload]);
       } else {
         setItems(payload);
         const firstId = payload[0]?.asset_id || null;
-        const nextSelectedId =
-          selectedAssetId && payload.some((item) => item.asset_id === selectedAssetId)
-            ? selectedAssetId
-            : firstId;
-        setSelectedAssetId(nextSelectedId);
-        await loadDetail(nextSelectedId || null);
+        const selectionStillValid = selectedAssetId && payload.some((item) => item.asset_id === selectedAssetId);
+        // preserveView never steals selection by jumping to the first item;
+        // it only clears when the selected asset truly disappeared.
+        const nextSelectedId = selectionStillValid ? selectedAssetId : preserveView ? null : firstId;
+        if (nextSelectedId !== selectedAssetId) {
+          setSelectedAssetId(nextSelectedId);
+          await loadDetail(nextSelectedId || null);
+        }
       }
       setBrowserReady(true);
     } finally {
@@ -221,11 +226,17 @@ export default function useWorkspace() {
     }
     if (scope === "collections") {
       void loadCollections();
-      if (activeCollectionId) void loadBrowser({ force: true });
+      if (activeCollectionId && Date.now() >= suppressAutoReloadUntilRef.current) {
+        void loadBrowser({ force: true, preserveView: true });
+      }
       return;
     }
+    // During an agent reveal the reveal's own imperative load supersedes this
+    // refresh — a forced reload here would bump the request id and cancel the
+    // reveal mid-flight ("Selected N photos" toast with nothing selected).
+    if (Date.now() < suppressAutoReloadUntilRef.current) return;
     invalidateAnnotations();
-    void loadBrowser({ force: true });
+    void loadBrowser({ force: true, preserveView: true });
   };
   useEffect(() => {
     window.mediaWorkspace?.onCatalogChanged?.((payload) => catalogChangedRef.current?.(payload));
@@ -378,6 +389,15 @@ export default function useWorkspace() {
     void loadBrowser({ collectionId });
   }
 
+  // Status filters and collections are mutually exclusive views. This owns
+  // that invariant — callers must not have to remember to clear the
+  // collection themselves (pagination/reloads would silently mix datasets).
+  function setStatusFilter(next) {
+    setActiveCollectionId(null);
+    setStatus(next);
+    void refreshAll({ nextStatus: next, collectionId: null });
+  }
+
   function clearCollection(options = {}) {
     const { reload = true } = options;
     if (!activeCollectionId) return;
@@ -387,7 +407,7 @@ export default function useWorkspace() {
     }
   }
 
-  async function refreshAll({ nextStatus = status, collectionId = activeCollectionId, force = false } = {}) {
+  async function refreshAll({ nextStatus = status, collectionId = activeCollectionId, force = false, preserveView = false } = {}) {
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
       window.mediaWorkspace.getInfo(),
       window.mediaWorkspace.getSummary(),
@@ -402,7 +422,7 @@ export default function useWorkspace() {
     setImportTask(nextImportTask);
     setPreviewTask(nextPreviewTask);
     setEnrichmentTask(nextEnrichmentTask);
-    await Promise.all([loadCollections(), loadBrowser({ nextStatus, collectionId, force })]);
+    await Promise.all([loadCollections(), loadBrowser({ nextStatus, collectionId, force, preserveView })]);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
     void window.mediaWorkspace?.getFacetValues?.().then(setFacetValues).catch(() => {});
@@ -581,28 +601,30 @@ export default function useWorkspace() {
       setImportTask(final);
       const queued = pendingImportRef.current || { rawDirs: [], exportDirs: [] };
       setPendingImport({ rawDirs: [], exportDirs: [] });
-      await h.refreshAll();
+      await h.refreshAll({ preserveView: true });
       // Continue queued dirs — but not after a user cancel.
       if (!cancelled && (queued.rawDirs.length || queued.exportDirs.length)) {
         await h.startIncrementalImport({ rawDirs: queued.rawDirs, exportDirs: queued.exportDirs });
       }
     } else if (meta.jobType === "preview") {
-      if ((meta.kind || "preview") === "preview" && !cancelled) {
+      // Chain preview-hd only after a SUCCESSFUL small-preview pass — a failed
+      // or indeterminate run would just fail again at HD size.
+      if ((meta.kind || "preview") === "preview" && final?.status === "succeeded") {
         // Auto-chain preview-hd after the small previews finish.
         const hdTask = await window.mediaWorkspace.startPreviewGeneration("preview-hd");
         setPreviewTask({ ...hdTask, _kind: "preview-hd" });
         pokeJobs(hdTask?.jobId ? { jobId: hdTask.jobId, jobType: "preview", kind: "preview-hd" } : undefined);
       } else {
         setPreviewTask(final);
-        await h.refreshAll();
+        await h.refreshAll({ preserveView: true });
       }
     } else if (meta.jobType === "enrichment") {
       setEnrichmentTask(final);
-      await h.refreshAll();
+      await h.refreshAll({ preserveView: true });
     } else if (meta.jobType === "ai_repaint") {
       // The job runner registers the repainted file as a new version asset —
       // reload so it appears in the grid without a manual refresh.
-      if (!cancelled) await h.refreshAll();
+      if (!cancelled) await h.refreshAll({ preserveView: true });
     }
     // Generic finish event — App-level consumers (annotation toast/cache,
     // activity center) react to this.
@@ -614,16 +636,23 @@ export default function useWorkspace() {
     try {
       jobs = (await window.mediaWorkspace.getActiveJobs?.()) || [];
     } catch { jobs = []; }
-    setActiveJobs(jobs);
+    // Skip the state churn when nothing actually changed — otherwise every
+    // 1.2s tick re-renders the whole tree for the lifetime of a job.
+    const jobsJson = JSON.stringify(jobs);
+    const changed = jobsJson !== lastJobsJsonRef.current;
+    lastJobsJsonRef.current = jobsJson;
+    if (changed) setActiveJobs(jobs);
 
     // Mirror into the legacy per-type task states (ImportOverlay & friends).
-    const byType = new Map(jobs.map((j) => [j.jobType, j]));
-    if (byType.has("import")) setImportTask(byType.get("import"));
-    if (byType.has("preview")) {
-      const j = byType.get("preview");
-      setPreviewTask({ ...j, _kind: j.kind || knownActiveRef.current.get(j.jobId)?.kind || "preview" });
+    if (changed) {
+      const byType = new Map(jobs.map((j) => [j.jobType, j]));
+      if (byType.has("import")) setImportTask(byType.get("import"));
+      if (byType.has("preview")) {
+        const j = byType.get("preview");
+        setPreviewTask({ ...j, _kind: j.kind || knownActiveRef.current.get(j.jobId)?.kind || "preview" });
+      }
+      if (byType.has("enrichment")) setEnrichmentTask(byType.get("enrichment"));
     }
-    if (byType.has("enrichment")) setEnrichmentTask(byType.get("enrichment"));
 
     // Finish detection: anything we knew about that's no longer active.
     const liveIds = new Set(jobs.map((j) => j.jobId));
@@ -723,6 +752,7 @@ export default function useWorkspace() {
     activeCollectionId,
     selectCollection,
     clearCollection,
+    setStatusFilter,
     createCollection,
     renameCollection,
     deleteCollection,

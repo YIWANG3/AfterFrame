@@ -313,28 +313,48 @@ function createMcpServer(deps) {
         if (!hasRating && !addTags.length && !removeTags.length) {
           throw new Error("Nothing to do — pass rating, add_tags and/or remove_tags.");
         }
-        if (hasRating) {
-          const rating = Number(args.rating);
-          if (!Number.isInteger(rating) || rating < 0 || rating > 5) throw new Error("rating must be an integer 0-5.");
-          const command = ["set-asset-rating", "--rating", String(rating)];
-          for (const id of ids) command.push("--asset-id", id);
-          await callSidecarJsonAsync(command);
-        }
-        // Sequential on purpose: SQLite single-writer, and per-asset-per-tag CLI.
-        for (const id of ids) {
-          for (const tag of addTags) {
-            await callSidecarJsonAsync(["add-asset-tag", "--asset-id", id, "--tag", tag]);
+        let mutated = false;
+        const errors = [];
+        try {
+          if (hasRating) {
+            const rating = Number(args.rating);
+            if (!Number.isInteger(rating) || rating < 0 || rating > 5) throw new Error("rating must be an integer 0-5.");
+            const command = ["set-asset-rating", "--rating", String(rating)];
+            for (const id of ids) command.push("--asset-id", id);
+            await callSidecarJsonAsync(command);
+            mutated = true;
           }
-          for (const tag of removeTags) {
-            await callSidecarJsonAsync(["remove-asset-tag", "--asset-id", id, "--tag", tag]);
+          // Sequential on purpose: SQLite single-writer, and per-asset-per-tag CLI.
+          // Per-asset errors are collected, not thrown — a mid-loop failure must
+          // not hide the writes that already landed.
+          for (const id of ids) {
+            for (const tag of addTags) {
+              try {
+                await callSidecarJsonAsync(["add-asset-tag", "--asset-id", id, "--tag", tag]);
+                mutated = true;
+              } catch (error) {
+                errors.push({ asset_id: id, op: `add_tag:${tag}`, error: error.message });
+              }
+            }
+            for (const tag of removeTags) {
+              try {
+                await callSidecarJsonAsync(["remove-asset-tag", "--asset-id", id, "--tag", tag]);
+                mutated = true;
+              } catch (error) {
+                errors.push({ asset_id: id, op: `remove_tag:${tag}`, error: error.message });
+              }
+            }
           }
+        } finally {
+          // The UI must hear about whatever DID change, even on partial failure.
+          if (mutated) deps.broadcastCatalogChanged?.("assets", { ids });
         }
-        deps.broadcastCatalogChanged?.("assets", { ids });
         return {
-          updated: ids.length,
+          updated: ids.length - new Set(errors.map((e) => e.asset_id)).size,
           rating: hasRating ? Number(args.rating) : undefined,
           added_tags: addTags.length ? addTags : undefined,
           removed_tags: removeTags.length ? removeTags : undefined,
+          errors: errors.length ? errors : undefined,
         };
       },
     },
