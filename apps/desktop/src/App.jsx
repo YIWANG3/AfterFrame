@@ -6,7 +6,7 @@ import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import Gallery from "./components/Gallery";
 import Inspector from "./components/Inspector";
-import ImportOverlay from "./components/ImportOverlay";
+import JobDock from "./components/JobDock";
 import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
@@ -101,20 +101,6 @@ export default function App() {
   const { toasts, pushToast, dismissToast } = useToasts();
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
-  // Live annotation job (for the progress pill) from the unified poller.
-  const annotationJob = useMemo(() => {
-    const j = (workspace.jobs || []).find((job) => job.jobType === "annotation");
-    if (!j) return null;
-    const phase = j.result?.current_phase?.result || {};
-    return {
-      jobId: j.jobId,
-      running: true,
-      processed: Number(phase.processed || 0),
-      total: Number(phase.total || 0),
-      progress: Number(j.progress || 0),
-    };
-  }, [workspace.jobs]);
-
   // Unified finish handling: annotation results (toast + cache invalidation)
   // and auto-annotate-on-import both react to the workspace's finish events.
   useEffect(() => {
@@ -143,6 +129,16 @@ export default function App() {
           if (s?.autoOnImport) runAnnotation(null, { scope: "all", onlyMissing: true });
         } catch { /* ignore */ }
       })();
+    } else if (fin.status === "failed" && fin.jobType !== "ai_repaint") {
+      // Generic failure surfacing for the other job types (the editor handles
+      // ai_repaint errors inline).
+      const labels = { import: "Import", preview: "Preview generation", enrichment: "Enrichment" };
+      pushToast?.({
+        title: `${labels[fin.jobType] || fin.jobType} failed`,
+        message: fin.error || "Job failed.",
+        ttl: 7000,
+        tone: "error",
+      });
     }
   }, [workspace.lastFinishedJob]);
 
@@ -799,7 +795,7 @@ export default function App() {
         ) : null}
       </div>
 
-      <ImportOverlay overlay={workspace.activeOverlay} />
+      <JobDock jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} />
       <Lightbox
         open={lightboxOpen}
         items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
@@ -877,32 +873,6 @@ export default function App() {
         }}
       />
       {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
-      {annotationJob && (
-        <div className="fixed bottom-4 right-4 z-[12000] w-64 rounded-lg border border-border/60 bg-chrome/95 p-3 shadow-overlay backdrop-blur-sm">
-          <div className="flex items-center justify-between text-[11px] font-medium text-text">
-            <span>Annotating with AI…</span>
-            <span className="flex items-center gap-1.5">
-              <span className="tabular-nums text-muted2">
-                {annotationJob.total ? `${annotationJob.processed}/${annotationJob.total}` : ""}
-              </span>
-              <button
-                type="button"
-                title="Cancel annotation"
-                onClick={() => void workspace.cancelJob(annotationJob.jobId)}
-                className="rounded px-1 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-red-400"
-              >
-                Cancel
-              </button>
-            </span>
-          </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-app">
-            <div
-              className="h-full rounded-full bg-[rgb(var(--accent-color))] transition-[width] duration-300"
-              style={{ width: `${Math.round((annotationJob.progress || 0) * 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

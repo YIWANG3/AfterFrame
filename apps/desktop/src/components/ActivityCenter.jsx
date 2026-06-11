@@ -10,7 +10,7 @@ import {
   CheckCircle2, XCircle, CircleSlash,
 } from "lucide-react";
 
-const JOB_META = {
+export const JOB_META = {
   import: { label: "Import", icon: FolderInput },
   preview: { label: "Previews", icon: Images },
   enrichment: { label: "Enrichment", icon: FileSearch },
@@ -18,7 +18,7 @@ const JOB_META = {
   ai_repaint: { label: "AI Repaint", icon: Wand2 },
 };
 
-function jobLine(job) {
+export function jobLine(job) {
   const phase = job.result?.current_phase?.result || {};
   const processed = Number(phase.processed || 0);
   const total = Number(phase.total || 0);

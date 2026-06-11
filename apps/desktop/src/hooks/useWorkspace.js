@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collapseRootPaths, mergeRoots, determineImportMode, formatPercent, progressNote } from "../utils/format";
+import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
 
 const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
@@ -116,47 +116,13 @@ export default function useWorkspace() {
     void window.mediaWorkspace?.getFacetValues?.().then(setFacetValues).catch(() => {});
   }, [browserReady, summary?.export_assets]);
 
-  const activeOverlay = useMemo(() => {
+  // Queued-changes note for the import card in the unified JobDock.
+  const queuedImportNote = useMemo(() => {
     const queuedRawCount = pendingImport.rawDirs.length;
     const queuedExportCount = pendingImport.exportDirs.length;
-    if (importTask?.running || enrichmentTask?.running || previewTask?.running || importTask?.error || previewTask?.error || enrichmentTask?.error || queuedRawCount || queuedExportCount) {
-      return {
-        visible: true,
-        title: importTask?.running
-          ? `Import running: ${importTask.phaseLabel || importTask.phase || "Starting"} (${importTask.phaseIndex}/${importTask.phaseCount || 1}, ${formatPercent(importTask.progress)})`
-          : enrichmentTask?.running
-            ? "Enrichment running"
-            : previewTask?.running
-              ? previewTask._kind === "preview-hd" ? "Generating HD previews" : "Generating previews"
-              : "Import attention needed",
-        status: importTask?.running
-          ? "Import in progress"
-          : enrichmentTask?.running
-            ? "Enrichment in progress"
-            : previewTask?.running
-              ? "Preview generation in progress"
-              : "Pending changes",
-        percent: importTask?.running
-          ? formatPercent(importTask.progress)
-          : previewTask?.running
-            ? formatPercent(previewTask.progress)
-            : enrichmentTask?.running
-              ? formatPercent(enrichmentTask.progress)
-              : "",
-        notes: [
-          progressNote(importTask),
-          progressNote(previewTask),
-          progressNote(enrichmentTask),
-          queuedRawCount || queuedExportCount
-            ? `Queued changes: ${queuedExportCount} media · ${queuedRawCount} sources`
-            : "",
-          importTask?.error || previewTask?.error || enrichmentTask?.error || "",
-        ].filter(Boolean),
-        phases: Array.isArray(importTask?.phaseResults) ? importTask.phaseResults.map((phase) => phase.label) : [],
-      };
-    }
-    return { visible: false, title: "", status: "", percent: "", notes: [], phases: [] };
-  }, [importTask, enrichmentTask, previewTask, pendingImport]);
+    if (!queuedRawCount && !queuedExportCount) return null;
+    return `Queued changes: ${queuedExportCount} media · ${queuedRawCount} sources`;
+  }, [pendingImport]);
 
   async function loadDetail(assetId) {
     if (!assetId) {
@@ -635,7 +601,7 @@ export default function useWorkspace() {
     browserOffset,
     loadMoreBrowser,
     refreshAll,
-    activeOverlay,
+    queuedImportNote,
     addImages,
     addImagesFromPaths,
     addSources,
