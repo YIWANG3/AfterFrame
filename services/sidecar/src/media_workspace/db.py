@@ -56,6 +56,9 @@ def init_db(connection: sqlite3.Connection) -> None:
     _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")
     _ensure_column(connection, "raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'")
     _ensure_column(connection, "jobs", "result_json", "TEXT NOT NULL DEFAULT '{}'")
+    # Cooperative cancellation: runners poll this flag between batches and
+    # finish gracefully with status='cancelled'.
+    _ensure_column(connection, "jobs", "cancel_requested", "INTEGER NOT NULL DEFAULT 0")
     # Searchable facet columns + indexes (idempotent; VIRTUAL generated columns).
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(
@@ -528,6 +531,7 @@ def _job_id(job_type: str) -> str:
 def _decode_job_row(row: sqlite3.Row | None) -> dict[str, object] | None:
     if row is None:
         return None
+    keys = row.keys()
     return {
         "job_id": row["job_id"],
         "job_type": row["job_type"],
@@ -536,6 +540,7 @@ def _decode_job_row(row: sqlite3.Row | None) -> dict[str, object] | None:
         "result": json.loads(row["result_json"] or "{}"),
         "progress": float(row["progress"] or 0),
         "error": row["error_text"],
+        "cancel_requested": bool(row["cancel_requested"]) if "cancel_requested" in keys else False,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -605,7 +610,7 @@ def update_job(
 def get_job(connection: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
     row = connection.execute(
         """
-        SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, created_at, updated_at
+        SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
         FROM jobs
         WHERE job_id = ?
         """,
@@ -618,7 +623,7 @@ def get_latest_job(connection: sqlite3.Connection, job_type: str | None = None) 
     if job_type:
         row = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             WHERE job_type = ?
             ORDER BY created_at DESC, job_id DESC
@@ -629,7 +634,7 @@ def get_latest_job(connection: sqlite3.Connection, job_type: str | None = None) 
     else:
         row = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             ORDER BY created_at DESC, job_id DESC
             LIMIT 1
@@ -642,7 +647,7 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
     if job_type:
         rows = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             WHERE job_type = ?
             ORDER BY created_at DESC, job_id DESC
@@ -653,7 +658,7 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
     else:
         rows = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             ORDER BY created_at DESC, job_id DESC
             LIMIT ?
@@ -661,6 +666,36 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
             (limit,),
         ).fetchall()
     return [_decode_job_row(row) for row in rows if row is not None]
+
+
+def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
+    """All queued/running jobs across every type — drives the activity center."""
+    rows = connection.execute(
+        """
+        SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
+        FROM jobs
+        WHERE status IN ('queued', 'running')
+        ORDER BY created_at ASC
+        """
+    ).fetchall()
+    return [_decode_job_row(row) for row in rows if row is not None]
+
+
+def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:
+    """Flag a job for cooperative cancellation. The runner notices the flag at
+    its next progress checkpoint and exits with status='cancelled'."""
+    connection.execute(
+        "UPDATE jobs SET cancel_requested = 1, updated_at = CURRENT_TIMESTAMP WHERE job_id = ? AND status IN ('queued', 'running')",
+        (job_id,),
+    )
+    if commit:
+        connection.commit()
+    return get_job(connection, job_id)
+
+
+def is_cancel_requested(connection: sqlite3.Connection, job_id: str) -> bool:
+    row = connection.execute("SELECT cancel_requested FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+    return bool(row and row["cancel_requested"])
 
 
 def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, commit: bool = True) -> None:

@@ -268,6 +268,11 @@ def build_parser() -> argparse.ArgumentParser:
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
     latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"])
 
+    cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
+    cancel_job_parser.add_argument("--job-id", required=True)
+
+    subparsers.add_parser("list-active-jobs", parents=[common])
+
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
     list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
@@ -784,6 +789,16 @@ def main() -> int:
 
     if args.command == "list-jobs":
         print(json.dumps(list_jobs(connection, job_type=args.job_type, limit=args.limit), indent=2))
+        return 0
+
+    if args.command == "cancel-job":
+        from .db import request_job_cancel
+        print(json.dumps(request_job_cancel(connection, args.job_id), indent=2))
+        return 0
+
+    if args.command == "list-active-jobs":
+        from .db import list_active_jobs
+        print(json.dumps(list_active_jobs(connection), indent=2))
         return 0
 
     if args.command == "run-import-job":

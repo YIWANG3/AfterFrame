@@ -113,51 +113,59 @@ class PreviewService:
             else:
                 to_render.append(row)
 
-        # Parallel render
+        # Parallel render. All futures are submitted upfront, so if the
+        # progress callback raises (cooperative job cancellation) we cancel the
+        # queued futures before unwinding — otherwise the executor's exit
+        # handler would block until every queued render finished anyway.
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
             futures = {
                 pool.submit(self.generate_for_row, row, kind=kind, force=force): row
                 for row in to_render
             }
-            for future in as_completed(futures):
-                row = futures[future]
-                try:
-                    result = future.result()
-                    upsert_preview_entry(
-                        connection,
-                        asset_id=result.asset_id,
-                        kind=result.kind,
-                        relative_path=result.relative_path,
-                        width=result.width,
-                        height=result.height,
-                        status=result.status,
-                        commit=False,
+            try:
+                for future in as_completed(futures):
+                    row = futures[future]
+                    try:
+                        result = future.result()
+                        upsert_preview_entry(
+                            connection,
+                            asset_id=result.asset_id,
+                            kind=result.kind,
+                            relative_path=result.relative_path,
+                            width=result.width,
+                            height=result.height,
+                            status=result.status,
+                            commit=False,
+                        )
+                        generated += 1
+                    except Exception:
+                        upsert_preview_entry(
+                            connection,
+                            asset_id=row["asset_id"],
+                            kind=kind,
+                            relative_path="",
+                            width=None,
+                            height=None,
+                            status="failed",
+                            commit=False,
+                        )
+                        failed += 1
+                    processed += 1
+                    if processed % batch_size == 0:
+                        connection.commit()
+                    report_progress(
+                        progress_callback,
+                        phase="generate_previews",
+                        processed=processed,
+                        total=total,
+                        generated=generated,
+                        skipped=skipped,
+                        failed=failed,
                     )
-                    generated += 1
-                except Exception:
-                    upsert_preview_entry(
-                        connection,
-                        asset_id=row["asset_id"],
-                        kind=kind,
-                        relative_path="",
-                        width=None,
-                        height=None,
-                        status="failed",
-                        commit=False,
-                    )
-                    failed += 1
-                processed += 1
-                if processed % batch_size == 0:
-                    connection.commit()
-                report_progress(
-                    progress_callback,
-                    phase="generate_previews",
-                    processed=processed,
-                    total=total,
-                    generated=generated,
-                    skipped=skipped,
-                    failed=failed,
-                )
+            except BaseException:
+                pool.shutdown(wait=False, cancel_futures=True)
+                connection.commit()  # keep previews finished before the cancel
+                raise
         connection.commit()
         return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
 
