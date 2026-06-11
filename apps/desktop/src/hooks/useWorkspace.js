@@ -34,9 +34,15 @@ export default function useWorkspace() {
   const [pendingImport, setPendingImport] = useState({ rawDirs: [], exportDirs: [] });
   const [collections, setCollections] = useState([]);
   const [activeCollectionId, setActiveCollectionId] = useState(null);
-  const importPollRef = useRef(null);
-  const enrichmentPollRef = useRef(null);
-  const previewPollRef = useRef(null);
+  // Unified job polling: one timer for ALL background jobs (import, preview,
+  // enrichment, annotation, ai_repaint). Replaces the per-type interval loops.
+  const [activeJobs, setActiveJobs] = useState([]);
+  const [lastFinishedJob, setLastFinishedJob] = useState(null);
+  const jobsTimerRef = useRef(null);
+  const jobsPollingRef = useRef(false);
+  const knownActiveRef = useRef(new Map()); // jobId -> { jobId, jobType, kind }
+  const pendingImportRef = useRef(null);
+  const jobHandlersRef = useRef({});
   const browserRequestIdRef = useRef(0);
 
   const rawDirs = useMemo(
@@ -367,6 +373,7 @@ export default function useWorkspace() {
       mode,
     });
     setImportTask(task);
+    pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
   }
 
   async function addImages() {
@@ -410,12 +417,14 @@ export default function useWorkspace() {
     if (importTask?.running || enrichmentTask?.running) return;
     const task = await window.mediaWorkspace.startEnrichment();
     setEnrichmentTask(task);
+    pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "enrichment" } : undefined);
   }
 
   async function runPreviewGeneration(kind = "preview") {
     if (importTask?.running || previewTask?.running) return;
     const task = await window.mediaWorkspace.startPreviewGeneration(kind);
     setPreviewTask({ ...task, _kind: kind });
+    pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "preview", kind } : undefined);
   }
 
   async function switchCatalog(nextCatalogPath) {
@@ -435,7 +444,11 @@ export default function useWorkspace() {
     setPendingImport({ rawDirs: [], exportDirs: [] });
     setCollections([]);
     setActiveCollectionId(null);
+    knownActiveRef.current.clear();
+    setActiveJobs([]);
+    setLastFinishedJob(null);
     await refreshAll({ nextStatus: "all", force: true });
+    pokeJobs();
   }
 
   useEffect(() => {
@@ -480,95 +493,117 @@ export default function useWorkspace() {
     return undefined;
   }, [importTask, exportDirs, rawDirs, summary, previewTask, enrichmentTask]);
 
-  useEffect(() => {
-    if (!importTask?.running) {
-      if (importPollRef.current) {
-        clearInterval(importPollRef.current);
-        importPollRef.current = null;
-      }
-      return undefined;
-    }
-    importPollRef.current = window.setInterval(async () => {
-      const task = await window.mediaWorkspace.getImportStatus();
-      setImportTask(task);
-      if (!task?.running) {
-        clearInterval(importPollRef.current);
-        importPollRef.current = null;
-        const queuedRawDirs = pendingImport.rawDirs;
-        const queuedExportDirs = pendingImport.exportDirs;
-        setPendingImport({ rawDirs: [], exportDirs: [] });
-        await refreshAll();
-        if (queuedRawDirs.length || queuedExportDirs.length) {
-          await startIncrementalImport({ rawDirs: queuedRawDirs, exportDirs: queuedExportDirs });
-        }
-      }
-    }, 1200);
-    return () => {
-      if (importPollRef.current) {
-        clearInterval(importPollRef.current);
-        importPollRef.current = null;
-      }
-    };
-  }, [importTask?.running, pendingImport.rawDirs, pendingImport.exportDirs]);
+  // ── Unified job polling ─────────────────────────────────────────────────
+  // Keep latest mutable state/handlers in refs so the timer chain never works
+  // with stale closures (the old per-type intervals re-created themselves on
+  // dep changes; the unified loop instead reads through refs).
+  pendingImportRef.current = pendingImport;
+  jobHandlersRef.current = { refreshAll, startIncrementalImport };
 
-  useEffect(() => {
-    if (!previewTask?.running) {
-      if (previewPollRef.current) {
-        clearInterval(previewPollRef.current);
-        previewPollRef.current = null;
+  async function handleJobFinished(meta) {
+    const h = jobHandlersRef.current;
+    let final = null;
+    try {
+      if (meta.jobType === "import") final = await window.mediaWorkspace.getImportStatus();
+      else if (meta.jobType === "preview") final = await window.mediaWorkspace.getPreviewStatus();
+      else if (meta.jobType === "enrichment") final = await window.mediaWorkspace.getEnrichmentStatus();
+      else if (meta.jobType === "annotation") final = await window.mediaWorkspace.getAnnotationJobStatus?.();
+      else if (meta.jobType === "ai_repaint") final = await window.mediaWorkspace.getAiRepaintStatus?.();
+    } catch { /* sidecar hiccup — still emit the finish event below */ }
+    const cancelled = final?.status === "cancelled";
+
+    if (meta.jobType === "import") {
+      setImportTask(final);
+      const queued = pendingImportRef.current || { rawDirs: [], exportDirs: [] };
+      setPendingImport({ rawDirs: [], exportDirs: [] });
+      await h.refreshAll();
+      // Continue queued dirs — but not after a user cancel.
+      if (!cancelled && (queued.rawDirs.length || queued.exportDirs.length)) {
+        await h.startIncrementalImport({ rawDirs: queued.rawDirs, exportDirs: queued.exportDirs });
       }
-      return undefined;
-    }
-    const currentKind = previewTask._kind || "preview";
-    previewPollRef.current = window.setInterval(async () => {
-      const task = await window.mediaWorkspace.getPreviewStatus();
-      if (!task?.running) {
-        clearInterval(previewPollRef.current);
-        previewPollRef.current = null;
-        if (currentKind === "preview") {
-          // Auto-start preview-hd after preview completes
-          const hdTask = await window.mediaWorkspace.startPreviewGeneration("preview-hd");
-          setPreviewTask({ ...hdTask, _kind: "preview-hd" });
-        } else {
-          setPreviewTask(task);
-          await refreshAll();
-        }
+    } else if (meta.jobType === "preview") {
+      if ((meta.kind || "preview") === "preview" && !cancelled) {
+        // Auto-chain preview-hd after the small previews finish.
+        const hdTask = await window.mediaWorkspace.startPreviewGeneration("preview-hd");
+        setPreviewTask({ ...hdTask, _kind: "preview-hd" });
+        pokeJobs(hdTask?.jobId ? { jobId: hdTask.jobId, jobType: "preview", kind: "preview-hd" } : undefined);
       } else {
-        setPreviewTask({ ...task, _kind: currentKind });
+        setPreviewTask(final);
+        await h.refreshAll();
       }
-    }, 1500);
-    return () => {
-      if (previewPollRef.current) {
-        clearInterval(previewPollRef.current);
-        previewPollRef.current = null;
-      }
-    };
-  }, [previewTask?.running, previewTask?._kind]);
-
-  useEffect(() => {
-    if (!enrichmentTask?.running) {
-      if (enrichmentPollRef.current) {
-        clearInterval(enrichmentPollRef.current);
-        enrichmentPollRef.current = null;
-      }
-      return undefined;
+    } else if (meta.jobType === "enrichment") {
+      setEnrichmentTask(final);
+      await h.refreshAll();
     }
-    enrichmentPollRef.current = window.setInterval(async () => {
-      const task = await window.mediaWorkspace.getEnrichmentStatus();
-      setEnrichmentTask(task);
-      if (!task?.running) {
-        clearInterval(enrichmentPollRef.current);
-        enrichmentPollRef.current = null;
-        await refreshAll();
+    // Generic finish event — App-level consumers (annotation toast/cache,
+    // activity center) react to this.
+    setLastFinishedJob({ ...(final || {}), jobType: meta.jobType, jobId: meta.jobId, finishedAtMs: Date.now() });
+  }
+
+  async function pollActiveJobsOnce() {
+    let jobs = [];
+    try {
+      jobs = (await window.mediaWorkspace.getActiveJobs?.()) || [];
+    } catch { jobs = []; }
+    setActiveJobs(jobs);
+
+    // Mirror into the legacy per-type task states (ImportOverlay & friends).
+    const byType = new Map(jobs.map((j) => [j.jobType, j]));
+    if (byType.has("import")) setImportTask(byType.get("import"));
+    if (byType.has("preview")) {
+      const j = byType.get("preview");
+      setPreviewTask({ ...j, _kind: j.kind || knownActiveRef.current.get(j.jobId)?.kind || "preview" });
+    }
+    if (byType.has("enrichment")) setEnrichmentTask(byType.get("enrichment"));
+
+    // Finish detection: anything we knew about that's no longer active.
+    const liveIds = new Set(jobs.map((j) => j.jobId));
+    for (const [id, meta] of [...knownActiveRef.current]) {
+      if (!liveIds.has(id)) {
+        knownActiveRef.current.delete(id);
+        void handleJobFinished(meta);
       }
-    }, 1500);
+    }
+    for (const j of jobs) {
+      const prev = knownActiveRef.current.get(j.jobId);
+      knownActiveRef.current.set(j.jobId, { jobId: j.jobId, jobType: j.jobType, kind: j.kind || prev?.kind });
+    }
+
+    if (jobs.length > 0) {
+      jobsTimerRef.current = window.setTimeout(pollActiveJobsOnce, 1200);
+    } else {
+      jobsPollingRef.current = false;
+      jobsTimerRef.current = null;
+    }
+  }
+
+  // Kick (or re-kick) the poll loop. `seed` pre-registers a just-started job
+  // so even one that finishes before the first poll still gets its finish
+  // side effects dispatched.
+  function pokeJobs(seed) {
+    if (seed?.jobId) {
+      knownActiveRef.current.set(seed.jobId, { jobId: seed.jobId, jobType: seed.jobType, kind: seed.kind });
+    }
+    if (jobsPollingRef.current) return;
+    jobsPollingRef.current = true;
+    jobsTimerRef.current = window.setTimeout(pollActiveJobsOnce, 250);
+  }
+
+  async function cancelJob(jobId) {
+    if (!jobId) return null;
+    const res = await window.mediaWorkspace.cancelJob?.(jobId);
+    pokeJobs();
+    return res;
+  }
+
+  // Recover mid-run jobs after a reload/app start, and clean up on unmount.
+  useEffect(() => {
+    pokeJobs();
     return () => {
-      if (enrichmentPollRef.current) {
-        clearInterval(enrichmentPollRef.current);
-        enrichmentPollRef.current = null;
-      }
+      if (jobsTimerRef.current) clearTimeout(jobsTimerRef.current);
+      jobsPollingRef.current = false;
     };
-  }, [enrichmentTask?.running]);
+  }, []);
 
   return {
     theme,
@@ -609,6 +644,10 @@ export default function useWorkspace() {
     runEnrichment,
     runPreviewGeneration,
     importTask,
+    jobs: activeJobs,
+    lastFinishedJob,
+    cancelJob,
+    pokeJobs,
     collections,
     activeCollectionId,
     selectCollection,

@@ -17,6 +17,7 @@ import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
+import { invalidateAnnotations } from "./components/annotation/annotationStore";
 
 export default function App() {
   const workspace = useWorkspace();
@@ -98,16 +99,44 @@ export default function App() {
 
   const [dropActive, setDropActive] = useState(false);
   const { toasts, pushToast, dismissToast } = useToasts();
-  const { job: annotationJob, annotate: runAnnotation } = useAnnotationJob(pushToast);
+  const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
-  // Auto-annotate on import: when the import pipeline finishes and the user
-  // enabled the setting, kick off a batch annotation of newly-imported
-  // (un-annotated) assets. runAnnotation no-ops if nothing qualifies or no
-  // provider is configured.
-  const prevImportRunningRef = useRef(false);
+  // Live annotation job (for the progress pill) from the unified poller.
+  const annotationJob = useMemo(() => {
+    const j = (workspace.jobs || []).find((job) => job.jobType === "annotation");
+    if (!j) return null;
+    const phase = j.result?.current_phase?.result || {};
+    return {
+      jobId: j.jobId,
+      running: true,
+      processed: Number(phase.processed || 0),
+      total: Number(phase.total || 0),
+      progress: Number(j.progress || 0),
+    };
+  }, [workspace.jobs]);
+
+  // Unified finish handling: annotation results (toast + cache invalidation)
+  // and auto-annotate-on-import both react to the workspace's finish events.
   useEffect(() => {
-    const running = !!workspace.importTask?.running;
-    if (prevImportRunningRef.current && !running) {
+    const fin = workspace.lastFinishedJob;
+    if (!fin) return;
+    if (fin.jobType === "annotation") {
+      invalidateAnnotations();
+      const r = fin.result || {};
+      if (fin.status === "succeeded") {
+        const failed = Number(r.failed || 0);
+        pushToast?.({
+          title: "Annotation complete",
+          message: `${Number(r.succeeded || 0)} annotated${failed ? `, ${failed} failed` : ""}.`,
+          ttl: 5000,
+        });
+      } else if (fin.status === "cancelled") {
+        pushToast?.({ title: "Annotation cancelled", message: "Already-annotated results were kept.", ttl: 4000 });
+      } else if (fin.status === "failed") {
+        pushToast?.({ title: "Annotation failed", message: fin.error || "Job failed.", ttl: 7000, tone: "error" });
+      }
+    } else if (fin.jobType === "import" && fin.status === "succeeded") {
+      // Auto-annotate on import (setting-gated; no-ops without provider/targets).
       void (async () => {
         try {
           const s = await window.mediaWorkspace?.getAnnotationSettings?.();
@@ -115,8 +144,7 @@ export default function App() {
         } catch { /* ignore */ }
       })();
     }
-    prevImportRunningRef.current = running;
-  }, [workspace.importTask?.running, runAnnotation]);
+  }, [workspace.lastFinishedJob]);
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
@@ -849,9 +877,19 @@ export default function App() {
       {annotationJob && (
         <div className="fixed bottom-4 right-4 z-[12000] w-64 rounded-lg border border-border/60 bg-chrome/95 p-3 shadow-overlay backdrop-blur-sm">
           <div className="flex items-center justify-between text-[11px] font-medium text-text">
-            <span>{annotationJob.running ? "Annotating with AI…" : "Annotation finished"}</span>
-            <span className="tabular-nums text-muted2">
-              {annotationJob.total ? `${annotationJob.processed}/${annotationJob.total}` : ""}
+            <span>Annotating with AI…</span>
+            <span className="flex items-center gap-1.5">
+              <span className="tabular-nums text-muted2">
+                {annotationJob.total ? `${annotationJob.processed}/${annotationJob.total}` : ""}
+              </span>
+              <button
+                type="button"
+                title="Cancel annotation"
+                onClick={() => void workspace.cancelJob(annotationJob.jobId)}
+                className="rounded px-1 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-red-400"
+              >
+                Cancel
+              </button>
             </span>
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-app">

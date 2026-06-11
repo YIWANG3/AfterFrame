@@ -580,6 +580,7 @@ function formatJobStatus(job) {
     rawDirs: Array.isArray(payload.raw_dirs) ? payload.raw_dirs : [],
     exportDirs: Array.isArray(payload.export_dirs) ? payload.export_dirs : [],
     mode: payload.mode || null,
+    kind: payload.kind || null,
     phaseResults: Array.isArray(result.phase_results) ? result.phase_results : [],
     progress: Number(job.progress || 0),
     result,
