@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   startEnrichment: () => ipcRenderer.invoke("workspace:enrich-start"),
   getPreviewStatus: () => ipcRenderer.invoke("workspace:preview-status"),
   startPreviewGeneration: (kind) => ipcRenderer.invoke("workspace:preview-start", kind),
+  getActiveJobs: () => ipcRenderer.invoke("workspace:active-jobs"),
+  cancelJob: (jobId) => ipcRenderer.invoke("workspace:cancel-job", jobId),
   getPending: () => ipcRenderer.invoke("workspace:pending"),
   browseExports: (options) => ipcRenderer.invoke("workspace:browse", options),
   getFacetValues: () => ipcRenderer.invoke("workspace:facet-values"),

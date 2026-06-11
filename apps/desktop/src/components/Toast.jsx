@@ -29,10 +29,15 @@ export function useToasts() {
   return { toasts, pushToast, dismissToast };
 }
 
-export default function ToastStack({ toasts, onDismiss }) {
+// `inline` skips the fixed positioning so the stack can live inside a shared
+// bottom-corner container (alongside the JobDock) without overlapping it.
+export default function ToastStack({ toasts, onDismiss, inline = false }) {
   if (!toasts?.length) return null;
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[20000] flex flex-col-reverse gap-2">
+    <div className={[
+      "pointer-events-none flex flex-col-reverse gap-2",
+      inline ? "" : "fixed bottom-4 right-4 z-[20000]",
+    ].join(" ")}>
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={() => onDismiss(t.id)} />
       ))}
@@ -48,14 +53,21 @@ function ToastItem({ toast, onDismiss }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
+  // Visual language matches the JobDock progress cards (panel2 + ring + left
+  // edge bar) so the bottom-right column reads as one consistent surface.
+  // Edge color encodes tone: red for errors, accent otherwise.
   return (
     <div
       ref={ref}
       className={[
-        "pointer-events-auto w-[340px] rounded-xl border border-border/60 bg-chrome/95 p-3 shadow-overlay backdrop-blur-xl transition-all duration-200",
+        "pointer-events-auto relative w-[340px] overflow-hidden rounded-lg border border-border bg-panel2 p-3 pl-4 shadow-overlay ring-1 ring-black/40 transition-all duration-200",
         entered ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
       ].join(" ")}
     >
+      <div className={[
+        "absolute inset-y-0 left-0 w-[3px]",
+        toast.tone === "error" ? "bg-red-400" : "bg-accent",
+      ].join(" ")} />
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           {toast.title && (

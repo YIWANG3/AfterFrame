@@ -6,7 +6,7 @@ import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import Gallery from "./components/Gallery";
 import Inspector from "./components/Inspector";
-import ImportOverlay from "./components/ImportOverlay";
+import JobDock from "./components/JobDock";
 import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
@@ -17,6 +17,7 @@ import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
+import { invalidateAnnotations } from "./components/annotation/annotationStore";
 
 export default function App() {
   const workspace = useWorkspace();
@@ -98,25 +99,48 @@ export default function App() {
 
   const [dropActive, setDropActive] = useState(false);
   const { toasts, pushToast, dismissToast } = useToasts();
-  const { job: annotationJob, annotate: runAnnotation } = useAnnotationJob(pushToast);
+  const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
-  // Auto-annotate on import: when the import pipeline finishes and the user
-  // enabled the setting, kick off a batch annotation of newly-imported
-  // (un-annotated) assets. runAnnotation no-ops if nothing qualifies or no
-  // provider is configured.
-  const prevImportRunningRef = useRef(false);
+  // Unified finish handling: annotation results (toast + cache invalidation)
+  // and auto-annotate-on-import both react to the workspace's finish events.
   useEffect(() => {
-    const running = !!workspace.importTask?.running;
-    if (prevImportRunningRef.current && !running) {
+    const fin = workspace.lastFinishedJob;
+    if (!fin) return;
+    if (fin.jobType === "annotation") {
+      invalidateAnnotations();
+      const r = fin.result || {};
+      if (fin.status === "succeeded") {
+        const failed = Number(r.failed || 0);
+        pushToast?.({
+          title: "Annotation complete",
+          message: `${Number(r.succeeded || 0)} annotated${failed ? `, ${failed} failed` : ""}.`,
+          ttl: 5000,
+        });
+      } else if (fin.status === "cancelled") {
+        pushToast?.({ title: "Annotation cancelled", message: "Already-annotated results were kept.", ttl: 4000 });
+      } else if (fin.status === "failed") {
+        pushToast?.({ title: "Annotation failed", message: fin.error || "Job failed.", ttl: 7000, tone: "error" });
+      }
+    } else if (fin.jobType === "import" && fin.status === "succeeded") {
+      // Auto-annotate on import (setting-gated; no-ops without provider/targets).
       void (async () => {
         try {
           const s = await window.mediaWorkspace?.getAnnotationSettings?.();
           if (s?.autoOnImport) runAnnotation(null, { scope: "all", onlyMissing: true });
         } catch { /* ignore */ }
       })();
+    } else if (fin.status === "failed" && fin.jobType !== "ai_repaint") {
+      // Generic failure surfacing for the other job types (the editor handles
+      // ai_repaint errors inline).
+      const labels = { import: "Import", preview: "Preview generation", enrichment: "Enrichment" };
+      pushToast?.({
+        title: `${labels[fin.jobType] || fin.jobType} failed`,
+        message: fin.error || "Job failed.",
+        ttl: 7000,
+        tone: "error",
+      });
     }
-    prevImportRunningRef.current = running;
-  }, [workspace.importTask?.running, runAnnotation]);
+  }, [workspace.lastFinishedJob]);
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
@@ -677,6 +701,9 @@ export default function App() {
                 showFilters={showFilters}
                 onToggleFilters={() => setShowFilters((v) => !v)}
                 filterCount={Object.keys(workspace.filters || {}).length}
+                activityJobs={workspace.jobs}
+                lastFinishedJob={workspace.lastFinishedJob}
+                onCancelJob={workspace.cancelJob}
               />
               {showFilters && (
                 <FilterBar
@@ -768,7 +795,12 @@ export default function App() {
         ) : null}
       </div>
 
-      <ImportOverlay overlay={workspace.activeOverlay} />
+      {/* Single bottom-right surface: running-job cards stacked above
+          transient toasts — no overlap between the two. */}
+      <div className="fixed bottom-4 right-4 z-[20000] flex flex-col items-end gap-2">
+        <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} />
+        <ToastStack inline toasts={toasts} onDismiss={dismissToast} />
+      </div>
       <Lightbox
         open={lightboxOpen}
         items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
@@ -846,23 +878,6 @@ export default function App() {
         }}
       />
       {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
-      {annotationJob && (
-        <div className="fixed bottom-4 right-4 z-[12000] w-64 rounded-lg border border-border/60 bg-chrome/95 p-3 shadow-overlay backdrop-blur-sm">
-          <div className="flex items-center justify-between text-[11px] font-medium text-text">
-            <span>{annotationJob.running ? "Annotating with AI…" : "Annotation finished"}</span>
-            <span className="tabular-nums text-muted2">
-              {annotationJob.total ? `${annotationJob.processed}/${annotationJob.total}` : ""}
-            </span>
-          </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-app">
-            <div
-              className="h-full rounded-full bg-[rgb(var(--accent-color))] transition-[width] duration-300"
-              style={{ width: `${Math.round((annotationJob.progress || 0) * 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
-      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

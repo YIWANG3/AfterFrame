@@ -9,12 +9,42 @@ from .config import Thresholds
 from .db import (
     attach_asset_to_resource_set,
     get_app_setting,
+    is_cancel_requested,
     list_export_assets_missing_resource_set,
     update_job,
     upsert_export_asset,
     upsert_preview_entry,
     upsert_registry,
 )
+
+
+class JobCancelled(Exception):
+    """Raised from a progress checkpoint when the job's cancel flag is set.
+
+    Cancellation is cooperative: the UI sets jobs.cancel_requested, and every
+    runner checks the flag at its progress callbacks (which already fire per
+    batch). The runner then unwinds, marks the job 'cancelled', and exits —
+    work committed so far is kept.
+    """
+
+
+def _check_cancel(connection, job_id: str) -> None:
+    if is_cancel_requested(connection, job_id):
+        raise JobCancelled(job_id)
+
+
+def _mark_cancelled(connection, job_id: str, payload: dict, result: dict | None = None, progress: float = 0.0) -> dict[str, object]:
+    final = {**(result or {}), "cancelled": True, "current_phase": None}
+    update_job(
+        connection,
+        job_id,
+        status="cancelled",
+        payload={**payload, "phase": None, "phase_label": None},
+        result=final,
+        progress=progress,
+        error_text=None,
+    )
+    return final
 from .metadata import extract_export_candidate
 from .models import MatchDecision
 from .preview_service import PreviewService
@@ -132,6 +162,7 @@ def run_import_job(
                 }
 
                 def scan_progress(update: dict[str, int | str]) -> None:
+                    _check_cancel(connection, job_id)
                     overall_processed = int(scan_totals["processed"]) + int(update.get("processed", 0) or 0)
                     overall_discovered = int(scan_totals["discovered"]) + int(update.get("discovered", 0) or 0)
                     phase_result = {
@@ -188,6 +219,7 @@ def run_import_job(
             )
 
             def resolve_progress(update: dict[str, int | str]) -> None:
+                _check_cancel(connection, job_id)
                 phase_fraction = _fraction(int(update.get("processed", 0)), int(update.get("total", 0)))
                 update_job(
                     connection,
@@ -239,6 +271,7 @@ def run_import_job(
             )
 
             def preview_progress(update: dict[str, int | str]) -> None:
+                _check_cancel(connection, job_id)
                 phase_fraction = _fraction(int(update.get("processed", 0)), int(update.get("total", 0)))
                 update_job(
                     connection,
@@ -283,6 +316,7 @@ def run_import_job(
             )
 
             def preview_hd_progress(update: dict[str, int | str]) -> None:
+                _check_cancel(connection, job_id)
                 phase_fraction = _fraction(int(update.get("processed", 0)), int(update.get("total", 0)))
                 update_job(
                     connection,
@@ -325,6 +359,12 @@ def run_import_job(
             error_text=None,
         )
         return result
+    except JobCancelled:
+        return _mark_cancelled(
+            connection, job_id, payload,
+            result={"phase_results": phase_results},
+            progress=max(0.0, len(phase_results) / len(phases)),
+        )
     except Exception as error:
         update_job(
             connection,
@@ -353,6 +393,7 @@ def run_enrichment_job(
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
     try:
         def enrich_progress(update: dict[str, int | str]) -> None:
+            _check_cancel(connection, job_id)
             update_job(
                 connection,
                 job_id,
@@ -379,6 +420,8 @@ def run_enrichment_job(
             error_text=None,
         )
         return result
+    except JobCancelled:
+        return _mark_cancelled(connection, job_id, payload)
     except Exception as error:
         update_job(
             connection,
@@ -415,6 +458,7 @@ def run_preview_job(
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
     try:
         def preview_progress(update: dict[str, int | str]) -> None:
+            _check_cancel(connection, job_id)
             update_job(
                 connection,
                 job_id,
@@ -442,6 +486,8 @@ def run_preview_job(
             error_text=None,
         )
         return result
+    except JobCancelled:
+        return _mark_cancelled(connection, job_id, payload)
     except Exception as error:
         update_job(
             connection,
@@ -500,6 +546,7 @@ def run_annotation_job(
         )
 
         def annotation_progress(update: dict[str, int]) -> None:
+            _check_cancel(connection, job_id)
             update_job(
                 connection,
                 job_id,
@@ -533,6 +580,8 @@ def run_annotation_job(
             error_text=None,
         )
         return result
+    except JobCancelled:
+        return _mark_cancelled(connection, job_id, payload)
     except Exception as error:
         update_job(
             connection,

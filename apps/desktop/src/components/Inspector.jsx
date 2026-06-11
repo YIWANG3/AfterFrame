@@ -184,7 +184,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             <DetailRow label="Asset">
               <button
                 type="button"
-                className="cursor-pointer text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+                className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
                 onClick={() => void window.mediaWorkspace?.revealPath?.(detail.export_path)}
                 title="Reveal in Finder"
               >
@@ -195,7 +195,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
               {detail.raw_path ? (
                 <button
                   type="button"
-                  className="cursor-pointer text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+                  className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
                   onClick={() => void window.mediaWorkspace?.revealPath?.(detail.raw_path)}
                   title="Reveal in Finder"
                 >

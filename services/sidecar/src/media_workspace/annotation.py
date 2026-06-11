@@ -491,20 +491,27 @@ def annotate_batch(
             existing_tags=existing_tags,
         )
 
+    # All futures are submitted upfront; if the progress callback raises
+    # (cooperative job cancellation) cancel the queued API calls before
+    # unwinding so the executor's exit handler doesn't run the whole batch.
     with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
         futures = {pool.submit(work, row): row for row in assets}
-        for future in as_completed(futures):
-            row = futures[future]
-            try:
-                result = future.result()
-                save_annotation(connection, str(row["asset_id"]), result)
-                succeeded += 1
-            except Exception as exc:  # noqa: BLE001 — one bad asset must not kill the batch
-                failed += 1
-                if len(errors) < 50:
-                    errors.append({"asset_id": str(row["asset_id"]), "error": f"{type(exc).__name__}: {exc}"})
-            processed += 1
-            report()
+        try:
+            for future in as_completed(futures):
+                row = futures[future]
+                try:
+                    result = future.result()
+                    save_annotation(connection, str(row["asset_id"]), result)
+                    succeeded += 1
+                except Exception as exc:  # noqa: BLE001 — one bad asset must not kill the batch
+                    failed += 1
+                    if len(errors) < 50:
+                        errors.append({"asset_id": str(row["asset_id"]), "error": f"{type(exc).__name__}: {exc}"})
+                processed += 1
+                report()
+        except BaseException:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
 
     return {"total": total, "succeeded": succeeded, "failed": failed, "errors": errors}
 
