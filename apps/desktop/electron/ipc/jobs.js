@@ -45,7 +45,11 @@ function register({
     if (!currentCatalogPath || !catalogHasDb()) return [];
     try {
       const jobs = await callSidecarJsonAsync(["list-active-jobs"]) || [];
-      return jobs.map((job) => ({ ...formatJobStatus(job), jobType: job.job_type }));
+      return jobs.map((job) => ({
+        ...formatJobStatus(job),
+        jobType: job.job_type,
+        cancel_requested: !!job.cancel_requested,
+      }));
     } catch {
       return [];
     }

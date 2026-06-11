@@ -705,6 +705,9 @@ export default function App() {
                 showFilters={showFilters}
                 onToggleFilters={() => setShowFilters((v) => !v)}
                 filterCount={Object.keys(workspace.filters || {}).length}
+                activityJobs={workspace.jobs}
+                lastFinishedJob={workspace.lastFinishedJob}
+                onCancelJob={workspace.cancelJob}
               />
               {showFilters && (
                 <FilterBar

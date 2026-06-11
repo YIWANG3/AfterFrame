@@ -669,7 +669,23 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
 
 
 def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
-    """All queued/running jobs across every type — drives the activity center."""
+    """All queued/running jobs across every type — drives the activity center.
+
+    Also reconciles orphans: every runner touches updated_at on each progress
+    batch, so an 'active' job whose heartbeat is >10 minutes old is a process
+    that died (app quit, crash, kill). Mark it failed so it doesn't haunt the
+    activity center forever.
+    """
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status = 'failed', error_text = 'stalled — no heartbeat for 10 minutes (process likely terminated)',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE status IN ('queued', 'running')
+          AND updated_at < datetime('now', '-10 minutes')
+        """
+    )
+    connection.commit()
     rows = connection.execute(
         """
         SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at

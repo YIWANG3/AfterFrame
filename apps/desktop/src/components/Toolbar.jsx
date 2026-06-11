@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ActivityCenter from "./ActivityCenter";
 import {
   ChevronLeft,
   ChevronRight,
@@ -157,6 +158,9 @@ export default function Toolbar({
   showFilters,
   onToggleFilters,
   filterCount = 0,
+  activityJobs,
+  lastFinishedJob,
+  onCancelJob,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const actionMap = {
@@ -270,6 +274,8 @@ export default function Toolbar({
           </span>
         )}
       </div>
+
+      <ActivityCenter jobs={activityJobs} lastFinishedJob={lastFinishedJob} onCancel={onCancelJob} />
 
       <IconButton onClick={() => void refreshAll()} title="Refresh">
         <RotateCw className="h-3.5 w-3.5 stroke-[1.8]" />
