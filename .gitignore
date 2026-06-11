@@ -55,3 +55,6 @@ apps/desktop/test-results/
 
 # env
 .env*
+
+# Social media marketing drafts (local only)
+marketing/
