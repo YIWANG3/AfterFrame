@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 /* ── Provider type templates (not instances) ── */
-const PROVIDER_TYPES = [
+export const PROVIDER_TYPES = [
   {
     type: "nanobanana",
     label: "Nanobanana",
@@ -64,15 +64,15 @@ const PROVIDER_TYPES = [
   },
 ];
 
-function getProviderType(typeKey) {
+export function getProviderType(typeKey) {
   return PROVIDER_TYPES.find((t) => t.type === typeKey) || null;
 }
 
-function generateInstanceId() {
+export function generateInstanceId() {
   return `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function generateInstanceName(typeKey, existingInstances) {
+export function generateInstanceName(typeKey, existingInstances) {
   const tmpl = getProviderType(typeKey);
   const base = tmpl?.label || typeKey;
   const sameType = existingInstances.filter((p) => p.type === typeKey);
@@ -314,7 +314,7 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
 }
 
 /* ── Provider instance modal: create new / edit existing ── */
-function ProviderModal({
+export function ProviderModal({
   mode,          // "new" | "edit"
   instances,     // all existing instances (for auto-naming)
   instance,      // existing instance when mode=edit, null for new

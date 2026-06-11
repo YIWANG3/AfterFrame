@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Brain, FolderOpen, Info } from "lucide-react";
+import { X, Brain, FolderOpen, Info, Wand2 } from "lucide-react";
 import AnnotationSettings from "./settings/AnnotationSettings";
+import RepaintSettings from "./settings/RepaintSettings";
 import LibrarySettings from "./settings/LibrarySettings";
 import AboutSettings from "./settings/AboutSettings";
 
@@ -10,7 +11,8 @@ import AboutSettings from "./settings/AboutSettings";
    backdrop, centered modal, ESC + backdrop click close. */
 
 const TABS = [
-  { id: "ai", label: "AI", icon: Brain },
+  { id: "ai", label: "AI Annotation", icon: Brain },
+  { id: "repaint", label: "AI Repaint", icon: Wand2 },
   { id: "library", label: "Library", icon: FolderOpen },
   { id: "about", label: "About", icon: Info },
 ];
@@ -76,6 +78,7 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
             {tab === "ai" && <AnnotationSettings />}
+            {tab === "repaint" && <RepaintSettings />}
             {tab === "library" && <LibrarySettings />}
             {tab === "about" && <AboutSettings />}
           </div>

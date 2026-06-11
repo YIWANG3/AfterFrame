@@ -79,6 +79,20 @@ export function setCachedAnnotation(assetId, value) {
   notify();
 }
 
+// Bulk-hydrate from browse results (rows carry an inline `annotation` field).
+// Marks every listed asset as KNOWN — annotated or known-empty — so the
+// Inspector renders synchronously on selection, like the EXIF sections.
+export function seedAnnotations(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  let changed = false;
+  for (const item of items) {
+    if (!item?.asset_id || item.annotation === undefined) continue;
+    annotationCache.set(item.asset_id, item.annotation || null);
+    changed = true;
+  }
+  if (changed) notify();
+}
+
 // Drop all cached per-asset annotations (e.g. after a batch job) so the next
 // view re-fetches fresh results from the catalog.
 export function invalidateAnnotations() {

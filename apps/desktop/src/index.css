@@ -338,3 +338,18 @@ select {
 }
 :root { --checker-stripe: rgba(255, 255, 255, 0.05); }
 :root[data-theme="light"] { --checker-stripe: rgba(0, 0, 0, 0.06); }
+
+/* Toolbar responsive collapse — container queries track the CENTER PANE's
+   actual width (sidebar/inspector resize included), not the viewport.
+   Priority when space runs out: search shrinks (flex, in JSX) → thumb-size
+   slider hides → display-mode switcher hides. */
+.app-toolbar {
+  container-type: inline-size;
+  container-name: toolbar;
+}
+@container toolbar (max-width: 780px) {
+  .toolbar-thumbsize { display: none; }
+}
+@container toolbar (max-width: 640px) {
+  .toolbar-modes { display: none; }
+}

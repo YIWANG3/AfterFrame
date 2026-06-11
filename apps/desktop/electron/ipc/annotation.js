@@ -124,7 +124,8 @@ function register({
   //   collection → opts.collectionId (folder)
   // onlyMissing (default true) skips already-annotated assets; pass false to
   // re-annotate. Reads provider + annotation options from saved settings.
-  ipcMain.handle("workspace:annotation-start", async (_event, options) => {
+  // Shared by the IPC handler below and the MCP annotate_assets tool.
+  async function startAnnotationTask(options) {
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) throw new Error("Open a catalog before annotating assets.");
 
@@ -162,7 +163,9 @@ function register({
 
     launchSidecarJob(args);
     return formatJobStatus(job);
-  });
+  }
+
+  ipcMain.handle("workspace:annotation-start", (_event, options) => startAnnotationTask(options));
 
   ipcMain.handle("workspace:annotation-status", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
@@ -248,6 +251,8 @@ function register({
       return { ok: false, error: err?.message || String(err), models: [] };
     }
   });
+
+  return { startAnnotationTask };
 }
 
 module.exports = { register };

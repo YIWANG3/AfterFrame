@@ -174,7 +174,7 @@ export default function Toolbar({
   };
 
   return (
-    <div className="relative z-50 flex h-11 items-center gap-1 bg-chrome px-2.5">
+    <div className="app-toolbar relative z-50 flex h-11 items-center gap-1 bg-chrome px-2.5">
       <div className="relative">
         <IconButton onClick={() => setMenuOpen((c) => !c)}>
           <Plus className="h-4 w-4 stroke-[1.8]" />
@@ -220,7 +220,7 @@ export default function Toolbar({
         <div className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{title}</div>
       </div>
 
-      <div className="flex h-8 items-center gap-1.5 text-muted2">
+      <div className="toolbar-thumbsize flex h-8 items-center gap-1.5 text-muted2">
         <span className="relative -top-px flex h-8 w-4 items-center justify-center text-[13px] leading-none">−</span>
         <input
           type="range"
@@ -235,7 +235,7 @@ export default function Toolbar({
         <span className="relative -top-px flex h-8 w-4 items-center justify-center text-[13px] leading-none">+</span>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="toolbar-modes flex items-center gap-1">
         {DISPLAY_MODES.map(({ key, icon: Icon, tip }) => (
           <IconButton
             key={key}
@@ -248,13 +248,14 @@ export default function Toolbar({
         ))}
       </div>
 
-      <label className="relative">
+      {/* Flexible: shrinks before anything gets clipped, but never below usable */}
+      <label className="relative block min-w-[96px] max-w-[176px] flex-1">
         <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search"
-          className="h-8 w-44 rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+          className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
       </label>
 

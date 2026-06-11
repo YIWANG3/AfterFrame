@@ -225,8 +225,19 @@ export default function AnnotationsSection({
     }
   }, [assetId, pushToast]);
 
-  // No annotation (or still unknown): show the CTA. Layout is stable across
-  // unknown→known transitions so switching assets doesn't flicker.
+  // Still unknown (fetch in flight): render a quiet placeholder matching the
+  // CTA's footprint. Showing the CTA here would flash "Annotate with AI" for
+  // a beat on every already-annotated asset before the fetch resolves.
+  if (!known) {
+    return (
+      <Section title="AI">
+        <div className="h-[30px] w-full animate-pulse rounded-md border border-border/30 bg-app" />
+        <div className="mt-2 h-[13px] w-3/4 animate-pulse rounded-sm bg-app" />
+      </Section>
+    );
+  }
+
+  // Known to have no annotation: show the CTA.
   if (!annotation) {
     const providerKnown = hasProvider !== null;
     const enabled = providerKnown && hasProvider && !running && !!imagePath;

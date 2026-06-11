@@ -284,11 +284,6 @@ export default function AnnotationSettings() {
         </FieldRow>
       </Group>
 
-      <Group title="AI Repaint" subtitle="Image-to-image style transfer. Used by the AI Repaint tool in the editor.">
-        <div className="py-6 text-center text-[11px] text-muted2">
-          Configure AI Repaint providers from the editor's AI Repaint panel for now — migration to Settings coming soon.
-        </div>
-      </Group>
     </div>
   );
 

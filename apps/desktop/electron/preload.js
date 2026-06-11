@@ -12,6 +12,22 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
     ipcRenderer.removeAllListeners("workspace:external-import");
     ipcRenderer.on("workspace:external-import", (_event, paths) => callback(paths));
   },
+  // Agent (MCP) asked the app to reveal assets in the gallery. The renderer
+  // answers on a per-request channel so the agent learns what was found.
+  onAgentRevealAssets: (callback) => {
+    ipcRenderer.removeAllListeners("workspace:agent-reveal-assets");
+    ipcRenderer.on("workspace:agent-reveal-assets", (_event, payload) => callback(payload));
+  },
+  sendAgentRevealResult: (requestId, result) =>
+    ipcRenderer.send(`workspace:agent-reveal-result:${requestId}`, result),
+  // Push selection changes to main so the MCP get_selection tool can answer
+  // "these photos" instantly.
+  reportSelection: (assets) => ipcRenderer.send("workspace:selection-changed", assets),
+  // Agent write tools mutated the catalog — refresh the affected views.
+  onCatalogChanged: (callback) => {
+    ipcRenderer.removeAllListeners("workspace:catalog-changed");
+    ipcRenderer.on("workspace:catalog-changed", (_event, payload) => callback(payload));
+  },
   isPackaged: ipcRenderer.sendSync("workspace:is-packaged"),
   getInfo: () => ipcRenderer.invoke("workspace:info"),
   getSummary: () => ipcRenderer.invoke("workspace:summary"),

@@ -101,6 +101,58 @@ export default function App() {
   const { toasts, pushToast, dismissToast } = useToasts();
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
+  // Agent (MCP show_in_app) asked us to reveal assets. Kept in a ref so the
+  // IPC listener registers once but always calls the latest closure.
+  const agentRevealRef = useRef(null);
+  agentRevealRef.current = async ({ requestId, assetIds }) => {
+    setViewMode("assets");
+    setLightboxOpen(false);
+    const result = await workspace.revealAssets(assetIds || []);
+    setSelectedIds(result.found);
+    setSelectionAnchorId(result.found[0] || null);
+    if (result.found.length || result.missing.length) {
+      const missingNote = result.missing.length ? ` (${result.missing.length} not found)` : "";
+      pushToast?.({
+        title: "Agent",
+        message: `Selected ${result.found.length} photo${result.found.length === 1 ? "" : "s"}${missingNote}.`,
+        ttl: 4000,
+      });
+    }
+    window.mediaWorkspace?.sendAgentRevealResult?.(requestId, result);
+  };
+  useEffect(() => {
+    window.mediaWorkspace?.onAgentRevealAssets?.((payload) => agentRevealRef.current?.(payload));
+  }, []);
+
+  // Agent wrote to the catalog (crop / tags / rating / collections) — give the
+  // user a lightweight heads-up; the views themselves refresh via useWorkspace.
+  useEffect(() => {
+    const change = workspace.lastAgentChange;
+    if (!change) return;
+    const n = change.ids?.length || 0;
+    pushToast?.({
+      title: "Agent",
+      message:
+        change.scope === "collections"
+          ? "Collections updated."
+          : `Updated ${n || "some"} item${n === 1 ? "" : "s"} in the library.`,
+      ttl: 3500,
+    });
+  }, [workspace.lastAgentChange]);
+
+  // Mirror the current selection to the main process so the MCP get_selection
+  // tool can answer "these photos" instantly.
+  useEffect(() => {
+    const ids = selectedIds.length
+      ? selectedIds
+      : [workspace.selectedAssetId].filter(Boolean);
+    const payload = ids
+      .map((id) => itemById.get(id))
+      .filter(Boolean)
+      .map((item) => ({ asset_id: item.asset_id, stem: item.stem, export_path: item.export_path }));
+    window.mediaWorkspace?.reportSelection?.(payload);
+  }, [selectedIds, workspace.selectedAssetId, itemById]);
+
   // Unified finish handling: annotation results (toast + cache invalidation)
   // and auto-annotate-on-import both react to the workspace's finish events.
   useEffect(() => {

@@ -17,6 +17,7 @@ const browseIpc = require("./ipc/browse");
 const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
+const { createMcpServer } = require("./mcp/server");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -288,7 +289,111 @@ function callSidecarJson(command) {
   return payload ? JSON.parse(payload) : null;
 }
 
-function callSidecarAsync(command, timeoutMs = 30000) {
+// ---- Resident sidecar ------------------------------------------------------
+// One long-lived `serve` process per catalog answers commands over line-
+// delimited JSON, skipping the ~150ms Python spawn+import cost per call.
+// Job runners still spawn detached (launchSidecarJob); any resident failure
+// falls back to the one-shot path below.
+const readline = require("node:readline");
+let residentSidecar = null; // { child, pending: Map<id,{resolve,reject,timer}>, nextId, catalogPath }
+
+function stopResidentSidecar() {
+  if (!residentSidecar) return;
+  const state = residentSidecar;
+  residentSidecar = null;
+  for (const entry of state.pending.values()) {
+    clearTimeout(entry.timer);
+    entry.reject(new Error("resident sidecar stopped"));
+  }
+  state.pending.clear();
+  try { state.child.kill(); } catch (_) { /* already gone */ }
+}
+
+function ensureResidentSidecar() {
+  if (process.env.AFTERFRAME_SIDECAR_RESIDENT === "0") return null;
+  if (!currentCatalogPath) return null;
+  if (residentSidecar && residentSidecar.catalogPath === currentCatalogPath) return residentSidecar;
+  stopResidentSidecar();
+  let spawned;
+  try {
+    const { cmd, args, env } = sidecarCommand(["serve"]);
+    spawned = spawn(cmd, args, { cwd: rootDir, env });
+  } catch (err) {
+    console.warn("[sidecar:resident] failed to start:", err.message);
+    return null;
+  }
+  const state = { child: spawned, pending: new Map(), nextId: 1, catalogPath: currentCatalogPath };
+  const rl = readline.createInterface({ input: spawned.stdout });
+  rl.on("line", (line) => {
+    let msg;
+    try { msg = JSON.parse(line); } catch { return; }
+    if (msg.ready) {
+      console.log("[sidecar:resident] ready for", state.catalogPath);
+      return;
+    }
+    const entry = state.pending.get(msg.id);
+    if (!entry) return;
+    state.pending.delete(msg.id);
+    clearTimeout(entry.timer);
+    if (msg.code !== 0) {
+      entry.reject(new Error(msg.error || msg.stdout || "sidecar command failed"));
+    } else {
+      entry.resolve((msg.stdout || "").trim());
+    }
+  });
+  spawned.stderr.on("data", (d) => console.warn("[sidecar:resident:stderr]", String(d).slice(0, 300)));
+  spawned.on("exit", (code) => {
+    console.warn("[sidecar:resident] exited with code", code);
+    for (const entry of state.pending.values()) {
+      clearTimeout(entry.timer);
+      entry.reject(new Error("resident sidecar exited"));
+    }
+    state.pending.clear();
+    if (residentSidecar === state) residentSidecar = null;
+  });
+  residentSidecar = state;
+  return state;
+}
+
+function callSidecarResident(command, timeoutMs) {
+  const state = ensureResidentSidecar();
+  if (!state) return null;
+  return new Promise((resolve, reject) => {
+    const id = state.nextId++;
+    const timer = setTimeout(() => {
+      state.pending.delete(id);
+      console.error("[sidecar:resident] timeout after", timeoutMs, "ms — restarting resident server");
+      stopResidentSidecar();
+      reject(new Error(`sidecar timed out after ${timeoutMs}ms: ${command.join(" ")}`));
+    }, timeoutMs);
+    state.pending.set(id, { resolve, reject, timer });
+    try {
+      state.child.stdin.write(JSON.stringify({ id, argv: command.map(String) }) + "\n");
+    } catch (err) {
+      clearTimeout(timer);
+      state.pending.delete(id);
+      stopResidentSidecar();
+      reject(err);
+    }
+  });
+}
+
+async function callSidecarAsync(command, timeoutMs = 30000) {
+  const residentPromise = callSidecarResident(command, timeoutMs);
+  if (residentPromise) {
+    try {
+      return await residentPromise;
+    } catch (err) {
+      // Genuine timeouts propagate (the command itself hung); transport-level
+      // failures (process died, stopped) retry once via one-shot spawn.
+      if (/timed out after/.test(err.message)) throw err;
+      console.warn("[sidecar:resident] falling back to one-shot:", err.message);
+    }
+  }
+  return callSidecarOneShot(command, timeoutMs);
+}
+
+function callSidecarOneShot(command, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     const errChunks = [];
@@ -747,6 +852,48 @@ async function startAiRepaintTask(options) {
   return formatJobStatus(job);
 }
 
+// UI → Agent bridge: the renderer reports every selection change so the MCP
+// get_selection tool can answer "these photos" without a round trip.
+let currentSelection = { assets: [], updatedAt: null };
+ipcMain.on("workspace:selection-changed", (_event, assets) => {
+  currentSelection = { assets: Array.isArray(assets) ? assets : [], updatedAt: new Date().toISOString() };
+});
+
+// Agent write tools call this after mutating the catalog so the UI refreshes
+// immediately instead of waiting for a manual reload. See docs/agent-native-mcp.md.
+function broadcastCatalogChanged(scope, detail = {}) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send("workspace:catalog-changed", { scope, reason: "agent", ...detail });
+  }
+}
+
+// Agent → UI bridge: bring the window forward and ask the renderer to select
+// and scroll to the given assets. Resolves with the renderer's ack ({found,
+// missing}) or a timeout fallback so MCP tool calls never hang on the UI.
+function revealAssetsInApp(assetIds) {
+  return new Promise((resolve) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win || win.isDestroyed()) {
+      resolve({ shown: false, error: "App window is not available." });
+      return;
+    }
+    const requestId = crypto.randomUUID();
+    const channel = `workspace:agent-reveal-result:${requestId}`;
+    const timer = setTimeout(() => {
+      ipcMain.removeAllListeners(channel);
+      resolve({ shown: true, acknowledged: false, requested: assetIds });
+    }, 8000);
+    ipcMain.once(channel, (_event, result) => {
+      clearTimeout(timer);
+      resolve({ shown: true, acknowledged: true, ...result });
+    });
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    win.webContents.send("workspace:agent-reveal-assets", { requestId, assetIds });
+  });
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 1440,
@@ -914,10 +1061,12 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   if (!nextCatalogPath && !scratchCatalogPath) {
     currentCatalogPath = null;
     console.log("[ipc:switch-catalog] cleared currentCatalogPath (packaged mode, no path)");
+    stopResidentSidecar();
     return true;
   }
   currentCatalogPath = normalizeCatalogPath(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath;
   console.log("[ipc:switch-catalog] currentCatalogPath set to:", currentCatalogPath);
+  stopResidentSidecar(); // next sidecar call restarts it bound to the new catalog
   await prepareCatalogPath();
   // Persist last catalog path for next launch
   if (currentCatalogPath) {
@@ -943,7 +1092,7 @@ aiIpc.register({
   startAiRepaintTask, latestJobStatus, formatJobStatus,
 });
 
-annotationIpc.register({
+const annotationApi = annotationIpc.register({
   ipcMain,
   callSidecarJsonAsync,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
@@ -1099,6 +1248,26 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(buildAppMenu());
   createWindow();
 
+  // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
+  // through this while it runs. Failures must never affect the app itself.
+  const mcp = createMcpServer({
+    getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+    callSidecarJsonAsync,
+    callSidecarAsync,
+    startImportTask,
+    formatJobStatus,
+    registerRoots,
+    revealAssetsInApp,
+    getCurrentSelection: () => currentSelection,
+    broadcastCatalogChanged,
+    startAnnotationTask: annotationApi.startAnnotationTask,
+    startAiRepaintTask,
+    readAppSettings,
+    sharp,
+    port: Number(process.env.AFTERFRAME_MCP_PORT) || undefined,
+  });
+  mcp.start();
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -1110,4 +1279,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("will-quit", () => {
+  stopResidentSidecar();
 });

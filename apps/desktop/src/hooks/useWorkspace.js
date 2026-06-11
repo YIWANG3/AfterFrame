@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
+import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 
 const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
@@ -44,6 +45,9 @@ export default function useWorkspace() {
   const pendingImportRef = useRef(null);
   const jobHandlersRef = useRef({});
   const browserRequestIdRef = useRef(0);
+  // While an agent-driven reveal resets query/filters/status, the reload
+  // effects below must not fire — the reveal does one imperative load itself.
+  const suppressAutoReloadUntilRef = useRef(0);
 
   const rawDirs = useMemo(
     () => roots.filter((item) => item.root_type === "raw").map((item) => item.path),
@@ -91,8 +95,10 @@ export default function useWorkspace() {
   const searchTimerRef = useRef(null);
   useEffect(() => {
     if (!browserReady) return;
+    if (Date.now() < suppressAutoReloadUntilRef.current) return;
     clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
+      if (Date.now() < suppressAutoReloadUntilRef.current) return;
       void loadBrowser({ search: query.trim() || undefined, force: true });
     }, 250);
     return () => clearTimeout(searchTimerRef.current);
@@ -101,12 +107,14 @@ export default function useWorkspace() {
   // Reload from backend when sort changes
   useEffect(() => {
     if (!browserReady) return;
+    if (Date.now() < suppressAutoReloadUntilRef.current) return;
     void loadBrowser({ force: true, sortKey: sort });
   }, [sort]);
 
   // Reload when structured facet filters change
   useEffect(() => {
     if (!browserReady) return;
+    if (Date.now() < suppressAutoReloadUntilRef.current) return;
     void loadBrowser({ force: true, facetFilters: filters });
   }, [filters]);
 
@@ -165,6 +173,7 @@ export default function useWorkspace() {
         });
       }
       if (browserRequestIdRef.current !== requestId) return;
+      seedAnnotations(payload);
       setBrowserOffset(nextOffset + payload.length);
       setBrowserHasMore(payload.length === PAGE_SIZE);
       if (append) {
@@ -186,6 +195,96 @@ export default function useWorkspace() {
       } else {
         setBrowserLoading(false);
       }
+    }
+  }
+
+  // Agent write tools (MCP update_assets / manage_collections) mutated the
+  // catalog out-of-band — refresh the affected views. Ref pattern so the IPC
+  // listener registers once but always sees fresh closures.
+  const [lastAgentChange, setLastAgentChange] = useState(null);
+  const catalogChangedRef = useRef(null);
+  catalogChangedRef.current = (payload) => {
+    const scope = payload?.scope;
+    // Surface agent writes as a toast (jobs excluded — JobDock already shows
+    // those). App.jsx watches lastAgentChange.
+    if (payload?.reason === "agent" && scope !== "jobs") {
+      setLastAgentChange({ scope, ids: payload?.ids || null, at: Date.now() });
+    }
+    if (scope === "jobs") {
+      // Agent started/cancelled a background job — wake the polling loop so
+      // JobDock picks it up (it self-stops when no jobs are known active).
+      // Seeding with the job id guarantees finish side effects (refresh,
+      // annotation invalidation, toast) even if the job ends before the
+      // first poll.
+      pokeJobs(payload?.jobId ? { jobId: payload.jobId, jobType: payload.jobType } : undefined);
+      return;
+    }
+    if (scope === "collections") {
+      void loadCollections();
+      if (activeCollectionId) void loadBrowser({ force: true });
+      return;
+    }
+    invalidateAnnotations();
+    void loadBrowser({ force: true });
+  };
+  useEffect(() => {
+    window.mediaWorkspace?.onCatalogChanged?.((payload) => catalogChangedRef.current?.(payload));
+  }, []);
+
+  // Agent-driven reveal (MCP show_in_app): reset to the unfiltered library,
+  // page through until the requested ids are loaded (bounded scan), then
+  // select the first one. Returns {found, missing} for the agent's report.
+  async function revealAssets(assetIds) {
+    const wanted = new Set((assetIds || []).filter(Boolean));
+    if (!wanted.size) return { found: [], missing: [] };
+    suppressAutoReloadUntilRef.current = Date.now() + 1500;
+    setActiveCollectionId(null);
+    setQuery("");
+    setFilters({});
+    setStatus("all");
+    const requestId = browserRequestIdRef.current + 1;
+    browserRequestIdRef.current = requestId;
+    setBrowserLoading(true);
+    try {
+      const MAX_PAGES = 12; // bounded: scans at most MAX_PAGES * PAGE_SIZE assets
+      const collected = [];
+      const found = [];
+      let offset = 0;
+      let lastPageFull = false;
+      for (let page = 0; page < MAX_PAGES; page += 1) {
+        const payload = await window.mediaWorkspace.browseExports({
+          status: "all",
+          limit: PAGE_SIZE,
+          offset,
+          sort: sort || undefined,
+        });
+        collected.push(...payload);
+        offset += payload.length;
+        for (const item of payload) {
+          if (wanted.has(item.asset_id)) {
+            wanted.delete(item.asset_id);
+            found.push(item.asset_id);
+          }
+        }
+        lastPageFull = payload.length === PAGE_SIZE;
+        if (!wanted.size || !lastPageFull) break;
+      }
+      if (browserRequestIdRef.current !== requestId) {
+        return { found, missing: [...wanted] };
+      }
+      seedAnnotations(collected);
+      setItems(collected);
+      setBrowserOffset(offset);
+      setBrowserHasMore(lastPageFull);
+      setBrowserReady(true);
+      const primary = found[0] || null;
+      if (primary) {
+        setSelectedAssetId(primary);
+        await loadDetail(primary);
+      }
+      return { found, missing: [...wanted] };
+    } finally {
+      setBrowserLoading(false);
     }
   }
 
@@ -500,6 +599,10 @@ export default function useWorkspace() {
     } else if (meta.jobType === "enrichment") {
       setEnrichmentTask(final);
       await h.refreshAll();
+    } else if (meta.jobType === "ai_repaint") {
+      // The job runner registers the repainted file as a new version asset —
+      // reload so it appears in the grid without a manual refresh.
+      if (!cancelled) await h.refreshAll();
     }
     // Generic finish event — App-level consumers (annotation toast/cache,
     // activity center) react to this.
@@ -600,6 +703,8 @@ export default function useWorkspace() {
     browserHasMore,
     browserOffset,
     loadMoreBrowser,
+    revealAssets,
+    lastAgentChange,
     refreshAll,
     queuedImportNote,
     addImages,

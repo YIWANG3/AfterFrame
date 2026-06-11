@@ -24,10 +24,8 @@ export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) 
         return (
           <div
             key={job.jobId}
-            className="relative overflow-hidden rounded-lg border border-border bg-panel2 p-3 pl-4 shadow-overlay ring-1 ring-black/40"
+            className="relative overflow-hidden rounded-lg border border-border/60 bg-panel2 p-3 shadow-overlay"
           >
-            {/* Accent edge so the card reads as "activity" against any panel */}
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
             <div className="flex items-center gap-2">
               <Icon className="h-3.5 w-3.5 shrink-0 text-accent" />
               <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-text">

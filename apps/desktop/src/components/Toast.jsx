@@ -53,21 +53,18 @@ function ToastItem({ toast, onDismiss }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Visual language matches the JobDock progress cards (panel2 + ring + left
-  // edge bar) so the bottom-right column reads as one consistent surface.
-  // Edge color encodes tone: red for errors, accent otherwise.
+  // Visual language matches the JobDock progress cards (panel2 + soft border)
+  // so the bottom-right column reads as one consistent surface. Tone shows in
+  // the border tint: red for errors, neutral otherwise.
   return (
     <div
       ref={ref}
       className={[
-        "pointer-events-auto relative w-[340px] overflow-hidden rounded-lg border border-border bg-panel2 p-3 pl-4 shadow-overlay ring-1 ring-black/40 transition-all duration-200",
+        "pointer-events-auto relative w-[340px] overflow-hidden rounded-lg border bg-panel2 p-3 shadow-overlay transition-all duration-200",
+        toast.tone === "error" ? "border-red-400/50" : "border-border/60",
         entered ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
       ].join(" ")}
     >
-      <div className={[
-        "absolute inset-y-0 left-0 w-[3px]",
-        toast.tone === "error" ? "bg-red-400" : "bg-accent",
-      ].join(" ")} />
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           {toast.title && (
