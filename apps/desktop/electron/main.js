@@ -930,6 +930,7 @@ jobsIpc.register({
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   formatJobStatus, latestJobStatus,
   startImportTask, startEnrichmentTask, startPreviewTask,
+  callSidecarJsonAsync,
 });
 
 aiIpc.register({
