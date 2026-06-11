@@ -98,6 +98,76 @@ def _infer_origin_stem(stem: str) -> tuple[str | None, str]:
     return (current if changed and current else None, inferred_kind)
 
 
+def _serve_loop(args) -> int:
+    """Resident mode: amortize interpreter startup across many commands.
+
+    Protocol (line-delimited JSON on stdio):
+      request  {"id": <any>, "argv": ["browse-exports", "--status", "all", ...]}
+      response {"id": <any>, "code": <int>, "stdout": <str>, "error": <str|null>}
+
+    Each request re-enters main() with a fresh parse and DB connection — the
+    savings come from skipping process spawn + module imports (~150ms), not
+    from caching state, so per-command semantics are identical to one-shot.
+    """
+    import contextlib
+    import io
+    import sys
+    import traceback
+
+    catalog_arg = str(args.catalog)
+    sys.stdout.write(json.dumps({"ready": True, "catalog": catalog_arg}) + "\n")
+    sys.stdout.flush()
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        buf = io.StringIO()
+        errbuf = io.StringIO()
+        code = 0
+        error = None
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(errbuf):
+                code = main(["--catalog", catalog_arg, *[str(a) for a in request.get("argv", [])]])
+        except SystemExit as exc:  # argparse errors etc.
+            code = int(exc.code) if isinstance(exc.code, int) else 1
+            error = str(exc) if exc.code and not isinstance(exc.code, int) else None
+        except Exception:  # noqa: BLE001
+            code = 1
+            error = traceback.format_exc(limit=8)
+        if code != 0 and not error and errbuf.getvalue():
+            error = errbuf.getvalue()[-2000:]
+        response = {"id": request.get("id"), "code": code, "stdout": buf.getvalue(), "error": error}
+        sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+    return 0
+
+
+def _annotation_from_row(row) -> dict | None:
+    """Inline annotation payload for browse rows (same shape as get-annotation).
+
+    Lets the UI hydrate its annotation cache from browse results so switching
+    assets renders synchronously — no per-asset fetch, no placeholder flash.
+    """
+    if row["anno_provider"] is None:
+        return None
+    return {
+        "asset_id": row["asset_id"],
+        "provider": row["anno_provider"],
+        "model": row["anno_model"],
+        "schema_version": row["anno_schema_version"],
+        "caption": row["anno_caption"],
+        "tags": json.loads(row["anno_tags_json"] or "[]"),
+        "location": json.loads(row["anno_location_json"]) if row["anno_location_json"] else None,
+        "detected_text": row["anno_detected_text"],
+        "created_at": row["anno_created_at"],
+        "updated_at": row["anno_updated_at"],
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="media_workspace")
     parser.add_argument("--catalog", type=Path, default=Path("data/default.afcatalog"))
@@ -242,6 +312,34 @@ def build_parser() -> argparse.ArgumentParser:
     quick_reg.add_argument("--export-path", type=Path, required=True)
     quick_reg.add_argument("--origin-path", type=Path, default=None)
     quick_reg.add_argument("--collage-source-ids", nargs="*", default=None)
+
+    create_derived = subparsers.add_parser("create-derived", parents=[common])
+    create_derived.add_argument("--asset-id", required=True)
+    create_derived.add_argument("--crop-ratio", required=True, help="Target aspect ratio, e.g. '4:3', '1:1', '16:9'")
+    create_derived.add_argument("--gravity", choices=["center", "top", "bottom", "left", "right"], default="center")
+
+    add_text_p = subparsers.add_parser("add-text", parents=[common])
+    add_text_p.add_argument("--asset-id", required=True)
+    add_text_p.add_argument("--text", required=True)
+    add_text_p.add_argument("--x", type=float, default=0.5, help="Normalized center x of the text block (0-1)")
+    add_text_p.add_argument("--y", type=float, default=0.9, help="Normalized center y of the text block (0-1)")
+    add_text_p.add_argument("--size", type=float, default=0.05, help="Font height as a fraction of image height")
+    add_text_p.add_argument("--color", default="#FFFFFF")
+    add_text_p.add_argument("--stroke-color", default="#000000")
+    add_text_p.add_argument("--stroke-width", type=int, default=None)
+    add_text_p.add_argument("--opacity", type=float, default=1.0)
+    add_text_p.add_argument("--align", choices=["left", "center", "right"], default="center")
+    add_text_p.add_argument("--font-path", default=None)
+    add_text_p.add_argument("--output", type=Path, default=None, help="Render to this path only — no catalog registration (preview mode)")
+
+    subparsers.add_parser("serve", parents=[common], help="Resident mode: line-delimited JSON requests on stdin")
+
+    export_assets_p = subparsers.add_parser("export-assets", parents=[common])
+    export_assets_p.add_argument("--asset-id", action="append", required=True)
+    export_assets_p.add_argument("--dest", type=Path, required=True)
+    export_assets_p.add_argument("--max-edge", type=int, help="Resize so the longest edge fits this many pixels")
+    export_assets_p.add_argument("--format", choices=["jpeg", "png", "webp"], help="Transcode to this format")
+    export_assets_p.add_argument("--quality", type=int, default=90)
 
     collage_src = subparsers.add_parser("collage-sources", parents=[common])
     collage_src.add_argument("--asset-id", required=True)
@@ -406,9 +504,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    if args.command == "serve":
+        return _serve_loop(args)
 
     if args.command == "benchmark-dataset":
         thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
@@ -929,6 +1030,7 @@ def main() -> int:
                     "set_raw_asset_id": row["set_raw_asset_id"],
                     "primary_stem": row["primary_stem"],
                     "set_item_count": row["set_item_count"],
+                    "annotation": _annotation_from_row(row),
                 }
             )
         print(json.dumps(payload, indent=2))
@@ -1127,118 +1229,61 @@ def main() -> int:
         return 0
 
     if args.command == "quick-register":
-        export_path = args.export_path.resolve()
-        candidate = extract_export_candidate(export_path, fingerprint_mode="head-only")
-        asset_id = upsert_export_asset(connection, candidate, commit=True)
-        origin_asset_id = None
+        from .derived import register_export_file
+        payload = register_export_file(
+            connection,
+            catalog,
+            args.export_path.resolve(),
+            origin_path=args.origin_path.resolve() if args.origin_path else None,
+            collage_source_ids=getattr(args, "collage_source_ids", None) or [],
+        )
+        print(json.dumps(payload))
+        return 0
 
-        # If origin-path provided, copy its source relationship instead of running matcher
-        match_status = "unmatched"
-        match_score = 0.0
-        raw_asset_id = None
-        if args.origin_path:
-            origin = str(args.origin_path.resolve())
-            origin_asset_row = connection.execute(
-                "SELECT asset_id FROM asset_files WHERE path = ?",
-                (origin,),
-            ).fetchone()
-            origin_asset_id = str(origin_asset_row["asset_id"]) if origin_asset_row else None
-            origin_row = connection.execute(
-                """
-                SELECT registry.raw_asset_id, registry.score
-                FROM asset_files
-                JOIN export_lookup_registry AS registry ON registry.export_asset_id = asset_files.asset_id
-                WHERE asset_files.path = ?
-                  AND registry.raw_asset_id IS NOT NULL
-                """,
-                (origin,),
-            ).fetchone()
-            if origin_row:
-                raw_asset_id = origin_row[0]
-                match_score = origin_row[1] or 1.0
-                match_status = "auto_bound"
+    if args.command == "create-derived":
+        from .derived import create_derived_crop
+        payload = create_derived_crop(
+            connection,
+            catalog,
+            args.asset_id,
+            args.crop_ratio,
+            gravity=args.gravity,
+        )
+        print(json.dumps(payload))
+        return 0
 
-        # If no origin match found, fall back to matcher
-        if not raw_asset_id:
-            thresholds = Thresholds()
-            decision = resolve_export(connection, export_path, thresholds=thresholds, refresh=True)
-            match_status = decision.status
-            match_score = decision.score
-            raw_asset_id = decision.raw_asset_id
-        else:
-            # Write registry entry directly
-            reg_decision = MatchDecision(
-                export_asset_id=asset_id,
-                export_path=export_path,
-                status=match_status,
-                score=match_score,
-                raw_asset_id=raw_asset_id,
-                feature_vector={},
-            )
-            upsert_registry(connection, reg_decision, commit=True)
+    if args.command == "add-text":
+        from .derived import create_derived_text
+        payload = create_derived_text(
+            connection,
+            catalog,
+            args.asset_id,
+            output=args.output,
+            text=args.text,
+            x=args.x,
+            y=args.y,
+            size=args.size,
+            color=args.color,
+            stroke_color=args.stroke_color,
+            stroke_width=args.stroke_width,
+            opacity=args.opacity,
+            align=args.align,
+            font_path=args.font_path,
+        )
+        print(json.dumps(payload))
+        return 0
 
-        collage_source_ids = getattr(args, 'collage_source_ids', None) or []
-        if collage_source_ids:
-            # Collage gets its own resource set, not joined to any source's set
-            attach_asset_to_resource_set(
-                connection,
-                asset_id,
-                origin_asset_id=None,
-                version_kind="import",
-                commit=True,
-            )
-        else:
-            attach_asset_to_resource_set(
-                connection,
-                asset_id,
-                origin_asset_id=origin_asset_id,
-                version_kind="derived" if origin_asset_id else "import",
-                commit=True,
-            )
-
-        # Generate preview for this single asset
-        preview_service = PreviewService(catalog)
-        row = connection.execute(
-            """
-            SELECT asset_id, asset_type, canonical_path, extension,
-                   json_extract(metadata_json, '$.width') AS width,
-                   json_extract(metadata_json, '$.height') AS height
-            FROM assets WHERE asset_id = ?
-            """,
-            (asset_id,),
-        ).fetchone()
-        if row:
-            try:
-                from .db import upsert_preview_entry
-                preview_result = preview_service.generate_for_row(row, kind="preview", force=False)
-                upsert_preview_entry(connection, asset_id, "preview", preview_result.relative_path, preview_result.width, preview_result.height, preview_result.status)
-                preview_hd_result = preview_service.generate_for_row(row, kind="preview-hd", force=False)
-                upsert_preview_entry(connection, asset_id, "preview-hd", preview_hd_result.relative_path, preview_hd_result.width, preview_hd_result.height, preview_hd_result.status)
-                connection.commit()
-            except Exception as e:
-                import sys
-                print(f"Warning: preview generation failed: {e}", file=sys.stderr)
-
-        # Record collage source relationships
-        if collage_source_ids:
-            for idx, source_id in enumerate(collage_source_ids):
-                connection.execute(
-                    """
-                    INSERT INTO asset_links (link_id, parent_asset_id, child_asset_id, relation_type, recipe_json, confidence)
-                    VALUES (?, ?, ?, 'collage_source', ?, 1.0)
-                    ON CONFLICT(parent_asset_id, child_asset_id, relation_type) DO NOTHING
-                    """,
-                    (str(uuid4()), asset_id, source_id, json.dumps({"sort_order": idx})),
-                )
-            connection.commit()
-
-        print(json.dumps({
-            "asset_id": asset_id,
-            "export_path": str(export_path),
-            "match_status": match_status,
-            "score": match_score,
-            "raw_asset_id": raw_asset_id,
-        }))
+    if args.command == "export-assets":
+        from .derived import export_assets_to_dir
+        payload = export_assets_to_dir(
+            connection,
+            args.asset_id,
+            args.dest,
+            max_edge=args.max_edge,
+            fmt=args.format,
+            quality=args.quality,
+        )
+        print(json.dumps(payload, indent=2))
         return 0
 
     if args.command == "cleanup-orphan-exports":
@@ -1379,6 +1424,7 @@ def main() -> int:
                     "set_raw_asset_id": row["set_raw_asset_id"],
                     "primary_stem": row["primary_stem"],
                     "set_item_count": row["set_item_count"],
+                    "annotation": _annotation_from_row(row),
                 }
             )
         print(json.dumps(payload, indent=2))

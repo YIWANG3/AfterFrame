@@ -1447,7 +1447,16 @@ def list_export_assets(
             rs.primary_asset_id AS set_primary_asset_id,
             rs.raw_asset_id AS set_raw_asset_id,
             primary_assets.stem AS primary_stem,
-            set_counts.set_item_count AS set_item_count
+            set_counts.set_item_count AS set_item_count,
+            anno.provider AS anno_provider,
+            anno.model AS anno_model,
+            anno.schema_version AS anno_schema_version,
+            anno.caption AS anno_caption,
+            anno.tags_json AS anno_tags_json,
+            anno.location_json AS anno_location_json,
+            anno.detected_text AS anno_detected_text,
+            anno.created_at AS anno_created_at,
+            anno.updated_at AS anno_updated_at
         FROM export_lookup_registry AS registry
         JOIN assets
             ON assets.asset_id = registry.export_asset_id
@@ -2215,9 +2224,20 @@ def browse_collection(
             rs.primary_asset_id AS set_primary_asset_id,
             rs.raw_asset_id AS set_raw_asset_id,
             primary_assets.stem AS primary_stem,
-            set_counts.set_item_count AS set_item_count
+            set_counts.set_item_count AS set_item_count,
+            anno.provider AS anno_provider,
+            anno.model AS anno_model,
+            anno.schema_version AS anno_schema_version,
+            anno.caption AS anno_caption,
+            anno.tags_json AS anno_tags_json,
+            anno.location_json AS anno_location_json,
+            anno.detected_text AS anno_detected_text,
+            anno.created_at AS anno_created_at,
+            anno.updated_at AS anno_updated_at
         FROM collection_items ci
         JOIN assets ON assets.asset_id = ci.asset_id
+        LEFT JOIN asset_ai_annotations AS anno
+            ON anno.asset_id = assets.asset_id
         JOIN export_lookup_registry AS registry
             ON registry.export_asset_id = assets.asset_id
         LEFT JOIN assets AS raw_assets
