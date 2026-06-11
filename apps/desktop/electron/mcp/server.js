@@ -6,6 +6,7 @@
 
 const http = require("node:http");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const DEFAULT_PORT = 41706;
@@ -34,6 +35,8 @@ const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const VIEW_MAX_ASSETS = 8;
 const VIEW_EDGE_PX = 384;
 const IMPORT_WAIT_MS = 25000;
+const MAX_BODY_BYTES = 2 * 1024 * 1024; // JSON-RPC requests are tiny; cap abuse
+const VIEW_TIME_BUDGET_MS = 20000;
 
 // asset_id -> { preview, previewHd } absolute paths, filled by search results
 // so /assets/{id} usually serves without spawning the sidecar again.
@@ -231,7 +234,12 @@ function createMcpServer(deps) {
         requireCatalog();
         const ids = (args.asset_ids || []).slice(0, VIEW_MAX_ASSETS);
         const skipped = (args.asset_ids || []).length - ids.length;
+        const deadline = Date.now() + VIEW_TIME_BUDGET_MS;
         for (const assetId of ids) {
+          if (Date.now() > deadline) {
+            content.push({ type: "text", text: "(time budget exhausted — remaining ids skipped)" });
+            break;
+          }
           const { preview, previewHd } = await resolvePreviewPaths(assetId);
           const source = preview || previewHd;
           if (!source || !fs.existsSync(source)) {
@@ -573,7 +581,14 @@ function createMcpServer(deps) {
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
         if (!ids.length) throw new Error("asset_ids is empty.");
         if (!args.dest_dir) throw new Error("dest_dir is required.");
-        const command = ["export-assets", "--dest", String(args.dest_dir)];
+        // Write-side constraint: exports land under the user's home or the
+        // temp dir — never system locations, no matter what the agent passes.
+        const destResolved = path.resolve(String(args.dest_dir));
+        const allowedPrefixes = [os.homedir(), os.tmpdir()].map((d) => path.resolve(d));
+        if (!allowedPrefixes.some((d) => destResolved === d || destResolved.startsWith(d + path.sep))) {
+          throw new Error(`dest_dir must be inside your home directory or the temp dir (got ${destResolved}).`);
+        }
+        const command = ["export-assets", "--dest", destResolved];
         for (const id of ids) command.push("--asset-id", id);
         if (args.max_edge) command.push("--max-edge", String(args.max_edge));
         if (args.format) command.push("--format", String(args.format));
@@ -781,10 +796,17 @@ function createMcpServer(deps) {
   }
 
   const server = http.createServer(async (req, res) => {
-    // DNS-rebinding guard: this server is for local agents, never for web pages.
+    // DNS-rebinding guards: this server is for local agents, never for web
+    // pages. Origin catches browser fetches; Host catches rebound domains
+    // pointing at 127.0.0.1 (no token by explicit user decision — local only).
     const origin = req.headers.origin;
     if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       res.writeHead(403).end("forbidden origin");
+      return;
+    }
+    const host = String(req.headers.host || "");
+    if (host && !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) {
+      res.writeHead(403).end("forbidden host");
       return;
     }
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
@@ -800,7 +822,15 @@ function createMcpServer(deps) {
         return;
       }
       const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
+      let received = 0;
+      for await (const chunk of req) {
+        received += chunk.length;
+        if (received > MAX_BODY_BYTES) {
+          res.writeHead(413).end("payload too large");
+          return;
+        }
+        chunks.push(chunk);
+      }
       let body;
       try {
         body = JSON.parse(Buffer.concat(chunks).toString("utf-8"));

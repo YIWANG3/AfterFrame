@@ -12,6 +12,7 @@ function register({
   dialog,
   rootDir,
   writeImageWithSourceMetadata,
+  addAllowedMediaDir,
 }) {
   ipcMain.handle("workspace:pick-save-path", async (_event, options) => {
     const result = await dialog.showSaveDialog({
@@ -26,6 +27,7 @@ function register({
 
   ipcMain.handle("workspace:save-image", async (_event, targetPath, arrayBuffer, sourceMetadataPath) => {
     if (!targetPath) throw new Error("Missing target path");
+    addAllowedMediaDir?.(require("node:path").dirname(targetPath));
     const output = Buffer.from(arrayBuffer);
     return await writeImageWithSourceMetadata(targetPath, output, sourceMetadataPath);
   });

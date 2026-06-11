@@ -270,28 +270,29 @@ function createCatalogAt(targetPath) {
   return normalizedPath;
 }
 
-function callSidecar(command) {
-  const { cmd, args, env } = sidecarCommand(command);
-  console.log("[sidecar:sync]", cmd, args.join(" "));
-  const t0 = Date.now();
-  const result = spawnSync(cmd, args, { cwd: rootDir, env, encoding: "utf-8", timeout: 30000 });
-  console.log("[sidecar:sync] done in", Date.now() - t0, "ms, exit:", result.status);
-
-  if (result.error) {
-    console.error("[sidecar:sync] spawn error:", result.error.message);
-    throw result.error;
+// Secrets must never ride on argv — `ps` shows it to every local process and
+// our transport logs would print it. The transport strips `--api-key <value>`
+// here and hands it to the child via env instead; the sidecar falls back to
+// MEDIA_WORKSPACE_API_KEY when the flag is absent. (The resident path carries
+// commands over stdin JSON, which is already invisible to `ps`.)
+function extractSecretEnv(command) {
+  const sanitized = [];
+  const secretEnv = {};
+  for (let i = 0; i < command.length; i += 1) {
+    if (command[i] === "--api-key" && i + 1 < command.length) {
+      secretEnv.MEDIA_WORKSPACE_API_KEY = String(command[i + 1]);
+      i += 1;
+      continue;
+    }
+    sanitized.push(command[i]);
   }
-  if (result.status !== 0) {
-    console.error("[sidecar:sync] stderr:", result.stderr?.slice(0, 500));
-    throw new Error(result.stderr || result.stdout || "sidecar command failed");
-  }
-
-  return result.stdout.trim();
+  return { sanitized, secretEnv };
 }
 
-function callSidecarJson(command) {
-  const payload = callSidecar(command);
-  return payload ? JSON.parse(payload) : null;
+function redactCommand(command) {
+  return command
+    .map((arg, i) => (command[i - 1] === "--api-key" ? "***" : String(arg)))
+    .join(" ");
 }
 
 // ---- Resident sidecar ------------------------------------------------------
@@ -340,6 +341,7 @@ function ensureResidentSidecar() {
     if (!entry) return;
     state.pending.delete(msg.id);
     clearTimeout(entry.timer);
+    state.consecutiveTimeouts = 0; // any completed response proves the server is alive
     if (msg.code !== 0) {
       entry.reject(new Error(msg.error || msg.stdout || "sidecar command failed"));
     } else {
@@ -382,9 +384,16 @@ function callSidecarResident(command, timeoutMs) {
     const id = state.nextId++;
     const timer = setTimeout(() => {
       state.pending.delete(id);
-      console.error("[sidecar:resident] timeout after", timeoutMs, "ms — restarting resident server");
-      stopResidentSidecar();
-      reject(new Error(`sidecar timed out after ${timeoutMs}ms: ${command.join(" ")}`));
+      console.error("[sidecar:resident] timeout after", timeoutMs, "ms");
+      // One slow command shouldn't nuke every other in-flight request — only
+      // restart the resident process after consecutive timeouts (it's likely
+      // wedged at that point, not just busy).
+      state.consecutiveTimeouts = (state.consecutiveTimeouts || 0) + 1;
+      if (state.consecutiveTimeouts >= 2) {
+        console.error("[sidecar:resident] consecutive timeouts — restarting resident server");
+        stopResidentSidecar();
+      }
+      reject(new Error(`sidecar timed out after ${timeoutMs}ms: ${redactCommand(command)}`));
     }, timeoutMs);
     state.pending.set(id, { resolve, reject, timer });
     try {
@@ -427,10 +436,11 @@ function callSidecarOneShot(command, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     const errChunks = [];
-    const { cmd, args, env } = sidecarCommand(command);
+    const { sanitized, secretEnv } = extractSecretEnv(command);
+    const { cmd, args, env } = sidecarCommand(sanitized);
     console.log("[sidecar:async]", cmd, args.join(" "));
     const t0 = Date.now();
-    const child = spawn(cmd, args, { cwd: rootDir, env });
+    const child = spawn(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv } });
 
     const timer = setTimeout(() => {
       console.error("[sidecar:async] TIMEOUT after", timeoutMs, "ms — killing child");
@@ -486,8 +496,9 @@ function sidecarCommand(command) {
 }
 
 function spawnDetachedSidecar(command) {
-  const { cmd, args, env } = sidecarCommand(command);
-  return spawn(cmd, args, { cwd: rootDir, env, detached: true, stdio: "ignore" });
+  const { sanitized, secretEnv } = extractSecretEnv(command);
+  const { cmd, args, env } = sidecarCommand(sanitized);
+  return spawn(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore" });
 }
 
 function launchSidecarJob(command) {
@@ -739,6 +750,58 @@ async function createJob(jobType, payload) {
   return await callSidecarJsonAsync(["create-job", "--job-type", jobType, "--payload-json", JSON.stringify(payload || {})]);
 }
 
+// ---- media:// allowlist ----------------------------------------------------
+// The media: protocol must only serve files the app legitimately knows about:
+// the catalog (previews/derived), registered raw/export roots, app data
+// (sticker library), the HEIC transcode cache, and directories the app itself
+// just wrote into (editor saves). Anything else is a renderer-compromise
+// escalation to full disk read.
+const allowedMediaDirs = new Set();
+const baselineMediaDirs = []; // catalog-independent entries, survive resets
+let mediaRootsLoaded = null; // promise — lazily refreshed per catalog
+
+function addAllowedMediaDir(dir) {
+  if (dir) allowedMediaDirs.add(path.resolve(String(dir)));
+}
+
+function addBaselineMediaDir(dir) {
+  if (!dir) return;
+  baselineMediaDirs.push(path.resolve(String(dir)));
+  addAllowedMediaDir(dir);
+}
+
+function resetMediaAllowlist() {
+  allowedMediaDirs.clear();
+  mediaRootsLoaded = null;
+  for (const dir of baselineMediaDirs) addAllowedMediaDir(dir);
+}
+
+function ensureMediaRootsLoaded() {
+  if (!mediaRootsLoaded) {
+    mediaRootsLoaded = (async () => {
+      if (!currentCatalogPath || !catalogHasDb()) return;
+      try {
+        const roots = (await callSidecarJsonAsync(["catalog-roots"])) || [];
+        for (const root of roots) addAllowedMediaDir(root.path);
+      } catch (err) {
+        console.warn("[media] failed to load catalog roots for allowlist:", err.message);
+        mediaRootsLoaded = null; // retry on next request
+      }
+    })();
+  }
+  return mediaRootsLoaded;
+}
+
+function isAllowedMediaPath(resolved) {
+  if (currentCatalogPath && (resolved === currentCatalogPath || resolved.startsWith(currentCatalogPath + path.sep))) {
+    return true;
+  }
+  for (const dir of allowedMediaDirs) {
+    if (resolved === dir || resolved.startsWith(dir + path.sep)) return true;
+  }
+  return false;
+}
+
 async function registerRoots(rootType, paths) {
   const uniquePaths = [...new Set((paths || []).filter(Boolean))];
   if (!uniquePaths.length) {
@@ -747,6 +810,7 @@ async function registerRoots(rootType, paths) {
   const command = ["register-roots", "--root-type", rootType];
   for (const targetPath of uniquePaths) {
     command.push("--path", targetPath);
+    addAllowedMediaDir(targetPath);
   }
   return await callSidecarJsonAsync(command) || [];
 }
@@ -888,6 +952,7 @@ async function startAiRepaintTask(options) {
 // UI → Agent bridge: the renderer reports every selection change so the MCP
 // get_selection tool can answer "these photos" without a round trip.
 let currentSelection = { assets: [], updatedAt: null };
+let mcpServerApi = null;
 ipcMain.on("workspace:selection-changed", (_event, assets) => {
   currentSelection = { assets: Array.isArray(assets) ? assets : [], updatedAt: new Date().toISOString() };
 });
@@ -1100,6 +1165,11 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   currentCatalogPath = normalizeCatalogPath(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath;
   console.log("[ipc:switch-catalog] currentCatalogPath set to:", currentCatalogPath);
   stopResidentSidecar(); // next sidecar call restarts it bound to the new catalog
+  // Per-catalog caches must not leak across libraries: media allowlist roots,
+  // the agent-facing selection mirror, and the MCP preview-path cache.
+  resetMediaAllowlist();
+  currentSelection = { assets: [], updatedAt: null };
+  mcpServerApi?.clearPreviewCache?.();
   await prepareCatalogPath();
   // Persist last catalog path for next launch
   if (currentCatalogPath) {
@@ -1140,12 +1210,13 @@ browseIpc.register({
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
 });
 
-assetsIpc.register({ ipcMain, shell, callSidecarJsonAsync });
+assetsIpc.register({ ipcMain, shell, callSidecarJsonAsync, addAllowedMediaDir });
 
 saveFileIpc.register({
   ipcMain, dialog,
   rootDir,
   writeImageWithSourceMetadata,
+  addAllowedMediaDir,
 });
 
 // quick-register / collage-sources / delete-export-assets are in ipc/assets.js
@@ -1260,15 +1331,25 @@ app.whenReady().then(() => {
     return null;
   }
 
-  protocol.handle("media", (request) => {
+  // Baseline allowlist entries that don't depend on the catalog
+  addBaselineMediaDir(heicCacheDir);
+  addBaselineMediaDir(path.join(app.getPath("userData"), "afterframe"));
+  if (!isPackaged) addBaselineMediaDir(rootDir); // dev fixtures / demo assets
+
+  protocol.handle("media", async (request) => {
     const raw = request.url.slice("media://".length);
     const filePath = raw.split("/").map((seg) => decodeURIComponent(seg)).join(path.sep);
     const resolved = path.resolve(filePath);
-    const inCatalog = currentCatalogPath && (resolved === currentCatalogPath || resolved.startsWith(currentCatalogPath + path.sep));
-    const existsOnDisk = fs.existsSync(resolved);
-    if (!inCatalog && !existsOnDisk) {
-      return new Response("forbidden", { status: 403 });
+    if (!isAllowedMediaPath(resolved)) {
+      // Registered roots load lazily — retry once with them present before
+      // rejecting (covers the first original-file view after startup).
+      await ensureMediaRootsLoaded();
+      if (!isAllowedMediaPath(resolved)) {
+        console.warn("[media] blocked path outside allowlist:", resolved);
+        return new Response("forbidden", { status: 403 });
+      }
     }
+    const existsOnDisk = fs.existsSync(resolved);
     if (existsOnDisk && HEIC_RE.test(resolved)) {
       const jpeg = transcodeHeicToJpeg(resolved);
       if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
@@ -1283,7 +1364,7 @@ app.whenReady().then(() => {
 
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
   // through this while it runs. Failures must never affect the app itself.
-  const mcp = createMcpServer({
+  mcpServerApi = createMcpServer({
     getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
     callSidecarJsonAsync,
     callSidecarAsync,
@@ -1299,7 +1380,7 @@ app.whenReady().then(() => {
     sharp,
     port: Number(process.env.AFTERFRAME_MCP_PORT) || undefined,
   });
-  mcp.start();
+  mcpServerApi.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

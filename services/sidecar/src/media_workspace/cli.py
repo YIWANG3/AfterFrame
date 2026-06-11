@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -507,6 +508,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Secrets come via env, not argv (argv is visible to every local process
+    # through `ps`). The Electron transport strips --api-key into this var;
+    # an explicitly passed flag still wins for direct CLI use.
+    if getattr(args, "api_key", None) in (None, ""):
+        env_key = os.environ.get("MEDIA_WORKSPACE_API_KEY")
+        if env_key and hasattr(args, "api_key"):
+            args.api_key = env_key
 
     if args.command == "serve":
         return _serve_loop(args)
