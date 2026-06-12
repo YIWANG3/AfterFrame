@@ -55,7 +55,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 ### AI 重绘（BYOK）
 自带 API Key 模式。AfterFrame 不内置也不代理任何 AI 服务 — 你自行配置 API 密钥，所有请求从你的电脑直连 API。
 
-- 支持 Gemini、GPT Image、即梦，或任意 OpenAI 兼容端点
+- 支持 Gemini、GPT Image、即梦，或任意 OpenAI 兼容端点——在 设置 → AI Repaint 中管理服务商与各自的默认模型
 - 25 个内置风格提示词（油画、动漫、水彩、水墨、概念艺术等）
 - 并排和上下对比的前后效果预览
 - 每次重绘的版本历史记录
@@ -71,11 +71,26 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 - 手动编辑每张图的标签 —— 删除错误标签或自行添加（带标签搜索）
 - 标注结果直接驱动上面的「搜索与筛选」;支持 HEIC / RAW 输入
 
+### Agent 原生（MCP）
+AfterFrame 内嵌了 [MCP](https://modelcontextprotocol.io) 服务器——任何 AI agent（Claude Code、Claude Desktop 或其他 MCP 兼容客户端）都能在 App 运行时用自然语言操作你的图库：
+
+> 「把我桌面的照片导入进来」 · 「找出上个月拍的竖构图照片给我看看」 · 「这几张裁成 4:3 发小红书」 · 「把还没打标签的图全部标注一遍」 · 「这个合集导出成长边 2048 的 JPEG」
+
+- **17 个工具**：检索（全文 + EXIF 筛选）、agent 真正"看得见"的缩略图、导入、裁剪、导出、标签/评分、合集、AI 标注与重绘任务、删除，以及任务控制
+- **双向选中桥**——你在 App 里框选后直接说"这几张"；agent 挑中的图也会在你的画廊里高亮并滚动到位（`show_in_app`）
+- **可见、可取消**——agent 发起的工作和你自己的一样出现在后台活动面板里，有实时进度和取消按钮
+- **零配置**——服务监听 `127.0.0.1:41706`，仓库自带 `.mcp.json`，Claude Code 打开项目即自动连接。纯本地，隐私立场与 BYOK 一致
+
+![Agent 驱动的工作流](docs/assets/agent-claude-code.png)
+
+![Agent 选中的照片在画廊中高亮](docs/assets/agent-reveal.png)
+
 ### 素材库管理
 - 基于 Catalog 的工作流 — 每个项目一个 `.afcatalog`
 - 导入流水线：自动提取元数据与生成预览
 - 可选的 RAW 源文件索引与按文件名匹配
 - HEIC / HEIF 支持 — 原图按需转码为 JPEG，iPhone 照片在 Lightbox、编辑器、拼图中以全分辨率正常显示
+- 统一后台活动面板：导入、预览、标注、AI 任务的进度集中显示，随时可取消
 - 本地优先：文件始终保留在你的硬盘上，不会上传
 
 ![浏览与检查面板](docs/assets/browse-inspector.png)
@@ -115,7 +130,7 @@ npm run dist:mac
 ## 项目结构
 
 ```
-apps/desktop/          Electron + React 桌面应用
+apps/desktop/          Electron + React 桌面应用（electron/mcp/ 内嵌 MCP 服务器）
 services/sidecar/      Python 后端（SQLite catalog、元数据、AI 重绘）
 RESOURCES/             AI 风格提示词库、设计资源
 docs/                  截图与开发文档

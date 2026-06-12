@@ -55,7 +55,7 @@ Download the latest `.dmg` from [Releases](../../releases).
 ### AI Repaint (BYOK)
 Bring your own API key. AfterFrame does not bundle or proxy any AI service — you connect your own provider and all requests go directly from your machine to the API.
 
-- Supports Gemini, GPT Image, Jimeng, or any OpenAI-compatible endpoint
+- Supports Gemini, GPT Image, Jimeng, or any OpenAI-compatible endpoint — manage providers and per-provider model defaults in Settings → AI Repaint
 - 25 built-in style prompts (oil painting, anime, watercolor, ink, concept art, and more)
 - Side-by-side and stacked before/after comparison
 - Version history for every repaint
@@ -71,11 +71,26 @@ Generate a caption, tags, and a location guess for your photos with your own LLM
 - Hand-edit per-photo tags — remove a wrong one or add your own (with the same tag search)
 - Results power Search & Filter above; HEIC / RAW inputs handled
 
+### Agent-Native (MCP)
+AfterFrame embeds an [MCP](https://modelcontextprotocol.io) server, so any AI agent — Claude Code, Claude Desktop, or anything MCP-compatible — can drive your library in natural language while the app runs:
+
+> "Import the photos on my Desktop" · "Find the vertical shots from last month and show them to me" · "Crop these to 4:3 for Xiaohongshu" · "Tag everything that has no tags yet" · "Export this collection at 2048px JPEG"
+
+- **17 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, import, crop, export, tags/ratings, collections, AI annotation & repaint jobs, deletion — plus job control
+- **Two-way selection bridge** — select photos in the app and say "these"; the agent's picks get highlighted and scrolled into view right in your gallery (`show_in_app`)
+- **Visible & cancellable** — agent-started work appears in the same background-activity dock as your own, with live progress and a Cancel button
+- **Zero config** — the server listens on `127.0.0.1:41706`; the repo ships a `.mcp.json` so Claude Code connects automatically. Local-only, same BYOK privacy stance as everything else
+
+![Agent-driven workflow](docs/assets/agent-claude-code.png)
+
+![Agent picks revealed in the gallery](docs/assets/agent-reveal.png)
+
 ### Library Management
 - Catalog-based workflow — one `.afcatalog` per project
 - Import pipeline with automatic metadata extraction and preview generation
 - Optional RAW source indexing and matching by filename
 - HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
+- Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Local-first: your files stay on your drives, nothing is uploaded
 
 ![Browse with Inspector](docs/assets/browse-inspector.png)
@@ -115,7 +130,7 @@ The `.dmg` will be in `apps/desktop/release/`.
 ## Project Structure
 
 ```
-apps/desktop/          Electron + React desktop app
+apps/desktop/          Electron + React desktop app (embedded MCP server in electron/mcp/)
 services/sidecar/      Python backend (SQLite catalog, metadata, AI repaint)
 RESOURCES/             AI style prompt libraries, design assets
 docs/                  Screenshots and developer docs
