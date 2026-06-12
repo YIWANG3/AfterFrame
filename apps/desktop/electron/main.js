@@ -1332,9 +1332,11 @@ app.whenReady().then(() => {
     return null;
   }
 
-  // Baseline allowlist entries that don't depend on the catalog
+  // Baseline allowlist entries that don't depend on the catalog. The whole
+  // userData dir is app-owned (settings, sticker library, depth-cache …) —
+  // allowing only the afterframe/ subdir broke depth-field loading.
   addBaselineMediaDir(heicCacheDir);
-  addBaselineMediaDir(path.join(app.getPath("userData"), "afterframe"));
+  addBaselineMediaDir(app.getPath("userData"));
   if (!isPackaged) addBaselineMediaDir(rootDir); // dev fixtures / demo assets
 
   protocol.handle("media", async (request) => {
