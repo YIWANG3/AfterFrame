@@ -125,16 +125,11 @@ npm start
 ### Build
 
 ```bash
-# Build sidecar binary
-cd services/sidecar
-pyinstaller media-workspace.spec --distpath dist --noconfirm
-
-# Package desktop app
 cd apps/desktop
-npm run dist:mac
+npm run dist:mac   # rebuilds the Python sidecar binary, then packages the app
 ```
 
-The `.dmg` will be in `apps/desktop/release/`.
+The `.dmg` will be in `apps/desktop/release/`. Requires `pyinstaller` (`pip3 install pyinstaller`) for the sidecar step.
 
 ## Project Structure
 

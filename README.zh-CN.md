@@ -125,16 +125,11 @@ npm start
 ### 构建
 
 ```bash
-# 构建 sidecar 二进制
-cd services/sidecar
-pyinstaller media-workspace.spec --distpath dist --noconfirm
-
-# 打包桌面应用
 cd apps/desktop
-npm run dist:mac
+npm run dist:mac   # 先重打 Python sidecar 二进制，再打包桌面应用
 ```
 
-`.dmg` 文件位于 `apps/desktop/release/`。
+`.dmg` 输出在 `apps/desktop/release/`。sidecar 步骤需要 `pyinstaller`（`pip3 install pyinstaller`）。
 
 ## 项目结构
 
