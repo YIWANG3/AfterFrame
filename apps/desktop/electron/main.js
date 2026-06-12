@@ -1396,7 +1396,11 @@ app.whenReady().then(() => {
     startAiRepaintTask,
     readAppSettings,
     sharp,
-    port: Number(process.env.AFTERFRAME_MCP_PORT) || undefined,
+    // Dev and packaged builds get DIFFERENT default ports so running both at
+    // once never collides — and agents deterministically reach the instance
+    // they were configured for (repo .mcp.json → dev :41707; user-scope
+    // registration → release :41706). Env var still overrides both.
+    port: Number(process.env.AFTERFRAME_MCP_PORT) || (isPackaged ? 41706 : 41707),
   });
   mcpServerApi.start();
 
