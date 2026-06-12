@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filterTitle } from "./utils/format";
 import useWorkspace from "./hooks/useWorkspace";
+import api from "./api";
 import usePaneResize from "./hooks/usePaneResize";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
@@ -118,10 +119,10 @@ export default function App() {
         ttl: 4000,
       });
     }
-    window.mediaWorkspace?.sendAgentRevealResult?.(requestId, result);
+    api.sendAgentRevealResult(requestId, result);
   };
   useEffect(() => {
-    window.mediaWorkspace?.onAgentRevealAssets?.((payload) => agentRevealRef.current?.(payload));
+    api.onAgentRevealAssets((payload) => agentRevealRef.current?.(payload));
   }, []);
 
   // Agent wrote to the catalog (crop / tags / rating / collections) — give the
@@ -156,7 +157,7 @@ export default function App() {
     const serialized = JSON.stringify(payload);
     if (serialized === lastSelectionSentRef.current) return;
     lastSelectionSentRef.current = serialized;
-    window.mediaWorkspace?.reportSelection?.(payload);
+    api.reportSelection(payload);
   }, [selectedIds, workspace.selectedAssetId, itemById]);
 
   // Unified finish handling: annotation results (toast + cache invalidation)
@@ -183,7 +184,7 @@ export default function App() {
       // Auto-annotate on import (setting-gated; no-ops without provider/targets).
       void (async () => {
         try {
-          const s = await window.mediaWorkspace?.getAnnotationSettings?.();
+          const s = await api.getAnnotationSettings();
           if (s?.autoOnImport) runAnnotation(null, { scope: "all", onlyMissing: true });
         } catch { /* ignore */ }
       })();
@@ -203,8 +204,8 @@ export default function App() {
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
   useEffect(() => {
-    if (!window.mediaWorkspace?.onExternalImport) return;
-    window.mediaWorkspace.onExternalImport((paths) => {
+    if (!api.has("onExternalImport")) return;
+    api.onExternalImport((paths) => {
       if (paths?.length) workspace.addImagesFromPaths(paths);
     });
   }, [workspace.addImagesFromPaths]);
@@ -248,7 +249,7 @@ export default function App() {
     event.preventDefault();
     const paths = [];
     for (const file of event.dataTransfer.files) {
-      const p = window.mediaWorkspace?.getPathForFile?.(file) || file.path;
+      const p = api.getPathForFile(file) || file.path;
       if (p) paths.push(p);
     }
     if (paths.length) workspace.addImagesFromPaths(paths);
@@ -905,7 +906,7 @@ export default function App() {
               actions: [{
                 label: "Show in Finder",
                 primary: true,
-                onClick: () => window.mediaWorkspace?.revealPath?.(savePath),
+                onClick: () => api.revealPath(savePath),
               }],
             });
           }
@@ -936,13 +937,13 @@ export default function App() {
               actions: [{
                 label: "Show in Finder",
                 primary: true,
-                onClick: () => window.mediaWorkspace?.revealPath?.(savePath),
+                onClick: () => api.revealPath(savePath),
               }],
             });
           }
         }}
       />
-      {!window.mediaWorkspace.isPackaged && <DesignSystemPanel />}
+      {!api.isPackaged && <DesignSystemPanel />}
     </div>
   );
 }

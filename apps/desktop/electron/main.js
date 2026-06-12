@@ -18,6 +18,7 @@ const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
 const { createMcpServer } = require("./mcp/server");
+const { createSidecarCommands } = require("./sidecar/commands");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -474,6 +475,10 @@ async function callSidecarJsonAsync(command) {
   return payload ? JSON.parse(payload) : null;
 }
 
+// Domain-verb command layer — the only place argv is assembled. IPC handlers
+// and MCP tools both receive this instead of building commands by hand.
+const sidecarCommands = createSidecarCommands(callSidecarJsonAsync);
+
 // Sidecar: packaged = standalone binary, dev = python3 -m media_workspace
 const sidecarBin = isPackaged
   ? path.join(process.resourcesPath, "sidecar", "media-workspace", "media-workspace")
@@ -742,12 +747,11 @@ function formatJobStatus(job) {
 }
 
 async function latestJobStatus(jobType) {
-  const job = await callSidecarJsonAsync(["latest-job", "--job-type", jobType]);
-  return formatJobStatus(job);
+  return formatJobStatus(await sidecarCommands.latestJob(jobType));
 }
 
 async function createJob(jobType, payload) {
-  return await callSidecarJsonAsync(["create-job", "--job-type", jobType, "--payload-json", JSON.stringify(payload || {})]);
+  return await sidecarCommands.createJob(jobType, payload);
 }
 
 // ---- media:// allowlist ----------------------------------------------------
@@ -781,7 +785,7 @@ function ensureMediaRootsLoaded() {
     mediaRootsLoaded = (async () => {
       if (!currentCatalogPath || !catalogHasDb()) return;
       try {
-        const roots = (await callSidecarJsonAsync(["catalog-roots"])) || [];
+        const roots = await sidecarCommands.catalogRoots();
         for (const root of roots) addAllowedMediaDir(root.path);
       } catch (err) {
         console.warn("[media] failed to load catalog roots for allowlist:", err.message);
@@ -807,12 +811,8 @@ async function registerRoots(rootType, paths) {
   if (!uniquePaths.length) {
     return [];
   }
-  const command = ["register-roots", "--root-type", rootType];
-  for (const targetPath of uniquePaths) {
-    command.push("--path", targetPath);
-    addAllowedMediaDir(targetPath);
-  }
-  return await callSidecarJsonAsync(command) || [];
+  for (const targetPath of uniquePaths) addAllowedMediaDir(targetPath);
+  return await sidecarCommands.registerRoots(rootType, uniquePaths);
 }
 
 async function startEnrichmentTask() {
@@ -1183,7 +1183,7 @@ jobsIpc.register({
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   formatJobStatus, latestJobStatus,
   startImportTask, startEnrichmentTask, startPreviewTask,
-  callSidecarJsonAsync,
+  commands: sidecarCommands,
 });
 
 aiIpc.register({
@@ -1198,6 +1198,7 @@ aiIpc.register({
 const annotationApi = annotationIpc.register({
   ipcMain,
   callSidecarJsonAsync,
+  commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
@@ -1206,11 +1207,11 @@ const annotationApi = annotationIpc.register({
 
 browseIpc.register({
   ipcMain,
-  callSidecarJsonAsync,
+  commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
 });
 
-assetsIpc.register({ ipcMain, shell, callSidecarJsonAsync, addAllowedMediaDir });
+assetsIpc.register({ ipcMain, shell, commands: sidecarCommands, callSidecarJsonAsync, addAllowedMediaDir });
 
 saveFileIpc.register({
   ipcMain, dialog,
@@ -1231,7 +1232,7 @@ ipcMain.handle("workspace:info", () => workspaceInfo());
 
 collectionsIpc.register({
   ipcMain,
-  callSidecarJsonAsync,
+  commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
 });
 
@@ -1373,6 +1374,7 @@ app.whenReady().then(() => {
     registerRoots,
     revealAssetsInApp,
     getCurrentSelection: () => currentSelection,
+    commands: sidecarCommands,
     broadcastCatalogChanged,
     startAnnotationTask: annotationApi.startAnnotationTask,
     startAiRepaintTask,

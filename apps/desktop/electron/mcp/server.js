@@ -94,6 +94,7 @@ function contentTypeFor(filePath) {
 function createMcpServer(deps) {
   const {
     getCatalogState,
+    commands,
     callSidecarJsonAsync,
     callSidecarAsync,
     startImportTask,
@@ -115,7 +116,7 @@ function createMcpServer(deps) {
     if (cached && (cached.preview || cached.previewHd)) return cached;
     let detail = null;
     try {
-      detail = await callSidecarJsonAsync(["asset-detail", "--asset-id", assetId]);
+      detail = await commands.assetDetail({ assetId });
     } catch (error) {
       // Unknown asset id is a lookup miss (→ 404 at the endpoint), not a
       // server fault — anything else propagates.
@@ -127,7 +128,7 @@ function createMcpServer(deps) {
   }
 
   async function getJob(jobId) {
-    return await callSidecarJsonAsync(["get-job", "--job-id", String(jobId)]);
+    return await commands.getJob(jobId);
   }
 
   // ---- Tool definitions ----------------------------------------------------
@@ -144,7 +145,7 @@ function createMcpServer(deps) {
         const catalogPath = requireCatalog();
         const [summaryRaw, facets] = await Promise.all([
           callSidecarAsync(["summary", "--json"]),
-          callSidecarJsonAsync(["facet-values"]).catch(() => null),
+          commands.facetValues().catch(() => null),
         ]);
         return {
           catalog_path: catalogPath,
@@ -192,16 +193,14 @@ function createMcpServer(deps) {
         ]) {
           if (args[key] !== undefined && args[key] !== null && args[key] !== "") filters[key] = args[key];
         }
-        const command = [
-          "browse-exports",
-          "--status", args.status || "all",
-          "--limit", String(args.limit || 24),
-          "--offset", String(args.offset || 0),
-        ];
-        if (args.query) command.push("--search", String(args.query));
-        if (args.sort) command.push("--sort", String(args.sort));
-        if (Object.keys(filters).length) command.push("--filters", JSON.stringify(filters));
-        const rows = (await callSidecarJsonAsync(command)) || [];
+        const rows = await commands.browseExports({
+          status: args.status || "all",
+          limit: args.limit || 24,
+          offset: args.offset || 0,
+          search: args.query ? String(args.query) : undefined,
+          sort: args.sort ? String(args.sort) : undefined,
+          filters,
+        });
         for (const row of rows) rememberPreview(row.asset_id, row.preview_path, row.preview_hd_path);
         return {
           count: rows.length,
@@ -221,7 +220,7 @@ function createMcpServer(deps) {
       },
       async handler(args) {
         requireCatalog();
-        const detail = await callSidecarJsonAsync(["asset-detail", "--asset-id", String(args.asset_id)]);
+        const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
         rememberPreview(detail?.asset_id, detail?.export_preview_path, detail?.export_preview_hd_path);
         return detail;
       },
@@ -335,9 +334,7 @@ function createMcpServer(deps) {
           if (hasRating) {
             const rating = Number(args.rating);
             if (!Number.isInteger(rating) || rating < 0 || rating > 5) throw new Error("rating must be an integer 0-5.");
-            const command = ["set-asset-rating", "--rating", String(rating)];
-            for (const id of ids) command.push("--asset-id", id);
-            await callSidecarJsonAsync(command);
+            await commands.setAssetRating(ids, rating);
             mutated = true;
           }
           // Sequential on purpose: SQLite single-writer, and per-asset-per-tag CLI.
@@ -346,7 +343,7 @@ function createMcpServer(deps) {
           for (const id of ids) {
             for (const tag of addTags) {
               try {
-                await callSidecarJsonAsync(["add-asset-tag", "--asset-id", id, "--tag", tag]);
+                await commands.addAssetTag(id, tag);
                 mutated = true;
               } catch (error) {
                 errors.push({ asset_id: id, op: `add_tag:${tag}`, error: error.message });
@@ -354,7 +351,7 @@ function createMcpServer(deps) {
             }
             for (const tag of removeTags) {
               try {
-                await callSidecarJsonAsync(["remove-asset-tag", "--asset-id", id, "--tag", tag]);
+                await commands.removeAssetTag(id, tag);
                 mutated = true;
               } catch (error) {
                 errors.push({ asset_id: id, op: `remove_tag:${tag}`, error: error.message });
@@ -399,40 +396,38 @@ function createMcpServer(deps) {
         const needsId = ["rename", "delete", "add_items", "remove_items", "browse"];
         if (needsId.includes(action) && !args.collection_id) throw new Error(`collection_id is required for ${action}.`);
         if (action === "list") {
-          return { collections: (await callSidecarJsonAsync(["list-collections"])) || [] };
+          return { collections: await commands.listCollections() };
         }
         if (action === "create") {
           if (!args.name) throw new Error("name is required for create.");
-          const created = await callSidecarJsonAsync(["create-collection", "--name", String(args.name), "--kind", "manual"]);
+          const created = await commands.createCollection(String(args.name), "manual");
           deps.broadcastCatalogChanged?.("collections");
           return created;
         }
         if (action === "rename") {
           if (!args.name) throw new Error("name is required for rename.");
-          const updated = await callSidecarJsonAsync(["update-collection", "--collection-id", String(args.collection_id), "--name", String(args.name)]);
+          const updated = await commands.updateCollection(String(args.collection_id), { name: String(args.name) });
           deps.broadcastCatalogChanged?.("collections");
           return updated;
         }
         if (action === "delete") {
-          const deleted = await callSidecarJsonAsync(["delete-collection", "--collection-id", String(args.collection_id)]);
+          const deleted = await commands.deleteCollection(String(args.collection_id));
           deps.broadcastCatalogChanged?.("collections");
           return deleted;
         }
         if (action === "add_items" || action === "remove_items") {
           if (!ids.length) throw new Error(`asset_ids is required for ${action}.`);
-          const command = [action === "add_items" ? "collection-add-items" : "collection-remove-items", "--collection-id", String(args.collection_id)];
-          for (const id of ids) command.push("--asset-id", id);
-          const result = await callSidecarJsonAsync(command);
+          const result = action === "add_items"
+            ? await commands.collectionAddItems(String(args.collection_id), ids)
+            : await commands.collectionRemoveItems(String(args.collection_id), ids);
           deps.broadcastCatalogChanged?.("collections");
           return result;
         }
         if (action === "browse") {
-          const rows = (await callSidecarJsonAsync([
-            "browse-collection",
-            "--collection-id", String(args.collection_id),
-            "--limit", String(args.limit || 24),
-            "--offset", String(args.offset || 0),
-          ])) || [];
+          const rows = await commands.browseCollection(String(args.collection_id), {
+            limit: args.limit || 24,
+            offset: args.offset || 0,
+          });
           for (const row of rows) rememberPreview(row.asset_id, row.preview_path, row.preview_hd_path);
           return { count: rows.length, assets: rows.map((row) => compactAsset(row, port)) };
         }
@@ -544,12 +539,11 @@ function createMcpServer(deps) {
         // Sequential: SQLite single-writer + full-res image decode per call.
         for (const id of ids) {
           try {
-            const payload = await callSidecarJsonAsync([
-              "create-derived",
-              "--asset-id", id,
-              "--crop-ratio", String(args.ratio),
-              "--gravity", String(args.gravity || "center"),
-            ]);
+            const payload = await commands.createDerived({
+              assetId: id,
+              ratio: String(args.ratio),
+              gravity: String(args.gravity || "center"),
+            });
             rememberPreview(payload.asset_id, null, null);
             results.push({
               source_asset_id: id,
@@ -596,12 +590,13 @@ function createMcpServer(deps) {
         if (!allowedPrefixes.some((d) => destResolved === d || destResolved.startsWith(d + path.sep))) {
           throw new Error(`dest_dir must be inside your home directory or the temp dir (got ${destResolved}).`);
         }
-        const command = ["export-assets", "--dest", destResolved];
-        for (const id of ids) command.push("--asset-id", id);
-        if (args.max_edge) command.push("--max-edge", String(args.max_edge));
-        if (args.format) command.push("--format", String(args.format));
-        if (args.quality) command.push("--quality", String(args.quality));
-        const results = (await callSidecarJsonAsync(command)) || [];
+        const results = await commands.exportAssets({
+          assetIds: ids,
+          dest: destResolved,
+          maxEdge: args.max_edge,
+          format: args.format,
+          quality: args.quality,
+        });
         const failed = results.filter((r) => r.error);
         return {
           exported: results.length - failed.length,
@@ -629,7 +624,7 @@ function createMcpServer(deps) {
       async handler(args) {
         requireCatalog();
         if (!deps.startAiRepaintTask || !deps.readAppSettings) throw new Error("Repaint bridge unavailable.");
-        const detail = await callSidecarJsonAsync(["asset-detail", "--asset-id", String(args.asset_id)]);
+        const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
         if (!detail?.export_path) throw new Error(`No file path for asset ${args.asset_id}.`);
         const prefs = deps.readAppSettings()?.aiPreferences || {};
         const providers = Array.isArray(prefs.providers) ? prefs.providers : [];
@@ -671,9 +666,7 @@ function createMcpServer(deps) {
         requireCatalog();
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
         if (!ids.length) throw new Error("asset_ids is empty.");
-        const command = ["delete-export-assets"];
-        for (const id of ids) command.push("--asset-id", id);
-        const results = (await callSidecarJsonAsync(command)) || [];
+        const results = await commands.deleteExportAssets(ids);
         for (const id of ids) previewPathCache.delete(id);
         deps.broadcastCatalogChanged?.("assets", { ids });
         return { deleted: results.length, results };
@@ -699,7 +692,7 @@ function createMcpServer(deps) {
       async handler() {
         const { currentCatalogPath, catalogHasDb } = getCatalogState();
         if (!currentCatalogPath || !catalogHasDb()) return { jobs: [] };
-        const jobs = (await callSidecarJsonAsync(["list-active-jobs"])) || [];
+        const jobs = await commands.listActiveJobs();
         return {
           jobs: jobs.map((job) => ({
             ...formatJobStatus(job),
@@ -719,7 +712,7 @@ function createMcpServer(deps) {
       },
       async handler(args) {
         requireCatalog();
-        const result = await callSidecarJsonAsync(["cancel-job", "--job-id", String(args.job_id)]);
+        const result = await commands.cancelJob(String(args.job_id));
         deps.broadcastCatalogChanged?.("jobs");
         return result;
       },

@@ -10,7 +10,7 @@ function register({
   startImportTask,
   startEnrichmentTask,
   startPreviewTask,
-  callSidecarJsonAsync,
+  commands,
 }) {
   function emptyStatus() {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
@@ -44,7 +44,7 @@ function register({
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];
     try {
-      const jobs = await callSidecarJsonAsync(["list-active-jobs"]) || [];
+      const jobs = await commands.listActiveJobs();
       return jobs.map((job) => ({
         ...formatJobStatus(job),
         jobType: job.job_type,
@@ -61,7 +61,7 @@ function register({
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return null;
     if (!jobId) return null;
-    return await callSidecarJsonAsync(["cancel-job", "--job-id", String(jobId)]);
+    return await commands.cancelJob(jobId);
   });
 }
 

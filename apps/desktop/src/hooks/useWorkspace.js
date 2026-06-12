@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
+import api from "../api";
 
 const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
@@ -122,7 +123,7 @@ export default function useWorkspace() {
   // Refresh facet options when the catalog/library changes
   useEffect(() => {
     if (!browserReady) return;
-    void window.mediaWorkspace?.getFacetValues?.().then(setFacetValues).catch(() => {});
+    void api.getFacetValues().then(setFacetValues).catch(() => {});
   }, [browserReady, summary?.export_assets]);
 
   // Queued-changes note for the import card in the unified JobDock.
@@ -138,7 +139,7 @@ export default function useWorkspace() {
       setDetail(null);
       return;
     }
-    const payload = await window.mediaWorkspace.getAssetDetailById(assetId);
+    const payload = await api.getAssetDetailById(assetId);
     setDetail(payload);
   }
 
@@ -161,12 +162,12 @@ export default function useWorkspace() {
       const pageLimit = preserveView ? Math.max(PAGE_SIZE, browserOffset) : PAGE_SIZE;
       let payload;
       if (collectionId) {
-        payload = await window.mediaWorkspace.browseCollection(collectionId, {
+        payload = await api.browseCollection(collectionId, {
           limit: pageLimit,
           offset: nextOffset,
         });
       } else {
-        payload = await window.mediaWorkspace.browseExports({
+        payload = await api.browseExports({
           status: nextStatus,
           limit: pageLimit,
           offset: nextOffset,
@@ -239,7 +240,7 @@ export default function useWorkspace() {
     void loadBrowser({ force: true, preserveView: true });
   };
   useEffect(() => {
-    window.mediaWorkspace?.onCatalogChanged?.((payload) => catalogChangedRef.current?.(payload));
+    api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));
   }, []);
 
   // Agent-driven reveal (MCP show_in_app): reset to the unfiltered library,
@@ -263,7 +264,7 @@ export default function useWorkspace() {
       let offset = 0;
       let lastPageFull = false;
       for (let page = 0; page < MAX_PAGES; page += 1) {
-        const payload = await window.mediaWorkspace.browseExports({
+        const payload = await api.browseExports({
           status: "all",
           limit: PAGE_SIZE,
           offset,
@@ -305,7 +306,7 @@ export default function useWorkspace() {
 
   async function loadCollections() {
     try {
-      const list = await window.mediaWorkspace.listCollections();
+      const list = await api.listCollections();
       setCollections(list || []);
     } catch {
       setCollections([]);
@@ -313,18 +314,18 @@ export default function useWorkspace() {
   }
 
   async function createCollection(name) {
-    const col = await window.mediaWorkspace.createCollection(name, "manual");
+    const col = await api.createCollection(name, "manual");
     await loadCollections();
     return col;
   }
 
   async function renameCollection(collectionId, name) {
-    await window.mediaWorkspace.updateCollection(collectionId, { name });
+    await api.updateCollection(collectionId, { name });
     await loadCollections();
   }
 
   async function deleteCollection(collectionId) {
-    await window.mediaWorkspace.deleteCollection(collectionId);
+    await api.deleteCollection(collectionId);
     if (activeCollectionId === collectionId) {
       setActiveCollectionId(null);
     }
@@ -332,7 +333,7 @@ export default function useWorkspace() {
   }
 
   async function addToCollection(collectionId, assetIds) {
-    await window.mediaWorkspace.collectionAddItems(collectionId, assetIds);
+    await api.collectionAddItems(collectionId, assetIds);
     await loadCollections();
     if (activeCollectionId === collectionId) {
       await loadBrowser({ collectionId });
@@ -342,7 +343,7 @@ export default function useWorkspace() {
   async function removeFromCollection(collectionId, assetIds) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
-    await window.mediaWorkspace.collectionRemoveItems(collectionId, targetIds);
+    await api.collectionRemoveItems(collectionId, targetIds);
     await loadCollections();
     if (activeCollectionId === collectionId) {
       const removedSet = new Set(targetIds);
@@ -353,7 +354,7 @@ export default function useWorkspace() {
   async function deleteExportAssets(assetIds) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
-    await window.mediaWorkspace.deleteExportAssets(targetIds);
+    await api.deleteExportAssets(targetIds);
     const deletedSet = new Set(targetIds);
     setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
     if (selectedAssetId && deletedSet.has(selectedAssetId)) {
@@ -381,7 +382,7 @@ export default function useWorkspace() {
         : current,
     );
 
-    await window.mediaWorkspace.setAssetRating(targetIds, normalized);
+    await api.setAssetRating(targetIds, normalized);
   }
 
   function selectCollection(collectionId) {
@@ -409,12 +410,12 @@ export default function useWorkspace() {
 
   async function refreshAll({ nextStatus = status, collectionId = activeCollectionId, force = false, preserveView = false } = {}) {
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
-      window.mediaWorkspace.getInfo(),
-      window.mediaWorkspace.getSummary(),
-      window.mediaWorkspace.getCatalogRoots(),
-      window.mediaWorkspace.getImportStatus(),
-      window.mediaWorkspace.getPreviewStatus(),
-      window.mediaWorkspace.getEnrichmentStatus(),
+      api.getInfo(),
+      api.getSummary(),
+      api.getCatalogRoots(),
+      api.getImportStatus(),
+      api.getPreviewStatus(),
+      api.getEnrichmentStatus(),
     ]);
     setInfo(nextInfo);
     setSummary(nextSummary);
@@ -425,7 +426,7 @@ export default function useWorkspace() {
     await Promise.all([loadCollections(), loadBrowser({ nextStatus, collectionId, force, preserveView })]);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
-    void window.mediaWorkspace?.getFacetValues?.().then(setFacetValues).catch(() => {});
+    void api.getFacetValues().then(setFacetValues).catch(() => {});
   }
 
   async function startIncrementalImport({ rawDirs: nextRawDirs = [], exportDirs: nextExportDirs = [], fullCatalog = false }) {
@@ -452,7 +453,7 @@ export default function useWorkspace() {
     if (modeNeedsSources && !resolvedRawDirs.length) return;
     if (modeNeedsProcessed && !resolvedExportDirs.length) return;
 
-    const task = await window.mediaWorkspace.startImport({
+    const task = await api.startImport({
       rawDirs: resolvedRawDirs,
       exportDirs: resolvedExportDirs,
       mode,
@@ -462,13 +463,13 @@ export default function useWorkspace() {
   }
 
   async function addImages() {
-    const selected = await window.mediaWorkspace.pickDirectories("export");
+    const selected = await api.pickDirectories("export");
     await addImagesFromPaths(selected);
   }
 
   async function addImagesFromPaths(selected) {
     if (!selected || !selected.length) return;
-    await window.mediaWorkspace.registerRoots("export", selected);
+    await api.registerRoots("export", selected);
     const nextRoots = mergeRoots(exportDirs, selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "export", path }))]);
     if (importTask?.running) {
@@ -480,9 +481,9 @@ export default function useWorkspace() {
   }
 
   async function addSources() {
-    const selected = await window.mediaWorkspace.pickDirectories("raw");
+    const selected = await api.pickDirectories("raw");
     if (!selected.length) return;
-    await window.mediaWorkspace.registerRoots("raw", selected);
+    await api.registerRoots("raw", selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "raw", path }))]);
     if (importTask?.running) {
       setPendingImport((current) => ({ ...current, rawDirs: mergeRoots(current.rawDirs, selected) }));
@@ -500,20 +501,20 @@ export default function useWorkspace() {
 
   async function runEnrichment() {
     if (importTask?.running || enrichmentTask?.running) return;
-    const task = await window.mediaWorkspace.startEnrichment();
+    const task = await api.startEnrichment();
     setEnrichmentTask(task);
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "enrichment" } : undefined);
   }
 
   async function runPreviewGeneration(kind = "preview") {
     if (importTask?.running || previewTask?.running) return;
-    const task = await window.mediaWorkspace.startPreviewGeneration(kind);
+    const task = await api.startPreviewGeneration(kind);
     setPreviewTask({ ...task, _kind: kind });
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "preview", kind } : undefined);
   }
 
   async function switchCatalog(nextCatalogPath) {
-    await window.mediaWorkspace.switchCatalog(nextCatalogPath ?? null);
+    await api.switchCatalog(nextCatalogPath ?? null);
     setStatus("all");
     setSort("name-asc");
     setQuery("");
@@ -549,13 +550,13 @@ export default function useWorkspace() {
   }, [selectedAssetId]);
 
   useEffect(() => {
-    if (!window.mediaWorkspace.onMenuAction) return undefined;
-    window.mediaWorkspace.onMenuAction(async (action) => {
+    if (!api.has("onMenuAction")) return undefined;
+    api.onMenuAction(async (action) => {
       if (action === "catalog:new") {
-        const created = await window.mediaWorkspace.createCatalog();
+        const created = await api.createCatalog();
         if (created) await switchCatalog(created);
       } else if (action === "catalog:open") {
-        const selected = await window.mediaWorkspace.pickCatalog();
+        const selected = await api.pickCatalog();
         if (selected) await switchCatalog(selected);
       } else if (action === "catalog:scratch") {
         await switchCatalog(null);
@@ -589,11 +590,11 @@ export default function useWorkspace() {
     const h = jobHandlersRef.current;
     let final = null;
     try {
-      if (meta.jobType === "import") final = await window.mediaWorkspace.getImportStatus();
-      else if (meta.jobType === "preview") final = await window.mediaWorkspace.getPreviewStatus();
-      else if (meta.jobType === "enrichment") final = await window.mediaWorkspace.getEnrichmentStatus();
-      else if (meta.jobType === "annotation") final = await window.mediaWorkspace.getAnnotationJobStatus?.();
-      else if (meta.jobType === "ai_repaint") final = await window.mediaWorkspace.getAiRepaintStatus?.();
+      if (meta.jobType === "import") final = await api.getImportStatus();
+      else if (meta.jobType === "preview") final = await api.getPreviewStatus();
+      else if (meta.jobType === "enrichment") final = await api.getEnrichmentStatus();
+      else if (meta.jobType === "annotation") final = await api.getAnnotationJobStatus();
+      else if (meta.jobType === "ai_repaint") final = await api.getAiRepaintStatus();
     } catch { /* sidecar hiccup — still emit the finish event below */ }
     const cancelled = final?.status === "cancelled";
 
@@ -611,7 +612,7 @@ export default function useWorkspace() {
       // or indeterminate run would just fail again at HD size.
       if ((meta.kind || "preview") === "preview" && final?.status === "succeeded") {
         // Auto-chain preview-hd after the small previews finish.
-        const hdTask = await window.mediaWorkspace.startPreviewGeneration("preview-hd");
+        const hdTask = await api.startPreviewGeneration("preview-hd");
         setPreviewTask({ ...hdTask, _kind: "preview-hd" });
         pokeJobs(hdTask?.jobId ? { jobId: hdTask.jobId, jobType: "preview", kind: "preview-hd" } : undefined);
       } else {
@@ -634,7 +635,7 @@ export default function useWorkspace() {
   async function pollActiveJobsOnce() {
     let jobs = [];
     try {
-      jobs = (await window.mediaWorkspace.getActiveJobs?.()) || [];
+      jobs = (await api.getActiveJobs()) || [];
     } catch { jobs = []; }
     // Skip the state churn when nothing actually changed — otherwise every
     // 1.2s tick re-renders the whole tree for the lifetime of a job.
@@ -689,7 +690,7 @@ export default function useWorkspace() {
 
   async function cancelJob(jobId) {
     if (!jobId) return null;
-    const res = await window.mediaWorkspace.cancelJob?.(jobId);
+    const res = await api.cancelJob(jobId);
     pokeJobs();
     return res;
   }

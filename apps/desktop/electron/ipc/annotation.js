@@ -5,6 +5,7 @@
 function register({
   ipcMain,
   callSidecarJsonAsync,
+  commands,
   getCatalogState,
   readAppSettings,
   updateAppSettings,
@@ -189,14 +190,14 @@ function register({
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) throw new Error("Open a catalog first.");
     if (!assetId || !tag) return null;
-    return await callSidecarJsonAsync(["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
+    return await commands.addAssetTag(assetId, tag);
   });
 
   ipcMain.handle("workspace:remove-asset-tag", async (_event, assetId, tag) => {
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) throw new Error("Open a catalog first.");
     if (!assetId || !tag) return null;
-    return await callSidecarJsonAsync(["remove-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
+    return await commands.removeAssetTag(assetId, tag);
   });
 
   ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {
