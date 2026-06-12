@@ -1,0 +1,472 @@
+"""The read side: gallery/collection browse, facets, asset detail.
+
+Split from the monolithic db.py (review P3-5); one module per domain.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+from hashlib import sha1
+from pathlib import Path
+from uuid import uuid4
+
+from ..models import ExportCandidate, MatchDecision, RawMetadata
+
+# Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
+_UNSET = object()
+from ..schema import SCHEMA_STATEMENTS
+
+RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
+SCHEMA_VERSION = 5
+
+# Shared between list_export_assets and browse_collection — the two SELECTs
+# went out of sync by hand twice before (annotation columns). Single source.
+_BROWSE_SELECT_COLUMNS = """\
+            assets.asset_id,
+            assets.stem,
+            registry.export_path AS export_path,
+            assets.metadata_json AS export_metadata_json,
+            assets.app_rating,
+            assets.created_at AS imported_at,
+            registry.match_status,
+            registry.score,
+            registry.raw_asset_id,
+            raw_assets.canonical_path AS raw_path,
+            raw_assets.metadata_json AS raw_metadata_json,
+            preview_entries.relative_path AS preview_relative_path,
+            preview_hd_entries.relative_path AS preview_hd_relative_path,
+            rsi.set_id AS resource_set_id,
+            rsi.role AS resource_role,
+            rsi.version_kind AS version_kind,
+            rsi.sort_order AS resource_sort_order,
+            rs.primary_asset_id AS set_primary_asset_id,
+            rs.raw_asset_id AS set_raw_asset_id,
+            primary_assets.stem AS primary_stem,
+            set_counts.set_item_count AS set_item_count,
+            anno.provider AS anno_provider,
+            anno.model AS anno_model,
+            anno.schema_version AS anno_schema_version,
+            anno.caption AS anno_caption,
+            anno.tags_json AS anno_tags_json,
+            anno.location_json AS anno_location_json,
+            anno.detected_text AS anno_detected_text,
+            anno.created_at AS anno_created_at,
+            anno.updated_at AS anno_updated_at"""
+
+_BROWSE_SHARED_JOINS = """\
+        LEFT JOIN assets AS raw_assets
+            ON raw_assets.asset_id = registry.raw_asset_id
+        LEFT JOIN resource_set_items AS rsi
+            ON rsi.asset_id = assets.asset_id
+        LEFT JOIN resource_sets AS rs
+            ON rs.set_id = rsi.set_id
+        LEFT JOIN assets AS primary_assets
+            ON primary_assets.asset_id = rs.primary_asset_id
+        LEFT JOIN (
+            SELECT set_id, COUNT(*) AS set_item_count
+            FROM resource_set_items
+            GROUP BY set_id
+        ) AS set_counts
+            ON set_counts.set_id = rs.set_id
+        LEFT JOIN preview_entries
+            ON preview_entries.asset_id = assets.asset_id
+           AND preview_entries.kind = 'preview'
+           AND preview_entries.status = 'ready'
+        LEFT JOIN preview_entries AS preview_hd_entries
+            ON preview_hd_entries.asset_id = assets.asset_id
+           AND preview_hd_entries.kind = 'preview-hd'
+           AND preview_hd_entries.status = 'ready'
+        LEFT JOIN asset_ai_annotations AS anno
+            ON anno.asset_id = assets.asset_id"""
+
+
+def _browse_order_clause(sort: str | None) -> str:
+    if sort == "name-desc":
+        return "assets.stem DESC, registry.export_path"
+    if sort == "imported-desc":
+        return "assets.created_at DESC, assets.stem"
+    if sort == "imported-asc":
+        return "assets.created_at ASC, assets.stem"
+    if sort == "captured-desc":
+        return "json_extract(assets.metadata_json, '$.capture_time') DESC, assets.stem"
+    if sort == "captured-asc":
+        return "json_extract(assets.metadata_json, '$.capture_time') ASC, assets.stem"
+    if sort == "rating-desc":
+        return "CASE WHEN assets.app_rating IS NULL OR assets.app_rating = 0 THEN 1 ELSE 0 END, assets.app_rating DESC, assets.stem"
+    # default: name-asc
+    return "assets.stem, registry.export_path"
+
+
+def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
+    """Build AND-combined WHERE fragments + params from a structured facet dict.
+
+    Recognized keys: camera, lens (exact), iso_min/iso_max, aperture_min/max,
+    focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
+    rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags).
+    Unknown/empty keys are ignored.
+    """
+    if not filters:
+        return "", []
+    clauses: list[str] = []
+    params: list[object] = []
+
+    def add(clause: str, *vals: object) -> None:
+        clauses.append(clause)
+        params.extend(vals)
+
+    if filters.get("camera"):
+        add("assets.meta_camera_model = ?", filters["camera"])
+    if filters.get("lens"):
+        add("assets.meta_lens_model = ?", filters["lens"])
+    for key, col in (("iso", "meta_iso"), ("aperture", "meta_aperture"),
+                     ("focal", "meta_focal"), ("shutter", "meta_shutter")):
+        lo, hi = filters.get(f"{key}_min"), filters.get(f"{key}_max")
+        if lo is not None:
+            add(f"assets.{col} >= ?", lo)
+        if hi is not None:
+            add(f"assets.{col} <= ?", hi)
+    if filters.get("date_from"):
+        add("date(assets.meta_capture_time) >= date(?)", filters["date_from"])
+    if filters.get("date_to"):
+        add("date(assets.meta_capture_time) <= date(?)", filters["date_to"])
+    if filters.get("rating_min") is not None:
+        add("assets.app_rating >= ?", filters["rating_min"])
+    orientation = filters.get("orientation")
+    if orientation == "portrait":
+        add("assets.meta_height > assets.meta_width")
+    elif orientation == "landscape":
+        add("assets.meta_width > assets.meta_height")
+    elif orientation == "square":
+        add("assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL")
+    if filters.get("tag"):
+        add("EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = assets.asset_id AND t.tag = ?)", filters["tag"])
+
+    if not clauses:
+        return "", []
+    return "AND " + " AND ".join(clauses), params
+
+
+def list_export_assets(
+    connection: sqlite3.Connection,
+    status: str,
+    limit: int = 120,
+    offset: int = 0,
+    search: str | None = None,
+    sort: str | None = None,
+    filters: dict | None = None,
+) -> list[sqlite3.Row]:
+    if status == "matched":
+        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed')"
+    elif status == "unmatched":
+        status_clause = "registry.match_status IN ('unmatched', 'pending_confirmation')"
+    elif status == "rated":
+        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.app_rating > 0"
+    elif status == "recent":
+        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.created_at >= datetime('now', '-7 days')"
+    elif status == "all":
+        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation')"
+    else:
+        raise ValueError(f"unsupported status: {status}")
+
+    params: list[object] = []
+    search_clause = ""
+    if search:
+        # Full-text-ish search across filename/path, camera/lens, and the AI
+        # annotation (caption, detected OCR text, tags). LIKE is plenty fast at
+        # this scale; FTS5 can replace it later if libraries grow very large.
+        search_clause = (
+            "AND (assets.stem LIKE ? OR registry.export_path LIKE ? "
+            "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
+            "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
+            "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
+        )
+        like_pattern = f"%{search}%"
+        params.extend([like_pattern] * 7)
+
+    facet_clause, facet_params = _facet_clauses(filters)
+    params.extend(facet_params)
+    params.extend([limit, offset])
+
+    return connection.execute(
+        f"""
+        SELECT
+{_BROWSE_SELECT_COLUMNS}
+        FROM export_lookup_registry AS registry
+        JOIN assets
+            ON assets.asset_id = registry.export_asset_id
+{_BROWSE_SHARED_JOINS}
+        WHERE {status_clause}
+          {search_clause}
+          {facet_clause}
+        ORDER BY {_browse_order_clause(sort)}
+        LIMIT ? OFFSET ?
+        """,
+        params,
+    ).fetchall()
+
+
+def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
+    """Available facet options for building the filter bar.
+
+    Returns distinct cameras/lenses with counts, numeric min/max for the range
+    sliders, and the capture-time span — all scoped to export assets.
+    """
+    base = "FROM assets WHERE asset_type = 'export'"
+
+    def value_counts(col: str) -> list[dict[str, object]]:
+        rows = connection.execute(
+            f"SELECT assets.{col} AS v, COUNT(*) AS c {base} AND assets.{col} IS NOT NULL "
+            f"AND assets.{col} != '' GROUP BY assets.{col} ORDER BY c DESC"
+        ).fetchall()
+        return [{"value": r["v"], "count": r["c"]} for r in rows]
+
+    def min_max(col: str) -> dict[str, object]:
+        r = connection.execute(
+            f"SELECT MIN(assets.{col}) AS lo, MAX(assets.{col}) AS hi {base} AND assets.{col} IS NOT NULL"
+        ).fetchone()
+        return {"min": r["lo"], "max": r["hi"]}
+
+    # Only the most-used tags for the default dropdown; the rest are reachable
+    # via server-side search (search_facet_values) so this stays bounded even
+    # with thousands of tags.
+    tag_rows = connection.execute(
+        """
+        SELECT t.tag AS v, COUNT(*) AS c
+        FROM asset_tags AS t
+        JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'export'
+        GROUP BY t.tag
+        ORDER BY c DESC, t.tag
+        LIMIT 60
+        """
+    ).fetchall()
+
+    return {
+        "cameras": value_counts("meta_camera_model"),
+        "lenses": value_counts("meta_lens_model"),
+        "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
+        "iso": min_max("meta_iso"),
+        "aperture": min_max("meta_aperture"),
+        "focal": min_max("meta_focal"),
+        "shutter": min_max("meta_shutter"),
+        "capture_time": min_max("meta_capture_time"),
+    }
+
+
+def search_facet_values(
+    connection: sqlite3.Connection,
+    field: str,
+    q: str = "",
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    """Server-side facet search, so a dropdown never loads more than `limit`
+    rows regardless of how many distinct values exist. Matches substring,
+    ordered by frequency."""
+    like = f"%{q}%" if q else "%"
+    if field == "tag":
+        rows = connection.execute(
+            """
+            SELECT t.tag AS v, COUNT(*) AS c
+            FROM asset_tags AS t
+            JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'export'
+            WHERE t.tag LIKE ?
+            GROUP BY t.tag
+            ORDER BY c DESC, t.tag
+            LIMIT ?
+            """,
+            (like, limit),
+        ).fetchall()
+    elif field in ("camera", "lens"):
+        col = "meta_camera_model" if field == "camera" else "meta_lens_model"
+        rows = connection.execute(
+            f"""
+            SELECT assets.{col} AS v, COUNT(*) AS c
+            FROM assets
+            WHERE asset_type = 'export' AND assets.{col} IS NOT NULL
+              AND assets.{col} != '' AND assets.{col} LIKE ?
+            GROUP BY assets.{col}
+            ORDER BY c DESC
+            LIMIT ?
+            """,
+            (like, limit),
+        ).fetchall()
+    else:
+        return []
+    return [{"value": r["v"], "count": r["c"]} for r in rows]
+
+
+def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT
+            assets.asset_id,
+            assets.stem,
+            assets.canonical_path AS export_path,
+            assets.metadata_json AS export_metadata_json,
+            assets.app_rating,
+            assets.created_at AS imported_at,
+            registry.match_status,
+            registry.score,
+            registry.raw_asset_id,
+            registry.feature_vector_json,
+            registry.candidate_json,
+            raw_assets.canonical_path AS raw_path,
+            raw_assets.metadata_json AS raw_metadata_json,
+            export_preview.relative_path AS export_preview_relative_path,
+            raw_preview.relative_path AS raw_preview_relative_path,
+            export_preview_hd.relative_path AS export_preview_hd_relative_path,
+            rsi.set_id AS resource_set_id,
+            rsi.role AS resource_role,
+            rsi.version_kind AS version_kind,
+            rsi.sort_order AS resource_sort_order,
+            rs.primary_asset_id AS set_primary_asset_id,
+            rs.raw_asset_id AS set_raw_asset_id,
+            primary_assets.stem AS primary_stem,
+            set_counts.set_item_count AS set_item_count
+        FROM assets
+        LEFT JOIN export_lookup_registry AS registry
+            ON registry.rowid = (
+                SELECT reg.rowid
+                FROM export_lookup_registry AS reg
+                WHERE reg.export_asset_id = assets.asset_id
+                ORDER BY reg.updated_at DESC, reg.created_at DESC, reg.export_path DESC
+                LIMIT 1
+            )
+        LEFT JOIN assets AS raw_assets
+            ON raw_assets.asset_id = registry.raw_asset_id
+        LEFT JOIN resource_set_items AS rsi
+            ON rsi.asset_id = assets.asset_id
+        LEFT JOIN resource_sets AS rs
+            ON rs.set_id = rsi.set_id
+        LEFT JOIN assets AS primary_assets
+            ON primary_assets.asset_id = rs.primary_asset_id
+        LEFT JOIN (
+            SELECT set_id, COUNT(*) AS set_item_count
+            FROM resource_set_items
+            GROUP BY set_id
+        ) AS set_counts
+            ON set_counts.set_id = rs.set_id
+        LEFT JOIN preview_entries AS export_preview
+            ON export_preview.asset_id = assets.asset_id
+           AND export_preview.kind = 'preview'
+           AND export_preview.status = 'ready'
+        LEFT JOIN preview_entries AS raw_preview
+            ON raw_preview.asset_id = registry.raw_asset_id
+           AND raw_preview.kind = 'preview'
+           AND raw_preview.status = 'ready'
+        LEFT JOIN preview_entries AS export_preview_hd
+            ON export_preview_hd.asset_id = assets.asset_id
+           AND export_preview_hd.kind = 'preview-hd'
+           AND export_preview_hd.status = 'ready'
+        WHERE assets.asset_id = ?
+          AND assets.asset_type = 'export'
+        """,
+        (asset_id,),
+    ).fetchone()
+
+
+def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path: str) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT
+            assets.asset_id,
+            assets.stem,
+            registry.export_path AS export_path,
+            assets.metadata_json AS export_metadata_json,
+            assets.app_rating,
+            assets.created_at AS imported_at,
+            registry.match_status,
+            registry.score,
+            registry.raw_asset_id,
+            registry.feature_vector_json,
+            registry.candidate_json,
+            raw_assets.canonical_path AS raw_path,
+            raw_assets.metadata_json AS raw_metadata_json,
+            export_preview.relative_path AS export_preview_relative_path,
+            raw_preview.relative_path AS raw_preview_relative_path,
+            export_preview_hd.relative_path AS export_preview_hd_relative_path,
+            rsi.set_id AS resource_set_id,
+            rsi.role AS resource_role,
+            rsi.version_kind AS version_kind,
+            rsi.sort_order AS resource_sort_order,
+            rs.primary_asset_id AS set_primary_asset_id,
+            rs.raw_asset_id AS set_raw_asset_id,
+            primary_assets.stem AS primary_stem,
+            set_counts.set_item_count AS set_item_count
+        FROM export_lookup_registry AS registry
+        JOIN assets
+            ON assets.asset_id = registry.export_asset_id
+           AND assets.asset_type = 'export'
+        LEFT JOIN assets AS raw_assets
+            ON raw_assets.asset_id = registry.raw_asset_id
+        LEFT JOIN resource_set_items AS rsi
+            ON rsi.asset_id = assets.asset_id
+        LEFT JOIN resource_sets AS rs
+            ON rs.set_id = rsi.set_id
+        LEFT JOIN assets AS primary_assets
+            ON primary_assets.asset_id = rs.primary_asset_id
+        LEFT JOIN (
+            SELECT set_id, COUNT(*) AS set_item_count
+            FROM resource_set_items
+            GROUP BY set_id
+        ) AS set_counts
+            ON set_counts.set_id = rs.set_id
+        LEFT JOIN preview_entries AS export_preview
+            ON export_preview.asset_id = assets.asset_id
+           AND export_preview.kind = 'preview'
+           AND export_preview.status = 'ready'
+        LEFT JOIN preview_entries AS raw_preview
+            ON raw_preview.asset_id = registry.raw_asset_id
+           AND raw_preview.kind = 'preview'
+           AND raw_preview.status = 'ready'
+        LEFT JOIN preview_entries AS export_preview_hd
+            ON export_preview_hd.asset_id = assets.asset_id
+           AND export_preview_hd.kind = 'preview-hd'
+           AND export_preview_hd.status = 'ready'
+        WHERE registry.export_path = ?
+        """,
+        (export_path,),
+    ).fetchone()
+
+
+def browse_collection(
+    connection: sqlite3.Connection,
+    collection_id: str,
+    limit: int = 120,
+    offset: int = 0,
+) -> list[sqlite3.Row]:
+    return connection.execute(
+        f"""
+        SELECT
+{_BROWSE_SELECT_COLUMNS}
+        FROM collection_items ci
+        JOIN assets ON assets.asset_id = ci.asset_id
+        JOIN export_lookup_registry AS registry
+            ON registry.export_asset_id = assets.asset_id
+{_BROWSE_SHARED_JOINS}
+        WHERE ci.collection_id = ?
+          AND assets.asset_type = 'export'
+        ORDER BY ci.added_at DESC, assets.stem
+        LIMIT ? OFFSET ?
+        """,
+        (collection_id, limit, offset),
+    ).fetchall()
+
+
+def list_version_siblings(connection: sqlite3.Connection, set_id: str, exclude_asset_id: str) -> list[sqlite3.Row]:
+    """Other members of an asset's resource set (the version stack)."""
+    return connection.execute(
+        """
+        SELECT rsi.asset_id, rsi.role, rsi.version_kind, rsi.sort_order,
+               a.stem, a.canonical_path,
+               af.path AS export_path,
+               pe.relative_path AS preview_relative_path
+        FROM resource_set_items rsi
+        JOIN assets a ON a.asset_id = rsi.asset_id
+        LEFT JOIN asset_files af ON af.asset_id = rsi.asset_id AND af.role = 'canonical'
+        LEFT JOIN preview_entries pe ON pe.asset_id = rsi.asset_id AND pe.kind = 'preview'
+        WHERE rsi.set_id = ? AND rsi.asset_id != ?
+        ORDER BY rsi.sort_order
+        """,
+        (set_id, exclude_asset_id),
+    ).fetchall()

@@ -607,29 +607,8 @@ def _cmd_repair_resource_sets(args, connection, catalog, parser):
     raw_removed = remove_raw_from_resource_sets(connection)
 
     # Phase 1: Split incorrectly merged sets (different-directory independent exports)
-    split_count = 0
-    merged_sets = list_incorrectly_merged_resource_sets(connection)
-    for merged in merged_sets:
-        set_id = merged["set_id"]
-        # Keep the primary (first member) in the original set,
-        # remove all other independent (no parent) exports so they become orphans
-        independent = [m for m in merged["members"] if not m["parent_asset_id"]]
-        # Keep the first one, detach the rest
-        for member in independent[1:]:
-            connection.execute(
-                "DELETE FROM resource_set_items WHERE set_id = ? AND asset_id = ?",
-                (set_id, member["asset_id"]),
-            )
-            split_count += 1
-        # Update set_item_count by checking if set is now empty
-        remaining = connection.execute(
-            "SELECT COUNT(*) AS item_count FROM resource_set_items WHERE set_id = ?",
-            (set_id,),
-        ).fetchone()
-        if remaining is not None and int(remaining["item_count"]) == 0:
-            connection.execute("DELETE FROM resource_sets WHERE set_id = ?", (set_id,))
-    if split_count:
-        connection.commit()
+    from .db import split_incorrectly_merged_sets
+    split_count = split_incorrectly_merged_sets(connection)
 
     # Phase 2: Attach assets missing a resource set
     repaired = 0
@@ -1140,21 +1119,8 @@ def _cmd_asset_detail(args, connection, catalog, parser):
     asset_id = row["asset_id"]
     set_id = row["resource_set_id"]
     if set_id:
-        siblings = connection.execute(
-            """
-            SELECT rsi.asset_id, rsi.role, rsi.version_kind, rsi.sort_order,
-                   a.stem, a.canonical_path,
-                   af.path AS export_path,
-                   pe.relative_path AS preview_relative_path
-            FROM resource_set_items rsi
-            JOIN assets a ON a.asset_id = rsi.asset_id
-            LEFT JOIN asset_files af ON af.asset_id = rsi.asset_id AND af.role = 'canonical'
-            LEFT JOIN preview_entries pe ON pe.asset_id = rsi.asset_id AND pe.kind = 'preview'
-            WHERE rsi.set_id = ? AND rsi.asset_id != ?
-            ORDER BY rsi.sort_order
-            """,
-            (set_id, asset_id),
-        ).fetchall()
+        from .db import list_version_siblings
+        siblings = list_version_siblings(connection, set_id, asset_id)
         payload["version_siblings"] = [
             {
                 "asset_id": s["asset_id"],
@@ -1171,22 +1137,8 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         payload["version_siblings"] = []
 
     # Add collage relationships
-    collage_sources = connection.execute(
-        """
-        SELECT al.child_asset_id AS source_asset_id,
-               json_extract(al.recipe_json, '$.sort_order') AS sort_order,
-               a.stem,
-               af.path AS export_path,
-               pe.relative_path AS preview_relative_path
-        FROM asset_links al
-        JOIN assets a ON a.asset_id = al.child_asset_id
-        LEFT JOIN asset_files af ON af.asset_id = al.child_asset_id AND af.role = 'canonical'
-        LEFT JOIN preview_entries pe ON pe.asset_id = al.child_asset_id AND pe.kind = 'preview'
-        WHERE al.parent_asset_id = ? AND al.relation_type = 'collage_source'
-        ORDER BY json_extract(al.recipe_json, '$.sort_order')
-        """,
-        (asset_id,),
-    ).fetchall()
+    from .db import list_collage_sources, list_collages_using_asset
+    collage_sources = list_collage_sources(connection, asset_id)
     payload["collage_sources"] = [
         {
             "asset_id": s["source_asset_id"],
@@ -1198,20 +1150,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         for s in collage_sources
     ]
 
-    used_in_collages = connection.execute(
-        """
-        SELECT al.parent_asset_id AS collage_asset_id,
-               a.stem,
-               af.path AS export_path,
-               pe.relative_path AS preview_relative_path
-        FROM asset_links al
-        JOIN assets a ON a.asset_id = al.parent_asset_id
-        LEFT JOIN asset_files af ON af.asset_id = al.parent_asset_id AND af.role = 'canonical'
-        LEFT JOIN preview_entries pe ON pe.asset_id = al.parent_asset_id AND pe.kind = 'preview'
-        WHERE al.child_asset_id = ? AND al.relation_type = 'collage_source'
-        """,
-        (asset_id,),
-    ).fetchall()
+    used_in_collages = list_collages_using_asset(connection, asset_id)
     payload["used_in_collages"] = [
         {
             "asset_id": s["collage_asset_id"],
@@ -1256,29 +1195,10 @@ def _cmd_list_repaint_history(args, connection, catalog, parser):
 
 def _cmd_collage_sources(args, connection, catalog, parser):
     # Get sources if this asset is a collage
-    sources = connection.execute(
-        """
-        SELECT al.child_asset_id AS source_asset_id,
-               json_extract(al.recipe_json, '$.sort_order') AS sort_order,
-               a.stem, a.canonical_path
-        FROM asset_links al
-        JOIN assets a ON a.asset_id = al.child_asset_id
-        WHERE al.parent_asset_id = ? AND al.relation_type = 'collage_source'
-        ORDER BY json_extract(al.recipe_json, '$.sort_order')
-        """,
-        (args.asset_id,),
-    ).fetchall()
+    from .db import list_collage_sources, list_collages_using_asset
+    sources = list_collage_sources(connection, args.asset_id)
     # Get collages that use this asset as a source
-    used_in = connection.execute(
-        """
-        SELECT al.parent_asset_id AS collage_asset_id,
-               a.stem, a.canonical_path
-        FROM asset_links al
-        JOIN assets a ON a.asset_id = al.parent_asset_id
-        WHERE al.child_asset_id = ? AND al.relation_type = 'collage_source'
-        """,
-        (args.asset_id,),
-    ).fetchall()
+    used_in = list_collages_using_asset(connection, args.asset_id)
     print(json.dumps({
         "sources": [dict(r) for r in sources],
         "used_in_collages": [dict(r) for r in used_in],
