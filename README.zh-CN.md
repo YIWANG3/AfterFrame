@@ -90,7 +90,7 @@ claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
 
 在本仓库内开发？无需任何操作——自带的 `.mcp.json` 会让 Claude Code 自动连接。其他 MCP 客户端（Claude Desktop 等）：添加远程 HTTP 服务器，URL 相同。
 
-然后直接说：*「找出我的竖构图照片，挑最好的 3 张给我看」*
+然后直接说：*「找几张加州的照片，在 App 里给我看看」*
 
 ![Agent 驱动的工作流](docs/assets/agent-claude-code.png)
 

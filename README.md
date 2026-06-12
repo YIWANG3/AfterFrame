@@ -90,7 +90,7 @@ claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
 
 Working inside this repo? Nothing to do — the bundled `.mcp.json` connects Claude Code automatically. Other MCP clients (Claude Desktop etc.): add a remote HTTP server with the same URL.
 
-Then just ask: *"Find my vertical shots and show me the best 3."*
+Then just ask: *"Find my photos of California and show them in the app."*
 
 ![Agent-driven workflow](docs/assets/agent-claude-code.png)
 
