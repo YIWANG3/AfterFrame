@@ -49,14 +49,14 @@ export const PROVIDER_TYPES = [
   },
   {
     type: "jimeng",
-    label: "Jimeng",
+    label: "即梦 (Jimeng)",
     capability: "Image generation & editing",
     authFields: ["access_key_id", "secret_access_key"],
     placeholders: { access_key_id: "Access Key ID", secret_access_key: "Secret Access Key" },
     defaultModels: [
-      { id: "jimeng_t2i_v40", name: "Jimeng Image 4.0" },
-      { id: "jimeng_seedream46_cvtob", name: "Jimeng Image 4.6" },
-      { id: "jimeng_i2i_seed3_tilesr_cvtob", name: "Jimeng Super Resolution" },
+      { id: "jimeng_t2i_v40", name: "即梦 图片生成 4.0" },
+      { id: "jimeng_seedream46_cvtob", name: "即梦 图片生成 4.6" },
+      { id: "jimeng_i2i_seed3_tilesr_cvtob", name: "即梦 智能超清" },
     ],
   },
 ];

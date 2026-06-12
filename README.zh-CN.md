@@ -94,8 +94,6 @@ claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
 
 ![Agent 驱动的工作流](docs/assets/agent-claude-code.png)
 
-![Agent 选中的照片在画廊中高亮](docs/assets/agent-reveal.png)
-
 ### 素材库管理
 - 基于 Catalog 的工作流 — 每个项目一个 `.afcatalog`
 - 导入流水线：自动提取元数据与生成预览

@@ -94,8 +94,6 @@ Then just ask: *"Find my photos of California and show them in the app."*
 
 ![Agent-driven workflow](docs/assets/agent-claude-code.png)
 
-![Agent picks revealed in the gallery](docs/assets/agent-reveal.png)
-
 ### Library Management
 - Catalog-based workflow — one `.afcatalog` per project
 - Import pipeline with automatic metadata extraction and preview generation
