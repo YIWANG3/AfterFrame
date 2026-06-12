@@ -79,7 +79,18 @@ AfterFrame 内嵌了 [MCP](https://modelcontextprotocol.io) 服务器——任�
 - **17 个工具**：检索（全文 + EXIF 筛选）、agent 真正"看得见"的缩略图、导入、裁剪、导出、标签/评分、合集、AI 标注与重绘任务、删除，以及任务控制
 - **双向选中桥**——你在 App 里框选后直接说"这几张"；agent 挑中的图也会在你的画廊里高亮并滚动到位（`show_in_app`）
 - **可见、可取消**——agent 发起的工作和你自己的一样出现在后台活动面板里，有实时进度和取消按钮
-- **零配置**——服务监听 `127.0.0.1:41706`，仓库自带 `.mcp.json`，Claude Code 打开项目即自动连接。纯本地，隐私立场与 BYOK 一致
+- **纯本地**——App 运行期间服务监听 `127.0.0.1:41706`；隐私立场与 BYOK 一致
+
+**接入方法**（需 AfterFrame 处于运行状态）：
+
+```bash
+# Claude Code —— 一次性配置，任意目录可用
+claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
+```
+
+在本仓库内开发？无需任何操作——自带的 `.mcp.json` 会让 Claude Code 自动连接。其他 MCP 客户端（Claude Desktop 等）：添加远程 HTTP 服务器，URL 相同。
+
+然后直接说：*「找出我的竖构图照片，挑最好的 3 张给我看」*
 
 ![Agent 驱动的工作流](docs/assets/agent-claude-code.png)
 

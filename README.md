@@ -79,7 +79,18 @@ AfterFrame embeds an [MCP](https://modelcontextprotocol.io) server, so any AI ag
 - **17 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, import, crop, export, tags/ratings, collections, AI annotation & repaint jobs, deletion — plus job control
 - **Two-way selection bridge** — select photos in the app and say "these"; the agent's picks get highlighted and scrolled into view right in your gallery (`show_in_app`)
 - **Visible & cancellable** — agent-started work appears in the same background-activity dock as your own, with live progress and a Cancel button
-- **Zero config** — the server listens on `127.0.0.1:41706`; the repo ships a `.mcp.json` so Claude Code connects automatically. Local-only, same BYOK privacy stance as everything else
+- **Local-only** — the server listens on `127.0.0.1:41706` while the app runs; same BYOK privacy stance as everything else
+
+**Connect an agent** (AfterFrame must be running):
+
+```bash
+# Claude Code — one-time setup, works from any directory
+claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
+```
+
+Working inside this repo? Nothing to do — the bundled `.mcp.json` connects Claude Code automatically. Other MCP clients (Claude Desktop etc.): add a remote HTTP server with the same URL.
+
+Then just ask: *"Find my vertical shots and show me the best 3."*
 
 ![Agent-driven workflow](docs/assets/agent-claude-code.png)
 
