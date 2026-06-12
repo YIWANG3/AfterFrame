@@ -21,6 +21,8 @@ import {
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X,
 } from "lucide-react";
+
+import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import { isTextLayer, isStickerLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
@@ -615,64 +617,7 @@ function Switch({ on, onToggle }) {
   );
 }
 
-function SliderRow({ label, min, max, value, onChange, suffix, compact }) {
-  return (
-    <div className={["flex items-center gap-2", compact ? "" : "mt-2"].join(" ")}>
-      {label && <label className="min-w-[48px] text-[10px] text-muted2">{label}</label>}
-      <input
-        type="range" min={min} max={max} value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="slider flex-1"
-      />
-      <NumInput value={value} min={min} max={max} onChange={onChange} />
-      {suffix && <span className="text-[10px] text-muted2">{suffix}</span>}
-    </div>
-  );
-}
 
-function NumInput({ value, min, max, onChange, className = "w-11" }) {
-  const ref = useRef(null);
-  const DRAG_THRESHOLD = 3;
-
-  const handleMouseDown = (e) => {
-    // If already focused (editing), let native input handle it
-    if (document.activeElement === ref.current) return;
-    e.preventDefault();
-    const startX = e.clientX;
-    const startVal = value;
-    let dragging = false;
-
-    const onMove = (ev) => {
-      const dx = ev.clientX - startX;
-      if (!dragging && Math.abs(dx) < DRAG_THRESHOLD) return;
-      dragging = true;
-      const next = Math.min(max, Math.max(min, startVal + Math.round(dx)));
-      onChange(next);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      if (!dragging) {
-        // Was a click, not a drag — focus the input for typing
-        ref.current?.focus();
-      }
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
-
-  return (
-    <input
-      ref={ref}
-      type="number" min={min} max={max} value={value}
-      onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
-      onFocus={(e) => e.target.select()}
-      onMouseDown={handleMouseDown}
-      style={{ cursor: "ew-resize" }}
-      className={`hide-spinner rounded-md border border-border/60 bg-app px-1.5 py-0.5 text-center text-[11px] text-text outline-none focus:border-[rgb(var(--accent-color))] focus:cursor-text ${className}`}
-    />
-  );
-}
 
 function StackedField({ label, value, onChange, min, max }) {
   return (

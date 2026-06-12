@@ -113,7 +113,15 @@ function createMcpServer(deps) {
   async function resolvePreviewPaths(assetId) {
     const cached = previewPathCache.get(assetId);
     if (cached && (cached.preview || cached.previewHd)) return cached;
-    const detail = await callSidecarJsonAsync(["asset-detail", "--asset-id", assetId]);
+    let detail = null;
+    try {
+      detail = await callSidecarJsonAsync(["asset-detail", "--asset-id", assetId]);
+    } catch (error) {
+      // Unknown asset id is a lookup miss (→ 404 at the endpoint), not a
+      // server fault — anything else propagates.
+      if (!/unknown export asset/i.test(error.message)) throw error;
+      return { preview: null, previewHd: null };
+    }
     rememberPreview(assetId, detail?.export_preview_path, detail?.export_preview_hd_path);
     return previewPathCache.get(assetId) || { preview: null, previewHd: null };
   }

@@ -18,13 +18,20 @@ const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.a
  *   (10 gradient images). Set false for tests that want a blank-state app.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
+// Each launch gets its own MCP port: the dev app holds the default 41706, and
+// a port collision is silently swallowed by the server (EADDRINUSE → no MCP),
+// which would make MCP-dependent specs flake in confusing ways.
+let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
+
 async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
   // Fresh userData so each run starts from a clean slate
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
+  const mcpPort = nextMcpPort++;
 
   const env = {
     ...process.env,
     AFTERFRAME_USER_DATA: userDataDir,
+    AFTERFRAME_MCP_PORT: String(mcpPort),
     NODE_ENV: "test",
   };
 
@@ -43,7 +50,25 @@ async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
     env,
   });
   const window = await app.firstWindow();
-  return { app, window, userDataDir, catalogDir: workCatalog };
+  return { app, window, userDataDir, catalogDir: workCatalog, mcpPort };
+}
+
+/**
+ * JSON-RPC call against the app's embedded MCP server.
+ * @param {number} port - from launchApp().mcpPort
+ * @param {string} method - e.g. "initialize", "tools/list", "tools/call"
+ * @param {object} [params]
+ */
+async function mcpCall(port, method, params) {
+  const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, ...(params ? { params } : {}) }),
+  });
+  if (!response.ok) throw new Error(`mcp ${method} → HTTP ${response.status}`);
+  const body = await response.json();
+  if (body.error) throw new Error(`mcp ${method} → ${body.error.message}`);
+  return body.result;
 }
 
 async function closeApp(app, userDataDir) {
@@ -55,4 +80,4 @@ async function closeApp(app, userDataDir) {
   }
 }
 
-module.exports = { launchApp, closeApp, REPO_DESKTOP_DIR };
+module.exports = { launchApp, closeApp, mcpCall, REPO_DESKTOP_DIR };

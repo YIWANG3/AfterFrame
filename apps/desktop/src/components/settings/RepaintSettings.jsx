@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Group, Callout, SecondaryButton } from "./SettingsPrimitives";
-import { PROVIDER_TYPES, getProviderType, ProviderModal } from "../editor/AiRepaintPanel";
+import { PROVIDER_TYPES, getProviderType, ProviderModal } from "../ai/providers";
 
 export default function RepaintSettings() {
   const [prefs, setPrefs] = useState(null);

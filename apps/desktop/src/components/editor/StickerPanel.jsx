@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Sparkles, Trash2, Star, Loader2, Check, RotateCcw } from "lucide-react";
+
+import { SliderRow } from "../../ui";
 import { localFileUrl, fileName, stickerLabel } from "../../utils/format";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
 
@@ -509,24 +511,6 @@ function Section({ label, children }) {
   );
 }
 
-function SliderRow({ label, min, max, value, onChange, suffix }) {
-  return (
-    <div className="mb-1 flex items-center gap-2">
-      <span className="w-12 text-[10px] uppercase tracking-wider text-muted2">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="slider flex-1"
-      />
-      <div className="flex h-6 w-12 items-center justify-end rounded border border-border/60 bg-app px-1.5 text-[11px] text-text">
-        {value}{suffix ? <span className="ml-0.5 text-muted2">{suffix}</span> : null}
-      </div>
-    </div>
-  );
-}
 
 /* ─── Outline preview (SVG) ──────────────────────────────────── */
 
