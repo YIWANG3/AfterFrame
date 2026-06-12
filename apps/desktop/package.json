@@ -11,12 +11,13 @@
     "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "vite build",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux",
+    "dist": "npm run build:sidecar && npm run build && electron-builder",
+    "dist:mac": "npm run build:sidecar && npm run build && electron-builder --mac",
+    "dist:win": "npm run build:sidecar && npm run build && electron-builder --win",
+    "dist:linux": "npm run build:sidecar && npm run build && electron-builder --linux",
     "e2e": "npm run build && playwright test",
-    "e2e:only": "playwright test"
+    "e2e:only": "playwright test",
+    "build:sidecar": "cd ../../services/sidecar && pyinstaller media-workspace.spec --distpath dist --noconfirm"
   },
   "build": {
     "appId": "com.afterframe.app",
