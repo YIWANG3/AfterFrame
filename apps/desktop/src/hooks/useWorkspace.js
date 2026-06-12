@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
+import useJobs from "./useJobs";
 
 const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
@@ -36,16 +37,6 @@ export default function useWorkspace() {
   const [pendingImport, setPendingImport] = useState({ rawDirs: [], exportDirs: [] });
   const [collections, setCollections] = useState([]);
   const [activeCollectionId, setActiveCollectionId] = useState(null);
-  // Unified job polling: one timer for ALL background jobs (import, preview,
-  // enrichment, annotation, ai_repaint). Replaces the per-type interval loops.
-  const [activeJobs, setActiveJobs] = useState([]);
-  const [lastFinishedJob, setLastFinishedJob] = useState(null);
-  const jobsTimerRef = useRef(null);
-  const lastJobsJsonRef = useRef("");
-  const jobsPollingRef = useRef(false);
-  const knownActiveRef = useRef(new Map()); // jobId -> { jobId, jobType, kind }
-  const pendingImportRef = useRef(null);
-  const jobHandlersRef = useRef({});
   const browserRequestIdRef = useRef(0);
   // While an agent-driven reveal resets query/filters/status, the reload
   // effects below must not fire — the reveal does one imperative load itself.
@@ -59,6 +50,25 @@ export default function useWorkspace() {
     () => roots.filter((item) => item.root_type === "export").map((item) => item.path),
     [roots],
   );
+
+  // Unified job polling lives in useJobs; domain reactions flow through this
+  // bridge ref (reassigned every render → the timer never sees stale closures).
+  const jobsBridgeRef = useRef({});
+  jobsBridgeRef.current = {
+    refreshAll: (opts) => refreshAll(opts),
+    startIncrementalImport: (opts) => startIncrementalImport(opts),
+    consumeQueuedImport: () => {
+      const queued = pendingImport;
+      setPendingImport({ rawDirs: [], exportDirs: [] });
+      return queued;
+    },
+    mirrorTask: (type, task) => {
+      if (type === "import") setImportTask(task);
+      else if (type === "preview") setPreviewTask(task);
+      else if (type === "enrichment") setEnrichmentTask(task);
+    },
+  };
+  const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, resetJobs } = useJobs(jobsBridgeRef);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -530,9 +540,7 @@ export default function useWorkspace() {
     setPendingImport({ rawDirs: [], exportDirs: [] });
     setCollections([]);
     setActiveCollectionId(null);
-    knownActiveRef.current.clear();
-    setActiveJobs([]);
-    setLastFinishedJob(null);
+    resetJobs();
     await refreshAll({ nextStatus: "all", force: true });
     pokeJobs();
   }
@@ -584,130 +592,6 @@ export default function useWorkspace() {
     return api.onMenuAction((action) => menuActionRef.current?.(action));
   }, []);
 
-  // ── Unified job polling ─────────────────────────────────────────────────
-  // Keep latest mutable state/handlers in refs so the timer chain never works
-  // with stale closures (the old per-type intervals re-created themselves on
-  // dep changes; the unified loop instead reads through refs).
-  pendingImportRef.current = pendingImport;
-  jobHandlersRef.current = { refreshAll, startIncrementalImport };
-
-  async function handleJobFinished(meta) {
-    const h = jobHandlersRef.current;
-    let final = null;
-    try {
-      if (meta.jobType === "import") final = await api.getImportStatus();
-      else if (meta.jobType === "preview") final = await api.getPreviewStatus();
-      else if (meta.jobType === "enrichment") final = await api.getEnrichmentStatus();
-      else if (meta.jobType === "annotation") final = await api.getAnnotationJobStatus();
-      else if (meta.jobType === "ai_repaint") final = await api.getAiRepaintStatus();
-    } catch { /* sidecar hiccup — still emit the finish event below */ }
-    const cancelled = final?.status === "cancelled";
-
-    if (meta.jobType === "import") {
-      setImportTask(final);
-      const queued = pendingImportRef.current || { rawDirs: [], exportDirs: [] };
-      setPendingImport({ rawDirs: [], exportDirs: [] });
-      await h.refreshAll({ preserveView: true });
-      // Continue queued dirs — but not after a user cancel.
-      if (!cancelled && (queued.rawDirs.length || queued.exportDirs.length)) {
-        await h.startIncrementalImport({ rawDirs: queued.rawDirs, exportDirs: queued.exportDirs });
-      }
-    } else if (meta.jobType === "preview") {
-      // Chain preview-hd only after a SUCCESSFUL small-preview pass — a failed
-      // or indeterminate run would just fail again at HD size.
-      if ((meta.kind || "preview") === "preview" && final?.status === "succeeded") {
-        // Auto-chain preview-hd after the small previews finish.
-        const hdTask = await api.startPreviewGeneration("preview-hd");
-        setPreviewTask({ ...hdTask, _kind: "preview-hd" });
-        pokeJobs(hdTask?.jobId ? { jobId: hdTask.jobId, jobType: "preview", kind: "preview-hd" } : undefined);
-      } else {
-        setPreviewTask(final);
-        await h.refreshAll({ preserveView: true });
-      }
-    } else if (meta.jobType === "enrichment") {
-      setEnrichmentTask(final);
-      await h.refreshAll({ preserveView: true });
-    } else if (meta.jobType === "ai_repaint") {
-      // The job runner registers the repainted file as a new version asset —
-      // reload so it appears in the grid without a manual refresh.
-      if (!cancelled) await h.refreshAll({ preserveView: true });
-    }
-    // Generic finish event — App-level consumers (annotation toast/cache,
-    // activity center) react to this.
-    setLastFinishedJob({ ...(final || {}), jobType: meta.jobType, jobId: meta.jobId, finishedAtMs: Date.now() });
-  }
-
-  async function pollActiveJobsOnce() {
-    let jobs = [];
-    try {
-      jobs = (await api.getActiveJobs()) || [];
-    } catch { jobs = []; }
-    // Skip the state churn when nothing actually changed — otherwise every
-    // 1.2s tick re-renders the whole tree for the lifetime of a job.
-    const jobsJson = JSON.stringify(jobs);
-    const changed = jobsJson !== lastJobsJsonRef.current;
-    lastJobsJsonRef.current = jobsJson;
-    if (changed) setActiveJobs(jobs);
-
-    // Mirror into the legacy per-type task states (ImportOverlay & friends).
-    if (changed) {
-      const byType = new Map(jobs.map((j) => [j.jobType, j]));
-      if (byType.has("import")) setImportTask(byType.get("import"));
-      if (byType.has("preview")) {
-        const j = byType.get("preview");
-        setPreviewTask({ ...j, _kind: j.kind || knownActiveRef.current.get(j.jobId)?.kind || "preview" });
-      }
-      if (byType.has("enrichment")) setEnrichmentTask(byType.get("enrichment"));
-    }
-
-    // Finish detection: anything we knew about that's no longer active.
-    const liveIds = new Set(jobs.map((j) => j.jobId));
-    for (const [id, meta] of [...knownActiveRef.current]) {
-      if (!liveIds.has(id)) {
-        knownActiveRef.current.delete(id);
-        void handleJobFinished(meta);
-      }
-    }
-    for (const j of jobs) {
-      const prev = knownActiveRef.current.get(j.jobId);
-      knownActiveRef.current.set(j.jobId, { jobId: j.jobId, jobType: j.jobType, kind: j.kind || prev?.kind });
-    }
-
-    if (jobs.length > 0) {
-      jobsTimerRef.current = window.setTimeout(pollActiveJobsOnce, 1200);
-    } else {
-      jobsPollingRef.current = false;
-      jobsTimerRef.current = null;
-    }
-  }
-
-  // Kick (or re-kick) the poll loop. `seed` pre-registers a just-started job
-  // so even one that finishes before the first poll still gets its finish
-  // side effects dispatched.
-  function pokeJobs(seed) {
-    if (seed?.jobId) {
-      knownActiveRef.current.set(seed.jobId, { jobId: seed.jobId, jobType: seed.jobType, kind: seed.kind });
-    }
-    if (jobsPollingRef.current) return;
-    jobsPollingRef.current = true;
-    jobsTimerRef.current = window.setTimeout(pollActiveJobsOnce, 250);
-  }
-
-  async function cancelJob(jobId) {
-    if (!jobId) return null;
-    const res = await api.cancelJob(jobId);
-    pokeJobs();
-    return res;
-  }
-
-  // Recover mid-run jobs after a reload/app start, and clean up on unmount.
-  useEffect(() => {
-    pokeJobs();
-    return () => {
-      if (jobsTimerRef.current) clearTimeout(jobsTimerRef.current);
-      jobsPollingRef.current = false;
-    };
-  }, []);
 
   return {
     theme,

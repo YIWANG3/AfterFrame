@@ -3,6 +3,8 @@ import { filterTitle } from "./utils/format";
 import useWorkspace from "./hooks/useWorkspace";
 import api from "./api";
 import usePaneResize from "./hooks/usePaneResize";
+import useSelection from "./hooks/useSelection";
+import useAgentBridge from "./hooks/useAgentBridge";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import Gallery from "./components/Gallery";
@@ -33,8 +35,6 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [proofMode, setProofMode] = useState(false);
   const [layoutItems, setLayoutItems] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [selectionAnchorId, setSelectionAnchorId] = useState(null);
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
   const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers"
@@ -91,74 +91,43 @@ export default function App() {
     () => new Map(currentItems.map((item) => [item.asset_id, item])),
     [currentItems],
   );
-  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const {
+    selectedIds, setSelectedIds, setAnchorId: setSelectionAnchorId,
+    selectedIdSet, selectedIndex,
+    selectSingle, handleItemSelect, selectByIndex,
+    handleContextSelect, handleSelectionGroup, clearSelection,
+    prepareDragSelection, moveSelection, selectByDirection,
+  } = useSelection({
+    orderedIds,
+    itemById,
+    currentItems,
+    layoutItems,
+    displayMode,
+    primaryId: workspace.selectedAssetId,
+    setPrimaryId: workspace.setSelectedAssetId,
+  });
   const selectedAssetIds = selectedIds;
-  const selectedIndex = useMemo(
-    () => currentItems.findIndex((item) => item.asset_id === workspace.selectedAssetId),
-    [currentItems, workspace.selectedAssetId],
-  );
 
   const [dropActive, setDropActive] = useState(false);
   const { toasts, pushToast, dismissToast } = useToasts();
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
-  // Agent (MCP show_in_app) asked us to reveal assets. Kept in a ref so the
-  // IPC listener registers once but always calls the latest closure.
-  const agentRevealRef = useRef(null);
-  agentRevealRef.current = async ({ requestId, assetIds }) => {
-    setViewMode("assets");
-    setLightboxOpen(false);
-    const result = await workspace.revealAssets(assetIds || []);
-    setSelectedIds(result.found);
-    setSelectionAnchorId(result.found[0] || null);
-    if (result.found.length || result.missing.length) {
-      const missingNote = result.missing.length ? ` (${result.missing.length} not found)` : "";
-      pushToast?.({
-        title: "Agent",
-        message: `Selected ${result.found.length} photo${result.found.length === 1 ? "" : "s"}${missingNote}.`,
-        ttl: 4000,
-      });
-    }
-    api.sendAgentRevealResult(requestId, result);
-  };
-  useEffect(() => {
-    return api.onAgentRevealAssets((payload) => agentRevealRef.current?.(payload));
-  }, []);
-
-  // Agent wrote to the catalog (crop / tags / rating / collections) — give the
-  // user a lightweight heads-up; the views themselves refresh via useWorkspace.
-  useEffect(() => {
-    const change = workspace.lastAgentChange;
-    if (!change) return;
-    const n = change.ids?.length || 0;
-    pushToast?.({
-      title: "Agent",
-      message:
-        change.scope === "collections"
-          ? "Collections updated."
-          : `Updated ${n || "some"} item${n === 1 ? "" : "s"} in the library.`,
-      ttl: 3500,
-    });
-  }, [workspace.lastAgentChange]);
-
-  // Mirror the current selection to the main process so the MCP get_selection
-  // tool can answer "these photos" instantly.
-  const lastSelectionSentRef = useRef("");
-  useEffect(() => {
-    const ids = selectedIds.length
-      ? selectedIds
-      : [workspace.selectedAssetId].filter(Boolean);
-    const payload = ids
-      .map((id) => itemById.get(id))
-      .filter(Boolean)
-      .map((item) => ({ asset_id: item.asset_id, stem: item.stem, export_path: item.export_path }));
-    // itemById is rebuilt on every items mutation (paging, polls, rating
-    // edits) — only ship the IPC when the selection payload actually changed.
-    const serialized = JSON.stringify(payload);
-    if (serialized === lastSelectionSentRef.current) return;
-    lastSelectionSentRef.current = serialized;
-    api.reportSelection(payload);
-  }, [selectedIds, workspace.selectedAssetId, itemById]);
+  // Agent ↔ UI bridges (reveal / agent-change toast / selection mirror) live
+  // in one hook so the contract is explicit — see useAgentBridge.
+  useAgentBridge({
+    revealAssets: workspace.revealAssets,
+    lastAgentChange: workspace.lastAgentChange,
+    selectedIds,
+    setSelectedIds,
+    setAnchorId: setSelectionAnchorId,
+    primaryId: workspace.selectedAssetId,
+    itemById,
+    pushToast,
+    onBeforeReveal: () => {
+      setViewMode("assets");
+      setLightboxOpen(false);
+    },
+  });
 
   // Unified finish handling: annotation results (toast + cache invalidation)
   // and auto-annotate-on-import both react to the workspace's finish events.
@@ -268,100 +237,11 @@ export default function App() {
     gridTemplateRows: "minmax(0, 1fr)",
   };
 
-  function commitSelection(nextIds, primaryId, anchorId = primaryId) {
-    const deduped = [];
-    const seen = new Set();
-    for (const id of nextIds) {
-      if (!id || seen.has(id) || !itemById.has(id)) continue;
-      seen.add(id);
-      deduped.push(id);
-    }
-    const nextPrimary = primaryId && itemById.has(primaryId) ? primaryId : deduped[0] || null;
-    // Marquee drags call this on every pointermove — bail when nothing changed.
-    if (
-      nextPrimary === workspace.selectedAssetId &&
-      deduped.length === selectedIds.length &&
-      deduped.every((id, i) => id === selectedIds[i])
-    ) {
-      return;
-    }
-    setSelectedIds(deduped);
-    setSelectionAnchorId(anchorId && itemById.has(anchorId) ? anchorId : nextPrimary);
-    workspace.setSelectedAssetId(nextPrimary);
-  }
-
-  function selectSingle(id) {
-    commitSelection(id ? [id] : [], id, id);
-  }
-
-  function toggleSelection(id) {
-    if (!id) return;
-    if (selectedIdSet.has(id)) {
-      const nextIds = selectedIds.filter((existingId) => existingId !== id);
-      const nextPrimary =
-        workspace.selectedAssetId === id ? nextIds[nextIds.length - 1] || null : workspace.selectedAssetId;
-      commitSelection(nextIds, nextPrimary, selectionAnchorId === id ? nextPrimary : selectionAnchorId);
-      return;
-    }
-    commitSelection([...selectedIds, id], id, selectionAnchorId || id);
-  }
-
-  function selectRange(id, append = false) {
-    if (!id) return;
-    const anchor = selectionAnchorId || workspace.selectedAssetId || id;
-    const anchorIndex = orderedIds.indexOf(anchor);
-    const targetIndex = orderedIds.indexOf(id);
-    if (anchorIndex < 0 || targetIndex < 0) {
-      selectSingle(id);
-      return;
-    }
-    const start = Math.min(anchorIndex, targetIndex);
-    const end = Math.max(anchorIndex, targetIndex);
-    const rangeIds = orderedIds.slice(start, end + 1);
-    const nextIds = append ? [...selectedIds, ...rangeIds] : rangeIds;
-    commitSelection(nextIds, id, anchor);
-  }
-
-  function handleItemSelect(assetId, event) {
-    if (!event) {
-      selectSingle(assetId);
-      return;
-    }
-    const isToggle = event.metaKey || event.ctrlKey;
-    if (event.shiftKey) {
-      selectRange(assetId, isToggle);
-      return;
-    }
-    if (isToggle) {
-      toggleSelection(assetId);
-      return;
-    }
-    selectSingle(assetId);
-  }
-
   function openLightboxForItem(assetId) {
     if (!assetId) return;
     selectSingle(assetId);
     setProofMode(false);
     setLightboxOpen(true);
-  }
-
-  function handleContextSelect(assetId) {
-    if (selectedIdSet.has(assetId)) {
-      workspace.setSelectedAssetId(assetId);
-      return;
-    }
-    selectSingle(assetId);
-  }
-
-  function handleSelectionGroup(ids, primaryId, anchorId = primaryId) {
-    commitSelection(ids, primaryId, anchorId);
-  }
-
-  function clearSelection() {
-    setSelectedIds([]);
-    setSelectionAnchorId(null);
-    workspace.setSelectedAssetId(null);
   }
 
   function applyRating(nextRating) {
@@ -372,125 +252,6 @@ export default function App() {
     void workspace.setAssetRating(targetIds, nextRating);
   }
 
-  function prepareDragSelection(assetId) {
-    if (selectedIdSet.has(assetId) && selectedAssetIds.length > 1) {
-      workspace.setSelectedAssetId(assetId);
-      const exportPaths = selectedAssetIds.map((id) => itemById.get(id)?.export_path).filter(Boolean);
-      return { assetIds: selectedAssetIds, exportPaths };
-    }
-    selectSingle(assetId);
-    const item = itemById.get(assetId);
-    return {
-      assetIds: [assetId].filter(Boolean),
-      exportPaths: [item?.export_path].filter(Boolean),
-    };
-  }
-
-  function selectByIndex(index) {
-    const next = currentItems[index];
-    if (!next) return;
-    selectSingle(next.asset_id);
-  }
-
-  function moveSelection(offset) {
-    if (!currentItems.length) return;
-    if (selectedIndex < 0) {
-      selectByIndex(offset >= 0 ? 0 : currentItems.length - 1);
-      return;
-    }
-    const nextIndex = selectedIndex + offset;
-    if (nextIndex < 0 || nextIndex >= currentItems.length) return;
-    selectByIndex(nextIndex);
-  }
-
-  function selectByDirection(direction) {
-    if (!currentItems.length) return;
-    if (!workspace.selectedAssetId) {
-      selectByIndex(0);
-      return;
-    }
-
-    const current = layoutItems.find((item) => item.assetId === workspace.selectedAssetId);
-    if (!current) {
-      moveSelection(direction === "left" || direction === "up" ? -1 : 1);
-      return;
-    }
-
-    const isForward = direction === "right" || direction === "down";
-    const curCenterX = current.left + current.width / 2;
-    const curCenterY = current.top + current.height / 2;
-
-    function groupByPosition(items, getPos, tolerance) {
-      const groups = [];
-      for (const item of items) {
-        const pos = getPos(item);
-        const existing = groups.find((g) => Math.abs(g.key - pos) < tolerance);
-        if (existing) {
-          existing.items.push(item);
-        } else {
-          groups.push({ key: pos, items: [item] });
-        }
-      }
-      groups.sort((a, b) => a.key - b.key);
-      return groups;
-    }
-
-    if (displayMode === "grid" || displayMode === "tiles") {
-      if (direction === "left" || direction === "right") {
-        moveSelection(isForward ? 1 : -1);
-      } else {
-        const colCount = layoutItems.filter((c) => Math.abs(c.top - current.top) < 2).length || 1;
-        moveSelection(isForward ? colCount : -colCount);
-      }
-      return;
-    }
-
-    if (displayMode === "justified") {
-      if (direction === "left" || direction === "right") {
-        moveSelection(isForward ? 1 : -1);
-        return;
-      }
-      const rows = groupByPosition(layoutItems, (item) => item.top, 8);
-      const curRowIdx = rows.findIndex((r) => r.items.some((item) => item.assetId === current.assetId));
-      const targetRowIdx = isForward ? curRowIdx + 1 : curRowIdx - 1;
-      if (targetRowIdx < 0 || targetRowIdx >= rows.length) return;
-      const targetRow = rows[targetRowIdx].items;
-      let best = targetRow[0];
-      let bestDist = Infinity;
-      for (const item of targetRow) {
-        const dist = Math.abs(item.left + item.width / 2 - curCenterX);
-        if (dist < bestDist) { bestDist = dist; best = item; }
-      }
-      selectSingle(best.assetId);
-      return;
-    }
-
-    if (displayMode === "waterfall") {
-      const columns = groupByPosition(layoutItems, (item) => item.left, 4);
-      for (const col of columns) col.items.sort((a, b) => a.top - b.top);
-      const curColIdx = columns.findIndex((c) => c.items.some((item) => item.assetId === current.assetId));
-      const curCol = columns[curColIdx];
-      const curItemInColIdx = curCol.items.findIndex((item) => item.assetId === current.assetId);
-
-      if (direction === "left" || direction === "right") {
-        const targetColIdx = isForward ? curColIdx + 1 : curColIdx - 1;
-        if (targetColIdx < 0 || targetColIdx >= columns.length) return;
-        const targetCol = columns[targetColIdx].items;
-        let best = targetCol[0];
-        let bestDist = Infinity;
-        for (const item of targetCol) {
-          const dist = Math.abs(item.top + item.height / 2 - curCenterY);
-          if (dist < bestDist) { bestDist = dist; best = item; }
-        }
-        selectSingle(best.assetId);
-      } else {
-        const targetIdx = isForward ? curItemInColIdx + 1 : curItemInColIdx - 1;
-        if (targetIdx < 0 || targetIdx >= curCol.items.length) return;
-        selectSingle(curCol.items[targetIdx].assetId);
-      }
-      return;
-    }
-  }
 
   function openEditor(target) {
     const nextItem =
@@ -525,28 +286,6 @@ export default function App() {
       setEditorItem(null);
     }
   }, [workspace.selectedAssetId]);
-
-  useEffect(() => {
-    const validIds = new Set(orderedIds);
-    setSelectedIds((current) => {
-      const next = current.filter((id) => validIds.has(id));
-      const primaryId =
-        workspace.selectedAssetId && validIds.has(workspace.selectedAssetId) ? workspace.selectedAssetId : null;
-      if (primaryId) {
-        if (!next.length) return [primaryId];
-        if (!next.includes(primaryId)) return [primaryId];
-        return next;
-      }
-      return next;
-    });
-    setSelectionAnchorId((current) => {
-      if (current && validIds.has(current)) return current;
-      if (workspace.selectedAssetId && validIds.has(workspace.selectedAssetId)) {
-        return workspace.selectedAssetId;
-      }
-      return orderedIds[0] || null;
-    });
-  }, [orderedIds, workspace.selectedAssetId]);
 
   useEffect(() => {
     function shouldIgnoreKey(event) {
