@@ -33,15 +33,20 @@ test.describe("Sidebar navigation", () => {
     await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 5_000 });
   });
 
-  test("Recently Added filter loads; Rated hidden when nothing is rated", async () => {
+  test("Recently Added and Rated filters load real data", async () => {
     const recent = window.getByRole("button", { name: /Recently Added/i }).first();
     await expect(recent).toBeVisible();
     await recent.click();
     // The toolbar title reflects the active filter
     await expect(window.getByText("Recently Added").nth(1)).toBeVisible({ timeout: 5_000 });
-    // Seeded catalog has zero ratings — the Rated entry must NOT render
-    // (rated_count gate). The old test silently no-op'd here.
-    await expect(window.getByRole("button", { name: /^Rated$/i })).toHaveCount(0);
+
+    // The fixture seeds two 4-star images, so the Rated entry renders
+    // (it's gated on rated_count > 0) and filters down to exactly them.
+    const rated = window.getByRole("button", { name: /Rated/i }).first();
+    await expect(rated).toBeVisible();
+    await rated.click();
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(2, { timeout: 5_000 });
+
     // restore
     await window.getByRole("button", { name: /All Assets/i }).first().click();
   });

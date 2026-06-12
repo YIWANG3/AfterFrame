@@ -47,7 +47,7 @@ test.describe("Demo (slow walkthrough)", () => {
   test("03 — select first card (you should see the accent ring)", async () => {
     const firstCard = window.locator("[data-gallery-item='true']").first();
     await firstCard.click();
-    await expect(firstCard.locator(".ring-accent").first()).toBeVisible();
+    await expect(firstCard).toHaveAttribute("data-selected", "true");
     await window.waitForTimeout(BEAT);
   });
 

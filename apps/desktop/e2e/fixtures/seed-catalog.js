@@ -15,7 +15,9 @@ const FIXTURES_DIR = __dirname;
 const CATALOG_DIR = path.join(FIXTURES_DIR, "test-catalog.afcatalog");
 const IMAGES_DIR = path.join(FIXTURES_DIR, "test-images");
 const REPO_ROOT = path.resolve(FIXTURES_DIR, "..", "..", "..", "..");
-const SIDECAR = path.join(REPO_ROOT, "services", "sidecar", "dist", "media-workspace", "media-workspace");
+// Run the sidecar from SOURCE, not the packaged dist binary — the binary is
+// only rebuilt at release time and silently goes stale in between.
+const SIDECAR_SRC = path.join(REPO_ROOT, "services", "sidecar", "src");
 
 const IMAGES = [
   { name: "001-red.jpg",    rgb: [180,  60,  60] },
@@ -50,7 +52,10 @@ async function generateImage(file, rgb) {
 }
 
 function runSidecar(args) {
-  return execFileSync(SIDECAR, args, { encoding: "utf-8" });
+  return execFileSync("python3", ["-m", "media_workspace", ...args], {
+    encoding: "utf-8",
+    env: { ...process.env, PYTHONPATH: SIDECAR_SRC },
+  });
 }
 
 async function main() {
@@ -89,6 +94,18 @@ async function main() {
       "--export-path", p,
     ]);
   }
+
+  // 5. Rate two images and tag one so the Rated filter and tag-search paths
+  //    are exercisable in e2e (previously zero ratings made them no-ops).
+  console.log("Rating 001/002 and tagging 003…");
+  const browse = JSON.parse(runSidecar([
+    "--catalog", CATALOG_DIR, "browse-exports", "--status", "all", "--limit", "10", "--offset", "0",
+  ]));
+  const byStem = Object.fromEntries(browse.map((r) => [r.stem, r.asset_id]));
+  runSidecar(["--catalog", CATALOG_DIR, "set-asset-rating", "--rating", "4",
+    "--asset-id", byStem["001-red"], "--asset-id", byStem["002-orange"]]);
+  runSidecar(["--catalog", CATALOG_DIR, "add-asset-tag",
+    "--asset-id", byStem["003-yellow"], "--tag", "seeded-tag"]);
 
   console.log("\n✓ Seeded catalog:", CATALOG_DIR);
   console.log("✓ Images:", IMAGES_DIR);

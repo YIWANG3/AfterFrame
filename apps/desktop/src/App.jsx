@@ -122,7 +122,7 @@ export default function App() {
     api.sendAgentRevealResult(requestId, result);
   };
   useEffect(() => {
-    api.onAgentRevealAssets((payload) => agentRevealRef.current?.(payload));
+    return api.onAgentRevealAssets((payload) => agentRevealRef.current?.(payload));
   }, []);
 
   // Agent wrote to the catalog (crop / tags / rating / collections) — give the
@@ -203,12 +203,16 @@ export default function App() {
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
+  const externalImportRef = useRef(null);
+  externalImportRef.current = (paths) => {
+    if (paths?.length) workspace.addImagesFromPaths(paths);
+  };
   useEffect(() => {
-    if (!api.has("onExternalImport")) return;
-    api.onExternalImport((paths) => {
-      if (paths?.length) workspace.addImagesFromPaths(paths);
-    });
-  }, [workspace.addImagesFromPaths]);
+    if (!api.has("onExternalImport")) return undefined;
+    // Register once; the old deps re-registered on every render (fresh
+    // function identity) which would now accumulate listeners.
+    return api.onExternalImport((paths) => externalImportRef.current?.(paths));
+  }, []);
 
   // Block the browser's default behavior on file drops anywhere outside the
   // gallery drop zone — without this, dropping a file on the sidebar/inspector

@@ -36,6 +36,6 @@ test.describe("Catalog browse", () => {
     const firstCard = window.locator("[data-gallery-item='true']").first();
     await firstCard.click();
     // The selection ring is on an inner div (not the button itself).
-    await expect(firstCard.locator(".ring-accent").first()).toBeVisible();
+    await expect(firstCard).toHaveAttribute("data-selected", "true");
   });
 });

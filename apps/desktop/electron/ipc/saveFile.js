@@ -78,7 +78,6 @@ function register({
 
     const discreteAngle = ((quarterTurns * 90) % 360 + 360) % 360;
 
-    let tmpPath = null;
     try {
       // Single pipeline merges EXIF + user transforms into one .rotate() call.
       let pipeline = sharp(sourcePath, { limitInputPixels: false, sequentialRead: true });
@@ -140,7 +139,6 @@ function register({
       console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${savePath}`);
       return { path: savePath, width: result.width, height: result.height };
     } finally {
-      if (tmpPath) fs.promises.unlink(tmpPath).catch(() => {});
     }
   });
 }

@@ -134,6 +134,7 @@ function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
     <button
       type="button"
+      data-testid={`tool-${label.toLowerCase().replace(/\s+/g, "-")}`}
       className={[
         "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
         active

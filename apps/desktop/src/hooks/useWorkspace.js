@@ -240,7 +240,7 @@ export default function useWorkspace() {
     void loadBrowser({ force: true, preserveView: true });
   };
   useEffect(() => {
-    api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));
+    return api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));
   }, []);
 
   // Agent-driven reveal (MCP show_in_app): reset to the unfiltered library,
@@ -516,7 +516,7 @@ export default function useWorkspace() {
   async function switchCatalog(nextCatalogPath) {
     await api.switchCatalog(nextCatalogPath ?? null);
     setStatus("all");
-    setSort("name-asc");
+    setSort("imported-desc"); // matches the app-default sort (was name-asc — inconsistent)
     setQuery("");
     setItems([]);
     setDetail(null);
@@ -549,9 +549,12 @@ export default function useWorkspace() {
     void loadDetail(selectedAssetId);
   }, [selectedAssetId]);
 
-  useEffect(() => {
-    if (!api.has("onMenuAction")) return undefined;
-    api.onMenuAction(async (action) => {
+  // Menu actions: registered ONCE, dispatched through a ref so the handler
+  // always sees fresh closures. The old deps-array registration both leaked
+  // listeners (no cleanup) and ran stale closures when status/collection
+  // changed without the listed deps changing.
+  const menuActionRef = useRef(null);
+  menuActionRef.current = async (action) => {
       if (action === "catalog:new") {
         const created = await api.createCatalog();
         if (created) await switchCatalog(created);
@@ -575,9 +578,11 @@ export default function useWorkspace() {
       } else if (action === "view:refresh") {
         await refreshAll();
       }
-    });
-    return undefined;
-  }, [importTask, exportDirs, rawDirs, summary, previewTask, enrichmentTask]);
+  };
+  useEffect(() => {
+    if (!api.has("onMenuAction")) return undefined;
+    return api.onMenuAction((action) => menuActionRef.current?.(action));
+  }, []);
 
   // ── Unified job polling ─────────────────────────────────────────────────
   // Keep latest mutable state/handlers in refs so the timer chain never works

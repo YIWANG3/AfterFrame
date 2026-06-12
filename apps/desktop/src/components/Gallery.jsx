@@ -314,6 +314,7 @@ const CardContent = memo(function CardContent({
         }
       }}
       data-gallery-item="true"
+      data-selected={selected ? "true" : "false"}
       data-asset-id={item.asset_id}
       data-export-path={item.export_path}
       draggable

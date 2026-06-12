@@ -9,14 +9,16 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   },
   // Listen for files dropped on the dock icon / Finder "Open With" / open-files.
   onExternalImport: (callback) => {
-    ipcRenderer.removeAllListeners("workspace:external-import");
-    ipcRenderer.on("workspace:external-import", (_event, paths) => callback(paths));
+    const listener = (_event, paths) => callback(paths);
+    ipcRenderer.on("workspace:external-import", listener);
+    return () => ipcRenderer.removeListener("workspace:external-import", listener);
   },
   // Agent (MCP) asked the app to reveal assets in the gallery. The renderer
   // answers on a per-request channel so the agent learns what was found.
   onAgentRevealAssets: (callback) => {
-    ipcRenderer.removeAllListeners("workspace:agent-reveal-assets");
-    ipcRenderer.on("workspace:agent-reveal-assets", (_event, payload) => callback(payload));
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("workspace:agent-reveal-assets", listener);
+    return () => ipcRenderer.removeListener("workspace:agent-reveal-assets", listener);
   },
   sendAgentRevealResult: (requestId, result) =>
     ipcRenderer.send(`workspace:agent-reveal-result:${requestId}`, result),
@@ -25,8 +27,9 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   reportSelection: (assets) => ipcRenderer.send("workspace:selection-changed", assets),
   // Agent write tools mutated the catalog — refresh the affected views.
   onCatalogChanged: (callback) => {
-    ipcRenderer.removeAllListeners("workspace:catalog-changed");
-    ipcRenderer.on("workspace:catalog-changed", (_event, payload) => callback(payload));
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("workspace:catalog-changed", listener);
+    return () => ipcRenderer.removeListener("workspace:catalog-changed", listener);
   },
   isPackaged: ipcRenderer.sendSync("workspace:is-packaged"),
   getInfo: () => ipcRenderer.invoke("workspace:info"),
@@ -107,7 +110,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   stickerToggleStar: (id) => ipcRenderer.invoke("workspace:sticker-toggle-star", id),
   stickerCleanupScratch: (dir) => ipcRenderer.invoke("workspace:sticker-cleanup-scratch", dir),
   onMenuAction: (callback) => {
-    ipcRenderer.removeAllListeners("workspace:menu-action");
-    ipcRenderer.on("workspace:menu-action", (_event, action) => callback(action));
+    const listener = (_event, action) => callback(action);
+    ipcRenderer.on("workspace:menu-action", listener);
+    return () => ipcRenderer.removeListener("workspace:menu-action", listener);
   },
 });

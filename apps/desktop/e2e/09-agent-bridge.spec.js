@@ -46,7 +46,7 @@ test.afterAll(async () => {
 test("clicking a card in the UI is visible to MCP get_selection", async () => {
   const card = ctx.window.locator("[data-gallery-item='true']").first();
   await card.click();
-  await expect(ctx.window.locator(".ring-accent").first()).toBeVisible();
+  await expect(ctx.window.locator("[data-selected='true']").first()).toBeVisible();
 
   // Selection mirror is an IPC hop — poll briefly for it to land
   await expect(async () => {
@@ -66,7 +66,7 @@ test("MCP show_in_app selects and reveals assets in the gallery", async () => {
   expect(result.missing).toEqual([]);
 
   // Both cards carry the selection ring, and the reveal toast appeared
-  await expect(ctx.window.locator(".ring-accent")).toHaveCount(2, { timeout: 5_000 });
+  await expect(ctx.window.locator("[data-selected='true']")).toHaveCount(2, { timeout: 5_000 });
   await expect(ctx.window.getByText(/Selected 2 photos/i)).toBeVisible({ timeout: 5_000 });
 
   // Roundtrip: the agent-made selection is now the user selection
