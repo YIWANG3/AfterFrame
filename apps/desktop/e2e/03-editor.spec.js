@@ -51,7 +51,7 @@ test.describe("Editor functional", () => {
 
   test("can switch to AI Repaint tool — panel renders without errors", async () => {
     await window.getByRole("button", { name: /AI Repaint/i }).first().click();
-    // Should at least render some part of the AI panel (provider section or prompt)
-    await expect(window.locator("body")).toBeVisible();
+    // A real panel anchor — the one-time prompt input (body-visible was vacuous)
+    await expect(window.getByPlaceholder(/Enter a one-time prompt/i)).toBeVisible({ timeout: 5_000 });
   });
 });

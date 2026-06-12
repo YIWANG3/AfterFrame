@@ -764,8 +764,20 @@ const allowedMediaDirs = new Set();
 const baselineMediaDirs = []; // catalog-independent entries, survive resets
 let mediaRootsLoaded = null; // promise — lazily refreshed per catalog
 
+// Symlink-safe canonical form. On macOS /var → /private/var, /tmp → /private/tmp:
+// the sidecar emits realpath'd absolute paths while config strings keep the
+// symlinked form — naive prefix comparison 403's entire catalogs under /tmp.
+function canonicalizeMediaPath(p) {
+  const resolved = path.resolve(String(p));
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved; // not on disk (yet) — compare as-is
+  }
+}
+
 function addAllowedMediaDir(dir) {
-  if (dir) allowedMediaDirs.add(path.resolve(String(dir)));
+  if (dir) allowedMediaDirs.add(canonicalizeMediaPath(dir));
 }
 
 function addBaselineMediaDir(dir) {
@@ -796,9 +808,11 @@ function ensureMediaRootsLoaded() {
   return mediaRootsLoaded;
 }
 
-function isAllowedMediaPath(resolved) {
-  if (currentCatalogPath && (resolved === currentCatalogPath || resolved.startsWith(currentCatalogPath + path.sep))) {
-    return true;
+function isAllowedMediaPath(requestedPath) {
+  const resolved = canonicalizeMediaPath(requestedPath);
+  if (currentCatalogPath) {
+    const catalogCanonical = canonicalizeMediaPath(currentCatalogPath);
+    if (resolved === catalogCanonical || resolved.startsWith(catalogCanonical + path.sep)) return true;
   }
   for (const dir of allowedMediaDirs) {
     if (resolved === dir || resolved.startsWith(dir + path.sep)) return true;

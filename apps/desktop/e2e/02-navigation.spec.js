@@ -19,29 +19,30 @@ test.describe("Sidebar navigation", () => {
     const stickersBtn = window.getByRole("button", { name: /Stickers/i }).first();
     await expect(stickersBtn).toBeVisible({ timeout: 10_000 });
     await stickersBtn.click();
-    // Sticker view toolbar shows the count badge
-    await expect(window.getByText(/Sticker/i).first()).toBeVisible();
+    // StickerView actually rendered: the seeded library is empty, so its
+    // empty state is the anchor (the old assertion matched the nav button
+    // itself and passed without the view mounting).
+    await expect(window.getByText(/No stickers yet/i)).toBeVisible({ timeout: 5_000 });
   });
 
   test("can switch back to All Assets", async () => {
     const allAssetsBtn = window.getByRole("button", { name: /All Assets/i }).first();
     await expect(allAssetsBtn).toBeVisible();
     await allAssetsBtn.click();
-    // We're no longer in sticker mode — Stickers nav entry shouldn't have its active state
-    // (we don't have a great selector for "active" without DOM inspection — relying on
-    //  visual cue would be fragile, so just confirm clicking didn't error)
+    // Back in the asset gallery: seeded cards are visible again
+    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 5_000 });
   });
 
-  test("Recent / Rated filters are clickable", async () => {
-    const recent = window.getByRole("button", { name: /Recent/i }).first();
-    if (await recent.isVisible()) {
-      await recent.click();
-      await window.waitForTimeout(200);
-    }
-    const rated = window.getByRole("button", { name: /Rated/i }).first();
-    if (await rated.isVisible()) {
-      await rated.click();
-      await window.waitForTimeout(200);
-    }
+  test("Recently Added filter loads; Rated hidden when nothing is rated", async () => {
+    const recent = window.getByRole("button", { name: /Recently Added/i }).first();
+    await expect(recent).toBeVisible();
+    await recent.click();
+    // The toolbar title reflects the active filter
+    await expect(window.getByText("Recently Added").nth(1)).toBeVisible({ timeout: 5_000 });
+    // Seeded catalog has zero ratings — the Rated entry must NOT render
+    // (rated_count gate). The old test silently no-op'd here.
+    await expect(window.getByRole("button", { name: /^Rated$/i })).toHaveCount(0);
+    // restore
+    await window.getByRole("button", { name: /All Assets/i }).first().click();
   });
 });

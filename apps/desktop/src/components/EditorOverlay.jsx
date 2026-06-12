@@ -1084,7 +1084,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     if (!open) return;
     window.__afterframeTest = {
       ...(window.__afterframeTest || {}),
-      saveAs: (path) => executeSave(path),
+      // Through a ref: the effect's dep list doesn't include every piece of
+      // edit state (quarterTurns, crop …), so a direct closure goes stale —
+      // a backdoor save after rotating would silently save unrotated.
+      saveAs: (path) => executeSaveRef.current?.(path),
+      // Tests must wait for this before transform clicks — commitTransform
+      // aborts while the preview image is still decoding.
+      getPreviewReady: () => previewReadyRef.current,
       getSaving: () => saving,
       addTextLayer: (text) => {
         const nl = createDefaultLayer({ text: text || "Test Text", x: 0.5, y: 0.5 });
@@ -1102,6 +1108,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     return () => {
       if (window.__afterframeTest) {
         delete window.__afterframeTest.saveAs;
+        delete window.__afterframeTest.getPreviewReady;
         delete window.__afterframeTest.getSaving;
         delete window.__afterframeTest.addTextLayer;
         delete window.__afterframeTest.getLayerCount;
@@ -1110,6 +1117,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       }
     };
   }, [open, saving, layers, tool]);
+
+  const executeSaveRef = useRef(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  executeSaveRef.current = (savePath) => executeSave(savePath);
+  const previewReadyRef = useRef(false);
+  previewReadyRef.current = !!previewSource;
 
   async function executeSave(savePath) {
     setSaving(true);

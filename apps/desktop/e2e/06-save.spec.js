@@ -56,6 +56,7 @@ test.describe("Save pipeline", () => {
 
   test("canvas fallback save: add a text layer then save", async () => {
     // Switch to Text tool + add a layer (addTextLayer returns post-add count)
+    await window.waitForFunction(() => typeof window.__afterframeTest?.setTool === "function", null, { timeout: 10_000 });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
     const result = await window.evaluate(() => window.__afterframeTest.addTextLayer("Hello E2E"));
     expect(result.id).toBeTruthy();
@@ -67,5 +68,31 @@ test.describe("Save pipeline", () => {
     expect(fs.existsSync(out)).toBe(true);
     const stat = fs.statSync(out);
     expect(stat.size).toBeGreaterThan(1000); // non-trivial output
+  });
+
+  test("rotate save: 90° turn writes swapped dimensions", async () => {
+    // Fresh editor session so the text layer from the previous test doesn't
+    // force the canvas path — rotate/crop alone stays on the native one.
+    await window.evaluate(() => window.__afterframeTest.closeEditor());
+    await openEditorOnFirstAsset(window);
+
+    const before = await sharp(path.join(tmpDir, "native-save.jpg")).metadata();
+
+    await window.waitForFunction(() => typeof window.__afterframeTest?.setTool === "function", null, { timeout: 10_000 });
+    await window.evaluate(() => window.__afterframeTest.setTool("crop"));
+    // Rotating before the preview finishes decoding is silently ignored
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady()), { timeout: 10_000 })
+      .toBe(true);
+    await window.getByRole("button", { name: /90° L/ }).click();
+    // commitTransform is React state — give it a beat before saving
+    await window.waitForTimeout(500);
+    const out = path.join(tmpDir, "rotated-save.jpg");
+    await saveTo(window, out);
+
+    const meta = await sharp(out).metadata();
+    expect(meta.format).toBe("jpeg");
+    expect(meta.width).toBe(before.height);
+    expect(meta.height).toBe(before.width);
   });
 });

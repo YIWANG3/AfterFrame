@@ -21,7 +21,9 @@ test.describe("Scene depth", () => {
     await window.locator("[data-gallery-item='true']").first().click();
     await window.keyboard.press("e");
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    // Switch to Text tool — that's where the Scene Depth section lives
+    // Switch to Text tool — that's where the Scene Depth section lives.
+    // The backdoor registers in an effect a beat after Save becomes visible.
+    await window.waitForFunction(() => typeof window.__afterframeTest?.setTool === "function", null, { timeout: 10_000 });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => {

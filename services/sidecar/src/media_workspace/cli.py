@@ -581,871 +581,996 @@ def main(argv: list[str] | None = None) -> int:
         connection.close()
 
 
-def _dispatch(parser, args, catalog, connection) -> int:
-    if args.command == "get-provider-token":
-        payload = get_app_setting(connection, _provider_token_key(args.provider))
-        print(json.dumps(payload or {}, indent=2))
-        return 0
+def _cmd_get_provider_token(args, connection, catalog, parser):
+    payload = get_app_setting(connection, _provider_token_key(args.provider))
+    print(json.dumps(payload or {}, indent=2))
+    return 0
 
-    if args.command == "set-provider-token":
-        set_app_setting(connection, _provider_token_key(args.provider), {"token": args.token})
-        print(json.dumps({"provider": args.provider, "configured": True}, indent=2))
-        return 0
 
-    if args.command == "delete-provider-token":
-        delete_app_setting(connection, _provider_token_key(args.provider))
-        print(json.dumps({"provider": args.provider, "configured": False}, indent=2))
-        return 0
+def _cmd_set_provider_token(args, connection, catalog, parser):
+    set_app_setting(connection, _provider_token_key(args.provider), {"token": args.token})
+    print(json.dumps({"provider": args.provider, "configured": True}, indent=2))
+    return 0
 
-    if args.command == "repair-resource-sets":
-        from .db import list_incorrectly_merged_resource_sets
 
-        # Phase 0: Split assets sharing the same asset_id (old format without path)
-        shared_split_count = split_shared_asset_ids(connection)
-        raw_removed = remove_raw_from_resource_sets(connection)
+def _cmd_delete_provider_token(args, connection, catalog, parser):
+    delete_app_setting(connection, _provider_token_key(args.provider))
+    print(json.dumps({"provider": args.provider, "configured": False}, indent=2))
+    return 0
 
-        # Phase 1: Split incorrectly merged sets (different-directory independent exports)
-        split_count = 0
-        merged_sets = list_incorrectly_merged_resource_sets(connection)
-        for merged in merged_sets:
-            set_id = merged["set_id"]
-            # Keep the primary (first member) in the original set,
-            # remove all other independent (no parent) exports so they become orphans
-            independent = [m for m in merged["members"] if not m["parent_asset_id"]]
-            # Keep the first one, detach the rest
-            for member in independent[1:]:
-                connection.execute(
-                    "DELETE FROM resource_set_items WHERE set_id = ? AND asset_id = ?",
-                    (set_id, member["asset_id"]),
-                )
-                split_count += 1
-            # Update set_item_count by checking if set is now empty
-            remaining = connection.execute(
-                "SELECT COUNT(*) AS item_count FROM resource_set_items WHERE set_id = ?",
-                (set_id,),
-            ).fetchone()
-            if remaining is not None and int(remaining["item_count"]) == 0:
-                connection.execute("DELETE FROM resource_sets WHERE set_id = ?", (set_id,))
-        if split_count:
-            connection.commit()
 
-        # Phase 2: Attach assets missing a resource set
-        repaired = 0
-        primaries_created = 0
-        versions_attached = 0
-        missing = list_export_assets_missing_resource_set(connection)
-        for row in missing:
-            asset_id = str(row["asset_id"])
-            stem = str(row["stem"])
-            origin_stem, version_kind = _infer_origin_stem(stem)
-            origin_asset_id = None
-            if origin_stem:
-                candidate_ids = [candidate for candidate in find_export_asset_ids_by_stem(connection, origin_stem) if candidate != asset_id]
-                if candidate_ids:
-                    origin_asset_id = candidate_ids[0]
-            if origin_asset_id:
-                attach_asset_to_resource_set(
-                    connection,
-                    asset_id,
-                    origin_asset_id=origin_asset_id,
-                    version_kind=version_kind,
-                    commit=False,
-                )
-                versions_attached += 1
-            else:
-                attach_asset_to_resource_set(
-                    connection,
-                    asset_id,
-                    origin_asset_id=None,
-                    version_kind="import",
-                    commit=False,
-                )
-                primaries_created += 1
-            repaired += 1
+def _cmd_repair_resource_sets(args, connection, catalog, parser):
+    from .db import list_incorrectly_merged_resource_sets
 
-        # Phase 3: Reassign singleton derived sets
-        repaired_singletons = 0
-        suspect_sets = list_singleton_primary_resource_sets(connection)
-        for row in suspect_sets:
-            stem = str(row["stem"])
-            origin_stem, version_kind = _infer_origin_stem(stem)
-            if not origin_stem:
-                continue
-            candidate_ids = [candidate for candidate in find_export_asset_ids_by_stem(connection, origin_stem) if candidate != row["primary_asset_id"]]
-            if not candidate_ids:
-                continue
-            origin_asset_id = candidate_ids[0]
-            reassign_asset_to_resource_set(
+    # Phase 0: Split assets sharing the same asset_id (old format without path)
+    shared_split_count = split_shared_asset_ids(connection)
+    raw_removed = remove_raw_from_resource_sets(connection)
+
+    # Phase 1: Split incorrectly merged sets (different-directory independent exports)
+    split_count = 0
+    merged_sets = list_incorrectly_merged_resource_sets(connection)
+    for merged in merged_sets:
+        set_id = merged["set_id"]
+        # Keep the primary (first member) in the original set,
+        # remove all other independent (no parent) exports so they become orphans
+        independent = [m for m in merged["members"] if not m["parent_asset_id"]]
+        # Keep the first one, detach the rest
+        for member in independent[1:]:
+            connection.execute(
+                "DELETE FROM resource_set_items WHERE set_id = ? AND asset_id = ?",
+                (set_id, member["asset_id"]),
+            )
+            split_count += 1
+        # Update set_item_count by checking if set is now empty
+        remaining = connection.execute(
+            "SELECT COUNT(*) AS item_count FROM resource_set_items WHERE set_id = ?",
+            (set_id,),
+        ).fetchone()
+        if remaining is not None and int(remaining["item_count"]) == 0:
+            connection.execute("DELETE FROM resource_sets WHERE set_id = ?", (set_id,))
+    if split_count:
+        connection.commit()
+
+    # Phase 2: Attach assets missing a resource set
+    repaired = 0
+    primaries_created = 0
+    versions_attached = 0
+    missing = list_export_assets_missing_resource_set(connection)
+    for row in missing:
+        asset_id = str(row["asset_id"])
+        stem = str(row["stem"])
+        origin_stem, version_kind = _infer_origin_stem(stem)
+        origin_asset_id = None
+        if origin_stem:
+            candidate_ids = [candidate for candidate in find_export_asset_ids_by_stem(connection, origin_stem) if candidate != asset_id]
+            if candidate_ids:
+                origin_asset_id = candidate_ids[0]
+        if origin_asset_id:
+            attach_asset_to_resource_set(
                 connection,
-                str(row["primary_asset_id"]),
+                asset_id,
                 origin_asset_id=origin_asset_id,
                 version_kind=version_kind,
                 commit=False,
             )
-            repaired_singletons += 1
             versions_attached += 1
-            repaired += 1
-        connection.commit()
-        print(json.dumps({
-            "ok": True,
-            "shared_assets_split": shared_split_count,
-            "raw_removed_from_sets": raw_removed,
-            "split_merged_sets": split_count,
-            "repaired": repaired,
-            "primaries_created": primaries_created,
-            "versions_attached": versions_attached,
-            "singleton_versions_reassigned": repaired_singletons,
-        }, indent=2))
-        return 0
+        else:
+            attach_asset_to_resource_set(
+                connection,
+                asset_id,
+                origin_asset_id=None,
+                version_kind="import",
+                commit=False,
+            )
+            primaries_created += 1
+        repaired += 1
 
-    if args.command == "split-shared-assets":
-        count = split_shared_asset_ids(connection)
-        raw_removed = remove_raw_from_resource_sets(connection)
-        print(json.dumps({"ok": True, "split_count": count, "raw_removed": raw_removed}, indent=2))
-        return 0
-
-    if args.command == "list-ai-models":
-        effective_key = args.api_key
-        if not effective_key:
-            provider_key = f"ai_provider_token:{args.provider}"
-            config = get_app_setting(connection, provider_key)
-            effective_key = config.get("token") if isinstance(config, dict) else None
-        if not effective_key:
-            print(json.dumps({"error": f"No API key for {args.provider}"}))
-            return 1
-        models = list_provider_models(args.provider, effective_key, base_url=getattr(args, "base_url", None))
-        print(json.dumps(models, indent=2))
-        return 0
-
-    if args.command == "run-ai-repaint-job":
-        payload = run_ai_repaint_job(
+    # Phase 3: Reassign singleton derived sets
+    repaired_singletons = 0
+    suspect_sets = list_singleton_primary_resource_sets(connection)
+    for row in suspect_sets:
+        stem = str(row["stem"])
+        origin_stem, version_kind = _infer_origin_stem(stem)
+        if not origin_stem:
+            continue
+        candidate_ids = [candidate for candidate in find_export_asset_ids_by_stem(connection, origin_stem) if candidate != row["primary_asset_id"]]
+        if not candidate_ids:
+            continue
+        origin_asset_id = candidate_ids[0]
+        reassign_asset_to_resource_set(
             connection,
-            catalog_path=args.catalog,
-            job_id=args.job_id,
-            provider=args.provider,
+            str(row["primary_asset_id"]),
+            origin_asset_id=origin_asset_id,
+            version_kind=version_kind,
+            commit=False,
+        )
+        repaired_singletons += 1
+        versions_attached += 1
+        repaired += 1
+    connection.commit()
+    print(json.dumps({
+        "ok": True,
+        "shared_assets_split": shared_split_count,
+        "raw_removed_from_sets": raw_removed,
+        "split_merged_sets": split_count,
+        "repaired": repaired,
+        "primaries_created": primaries_created,
+        "versions_attached": versions_attached,
+        "singleton_versions_reassigned": repaired_singletons,
+    }, indent=2))
+    return 0
+
+
+def _cmd_split_shared_assets(args, connection, catalog, parser):
+    count = split_shared_asset_ids(connection)
+    raw_removed = remove_raw_from_resource_sets(connection)
+    print(json.dumps({"ok": True, "split_count": count, "raw_removed": raw_removed}, indent=2))
+    return 0
+
+
+def _cmd_list_ai_models(args, connection, catalog, parser):
+    effective_key = args.api_key
+    if not effective_key:
+        provider_key = f"ai_provider_token:{args.provider}"
+        config = get_app_setting(connection, provider_key)
+        effective_key = config.get("token") if isinstance(config, dict) else None
+    if not effective_key:
+        print(json.dumps({"error": f"No API key for {args.provider}"}))
+        return 1
+    models = list_provider_models(args.provider, effective_key, base_url=getattr(args, "base_url", None))
+    print(json.dumps(models, indent=2))
+    return 0
+
+
+def _cmd_run_ai_repaint_job(args, connection, catalog, parser):
+    payload = run_ai_repaint_job(
+        connection,
+        catalog_path=args.catalog,
+        job_id=args.job_id,
+        provider=args.provider,
+        input_path=args.input,
+        output_path=args.output,
+        prompt=args.prompt,
+        api_key=args.api_key,
+        origin_path=args.origin_path,
+        aspect_ratio=args.aspect_ratio,
+        image_size=args.image_size,
+        temperature=args.temperature,
+        model=getattr(args, "model", None),
+        base_url=getattr(args, "base_url", None),
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_ai_repaint(args, connection, catalog, parser):
+    if args.provider == "mock":
+        payload = run_mock_repaint(
+            input_path=args.input,
+            output_path=args.output,
+            prompt=args.prompt,
+        )
+    elif args.provider == OPENAI_PROVIDER:
+        payload = run_openai_repaint(
             input_path=args.input,
             output_path=args.output,
             prompt=args.prompt,
             api_key=args.api_key,
-            origin_path=args.origin_path,
+            model=args.model or DEFAULT_OPENAI_MODEL,
             aspect_ratio=args.aspect_ratio,
             image_size=args.image_size,
-            temperature=args.temperature,
-            model=getattr(args, "model", None),
-            base_url=getattr(args, "base_url", None),
         )
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "ai-repaint":
-        if args.provider == "mock":
-            payload = run_mock_repaint(
-                input_path=args.input,
-                output_path=args.output,
-                prompt=args.prompt,
-            )
-        elif args.provider == OPENAI_PROVIDER:
-            payload = run_openai_repaint(
-                input_path=args.input,
-                output_path=args.output,
-                prompt=args.prompt,
-                api_key=args.api_key,
-                model=args.model or DEFAULT_OPENAI_MODEL,
-                aspect_ratio=args.aspect_ratio,
-                image_size=args.image_size,
-            )
-        else:
-            payload = run_nanobanana_repaint(
-                input_path=args.input,
-                output_path=args.output,
-                prompt=args.prompt,
-                api_key=args.api_key,
-                model=args.model,
-                aspect_ratio=args.aspect_ratio,
-                image_size=args.image_size,
-            )
-        print(json.dumps(asdict(payload), indent=2))
-        return 0
-
-    if args.command == "annotate-asset":
-        from . import annotation as _annotation
-        langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
-        existing = _annotation.list_top_tags(connection)
-        result = _annotation.annotate(
-            image_path=args.image,
-            provider=args.provider,
+    else:
+        payload = run_nanobanana_repaint(
+            input_path=args.input,
+            output_path=args.output,
+            prompt=args.prompt,
             api_key=args.api_key,
             model=args.model,
-            base_url=args.base_url,
-            languages=langs,
-            max_tags=args.max_tags,
-            max_caption_chars=args.max_caption_chars,
-            custom_instructions=args.custom_instructions,
-            existing_tags=existing,
+            aspect_ratio=args.aspect_ratio,
+            image_size=args.image_size,
         )
-        saved = _annotation.save_annotation(connection, args.asset_id, result)
-        print(json.dumps(saved, ensure_ascii=False, indent=2))
-        return 0
+    print(json.dumps(asdict(payload), indent=2))
+    return 0
 
-    if args.command == "run-annotation-job":
-        langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
-        asset_ids = [s.strip() for s in (args.asset_ids or "").split(",") if s.strip()] or None
-        payload = run_annotation_job(
+
+def _cmd_annotate_asset(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
+    existing = _annotation.list_top_tags(connection)
+    result = _annotation.annotate(
+        image_path=args.image,
+        provider=args.provider,
+        api_key=args.api_key,
+        model=args.model,
+        base_url=args.base_url,
+        languages=langs,
+        max_tags=args.max_tags,
+        max_caption_chars=args.max_caption_chars,
+        custom_instructions=args.custom_instructions,
+        existing_tags=existing,
+    )
+    saved = _annotation.save_annotation(connection, args.asset_id, result)
+    print(json.dumps(saved, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_run_annotation_job(args, connection, catalog, parser):
+    langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
+    asset_ids = [s.strip() for s in (args.asset_ids or "").split(",") if s.strip()] or None
+    payload = run_annotation_job(
+        connection,
+        catalog_path=args.catalog,
+        job_id=args.job_id,
+        provider=args.provider,
+        api_key=args.api_key,
+        model=args.model,
+        base_url=args.base_url,
+        asset_type=args.asset_type,
+        only_missing=not args.reannotate,
+        asset_ids=asset_ids,
+        collection_id=args.collection_id or None,
+        languages=langs,
+        max_tags=args.max_tags,
+        max_caption_chars=args.max_caption_chars,
+        custom_instructions=args.custom_instructions,
+        limit=args.limit,
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_annotation_count(args, connection, catalog, parser):
+    from .db import count_assets_for_annotation
+    asset_ids = [s.strip() for s in (args.asset_ids or "").split(",") if s.strip()] or None
+    count = count_assets_for_annotation(
+        connection,
+        asset_type=args.asset_type,
+        only_missing=not args.reannotate,
+        asset_ids=asset_ids,
+        collection_id=args.collection_id or None,
+    )
+    print(json.dumps({"count": count}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_get_annotation(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    payload = _annotation.get_annotation(connection, args.asset_id)
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_add_asset_tag(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    payload = _annotation.add_asset_tag(connection, args.asset_id, args.tag)
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_remove_asset_tag(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    payload = _annotation.remove_asset_tag(connection, args.asset_id, args.tag)
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_list_tags(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    tags = _annotation.list_top_tags(connection, limit=args.limit)
+    print(json.dumps(tags, ensure_ascii=False))
+    return 0
+
+
+def _cmd_init_catalog(args, connection, catalog, parser):
+    set_catalog_path(connection, catalog.root)
+    print(f"initialized {catalog.root}")
+    return 0
+
+
+def _cmd_scan_raw(args, connection, catalog, parser):
+    aggregate = {"indexed": 0, "skipped": 0, "unchanged": 0, "forced": int(args.force)}
+    for raw_dir in args.raw_dir:
+        result = scan_raw_directory(
             connection,
-            catalog_path=args.catalog,
-            job_id=args.job_id,
-            provider=args.provider,
-            api_key=args.api_key,
-            model=args.model,
-            base_url=args.base_url,
-            asset_type=args.asset_type,
-            only_missing=not args.reannotate,
-            asset_ids=asset_ids,
-            collection_id=args.collection_id or None,
-            languages=langs,
-            max_tags=args.max_tags,
-            max_caption_chars=args.max_caption_chars,
-            custom_instructions=args.custom_instructions,
-            limit=args.limit,
-        )
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0
-
-    if args.command == "annotation-count":
-        from .db import count_assets_for_annotation
-        asset_ids = [s.strip() for s in (args.asset_ids or "").split(",") if s.strip()] or None
-        count = count_assets_for_annotation(
-            connection,
-            asset_type=args.asset_type,
-            only_missing=not args.reannotate,
-            asset_ids=asset_ids,
-            collection_id=args.collection_id or None,
-        )
-        print(json.dumps({"count": count}, ensure_ascii=False))
-        return 0
-
-    if args.command == "get-annotation":
-        from . import annotation as _annotation
-        payload = _annotation.get_annotation(connection, args.asset_id)
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0
-
-    if args.command == "add-asset-tag":
-        from . import annotation as _annotation
-        payload = _annotation.add_asset_tag(connection, args.asset_id, args.tag)
-        print(json.dumps(payload, ensure_ascii=False))
-        return 0
-
-    if args.command == "remove-asset-tag":
-        from . import annotation as _annotation
-        payload = _annotation.remove_asset_tag(connection, args.asset_id, args.tag)
-        print(json.dumps(payload, ensure_ascii=False))
-        return 0
-
-    if args.command == "list-tags":
-        from . import annotation as _annotation
-        tags = _annotation.list_top_tags(connection, limit=args.limit)
-        print(json.dumps(tags, ensure_ascii=False))
-        return 0
-
-    if args.command == "init-catalog":
-        set_catalog_path(connection, catalog.root)
-        print(f"initialized {catalog.root}")
-        return 0
-
-    if args.command == "scan-raw":
-        aggregate = {"indexed": 0, "skipped": 0, "unchanged": 0, "forced": int(args.force)}
-        for raw_dir in args.raw_dir:
-            result = scan_raw_directory(
-                connection,
-                raw_dir,
-                force=args.force,
-                workers=args.workers,
-                fingerprint_mode=args.fingerprint_mode,
-                metadata_profile=args.metadata_profile,
-            )
-            aggregate["indexed"] += result["indexed"]
-            aggregate["skipped"] += result["skipped"]
-            aggregate["unchanged"] += result["unchanged"]
-            aggregate["workers"] = result["workers"]
-            aggregate["fingerprint_mode"] = result["fingerprint_mode"]
-            aggregate["metadata_profile"] = result["metadata_profile"]
-        print(json.dumps(aggregate, indent=2))
-        return 0
-
-    if args.command == "enrich-raw":
-        payload = enrich_raw_assets(
-            connection,
-            raw_dirs=args.raw_dir,
-            limit=args.limit,
+            raw_dir,
+            force=args.force,
             workers=args.workers,
             fingerprint_mode=args.fingerprint_mode,
+            metadata_profile=args.metadata_profile,
         )
-        print(json.dumps(payload, indent=2))
-        return 0
+        aggregate["indexed"] += result["indexed"]
+        aggregate["skipped"] += result["skipped"]
+        aggregate["unchanged"] += result["unchanged"]
+        aggregate["workers"] = result["workers"]
+        aggregate["fingerprint_mode"] = result["fingerprint_mode"]
+        aggregate["metadata_profile"] = result["metadata_profile"]
+    print(json.dumps(aggregate, indent=2))
+    return 0
 
-    if args.command == "analyze-metadata":
-        payload = analyze_metadata_coverage(
-            raw_dirs=[path.resolve() for path in args.raw_dir],
-            export_dirs=[path.resolve() for path in args.export_dir],
+
+def _cmd_enrich_raw(args, connection, catalog, parser):
+    payload = enrich_raw_assets(
+        connection,
+        raw_dirs=args.raw_dir,
+        limit=args.limit,
+        workers=args.workers,
+        fingerprint_mode=args.fingerprint_mode,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_analyze_metadata(args, connection, catalog, parser):
+    payload = analyze_metadata_coverage(
+        raw_dirs=[path.resolve() for path in args.raw_dir],
+        export_dirs=[path.resolve() for path in args.export_dir],
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_create_job(args, connection, catalog, parser):
+    payload = json.loads(args.payload_json or "{}")
+    print(json.dumps(create_job(connection, args.job_type, payload=payload), indent=2))
+    return 0
+
+
+def _cmd_get_job(args, connection, catalog, parser):
+    print(json.dumps(get_job(connection, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_latest_job(args, connection, catalog, parser):
+    print(json.dumps(get_latest_job(connection, args.job_type), indent=2))
+    return 0
+
+
+def _cmd_list_jobs(args, connection, catalog, parser):
+    print(json.dumps(list_jobs(connection, job_type=args.job_type, limit=args.limit), indent=2))
+    return 0
+
+
+def _cmd_cancel_job(args, connection, catalog, parser):
+    from .db import request_job_cancel
+    print(json.dumps(request_job_cancel(connection, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_list_active_jobs(args, connection, catalog, parser):
+    from .db import list_active_jobs
+    print(json.dumps(list_active_jobs(connection), indent=2))
+    return 0
+
+
+def _cmd_run_import_job(args, connection, catalog, parser):
+    payload = run_import_job(
+        connection,
+        catalog.root,
+        args.job_id,
+        raw_dirs=args.raw_dir,
+        export_dirs=args.export_dir,
+        mode=args.mode,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_run_enrichment_job(args, connection, catalog, parser):
+    payload = run_enrichment_job(connection, args.job_id, raw_dirs=args.raw_dir)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_run_preview_job(args, connection, catalog, parser):
+    payload = run_preview_job(
+        connection,
+        catalog.root,
+        args.job_id,
+        kind=args.kind,
+        asset_type=args.asset_type,
+        limit=args.limit,
+        force=args.force,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_evaluate_ground_truth(args, connection, catalog, parser):
+    payload = evaluate_ground_truth(connection, args.truth_csv.resolve(), refresh=args.refresh)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_export_ground_truth(args, connection, catalog, parser):
+    payload = export_ground_truth(connection, args.output_csv, statuses=args.status)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_resolve_export(args, connection, catalog, parser):
+    thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
+    decision = resolve_export(connection, args.path, thresholds=thresholds, refresh=args.refresh)
+    print(
+        json.dumps(
+            {
+                "status": decision.status,
+                "score": decision.score,
+                "raw_asset_id": decision.raw_asset_id,
+                "top_candidates": decision.ranked_candidates,
+            },
+            indent=2,
         )
-        print(json.dumps(payload, indent=2))
-        return 0
+    )
+    return 0
 
-    if args.command == "create-job":
-        payload = json.loads(args.payload_json or "{}")
-        print(json.dumps(create_job(connection, args.job_type, payload=payload), indent=2))
-        return 0
 
-    if args.command == "get-job":
-        print(json.dumps(get_job(connection, args.job_id), indent=2))
-        return 0
+def _cmd_resolve_export_batch(args, connection, catalog, parser):
+    thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
+    payload = resolve_export_batch(connection, args.export_dir, thresholds=thresholds, refresh=args.refresh)
+    print(json.dumps(payload, indent=2))
+    return 0
 
-    if args.command == "latest-job":
-        print(json.dumps(get_latest_job(connection, args.job_type), indent=2))
-        return 0
 
-    if args.command == "list-jobs":
-        print(json.dumps(list_jobs(connection, job_type=args.job_type, limit=args.limit), indent=2))
-        return 0
+def _cmd_watch_export(args, connection, catalog, parser):
+    thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
+    watcher = ExportWatcher(
+        connection,
+        export_dirs=tuple(args.export_dir),
+        thresholds=thresholds,
+        poll_interval_seconds=args.interval,
+    )
+    watcher.run()
+    return 0
 
-    if args.command == "cancel-job":
-        from .db import request_job_cancel
-        print(json.dumps(request_job_cancel(connection, args.job_id), indent=2))
-        return 0
 
-    if args.command == "list-active-jobs":
-        from .db import list_active_jobs
-        print(json.dumps(list_active_jobs(connection), indent=2))
-        return 0
+def _cmd_generate_previews(args, connection, catalog, parser):
+    service = PreviewService(catalog)
+    payload = service.generate_batch(
+        connection,
+        kind=args.kind,
+        asset_type=args.asset_type,
+        limit=args.limit,
+        force=args.force,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
 
-    if args.command == "run-import-job":
-        payload = run_import_job(
-            connection,
-            catalog.root,
-            args.job_id,
-            raw_dirs=args.raw_dir,
-            export_dirs=args.export_dir,
-            mode=args.mode,
+
+def _cmd_facet_values(args, connection, catalog, parser):
+    from .db import get_facet_values
+    print(json.dumps(get_facet_values(connection), ensure_ascii=False))
+    return 0
+
+
+def _cmd_search_facet(args, connection, catalog, parser):
+    from .db import search_facet_values
+    print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit), ensure_ascii=False))
+    return 0
+
+
+def _cmd_browse_exports(args, connection, catalog, parser):
+    facet_filters = json.loads(args.filters) if args.filters else None
+    payload = []
+    for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
+        preview_path = None
+        if row["preview_relative_path"]:
+            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
+        preview_hd_path = None
+        if row["preview_hd_relative_path"]:
+            preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
+        payload.append(
+            {
+                "asset_id": row["asset_id"],
+                "stem": row["stem"],
+                "export_path": row["export_path"],
+                "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
+                "app_rating": row["app_rating"],
+                "imported_at": row["imported_at"],
+                "match_status": row["match_status"],
+                "score": row["score"],
+                "raw_asset_id": row["raw_asset_id"],
+                "raw_path": row["raw_path"],
+                "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
+                "preview_path": preview_path,
+                "preview_hd_path": preview_hd_path,
+                "resource_set_id": row["resource_set_id"],
+                "resource_role": row["resource_role"],
+                "version_kind": row["version_kind"],
+                "resource_sort_order": row["resource_sort_order"],
+                "set_primary_asset_id": row["set_primary_asset_id"],
+                "set_raw_asset_id": row["set_raw_asset_id"],
+                "primary_stem": row["primary_stem"],
+                "set_item_count": row["set_item_count"],
+                "annotation": _annotation_from_row(row),
+            }
         )
-        print(json.dumps(payload, indent=2))
-        return 0
+    print(json.dumps(payload, indent=2))
+    return 0
 
-    if args.command == "run-enrichment-job":
-        payload = run_enrichment_job(connection, args.job_id, raw_dirs=args.raw_dir)
-        print(json.dumps(payload, indent=2))
-        return 0
 
-    if args.command == "run-preview-job":
-        payload = run_preview_job(
-            connection,
-            catalog.root,
-            args.job_id,
-            kind=args.kind,
-            asset_type=args.asset_type,
-            limit=args.limit,
-            force=args.force,
-        )
-        print(json.dumps(payload, indent=2))
-        return 0
+def _cmd_asset_detail(args, connection, catalog, parser):
+    if args.export_path:
+        row = get_export_asset_detail_by_path(connection, str(args.export_path.resolve()))
+        identifier = str(args.export_path)
+    else:
+        row = get_export_asset_detail(connection, args.asset_id)
+        identifier = args.asset_id
+    if row is None:
+        raise SystemExit(f"unknown export asset: {identifier}")
+    duplicates = get_duplicate_assets(connection, row["asset_id"])
+    payload = {
+        "asset_id": row["asset_id"],
+        "stem": row["stem"],
+        "export_path": row["export_path"],
+        "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
+        "app_rating": row["app_rating"],
+        "imported_at": row["imported_at"],
+        "match_status": row["match_status"],
+        "score": row["score"],
+        "raw_asset_id": row["raw_asset_id"],
+        "raw_path": row["raw_path"],
+        "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
+        "feature_vector": json.loads(row["feature_vector_json"] or "{}"),
+        "candidates": json.loads(row["candidate_json"] or "[]"),
+        "export_preview_path": str((catalog.root / row["export_preview_relative_path"]).resolve())
+        if row["export_preview_relative_path"]
+        else None,
+        "raw_preview_path": str((catalog.root / row["raw_preview_relative_path"]).resolve())
+        if row["raw_preview_relative_path"]
+        else None,
+        "export_preview_hd_path": str((catalog.root / row["export_preview_hd_relative_path"]).resolve())
+        if row["export_preview_hd_relative_path"]
+        else None,
+        "resource_set_id": row["resource_set_id"],
+        "resource_role": row["resource_role"],
+        "version_kind": row["version_kind"],
+        "resource_sort_order": row["resource_sort_order"],
+        "set_primary_asset_id": row["set_primary_asset_id"],
+        "set_raw_asset_id": row["set_raw_asset_id"],
+        "primary_stem": row["primary_stem"],
+        "set_item_count": row["set_item_count"],
+        "duplicates": [
+            {"asset_id": d["asset_id"], "export_path": d["export_path"], "stem": d["stem"]}
+            for d in duplicates
+        ],
+    }
 
-    if args.command == "evaluate-ground-truth":
-        payload = evaluate_ground_truth(connection, args.truth_csv.resolve(), refresh=args.refresh)
-        print(json.dumps(payload, indent=2))
-        return 0
+    # Add version siblings from resource set
+    asset_id = row["asset_id"]
+    set_id = row["resource_set_id"]
+    if set_id:
+        siblings = connection.execute(
+            """
+            SELECT rsi.asset_id, rsi.role, rsi.version_kind, rsi.sort_order,
+                   a.stem, a.canonical_path,
+                   af.path AS export_path,
+                   pe.relative_path AS preview_relative_path
+            FROM resource_set_items rsi
+            JOIN assets a ON a.asset_id = rsi.asset_id
+            LEFT JOIN asset_files af ON af.asset_id = rsi.asset_id AND af.role = 'canonical'
+            LEFT JOIN preview_entries pe ON pe.asset_id = rsi.asset_id AND pe.kind = 'preview'
+            WHERE rsi.set_id = ? AND rsi.asset_id != ?
+            ORDER BY rsi.sort_order
+            """,
+            (set_id, asset_id),
+        ).fetchall()
+        payload["version_siblings"] = [
+            {
+                "asset_id": s["asset_id"],
+                "role": s["role"],
+                "version_kind": s["version_kind"],
+                "stem": s["stem"],
+                "export_path": s["export_path"],
+                "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
+                if s["preview_relative_path"] else None,
+            }
+            for s in siblings
+        ]
+    else:
+        payload["version_siblings"] = []
 
-    if args.command == "export-ground-truth":
-        payload = export_ground_truth(connection, args.output_csv, statuses=args.status)
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "resolve-export":
-        thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-        decision = resolve_export(connection, args.path, thresholds=thresholds, refresh=args.refresh)
-        print(
-            json.dumps(
-                {
-                    "status": decision.status,
-                    "score": decision.score,
-                    "raw_asset_id": decision.raw_asset_id,
-                    "top_candidates": decision.ranked_candidates,
-                },
-                indent=2,
-            )
-        )
-        return 0
-
-    if args.command == "resolve-export-batch":
-        thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-        payload = resolve_export_batch(connection, args.export_dir, thresholds=thresholds, refresh=args.refresh)
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "watch-export":
-        thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-        watcher = ExportWatcher(
-            connection,
-            export_dirs=tuple(args.export_dir),
-            thresholds=thresholds,
-            poll_interval_seconds=args.interval,
-        )
-        watcher.run()
-        return 0
-
-    if args.command == "generate-previews":
-        service = PreviewService(catalog)
-        payload = service.generate_batch(
-            connection,
-            kind=args.kind,
-            asset_type=args.asset_type,
-            limit=args.limit,
-            force=args.force,
-        )
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "facet-values":
-        from .db import get_facet_values
-        print(json.dumps(get_facet_values(connection), ensure_ascii=False))
-        return 0
-
-    if args.command == "search-facet":
-        from .db import search_facet_values
-        print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit), ensure_ascii=False))
-        return 0
-
-    if args.command == "browse-exports":
-        facet_filters = json.loads(args.filters) if args.filters else None
-        payload = []
-        for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
-            preview_path = None
-            if row["preview_relative_path"]:
-                preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
-            preview_hd_path = None
-            if row["preview_hd_relative_path"]:
-                preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
-            payload.append(
-                {
-                    "asset_id": row["asset_id"],
-                    "stem": row["stem"],
-                    "export_path": row["export_path"],
-                    "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
-                    "app_rating": row["app_rating"],
-                    "imported_at": row["imported_at"],
-                    "match_status": row["match_status"],
-                    "score": row["score"],
-                    "raw_asset_id": row["raw_asset_id"],
-                    "raw_path": row["raw_path"],
-                    "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
-                    "preview_path": preview_path,
-                    "preview_hd_path": preview_hd_path,
-                    "resource_set_id": row["resource_set_id"],
-                    "resource_role": row["resource_role"],
-                    "version_kind": row["version_kind"],
-                    "resource_sort_order": row["resource_sort_order"],
-                    "set_primary_asset_id": row["set_primary_asset_id"],
-                    "set_raw_asset_id": row["set_raw_asset_id"],
-                    "primary_stem": row["primary_stem"],
-                    "set_item_count": row["set_item_count"],
-                    "annotation": _annotation_from_row(row),
-                }
-            )
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "asset-detail":
-        if args.export_path:
-            row = get_export_asset_detail_by_path(connection, str(args.export_path.resolve()))
-            identifier = str(args.export_path)
-        else:
-            row = get_export_asset_detail(connection, args.asset_id)
-            identifier = args.asset_id
-        if row is None:
-            raise SystemExit(f"unknown export asset: {identifier}")
-        duplicates = get_duplicate_assets(connection, row["asset_id"])
-        payload = {
-            "asset_id": row["asset_id"],
-            "stem": row["stem"],
-            "export_path": row["export_path"],
-            "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
-            "app_rating": row["app_rating"],
-            "imported_at": row["imported_at"],
-            "match_status": row["match_status"],
-            "score": row["score"],
-            "raw_asset_id": row["raw_asset_id"],
-            "raw_path": row["raw_path"],
-            "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
-            "feature_vector": json.loads(row["feature_vector_json"] or "{}"),
-            "candidates": json.loads(row["candidate_json"] or "[]"),
-            "export_preview_path": str((catalog.root / row["export_preview_relative_path"]).resolve())
-            if row["export_preview_relative_path"]
-            else None,
-            "raw_preview_path": str((catalog.root / row["raw_preview_relative_path"]).resolve())
-            if row["raw_preview_relative_path"]
-            else None,
-            "export_preview_hd_path": str((catalog.root / row["export_preview_hd_relative_path"]).resolve())
-            if row["export_preview_hd_relative_path"]
-            else None,
-            "resource_set_id": row["resource_set_id"],
-            "resource_role": row["resource_role"],
-            "version_kind": row["version_kind"],
-            "resource_sort_order": row["resource_sort_order"],
-            "set_primary_asset_id": row["set_primary_asset_id"],
-            "set_raw_asset_id": row["set_raw_asset_id"],
-            "primary_stem": row["primary_stem"],
-            "set_item_count": row["set_item_count"],
-            "duplicates": [
-                {"asset_id": d["asset_id"], "export_path": d["export_path"], "stem": d["stem"]}
-                for d in duplicates
-            ],
+    # Add collage relationships
+    collage_sources = connection.execute(
+        """
+        SELECT al.child_asset_id AS source_asset_id,
+               json_extract(al.recipe_json, '$.sort_order') AS sort_order,
+               a.stem,
+               af.path AS export_path,
+               pe.relative_path AS preview_relative_path
+        FROM asset_links al
+        JOIN assets a ON a.asset_id = al.child_asset_id
+        LEFT JOIN asset_files af ON af.asset_id = al.child_asset_id AND af.role = 'canonical'
+        LEFT JOIN preview_entries pe ON pe.asset_id = al.child_asset_id AND pe.kind = 'preview'
+        WHERE al.parent_asset_id = ? AND al.relation_type = 'collage_source'
+        ORDER BY json_extract(al.recipe_json, '$.sort_order')
+        """,
+        (asset_id,),
+    ).fetchall()
+    payload["collage_sources"] = [
+        {
+            "asset_id": s["source_asset_id"],
+            "stem": s["stem"],
+            "export_path": s["export_path"],
+            "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
+            if s["preview_relative_path"] else None,
         }
+        for s in collage_sources
+    ]
 
-        # Add version siblings from resource set
-        asset_id = row["asset_id"]
-        set_id = row["resource_set_id"]
-        if set_id:
-            siblings = connection.execute(
-                """
-                SELECT rsi.asset_id, rsi.role, rsi.version_kind, rsi.sort_order,
-                       a.stem, a.canonical_path,
-                       af.path AS export_path,
-                       pe.relative_path AS preview_relative_path
-                FROM resource_set_items rsi
-                JOIN assets a ON a.asset_id = rsi.asset_id
-                LEFT JOIN asset_files af ON af.asset_id = rsi.asset_id AND af.role = 'canonical'
-                LEFT JOIN preview_entries pe ON pe.asset_id = rsi.asset_id AND pe.kind = 'preview'
-                WHERE rsi.set_id = ? AND rsi.asset_id != ?
-                ORDER BY rsi.sort_order
-                """,
-                (set_id, asset_id),
-            ).fetchall()
-            payload["version_siblings"] = [
-                {
-                    "asset_id": s["asset_id"],
-                    "role": s["role"],
-                    "version_kind": s["version_kind"],
-                    "stem": s["stem"],
-                    "export_path": s["export_path"],
-                    "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
-                    if s["preview_relative_path"] else None,
-                }
-                for s in siblings
-            ]
-        else:
-            payload["version_siblings"] = []
+    used_in_collages = connection.execute(
+        """
+        SELECT al.parent_asset_id AS collage_asset_id,
+               a.stem,
+               af.path AS export_path,
+               pe.relative_path AS preview_relative_path
+        FROM asset_links al
+        JOIN assets a ON a.asset_id = al.parent_asset_id
+        LEFT JOIN asset_files af ON af.asset_id = al.parent_asset_id AND af.role = 'canonical'
+        LEFT JOIN preview_entries pe ON pe.asset_id = al.parent_asset_id AND pe.kind = 'preview'
+        WHERE al.child_asset_id = ? AND al.relation_type = 'collage_source'
+        """,
+        (asset_id,),
+    ).fetchall()
+    payload["used_in_collages"] = [
+        {
+            "asset_id": s["collage_asset_id"],
+            "stem": s["stem"],
+            "export_path": s["export_path"],
+            "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
+            if s["preview_relative_path"] else None,
+        }
+        for s in used_in_collages
+    ]
+    print(json.dumps(payload, indent=2))
+    return 0
 
-        # Add collage relationships
-        collage_sources = connection.execute(
-            """
-            SELECT al.child_asset_id AS source_asset_id,
-                   json_extract(al.recipe_json, '$.sort_order') AS sort_order,
-                   a.stem,
-                   af.path AS export_path,
-                   pe.relative_path AS preview_relative_path
-            FROM asset_links al
-            JOIN assets a ON a.asset_id = al.child_asset_id
-            LEFT JOIN asset_files af ON af.asset_id = al.child_asset_id AND af.role = 'canonical'
-            LEFT JOIN preview_entries pe ON pe.asset_id = al.child_asset_id AND pe.kind = 'preview'
-            WHERE al.parent_asset_id = ? AND al.relation_type = 'collage_source'
-            ORDER BY json_extract(al.recipe_json, '$.sort_order')
-            """,
-            (asset_id,),
-        ).fetchall()
-        payload["collage_sources"] = [
+
+def _cmd_list_pending(args, connection, catalog, parser):
+    payload = []
+    for row in list_pending(connection):
+        payload.append(
             {
-                "asset_id": s["source_asset_id"],
-                "stem": s["stem"],
-                "export_path": s["export_path"],
-                "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
-                if s["preview_relative_path"] else None,
+                "export_path": row["export_path"],
+                "export_asset_id": row["export_asset_id"],
+                "score": row["score"],
+                "candidates": json.loads(row["candidate_json"]),
             }
-            for s in collage_sources
-        ]
-
-        used_in_collages = connection.execute(
-            """
-            SELECT al.parent_asset_id AS collage_asset_id,
-                   a.stem,
-                   af.path AS export_path,
-                   pe.relative_path AS preview_relative_path
-            FROM asset_links al
-            JOIN assets a ON a.asset_id = al.parent_asset_id
-            LEFT JOIN asset_files af ON af.asset_id = al.parent_asset_id AND af.role = 'canonical'
-            LEFT JOIN preview_entries pe ON pe.asset_id = al.parent_asset_id AND pe.kind = 'preview'
-            WHERE al.child_asset_id = ? AND al.relation_type = 'collage_source'
-            """,
-            (asset_id,),
-        ).fetchall()
-        payload["used_in_collages"] = [
-            {
-                "asset_id": s["collage_asset_id"],
-                "stem": s["stem"],
-                "export_path": s["export_path"],
-                "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
-                if s["preview_relative_path"] else None,
-            }
-            for s in used_in_collages
-        ]
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "list-pending":
-        payload = []
-        for row in list_pending(connection):
-            payload.append(
-                {
-                    "export_path": row["export_path"],
-                    "export_asset_id": row["export_asset_id"],
-                    "score": row["score"],
-                    "candidates": json.loads(row["candidate_json"]),
-                }
-            )
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "confirm-match":
-        confirm_match(connection, args.export_path, args.raw_asset_id)
-        print(f"confirmed {args.export_path} -> {args.raw_asset_id}")
-        return 0
-
-    if args.command == "list-repaint-history":
-        from .db import list_repaint_history
-        history = list_repaint_history(connection, str(args.asset_path.resolve()))
-        print(json.dumps(history, ensure_ascii=False))
-        return 0
-
-    if args.command == "collage-sources":
-        # Get sources if this asset is a collage
-        sources = connection.execute(
-            """
-            SELECT al.child_asset_id AS source_asset_id,
-                   json_extract(al.recipe_json, '$.sort_order') AS sort_order,
-                   a.stem, a.canonical_path
-            FROM asset_links al
-            JOIN assets a ON a.asset_id = al.child_asset_id
-            WHERE al.parent_asset_id = ? AND al.relation_type = 'collage_source'
-            ORDER BY json_extract(al.recipe_json, '$.sort_order')
-            """,
-            (args.asset_id,),
-        ).fetchall()
-        # Get collages that use this asset as a source
-        used_in = connection.execute(
-            """
-            SELECT al.parent_asset_id AS collage_asset_id,
-                   a.stem, a.canonical_path
-            FROM asset_links al
-            JOIN assets a ON a.asset_id = al.parent_asset_id
-            WHERE al.child_asset_id = ? AND al.relation_type = 'collage_source'
-            """,
-            (args.asset_id,),
-        ).fetchall()
-        print(json.dumps({
-            "sources": [dict(r) for r in sources],
-            "used_in_collages": [dict(r) for r in used_in],
-        }, ensure_ascii=False))
-        return 0
-
-    if args.command == "quick-register":
-        from .derived import register_export_file
-        payload = register_export_file(
-            connection,
-            catalog,
-            args.export_path.resolve(),
-            origin_path=args.origin_path.resolve() if args.origin_path else None,
-            collage_source_ids=getattr(args, "collage_source_ids", None) or [],
         )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_confirm_match(args, connection, catalog, parser):
+    confirm_match(connection, args.export_path, args.raw_asset_id)
+    print(f"confirmed {args.export_path} -> {args.raw_asset_id}")
+    return 0
+
+
+def _cmd_list_repaint_history(args, connection, catalog, parser):
+    from .db import list_repaint_history
+    history = list_repaint_history(connection, str(args.asset_path.resolve()))
+    print(json.dumps(history, ensure_ascii=False))
+    return 0
+
+
+def _cmd_collage_sources(args, connection, catalog, parser):
+    # Get sources if this asset is a collage
+    sources = connection.execute(
+        """
+        SELECT al.child_asset_id AS source_asset_id,
+               json_extract(al.recipe_json, '$.sort_order') AS sort_order,
+               a.stem, a.canonical_path
+        FROM asset_links al
+        JOIN assets a ON a.asset_id = al.child_asset_id
+        WHERE al.parent_asset_id = ? AND al.relation_type = 'collage_source'
+        ORDER BY json_extract(al.recipe_json, '$.sort_order')
+        """,
+        (args.asset_id,),
+    ).fetchall()
+    # Get collages that use this asset as a source
+    used_in = connection.execute(
+        """
+        SELECT al.parent_asset_id AS collage_asset_id,
+               a.stem, a.canonical_path
+        FROM asset_links al
+        JOIN assets a ON a.asset_id = al.parent_asset_id
+        WHERE al.child_asset_id = ? AND al.relation_type = 'collage_source'
+        """,
+        (args.asset_id,),
+    ).fetchall()
+    print(json.dumps({
+        "sources": [dict(r) for r in sources],
+        "used_in_collages": [dict(r) for r in used_in],
+    }, ensure_ascii=False))
+    return 0
+
+
+def _cmd_quick_register(args, connection, catalog, parser):
+    from .derived import register_export_file
+    payload = register_export_file(
+        connection,
+        catalog,
+        args.export_path.resolve(),
+        origin_path=args.origin_path.resolve() if args.origin_path else None,
+        collage_source_ids=getattr(args, "collage_source_ids", None) or [],
+    )
+    print(json.dumps(payload))
+    return 0
+
+
+def _cmd_create_derived(args, connection, catalog, parser):
+    from .derived import create_derived_crop
+    payload = create_derived_crop(
+        connection,
+        catalog,
+        args.asset_id,
+        args.crop_ratio,
+        gravity=args.gravity,
+    )
+    print(json.dumps(payload))
+    return 0
+
+
+def _cmd_add_text(args, connection, catalog, parser):
+    from .derived import create_derived_text
+    payload = create_derived_text(
+        connection,
+        catalog,
+        args.asset_id,
+        output=args.output,
+        text=args.text,
+        x=args.x,
+        y=args.y,
+        size=args.size,
+        color=args.color,
+        stroke_color=args.stroke_color,
+        stroke_width=args.stroke_width,
+        opacity=args.opacity,
+        align=args.align,
+        font_path=args.font_path,
+    )
+    print(json.dumps(payload))
+    return 0
+
+
+def _cmd_export_assets(args, connection, catalog, parser):
+    from .derived import export_assets_to_dir
+    payload = export_assets_to_dir(
+        connection,
+        args.asset_id,
+        args.dest,
+        max_edge=args.max_edge,
+        fmt=args.format,
+        quality=args.quality,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_cleanup_orphan_exports(args, connection, catalog, parser):
+    payload = cleanup_orphan_export_assets(connection)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_delete_export_assets(args, connection, catalog, parser):
+    payload = [
+        delete_export_asset_from_catalog(connection, catalog.root, asset_id, commit=False)
+        for asset_id in args.asset_id
+    ]
+    connection.commit()
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_catalog_roots(args, connection, catalog, parser):
+    payload = [
+        {
+            "root_id": row["root_id"],
+            "root_type": row["root_type"],
+            "path": row["path"],
+            "is_active": bool(row["is_active"]),
+        }
+        for row in list_catalog_roots(connection)
+    ]
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_register_roots(args, connection, catalog, parser):
+    for root_path in args.path:
+        upsert_catalog_root(connection, args.root_type, root_path.resolve(), commit=False)
+    connection.commit()
+    payload = [
+        {
+            "root_id": row["root_id"],
+            "root_type": row["root_type"],
+            "path": row["path"],
+            "is_active": bool(row["is_active"]),
+        }
+        for row in list_catalog_roots(connection)
+    ]
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_summary(args, connection, catalog, parser):
+    payload = summary(connection)
+    if args.json:
         print(json.dumps(payload))
-        return 0
-
-    if args.command == "create-derived":
-        from .derived import create_derived_crop
-        payload = create_derived_crop(
-            connection,
-            catalog,
-            args.asset_id,
-            args.crop_ratio,
-            gravity=args.gravity,
-        )
-        print(json.dumps(payload))
-        return 0
-
-    if args.command == "add-text":
-        from .derived import create_derived_text
-        payload = create_derived_text(
-            connection,
-            catalog,
-            args.asset_id,
-            output=args.output,
-            text=args.text,
-            x=args.x,
-            y=args.y,
-            size=args.size,
-            color=args.color,
-            stroke_color=args.stroke_color,
-            stroke_width=args.stroke_width,
-            opacity=args.opacity,
-            align=args.align,
-            font_path=args.font_path,
-        )
-        print(json.dumps(payload))
-        return 0
-
-    if args.command == "export-assets":
-        from .derived import export_assets_to_dir
-        payload = export_assets_to_dir(
-            connection,
-            args.asset_id,
-            args.dest,
-            max_edge=args.max_edge,
-            fmt=args.format,
-            quality=args.quality,
-        )
+    else:
         print(json.dumps(payload, indent=2))
-        return 0
+    return 0
 
-    if args.command == "cleanup-orphan-exports":
-        payload = cleanup_orphan_export_assets(connection)
-        print(json.dumps(payload, indent=2))
-        return 0
 
-    if args.command == "delete-export-assets":
-        payload = [
-            delete_export_asset_from_catalog(connection, catalog.root, asset_id, commit=False)
-            for asset_id in args.asset_id
-        ]
-        connection.commit()
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "catalog-roots":
-        payload = [
+def _cmd_list_collections(args, connection, catalog, parser):
+    payload = []
+    for row in list_collections(connection):
+        payload.append(
             {
-                "root_id": row["root_id"],
-                "root_type": row["root_type"],
-                "path": row["path"],
-                "is_active": bool(row["is_active"]),
+                "collection_id": row["collection_id"],
+                "name": row["name"],
+                "kind": row["kind"],
+                "parent_collection_id": row["parent_collection_id"],
+                "rules_json": row["rules_json"],
+                "sort_order": row["sort_order"],
+                "item_count": row["item_count"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
             }
-            for row in list_catalog_roots(connection)
-        ]
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "register-roots":
-        for root_path in args.path:
-            upsert_catalog_root(connection, args.root_type, root_path.resolve(), commit=False)
-        connection.commit()
-        payload = [
-            {
-                "root_id": row["root_id"],
-                "root_type": row["root_type"],
-                "path": row["path"],
-                "is_active": bool(row["is_active"]),
-            }
-            for row in list_catalog_roots(connection)
-        ]
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "summary":
-        payload = summary(connection)
-        if args.json:
-            print(json.dumps(payload))
-        else:
-            print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "list-collections":
-        payload = []
-        for row in list_collections(connection):
-            payload.append(
-                {
-                    "collection_id": row["collection_id"],
-                    "name": row["name"],
-                    "kind": row["kind"],
-                    "parent_collection_id": row["parent_collection_id"],
-                    "rules_json": row["rules_json"],
-                    "sort_order": row["sort_order"],
-                    "item_count": row["item_count"],
-                    "created_at": row["created_at"],
-                    "updated_at": row["updated_at"],
-                }
-            )
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    if args.command == "create-collection":
-        col = create_collection(connection, args.name, args.kind, args.rules_json)
-        print(json.dumps(col, indent=2))
-        return 0
-
-    if args.command == "update-collection":
-        update_collection(
-            connection,
-            args.collection_id,
-            name=args.name,
-            rules_json=args.rules_json,
-            sort_order=args.sort_order,
         )
-        print(json.dumps({"ok": True, "collection_id": args.collection_id}))
-        return 0
+    print(json.dumps(payload, indent=2))
+    return 0
 
-    if args.command == "delete-collection":
-        delete_collection(connection, args.collection_id)
-        print(json.dumps({"ok": True, "collection_id": args.collection_id}))
-        return 0
 
-    if args.command == "collection-add-items":
-        add_collection_items(connection, args.collection_id, args.asset_id)
-        print(json.dumps({"ok": True, "collection_id": args.collection_id, "added": args.asset_id}))
-        return 0
+def _cmd_create_collection(args, connection, catalog, parser):
+    col = create_collection(connection, args.name, args.kind, args.rules_json)
+    print(json.dumps(col, indent=2))
+    return 0
 
-    if args.command == "collection-remove-items":
-        remove_collection_items(connection, args.collection_id, args.asset_id)
-        print(json.dumps({"ok": True, "collection_id": args.collection_id, "removed": args.asset_id}))
-        return 0
 
-    if args.command == "set-asset-rating":
-        updated = set_asset_rating(connection, args.asset_id, None if args.rating == 0 else args.rating)
-        print(json.dumps({"ok": True, "asset_ids": args.asset_id, "rating": args.rating, "updated": updated}))
-        return 0
+def _cmd_update_collection(args, connection, catalog, parser):
+    update_collection(
+        connection,
+        args.collection_id,
+        name=args.name,
+        rules_json=args.rules_json,
+        sort_order=args.sort_order,
+    )
+    print(json.dumps({"ok": True, "collection_id": args.collection_id}))
+    return 0
 
-    if args.command == "browse-collection":
-        payload = []
-        for row in browse_collection(connection, args.collection_id, limit=args.limit, offset=args.offset):
-            preview_path = None
-            if row["preview_relative_path"]:
-                preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
-            preview_hd_path = None
-            if row["preview_hd_relative_path"]:
-                preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
-            payload.append(
-                {
-                    "asset_id": row["asset_id"],
-                    "stem": row["stem"],
-                    "export_path": row["export_path"],
-                    "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
-                    "app_rating": row["app_rating"],
-                    "imported_at": row["imported_at"],
-                    "match_status": row["match_status"],
-                    "score": row["score"],
-                    "raw_asset_id": row["raw_asset_id"],
-                    "raw_path": row["raw_path"],
-                    "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
-                    "preview_path": preview_path,
-                    "preview_hd_path": preview_hd_path,
-                    "resource_set_id": row["resource_set_id"],
-                    "resource_role": row["resource_role"],
-                    "version_kind": row["version_kind"],
-                    "resource_sort_order": row["resource_sort_order"],
-                    "set_primary_asset_id": row["set_primary_asset_id"],
-                    "set_raw_asset_id": row["set_raw_asset_id"],
-                    "primary_stem": row["primary_stem"],
-                    "set_item_count": row["set_item_count"],
-                    "annotation": _annotation_from_row(row),
-                }
-            )
-        print(json.dumps(payload, indent=2))
-        return 0
 
-    parser.error(f"unsupported command: {args.command}")
-    return 2
+def _cmd_delete_collection(args, connection, catalog, parser):
+    delete_collection(connection, args.collection_id)
+    print(json.dumps({"ok": True, "collection_id": args.collection_id}))
+    return 0
+
+
+def _cmd_collection_add_items(args, connection, catalog, parser):
+    add_collection_items(connection, args.collection_id, args.asset_id)
+    print(json.dumps({"ok": True, "collection_id": args.collection_id, "added": args.asset_id}))
+    return 0
+
+
+def _cmd_collection_remove_items(args, connection, catalog, parser):
+    remove_collection_items(connection, args.collection_id, args.asset_id)
+    print(json.dumps({"ok": True, "collection_id": args.collection_id, "removed": args.asset_id}))
+    return 0
+
+
+def _cmd_set_asset_rating(args, connection, catalog, parser):
+    updated = set_asset_rating(connection, args.asset_id, None if args.rating == 0 else args.rating)
+    print(json.dumps({"ok": True, "asset_ids": args.asset_id, "rating": args.rating, "updated": updated}))
+    return 0
+
+
+def _cmd_browse_collection(args, connection, catalog, parser):
+    payload = []
+    for row in browse_collection(connection, args.collection_id, limit=args.limit, offset=args.offset):
+        preview_path = None
+        if row["preview_relative_path"]:
+            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
+        preview_hd_path = None
+        if row["preview_hd_relative_path"]:
+            preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
+        payload.append(
+            {
+                "asset_id": row["asset_id"],
+                "stem": row["stem"],
+                "export_path": row["export_path"],
+                "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
+                "app_rating": row["app_rating"],
+                "imported_at": row["imported_at"],
+                "match_status": row["match_status"],
+                "score": row["score"],
+                "raw_asset_id": row["raw_asset_id"],
+                "raw_path": row["raw_path"],
+                "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
+                "preview_path": preview_path,
+                "preview_hd_path": preview_hd_path,
+                "resource_set_id": row["resource_set_id"],
+                "resource_role": row["resource_role"],
+                "version_kind": row["version_kind"],
+                "resource_sort_order": row["resource_sort_order"],
+                "set_primary_asset_id": row["set_primary_asset_id"],
+                "set_raw_asset_id": row["set_raw_asset_id"],
+                "primary_stem": row["primary_stem"],
+                "set_item_count": row["set_item_count"],
+                "annotation": _annotation_from_row(row),
+            }
+        )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+# Command registry — adding a CLI verb is one function + one entry here.
+COMMAND_HANDLERS = {
+    "get-provider-token": _cmd_get_provider_token,
+    "set-provider-token": _cmd_set_provider_token,
+    "delete-provider-token": _cmd_delete_provider_token,
+    "repair-resource-sets": _cmd_repair_resource_sets,
+    "split-shared-assets": _cmd_split_shared_assets,
+    "list-ai-models": _cmd_list_ai_models,
+    "run-ai-repaint-job": _cmd_run_ai_repaint_job,
+    "ai-repaint": _cmd_ai_repaint,
+    "annotate-asset": _cmd_annotate_asset,
+    "run-annotation-job": _cmd_run_annotation_job,
+    "annotation-count": _cmd_annotation_count,
+    "get-annotation": _cmd_get_annotation,
+    "add-asset-tag": _cmd_add_asset_tag,
+    "remove-asset-tag": _cmd_remove_asset_tag,
+    "list-tags": _cmd_list_tags,
+    "init-catalog": _cmd_init_catalog,
+    "scan-raw": _cmd_scan_raw,
+    "enrich-raw": _cmd_enrich_raw,
+    "analyze-metadata": _cmd_analyze_metadata,
+    "create-job": _cmd_create_job,
+    "get-job": _cmd_get_job,
+    "latest-job": _cmd_latest_job,
+    "list-jobs": _cmd_list_jobs,
+    "cancel-job": _cmd_cancel_job,
+    "list-active-jobs": _cmd_list_active_jobs,
+    "run-import-job": _cmd_run_import_job,
+    "run-enrichment-job": _cmd_run_enrichment_job,
+    "run-preview-job": _cmd_run_preview_job,
+    "evaluate-ground-truth": _cmd_evaluate_ground_truth,
+    "export-ground-truth": _cmd_export_ground_truth,
+    "resolve-export": _cmd_resolve_export,
+    "resolve-export-batch": _cmd_resolve_export_batch,
+    "watch-export": _cmd_watch_export,
+    "generate-previews": _cmd_generate_previews,
+    "facet-values": _cmd_facet_values,
+    "search-facet": _cmd_search_facet,
+    "browse-exports": _cmd_browse_exports,
+    "asset-detail": _cmd_asset_detail,
+    "list-pending": _cmd_list_pending,
+    "confirm-match": _cmd_confirm_match,
+    "list-repaint-history": _cmd_list_repaint_history,
+    "collage-sources": _cmd_collage_sources,
+    "quick-register": _cmd_quick_register,
+    "create-derived": _cmd_create_derived,
+    "add-text": _cmd_add_text,
+    "export-assets": _cmd_export_assets,
+    "cleanup-orphan-exports": _cmd_cleanup_orphan_exports,
+    "delete-export-assets": _cmd_delete_export_assets,
+    "catalog-roots": _cmd_catalog_roots,
+    "register-roots": _cmd_register_roots,
+    "summary": _cmd_summary,
+    "list-collections": _cmd_list_collections,
+    "create-collection": _cmd_create_collection,
+    "update-collection": _cmd_update_collection,
+    "delete-collection": _cmd_delete_collection,
+    "collection-add-items": _cmd_collection_add_items,
+    "collection-remove-items": _cmd_collection_remove_items,
+    "set-asset-rating": _cmd_set_asset_rating,
+    "browse-collection": _cmd_browse_collection,
+}
+
+
+def _dispatch(parser, args, catalog, connection) -> int:
+    handler = COMMAND_HANDLERS.get(args.command)
+    if handler is None:
+        parser.error(f"unsupported command: {args.command}")
+        return 2
+    return handler(args, connection, catalog, parser)
