@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" width="140" alt="AfterFrame logo" />
+</p>
+
 # AfterFrame
 
 **English** | [简体中文](README.zh-CN.md)
