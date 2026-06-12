@@ -1069,6 +1069,7 @@ stickerIpc.register({
   app, ipcMain,
   isPackaged,
   findSwiftRuntime,
+  addAllowedMediaDir,
 });
 
 // ---- External "Open With…" / dock-icon drop import ------------------------

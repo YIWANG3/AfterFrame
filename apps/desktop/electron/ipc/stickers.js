@@ -11,7 +11,7 @@ const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
 
-function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
+function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaDir }) {
   const stickerExtractScriptPath = isPackaged
     ? path.join(process.resourcesPath, "native", "extract-sticker.swift")
     : path.join(__dirname, "..", "..", "native", "extract-sticker.swift");
@@ -115,6 +115,10 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime }) {
       `afterframe-sticker-${crypto.randomBytes(6).toString("hex")}`,
     );
     fs.mkdirSync(scratchDir, { recursive: true });
+    // The renderer previews detected stickers via media:// — the scratch dir
+    // is outside every baseline allowlist root (system temp), so admit it
+    // explicitly the moment it exists.
+    addAllowedMediaDir?.(scratchDir);
 
     // Region pre-crop: feed swift a cropped image instead of the full source.
     let inputForSwift = sourcePath;
