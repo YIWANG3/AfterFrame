@@ -9,6 +9,7 @@
 //   }
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, Brain } from "lucide-react";
 import {
   Group, FieldRow, Toggle, TextInput, NumberInput, Select,
@@ -112,6 +113,7 @@ function hydrate(stored) {
 }
 
 export default function AnnotationSettings() {
+  const { t } = useTranslation("settings");
   const [settings, setSettings] = useState(null);
   const [editing, setEditing] = useState(null); // { provider, mode: "add" | "edit" }
 
@@ -146,7 +148,7 @@ export default function AnnotationSettings() {
     });
   }, []);
 
-  if (!settings) return <div className="text-[12px] text-muted">Loading settings…</div>;
+  if (!settings) return <div className="text-[12px] text-muted">{t("annotation.loading")}</div>;
 
   function startAdd() {
     setEditing({ provider: newProviderTemplate(), mode: "add" });
@@ -170,7 +172,7 @@ export default function AnnotationSettings() {
     setEditing(null);
   }
   async function deleteProvider(provider) {
-    if (!confirm(`Delete provider "${provider.name || provider.type}"?`)) return;
+    if (!confirm(t("annotation.deleteConfirm", { name: provider.name || provider.type }))) return;
     const next = settings.providers.filter((p) => p.id !== provider.id);
     const nextActive = settings.activeProviderId === provider.id
       ? (next[0]?.id || null)
@@ -185,9 +187,9 @@ export default function AnnotationSettings() {
   return (
     <div>
       <Group
-        title="Auto-annotation providers"
-        badge="New"
-        subtitle="Save multiple provider configurations; switch between them with a click. The active one is used when you annotate assets."
+        title={t("annotation.providersTitle")}
+        badge={t("annotation.providersBadge")}
+        subtitle={t("annotation.providersSubtitle")}
       >
         {editing ? (
           <ProviderEditor
@@ -200,7 +202,7 @@ export default function AnnotationSettings() {
           <>
             {settings.providers.length === 0 ? (
               <div className="px-1 py-6 text-center text-[11px] text-muted2">
-                No providers yet. Add one to enable annotation.
+                {t("annotation.noProviders")}
               </div>
             ) : (
               <div className="py-3">
@@ -222,7 +224,7 @@ export default function AnnotationSettings() {
                 onClick={startAdd}
                 className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-app py-2 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
               >
-                <Plus className="h-3 w-3" /> Add new provider
+                <Plus className="h-3 w-3" /> {t("annotation.addNewProvider")}
               </button>
             </div>
           </>
@@ -230,34 +232,34 @@ export default function AnnotationSettings() {
       </Group>
 
       <Group
-        title="Annotation behavior"
-        subtitle="Settings below apply to whichever provider is active when you annotate."
+        title={t("annotation.behaviorTitle")}
+        subtitle={t("annotation.behaviorSubtitle")}
       >
         <FieldRow
-          label="Auto-annotate on import"
-          hint="Off by default. When on, every imported asset is annotated as part of the import pipeline."
+          label={t("annotation.autoOnImport")}
+          hint={t("annotation.autoOnImportHint")}
         >
           <Toggle on={settings.autoOnImport} onChange={(v) => persist({ autoOnImport: v })} />
         </FieldRow>
 
         <FieldRow
-          label="Tag languages"
-          hint="Both selected means each photo gets tags in both languages, so search hits across users."
+          label={t("annotation.tagLanguages")}
+          hint={t("annotation.tagLanguagesHint")}
         >
           <Chip on={settings.languages.includes("en")} onClick={() => toggleLang("en")}>English</Chip>
           <Chip on={settings.languages.includes("zh")} onClick={() => toggleLang("zh")}>中文</Chip>
         </FieldRow>
 
         <FieldRow
-          label="Max tags per image"
-          hint="Hard cap. The model sees this and trims its own output."
+          label={t("annotation.maxTags")}
+          hint={t("annotation.maxTagsHint")}
         >
           <NumberInput value={settings.maxTags} min={1} max={50} onChange={(v) => persist({ maxTags: v })} />
         </FieldRow>
 
         <FieldRow
-          label="Max description length"
-          hint="Characters. Short captions read better in the inspector and search."
+          label={t("annotation.maxDescLength")}
+          hint={t("annotation.maxDescLengthHint")}
         >
           <NumberInput
             value={settings.maxCaptionChars}
@@ -265,13 +267,13 @@ export default function AnnotationSettings() {
             max={1000}
             step={10}
             onChange={(v) => persist({ maxCaptionChars: v })}
-            suffix="chars"
+            suffix={t("annotation.chars")}
           />
         </FieldRow>
 
         <FieldRow
-          label="Custom instructions"
-          hint={'Appended to every prompt. Use this to bias toward your taste — e.g. "prefer style and mood tags over generic objects".'}
+          label={t("annotation.customInstructions")}
+          hint={t("annotation.customInstructionsHint")}
           stack
         >
           <textarea
@@ -279,7 +281,7 @@ export default function AnnotationSettings() {
             onChange={(e) => persist({ customInstructions: e.target.value })}
             rows={3}
             className="w-full resize-y rounded border border-border bg-app px-2.5 py-2 text-[12px] text-text outline-none placeholder:text-muted2/60 focus:border-accent"
-            placeholder="Optional…"
+            placeholder={t("annotation.optional")}
           />
         </FieldRow>
       </Group>
@@ -298,6 +300,7 @@ export default function AnnotationSettings() {
 /* ─── Provider row in the list ───────────────────────────────────────── */
 
 function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
+  const { t } = useTranslation("settings");
   return (
     <div
       className={[
@@ -308,7 +311,7 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
       <button
         type="button"
         onClick={onActivate}
-        title={active ? "Active" : "Set as active"}
+        title={active ? t("annotation.active") : t("annotation.setActive")}
         className={[
           "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
           active ? "border-accent" : "border-muted2 hover:border-text",
@@ -323,7 +326,7 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
           </span>
           {active && (
             <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-accent">
-              Active
+              {t("annotation.active")}
             </span>
           )}
         </div>
@@ -337,7 +340,7 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
         <button
           type="button"
           onClick={onEdit}
-          title="Edit"
+          title={t("annotation.edit")}
           className="flex h-7 w-7 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text"
         >
           <Pencil className="h-3 w-3" />
@@ -345,7 +348,7 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
         <button
           type="button"
           onClick={onDelete}
-          title="Delete"
+          title={t("annotation.delete")}
           className="flex h-7 w-7 items-center justify-center rounded text-muted2 transition-colors hover:bg-error/15 hover:text-error"
         >
           <Trash2 className="h-3 w-3" />
@@ -358,6 +361,16 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
 /* ─── Provider editor (add + edit form) ──────────────────────────────── */
 
 function ProviderEditor({ initial, mode, onCancel, onSave }) {
+  const { t } = useTranslation("settings");
+  const localizedProviderTypes = useMemo(() => PROVIDER_TYPES.map((g) => ({
+    ...g,
+    label: g.label === "First-party APIs" ? t("annotation.typeGroupFirstParty")
+      : g.label === "Other (OpenAI-compatible)" ? t("annotation.typeGroupOther")
+      : g.label,
+    options: g.options.map((o) => (o.value === "openai_compatible"
+      ? { ...o, label: t("annotation.typeCustomEndpoint") }
+      : o)),
+  })), [t]);
   const [draft, setDraft] = useState(initial);
   const [keyValue, setKeyValue] = useState("");
   const [keyConfigured, setKeyConfigured] = useState(false);
@@ -406,7 +419,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
 
   async function handleTest() {
     if (typeof window.mediaWorkspace?.testAnnotationConnection !== "function") {
-      setTestState({ ok: false, error: "Restart the app to pick up the new IPC handlers." });
+      setTestState({ ok: false, error: t("annotation.restartHandlers") });
       return;
     }
     setTestState("running");
@@ -417,15 +430,15 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
         apiKey: keyValue && !keyValue.startsWith("•") ? keyValue : null,
         baseUrl: draft.baseUrl || null,
       });
-      setTestState(result || { ok: false, error: "Sidecar returned an empty response." });
+      setTestState(result || { ok: false, error: t("annotation.emptyResponse") });
     } catch (e) {
-      setTestState({ ok: false, error: e?.message || "Test failed" });
+      setTestState({ ok: false, error: e?.message || t("annotation.testFailed") });
     }
   }
 
   async function handleFetchModels() {
     if (typeof window.mediaWorkspace?.listAnnotationModels !== "function") {
-      setFetchModelsError("Restart the app to pick up the new IPC handlers.");
+      setFetchModelsError(t("annotation.restartHandlers"));
       return;
     }
     setFetchingModels(true);
@@ -443,10 +456,10 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
           update({ model: result.models[0].id });
         }
       } else {
-        setFetchModelsError(result?.error || "Failed to fetch models");
+        setFetchModelsError(result?.error || t("annotation.fetchModelsFailed"));
       }
     } catch (e) {
-      setFetchModelsError(e?.message || "Failed to fetch models");
+      setFetchModelsError(e?.message || t("annotation.fetchModelsFailed"));
     } finally {
       setFetchingModels(false);
     }
@@ -465,10 +478,10 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
   return (
     <div className="py-3">
       <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted2">
-        {mode === "add" ? "New provider" : "Edit provider"}
+        {mode === "add" ? t("annotation.newProvider") : t("annotation.editProvider")}
       </div>
 
-      <FieldRow label="Display name" hint="Short label shown in the provider list.">
+      <FieldRow label={t("annotation.displayName")} hint={t("annotation.displayNameHint")}>
         <TextInput
           value={draft.name}
           onChange={(v) => update({ name: v })}
@@ -477,26 +490,22 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
         />
       </FieldRow>
 
-      <FieldRow label="Type">
+      <FieldRow label={t("annotation.type")}>
         <Select
           value={draft.type}
-          onChange={(t) => update({
-            type: t,
-            baseUrl: DEFAULT_HOST_URL[t] || "",
-            model: DEFAULT_MODEL[t] || "",
+          onChange={(nextType) => update({
+            type: nextType,
+            baseUrl: DEFAULT_HOST_URL[nextType] || "",
+            model: DEFAULT_MODEL[nextType] || "",
           })}
-          options={PROVIDER_TYPES}
+          options={localizedProviderTypes}
         />
       </FieldRow>
 
       {showHostUrl && (
         <FieldRow
-          label="Host URL"
-          hint={
-            <>
-              Full OpenAI-compatible base URL <strong className="text-text">including <code className="rounded bg-app px-1">/v1</code></strong>. Local Ollama is usually <code className="rounded bg-app px-1">http://localhost:11434/v1</code>.
-            </>
-          }
+          label={t("annotation.hostUrl")}
+          hint={t("annotation.hostUrlHint")}
         >
           <TextInput
             value={draft.baseUrl || ""}
@@ -509,8 +518,8 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
       )}
 
       <FieldRow
-        label="API key"
-        hint={isLocal ? "Leave empty for local-only providers like Ollama." : "Stored locally in your keychain. Never sent to AfterFrame servers."}
+        label={t("annotation.apiKey")}
+        hint={isLocal ? t("annotation.apiKeyHintLocal") : t("annotation.apiKeyHint")}
         stack
       >
         <div className="flex items-center gap-1.5">
@@ -520,24 +529,24 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
             onChange={(v) => { setKeyValue(v); }}
             monospace
             className="flex-1 min-w-0"
-            placeholder={isLocal ? "(none for local)" : "sk-…"}
+            placeholder={isLocal ? t("annotation.noneForLocal") : "sk-…"}
           />
           {keyConfigured && (keyValue.startsWith("•") || !keyValue) ? (
-            <SecondaryButton onClick={handleClearKey}>Clear</SecondaryButton>
+            <SecondaryButton onClick={handleClearKey}>{t("annotation.clear")}</SecondaryButton>
           ) : (
             <SecondaryButton onClick={handleSaveKey} disabled={keySaving || !keyValue || keyValue.startsWith("•")}>
-              {keySaving ? "Saving…" : "Save key"}
+              {keySaving ? t("annotation.saving") : t("annotation.saveKey")}
             </SecondaryButton>
           )}
         </div>
         <div className="mt-2 flex items-center gap-2">
           <SecondaryButton onClick={handleTest} disabled={testState === "running"}>
-            {testState === "running" ? "Testing…" : "Test connection"}
+            {testState === "running" ? t("annotation.testing") : t("annotation.testConnection")}
           </SecondaryButton>
           {testState && testState !== "running" && (
             testState.ok ? (
               <span className="inline-flex items-center gap-1 text-[11px] text-success">
-                <Check className="h-3 w-3" /> {testState.info || "Reachable"}
+                <Check className="h-3 w-3" /> {testState.info || t("annotation.reachable")}
               </span>
             ) : (
               <span className="inline-flex max-w-[400px] items-center gap-1 text-[11px] text-error">
@@ -550,8 +559,8 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
       </FieldRow>
 
       <FieldRow
-        label="Model"
-        hint={isLocal && fetchedModels.length === 0 ? "Type the model id or click ↻ to fetch the list from your endpoint." : null}
+        label={t("annotation.model")}
+        hint={isLocal && fetchedModels.length === 0 ? t("annotation.modelHintLocal") : null}
       >
         {fetchedModels.length > 0 ? (
           <Select
@@ -572,7 +581,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
           type="button"
           onClick={handleFetchModels}
           disabled={fetchingModels}
-          title={fetchingModels ? "Fetching…" : (fetchedModels.length > 0 ? "Refresh model list" : "Fetch model list from endpoint")}
+          title={fetchingModels ? t("annotation.fetching") : (fetchedModels.length > 0 ? t("annotation.refreshModelList") : t("annotation.fetchModelList"))}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-app text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`h-3 w-3 ${fetchingModels ? "animate-spin" : ""}`} />
@@ -584,14 +593,14 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
 
       <div className="mt-2">
         <Callout>
-          <strong className="font-semibold text-accent">Where your images go</strong> — when you annotate, AfterFrame uploads a 512px-max-edge JPEG directly from your machine to <strong>{providerLabel}</strong>{isLocal ? "" : "'s API"}. We never proxy or store your photos. EXIF GPS is stripped from the upload.
+          <strong className="font-semibold text-accent">{t("annotation.calloutTitle")}</strong>{t("annotation.calloutBody", { provider: providerLabel })}
         </Callout>
       </div>
 
       <div className="mt-4 flex justify-end gap-2 border-t border-border pt-3">
-        <SecondaryButton onClick={onCancel}>Cancel</SecondaryButton>
+        <SecondaryButton onClick={onCancel}>{t("annotation.cancel")}</SecondaryButton>
         <PrimaryButton onClick={handleSubmit}>
-          {mode === "add" ? "Add provider" : "Save changes"}
+          {mode === "add" ? t("annotation.addProvider") : t("annotation.saveChanges")}
         </PrimaryButton>
       </div>
     </div>
