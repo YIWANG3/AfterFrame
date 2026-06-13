@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import {
   ChevronLeft,
@@ -21,44 +22,37 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+// Labels resolved at render via t(`toolbar.*`); these consts carry i18n keys.
 const DISPLAY_MODES = [
-  { key: "grid", icon: LayoutGrid, tip: "Grid" },
-  { key: "tiles", icon: Grid2x2, tip: "Tiles" },
-  { key: "justified", icon: LayoutDashboard, tip: "Justified" },
-  { key: "waterfall", icon: Columns2, tip: "Waterfall" },
+  { key: "grid", icon: LayoutGrid },
+  { key: "tiles", icon: Grid2x2 },
+  { key: "justified", icon: LayoutDashboard },
+  { key: "waterfall", icon: Columns2 },
 ];
 
-const SORT_OPTIONS = [
-  { value: "imported-desc", label: "Imported ↓" },
-  { value: "imported-asc", label: "Imported ↑" },
-  { value: "captured-desc", label: "Captured ↓" },
-  { value: "captured-asc", label: "Captured ↑" },
-  { value: "rating-desc", label: "Rating" },
-  { value: "name-asc", label: "Name A-Z" },
-  { value: "name-desc", label: "Name Z-A" },
-];
+const SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
 const MENU_SECTIONS = [
   {
-    label: "Library",
+    key: "library",
     items: [
-      { label: "Import", icon: ImagePlus, action: "processed" },
-      { label: "Add Raw Sources", icon: FolderPlus, action: "sources" },
+      { key: "import", icon: ImagePlus, action: "processed" },
+      { key: "addRawSources", icon: FolderPlus, action: "sources" },
     ],
   },
   {
-    label: "Tasks",
+    key: "tasks",
     items: [
-      { label: "Run Import Pipeline", icon: Play, action: "import" },
-      { label: "Run Enrichment", icon: Sparkles, action: "enrichment" },
-      { label: "Generate Previews", icon: Images, action: "previews" },
+      { key: "runImport", icon: Play, action: "import" },
+      { key: "runEnrichment", icon: Sparkles, action: "enrichment" },
+      { key: "generatePreviews", icon: Images, action: "previews" },
     ],
   },
   {
-    label: "AI Annotation",
+    key: "ai",
     items: [
-      { label: "Annotate Un-annotated", icon: Tags, action: "annotateMissing" },
-      { label: "Re-annotate All", icon: Tags, action: "annotateAll" },
+      { key: "annotateMissing", icon: Tags, action: "annotateMissing" },
+      { key: "reannotateAll", icon: Tags, action: "annotateAll" },
     ],
   },
 ];
@@ -79,6 +73,7 @@ function IconButton({ children, className = "", ...props }) {
 }
 
 function SortDropdown({ sort, setSort }) {
+  const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -98,7 +93,7 @@ function SortDropdown({ sort, setSort }) {
     };
   }, [open]);
 
-  const current = SORT_OPTIONS.find((o) => o.value === sort);
+  const current = SORT_OPTIONS.includes(sort) ? sort : null;
 
   return (
     <div ref={ref} className="relative ml-1">
@@ -107,24 +102,24 @@ function SortDropdown({ sort, setSort }) {
         className="flex h-8 w-[100px] cursor-pointer items-center justify-center rounded-md border border-border/70 bg-app px-2 text-[12px] text-text outline-none transition-colors hover:border-border focus:border-accent/50"
         onClick={() => setOpen((c) => !c)}
       >
-        <span>{current?.label || "Sort"}</span>
+        <span>{current ? t(`toolbar.sort.${current}`) : t("toolbar.sortFallback")}</span>
       </button>
       {open && (
         <div className="absolute right-0 top-full z-[101] mt-1.5 min-w-[160px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
-          {SORT_OPTIONS.map((opt) => (
+          {SORT_OPTIONS.map((value) => (
             <button
-              key={opt.value}
+              key={value}
               type="button"
               className={[
                 "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-hover",
-                sort === opt.value ? "text-text" : "text-muted",
+                sort === value ? "text-text" : "text-muted",
               ].join(" ")}
-              onClick={() => { setSort(opt.value); setOpen(false); }}
+              onClick={() => { setSort(value); setOpen(false); }}
             >
               <span className="flex h-3.5 w-3.5 items-center justify-center">
-                {sort === opt.value && <Check className="h-3 w-3 text-accent" />}
+                {sort === value && <Check className="h-3 w-3 text-accent" />}
               </span>
-              {opt.label}
+              {t(`toolbar.sort.${value}`)}
             </button>
           ))}
         </div>
@@ -162,6 +157,7 @@ export default function Toolbar({
   lastFinishedJob,
   onCancelJob,
 }) {
+  const { t } = useTranslation("nav");
   const [menuOpen, setMenuOpen] = useState(false);
   const actionMap = {
     processed: onAddProcessed,
@@ -184,13 +180,13 @@ export default function Toolbar({
             <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpen(false)} />
             <div className="absolute top-full z-[101] mt-2.5 w-[248px] rounded-lg border border-border/60 bg-chrome p-1.5 shadow-overlay">
               {MENU_SECTIONS.map((section, sectionIndex) => (
-                <div key={section.label} className={sectionIndex > 0 ? "mt-1 border-t border-border/80 pt-1.5" : ""}>
+                <div key={section.key} className={sectionIndex > 0 ? "mt-1 border-t border-border/80 pt-1.5" : ""}>
                   <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted2">
-                    {section.label}
+                    {t(`toolbar.menu.${section.key}`)}
                   </div>
-                  {section.items.map(({ label, icon: Icon, action }) => (
+                  {section.items.map(({ key, icon: Icon, action }) => (
                     <button
-                      key={label}
+                      key={key}
                       type="button"
                       className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium text-text transition-colors hover:bg-hover"
                       onClick={async () => {
@@ -199,7 +195,7 @@ export default function Toolbar({
                       }}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0 text-muted" />
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                      <span className="min-w-0 flex-1 truncate">{t(`toolbar.menu.${key}`)}</span>
                     </button>
                   ))}
                 </div>
@@ -230,18 +226,18 @@ export default function Toolbar({
           value={thumbSize}
           onChange={(e) => setThumbSize(Number(e.target.value))}
           className="w-16"
-          aria-label="Thumbnail size"
+          aria-label={t("toolbar.thumbnailSize")}
         />
         <span className="relative -top-px flex h-8 w-4 items-center justify-center text-[13px] leading-none">+</span>
       </div>
 
       <div className="toolbar-modes flex items-center gap-1">
-        {DISPLAY_MODES.map(({ key, icon: Icon, tip }) => (
+        {DISPLAY_MODES.map(({ key, icon: Icon }) => (
           <IconButton
             key={key}
             onClick={() => setDisplayMode(key)}
             className={displayMode === key ? "bg-selected text-accent" : ""}
-            title={tip}
+            title={t(`toolbar.display.${key}`)}
           >
             <Icon className="h-3.5 w-3.5 stroke-[1.6]" />
           </IconButton>
@@ -254,7 +250,7 @@ export default function Toolbar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search"
+          placeholder={t("toolbar.search")}
           className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
       </label>
@@ -265,7 +261,7 @@ export default function Toolbar({
         <IconButton
           onClick={onToggleFilters}
           className={showFilters || filterCount > 0 ? "bg-selected text-accent" : ""}
-          title="Filters"
+          title={t("toolbar.filters")}
         >
           <SlidersHorizontal className="h-3.5 w-3.5 stroke-[1.8]" />
         </IconButton>
@@ -278,7 +274,7 @@ export default function Toolbar({
 
       <ActivityCenter jobs={activityJobs} lastFinishedJob={lastFinishedJob} onCancel={onCancelJob} />
 
-      <IconButton onClick={() => void refreshAll()} title="Refresh">
+      <IconButton onClick={() => void refreshAll()} title={t("toolbar.refresh")}>
         <RotateCw className="h-3.5 w-3.5 stroke-[1.8]" />
       </IconButton>
     </div>

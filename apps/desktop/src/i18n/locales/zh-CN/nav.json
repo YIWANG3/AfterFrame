@@ -5,6 +5,40 @@
     "rated": "已评分",
     "matched": "含 RAW"
   },
+  "toolbar": {
+    "search": "搜索",
+    "refresh": "刷新",
+    "filters": "筛选",
+    "thumbnailSize": "缩略图大小",
+    "sortFallback": "排序",
+    "display": {
+      "grid": "网格",
+      "tiles": "瓦片",
+      "justified": "两端对齐",
+      "waterfall": "瀑布流"
+    },
+    "sort": {
+      "imported-desc": "导入时间 ↓",
+      "imported-asc": "导入时间 ↑",
+      "captured-desc": "拍摄时间 ↓",
+      "captured-asc": "拍摄时间 ↑",
+      "rating-desc": "评分",
+      "name-asc": "名称 A-Z",
+      "name-desc": "名称 Z-A"
+    },
+    "menu": {
+      "library": "图库",
+      "tasks": "任务",
+      "ai": "AI 标注",
+      "import": "导入",
+      "addRawSources": "添加 RAW 源",
+      "runImport": "运行导入流程",
+      "runEnrichment": "运行元数据补全",
+      "generatePreviews": "生成预览",
+      "annotateMissing": "标注未标注项",
+      "reannotateAll": "全部重新标注"
+    }
+  },
   "sidebar": {
     "stickers": "贴纸",
     "folders": "文件夹",

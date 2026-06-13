@@ -5,6 +5,40 @@
     "rated": "Rated",
     "matched": "With Raw"
   },
+  "toolbar": {
+    "search": "Search",
+    "refresh": "Refresh",
+    "filters": "Filters",
+    "thumbnailSize": "Thumbnail size",
+    "sortFallback": "Sort",
+    "display": {
+      "grid": "Grid",
+      "tiles": "Tiles",
+      "justified": "Justified",
+      "waterfall": "Waterfall"
+    },
+    "sort": {
+      "imported-desc": "Imported ↓",
+      "imported-asc": "Imported ↑",
+      "captured-desc": "Captured ↓",
+      "captured-asc": "Captured ↑",
+      "rating-desc": "Rating",
+      "name-asc": "Name A-Z",
+      "name-desc": "Name Z-A"
+    },
+    "menu": {
+      "library": "Library",
+      "tasks": "Tasks",
+      "ai": "AI Annotation",
+      "import": "Import",
+      "addRawSources": "Add Raw Sources",
+      "runImport": "Run Import Pipeline",
+      "runEnrichment": "Run Enrichment",
+      "generatePreviews": "Generate Previews",
+      "annotateMissing": "Annotate Un-annotated",
+      "reannotateAll": "Re-annotate All"
+    }
+  },
   "sidebar": {
     "stickers": "Stickers",
     "folders": "Folders",
