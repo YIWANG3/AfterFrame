@@ -1,0 +1,28 @@
+{
+  "drop": {
+    "title": "拖放以导入",
+    "subtitle": "文件和文件夹将被添加到图库"
+  },
+  "dismiss": "关闭",
+  "showInFinder": "在访达中显示",
+  "annotationComplete": "标注完成",
+  "annotationCompleteMsg": "已标注 {{count}} 个。",
+  "annotationCompleteWithFailed": "已标注 {{count}} 个,{{failed}} 个失败。",
+  "annotationCancelled": "标注已取消",
+  "annotationKept": "已保留此前已标注的结果。",
+  "annotationFailed": "标注失败",
+  "jobFailed": "任务失败。",
+  "missingTitle": "原文件缺失",
+  "missingMsg": "在检视器中重新连接原文件,以进行全质量编辑。",
+  "saved": "已保存",
+  "collageExported": "拼图已导出",
+  "verifyMissing_other": "{{count}} 个文件缺失",
+  "verifyMissingMsg": "已检查 {{checked}} 个。它们的原文件已移动或删除 —— 在检视器中重新连接。",
+  "verifyAllPresent": "所有文件都在",
+  "verifyCheckedMsg": "已检查 {{checked}} 个。",
+  "verifyCheckedRecoveredMsg": "已检查 {{checked}} 个,恢复 {{recovered}} 个。",
+  "importMixed": "已导入 {{added}} 个新文件 · {{already}} 个已在库中",
+  "importAllExisting": "{{already}} 个已在库中",
+  "importMixedMsg_other": "{{count}} 个所选文件已导入过,已跳过。",
+  "importAllExistingMsg": "所有所选文件都已导入过 —— 没有新增。"
+}

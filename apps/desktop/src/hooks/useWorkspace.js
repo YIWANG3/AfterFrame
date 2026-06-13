@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
@@ -10,6 +11,7 @@ const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
 
 export default function useWorkspace({ pushToast } = {}) {
+  const { t } = useTranslation("app");
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "dark");
   const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) || 240));
   const [inspectorWidth, setInspectorWidth] = useState(() =>
@@ -574,11 +576,11 @@ export default function useWorkspace({ pushToast } = {}) {
     if (already > 0) {
       pushToast?.({
         title: added > 0
-          ? `Imported ${added} new · ${already} already in catalog`
-          : `${already} already in catalog`,
+          ? t("importMixed", { added, already })
+          : t("importAllExisting", { already }),
         message: added > 0
-          ? `${already} of the selected file${already === 1 ? " was" : "s were"} already imported and skipped.`
-          : "Every selected file was already imported — nothing new added.",
+          ? t("importMixedMsg", { count: already })
+          : t("importAllExistingMsg"),
         ttl: 6000,
       });
     }
@@ -615,14 +617,16 @@ export default function useWorkspace({ pushToast } = {}) {
           pushToast?.(
             missing > 0
               ? {
-                  title: `${missing} file${missing === 1 ? "" : "s"} missing`,
-                  message: `Checked ${checked}. Their originals have moved or been deleted — relink from the inspector.`,
+                  title: t("verifyMissing", { count: missing }),
+                  message: t("verifyMissingMsg", { checked }),
                   ttl: 7000,
                   tone: "error",
                 }
               : {
-                  title: "All files present",
-                  message: `Checked ${checked}${recovered ? `, recovered ${recovered}` : ""}.`,
+                  title: t("verifyAllPresent"),
+                  message: recovered
+                    ? t("verifyCheckedRecoveredMsg", { checked, recovered })
+                    : t("verifyCheckedMsg", { checked }),
                   ttl: 4000,
                 },
           );

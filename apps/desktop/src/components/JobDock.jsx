@@ -3,12 +3,14 @@
 // bottom-left ImportOverlay card and the bottom-right annotation pill.
 // Detailed history / management lives in the Toolbar's ActivityCenter.
 
+import { useTranslation } from "react-i18next";
 import { JOB_META, jobLine } from "./ActivityCenter";
 import { Activity } from "lucide-react";
 
 // `inline` skips the fixed positioning so the dock can live inside a shared
 // bottom-corner container (alongside the ToastStack) without overlapping it.
 export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) {
+  const { t } = useTranslation("nav");
   const list = jobs || [];
   if (!list.length) return null;
   return (
@@ -29,7 +31,7 @@ export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) 
             <div className="flex items-center gap-2">
               <Icon className="h-3.5 w-3.5 shrink-0 text-accent" />
               <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-text">
-                {meta.label}
+                {t(`activity.jobs.${job.jobType}`, meta.label)}
                 {isImport && job.phaseCount > 1 ? ` · ${job.phaseIndex}/${job.phaseCount}` : ""}
               </span>
               <span className="shrink-0 text-[10px] tabular-nums text-muted2">
@@ -44,10 +46,10 @@ export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) 
                   cancelling ? "cursor-default text-muted2 opacity-50" : "text-muted2 hover:bg-hover hover:text-red-400",
                 ].join(" ")}
               >
-                {cancelling ? "Cancelling…" : "Cancel"}
+                {cancelling ? t("activity.cancelling") : t("activity.cancel")}
               </button>
             </div>
-            <div className="mt-1 truncate pl-[22px] text-[10px] text-muted2">{jobLine(job)}</div>
+            <div className="mt-1 truncate pl-[22px] text-[10px] text-muted2">{jobLine(job, t)}</div>
             {isImport && queuedNote ? (
               <div className="mt-0.5 truncate pl-[22px] text-[10px] text-muted2">{queuedNote}</div>
             ) : null}

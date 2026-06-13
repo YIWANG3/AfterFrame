@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
 // Shared toast infra. Rendered once at the App root, fed by `pushToast` returned
@@ -46,6 +47,7 @@ export default function ToastStack({ toasts, onDismiss, inline = false }) {
 }
 
 function ToastItem({ toast, onDismiss }) {
+  const { t } = useTranslation("app");
   const [entered, setEntered] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -80,7 +82,7 @@ function ToastItem({ toast, onDismiss }) {
           type="button"
           onClick={onDismiss}
           className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text"
-          aria-label="Dismiss"
+          aria-label={t("dismiss")}
         >
           <X className="h-3.5 w-3.5" />
         </button>

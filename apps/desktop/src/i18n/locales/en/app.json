@@ -1,0 +1,30 @@
+{
+  "drop": {
+    "title": "Drop to import",
+    "subtitle": "Files and folders will be added to the catalog"
+  },
+  "dismiss": "Dismiss",
+  "showInFinder": "Show in Finder",
+  "annotationComplete": "Annotation complete",
+  "annotationCompleteMsg": "{{count}} annotated.",
+  "annotationCompleteWithFailed": "{{count}} annotated, {{failed}} failed.",
+  "annotationCancelled": "Annotation cancelled",
+  "annotationKept": "Already-annotated results were kept.",
+  "annotationFailed": "Annotation failed",
+  "jobFailed": "Job failed.",
+  "missingTitle": "Original file missing",
+  "missingMsg": "Relink the original from the inspector to edit at full quality.",
+  "saved": "Saved",
+  "collageExported": "Collage exported",
+  "verifyMissing_one": "{{count}} file missing",
+  "verifyMissing_other": "{{count}} files missing",
+  "verifyMissingMsg": "Checked {{checked}}. Their originals have moved or been deleted — relink from the inspector.",
+  "verifyAllPresent": "All files present",
+  "verifyCheckedMsg": "Checked {{checked}}.",
+  "verifyCheckedRecoveredMsg": "Checked {{checked}}, recovered {{recovered}}.",
+  "importMixed": "Imported {{added}} new · {{already}} already in catalog",
+  "importAllExisting": "{{already}} already in catalog",
+  "importMixedMsg_one": "{{count}} of the selected files was already imported and skipped.",
+  "importMixedMsg_other": "{{count}} of the selected files were already imported and skipped.",
+  "importAllExistingMsg": "Every selected file was already imported — nothing new added."
+}

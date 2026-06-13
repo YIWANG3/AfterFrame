@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { filterTitle } from "./utils/format";
 import useWorkspace from "./hooks/useWorkspace";
 import api from "./api";
@@ -27,6 +28,7 @@ export default function App() {
   // Toasts must exist before useWorkspace so menu actions (e.g. Verify Files)
   // can report their result.
   const { toasts, pushToast, dismissToast } = useToasts();
+  const { t } = useTranslation("app");
   const workspace = useWorkspace({ pushToast });
   // Fresh-closure handle for the test backdoor, whose effect must NOT depend on
   // `workspace` (a new object each render) — re-running would clobber the
@@ -150,14 +152,16 @@ export default function App() {
       if (fin.status === "succeeded") {
         const failed = Number(r.failed || 0);
         pushToast?.({
-          title: "Annotation complete",
-          message: `${Number(r.succeeded || 0)} annotated${failed ? `, ${failed} failed` : ""}.`,
+          title: t("annotationComplete"),
+          message: failed
+            ? t("annotationCompleteWithFailed", { count: Number(r.succeeded || 0), failed })
+            : t("annotationCompleteMsg", { count: Number(r.succeeded || 0) }),
           ttl: 5000,
         });
       } else if (fin.status === "cancelled") {
-        pushToast?.({ title: "Annotation cancelled", message: "Already-annotated results were kept.", ttl: 4000 });
+        pushToast?.({ title: t("annotationCancelled"), message: t("annotationKept"), ttl: 4000 });
       } else if (fin.status === "failed") {
-        pushToast?.({ title: "Annotation failed", message: fin.error || "Job failed.", ttl: 7000, tone: "error" });
+        pushToast?.({ title: t("annotationFailed"), message: fin.error || t("jobFailed"), ttl: 7000, tone: "error" });
       }
     } else if (fin.jobType === "import" && fin.status === "succeeded") {
       // Auto-annotate on import (setting-gated; no-ops without provider/targets).
@@ -275,8 +279,8 @@ export default function App() {
     // would have only the downscaled preview to work from. Send them to relink.
     if (nextItem.exists_on_disk === false) {
       pushToast?.({
-        title: "Original file missing",
-        message: "Relink the original from the inspector to edit at full quality.",
+        title: t("missingTitle"),
+        message: t("missingMsg"),
         ttl: 6000,
         tone: "error",
       });
@@ -576,8 +580,8 @@ export default function App() {
               {dropActive && (
                 <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-app/85 backdrop-blur-sm">
                   <div className="rounded-xl border-2 border-dashed border-[rgb(var(--accent-color))] bg-chrome/90 px-8 py-6 text-center shadow-overlay">
-                    <div className="text-[15px] font-medium text-text">Drop to import</div>
-                    <div className="mt-1 text-[12px] text-muted2">Files and folders will be added to the catalog</div>
+                    <div className="text-[15px] font-medium text-text">{t("drop.title")}</div>
+                    <div className="mt-1 text-[12px] text-muted2">{t("drop.subtitle")}</div>
                   </div>
                 </div>
               )}
@@ -665,11 +669,11 @@ export default function App() {
           await workspace.refreshAll?.();
           if (savePath) {
             pushToast({
-              title: "Saved",
+              title: t("saved"),
               message: savePath,
               ttl: 20_000,
               actions: [{
-                label: "Show in Finder",
+                label: t("showInFinder"),
                 primary: true,
                 onClick: () => api.revealPath(savePath),
               }],
@@ -696,11 +700,11 @@ export default function App() {
           await workspace.refreshAll?.();
           if (savePath) {
             pushToast({
-              title: "Collage exported",
+              title: t("collageExported"),
               message: savePath,
               ttl: 20_000,
               actions: [{
-                label: "Show in Finder",
+                label: t("showInFinder"),
                 primary: true,
                 onClick: () => api.revealPath(savePath),
               }],
