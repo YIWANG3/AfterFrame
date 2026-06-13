@@ -3,6 +3,7 @@
    extracted so the settings tab no longer imports the whole editor panel. */
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
 import { Modal, Button, cx } from "../../ui";
 
@@ -85,6 +86,7 @@ export function ProviderModal({
   onDelete,      // (instanceId) => void
   onClose,
 }) {
+  const { t } = useTranslation("settings");
   const [selectedType, setSelectedType] = useState(instance?.type || PROVIDER_TYPES[0].type);
   const [name, setName] = useState(
     instance?.name || (mode === "new" ? generateInstanceName(PROVIDER_TYPES[0].type, instances) : ""),
@@ -151,7 +153,7 @@ export function ProviderModal({
       <div>
         <div className="px-4 py-4">
           <div className="flex items-center justify-between gap-3">
-            <PanelLabel>{mode === "new" ? "New Provider" : "Edit Provider"}</PanelLabel>
+            <PanelLabel>{mode === "new" ? t("providers.newProvider") : t("providers.editProvider")}</PanelLabel>
             <button
               type="button"
               className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
@@ -163,7 +165,7 @@ export function ProviderModal({
 
           {mode === "new" && (
             <label className="mt-3 block">
-              <div className="mb-1 text-[11px] text-muted">Type</div>
+              <div className="mb-1 text-[11px] text-muted">{t("providers.type")}</div>
               <select
                 value={selectedType}
                 onChange={(e) => handleTypeChange(e.target.value)}
@@ -178,23 +180,23 @@ export function ProviderModal({
 
           {mode === "edit" && (
             <div className="mt-3 text-[11px] text-muted">
-              Type: {tmpl?.label || instance?.type}
+              {t("providers.typeLabel", { type: tmpl?.label || instance?.type })}
             </div>
           )}
 
           <label className="mt-3 block">
-            <div className="mb-1 text-[11px] text-muted">Name</div>
+            <div className="mb-1 text-[11px] text-muted">{t("providers.name")}</div>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Provider name"
+              placeholder={t("providers.providerName")}
               className={cx(FIELD, "placeholder:text-muted2")}
               autoFocus={mode === "new"}
             />
           </label>
 
           <div className="mt-4">
-            <PanelLabel>{isMultiField ? "Credentials" : "API Token"}</PanelLabel>
+            <PanelLabel>{isMultiField ? t("providers.credentials") : t("providers.apiToken")}</PanelLabel>
           </div>
 
           {isMultiField ? (
@@ -217,27 +219,27 @@ export function ProviderModal({
               <input
                 value={tokenValue}
                 onChange={(e) => setTokenValue(e.target.value)}
-                placeholder={tmpl?.placeholder || "API key..."}
+                placeholder={tmpl?.placeholder || t("providers.apiKeyPlaceholder")}
                 className="h-full flex-1 bg-transparent text-[12px] text-text outline-none placeholder:text-muted2"
               />
             </div>
           )}
           {hasExistingToken && !tokenValue.trim() && (
-            <div className="mt-1 text-[11px] text-muted">Credentials saved (encrypted). Leave blank to keep existing.</div>
+            <div className="mt-1 text-[11px] text-muted">{t("providers.savedNote")}</div>
           )}
         </div>
 
         <div className="flex items-center gap-2 border-t border-border/60 px-4 py-3">
           <Button variant="primary" onClick={handleSave}>
-            {mode === "new" ? "Create" : "Save"}
+            {mode === "new" ? t("providers.create") : t("providers.save")}
           </Button>
           {mode === "edit" && (
             <Button variant="danger" onClick={() => onDelete(instance.id)}>
-              Delete
+              {t("providers.delete")}
             </Button>
           )}
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t("providers.cancel")}
           </Button>
         </div>
       </div>

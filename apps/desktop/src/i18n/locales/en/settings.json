@@ -11,5 +11,57 @@
     "title": "General",
     "language": "Language",
     "languageHint": "Interface language. Takes effect immediately."
+  },
+  "library": {
+    "currentCatalog": "Current catalog",
+    "comingSoon": "Catalog management — coming soon.",
+    "cacheStorage": "Cache & storage",
+    "cacheSubtitle": "All caches live under ~/Library/Application Support/AfterFrame.",
+    "previewThumbnails": "Preview thumbnails",
+    "depthMaps": "Depth maps",
+    "stickerLibrary": "Sticker library"
+  },
+  "about": {
+    "tagline": "A local-first photo workspace for photographers.",
+    "githubRepo": "GitHub repository",
+    "checkUpdates": "Check for updates",
+    "openReleases": "Open Releases",
+    "license": "License",
+    "reportIssue": "Report an issue",
+    "openIssueTracker": "Open issue tracker",
+    "updatesPre": "Updates are ",
+    "updatesNotAuto": "not automatic",
+    "updatesMid": " — when a new version ships, download the .dmg from ",
+    "githubReleases": "GitHub Releases",
+    "updatesPost": " and drag it over the old Applications/AfterFrame.app. Catalogs and settings persist across updates.",
+    "builtWithPre": "Built with ",
+    "builtWithPost": ". Sticker extraction uses Apple VisionKit; depth-aware text uses Depth Anything V2."
+  },
+  "repaint": {
+    "providers": "Providers",
+    "providersSubtitle": "Image generation providers for AI Repaint. The active provider is used by the editor and by agent (MCP) repaint requests.",
+    "noProvider": "No repaint provider configured yet. Add one to enable AI Repaint.",
+    "activeProvider": "Active provider",
+    "makeActive": "Make active",
+    "refreshModels": "Refresh model list (also verifies credentials)",
+    "editProvider": "Edit name / credentials",
+    "removeProvider": "Remove provider",
+    "addProvider": "Add provider"
+  },
+  "providers": {
+    "newProvider": "New Provider",
+    "editProvider": "Edit Provider",
+    "type": "Type",
+    "typeLabel": "Type: {{type}}",
+    "name": "Name",
+    "providerName": "Provider name",
+    "credentials": "Credentials",
+    "apiToken": "API Token",
+    "apiKeyPlaceholder": "API key...",
+    "savedNote": "Credentials saved (encrypted). Leave blank to keep existing.",
+    "create": "Create",
+    "save": "Save",
+    "delete": "Delete",
+    "cancel": "Cancel"
   }
 }

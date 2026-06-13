@@ -4,11 +4,13 @@
 // providers + credentials, the active provider, and each provider's model.
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Group, Callout, SecondaryButton } from "./SettingsPrimitives";
 import { PROVIDER_TYPES, getProviderType, ProviderModal } from "../ai/providers";
 
 export default function RepaintSettings() {
+  const { t } = useTranslation("settings");
   const [prefs, setPrefs] = useState(null);
   const [modal, setModal] = useState(null); // { mode: "new"|"edit", instance }
   const [refreshing, setRefreshing] = useState({});
@@ -89,12 +91,12 @@ export default function RepaintSettings() {
   return (
     <div>
       <Group
-        title="Providers"
-        subtitle="Image generation providers for AI Repaint. The active provider is used by the editor and by agent (MCP) repaint requests."
+        title={t("repaint.providers")}
+        subtitle={t("repaint.providersSubtitle")}
       >
         <div className="py-3">
         {prefs.providers.length === 0 && (
-          <div className="mb-2.5"><Callout>No repaint provider configured yet. Add one to enable AI Repaint.</Callout></div>
+          <div className="mb-2.5"><Callout>{t("repaint.noProvider")}</Callout></div>
         )}
 
         <div className="flex flex-col gap-1.5">
@@ -112,7 +114,7 @@ export default function RepaintSettings() {
                 <button
                   type="button"
                   onClick={() => persist({ activeProvider: inst.id })}
-                  title={active ? "Active provider" : "Make active"}
+                  title={active ? t("repaint.activeProvider") : t("repaint.makeActive")}
                   className={[
                     "h-3.5 w-3.5 shrink-0 rounded-full border transition-colors",
                     active ? "border-accent bg-accent" : "border-border hover:border-accent/60",
@@ -134,7 +136,7 @@ export default function RepaintSettings() {
                 <button
                   type="button"
                   onClick={() => refreshModels(inst)}
-                  title="Refresh model list (also verifies credentials)"
+                  title={t("repaint.refreshModels")}
                   className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 >
                   <RefreshCw className={`h-3 w-3 ${refreshing[inst.id] ? "animate-spin" : ""}`} />
@@ -142,7 +144,7 @@ export default function RepaintSettings() {
                 <button
                   type="button"
                   onClick={() => setModal({ mode: "edit", instance: inst })}
-                  title="Edit name / credentials"
+                  title={t("repaint.editProvider")}
                   className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 >
                   <Pencil className="h-3 w-3" />
@@ -150,7 +152,7 @@ export default function RepaintSettings() {
                 <button
                   type="button"
                   onClick={() => handleDelete(inst.id)}
-                  title="Remove provider"
+                  title={t("repaint.removeProvider")}
                   className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-red-400"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -162,7 +164,7 @@ export default function RepaintSettings() {
 
         <div className="mt-2.5">
           <SecondaryButton onClick={() => setModal({ mode: "new", instance: null })}>
-            <span className="inline-flex items-center gap-1"><Plus className="h-3 w-3" /> Add provider</span>
+            <span className="inline-flex items-center gap-1"><Plus className="h-3 w-3" /> {t("repaint.addProvider")}</span>
           </SecondaryButton>
         </div>
         </div>

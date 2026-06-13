@@ -11,5 +11,57 @@
     "title": "通用",
     "language": "语言",
     "languageHint": "界面语言,立即生效。"
+  },
+  "library": {
+    "currentCatalog": "当前图库",
+    "comingSoon": "图库管理 —— 即将推出。",
+    "cacheStorage": "缓存与存储",
+    "cacheSubtitle": "所有缓存位于 ~/Library/Application Support/AfterFrame。",
+    "previewThumbnails": "预览缩略图",
+    "depthMaps": "深度图",
+    "stickerLibrary": "贴纸库"
+  },
+  "about": {
+    "tagline": "面向摄影师的本地优先照片工作台。",
+    "githubRepo": "GitHub 仓库",
+    "checkUpdates": "检查更新",
+    "openReleases": "打开发布页",
+    "license": "许可证",
+    "reportIssue": "反馈问题",
+    "openIssueTracker": "打开问题追踪",
+    "updatesPre": "更新",
+    "updatesNotAuto": "不是自动的",
+    "updatesMid": " —— 新版本发布时,从 ",
+    "githubReleases": "GitHub Releases",
+    "updatesPost": " 下载 .dmg,拖到旧的 Applications/AfterFrame.app 上覆盖即可。图库和设置会在更新后保留。",
+    "builtWithPre": "使用 ",
+    "builtWithPost": " 构建。贴纸提取使用 Apple VisionKit;深度感知文字使用 Depth Anything V2。"
+  },
+  "repaint": {
+    "providers": "服务商",
+    "providersSubtitle": "AI 重绘使用的图像生成服务商。当前服务商会被编辑器和 agent(MCP)重绘请求使用。",
+    "noProvider": "尚未配置重绘服务商。添加一个以启用 AI 重绘。",
+    "activeProvider": "当前服务商",
+    "makeActive": "设为当前",
+    "refreshModels": "刷新模型列表(同时验证凭据)",
+    "editProvider": "编辑名称 / 凭据",
+    "removeProvider": "移除服务商",
+    "addProvider": "添加服务商"
+  },
+  "providers": {
+    "newProvider": "新建服务商",
+    "editProvider": "编辑服务商",
+    "type": "类型",
+    "typeLabel": "类型:{{type}}",
+    "name": "名称",
+    "providerName": "服务商名称",
+    "credentials": "凭据",
+    "apiToken": "API 令牌",
+    "apiKeyPlaceholder": "API 密钥…",
+    "savedNote": "凭据已保存(加密)。留空则保留现有凭据。",
+    "create": "创建",
+    "save": "保存",
+    "delete": "删除",
+    "cancel": "取消"
   }
 }
