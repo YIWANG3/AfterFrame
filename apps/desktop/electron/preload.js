@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getAssetDetail: (exportPath) => ipcRenderer.invoke("workspace:detail", exportPath),
   getAssetDetailById: (assetId) => ipcRenderer.invoke("workspace:detail-by-id", assetId),
   revealPath: (targetPath) => ipcRenderer.invoke("workspace:reveal", targetPath),
+  verifyAssets: (options) => ipcRenderer.invoke("workspace:verify-assets", options),
+  relinkAsset: (options) => ipcRenderer.invoke("workspace:relink-asset", options),
   openExternal: (url) => ipcRenderer.invoke("workspace:open-external", url),
   pickSavePath: (options) => ipcRenderer.invoke("workspace:pick-save-path", options),
   saveImage: (targetPath, arrayBuffer, sourceMetadataPath) => ipcRenderer.invoke("workspace:save-image", targetPath, arrayBuffer, sourceMetadataPath),

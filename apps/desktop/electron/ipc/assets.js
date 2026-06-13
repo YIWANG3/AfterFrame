@@ -1,11 +1,49 @@
 // Asset-level IPC: quick-register (after a save), collage-sources lookup,
 // delete-export-assets, and the cross-platform "reveal in Finder/Explorer".
 
-function register({ ipcMain, shell, commands, callSidecarJsonAsync, addAllowedMediaDir }) {
+function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecarJsonAsync, addAllowedMediaDir, getCatalogState }) {
+  const fs = require("node:fs");
+  const path = require("node:path");
+
   ipcMain.handle("workspace:reveal", (_event, targetPath) => {
     if (!targetPath) return false;
+    // Don't silently no-op on a moved/deleted original — report it so the
+    // renderer can toast instead of opening Finder with nothing selected.
+    if (!fs.existsSync(targetPath)) return false;
     shell.showItemInFolder(targetPath);
     return true;
+  });
+
+  // Full-library missing-file sweep (File ▸ Verify Files menu action).
+  ipcMain.handle("workspace:verify-assets", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState?.() || {};
+    if (!currentCatalogPath || !catalogHasDb?.()) return null;
+    return await commands.verifyAssets(options || {});
+  });
+
+  // Relink a missing asset to a new on-disk location. With no newPath we open a
+  // native file picker. Returns the sidecar result verbatim, including the
+  // {status:"fingerprint_mismatch"} case so the renderer can confirm + retry.
+  ipcMain.handle("workspace:relink-asset", async (_event, options) => {
+    const opts = options || {};
+    if (!opts.assetId) return null;
+    let newPath = opts.newPath;
+    if (!newPath) {
+      const parent = BrowserWindow.getFocusedWindow();
+      const result = await dialog.showOpenDialog(parent, {
+        title: "Relink to file",
+        properties: ["openFile"],
+        message: "Choose the moved or renamed original file",
+      });
+      if (result.canceled || !result.filePaths?.length) return { status: "cancelled" };
+      newPath = result.filePaths[0];
+    }
+    const outcome = await commands.relinkAsset({ assetId: opts.assetId, newPath, force: !!opts.force });
+    // Let media:// load the relinked original right away.
+    if (outcome?.status === "relinked" && outcome.new_path) {
+      addAllowedMediaDir?.(path.dirname(outcome.new_path));
+    }
+    return outcome;
   });
 
   ipcMain.handle("workspace:open-external", (_event, url) => {

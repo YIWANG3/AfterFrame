@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, Star, Copy, Layers } from "lucide-react";
+import { ChevronRight, Star, Copy, Layers, AlertTriangle, Link2 } from "lucide-react";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
 
@@ -86,13 +86,43 @@ function ThumbnailStrip({ items, icon: Icon, onSelect }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, pushToast }) {
+export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, pushToast }) {
   const [localRating, setLocalRating] = useState(null);
+  const [relinking, setRelinking] = useState(false);
   const currentAssetId = detail?.asset_id || detail?.export_path || null;
 
   useEffect(() => {
     setLocalRating(null);
   }, [currentAssetId]);
+
+  async function handleRelink() {
+    if (!detail?.asset_id || relinking) return;
+    setRelinking(true);
+    try {
+      let res = await window.mediaWorkspace?.relinkAsset?.({ assetId: detail.asset_id });
+      if (res?.status === "fingerprint_mismatch") {
+        const proceed = window.confirm(
+          "The selected file doesn't match the original photo. Relink anyway?",
+        );
+        if (!proceed) return;
+        res = await window.mediaWorkspace?.relinkAsset?.({
+          assetId: detail.asset_id,
+          newPath: res.candidate_path,
+          force: true,
+        });
+      }
+      if (res?.status === "relinked") {
+        pushToast?.({ title: "Relinked", message: "Original file reconnected.", ttl: 4000 });
+        onRelinked?.();
+      } else if (res && res.status !== "cancelled") {
+        pushToast?.({ title: "Relink failed", message: String(res.status || "Unknown error"), ttl: 6000, tone: "error" });
+      }
+    } catch (err) {
+      pushToast?.({ title: "Relink failed", message: err?.message || String(err), ttl: 6000, tone: "error" });
+    } finally {
+      setRelinking(false);
+    }
+  }
 
   if (!detail) {
     return (
@@ -104,6 +134,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
     );
   }
 
+  const missing = detail.exists_on_disk === false;
   const previewPath = detail.export_preview_path || detail.raw_preview_path;
   const exportMeta = detail.export_metadata || {};
   const rawMeta = detail.raw_metadata || {};
@@ -144,6 +175,27 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
         <div className="px-0.5">
           <h2 className="text-[13px] font-medium leading-tight text-text">{exportName || detail.stem}</h2>
 
+          {missing ? (
+            <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[rgba(239,159,39,0.42)] bg-[rgba(120,70,8,0.18)] px-2.5 py-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#EF9F27]" />
+              <div className="min-w-0">
+                <div className="text-[12px] leading-tight text-[#FAC775]">Original file moved or deleted</div>
+                <div className="mt-0.5 text-[11px] leading-tight text-[#9a8f7a]">
+                  Showing preview · full-quality export &amp; editing disabled
+                </div>
+                <button
+                  type="button"
+                  disabled={relinking}
+                  onClick={handleRelink}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-[#EF9F27] px-2.5 py-1 text-[11px] font-medium text-[#412402] transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  <Link2 className="h-3 w-3" />
+                  {relinking ? "Relinking…" : "Relink"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {detail.collage_sources?.length > 0 ? (
             <div className="mt-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">Source Images</div>
@@ -182,14 +234,21 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
 
           <Section title="Source">
             <DetailRow label="Asset">
-              <button
-                type="button"
-                className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                onClick={() => void window.mediaWorkspace?.revealPath?.(detail.export_path)}
-                title="Reveal in Finder"
-              >
-                {escapePathLabel(detail.export_path)}
-              </button>
+              {missing ? (
+                <span className="flex min-w-0 items-center justify-end gap-1.5">
+                  <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">Missing</span>
+                  <span className="truncate text-muted2 line-through">{escapePathLabel(detail.export_path)}</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+                  onClick={() => void window.mediaWorkspace?.revealPath?.(detail.export_path)}
+                  title="Reveal in Finder"
+                >
+                  {escapePathLabel(detail.export_path)}
+                </button>
+              )}
             </DetailRow>
             <DetailRow label="RAW Source">
               {detail.raw_path ? (

@@ -8,6 +8,6 @@ from .assets import list_collage_sources, list_collages_using_asset, upsert_raw_
 from .browse import list_version_siblings, _browse_order_clause, _facet_clauses, list_export_assets, get_facet_values, search_facet_values, get_export_asset_detail, get_export_asset_detail_by_path, browse_collection
 from .jobs import _job_id, _decode_job_row, create_job, update_job, get_job, get_latest_job, list_jobs, list_active_jobs, request_job_cancel, is_cancel_requested
 from .collections import _collection_id, list_collections, create_collection, update_collection, delete_collection, add_collection_items, remove_collection_items
-from .maintenance import cleanup_orphan_export_assets, delete_export_asset_from_catalog, summary
+from .maintenance import cleanup_orphan_export_assets, delete_export_asset_from_catalog, summary, verify_assets, relink_asset
 from .jobs import _UNSET  # sentinel shared with update_job callers
 from .core import _file_id, RESOLVER_VERSION, SCHEMA_VERSION

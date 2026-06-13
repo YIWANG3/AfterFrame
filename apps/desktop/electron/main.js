@@ -863,6 +863,8 @@ function buildAppMenu() {
         { label: "Run Import Pipeline", accelerator: "CmdOrCtrl+I", click: () => sendMenuAction("import:start") },
         { label: "Run Enrichment", click: () => sendMenuAction("import:enrich") },
         { label: "Generate Previews", click: () => sendMenuAction("import:previews") },
+        { type: "separator" },
+        { label: "Verify Files", click: () => sendMenuAction("library:verify") },
       ],
     },
     {
@@ -1007,7 +1009,11 @@ browseIpc.register({
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
 });
 
-assetsIpc.register({ ipcMain, shell, commands: sidecarCommands, callSidecarJsonAsync, addAllowedMediaDir });
+assetsIpc.register({
+  ipcMain, shell, dialog, BrowserWindow,
+  commands: sidecarCommands, callSidecarJsonAsync, addAllowedMediaDir,
+  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+});
 
 saveFileIpc.register({
   ipcMain, dialog,

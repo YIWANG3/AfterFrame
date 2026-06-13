@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink } from "lucide-react";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
 
@@ -341,10 +341,20 @@ const CardContent = memo(function CardContent({
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
+            className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">No preview</div>
         )}
+        {item.exists_on_disk === false ? (
+          <div
+            className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-[rgba(120,70,8,0.94)] px-1.5 py-0.5 text-[10px] font-medium text-[#FAEEDA]"
+            title="Original file moved or deleted"
+          >
+            <Unlink className="h-2.5 w-2.5" />
+            Missing
+          </div>
+        ) : null}
       </div>
       {captionHeight > 0 ? (
         <div className="px-0.5 pt-1.5">

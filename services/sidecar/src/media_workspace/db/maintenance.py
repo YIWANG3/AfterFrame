@@ -23,6 +23,128 @@ SCHEMA_VERSION = 5
 from .assets import upsert_preview_entry
 from .resource_sets import _link_id, get_resource_set_for_asset
 
+
+def verify_assets(
+    connection: sqlite3.Connection,
+    *,
+    scope: str = "all",
+    commit: bool = True,
+) -> dict[str, int]:
+    """Stat every asset's original file and reconcile assets.exists_on_disk.
+
+    This is the explicit, full-library sweep behind the File ▸ Verify Files
+    menu action. Browsing reconciles the visible page lazily; this catches the
+    rest. Stat is cheap (microseconds/file), so we run it synchronously.
+
+    scope: 'all' | 'export' | 'raw'.
+    Returns {checked, present, missing, newly_missing, recovered}.
+    """
+    where = ""
+    params: list[object] = []
+    if scope in ("export", "raw"):
+        where = "WHERE asset_type = ?"
+        params = [scope]
+    elif scope != "all":
+        raise ValueError(f"unsupported scope: {scope}")
+
+    rows = connection.execute(
+        f"SELECT asset_id, canonical_path, exists_on_disk FROM assets {where}",
+        params,
+    ).fetchall()
+
+    metrics = {"checked": 0, "present": 0, "missing": 0, "newly_missing": 0, "recovered": 0}
+    for row in rows:
+        metrics["checked"] += 1
+        present = os.path.exists(str(row["canonical_path"]))
+        flag = 1 if present else 0
+        metrics["present" if present else "missing"] += 1
+        if flag != int(row["exists_on_disk"]):
+            connection.execute(
+                "UPDATE assets SET exists_on_disk = ?, updated_at = CURRENT_TIMESTAMP WHERE asset_id = ?",
+                (flag, str(row["asset_id"])),
+            )
+            metrics["recovered" if present else "newly_missing"] += 1
+
+    if commit:
+        connection.commit()
+    return metrics
+
+
+def relink_asset(
+    connection: sqlite3.Connection,
+    asset_id: str,
+    new_path: Path,
+    *,
+    force: bool = False,
+    commit: bool = True,
+) -> dict[str, object]:
+    """Point a missing asset at a new on-disk location, in place.
+
+    Keeps the original asset_id (and therefore its rating, crops, version
+    stack) — we only rewrite the path columns. The new file's content
+    fingerprint must match the stored one unless force=True; on mismatch we
+    return early WITHOUT mutating so the UI can confirm and retry with force.
+
+    Returns one of:
+      {"status": "relinked", asset_id, old_path, new_path, forced}
+      {"status": "fingerprint_mismatch", asset_id, old_path, candidate_path,
+       expected_fingerprint, actual_fingerprint}
+    """
+    from ..metadata import quick_fingerprint
+
+    row = connection.execute(
+        "SELECT asset_id, asset_type, fingerprint, canonical_path FROM assets WHERE asset_id = ?",
+        (asset_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"unknown asset: {asset_id}")
+
+    target = Path(new_path)
+    if not target.exists():
+        raise ValueError(f"new file does not exist: {target}")
+    new_str = str(target.resolve())
+    old_path = str(row["canonical_path"])
+
+    actual_fp = quick_fingerprint(target, mode="head-tail")
+    expected_fp = str(row["fingerprint"])
+    if actual_fp != expected_fp and not force:
+        return {
+            "status": "fingerprint_mismatch",
+            "asset_id": asset_id,
+            "old_path": old_path,
+            "candidate_path": new_str,
+            "expected_fingerprint": expected_fp,
+            "actual_fingerprint": actual_fp,
+        }
+
+    connection.execute(
+        "UPDATE assets SET canonical_path = ?, exists_on_disk = 1, updated_at = CURRENT_TIMESTAMP WHERE asset_id = ?",
+        (new_str, asset_id),
+    )
+    # asset_files.path is UNIQUE; rewrite the row that pointed at the old path.
+    connection.execute(
+        "UPDATE asset_files SET path = ? WHERE asset_id = ? AND path = ?",
+        (new_str, asset_id, old_path),
+    )
+    # The gallery reads export_path from the registry, not assets.canonical_path,
+    # so the registry's path (its PRIMARY KEY) has to move too.
+    if str(row["asset_type"]) == "export":
+        connection.execute(
+            "UPDATE export_lookup_registry SET export_path = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE export_asset_id = ? AND export_path = ?",
+            (new_str, asset_id, old_path),
+        )
+
+    if commit:
+        connection.commit()
+    return {
+        "status": "relinked",
+        "asset_id": asset_id,
+        "old_path": old_path,
+        "new_path": new_str,
+        "forced": actual_fp != expected_fp,
+    }
+
 def cleanup_orphan_export_assets(connection: sqlite3.Connection, commit: bool = True) -> dict[str, int]:
     orphan_rows = connection.execute(
         """

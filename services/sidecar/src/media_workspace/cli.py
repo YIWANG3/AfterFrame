@@ -17,6 +17,8 @@ from .db import (
     cleanup_orphan_export_assets,
     confirm_match,
     connect,
+    verify_assets,
+    relink_asset,
     create_job,
     delete_app_setting,
     delete_export_asset_from_catalog,
@@ -352,6 +354,16 @@ def build_parser() -> argparse.ArgumentParser:
     delete_export.add_argument("--asset-id", action="append", required=True)
 
     subparsers.add_parser("cleanup-orphan-exports", parents=[common])
+
+    verify_assets_p = subparsers.add_parser("verify-assets", parents=[common])
+    verify_assets_p.add_argument("--scope", choices=["all", "export", "raw"], default="all")
+
+    relink_asset_p = subparsers.add_parser("relink-asset", parents=[common])
+    relink_asset_p.add_argument("--asset-id", required=True)
+    relink_asset_p.add_argument("--new-path", type=Path, required=True)
+    relink_asset_p.add_argument("--force", action="store_true",
+                                help="Relink even if the new file's fingerprint differs from the original")
+
     subparsers.add_parser("catalog-roots", parents=[common])
     register_roots_parser = subparsers.add_parser("register-roots", parents=[common])
     register_roots_parser.add_argument("--root-type", choices=["raw", "export"], required=True)
@@ -1031,6 +1043,11 @@ def _cmd_search_facet(args, connection, catalog, parser):
 def _cmd_browse_exports(args, connection, catalog, parser):
     facet_filters = json.loads(args.filters) if args.filters else None
     payload = []
+    # Lazy detection (layer 1): stat the visible page so missing badges appear
+    # just by scrolling. This is the read path (re-run on every page/scroll), so
+    # it must stay read-only — reconciling assets.exists_on_disk is left to the
+    # explicit verify-assets sweep. The live `present` value below is what the
+    # UI badges/blocks read; the DB flag only gates preview/export batches.
     for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
         preview_path = None
         if row["preview_relative_path"]:
@@ -1038,6 +1055,7 @@ def _cmd_browse_exports(args, connection, catalog, parser):
         preview_hd_path = None
         if row["preview_hd_relative_path"]:
             preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
+        present = os.path.exists(row["export_path"]) if row["export_path"] else True
         payload.append(
             {
                 "asset_id": row["asset_id"],
@@ -1045,6 +1063,7 @@ def _cmd_browse_exports(args, connection, catalog, parser):
                 "export_path": row["export_path"],
                 "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
+                "exists_on_disk": present,
                 "imported_at": row["imported_at"],
                 "match_status": row["match_status"],
                 "score": row["score"],
@@ -1078,12 +1097,15 @@ def _cmd_asset_detail(args, connection, catalog, parser):
     if row is None:
         raise SystemExit(f"unknown export asset: {identifier}")
     duplicates = get_duplicate_assets(connection, row["asset_id"])
+    # Read-only live stat (see _cmd_browse_exports) — no write-back on this path.
+    present = os.path.exists(row["export_path"]) if row["export_path"] else True
     payload = {
         "asset_id": row["asset_id"],
         "stem": row["stem"],
         "export_path": row["export_path"],
         "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
         "app_rating": row["app_rating"],
+        "exists_on_disk": present,
         "imported_at": row["imported_at"],
         "match_status": row["match_status"],
         "score": row["score"],
@@ -1270,6 +1292,18 @@ def _cmd_export_assets(args, connection, catalog, parser):
 
 def _cmd_cleanup_orphan_exports(args, connection, catalog, parser):
     payload = cleanup_orphan_export_assets(connection)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_verify_assets(args, connection, catalog, parser):
+    payload = verify_assets(connection, scope=args.scope)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_relink_asset(args, connection, catalog, parser):
+    payload = relink_asset(connection, args.asset_id, args.new_path, force=args.force)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -1473,6 +1507,8 @@ COMMAND_HANDLERS = {
     "add-text": _cmd_add_text,
     "export-assets": _cmd_export_assets,
     "cleanup-orphan-exports": _cmd_cleanup_orphan_exports,
+    "verify-assets": _cmd_verify_assets,
+    "relink-asset": _cmd_relink_asset,
     "delete-export-assets": _cmd_delete_export_assets,
     "catalog-roots": _cmd_catalog_roots,
     "register-roots": _cmd_register_roots,

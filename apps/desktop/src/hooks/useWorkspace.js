@@ -9,7 +9,7 @@ const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
 
-export default function useWorkspace() {
+export default function useWorkspace({ pushToast } = {}) {
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "dark");
   const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) || 240));
   const [inspectorWidth, setInspectorWidth] = useState(() =>
@@ -581,6 +581,26 @@ export default function useWorkspace() {
         await runEnrichment();
       } else if (action === "import:previews") {
         await runPreviewGeneration();
+      } else if (action === "library:verify") {
+        const result = await api.verifyAssets();
+        if (result) {
+          const { missing = 0, checked = 0, recovered = 0 } = result;
+          pushToast?.(
+            missing > 0
+              ? {
+                  title: `${missing} file${missing === 1 ? "" : "s"} missing`,
+                  message: `Checked ${checked}. Their originals have moved or been deleted — relink from the inspector.`,
+                  ttl: 7000,
+                  tone: "error",
+                }
+              : {
+                  title: "All files present",
+                  message: `Checked ${checked}${recovered ? `, recovered ${recovered}` : ""}.`,
+                  ttl: 4000,
+                },
+          );
+        }
+        await refreshAll();
       } else if (action === "view:toggle-theme") {
         setTheme((current) => (current === "dark" ? "light" : "dark"));
       } else if (action === "view:refresh") {

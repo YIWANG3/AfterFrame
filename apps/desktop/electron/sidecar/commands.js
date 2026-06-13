@@ -36,6 +36,17 @@ function createSidecarCommands(callJson) {
       return callJson(["asset-detail", "--export-path", String(exportPath)]);
     },
 
+    // ── Missing-original handling ────────────────────────────────────────
+    verifyAssets({ scope = "all" } = {}) {
+      return callJson(["verify-assets", "--scope", String(scope)]);
+    },
+
+    relinkAsset({ assetId, newPath, force = false } = {}) {
+      const argv = ["relink-asset", "--asset-id", String(assetId), "--new-path", String(newPath)];
+      if (force) argv.push("--force");
+      return callJson(argv);
+    },
+
     facetValues() {
       return callJson(["facet-values"]);
     },

@@ -23,7 +23,15 @@ import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
 
 export default function App() {
-  const workspace = useWorkspace();
+  // Toasts must exist before useWorkspace so menu actions (e.g. Verify Files)
+  // can report their result.
+  const { toasts, pushToast, dismissToast } = useToasts();
+  const workspace = useWorkspace({ pushToast });
+  // Fresh-closure handle for the test backdoor, whose effect must NOT depend on
+  // `workspace` (a new object each render) — re-running would clobber the
+  // methods EditorOverlay merges into window.__afterframeTest.
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
   const [showSidebar] = useState(true);
   const [showInspector] = useState(true);
   const [displayMode, setDisplayMode] = useState("grid");
@@ -55,6 +63,7 @@ export default function App() {
       closeEditor() { setEditorItem(null); },
       getViewMode() { return viewMode; },
       getEditorOpen() { return !!editorItem; },
+      refresh() { return workspaceRef.current.refreshAll({ force: true }); },
     };
   }, [viewMode, editorItem]);
   const stickerView = useStickerView();
@@ -109,7 +118,6 @@ export default function App() {
   const selectedAssetIds = selectedIds;
 
   const [dropActive, setDropActive] = useState(false);
-  const { toasts, pushToast, dismissToast } = useToasts();
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
   // Agent ↔ UI bridges (reveal / agent-change toast / selection mirror) live
@@ -261,6 +269,17 @@ export default function App() {
           ? itemById.get(target.asset_id) || target
           : itemById.get(workspace.selectedAssetId);
     if (!nextItem) return;
+    // Decision (a): no full-quality editing on a missing original — the editor
+    // would have only the downscaled preview to work from. Send them to relink.
+    if (nextItem.exists_on_disk === false) {
+      pushToast?.({
+        title: "Original file missing",
+        message: "Relink the original from the inspector to edit at full quality.",
+        ttl: 6000,
+        tone: "error",
+      });
+      return;
+    }
     setEditorItem(nextItem);
   }
 
@@ -575,6 +594,7 @@ export default function App() {
               detail={workspace.detail}
               onRatingChange={applyRating}
               onSelectAsset={selectSingle}
+              onRelinked={() => workspace.refreshAll({ force: true })}
               pushToast={pushToast}
               onTagFilter={(tag) => {
                 if (!tag) return;

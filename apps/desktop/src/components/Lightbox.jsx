@@ -83,9 +83,19 @@ export default function Lightbox({
   const clampedIndex = Math.max(0, Math.min(currentIndex, Math.max((items?.length || 1) - 1, 0)));
   const currentItem = items?.[clampedIndex] || null;
   const sources = useMemo(
-    () => currentItem
-      ? [currentItem.export_path, currentItem.export_preview_path, currentItem.raw_preview_path].filter(Boolean)
-      : [],
+    () => {
+      if (!currentItem) return [];
+      // When the original is known-missing, don't even attempt to load it (that
+      // would flash a broken image) — fall back to the HD preview for viewing.
+      const original = currentItem.exists_on_disk === false ? null : currentItem.export_path;
+      return [
+        original,
+        currentItem.preview_hd_path,
+        currentItem.export_preview_path,
+        currentItem.preview_path,
+        currentItem.raw_preview_path,
+      ].filter(Boolean);
+    },
     [currentItem],
   );
   const imagePath = sources[sourceIndex] || null;
