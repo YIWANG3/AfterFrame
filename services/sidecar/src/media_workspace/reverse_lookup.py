@@ -201,6 +201,7 @@ def resolve_export(
     export_asset_id = upsert_export_asset(connection, export, commit=False)
 
     existing = get_registry(connection, export.path)
+    preexisting = existing is not None
     if existing and existing["match_status"] == "manual_confirmed":
         if commit:
             connection.commit()
@@ -212,6 +213,7 @@ def resolve_export(
             raw_asset_id=existing["raw_asset_id"],
             feature_vector=json.loads(existing["feature_vector_json"]),
             ranked_candidates=json.loads(existing["candidate_json"]),
+            preexisting=preexisting,
         )
 
     if existing and not refresh and existing["match_status"] == "auto_bound":
@@ -225,6 +227,7 @@ def resolve_export(
             raw_asset_id=existing["raw_asset_id"],
             feature_vector=json.loads(existing["feature_vector_json"]),
             ranked_candidates=json.loads(existing["candidate_json"]),
+            preexisting=preexisting,
         )
 
     ranked: list[dict[str, object]] = []
@@ -267,6 +270,7 @@ def resolve_export(
         raw_asset_id=raw_asset_id,
         feature_vector=feature_vector,
         ranked_candidates=ranked[:5],
+        preexisting=preexisting,
     )
     upsert_registry(connection, decision, commit=False)
     if commit:
@@ -289,6 +293,7 @@ def resolve_export_batch(
         "unmatched": 0,
     }
     processed = 0
+    already_in_catalog = 0
     total = sum(count_export_files(export_dir.resolve()) for export_dir in export_dirs)
     report_progress(progress_callback, phase="resolve_exports", processed=0, total=total, status_counts=counts)
 
@@ -305,6 +310,8 @@ def resolve_export_batch(
             )
             counts.setdefault(decision.status, 0)
             counts[decision.status] += 1
+            if decision.preexisting:
+                already_in_catalog += 1
             processed += 1
             if processed % RESOLVE_BATCH_COMMIT_SIZE == 0:
                 connection.commit()
@@ -316,6 +323,8 @@ def resolve_export_batch(
         "processed": processed,
         "total": total,
         "status_counts": {key: value for key, value in counts.items() if value > 0},
+        "already_in_catalog": already_in_catalog,
+        "newly_added": processed - already_in_catalog,
     }
 
 

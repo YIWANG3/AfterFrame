@@ -557,6 +557,33 @@ export default function useWorkspace({ pushToast } = {}) {
     void loadDetail(selectedAssetId);
   }, [selectedAssetId]);
 
+  // Re-import reminder: when an import finishes, tell the user how many of the
+  // selected files were already in the catalog (re-importing the same folder).
+  const lastImportToastRef = useRef(null);
+  useEffect(() => {
+    if (!lastFinishedJob || lastFinishedJob.jobType !== "import") return;
+    if (lastFinishedJob.status === "cancelled") return;
+    if (lastImportToastRef.current === lastFinishedJob.finishedAtMs) return;
+    lastImportToastRef.current = lastFinishedJob.finishedAtMs;
+    // The resolve phase key varies by mode, so find it by its payload shape.
+    const resolve = (lastFinishedJob.phaseResults || []).find(
+      (p) => p?.result && typeof p.result.already_in_catalog === "number",
+    );
+    const already = resolve?.result?.already_in_catalog || 0;
+    const added = resolve?.result?.newly_added || 0;
+    if (already > 0) {
+      pushToast?.({
+        title: added > 0
+          ? `Imported ${added} new · ${already} already in catalog`
+          : `${already} already in catalog`,
+        message: added > 0
+          ? `${already} of the selected file${already === 1 ? " was" : "s were"} already imported and skipped.`
+          : "Every selected file was already imported — nothing new added.",
+        ttl: 6000,
+      });
+    }
+  }, [lastFinishedJob]);
+
   // Menu actions: registered ONCE, dispatched through a ref so the handler
   // always sees fresh closures. The old deps-array registration both leaked
   // listeners (no cleanup) and ran stale closures when status/collection

@@ -90,3 +90,6 @@ class MatchDecision:
     raw_asset_id: str | None
     feature_vector: dict[str, float]
     ranked_candidates: list[dict[str, object]] = field(default_factory=list)
+    # True when this export was already in the catalog before this import pass —
+    # used to report "already imported" counts (re-importing the same folder).
+    preexisting: bool = False
