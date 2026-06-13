@@ -61,3 +61,6 @@ apps/desktop/test-results/
 
 # Social media marketing drafts (local only)
 marketing/
+
+# playwright run outputs
+test-results/
