@@ -12,17 +12,19 @@ import enSettings from "./locales/en/settings.json";
 import enNav from "./locales/en/nav.json";
 import enInspector from "./locales/en/inspector.json";
 import enAnnotation from "./locales/en/annotation.json";
+import enEditor from "./locales/en/editor.json";
 import zhCommon from "./locales/zh-CN/common.json";
 import zhSettings from "./locales/zh-CN/settings.json";
 import zhNav from "./locales/zh-CN/nav.json";
 import zhInspector from "./locales/zh-CN/inspector.json";
 import zhAnnotation from "./locales/zh-CN/annotation.json";
+import zhEditor from "./locales/zh-CN/editor.json";
 
 export const SUPPORTED_LOCALES = ["en", "zh-CN"];
 
 const resources = {
-  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation },
-  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation },
+  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation, editor: enEditor },
+  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation, editor: zhEditor },
 };
 
 function initialLocale() {
@@ -38,7 +40,7 @@ i18n.use(initReactI18next).init({
   lng: initialLocale(),
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "settings", "nav", "inspector", "annotation"],
+  ns: ["common", "settings", "nav", "inspector", "annotation", "editor"],
   interpolation: { escapeValue: false },
   returnNull: false,
   // Resources are bundled and registered synchronously, so there's nothing to

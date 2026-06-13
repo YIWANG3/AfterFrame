@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Columns2, Rows2, X } from "lucide-react";
 import { localFileUrl } from "../../utils/format";
 
@@ -52,6 +53,7 @@ function CompareCell({ src, label, zoom, pan, originPct, onWheel, onPointerDown,
 }
 
 export default function BeforeAfterCompare({ beforePath, afterPath, layout, onClose, onLayoutChange }) {
+  const { t } = useTranslation("editor");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [originPct, setOriginPct] = useState({ x: 50, y: 50 });
@@ -123,14 +125,14 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout, onCl
       <div className="flex h-10 shrink-0 items-center justify-between bg-[rgb(14,14,14)] px-4">
         <div />
         <div className="flex items-center gap-1">
-          <ToolbarBtn active={layout === "side"} icon={Columns2} label="Side by side" onClick={() => onLayoutChange?.("side")} />
-          <ToolbarBtn active={layout === "stack"} icon={Rows2} label="Top / Bottom" onClick={() => onLayoutChange?.("stack")} />
+          <ToolbarBtn active={layout === "side"} icon={Columns2} label={t("compare.sideBySide")} onClick={() => onLayoutChange?.("side")} />
+          <ToolbarBtn active={layout === "stack"} icon={Rows2} label={t("compare.topBottom")} onClick={() => onLayoutChange?.("stack")} />
           <div className="mx-1.5 h-4 w-px bg-white/8" />
           <button
             type="button"
             className="flex h-7 w-7 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/8 hover:text-white/70"
             onClick={onClose}
-            title="Close (Esc)"
+            title={t("compare.close")}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -139,14 +141,14 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout, onCl
 
       {/* Compare area */}
       <div className={`min-h-0 flex-1 flex ${horizontal ? "flex-row" : "flex-col"}`}>
-        <CompareCell src={beforeSrc} label="Before" {...cellProps} />
+        <CompareCell src={beforeSrc} label={t("compare.before")} {...cellProps} />
         <div className={`${horizontal ? "w-[2px]" : "h-[2px]"} shrink-0 bg-white/8`} />
-        <CompareCell src={afterSrc} label="After" {...cellProps} />
+        <CompareCell src={afterSrc} label={t("compare.after")} {...cellProps} />
       </div>
 
       {/* Footer */}
       <div className="flex h-8 shrink-0 items-center justify-center bg-[rgb(14,14,14)] text-[10px] text-white/30">
-        Scroll to zoom · Drag to pan · Esc to close
+        {t("compare.hint")}
       </div>
     </div>
   );

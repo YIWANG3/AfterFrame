@@ -1,0 +1,35 @@
+{
+  "overlay": {
+    "loading": "正在加载编辑器…",
+    "decodeError": "无法解码源图像。",
+    "close": "关闭编辑器 (Esc)",
+    "save": "保存图像",
+    "saveFailed": "保存失败",
+    "saveFailedMsg": "图像保存失败",
+    "edited": "已编辑",
+    "scale": "缩放",
+    "imageScale": "图像缩放",
+    "aspectRatio": "长宽比",
+    "reset": "重置",
+    "apply": "应用",
+    "flipH": "水平翻转",
+    "flipV": "垂直翻转",
+    "rotateLeft": "90° 左",
+    "rotateRight": "90° 右",
+    "tools": {
+      "crop": "裁剪",
+      "transform": "变换",
+      "text": "文字",
+      "sticker": "贴纸",
+      "repaint": "AI 重绘"
+    }
+  },
+  "compare": {
+    "before": "之前",
+    "after": "之后",
+    "sideBySide": "并排",
+    "topBottom": "上 / 下",
+    "close": "关闭 (Esc)",
+    "hint": "滚动缩放 · 拖动平移 · Esc 关闭"
+  }
+}

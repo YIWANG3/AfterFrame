@@ -1,0 +1,35 @@
+{
+  "overlay": {
+    "loading": "Loading editor…",
+    "decodeError": "The source image cannot be decoded.",
+    "close": "Close editor (Esc)",
+    "save": "Save image",
+    "saveFailed": "Save failed",
+    "saveFailedMsg": "Failed to save image",
+    "edited": "Edited",
+    "scale": "Scale",
+    "imageScale": "Image scale",
+    "aspectRatio": "Aspect Ratio",
+    "reset": "Reset",
+    "apply": "Apply",
+    "flipH": "Flip H",
+    "flipV": "Flip V",
+    "rotateLeft": "90° L",
+    "rotateRight": "90° R",
+    "tools": {
+      "crop": "Crop",
+      "transform": "Transform",
+      "text": "Text",
+      "sticker": "Sticker",
+      "repaint": "AI Repaint"
+    }
+  },
+  "compare": {
+    "before": "Before",
+    "after": "After",
+    "sideBySide": "Side by side",
+    "topBottom": "Top / Bottom",
+    "close": "Close (Esc)",
+    "hint": "Scroll to zoom · Drag to pan · Esc to close"
+  }
+}

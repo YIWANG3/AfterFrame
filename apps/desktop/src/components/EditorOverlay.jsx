@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Check,
   Crop,
@@ -428,6 +429,7 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
 }
 
 export default function EditorOverlay({ open, item, onClose, onSaveComplete, pushToast }) {
+  const { t } = useTranslation("editor");
   const viewportRef = useRef(null);
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
@@ -506,13 +508,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const rotationDeg = discreteRotationDeg + freeAngle;
   const showCropUi = tool === "crop";
   const panelMeta = tool === "crop"
-    ? { title: "Crop", badge: null }
+    ? { title: t("overlay.tools.crop"), badge: null }
     : tool === "ai"
-      ? { title: "AI Repaint", badge: null }
+      ? { title: t("overlay.tools.repaint"), badge: null }
       : tool === "text"
-        ? { title: "Text", badge: null }
+        ? { title: t("overlay.tools.text"), badge: null }
         : tool === "sticker"
-          ? { title: "Sticker", badge: null }
+          ? { title: t("overlay.tools.sticker"), badge: null }
           : { title: "", badge: null };
 
   function syncHistory(nextHistory, nextIndex) {
@@ -727,7 +729,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       } catch (error) {
         if (!active) return;
         setLoadState("error");
-        setMessage(error instanceof Error ? error.message : "The source image cannot be decoded.");
+        setMessage(error instanceof Error ? error.message : t("overlay.decodeError"));
       }
     }
 
@@ -1150,8 +1152,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       onSaveComplete?.(savePath);
     } catch (error) {
       pushToast?.({
-        title: "Save failed",
-        message: error instanceof Error ? error.message : "Failed to save image",
+        title: t("overlay.saveFailed"),
+        message: error instanceof Error ? error.message : t("overlay.saveFailedMsg"),
         ttl: 20_000,
       });
     } finally {
@@ -1333,7 +1335,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)] disabled:opacity-60"
             onClick={() => void handleExport()}
             disabled={saving || loadState !== "ready"}
-            title="Save image"
+            title={t("overlay.save")}
           >
             <Download className="h-3.5 w-3.5" />
             {saving ? "Saving…" : "Save"}
@@ -1342,7 +1344,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             type="button"
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
             onClick={onClose}
-            title="Close editor (Esc)"
+            title={t("overlay.close")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -1358,7 +1360,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
       >
-        {loadState === "loading" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">Loading editor…</div> : null}
+        {loadState === "loading" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{t("overlay.loading")}</div> : null}
         {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{message || "Failed to load image"}</div> : null}
 
         {imageRect ? (
@@ -1462,7 +1464,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               <>
                 <div className="max-h-[calc(100vh-10rem)] overflow-y-auto">
                   <div className="border-b border-border/60 px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Aspect Ratio</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.aspectRatio")}</div>
                     <div className="mt-3 grid grid-cols-2 gap-1.5">
                       {ASPECT_PRESETS.map((preset) => (
                         <AspectButton
@@ -1476,7 +1478,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   </div>
 
                   <div className="border-b border-border/60 px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Transform</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.tools.transform")}</div>
                     <div className="mt-3 grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
@@ -1484,7 +1486,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                         onClick={() => commitTransform({ quarterTurns: ((quarterTurns - 1) % 4 + 4) % 4, freeAngle: 0 })}
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                        90° L
+                        {t("overlay.rotateLeft")}
                       </button>
                       <button
                         type="button"
@@ -1492,7 +1494,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                         onClick={() => commitTransform({ quarterTurns: (quarterTurns + 1) % 4, freeAngle: 0 })}
                       >
                         <RotateCw className="h-3.5 w-3.5" />
-                        90° R
+                        {t("overlay.rotateRight")}
                       </button>
                       <button
                         type="button"
@@ -1503,7 +1505,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                         onClick={() => commitTransform({ flipX: !flipX })}
                       >
                         <FlipHorizontal2 className="h-3.5 w-3.5" />
-                        Flip H
+                        {t("overlay.flipH")}
                       </button>
                       <button
                         type="button"
@@ -1514,14 +1516,14 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                         onClick={() => commitTransform({ flipY: !flipY })}
                       >
                         <FlipVertical2 className="h-3.5 w-3.5" />
-                        Flip V
+                        {t("overlay.flipV")}
                       </button>
                     </div>
                   </div>
 
                   <div className="border-b border-border/60 px-4 py-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Scale</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.scale")}</div>
                       <div className="text-[11px] text-muted">{imageZoom.toFixed(2)}×</div>
                     </div>
                     <input
@@ -1543,18 +1545,18 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                         recordState(next);
                       }}
                       className="mt-3 w-full"
-                      aria-label="Image scale"
+                      aria-label={t("overlay.imageScale")}
                     />
                   </div>
 
                 </div>
 
                 <div className="flex items-center gap-1 border-t border-border/60 px-3 py-2">
-                  <FooterButton icon={RotateCcw} label="Reset" onClick={handleReset} disabled={loadState !== "ready"} />
+                  <FooterButton icon={RotateCcw} label={t("overlay.reset")} onClick={handleReset} disabled={loadState !== "ready"} />
                   <FooterButton icon={Undo2} label="" onClick={handleUndo} disabled={historyIndex <= 0} />
                   <FooterButton icon={Redo2} label="" onClick={handleRedo} disabled={historyIndex < 0 || historyIndex >= history.length - 1} />
                   <div className="flex-1" />
-                  <FooterButton icon={Check} label="Apply" onClick={handleApply} disabled={loadState !== "ready"} primary />
+                  <FooterButton icon={Check} label={t("overlay.apply")} onClick={handleApply} disabled={loadState !== "ready"} primary />
                 </div>
               </>
             ) : tool === "text" ? (
@@ -1605,10 +1607,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             className="pointer-events-auto flex w-12 flex-col items-center gap-2 rounded-xl border border-border/60 bg-chrome/95 p-1.5 shadow-overlay backdrop-blur-xl"
             data-editor-wheel-scope="toolbar"
           >
-            <ToolTab active={tool === "crop"} icon={Crop} label="Crop" onClick={() => { setTool("crop"); setDepthMapVisible(false); }} />
-            <ToolTab active={tool === "text"} icon={Type} label="Text" onClick={() => setTool("text")} />
-            <ToolTab active={tool === "sticker"} icon={Cannabis} label="Sticker" onClick={() => { setTool("sticker"); setDepthMapVisible(false); }} />
-            <ToolTab active={tool === "ai"} icon={Sparkles} label="AI Repaint" onClick={() => { setTool("ai"); setDepthMapVisible(false); }} />
+            <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => { setTool("crop"); setDepthMapVisible(false); }} />
+            <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => setTool("text")} />
+            <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => { setTool("sticker"); setDepthMapVisible(false); }} />
+            <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => { setTool("ai"); setDepthMapVisible(false); }} />
           </div>
         </div>
 
