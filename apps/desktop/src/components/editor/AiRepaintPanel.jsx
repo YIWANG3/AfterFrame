@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlignJustify,
   Check,
@@ -117,6 +118,7 @@ function CollapsibleSection({ label, collapsed, onToggle, border = "border-b", c
 }
 
 function StyleCard({ style, active, onSelect, onEdit, onDelete }) {
+  const { t } = useTranslation("editor");
   return (
     <div
       role="button"
@@ -148,7 +150,7 @@ function StyleCard({ style, active, onSelect, onEdit, onDelete }) {
               event.stopPropagation();
               onEdit();
             }}
-            title="Edit style"
+            title={t("repaint.editStyle")}
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -159,7 +161,7 @@ function StyleCard({ style, active, onSelect, onEdit, onDelete }) {
               event.stopPropagation();
               onDelete();
             }}
-            title="Delete style"
+            title={t("repaint.deleteStyle")}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -170,6 +172,7 @@ function StyleCard({ style, active, onSelect, onEdit, onDelete }) {
 }
 
 function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
+  const { t } = useTranslation("editor");
   return (
     <div
       role="button"
@@ -194,7 +197,7 @@ function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
           type="button"
           className="rounded-md p-0.5 text-muted2 transition-colors hover:text-text"
           onClick={(event) => { event.stopPropagation(); onEdit(); }}
-          title="Edit style"
+          title={t("repaint.editStyle")}
         >
           <Pencil className="h-3 w-3" />
         </button>
@@ -202,7 +205,7 @@ function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
           type="button"
           className="rounded-md p-0.5 text-muted2 transition-colors hover:text-text"
           onClick={(event) => { event.stopPropagation(); onDelete(); }}
-          title="Delete style"
+          title={t("repaint.deleteStyle")}
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -212,6 +215,7 @@ function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
 }
 
 function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
+  const { t } = useTranslation("editor");
   return (
     <div className="fixed inset-0 z-[10210] flex items-center justify-center bg-black/45 px-5 backdrop-blur-[2px]">
       <div className="w-full max-w-[360px] overflow-hidden rounded-xl border border-border/60 bg-chrome shadow-overlay">
@@ -229,24 +233,20 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
           <input
             value={draft.name}
             onChange={(event) => onChange({ ...draft, name: event.target.value })}
-            placeholder="Style name"
+            placeholder={t("repaint.styleName")}
             className={`mt-3 ${TOOLBAR_FIELD} placeholder:text-muted2`}
             autoFocus
           />
           <textarea
             value={draft.prompt}
             onChange={(event) => onChange({ ...draft, prompt: event.target.value })}
-            placeholder="Prompt"
+            placeholder={t("repaint.prompt")}
             className="mt-2 min-h-[96px] w-full rounded-md border border-border/70 bg-app px-2 py-2 text-[12px] leading-5 text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50"
           />
         </div>
         <div className="flex items-center gap-2 border-t border-border/60 px-4 py-3">
-          <button type="button" className={ACCENT_BUTTON} onClick={onSave}>
-            Save style
-          </button>
-          <button type="button" className={TOOLBAR_BUTTON} onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className={ACCENT_BUTTON} onClick={onSave}>{t("repaint.saveStyle")}</button>
+          <button type="button" className={TOOLBAR_BUTTON} onClick={onClose}>{t("repaint.cancel")}</button>
         </div>
       </div>
     </div>
@@ -256,6 +256,7 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
 /* ── Provider instance modal: create new / edit existing ── */
 
 export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current image", onCompareChange, compareState, onRepaintComplete }) {
+  const { t } = useTranslation("editor");
   const repaintPollRef = useRef(null);
   const prefsRef = useRef({});
   const [providerInstances, setProviderInstances] = useState([]);
@@ -676,7 +677,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto py-2">
-        <CollapsibleSection label="Provider" collapsed={collapsedSections.has("provider")} onToggle={() => toggleSection("provider")}>
+        <CollapsibleSection label={t("repaint.provider")} collapsed={collapsedSections.has("provider")} onToggle={() => toggleSection("provider")}>
           <div className="flex items-center gap-2">
             <select
               value={activeProviderId || ""}
@@ -684,7 +685,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
               className={`min-w-0 flex-1 ${TOOLBAR_FIELD}`}
             >
               {providerInstances.length === 0 && (
-                <option value="" disabled>No providers configured</option>
+                <option value="" disabled>{t("repaint.noProviders")}</option>
               )}
               {providerInstances.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -696,7 +697,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
               type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/70 bg-app text-text transition-colors hover:border-border hover:bg-hover"
               onClick={() => setProviderModalState({ mode: "new" })}
-              title="Add provider"
+              title={t("repaint.addProvider")}
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -705,7 +706,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                 type="button"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/70 bg-app text-text transition-colors hover:border-border hover:bg-hover"
                 onClick={() => setProviderModalState({ mode: "edit", instanceId: activeProviderId })}
-                title="Edit provider"
+                title={t("repaint.editProvider")}
               >
                 <KeyRound className="h-3.5 w-3.5" />
               </button>
@@ -713,7 +714,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
           </div>
           {activeInstance && (
             <div className="mt-2">
-              <div className="text-[11px] text-muted">Model</div>
+              <div className="text-[11px] text-muted">{t("repaint.model")}</div>
               <select
                 value={selectedModel[activeProviderId] || ""}
                 onChange={(event) => updateSelectedModel(activeProviderId, event.target.value)}
@@ -727,10 +728,10 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
           )}
         </CollapsibleSection>
 
-        <CollapsibleSection label="Parameters" collapsed={collapsedSections.has("parameters")} onToggle={() => toggleSection("parameters")}>
+        <CollapsibleSection label={t("repaint.parameters")} collapsed={collapsedSections.has("parameters")} onToggle={() => toggleSection("parameters")}>
           <div className={cx(isUpscaleModel && "opacity-40 pointer-events-none")}>
             <div className="flex items-center justify-between gap-3">
-              <div className="text-[12px] text-text">Temperature</div>
+              <div className="text-[12px] text-text">{t("repaint.temperature")}</div>
               <input
                 type="number"
                 min="0"
@@ -760,7 +761,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
           </div>
 
           <div className={cx("mt-4", isUpscaleModel && "opacity-40 pointer-events-none")}>
-            <div className="text-[12px] text-text">Aspect ratio</div>
+            <div className="text-[12px] text-text">{t("repaint.aspectRatio")}</div>
             <select
               value={aspectRatio}
               disabled={isUpscaleModel}
@@ -776,7 +777,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
           </div>
 
           <div className="mt-4">
-            <div className="text-[12px] text-text">Resolution</div>
+            <div className="text-[12px] text-text">{t("repaint.resolution")}</div>
             <select
               value={resolution}
               onChange={(event) => setResolution(event.target.value)}
@@ -792,7 +793,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
         </CollapsibleSection>
 
         <CollapsibleSection
-          label="My Styles"
+          label={t("repaint.myStyles")}
           collapsed={collapsedSections.has("styles")}
           onToggle={() => toggleSection("styles")}
           className={isUpscaleModel ? "opacity-40 pointer-events-none" : undefined}
@@ -806,7 +807,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                   compactStyles ? "text-muted2 hover:bg-hover hover:text-text" : "bg-hover text-text",
                 )}
                 onClick={() => setCompactStyles(false)}
-                title="Expanded view"
+                title={t("repaint.expandedView")}
               >
                 <StretchHorizontal className="h-3 w-3" />
               </button>
@@ -817,7 +818,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                   compactStyles ? "bg-hover text-text" : "text-muted2 hover:bg-hover hover:text-text",
                 )}
                 onClick={() => setCompactStyles(true)}
-                title="Compact view"
+                title={t("repaint.compactView")}
               >
                 <AlignJustify className="h-3 w-3" />
               </button>
@@ -825,7 +826,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                 type="button"
                 className="flex h-6 w-6 items-center justify-center rounded border border-border/70 bg-app text-text transition-colors hover:border-border hover:bg-hover"
                 onClick={openCreateStyle}
-                title="New style"
+                title={t("repaint.newStyle")}
               >
                 <Plus className="h-3 w-3" />
               </button>
@@ -837,7 +838,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
               <textarea
                 value={customPrompt}
                 onChange={(event) => setCustomPrompt(event.target.value)}
-                placeholder="Enter a one-time prompt..."
+                placeholder={t("repaint.onetimePrompt")}
                 rows={2}
                 className="w-full resize-none rounded-md border border-border/70 bg-app px-2.5 py-2 text-[12px] leading-5 text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50"
               />
@@ -849,7 +850,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                     setEditingStyleId("new");
                     setStyleDraft({ name: "", prompt: customPrompt.trim() });
                   }}
-                  title="Save as style"
+                  title={t("repaint.saveAsStyle")}
                 >
                   <Plus className="h-3 w-3" />
                   Save as style
@@ -861,7 +862,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
             {!styles ? (
               <div className="flex items-center gap-2 py-4 text-[11px] text-muted2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading styles…
+                {t("repaint.loadingStyles")}
               </div>
             ) : styles.map((style) => compactStyles ? (
               <StyleRow
@@ -886,7 +887,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
         </CollapsibleSection>
 
         {results.length > 0 ? (
-          <CollapsibleSection label="Results" border="border-t" collapsed={collapsedSections.has("results")} onToggle={() => toggleSection("results")}>
+          <CollapsibleSection label={t("repaint.results")} border="border-t" collapsed={collapsedSections.has("results")} onToggle={() => toggleSection("results")}>
             <div className="space-y-1">
               {results.map((r) => {
                 const name = r.path.split("/").pop();
@@ -915,7 +916,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                           onCompareChange?.({ afterPath: r.path, layout: compareState?.layout || "side" });
                         }
                       }}
-                      title={isComparing ? "Exit compare" : "Compare side-by-side"}
+                      title={isComparing ? t("repaint.exitCompare") : t("repaint.compareSide")}
                     >
                       <Columns2 className="h-3 w-3" />
                     </button>
@@ -934,7 +935,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                           onCompareChange?.({ afterPath: r.path, layout: "stack" });
                         }
                       }}
-                      title="Compare top/bottom"
+                      title={t("repaint.compareTopBottom")}
                     >
                       <Rows2 className="h-3 w-3" />
                     </button>
@@ -946,7 +947,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
         ) : null}
 
         {repaintHistory.length > 0 ? (
-          <CollapsibleSection label="Versions" border="border-t" collapsed={collapsedSections.has("versions")} onToggle={() => toggleSection("versions")}>
+          <CollapsibleSection label={t("repaint.versions")} border="border-t" collapsed={collapsedSections.has("versions")} onToggle={() => toggleSection("versions")}>
             <div className="space-y-0.5">
               {repaintHistory.map((h) => {
                 const name = h.output_path.split("/").pop();
@@ -983,7 +984,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                             onCompareChange?.({ afterPath: h.output_path, layout: "side" });
                           }
                         }}
-                        title="Compare side-by-side"
+                        title={t("repaint.compareSide")}
                       >
                         <Columns2 className="h-3 w-3" />
                       </button>
@@ -1002,19 +1003,19 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                             onCompareChange?.({ afterPath: h.output_path, layout: "stack" });
                           }
                         }}
-                        title="Compare top/bottom"
+                        title={t("repaint.compareTopBottom")}
                       >
                         <Rows2 className="h-3 w-3" />
                       </button>
                     </div>
                     {isExpanded && (
                       <div className="ml-6 mt-1 mb-1.5 space-y-1 rounded-md bg-app px-2.5 py-2 text-[11px] leading-5 text-muted">
-                        {h.prompt && <div><span className="text-muted2">Prompt: </span><span className="text-text">{h.prompt}</span></div>}
-                        {h.provider && <div><span className="text-muted2">Provider: </span>{h.provider}{h.model ? ` / ${h.model}` : ""}</div>}
-                        {h.temperature != null && <div><span className="text-muted2">Temperature: </span>{h.temperature}</div>}
-                        {h.resolution && <div><span className="text-muted2">Resolution: </span>{h.resolution}</div>}
-                        {h.aspect_ratio && <div><span className="text-muted2">Aspect ratio: </span>{h.aspect_ratio}</div>}
-                        {h.created_at && <div><span className="text-muted2">Created: </span>{new Date(h.created_at + "Z").toLocaleString()}</div>}
+                        {h.prompt && <div><span className="text-muted2">{t("repaint.promptColon")} </span><span className="text-text">{h.prompt}</span></div>}
+                        {h.provider && <div><span className="text-muted2">{t("repaint.providerColon")} </span>{h.provider}{h.model ? ` / ${h.model}` : ""}</div>}
+                        {h.temperature != null && <div><span className="text-muted2">{t("repaint.temperatureColon")} </span>{h.temperature}</div>}
+                        {h.resolution && <div><span className="text-muted2">{t("repaint.resolutionColon")} </span>{h.resolution}</div>}
+                        {h.aspect_ratio && <div><span className="text-muted2">{t("repaint.aspectRatioColon")} </span>{h.aspect_ratio}</div>}
+                        {h.created_at && <div><span className="text-muted2">{t("repaint.createdColon")} </span>{new Date(h.created_at + "Z").toLocaleString()}</div>}
                       </div>
                     )}
                   </div>
@@ -1044,7 +1045,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
           >
             <span className="inline-flex items-center gap-1.5">
               {generateStatus.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim()) ? <Check className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {generateStatus.running ? "Generating…" : "Generate"}
+              {generateStatus.running ? t("repaint.generating") : t("repaint.generate")}
             </span>
           </button>
         </div>
@@ -1060,7 +1061,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
 
       {editingStyleId ? (
         <EditStyleModal
-          title={editingStyleId === "new" ? "New Style" : "Edit Style"}
+          title={editingStyleId === "new" ? t("repaint.newStyle") : t("repaint.editStyle")}
           draft={styleDraft}
           onChange={setStyleDraft}
           onSave={saveStyleDraft}
