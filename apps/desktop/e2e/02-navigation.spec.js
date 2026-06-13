@@ -40,12 +40,14 @@ test.describe("Sidebar navigation", () => {
     // The toolbar title reflects the active filter
     await expect(window.getByText("Recently Added").nth(1)).toBeVisible({ timeout: 5_000 });
 
-    // The fixture seeds two 4-star images, so the Rated entry renders
-    // (it's gated on rated_count > 0) and filters down to exactly them.
+    // Four rated assets exist, so the Rated entry renders (gated on
+    // rated_count > 0) and filters down to exactly them: two synthetic
+    // images seeded at 4 stars, plus two real photographs whose original
+    // XMP carries an embedded 5-star rating that import reads through.
     const rated = window.getByRole("button", { name: /Rated/i }).first();
     await expect(rated).toBeVisible();
     await rated.click();
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(2, { timeout: 5_000 });
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(4, { timeout: 5_000 });
 
     // restore
     await window.getByRole("button", { name: /All Assets/i }).first().click();

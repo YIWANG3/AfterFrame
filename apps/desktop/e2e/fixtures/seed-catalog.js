@@ -1,15 +1,20 @@
 // Seeds a small E2E catalog at apps/desktop/e2e/fixtures/test-catalog.afcatalog/
-// with 10 generated images. Run once with:
+// with 10 generated images plus 3 real photographs (see make-real-images.js).
+// Run once with:
 //   node e2e/fixtures/seed-catalog.js
 // Re-run anytime to regenerate from scratch (deletes existing fixture).
 //
-// The seeded catalog is committed to git so tests don't need to regenerate
-// it on every run.
+// The seeded catalog — DB (catalog.sqlite3) + previews — is committed to git so
+// a fresh clone / CI runs the catalog-backed specs without re-seeding. The DB
+// is force-tracked past the *.sqlite3 ignore via an exception in .gitignore;
+// re-run this script and commit the result whenever the fixture set changes.
 
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
+
+const { OUT_DIR: REAL_IMAGES_DIR, SOURCES: REAL_IMAGES } = require("./make-real-images");
 
 const FIXTURES_DIR = __dirname;
 const CATALOG_DIR = path.join(FIXTURES_DIR, "test-catalog.afcatalog");
@@ -92,6 +97,35 @@ async function main() {
       "--catalog", CATALOG_DIR,
       "quick-register",
       "--export-path", p,
+    ]);
+  }
+
+  // 4b. Bring in the real-photo fixtures (committed under real-images/, NOT
+  //     regenerated here — they're downscaled originals, see make-real-images.js).
+  //     They register as a second export root so the gallery, preview pipeline,
+  //     and metadata parsing get exercised against genuine photographs. Two of
+  //     them carry an embedded 5-star XMP rating that import reads through, so
+  //     the Rated filter ends up with 4 assets (see 02-navigation.spec.js).
+  if (!fs.existsSync(REAL_IMAGES_DIR) ||
+      REAL_IMAGES.some((n) => !fs.existsSync(path.join(REAL_IMAGES_DIR, n)))) {
+    throw new Error(
+      `Real-image fixtures missing under ${REAL_IMAGES_DIR}.\n` +
+      `Run: node e2e/fixtures/make-real-images.js`,
+    );
+  }
+  console.log("Registering export root:", REAL_IMAGES_DIR);
+  runSidecar([
+    "--catalog", CATALOG_DIR,
+    "register-roots",
+    "--root-type", "export",
+    "--path", REAL_IMAGES_DIR,
+  ]);
+  for (const name of REAL_IMAGES) {
+    console.log("Registering", name);
+    runSidecar([
+      "--catalog", CATALOG_DIR,
+      "quick-register",
+      "--export-path", path.join(REAL_IMAGES_DIR, name),
     ]);
   }
 

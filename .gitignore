@@ -13,6 +13,9 @@ design/
 *.sqlite3-shm
 *.sqlite3-wal
 *.sqlite3-journal
+# …except the committed E2E fixture catalog DB, so a fresh clone / CI can run
+# the catalog-backed specs without re-seeding (regen via seed-catalog.js).
+!apps/desktop/e2e/fixtures/test-catalog.afcatalog/catalog.sqlite3
 tmp/
 log
 

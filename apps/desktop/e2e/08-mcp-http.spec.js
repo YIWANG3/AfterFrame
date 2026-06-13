@@ -65,7 +65,8 @@ test("search_assets returns the seeded catalog with thumbnail urls", async () =>
   });
   expect(result.isError).toBe(false);
   const payload = JSON.parse(result.content[0].text);
-  expect(payload.count).toBe(10);
+  // 10 synthetic gradients + 3 real photographs (see seed-catalog.js).
+  expect(payload.count).toBe(13);
   for (const asset of payload.assets) {
     expect(asset.asset_id).toBeTruthy();
     expect(asset.thumbnail_url).toContain(`http://127.0.0.1:${ctx.mcpPort}/assets/`);

@@ -4,7 +4,14 @@
 
 const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
+const path = require("node:path");
 const { launchApp, closeApp } = require("./helpers/app");
+const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
+
+// SF skyline at dusk — a real photo with a genuine foreground→background depth
+// gradient, so the model produces a meaningful depth map (a flat synthetic
+// gradient gave the inference nothing real to estimate).
+const DEPTH_FIXTURE = REAL_IMAGE_PATHS.find((p) => path.basename(p) === "0Y1A6707-9.jpg");
 
 const isMacOSWithXcode = () =>
   process.platform === "darwin" &&
@@ -16,10 +23,9 @@ test.describe("Scene depth", () => {
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "depth" }));
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
-    // Open a fixture image via the test catalog. Select + E keyboard shortcut.
-    await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
-    await window.locator("[data-gallery-item='true']").first().click();
-    await window.keyboard.press("e");
+    // Open a real photograph via the backdoor so depth inference runs on an
+    // image with actual scene structure rather than a flat gradient.
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), DEPTH_FIXTURE);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     // Switch to Text tool — that's where the Scene Depth section lives.
     // The backdoor registers in an effect a beat after Save becomes visible.
