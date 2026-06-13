@@ -1,0 +1,41 @@
+{
+  "section": {
+    "ai": "AI",
+    "description": "描述",
+    "tags": "标签",
+    "location": "位置"
+  },
+  "badge": {
+    "ai": "AI",
+    "guess": "AI · 推测"
+  },
+  "add": "添加",
+  "addTag": "添加标签…",
+  "removeTag": "移除标签",
+  "filterBy": "按「{{tag}}」筛选",
+  "annotate": "用 AI 标注",
+  "annotating": "正在标注…",
+  "analyzeAgain": "重新分析",
+  "analyzing": "正在分析…",
+  "reanalyzeTip": "重新分析此图片",
+  "configureTip": "在 设置 → AI 中配置服务商",
+  "configureHint": "在 设置 → AI 中配置服务商以启用标注。",
+  "generatesHint": "生成描述、标签和位置推测。",
+  "noCaption": "未返回描述。",
+  "noProviderError": "未配置服务商。打开 设置 → AI 添加一个。",
+  "loadFailed": "加载标注失败",
+  "loc": {
+    "country": "国家",
+    "region": "地区",
+    "landmark": "地标"
+  },
+  "toast": {
+    "annotatedTitle": "已标注",
+    "annotatedMsg": "AI 标注已保存。",
+    "failedTitle": "标注失败",
+    "failedMsg": "标注失败",
+    "addTagFailed": "无法添加标签",
+    "removeTagFailed": "无法移除标签",
+    "failedFallback": "失败"
+  }
+}

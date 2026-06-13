@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight, Star, Copy, Layers, AlertTriangle, Link2 } from "lucide-react";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
@@ -87,6 +88,7 @@ function ThumbnailStrip({ items, icon: Icon, onSelect }) {
 }
 
 export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, pushToast }) {
+  const { t } = useTranslation("inspector");
   const [localRating, setLocalRating] = useState(null);
   const [relinking, setRelinking] = useState(false);
   const currentAssetId = detail?.asset_id || detail?.export_path || null;
@@ -101,9 +103,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
     try {
       let res = await window.mediaWorkspace?.relinkAsset?.({ assetId: detail.asset_id });
       if (res?.status === "fingerprint_mismatch") {
-        const proceed = window.confirm(
-          "The selected file doesn't match the original photo. Relink anyway?",
-        );
+        const proceed = window.confirm(t("missing.mismatchConfirm"));
         if (!proceed) return;
         res = await window.mediaWorkspace?.relinkAsset?.({
           assetId: detail.asset_id,
@@ -112,13 +112,13 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
         });
       }
       if (res?.status === "relinked") {
-        pushToast?.({ title: "Relinked", message: "Original file reconnected.", ttl: 4000 });
+        pushToast?.({ title: t("toast.relinked"), message: t("toast.relinkedMsg"), ttl: 4000 });
         onRelinked?.();
       } else if (res && res.status !== "cancelled") {
-        pushToast?.({ title: "Relink failed", message: String(res.status || "Unknown error"), ttl: 6000, tone: "error" });
+        pushToast?.({ title: t("toast.relinkFailed"), message: String(res.status || "Unknown error"), ttl: 6000, tone: "error" });
       }
     } catch (err) {
-      pushToast?.({ title: "Relink failed", message: err?.message || String(err), ttl: 6000, tone: "error" });
+      pushToast?.({ title: t("toast.relinkFailed"), message: err?.message || String(err), ttl: 6000, tone: "error" });
     } finally {
       setRelinking(false);
     }
@@ -128,7 +128,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
     return (
       <aside className="flex h-full items-center justify-center overflow-y-auto bg-chrome px-4">
         <div className="text-center">
-          <div className="text-[12px] text-muted">Select an asset</div>
+          <div className="text-[12px] text-muted">{t("selectAsset")}</div>
         </div>
       </aside>
     );
@@ -140,9 +140,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const rawMeta = detail.raw_metadata || {};
   const exportName = fileName(detail.export_path);
   const rawName = fileName(detail.raw_path || "");
-  const formatValue = (detail.export_path || "").split(".").pop()?.toUpperCase() || "Unknown";
-  const dimensions = exportMeta.width && exportMeta.height ? `${exportMeta.width} × ${exportMeta.height}` : "Unknown";
-  const fileSize = formatBytes(exportMeta.file_size || exportMeta.size_bytes) || "Unknown";
+  const formatValue = (detail.export_path || "").split(".").pop()?.toUpperCase() || t("unknown");
+  const dimensions = exportMeta.width && exportMeta.height ? `${exportMeta.width} × ${exportMeta.height}` : t("unknown");
+  const fileSize = formatBytes(exportMeta.file_size || exportMeta.size_bytes) || t("unknown");
 
   const metaRating = Number(detail.app_rating ?? rawMeta.rating ?? exportMeta.rating ?? 0);
   const rating = localRating ?? metaRating;
@@ -165,7 +165,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           {previewPath ? (
             <img src={localFileUrl(previewPath)} alt={detail.stem} className="max-h-full max-w-full object-contain" draggable={false} />
           ) : (
-            <div className="flex items-center justify-center text-[12px] text-muted">No preview</div>
+            <div className="flex items-center justify-center text-[12px] text-muted">{t("noPreview")}</div>
           )}
           <span className="absolute left-2 top-2 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-medium text-white">
             {formatValue}
@@ -179,9 +179,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[rgba(239,159,39,0.42)] bg-[rgba(120,70,8,0.18)] px-2.5 py-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#EF9F27]" />
               <div className="min-w-0">
-                <div className="text-[12px] leading-tight text-[#FAC775]">Original file moved or deleted</div>
+                <div className="text-[12px] leading-tight text-[#FAC775]">{t("missing.banner")}</div>
                 <div className="mt-0.5 text-[11px] leading-tight text-[#9a8f7a]">
-                  Showing preview · full-quality export &amp; editing disabled
+                  {t("missing.hint")}
                 </div>
                 <button
                   type="button"
@@ -190,7 +190,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                   className="mt-2 inline-flex items-center gap-1 rounded-md bg-[#EF9F27] px-2.5 py-1 text-[11px] font-medium text-[#412402] transition-opacity hover:opacity-90 disabled:opacity-60"
                 >
                   <Link2 className="h-3 w-3" />
-                  {relinking ? "Relinking…" : "Relink"}
+                  {relinking ? t("missing.relinking") : t("missing.relink")}
                 </button>
               </div>
             </div>
@@ -198,20 +198,20 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
 
           {detail.collage_sources?.length > 0 ? (
             <div className="mt-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">Source Images</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.sourceImages")}</div>
               <ThumbnailStrip items={detail.collage_sources} onSelect={onSelectAsset} />
             </div>
           ) : null}
 
           {detail.version_siblings?.length > 0 ? (
             <div className="mt-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">Other Versions</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.otherVersions")}</div>
               <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} />
             </div>
           ) : null}
 
-          <Section title="Properties">
-            <DetailRow label="Rating">
+          <Section title={t("sections.properties")}>
+            <DetailRow label={t("rows.rating")}>
               <StarRating
                 value={rating}
                 onChange={(next) => {
@@ -220,9 +220,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                 }}
               />
             </DetailRow>
-            <DetailRow label="Dimensions">{dimensions}</DetailRow>
-            <DetailRow label="Size">{fileSize}</DetailRow>
-            <DetailRow label="Type">{formatValue}</DetailRow>
+            <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
+            <DetailRow label={t("rows.size")}>{fileSize}</DetailRow>
+            <DetailRow label={t("rows.type")}>{formatValue}</DetailRow>
           </Section>
 
           <AnnotationsSection
@@ -232,11 +232,11 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             pushToast={pushToast}
           />
 
-          <Section title="Source">
-            <DetailRow label="Asset">
+          <Section title={t("sections.source")}>
+            <DetailRow label={t("rows.asset")}>
               {missing ? (
                 <span className="flex min-w-0 items-center justify-end gap-1.5">
-                  <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">Missing</span>
+                  <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">{t("missing.badge")}</span>
                   <span className="truncate text-muted2 line-through">{escapePathLabel(detail.export_path)}</span>
                 </span>
               ) : (
@@ -244,55 +244,55 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                   type="button"
                   className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
                   onClick={() => void window.mediaWorkspace?.revealPath?.(detail.export_path)}
-                  title="Reveal in Finder"
+                  title={t("reveal")}
                 >
                   {escapePathLabel(detail.export_path)}
                 </button>
               )}
             </DetailRow>
-            <DetailRow label="RAW Source">
+            <DetailRow label={t("rows.rawSource")}>
               {detail.raw_path ? (
                 <button
                   type="button"
                   className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
                   onClick={() => void window.mediaWorkspace?.revealPath?.(detail.raw_path)}
-                  title="Reveal in Finder"
+                  title={t("reveal")}
                 >
                   {escapePathLabel(detail.raw_path)}
                 </button>
-              ) : "Not linked"}
+              ) : t("notLinked")}
             </DetailRow>
-            {exportMeta.software ? <DetailRow label="Last edited by">{exportMeta.software}</DetailRow> : null}
+            {exportMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{exportMeta.software}</DetailRow> : null}
           </Section>
 
-          <Section title="Camera">
-            <DetailRow label="Camera">{rawMeta.camera_model || exportMeta.camera_model || "—"}</DetailRow>
-            <DetailRow label="Lens">{rawMeta.lens_model || exportMeta.lens_model || "—"}</DetailRow>
+          <Section title={t("sections.camera")}>
+            <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || exportMeta.camera_model || "—"}</DetailRow>
+            <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || exportMeta.lens_model || "—"}</DetailRow>
           </Section>
 
           {hasExposure ? (
-            <Section title="Exposure">
-              {focal ? <DetailRow label="Focal length">{focal}</DetailRow> : null}
-              {aperture ? <DetailRow label="Aperture">{aperture}</DetailRow> : null}
-              {shutter ? <DetailRow label="Shutter">{shutter}</DetailRow> : null}
-              {iso ? <DetailRow label="ISO">{iso}</DetailRow> : null}
+            <Section title={t("sections.exposure")}>
+              {focal ? <DetailRow label={t("rows.focalLength")}>{focal}</DetailRow> : null}
+              {aperture ? <DetailRow label={t("rows.aperture")}>{aperture}</DetailRow> : null}
+              {shutter ? <DetailRow label={t("rows.shutter")}>{shutter}</DetailRow> : null}
+              {iso ? <DetailRow label={t("rows.iso")}>{iso}</DetailRow> : null}
             </Section>
           ) : null}
 
-          <Section title="Dates">
-            <DetailRow label="Imported">{formatTimestamp(detail.imported_at || exportMeta.imported_at)}</DetailRow>
-            <DetailRow label="Captured">{formatTimestamp(rawMeta.capture_time || exportMeta.capture_time)}</DetailRow>
-            <DetailRow label="Modified">{formatTimestamp(exportMeta.modified_time || detail.updated_at)}</DetailRow>
+          <Section title={t("sections.dates")}>
+            <DetailRow label={t("rows.imported")}>{formatTimestamp(detail.imported_at || exportMeta.imported_at)}</DetailRow>
+            <DetailRow label={t("rows.captured")}>{formatTimestamp(rawMeta.capture_time || exportMeta.capture_time)}</DetailRow>
+            <DetailRow label={t("rows.modified")}>{formatTimestamp(exportMeta.modified_time || detail.updated_at)}</DetailRow>
           </Section>
 
           {gps ? (
-            <Section title="Location">
-              <DetailRow label="GPS">{gps}</DetailRow>
+            <Section title={t("sections.location")}>
+              <DetailRow label={t("rows.gps")}>{gps}</DetailRow>
             </Section>
           ) : null}
 
           {detail.duplicates?.length > 0 ? (
-            <Section title="Duplicates">
+            <Section title={t("sections.duplicates")}>
               <div className="mt-1 space-y-1.5">
                 {detail.duplicates.map((dup) => (
                   <button
@@ -300,7 +300,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                     type="button"
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover"
                     onClick={() => void window.mediaWorkspace?.revealPath?.(dup.export_path)}
-                    title="Reveal in Finder"
+                    title={t("reveal")}
                   >
                     <Copy className="h-3 w-3 shrink-0 text-muted2" />
                     <div className="min-w-0 flex-1">

@@ -1,0 +1,50 @@
+{
+  "selectAsset": "Select an asset",
+  "noPreview": "No preview",
+  "unknown": "Unknown",
+  "notLinked": "Not linked",
+  "reveal": "Reveal in Finder",
+  "sections": {
+    "properties": "Properties",
+    "source": "Source",
+    "camera": "Camera",
+    "exposure": "Exposure",
+    "dates": "Dates",
+    "location": "Location",
+    "duplicates": "Duplicates",
+    "sourceImages": "Source Images",
+    "otherVersions": "Other Versions"
+  },
+  "rows": {
+    "rating": "Rating",
+    "dimensions": "Dimensions",
+    "size": "Size",
+    "type": "Type",
+    "asset": "Asset",
+    "rawSource": "RAW Source",
+    "lastEditedBy": "Last edited by",
+    "camera": "Camera",
+    "lens": "Lens",
+    "focalLength": "Focal length",
+    "aperture": "Aperture",
+    "shutter": "Shutter",
+    "iso": "ISO",
+    "imported": "Imported",
+    "captured": "Captured",
+    "modified": "Modified",
+    "gps": "GPS"
+  },
+  "missing": {
+    "badge": "Missing",
+    "banner": "Original file moved or deleted",
+    "hint": "Showing preview · full-quality export & editing disabled",
+    "relink": "Relink",
+    "relinking": "Relinking…",
+    "mismatchConfirm": "The selected file doesn't match the original photo. Relink anyway?"
+  },
+  "toast": {
+    "relinked": "Relinked",
+    "relinkedMsg": "Original file reconnected.",
+    "relinkFailed": "Relink failed"
+  }
+}

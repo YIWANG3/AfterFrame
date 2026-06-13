@@ -5,6 +5,7 @@
 //   - revisiting an already-loaded asset is synchronous (no flicker)
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, RotateCcw, ChevronRight, X, Plus } from "lucide-react";
 import {
   subscribe,
@@ -78,6 +79,7 @@ function useAnnotationState(assetId) {
 // Inline tag adder: type to search existing tags (server-side, scales to many)
 // or Enter to add a brand-new one.
 function TagAdder({ onAdd, existing }) {
+  const { t } = useTranslation("annotation");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -106,7 +108,7 @@ function TagAdder({ onAdd, existing }) {
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
       >
-        <Plus className="h-2.5 w-2.5" /> Add
+        <Plus className="h-2.5 w-2.5" /> {t("add")}
       </button>
     );
   }
@@ -121,7 +123,7 @@ function TagAdder({ onAdd, existing }) {
           if (e.key === "Enter") commit();
           else if (e.key === "Escape") { setQ(""); setOpen(false); }
         }}
-        placeholder="Add tag…"
+        placeholder={t("addTag")}
         className="w-28 rounded-md border border-accent/50 bg-app px-2 py-[2px] text-[10px] text-text outline-none placeholder:text-muted2"
       />
       {suggestions.length > 0 && (
@@ -149,6 +151,7 @@ export default function AnnotationsSection({
   onTagClick,
   pushToast,
 }) {
+  const { t } = useTranslation("annotation");
   const { hp: hasProvider, ann: annotation, known } = useAnnotationState(assetId);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
@@ -163,7 +166,7 @@ export default function AnnotationsSection({
     setError(null);
     if (assetId && !known) {
       void fetchAnnotationFromStore(assetId).catch((e) => {
-        setError(e?.message || "Failed to load annotation");
+        setError(e?.message || t("loadFailed"));
       });
     }
   }, [assetId, known]);
@@ -177,7 +180,7 @@ export default function AnnotationsSection({
       const providers = Array.isArray(settings.providers) ? settings.providers : [];
       const active = providers.find((p) => p.id === settings.activeProviderId) || providers[0];
       if (!active) {
-        throw new Error("No provider configured. Open Settings → AI to add one.");
+        throw new Error(t("noProviderError"));
       }
       // Sidecar adapters only know two: anthropic + openai_compatible. OpenAI
       // and Google route through openai_compatible (URL inferred at the sidecar).
@@ -195,11 +198,11 @@ export default function AnnotationsSection({
         customInstructions: settings.customInstructions || null,
       });
       setCachedAnnotation(assetId, result || null);
-      pushToast?.({ title: "Annotated", message: "AI annotation saved.", ttl: 3500 });
+      pushToast?.({ title: t("toast.annotatedTitle"), message: t("toast.annotatedMsg"), ttl: 3500 });
     } catch (e) {
-      const msg = e?.message || "Annotation failed";
+      const msg = e?.message || t("toast.failedMsg");
       setError(msg);
-      pushToast?.({ title: "Annotation failed", message: msg, ttl: 6000, tone: "error" });
+      pushToast?.({ title: t("toast.failedTitle"), message: msg, ttl: 6000, tone: "error" });
     } finally {
       setRunning(false);
     }
@@ -211,7 +214,7 @@ export default function AnnotationsSection({
       const updated = await window.mediaWorkspace?.addAssetTag?.(assetId, tag);
       setCachedAnnotation(assetId, updated || null);
     } catch (e) {
-      pushToast?.({ title: "Couldn't add tag", message: e?.message || "Failed", ttl: 4000, tone: "error" });
+      pushToast?.({ title: t("toast.addTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
     }
   }, [assetId, pushToast]);
 
@@ -221,7 +224,7 @@ export default function AnnotationsSection({
       const updated = await window.mediaWorkspace?.removeAssetTag?.(assetId, tag);
       setCachedAnnotation(assetId, updated || null);
     } catch (e) {
-      pushToast?.({ title: "Couldn't remove tag", message: e?.message || "Failed", ttl: 4000, tone: "error" });
+      pushToast?.({ title: t("toast.removeTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
     }
   }, [assetId, pushToast]);
 
@@ -230,7 +233,7 @@ export default function AnnotationsSection({
   // a beat on every already-annotated asset before the fetch resolves.
   if (!known) {
     return (
-      <Section title="AI">
+      <Section title={t("section.ai")}>
         <div className="h-[30px] w-full animate-pulse rounded-md border border-border/30 bg-app" />
         <div className="mt-2 h-[13px] w-3/4 animate-pulse rounded-sm bg-app" />
       </Section>
@@ -242,12 +245,12 @@ export default function AnnotationsSection({
     const providerKnown = hasProvider !== null;
     const enabled = providerKnown && hasProvider && !running && !!imagePath;
     return (
-      <Section title="AI">
+      <Section title={t("section.ai")}>
         <button
           type="button"
           onClick={run}
           disabled={!enabled}
-          title={providerKnown && !hasProvider ? "Configure a provider in Settings → AI" : undefined}
+          title={providerKnown && !hasProvider ? t("configureTip") : undefined}
           className={[
             "flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-1.5",
             "text-[11px] font-medium transition-colors",
@@ -261,13 +264,13 @@ export default function AnnotationsSection({
           ].join(" ")}
         >
           <Sparkles className="h-3 w-3" />
-          {running ? "Annotating…" : "Annotate with AI"}
+          {running ? t("annotating") : t("annotate")}
         </button>
         {error && <div className="mt-2 text-[10px] text-error">{error}</div>}
         <div className="mt-2 text-[10px] leading-snug text-muted2">
           {providerKnown && !hasProvider
-            ? "Configure your provider in Settings → AI to enable annotation."
-            : "Generates a caption, tags, and a location guess."}
+            ? t("configureHint")
+            : t("generatesHint")}
         </div>
       </Section>
     );
@@ -279,48 +282,48 @@ export default function AnnotationsSection({
   return (
     <>
       <Section
-        title="Description"
-        badge="AI"
+        title={t("section.description")}
+        badge={t("badge.ai")}
         collapsible
         action={
           <button
             type="button"
             onClick={run}
             disabled={running || !hasProvider}
-            title={!hasProvider ? "Configure a provider in Settings → AI" : "Re-analyze this image"}
+            title={!hasProvider ? t("configureTip") : t("reanalyzeTip")}
             className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium text-muted2 transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RotateCcw className={`h-3 w-3 ${running ? "animate-spin" : ""}`} />
-            {running ? "Analyzing…" : "Analyze again"}
+            {running ? t("analyzing") : t("analyzeAgain")}
           </button>
         }
       >
         {annotation.caption ? (
           <div className="text-[12px] leading-relaxed text-text">{annotation.caption}</div>
         ) : (
-          <div className="text-[11px] italic text-muted2">No caption returned.</div>
+          <div className="text-[11px] italic text-muted2">{t("noCaption")}</div>
         )}
       </Section>
 
-      <Section title="Tags" badge={annotation.tags?.length ? `${annotation.tags.length}` : undefined} collapsible>
+      <Section title={t("section.tags")} badge={annotation.tags?.length ? `${annotation.tags.length}` : undefined} collapsible>
         <div className="flex flex-wrap items-center gap-1">
-          {(annotation.tags || []).map((t) => (
+          {(annotation.tags || []).map((tag) => (
             <span
-              key={t}
+              key={tag}
               className="group/tag inline-flex items-center rounded-md border border-transparent bg-app px-2 py-[2px] text-[10px] text-muted transition-colors hover:border-border hover:text-text"
             >
               <button
                 type="button"
-                onClick={() => onTagClick?.(t)}
-                title={`Filter by "${t}"`}
+                onClick={() => onTagClick?.(tag)}
+                title={t("filterBy", { tag })}
                 className="hover:text-text"
               >
-                {t}
+                {tag}
               </button>
               <button
                 type="button"
-                onClick={() => removeTag(t)}
-                title="Remove tag"
+                onClick={() => removeTag(tag)}
+                title={t("removeTag")}
                 className="ml-0.5 hidden rounded p-px text-muted2 transition-colors hover:text-red-400 group-hover/tag:inline-flex"
               >
                 <X className="h-2.5 w-2.5" />
@@ -332,22 +335,22 @@ export default function AnnotationsSection({
       </Section>
 
       {hasLoc && (
-        <Section title="Location" badge="AI · guess" collapsible>
+        <Section title={t("section.location")} badge={t("badge.guess")} collapsible>
           {loc.country && (
             <div className="flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">Country</span>
+              <span className="min-w-[50px] text-muted2">{t("loc.country")}</span>
               <span className="flex-1 text-text">{loc.country}<ConfidencePill value={loc.confidence} /></span>
             </div>
           )}
           {loc.region && (
             <div className="mt-1 flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">Region</span>
+              <span className="min-w-[50px] text-muted2">{t("loc.region")}</span>
               <span className="flex-1 text-text">{loc.region}</span>
             </div>
           )}
           {loc.landmark && (
             <div className="mt-1 flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">Landmark</span>
+              <span className="min-w-[50px] text-muted2">{t("loc.landmark")}</span>
               <span className="flex-1 text-text">{loc.landmark}</span>
             </div>
           )}

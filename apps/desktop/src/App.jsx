@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { filterTitle } from "./utils/format";
 import useWorkspace from "./hooks/useWorkspace";
 import api from "./api";
+import i18n from "./i18n";
 import usePaneResize from "./hooks/usePaneResize";
 import useSelection from "./hooks/useSelection";
 import useAgentBridge from "./hooks/useAgentBridge";
@@ -64,6 +65,7 @@ export default function App() {
       getViewMode() { return viewMode; },
       getEditorOpen() { return !!editorItem; },
       refresh() { return workspaceRef.current.refreshAll({ force: true }); },
+      async setLocale(lng) { await i18n.changeLanguage(lng); await api.setLocale(lng); },
     };
   }, [viewMode, editorItem]);
   const stickerView = useStickerView();

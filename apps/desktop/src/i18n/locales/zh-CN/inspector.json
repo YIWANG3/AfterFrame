@@ -1,0 +1,50 @@
+{
+  "selectAsset": "选择一个素材",
+  "noPreview": "无预览",
+  "unknown": "未知",
+  "notLinked": "未关联",
+  "reveal": "在访达中显示",
+  "sections": {
+    "properties": "属性",
+    "source": "源文件",
+    "camera": "相机",
+    "exposure": "曝光",
+    "dates": "日期",
+    "location": "位置",
+    "duplicates": "重复项",
+    "sourceImages": "源图像",
+    "otherVersions": "其他版本"
+  },
+  "rows": {
+    "rating": "评分",
+    "dimensions": "尺寸",
+    "size": "大小",
+    "type": "类型",
+    "asset": "成品",
+    "rawSource": "RAW 源",
+    "lastEditedBy": "上次编辑",
+    "camera": "相机",
+    "lens": "镜头",
+    "focalLength": "焦距",
+    "aperture": "光圈",
+    "shutter": "快门",
+    "iso": "ISO",
+    "imported": "导入时间",
+    "captured": "拍摄时间",
+    "modified": "修改时间",
+    "gps": "GPS"
+  },
+  "missing": {
+    "badge": "缺失",
+    "banner": "原文件已移动或删除",
+    "hint": "正在显示预览 · 全质量导出与编辑已禁用",
+    "relink": "重新连接",
+    "relinking": "正在连接…",
+    "mismatchConfirm": "所选文件与原图不一致。仍要重新连接吗?"
+  },
+  "toast": {
+    "relinked": "已重新连接",
+    "relinkedMsg": "原文件已重新连接。",
+    "relinkFailed": "重新连接失败"
+  }
+}

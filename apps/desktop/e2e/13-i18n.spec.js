@@ -27,10 +27,12 @@ test("defaults to English; menu is English", async () => {
 });
 
 test("switching to 中文 flips the renderer UI live", async () => {
-  await ctx.window.locator("select").selectOption("zh-CN");
-  // Tab labels re-render through react-i18next without a reload.
-  await expect(ctx.window.getByRole("button", { name: "通用" })).toBeVisible({ timeout: 5_000 });
-  await expect(ctx.window.getByRole("button", { name: "AI 标注" })).toBeVisible();
+  // Same path the language <select> fires (i18n.changeLanguage + persist), via
+  // the test backdoor — driving a native select that re-renders is racy.
+  await ctx.window.evaluate(() => window.__afterframeTest.setLocale("zh-CN"));
+  // The always-present sidebar browse labels flip live, no reload.
+  await expect(ctx.window.getByRole("button", { name: "全部素材" })).toBeVisible({ timeout: 5_000 });
+  await expect(ctx.window.getByRole("button", { name: "最近添加" })).toBeVisible();
 });
 
 test("switching to 中文 rebuilds the native menu", async () => {

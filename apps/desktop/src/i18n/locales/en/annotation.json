@@ -1,0 +1,41 @@
+{
+  "section": {
+    "ai": "AI",
+    "description": "Description",
+    "tags": "Tags",
+    "location": "Location"
+  },
+  "badge": {
+    "ai": "AI",
+    "guess": "AI · guess"
+  },
+  "add": "Add",
+  "addTag": "Add tag…",
+  "removeTag": "Remove tag",
+  "filterBy": "Filter by \"{{tag}}\"",
+  "annotate": "Annotate with AI",
+  "annotating": "Annotating…",
+  "analyzeAgain": "Analyze again",
+  "analyzing": "Analyzing…",
+  "reanalyzeTip": "Re-analyze this image",
+  "configureTip": "Configure a provider in Settings → AI",
+  "configureHint": "Configure your provider in Settings → AI to enable annotation.",
+  "generatesHint": "Generates a caption, tags, and a location guess.",
+  "noCaption": "No caption returned.",
+  "noProviderError": "No provider configured. Open Settings → AI to add one.",
+  "loadFailed": "Failed to load annotation",
+  "loc": {
+    "country": "Country",
+    "region": "Region",
+    "landmark": "Landmark"
+  },
+  "toast": {
+    "annotatedTitle": "Annotated",
+    "annotatedMsg": "AI annotation saved.",
+    "failedTitle": "Annotation failed",
+    "failedMsg": "Annotation failed",
+    "addTagFailed": "Couldn't add tag",
+    "removeTagFailed": "Couldn't remove tag",
+    "failedFallback": "Failed"
+  }
+}

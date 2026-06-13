@@ -10,15 +10,19 @@ import { initReactI18next } from "react-i18next";
 import enCommon from "./locales/en/common.json";
 import enSettings from "./locales/en/settings.json";
 import enNav from "./locales/en/nav.json";
+import enInspector from "./locales/en/inspector.json";
+import enAnnotation from "./locales/en/annotation.json";
 import zhCommon from "./locales/zh-CN/common.json";
 import zhSettings from "./locales/zh-CN/settings.json";
 import zhNav from "./locales/zh-CN/nav.json";
+import zhInspector from "./locales/zh-CN/inspector.json";
+import zhAnnotation from "./locales/zh-CN/annotation.json";
 
 export const SUPPORTED_LOCALES = ["en", "zh-CN"];
 
 const resources = {
-  en: { common: enCommon, settings: enSettings, nav: enNav },
-  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav },
+  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation },
+  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation },
 };
 
 function initialLocale() {
@@ -34,9 +38,13 @@ i18n.use(initReactI18next).init({
   lng: initialLocale(),
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "settings", "nav"],
+  ns: ["common", "settings", "nav", "inspector", "annotation"],
   interpolation: { escapeValue: false },
   returnNull: false,
+  // Resources are bundled and registered synchronously, so there's nothing to
+  // suspend on — and Suspense would remount subtrees on changeLanguage (which
+  // detached live elements like the language <select> mid-interaction).
+  react: { useSuspense: false },
 });
 
 export default i18n;
