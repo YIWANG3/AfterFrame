@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, X, Star } from "lucide-react";
 import Calendar from "react-calendar";
@@ -78,6 +79,7 @@ function Popover({ label, active, summary, children, width = 220 }) {
 }
 
 function ListPopover({ label, value, options, onSelect, searchable, onSearch }) {
+  const { t } = useTranslation("nav");
   const [q, setQ] = useState("");
   const [remote, setRemote] = useState(null);
 
@@ -105,7 +107,7 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={`Search ${label.toLowerCase()}…`}
+          placeholder={t("filter.searchPlaceholder", { label })}
           className="mb-1.5 w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
       )}
@@ -116,7 +118,7 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
           onClick={() => onSelect(undefined)}
         >
           <span className="flex h-3 w-3 items-center justify-center">{!value && <Check className="h-3 w-3 text-accent" />}</span>
-          Any {label}
+          {t("filter.any", { label })}
         </button>
         {shown.map((opt) => (
           <button
@@ -184,6 +186,7 @@ function FacetSlider({ label, lo, hi, step, value, prefix, suffix, decimals, onC
 
 // Min + Max sliders for a numeric facet. A value at a bound clears that side.
 function RangePopover({ label, bounds, step, minKey, maxKey, filters, onChange, prefix = "", suffix = "", decimals = 0 }) {
+  const { t } = useTranslation("nav");
   const lo = Number(bounds?.min);
   const hi = Number(bounds?.max);
   if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null;
@@ -202,9 +205,9 @@ function RangePopover({ label, bounds, step, minKey, maxKey, filters, onChange, 
   return (
     <Popover label={label} active={active} summary={summary} width={260}>
       <div className="flex flex-col gap-2.5">
-        <FacetSlider label="Min" lo={lo} hi={hi} step={step} value={vMin} prefix={prefix} suffix={suffix} decimals={decimals}
+        <FacetSlider label={t("filter.min")} lo={lo} hi={hi} step={step} value={vMin} prefix={prefix} suffix={suffix} decimals={decimals}
           onChange={(v) => emit(Math.min(v, vMax), vMax)} />
-        <FacetSlider label="Max" lo={lo} hi={hi} step={step} value={vMax} prefix={prefix} suffix={suffix} decimals={decimals}
+        <FacetSlider label={t("filter.max")} lo={lo} hi={hi} step={step} value={vMax} prefix={prefix} suffix={suffix} decimals={decimals}
           onChange={(v) => emit(vMin, Math.max(v, vMin))} />
       </div>
       {active && (
@@ -213,7 +216,7 @@ function RangePopover({ label, bounds, step, minKey, maxKey, filters, onChange, 
           className="mt-2 w-full rounded-md py-1 text-[11px] text-muted2 hover:bg-hover hover:text-text"
           onClick={() => onChange(setOrDelete(setOrDelete(filters, minKey, undefined), maxKey, undefined))}
         >
-          Reset
+          {t("filter.reset")}
         </button>
       )}
     </Popover>
@@ -231,11 +234,12 @@ function parseYmd(s) {
 }
 
 function DateRangePopover({ captureRange, filters, onChange }) {
+  const { t } = useTranslation("nav");
   const from = parseYmd(filters.date_from);
   const to = parseYmd(filters.date_to);
   const active = !!(from || to);
   const fmt = (d) => (d ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "…");
-  const summary = active ? `${fmt(from)} – ${fmt(to)}` : "Date";
+  const summary = active ? `${fmt(from)} – ${fmt(to)}` : t("filter.date");
   const minD = parseYmd(captureRange?.min);
   const maxD = parseYmd(captureRange?.max);
 
@@ -246,7 +250,7 @@ function DateRangePopover({ captureRange, filters, onChange }) {
   }
 
   return (
-    <Popover label="Date" active={active} summary={summary} width="auto">
+    <Popover label={t("filter.date")} active={active} summary={summary} width="auto">
       <Calendar
         className="cal-dark"
         selectRange
@@ -266,7 +270,7 @@ function DateRangePopover({ captureRange, filters, onChange }) {
           className="mt-2 w-full rounded-md py-1 text-[11px] text-muted2 hover:bg-hover hover:text-text"
           onClick={() => onChange(setOrDelete(setOrDelete(filters, "date_from", undefined), "date_to", undefined))}
         >
-          Reset
+          {t("filter.reset")}
         </button>
       )}
     </Popover>
@@ -274,6 +278,7 @@ function DateRangePopover({ captureRange, filters, onChange }) {
 }
 
 export default function FilterBar({ facetValues, filters, onChange }) {
+  const { t } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
   const lenses = facetValues?.lenses || [];
@@ -283,14 +288,14 @@ export default function FilterBar({ facetValues, filters, onChange }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5">
       {cameras.length > 0 && (
-        <ListPopover label="Camera" value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
+        <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
       )}
       {lenses.length > 0 && (
-        <ListPopover label="Lens" value={f.lens} options={lenses} onSelect={(v) => onChange(setOrDelete(f, "lens", v))} />
+        <ListPopover label={t("filter.lens")} value={f.lens} options={lenses} onSelect={(v) => onChange(setOrDelete(f, "lens", v))} />
       )}
       {tags.length > 0 && (
         <ListPopover
-          label="Tag"
+          label={t("filter.tag")}
           value={f.tag}
           options={tags}
           onSearch={(q) => window.mediaWorkspace?.searchFacet?.({ field: "tag", q, limit: 60 })}
@@ -298,9 +303,9 @@ export default function FilterBar({ facetValues, filters, onChange }) {
         />
       )}
 
-      <RangePopover label="ISO" bounds={facetValues?.iso} step={50} minKey="iso_min" maxKey="iso_max" filters={f} onChange={onChange} />
-      <RangePopover label="Aperture" bounds={facetValues?.aperture} step={0.1} minKey="aperture_min" maxKey="aperture_max" filters={f} onChange={onChange} prefix="ƒ/" decimals={1} />
-      <RangePopover label="Focal" bounds={facetValues?.focal} step={1} minKey="focal_min" maxKey="focal_max" filters={f} onChange={onChange} suffix="mm" />
+      <RangePopover label={t("filter.iso")} bounds={facetValues?.iso} step={50} minKey="iso_min" maxKey="iso_max" filters={f} onChange={onChange} />
+      <RangePopover label={t("filter.aperture")} bounds={facetValues?.aperture} step={0.1} minKey="aperture_min" maxKey="aperture_max" filters={f} onChange={onChange} prefix="ƒ/" decimals={1} />
+      <RangePopover label={t("filter.focal")} bounds={facetValues?.focal} step={1} minKey="focal_min" maxKey="focal_max" filters={f} onChange={onChange} suffix="mm" />
 
       <DateRangePopover captureRange={facetValues?.capture_time} filters={f} onChange={onChange} />
 
@@ -312,7 +317,7 @@ export default function FilterBar({ facetValues, filters, onChange }) {
             <button
               key={n}
               type="button"
-              title={`Rating ≥ ${n}`}
+              title={t("filter.ratingAtLeast", { n })}
               onClick={() => onChange(setOrDelete(f, "rating_min", f.rating_min === n ? undefined : n))}
               className="p-0.5"
             >
@@ -329,7 +334,7 @@ export default function FilterBar({ facetValues, filters, onChange }) {
           className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
         >
           <X className="h-2.5 w-2.5" />
-          Clear {activeCount}
+          {t("filter.clear", { count: activeCount })}
         </button>
       )}
     </div>

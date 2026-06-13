@@ -1,0 +1,78 @@
+{
+  "browse": {
+    "all": "All Assets",
+    "recent": "Recently Added",
+    "rated": "Rated",
+    "matched": "With Raw"
+  },
+  "sidebar": {
+    "stickers": "Stickers",
+    "folders": "Folders",
+    "newFolder": "New folder",
+    "noFolders": "No folders yet",
+    "settings": "Settings",
+    "settingsTip": "Settings (⌘,)",
+    "rename": "Rename",
+    "delete": "Delete",
+    "annotateFolder": "Annotate un-annotated in this folder",
+    "untitledCatalog": "Untitled Catalog",
+    "noAssets": "No indexed assets yet",
+    "assetsCount_one": "{{count}} asset",
+    "assetsCount_other": "{{count}} assets",
+    "updated": "updated {{time}}"
+  },
+  "filter": {
+    "camera": "Camera",
+    "lens": "Lens",
+    "tag": "Tag",
+    "iso": "ISO",
+    "aperture": "Aperture",
+    "focal": "Focal",
+    "date": "Date",
+    "min": "Min",
+    "max": "Max",
+    "reset": "Reset",
+    "any": "Any {{label}}",
+    "searchPlaceholder": "Search {{label}}…",
+    "clear": "Clear {{count}}",
+    "ratingAtLeast": "Rating ≥ {{n}}"
+  },
+  "activity": {
+    "title": "Background Activity",
+    "tip": "Background activity",
+    "none": "No background jobs running",
+    "cancel": "Cancel",
+    "cancelling": "Cancelling…",
+    "queued": "Queued",
+    "working": "Working…",
+    "workingProgress": "{{label}} · {{processed}}/{{total}}",
+    "finished": "{{label}} finished",
+    "ended": "{{label}} {{status}}",
+    "jobs": {
+      "import": "Import",
+      "preview": "Previews",
+      "enrichment": "Enrichment",
+      "annotation": "AI Annotation",
+      "ai_repaint": "AI Repaint"
+    }
+  },
+  "gallery": {
+    "loading": "Loading…",
+    "noPreview": "No preview",
+    "noAssets": "No assets in this view",
+    "missing": "Missing",
+    "missingTip": "Original file moved or deleted",
+    "menu": {
+      "edit": "Edit…",
+      "compare": "Compare",
+      "collage": "Collage",
+      "addToFolder": "Add to Folder",
+      "removeFromFolder": "Remove from Folder",
+      "delete": "Delete from Catalog",
+      "annotate": "Annotate with AI",
+      "annotateSkip": "Annotate{{suffix}} (skip done)",
+      "reannotate": "Re-annotate{{suffix}}",
+      "reveal": "Reveal in Finder"
+    }
+  }
+}

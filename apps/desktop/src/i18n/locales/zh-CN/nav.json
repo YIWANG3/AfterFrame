@@ -1,0 +1,77 @@
+{
+  "browse": {
+    "all": "全部素材",
+    "recent": "最近添加",
+    "rated": "已评分",
+    "matched": "含 RAW"
+  },
+  "sidebar": {
+    "stickers": "贴纸",
+    "folders": "文件夹",
+    "newFolder": "新建文件夹",
+    "noFolders": "暂无文件夹",
+    "settings": "设置",
+    "settingsTip": "设置 (⌘,)",
+    "rename": "重命名",
+    "delete": "删除",
+    "annotateFolder": "标注此文件夹中未标注的图片",
+    "untitledCatalog": "未命名图库",
+    "noAssets": "尚未索引任何素材",
+    "assetsCount_other": "{{count}} 个素材",
+    "updated": "更新于 {{time}}"
+  },
+  "filter": {
+    "camera": "相机",
+    "lens": "镜头",
+    "tag": "标签",
+    "iso": "ISO",
+    "aperture": "光圈",
+    "focal": "焦距",
+    "date": "日期",
+    "min": "最小",
+    "max": "最大",
+    "reset": "重置",
+    "any": "任意{{label}}",
+    "searchPlaceholder": "搜索{{label}}…",
+    "clear": "清除 {{count}}",
+    "ratingAtLeast": "评分 ≥ {{n}}"
+  },
+  "activity": {
+    "title": "后台活动",
+    "tip": "后台活动",
+    "none": "没有正在运行的后台任务",
+    "cancel": "取消",
+    "cancelling": "正在取消…",
+    "queued": "排队中",
+    "working": "处理中…",
+    "workingProgress": "{{label}} · {{processed}}/{{total}}",
+    "finished": "{{label}}已完成",
+    "ended": "{{label}}{{status}}",
+    "jobs": {
+      "import": "导入",
+      "preview": "预览",
+      "enrichment": "元数据补全",
+      "annotation": "AI 标注",
+      "ai_repaint": "AI 重绘"
+    }
+  },
+  "gallery": {
+    "loading": "加载中…",
+    "noPreview": "无预览",
+    "noAssets": "此视图中没有素材",
+    "missing": "缺失",
+    "missingTip": "原文件已移动或删除",
+    "menu": {
+      "edit": "编辑…",
+      "compare": "对比",
+      "collage": "拼图",
+      "addToFolder": "加入文件夹",
+      "removeFromFolder": "移出文件夹",
+      "delete": "从图库删除",
+      "annotate": "用 AI 标注",
+      "annotateSkip": "标注{{suffix}}(跳过已标注)",
+      "reannotate": "重新标注{{suffix}}",
+      "reveal": "在访达中显示"
+    }
+  }
+}

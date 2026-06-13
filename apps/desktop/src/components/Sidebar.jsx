@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles } from "lucide-react";
 import { baseName, formatTimestamp, navItems } from "../utils/format";
 
@@ -55,10 +56,11 @@ export default function Sidebar({
   onOpenSettings,
   stickerMode = false,
 }) {
+  const { t } = useTranslation("nav");
   const browse = navItems(summary);
   const rootSummary = [];
-  if (Number(summary?.export_assets ?? 0)) rootSummary.push(`${summary.export_assets} assets`);
-  if (summary?.updated_at) rootSummary.push(`updated ${formatTimestamp(summary.updated_at)}`);
+  if (Number(summary?.export_assets ?? 0)) rootSummary.push(t("sidebar.assetsCount", { count: summary.export_assets }));
+  if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at) }));
 
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -95,9 +97,9 @@ export default function Sidebar({
   return (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-border/40 bg-chrome px-3 py-3">
       <div className="mb-5 px-1">
-        <div className="text-[13px] font-semibold tracking-[0.01em] text-text">{baseName(info?.catalogPath || "Untitled Catalog")}</div>
+        <div className="text-[13px] font-semibold tracking-[0.01em] text-text">{baseName(info?.catalogPath || t("sidebar.untitledCatalog"))}</div>
         <div className="mt-1 text-[11px] text-muted2">
-          {rootSummary.length ? rootSummary.join(" · ") : "No indexed assets yet"}
+          {rootSummary.length ? rootSummary.join(" · ") : t("sidebar.noAssets")}
         </div>
       </div>
 
@@ -123,7 +125,7 @@ export default function Sidebar({
               >
                 <span className="flex items-center gap-2.5">
                   <Icon className={`h-4 w-4 stroke-[1.6] ${active ? "text-accent" : ""}`} />
-                  <span className="text-[13px]">{item.label}</span>
+                  <span className="text-[13px]">{t(`browse.${item.key}`, item.label)}</span>
                 </span>
                 <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{item.count}</span>
               </button>
@@ -141,18 +143,18 @@ export default function Sidebar({
           >
             <span className="flex items-center gap-2.5">
               <Cannabis className={`h-4 w-4 stroke-[1.6] ${stickerMode ? "text-accent" : ""}`} />
-              <span className="text-[13px]">Stickers</span>
+              <span className="text-[13px]">{t("sidebar.stickers")}</span>
             </span>
           </button>
         </div>
 
         <div>
           <div className="flex items-center justify-between px-2.5 pb-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">Folders</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sidebar.folders")}</span>
             <button
               type="button"
               className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
-              title="New folder"
+              title={t("sidebar.newFolder")}
               onClick={() => setCreatingFolder(true)}
             >
               <FolderPlus className="h-3.5 w-3.5" />
@@ -245,7 +247,7 @@ export default function Sidebar({
                       <button
                         type="button"
                         className="rounded-md p-0.5 text-muted2 hover:text-text"
-                        title="Annotate un-annotated in this folder"
+                        title={t("sidebar.annotateFolder")}
                         onClick={(e) => { e.stopPropagation(); onAnnotateCollection?.(col.collection_id); }}
                       >
                         <Sparkles className="h-3 w-3" />
@@ -253,7 +255,7 @@ export default function Sidebar({
                       <button
                         type="button"
                         className="rounded-md p-0.5 text-muted2 hover:text-text"
-                        title="Rename"
+                        title={t("sidebar.rename")}
                         onClick={(e) => { e.stopPropagation(); setEditingId(col.collection_id); }}
                       >
                         <Pencil className="h-3 w-3" />
@@ -261,7 +263,7 @@ export default function Sidebar({
                       <button
                         type="button"
                         className="rounded-md p-0.5 text-muted2 hover:text-red-400"
-                        title="Delete"
+                        title={t("sidebar.delete")}
                         onClick={(e) => { e.stopPropagation(); onDeleteCollection?.(col.collection_id); }}
                       >
                         <Trash2 className="h-3 w-3" />
@@ -273,7 +275,7 @@ export default function Sidebar({
             })}
 
             {!(collections || []).some((c) => c.kind === "manual") && !creatingFolder && (
-              <div className="px-2.5 py-2 text-[11px] text-muted2">No folders yet</div>
+              <div className="px-2.5 py-2 text-[11px] text-muted2">{t("sidebar.noFolders")}</div>
             )}
           </div>
         </div>
@@ -285,10 +287,10 @@ export default function Sidebar({
           type="button"
           onClick={() => onOpenSettings?.()}
           className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-muted transition-colors hover:bg-hover/70 hover:text-text"
-          title="Settings (⌘,)"
+          title={t("sidebar.settingsTip")}
         >
           <SettingsIcon className="h-4 w-4 stroke-[1.6]" />
-          <span className="text-[13px]">Settings</span>
+          <span className="text-[13px]">{t("sidebar.settings")}</span>
         </button>
       </div>
     </aside>

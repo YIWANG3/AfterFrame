@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
 
@@ -159,6 +160,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
 }
 
 function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, onAddTo, onRemoveFrom, onReveal, onEdit, onDeleteFromCatalog, onCompare, onCollage, onAnnotate, onClose }) {
+  const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
     function handlePointerDown(e) {
@@ -202,38 +204,38 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
       className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu"
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
-      <MenuItem icon={Pencil} label="Edit…" shortcut="E" onClick={() => { onEdit?.(item.export_path); onClose(); }} />
+      <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut="E" onClick={() => { onEdit?.(item.export_path); onClose(); }} />
       {assetIds?.length === 2 && (
-        <MenuItem icon={Columns2} label="Compare" onClick={() => { onCompare?.(assetIds); onClose(); }} />
+        <MenuItem icon={Columns2} label={t("gallery.menu.compare")} onClick={() => { onCompare?.(assetIds); onClose(); }} />
       )}
       {assetIds?.length >= 2 && (
-        <MenuItem icon={LayoutGrid} label="Collage" onClick={() => { onCollage?.(assetIds); onClose(); }} />
+        <MenuItem icon={LayoutGrid} label={t("gallery.menu.collage")} onClick={() => { onCollage?.(assetIds); onClose(); }} />
       )}
-      <MenuItem icon={Sparkles} label="Annotate with AI">
+      <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")}>
         <button
           type="button"
           className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
         >
-          Annotate{assetIds?.length > 1 ? ` ${assetIds.length}` : ""} (skip done)
+          {t("gallery.menu.annotateSkip", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
         </button>
         <button
           type="button"
           className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
         >
-          Re-annotate{assetIds?.length > 1 ? ` ${assetIds.length}` : ""}
+          {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
         </button>
       </MenuItem>
-      <MenuItem icon={Eye} label="Reveal in Finder" shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
-      <MenuItem icon={Trash2} label="Delete from Catalog" onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
+      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
+      <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
 
       {(manualFolders.length > 0 || inActiveFolder) && (
         <div className="my-1 border-t border-border/40" />
       )}
 
       {manualFolders.length > 0 && (
-        <MenuItem icon={FolderPlus} label="Add to Folder">
+        <MenuItem icon={FolderPlus} label={t("gallery.menu.addToFolder")}>
           {manualFolders.map((col) => (
             <button
               key={col.collection_id}
@@ -249,7 +251,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
       )}
 
       {inActiveFolder && (
-        <MenuItem icon={FolderMinus} label="Remove from Folder" onClick={() => { onRemoveFrom(); onClose(); }} />
+        <MenuItem icon={FolderMinus} label={t("gallery.menu.removeFromFolder")} onClick={() => { onRemoveFrom(); onClose(); }} />
       )}
     </div>,
     document.body,
@@ -271,6 +273,7 @@ const CardContent = memo(function CardContent({
   compact = false,
   showVersionBadge = false, // deprecated — kept for compat
 }) {
+  const { t } = useTranslation("nav");
   const title = fileName(item.export_path) || item.stem;
   const totalHeight = height + captionHeight;
 
@@ -344,15 +347,15 @@ const CardContent = memo(function CardContent({
             className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">No preview</div>
+          <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">{t("gallery.noPreview")}</div>
         )}
         {item.exists_on_disk === false ? (
           <div
             className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-[rgba(120,70,8,0.94)] px-1.5 py-0.5 text-[10px] font-medium text-[#FAEEDA]"
-            title="Original file moved or deleted"
+            title={t("gallery.missingTip")}
           >
             <Unlink className="h-2.5 w-2.5" />
-            Missing
+            {t("gallery.missing")}
           </div>
         ) : null}
       </div>
@@ -405,6 +408,7 @@ export default function Gallery({
   onCollage,
   onAnnotate,
 }) {
+  const { t } = useTranslation("nav");
   const containerRef = useRef(null);
   const scrollRafRef = useRef(0);
   const [contextMenu, setContextMenu] = useState(null);
@@ -706,7 +710,7 @@ export default function Gallery({
     return (
       <div className="flex h-full items-center justify-center text-muted">
         <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-        <span className="text-[13px]">Loading…</span>
+        <span className="text-[13px]">{t("gallery.loading")}</span>
       </div>
     );
   }
@@ -716,7 +720,7 @@ export default function Gallery({
         <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-dashed border-border bg-chrome/50">
           <Images className="h-6 w-6 text-muted2" />
         </div>
-        <div className="text-[13px] text-muted">No assets in this view</div>
+        <div className="text-[13px] text-muted">{t("gallery.noAssets")}</div>
       </div>
     );
   }
