@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Github, Download, FileText, MessageSquare } from "lucide-react";
 import { Group } from "./SettingsPrimitives";
+import logo from "../../assets/logo.png";
 
 const REPO_URL = "https://github.com/YIWANG3/AfterFrame";
 const RELEASES_URL = `${REPO_URL}/releases`;
@@ -32,9 +33,7 @@ export default function AboutSettings() {
   return (
     <div>
       <div className="mb-6 flex items-center gap-4 border-b border-border pb-5">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent/70 text-[28px] font-bold text-app shadow-[0_4px_16px_rgba(212,167,85,0.3)]">
-          A
-        </div>
+        <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-2xl" />
         <div>
           <div className="text-[18px] font-semibold text-text">AfterFrame</div>
           <div className="text-[12px] text-muted2">A local-first photo workspace for photographers.</div>
