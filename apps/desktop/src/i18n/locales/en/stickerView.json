@@ -1,0 +1,30 @@
+{
+  "title": "Stickers",
+  "search": "Search stickers…",
+  "loading": "Loading…",
+  "noMatch": "No stickers match \"{{query}}\"",
+  "noStickers": "No stickers yet",
+  "tryDifferent": "Try a different search.",
+  "emptyHint": "Open any photo in the editor → switch to the Sticker tool → Create new.",
+  "reveal": "Reveal in Finder",
+  "deleteSticker": "Delete sticker",
+  "selectSticker": "Select a sticker",
+  "unknown": "Unknown",
+  "showInFinder": "Show in Finder",
+  "showPng": "Show PNG",
+  "star": "Star",
+  "unstar": "Unstar",
+  "pngAlpha": "PNG (alpha)",
+  "sections": { "properties": "Properties", "outline": "Outline", "source": "Source" },
+  "rows": {
+    "starred": "Starred",
+    "dimensions": "Dimensions",
+    "format": "Format",
+    "created": "Created",
+    "width": "Width",
+    "color": "Color",
+    "file": "File",
+    "path": "Path",
+    "sticker": "Sticker"
+  }
+}

@@ -14,6 +14,7 @@ import enInspector from "./locales/en/inspector.json";
 import enAnnotation from "./locales/en/annotation.json";
 import enEditor from "./locales/en/editor.json";
 import enCollage from "./locales/en/collage.json";
+import enStickerView from "./locales/en/stickerView.json";
 import zhCommon from "./locales/zh-CN/common.json";
 import zhSettings from "./locales/zh-CN/settings.json";
 import zhNav from "./locales/zh-CN/nav.json";
@@ -21,12 +22,13 @@ import zhInspector from "./locales/zh-CN/inspector.json";
 import zhAnnotation from "./locales/zh-CN/annotation.json";
 import zhEditor from "./locales/zh-CN/editor.json";
 import zhCollage from "./locales/zh-CN/collage.json";
+import zhStickerView from "./locales/zh-CN/stickerView.json";
 
 export const SUPPORTED_LOCALES = ["en", "zh-CN"];
 
 const resources = {
-  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation, editor: enEditor, collage: enCollage },
-  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation, editor: zhEditor, collage: zhCollage },
+  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation, editor: enEditor, collage: enCollage, stickerView: enStickerView },
+  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation, editor: zhEditor, collage: zhCollage, stickerView: zhStickerView },
 };
 
 function initialLocale() {
@@ -42,7 +44,7 @@ i18n.use(initReactI18next).init({
   lng: initialLocale(),
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "settings", "nav", "inspector", "annotation", "editor", "collage"],
+  ns: ["common", "settings", "nav", "inspector", "annotation", "editor", "collage", "stickerView"],
   interpolation: { escapeValue: false },
   returnNull: false,
   // Resources are bundled and registered synchronously, so there's nothing to

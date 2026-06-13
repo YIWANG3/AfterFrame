@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Search, Star, Trash2, FolderOpen, ChevronRight, Cannabis, Eye } from "lucide-react";
 import { localFileUrl, fileName, stickerLabel } from "../utils/format";
@@ -14,11 +15,12 @@ const GAP = 12;
 /* ─── Top toolbar — replacement for Toolbar.jsx ─────────────── */
 
 export function StickerToolbar({ count, query, setQuery }) {
+  const { t } = useTranslation("stickerView");
   return (
     <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/40 bg-chrome px-3 text-[12px]">
       <div className="flex items-center gap-2 text-muted2">
         <Cannabis className="h-4 w-4" />
-        <span className="text-text">Stickers</span>
+        <span className="text-text">{t("title")}</span>
         <span className="text-muted3">· {count}</span>
       </div>
       <div className="relative w-[280px]">
@@ -26,7 +28,7 @@ export function StickerToolbar({ count, query, setQuery }) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search stickers…"
+          placeholder={t("search")}
           className="h-7 w-full rounded-md border border-border/60 bg-app pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
         />
       </div>
@@ -37,6 +39,7 @@ export function StickerToolbar({ count, query, setQuery }) {
 /* ─── Main grid area — replacement for Gallery.jsx ───────────── */
 
 export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete, loading }) {
+  const { t } = useTranslation("stickerView");
   const [contextMenu, setContextMenu] = useState(null);
   const filtered = useMemo(() => {
     if (!query?.trim()) return stickers;
@@ -48,7 +51,7 @@ export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete
   }, [stickers, query]);
 
   if (loading) {
-    return <div className="grid h-full place-items-center text-[13px] text-muted">Loading…</div>;
+    return <div className="grid h-full place-items-center text-[13px] text-muted">{t("loading")}</div>;
   }
   if (filtered.length === 0) {
     return <EmptyState query={query} />;
@@ -137,6 +140,7 @@ function StickerCard({ sticker, selected, onSelect, onContextMenu }) {
 }
 
 function StickerContextMenu({ x, y, sticker, onReveal, onDelete, onClose }) {
+  const { t } = useTranslation("stickerView");
   const ref = useRef(null);
   const [pos, setPos] = useState({ x, y });
 
@@ -177,9 +181,9 @@ function StickerContextMenu({ x, y, sticker, onReveal, onDelete, onClose }) {
       className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu"
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
-      <MenuItem icon={Eye} label="Reveal in Finder" onClick={() => { onReveal?.(); onClose(); }} />
+      <MenuItem icon={Eye} label={t("reveal")} onClick={() => { onReveal?.(); onClose(); }} />
       <div className="my-1 border-t border-border/40" />
-      <MenuItem icon={Trash2} label="Delete sticker" onClick={() => { onDelete?.(); onClose(); }} danger />
+      <MenuItem icon={Trash2} label={t("deleteSticker")} onClick={() => { onDelete?.(); onClose(); }} danger />
     </div>,
     document.body,
   );
@@ -204,16 +208,17 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
 }
 
 function EmptyState({ query }) {
+  const { t } = useTranslation("stickerView");
   return (
     <div className="grid h-full place-items-center px-8 py-10">
       <div className="max-w-md rounded-lg border border-dashed border-border/60 px-8 py-10 text-center">
         <div className="text-[13px] text-text">
-          {query ? `No stickers match "${query}"` : "No stickers yet"}
+          {query ? t("noMatch", { query }) : t("noStickers")}
         </div>
         <div className="mt-2 text-[12px] leading-relaxed text-muted2">
           {query
-            ? "Try a different search."
-            : "Open any photo in the editor → switch to the Sticker tool → Create new."}
+            ? t("tryDifferent")
+            : t("emptyHint")}
         </div>
       </div>
     </div>
@@ -223,19 +228,20 @@ function EmptyState({ query }) {
 /* ─── Right pane — replacement for Inspector.jsx ─────────────── */
 
 export function StickerInspector({ sticker, onStar }) {
+  const { t } = useTranslation("stickerView");
   if (!sticker) {
     return (
       <aside className="flex h-full items-center justify-center overflow-y-auto bg-chrome px-4">
         <div className="text-center">
-          <div className="text-[12px] text-muted">Select a sticker</div>
+          <div className="text-[12px] text-muted">{t("selectSticker")}</div>
         </div>
       </aside>
     );
   }
   const dimensions = sticker.width && sticker.height
     ? `${sticker.width} × ${sticker.height}`
-    : "Unknown";
-  const created = sticker.createdAt ? new Date(sticker.createdAt).toLocaleString() : "Unknown";
+    : t("unknown");
+  const created = sticker.createdAt ? new Date(sticker.createdAt).toLocaleString() : t("unknown");
 
   return (
     <aside className="flex h-full flex-col overflow-hidden border-l border-border/40 bg-chrome">
@@ -257,27 +263,27 @@ export function StickerInspector({ sticker, onStar }) {
             {stickerLabel(sticker)}
           </h2>
 
-          <Section title="Properties">
-            <DetailRow label="Starred">
+          <Section title={t("sections.properties")}>
+            <DetailRow label={t("rows.starred")}>
               <button
                 type="button"
                 onClick={onStar}
                 className="p-0.5"
-                title={sticker.starred ? "Unstar" : "Star"}
+                title={sticker.starred ? t("unstar") : t("star")}
               >
                 <Star
                   className={`h-3.5 w-3.5 ${sticker.starred ? "fill-[rgb(225,180,105)] text-[rgb(225,180,105)]" : "text-muted2/40 hover:text-muted2/60"}`}
                 />
               </button>
             </DetailRow>
-            <DetailRow label="Dimensions">{dimensions}</DetailRow>
-            <DetailRow label="Format">PNG (alpha)</DetailRow>
-            <DetailRow label="Created">{created}</DetailRow>
+            <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
+            <DetailRow label={t("rows.format")}>{t("pngAlpha")}</DetailRow>
+            <DetailRow label={t("rows.created")}>{created}</DetailRow>
           </Section>
 
-          <Section title="Outline">
-            <DetailRow label="Width">{sticker.outlineWidth ?? 0} px</DetailRow>
-            <DetailRow label="Color">
+          <Section title={t("sections.outline")}>
+            <DetailRow label={t("rows.width")}>{sticker.outlineWidth ?? 0} px</DetailRow>
+            <DetailRow label={t("rows.color")}>
               <div className="flex items-center gap-1.5">
                 <div
                   className="h-3 w-3 rounded border border-border/60"
@@ -288,14 +294,14 @@ export function StickerInspector({ sticker, onStar }) {
             </DetailRow>
           </Section>
 
-          <Section title="Source">
-            <DetailRow label="File">
+          <Section title={t("sections.source")}>
+            <DetailRow label={t("rows.file")}>
               <span className="truncate" title={sticker.sourcePath}>
                 {sticker.sourceLabel || fileName(sticker.sourcePath) || "—"}
               </span>
             </DetailRow>
             {sticker.sourcePath ? (
-              <DetailRow label="Path">
+              <DetailRow label={t("rows.path")}>
                 <button
                   type="button"
                   onClick={() => window.mediaWorkspace?.revealPath?.(sticker.sourcePath)}
@@ -303,18 +309,18 @@ export function StickerInspector({ sticker, onStar }) {
                   title={sticker.sourcePath}
                 >
                   <FolderOpen className="h-3 w-3" />
-                  Show in Finder
+                  {t("showInFinder")}
                 </button>
               </DetailRow>
             ) : null}
-            <DetailRow label="Sticker">
+            <DetailRow label={t("rows.sticker")}>
               <button
                 type="button"
                 onClick={() => window.mediaWorkspace?.revealPath?.(sticker.path)}
                 className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-text"
               >
                 <FolderOpen className="h-3 w-3" />
-                Show PNG
+                {t("showPng")}
               </button>
             </DetailRow>
           </Section>

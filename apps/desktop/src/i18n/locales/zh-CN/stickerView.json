@@ -1,0 +1,30 @@
+{
+  "title": "贴纸",
+  "search": "搜索贴纸…",
+  "loading": "加载中…",
+  "noMatch": "没有匹配「{{query}}」的贴纸",
+  "noStickers": "暂无贴纸",
+  "tryDifferent": "换个搜索词试试。",
+  "emptyHint": "在编辑器中打开任意照片 → 切换到贴纸工具 → 新建。",
+  "reveal": "在访达中显示",
+  "deleteSticker": "删除贴纸",
+  "selectSticker": "选择一个贴纸",
+  "unknown": "未知",
+  "showInFinder": "在访达中显示",
+  "showPng": "显示 PNG",
+  "star": "收藏",
+  "unstar": "取消收藏",
+  "pngAlpha": "PNG(透明)",
+  "sections": { "properties": "属性", "outline": "描边", "source": "源" },
+  "rows": {
+    "starred": "已收藏",
+    "dimensions": "尺寸",
+    "format": "格式",
+    "created": "创建时间",
+    "width": "宽度",
+    "color": "颜色",
+    "file": "文件",
+    "path": "路径",
+    "sticker": "贴纸"
+  }
+}
