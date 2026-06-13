@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Download, Loader2, X, ChevronDown, Folder, Images } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
@@ -14,17 +15,18 @@ const PICKER_OVERSCAN_PX = 600;
 const PICKER_PRELOAD_PX = 1200;
 
 function builtInSources(summary) {
-  const items = [{ id: "all", label: "All" }];
+  const items = [{ id: "all", labelKey: "collage.filterAll" }];
   if (Number(summary?.rated_count ?? 0) > 0) {
-    items.push({ id: "rated", label: "Rated" });
+    items.push({ id: "rated", labelKey: "collage.filterRated" });
   }
   if (Number(summary?.raw_assets ?? 0) > 0) {
-    items.push({ id: "matched", label: "With Raw" });
+    items.push({ id: "matched", labelKey: "collage.filterMatched" });
   }
   return items;
 }
 
 function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) {
+  const { t } = useTranslation("collage");
   const scrollRef = useRef(null);
   const requestIdRef = useRef(0);
   const [source, setSource] = useState("all");
@@ -49,10 +51,10 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
 
   const activeLabel = useMemo(() => {
     const built = builtInItems.find((s) => s.id === source);
-    if (built) return built.label;
+    if (built) return t(built.labelKey);
     const col = manualCollections.find((c) => c.collection_id === source);
-    return col?.name || "All";
-  }, [source, builtInItems, manualCollections]);
+    return col?.name || t("collage.filterAll");
+  }, [source, builtInItems, manualCollections, t]);
 
   const sourceTotal = useMemo(() => {
     const totalSummary = summary || {};
@@ -223,7 +225,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-              Add Images
+              {t("collage.addImagesTitle")}
               <span className="ml-2 text-muted2">{loading ? "…" : countLabel}</span>
             </div>
           </div>
@@ -263,7 +265,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                   onClick={() => { setSource(s.id); setShowDropdown(false); }}
                 >
                   <Images className="h-3.5 w-3.5 shrink-0 text-muted2" />
-                  {s.label}
+                  {t(s.labelKey)}
                 </button>
               ))}
 
@@ -271,7 +273,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                 <>
                   <div className="mx-3 my-1 border-t border-border/60" />
                   <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted2">
-                    Folders
+                    {t("collage.folders")}
                   </div>
                   {manualCollections.map((col) => (
                     <button
@@ -302,7 +304,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-muted2">No more images available</div>
+            <div className="py-8 text-center text-[12px] text-muted2">{t("collage.noMore")}</div>
           ) : (
             <div className="relative" style={{ height: `${totalHeight}px` }}>
               {visibleItems.map(({ item, left, top }) => {
@@ -335,7 +337,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-app text-[10px] text-muted2">No preview</div>
+                      <div className="flex h-full w-full items-center justify-center bg-app text-[10px] text-muted2">{t("collage.noPreview")}</div>
                     )}
                     <span
                       className={[
@@ -379,6 +381,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
 }
 
 export default function CollageOverlay({ open, items, collections, summary, onClose, onExportComplete }) {
+  const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
   const [images, setImages] = useState([]);
   const [template, setTemplate] = useState(null);
@@ -470,7 +473,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     <div className="fixed inset-0 z-[10200] flex flex-col bg-app text-text">
       {/* Header */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-chrome px-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Collage</div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("collage.title")}</div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -479,13 +482,13 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             disabled={exporting || images.length < 2}
           >
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {exporting ? "Exporting…" : "Export"}
+            {exporting ? t("collage.exporting") : t("collage.export")}
           </button>
           <button
             type="button"
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
             onClick={onClose}
-            title="Close (Esc)"
+            title={t("collage.close")}
           >
             <X className="h-3.5 w-3.5" />
           </button>

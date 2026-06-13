@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { localFileUrl } from "../../utils/format";
 
 const MIN_ZOOM = 0.5;
@@ -124,6 +125,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, onSwap, onReplace, onSelectionChange, onSelectedStateChange },
   ref,
 ) {
+  const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
   const loadedImgsRef = useRef(new Map());
   const cellStatesRef = useRef([]); // { pan: {x,y}, zoom }
@@ -570,7 +572,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
               onReplaceRef.current?.(idx);
             }}
           >
-            Replace
+            {t("collage.replace")}
           </button>
         </div>
       )}
