@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, Sparkles, Trash2, Star, Loader2, Check, RotateCcw } from "lucide-react";
 
 import { SliderRow } from "../../ui";
@@ -14,6 +15,7 @@ import ColorPickerPopover from "../collage/ColorPickerPopover";
 // consumption happens in the Text tool's layer system.
 
 export default function StickerPanel({ sourcePath, sourceLabel, pushToast, region, onClearRegion }) {
+  const { t } = useTranslation("editor");
   const [tab, setTab] = useState("create"); // "library" | "create"
   const [stickers, setStickers] = useState([]);
   const [highlightId, setHighlightId] = useState(null);
@@ -34,8 +36,8 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
     setHighlightId(entry.id);
     setTab("library");
     pushToast?.({
-      title: "Sticker saved",
-      message: entry.sourceLabel || "Added to sticker library",
+      title: t("sticker.savedTitle"),
+      message: entry.sourceLabel || t("sticker.savedMsg"),
       ttl: 6000,
     });
     setTimeout(() => setHighlightId((id) => (id === entry.id ? null : id)), 2000);
@@ -44,15 +46,15 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
-        <h2 className="text-[11px] uppercase tracking-wider text-muted2">Sticker</h2>
+        <h2 className="text-[11px] uppercase tracking-wider text-muted2">{t("sticker.title")}</h2>
         <span className="text-[10px] text-muted3">
-          {tab === "library" ? `${stickers.length} in library` : "Make a new sticker"}
+          {tab === "library" ? t("sticker.inLibrary", { count: stickers.length }) : t("sticker.makeNew")}
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-1 px-3 pb-2">
-        <SegBtn active={tab === "create"} onClick={() => setTab("create")}>Create new</SegBtn>
-        <SegBtn active={tab === "library"} onClick={() => setTab("library")}>Library</SegBtn>
+        <SegBtn active={tab === "create"} onClick={() => setTab("create")}>{t("sticker.createNew")}</SegBtn>
+        <SegBtn active={tab === "library"} onClick={() => setTab("library")}>{t("sticker.library")}</SegBtn>
       </div>
 
       {tab === "library" ? (
@@ -79,6 +81,7 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
 /* ─── Library tab ─────────────────────────────────────────────── */
 
 function Library({ stickers, highlightId, onChanged, onCreate }) {
+  const { t } = useTranslation("editor");
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     if (!query.trim()) return stickers;
@@ -87,7 +90,7 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
   }, [stickers, query]);
 
   async function handleDelete(sticker) {
-    if (!confirm(`Delete this sticker?\n${stickerLabel(sticker)}`)) return;
+    if (!confirm(t("sticker.deleteConfirm", { label: stickerLabel(sticker) }))) return;
     await window.mediaWorkspace.stickerDelete(sticker.id);
     onChanged();
   }
@@ -104,7 +107,7 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search stickers…"
+            placeholder={t("sticker.search")}
             className="h-7 w-full rounded-md border border-border/60 bg-app pl-7 pr-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
           />
         </div>
@@ -132,24 +135,26 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
 }
 
 function EmptyState({ onCreate }) {
+  const { t } = useTranslation("editor");
   return (
     <div className="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 px-4 py-8 text-center">
-      <div className="text-[13px] text-text">No stickers yet</div>
+      <div className="text-[13px] text-text">{t("sticker.noStickers")}</div>
       <div className="text-[11px] leading-relaxed text-muted2">
-        Make your first one by extracting a subject from the current image.
+        {t("sticker.emptyHint")}
       </div>
       <button
         type="button"
         onClick={onCreate}
         className="rounded-md bg-[rgb(var(--accent-color))] px-3 py-1.5 text-[11px] font-medium text-[#111] transition-colors hover:brightness-110"
       >
-        Create sticker
+        {t("sticker.createSticker")}
       </button>
     </div>
   );
 }
 
 function StickerThumb({ sticker, highlight, onDelete, onStar }) {
+  const { t } = useTranslation("editor");
   return (
     <div className="group flex flex-col" title={stickerLabel(sticker)}>
       <div
@@ -180,7 +185,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
             type="button"
             onClick={(e) => { e.stopPropagation(); onStar(); }}
             className="flex h-4 w-4 items-center justify-center rounded text-white/80 hover:text-white"
-            title={sticker.starred ? "Unstar" : "Star"}
+            title={sticker.starred ? t("sticker.unstar") : t("sticker.star")}
           >
             <Star className={`h-3 w-3 ${sticker.starred ? "fill-current" : ""}`} />
           </button>
@@ -188,7 +193,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
             type="button"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="flex h-4 w-4 items-center justify-center rounded text-white/80 hover:text-white"
-            title="Delete"
+            title={t("sticker.delete")}
           >
             <Trash2 className="h-3 w-3" />
           </button>
@@ -204,6 +209,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
 /* ─── Create new tab ─────────────────────────────────────────── */
 
 function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClearRegion }) {
+  const { t } = useTranslation("editor");
   const [phase, setPhase] = useState("idle"); // idle | detecting | preview | saving
   const [scratchDir, setScratchDir] = useState(null);
   const [instances, setInstances] = useState([]);
@@ -254,8 +260,8 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
       if (!result.instances?.length) {
         setPhase("idle");
         pushToast?.({
-          title: "No subject detected",
-          message: "Try another photo with a clearer foreground subject.",
+          title: t("sticker.noSubjectTitle"),
+          message: t("sticker.noSubjectMsg"),
           ttl: 6000,
         });
         return;
@@ -318,7 +324,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto px-3 pb-3">
-        <Section label="Source">
+        <Section label={t("sticker.source")}>
           <div className="mb-2 truncate rounded-md border border-border/60 bg-app px-2 py-1.5 text-[11px] text-text">
             {sourceLabel || fileName(sourcePath) || "—"}
           </div>
@@ -328,21 +334,21 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             {region ? (
               <>
                 <span className="h-2 w-2 rounded-full bg-[rgb(var(--accent-color))]" />
-                <span className="text-text">Limited to selection</span>
+                <span className="text-text">{t("sticker.limitedToSelection")}</span>
                 <span className="text-muted2">({Math.round(region.w * 100)}% × {Math.round(region.h * 100)}%)</span>
                 <button
                   type="button"
                   onClick={onClearRegion}
                   className="ml-auto text-muted2 hover:text-text"
-                  title="Clear selection"
+                  title={t("sticker.clearSelection")}
                 >
-                  Clear
+                  {t("sticker.clear")}
                 </button>
               </>
             ) : (
               <>
                 <span className="h-2 w-2 rounded-full bg-muted3" />
-                <span className="text-muted2">Detects in full image · drag on canvas to limit</span>
+                <span className="text-muted2">{t("sticker.detectsFull")}</span>
               </>
             )}
           </div>
@@ -354,12 +360,12 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               disabled={!sourcePath}
               className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-app text-[11px] text-text transition-colors hover:border-[rgb(var(--accent-color))] hover:bg-hover disabled:opacity-50"
             >
-              <Sparkles className="h-3.5 w-3.5" /> Detect subjects
+              <Sparkles className="h-3.5 w-3.5" /> {t("sticker.detectSubjects")}
             </button>
           )}
           {phase === "detecting" && (
             <div className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-app text-[11px] text-muted">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Detecting subjects…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("sticker.detecting")}
             </div>
           )}
         </Section>
@@ -372,7 +378,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
 
         {phase !== "idle" && phase !== "detecting" && instances.length > 0 && (
           <>
-            <Section label={`Detected (${instances.length})`}>
+            <Section label={t("sticker.detected", { count: instances.length })}>
               <div className="grid grid-cols-4 gap-1.5">
                 {instances.map((inst, i) => (
                   <button
@@ -394,7 +400,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               </div>
             </Section>
 
-            <Section label="Preview">
+            <Section label={t("sticker.preview")}>
               <div className="mb-3 aspect-square overflow-hidden rounded-md border border-border bg-checker">
                 {activeInst && (
                   <OutlinePreview
@@ -406,7 +412,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               </div>
 
               <SliderRow
-                label="Outline"
+                label={t("sticker.outline")}
                 min={0}
                 max={32}
                 value={outline.width}
@@ -419,11 +425,11 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               />
             </Section>
 
-            <Section label="Name">
+            <Section label={t("sticker.name")}>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Sticker name"
+                placeholder={t("sticker.stickerName")}
                 className="h-7 w-full rounded-md border border-border/60 bg-app px-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
               />
             </Section>
@@ -447,7 +453,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             className="ml-auto flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-3 text-[11px] font-medium text-[#111] transition-all hover:brightness-110 disabled:opacity-60"
           >
             {phase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-            {phase === "saving" ? "Saving…" : "Save sticker"}
+            {phase === "saving" ? t("sticker.saving") : t("sticker.saveSticker")}
           </button>
         </div>
       )}
@@ -458,18 +464,19 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
 const OUTLINE_PRESETS = ["#ffffff", "#000000", "#d2a05a", "#f55b5b", "#5bf59c", "#5b8cf5"];
 
 function OutlineColorRow({ color, onChange }) {
+  const { t } = useTranslation("editor");
   const swatchRef = useRef(null);
   const [open, setOpen] = useState(false);
   return (
     <div className="mb-3 mt-2 flex items-center gap-2">
-      <span className="w-12 text-[10px] uppercase tracking-wider text-muted2">Color</span>
+      <span className="w-12 text-[10px] uppercase tracking-wider text-muted2">{t("sticker.color")}</span>
       <button
         ref={swatchRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="h-5 w-5 flex-shrink-0 rounded border border-border/60 transition-shadow hover:border-border-strong"
         style={{ backgroundColor: color }}
-        title="Pick custom color"
+        title={t("sticker.pickColor")}
       />
       <span className="font-mono text-[10px] text-muted2">{color.toUpperCase()}</span>
       {open && (
