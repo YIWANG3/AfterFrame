@@ -7,6 +7,7 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const sharp = require("sharp");
 
+const { makeT } = require("./i18n");
 const { findSwiftRuntime } = require("./ipc/swiftRuntime");
 const stickerIpc = require("./ipc/stickers");
 const depthIpc = require("./ipc/depth");
@@ -96,6 +97,16 @@ function readAppSettings() {
     return {};
   }
 }
+
+// Locale: the main process owns it (persisted in settings.json) so the menu and
+// the renderer never disagree. The renderer reads it synchronously at startup
+// via the preload bridge (app:get-locale).
+const SUPPORTED_LOCALES = ["en", "zh-CN"];
+function getLocale() {
+  const l = readAppSettings().locale;
+  return SUPPORTED_LOCALES.includes(l) ? l : "en";
+}
+let currentLocale = getLocale();
 
 // Serialize all read-modify-write operations to prevent race conditions
 let _settingsWriteQueue = Promise.resolve();
@@ -834,13 +845,16 @@ function sendMenuAction(action) {
 }
 
 function buildAppMenu() {
+  // Custom labels are translated; Electron `role` items are auto-localized by
+  // the OS, and the app-menu title stays the brand name.
+  const t = makeT(currentLocale);
   const template = [
     {
       label: "AfterFrame",
       submenu: [
         { role: "about" },
         { type: "separator" },
-        { label: "Use Scratch Catalog", click: () => sendMenuAction("catalog:scratch") },
+        { label: t("menu.scratchCatalog"), click: () => sendMenuAction("catalog:scratch") },
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -852,29 +866,29 @@ function buildAppMenu() {
       ],
     },
     {
-      label: "File",
+      label: t("menu.file"),
       submenu: [
-        { label: "New Catalog", accelerator: "CmdOrCtrl+N", click: () => sendMenuAction("catalog:new") },
-        { label: "Open Catalog...", accelerator: "CmdOrCtrl+O", click: () => sendMenuAction("catalog:open") },
+        { label: t("menu.newCatalog"), accelerator: "CmdOrCtrl+N", click: () => sendMenuAction("catalog:new") },
+        { label: t("menu.openCatalog"), accelerator: "CmdOrCtrl+O", click: () => sendMenuAction("catalog:open") },
         { type: "separator" },
-        { label: "Import", click: () => sendMenuAction("import:pick-export") },
-        { label: "Add Raw Sources", click: () => sendMenuAction("import:pick-source") },
+        { label: t("menu.import"), click: () => sendMenuAction("import:pick-export") },
+        { label: t("menu.addRawSources"), click: () => sendMenuAction("import:pick-source") },
         { type: "separator" },
-        { label: "Run Import Pipeline", accelerator: "CmdOrCtrl+I", click: () => sendMenuAction("import:start") },
-        { label: "Run Enrichment", click: () => sendMenuAction("import:enrich") },
-        { label: "Generate Previews", click: () => sendMenuAction("import:previews") },
+        { label: t("menu.runImport"), accelerator: "CmdOrCtrl+I", click: () => sendMenuAction("import:start") },
+        { label: t("menu.runEnrichment"), click: () => sendMenuAction("import:enrich") },
+        { label: t("menu.generatePreviews"), click: () => sendMenuAction("import:previews") },
         { type: "separator" },
-        { label: "Verify Files", click: () => sendMenuAction("library:verify") },
+        { label: t("menu.verifyFiles"), click: () => sendMenuAction("library:verify") },
       ],
     },
     {
       role: "editMenu",
     },
     {
-      label: "View",
+      label: t("menu.view"),
       submenu: [
-        { label: "Refresh", accelerator: "CmdOrCtrl+R", click: () => sendMenuAction("view:refresh") },
-        { label: "Toggle Theme", click: () => sendMenuAction("view:toggle-theme") },
+        { label: t("menu.refresh"), accelerator: "CmdOrCtrl+R", click: () => sendMenuAction("view:refresh") },
+        { label: t("menu.toggleTheme"), click: () => sendMenuAction("view:toggle-theme") },
         { type: "separator" },
         { role: "toggleDevTools", accelerator: "Alt+CommandOrControl+I" },
         { type: "separator" },
@@ -882,7 +896,7 @@ function buildAppMenu() {
       ],
     },
     {
-      label: "Window",
+      label: t("menu.window"),
       submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }],
     },
   ];
@@ -1013,6 +1027,20 @@ assetsIpc.register({
   ipcMain, shell, dialog, BrowserWindow,
   commands: sidecarCommands, callSidecarJsonAsync, addAllowedMediaDir,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  t: () => makeT(currentLocale),
+});
+
+// Locale: synchronous read for renderer startup; setter persists + rebuilds the
+// (main-process) menu so it flips language together with the UI.
+ipcMain.on("app:get-locale", (event) => {
+  event.returnValue = currentLocale;
+});
+ipcMain.handle("app:set-locale", (_event, lng) => {
+  if (!SUPPORTED_LOCALES.includes(lng)) return currentLocale;
+  currentLocale = lng;
+  void updateAppSettings((s) => ({ ...s, locale: lng }));
+  Menu.setApplicationMenu(buildAppMenu());
+  return currentLocale;
 });
 
 saveFileIpc.register({

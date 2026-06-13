@@ -1,0 +1,16 @@
+{
+  "scratchCatalog": "Use Scratch Catalog",
+  "file": "File",
+  "newCatalog": "New Catalog",
+  "openCatalog": "Open Catalog…",
+  "import": "Import",
+  "addRawSources": "Add Raw Sources",
+  "runImport": "Run Import Pipeline",
+  "runEnrichment": "Run Enrichment",
+  "generatePreviews": "Generate Previews",
+  "verifyFiles": "Verify Files",
+  "view": "View",
+  "refresh": "Refresh",
+  "toggleTheme": "Toggle Theme",
+  "window": "Window"
+}

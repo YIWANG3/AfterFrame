@@ -1,0 +1,16 @@
+{
+  "scratchCatalog": "使用临时图库",
+  "file": "文件",
+  "newCatalog": "新建图库",
+  "openCatalog": "打开图库…",
+  "import": "导入",
+  "addRawSources": "添加 RAW 源",
+  "runImport": "运行导入流程",
+  "runEnrichment": "运行元数据补全",
+  "generatePreviews": "生成预览",
+  "verifyFiles": "校验文件",
+  "view": "视图",
+  "refresh": "刷新",
+  "toggleTheme": "切换主题",
+  "window": "窗口"
+}

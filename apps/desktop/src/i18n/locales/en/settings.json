@@ -1,0 +1,15 @@
+{
+  "title": "Settings",
+  "tabs": {
+    "general": "General",
+    "ai": "AI Annotation",
+    "repaint": "AI Repaint",
+    "library": "Library",
+    "about": "About"
+  },
+  "general": {
+    "title": "General",
+    "language": "Language",
+    "languageHint": "Interface language. Takes effect immediately."
+  }
+}

@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   revealPath: (targetPath) => ipcRenderer.invoke("workspace:reveal", targetPath),
   verifyAssets: (options) => ipcRenderer.invoke("workspace:verify-assets", options),
   relinkAsset: (options) => ipcRenderer.invoke("workspace:relink-asset", options),
+  // i18n: synchronous so the first render is already in the right language.
+  getInitialLocale: () => { try { return ipcRenderer.sendSync("app:get-locale"); } catch { return "en"; } },
+  setLocale: (lng) => ipcRenderer.invoke("app:set-locale", lng),
   openExternal: (url) => ipcRenderer.invoke("workspace:open-external", url),
   pickSavePath: (options) => ipcRenderer.invoke("workspace:pick-save-path", options),
   saveImage: (targetPath, arrayBuffer, sourceMetadataPath) => ipcRenderer.invoke("workspace:save-image", targetPath, arrayBuffer, sourceMetadataPath),

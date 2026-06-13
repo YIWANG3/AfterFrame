@@ -1,0 +1,11 @@
+{
+  "language": {
+    "en": "English",
+    "zh-CN": "中文"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close"
+  }
+}

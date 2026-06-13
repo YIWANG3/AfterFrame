@@ -1,0 +1,15 @@
+{
+  "title": "设置",
+  "tabs": {
+    "general": "通用",
+    "ai": "AI 标注",
+    "repaint": "AI 重绘",
+    "library": "图库",
+    "about": "关于"
+  },
+  "general": {
+    "title": "通用",
+    "language": "语言",
+    "languageHint": "界面语言,立即生效。"
+  }
+}

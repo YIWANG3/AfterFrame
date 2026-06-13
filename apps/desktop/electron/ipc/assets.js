@@ -1,9 +1,12 @@
 // Asset-level IPC: quick-register (after a save), collage-sources lookup,
 // delete-export-assets, and the cross-platform "reveal in Finder/Explorer".
 
-function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecarJsonAsync, addAllowedMediaDir, getCatalogState }) {
+function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecarJsonAsync, addAllowedMediaDir, getCatalogState, t }) {
   const fs = require("node:fs");
   const path = require("node:path");
+  // t() returns a translator bound to the current locale; fall back to identity
+  // (English literals) if i18n wasn't wired (e.g. older callers/tests).
+  const tr = () => (typeof t === "function" ? t() : (key) => key);
 
   ipcMain.handle("workspace:reveal", (_event, targetPath) => {
     if (!targetPath) return false;
@@ -30,10 +33,11 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
     let newPath = opts.newPath;
     if (!newPath) {
       const parent = BrowserWindow.getFocusedWindow();
+      const translate = tr();
       const result = await dialog.showOpenDialog(parent, {
-        title: "Relink to file",
+        title: translate("dialog.relinkTitle"),
         properties: ["openFile"],
-        message: "Choose the moved or renamed original file",
+        message: translate("dialog.relinkMessage"),
       });
       if (result.canceled || !result.filePaths?.length) return { status: "cancelled" };
       newPath = result.filePaths[0];

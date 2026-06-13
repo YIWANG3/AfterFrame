@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Brain, FolderOpen, Info, Wand2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { X, Brain, FolderOpen, Info, Wand2, Languages } from "lucide-react";
+import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
 import RepaintSettings from "./settings/RepaintSettings";
 import LibrarySettings from "./settings/LibrarySettings";
@@ -11,14 +13,16 @@ import AboutSettings from "./settings/AboutSettings";
    backdrop, centered modal, ESC + backdrop click close. */
 
 const TABS = [
-  { id: "ai", label: "AI Annotation", icon: Brain },
-  { id: "repaint", label: "AI Repaint", icon: Wand2 },
-  { id: "library", label: "Library", icon: FolderOpen },
-  { id: "about", label: "About", icon: Info },
+  { id: "general", key: "general", icon: Languages },
+  { id: "ai", key: "ai", icon: Brain },
+  { id: "repaint", key: "repaint", icon: Wand2 },
+  { id: "library", key: "library", icon: FolderOpen },
+  { id: "about", key: "about", icon: Info },
 ];
 
 export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
   const [tab, setTab] = useState(initialTab);
+  const { t } = useTranslation("settings");
   const modalRef = useRef(null);
 
   useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
@@ -44,7 +48,7 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
         className="flex w-[880px] max-w-[95vw] h-[680px] max-h-[88vh] flex-col overflow-hidden rounded-xl border border-border bg-chrome shadow-overlay"
       >
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-5">
-          <span className="text-[14px] font-semibold text-text">Settings</span>
+          <span className="text-[14px] font-semibold text-text">{t("title")}</span>
           <button
             type="button"
             onClick={onClose}
@@ -57,26 +61,27 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
 
         <div className="flex min-h-0 flex-1">
           <nav className="w-40 shrink-0 border-r border-border px-2 py-2">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
+            {TABS.map((entry) => {
+              const Icon = entry.icon;
+              const active = tab === entry.id;
               return (
                 <button
-                  key={t.id}
+                  key={entry.id}
                   type="button"
-                  onClick={() => setTab(t.id)}
+                  onClick={() => setTab(entry.id)}
                   className={[
                     "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",
                     active ? "bg-accent/10 text-accent" : "text-muted hover:bg-hover hover:text-text",
                   ].join(" ")}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span>{t.label}</span>
+                  <span>{t(`tabs.${entry.key}`)}</span>
                 </button>
               );
             })}
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
+            {tab === "general" && <GeneralSettings />}
             {tab === "ai" && <AnnotationSettings />}
             {tab === "repaint" && <RepaintSettings />}
             {tab === "library" && <LibrarySettings />}
