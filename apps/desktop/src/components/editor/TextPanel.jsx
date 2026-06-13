@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
 
 function hexToRgba(hex, alpha = 1) {
@@ -61,6 +62,7 @@ export default function TextPanel({
   onPickDepthModel,
   onResetDepthModel,
 }) {
+  const { t } = useTranslation("editor");
   const selected = layers.filter((l) => selectedIds.has(l.id));
   const selectedText = selected.filter(isTextLayer);
   const current = selected.length === 1 ? selected[0] : null;
@@ -127,7 +129,7 @@ export default function TextPanel({
       <div className="relative h-[calc(100vh-10rem)]">
       <div className="h-full overflow-y-auto">
         {/* Presets */}
-        <Section label="Presets">
+        <Section label={t("text.presets")}>
           <div className="grid grid-cols-4 gap-1.5">
             {PRESETS.map((p) => (
               <button
@@ -164,14 +166,14 @@ export default function TextPanel({
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
             cached and shared by every text layer's z position slider. */}
-        <Section label="Scene Depth" action={
+        <Section label={t("text.depth.title")} action={
           hasSceneDepth ? (
             <button
               type="button"
               onClick={onClearDepth}
               className="text-[10px] text-muted2 hover:text-text"
             >
-              Clear
+              {t("text.clear")}
             </button>
           ) : null
         }>
@@ -193,17 +195,17 @@ export default function TextPanel({
             ].join(" ")}
           >
             {depthGenerating ? (
-              <><Layers className="h-3.5 w-3.5 animate-pulse" /> Inferring depth…</>
+              <><Layers className="h-3.5 w-3.5 animate-pulse" /> {t("text.depth.inferring")}</>
             ) : hasSceneDepth ? (
-              <><Layers className="h-3.5 w-3.5" /> Depth ready — regenerate</>
+              <><Layers className="h-3.5 w-3.5" /> {t("text.depth.ready")}</>
             ) : (
-              <><Sparkles className="h-3.5 w-3.5" /> Generate scene depth</>
+              <><Sparkles className="h-3.5 w-3.5" /> {t("text.depth.generate")}</>
             )}
           </button>
           {hasSceneDepth && (
             <>
               <SliderRow
-                label="Soft"
+                label={t("text.soft")}
                 min={0}
                 max={30}
                 value={Math.round(depthFeather * 100)}
@@ -212,7 +214,7 @@ export default function TextPanel({
               />
               {editTarget && (
                 <SliderRow
-                  label="Position"
+                  label={t("text.position")}
                   min={0}
                   max={100}
                   value={Math.round(((editTarget.zPosition ?? 1) * 100))}
@@ -227,21 +229,21 @@ export default function TextPanel({
                   onChange={(e) => onToggleDepthMap?.(e.target.checked)}
                   className="accent-[rgb(var(--accent-color))]"
                 />
-                Show depth map
+                {t("text.depth.showMap")}
               </label>
             </>
           )}
           <div className="mt-2">
             <div className="mb-1 flex items-center justify-between text-[10px] text-muted2">
-              <span className="uppercase tracking-wide">Model</span>
+              <span className="uppercase tracking-wide">{t("text.depth.model")}</span>
               {depthModel?.isCustom && (
                 <button
                   type="button"
                   onClick={() => onResetDepthModel?.()}
                   className="text-[10px] text-muted2 hover:text-text"
-                  title="Use bundled model"
+                  title={t("text.depth.useBundled")}
                 >
-                  Reset
+                  {t("text.reset")}
                 </button>
               )}
             </div>
@@ -249,28 +251,28 @@ export default function TextPanel({
               type="button"
               onClick={() => onPickDepthModel?.()}
               className="flex h-7 w-full items-center gap-2 rounded-md border border-border/60 bg-app px-2 text-[11px] text-text transition-colors hover:border-border hover:bg-hover"
-              title={depthModel?.path || "Select a CoreML depth model"}
+              title={depthModel?.path || t("text.depth.selectModel")}
             >
               <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-muted2" />
               <span className="truncate flex-1 text-left">
-                {depthModel?.name || "Default"}
+                {depthModel?.name || t("text.depth.default")}
               </span>
               <span className="text-[9px] text-muted2 flex-shrink-0">
-                {depthModel?.isCustom ? "Custom" : "Bundled"}
+                {depthModel?.isCustom ? t("text.depth.custom") : t("text.depth.bundled")}
               </span>
             </button>
           </div>
         </Section>
 
         {/* Layers — text + sticker */}
-        <Section label="Layers" action={
+        <Section label={t("text.layers")} action={
           <div className="flex items-center gap-0.5">
             <IconBtn
               icon={Cannabis}
-              title={stickerPickerOpen ? "Hide sticker picker" : "Add sticker layer"}
+              title={stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer")}
               onClick={() => setStickerPickerOpen((v) => !v)}
             />
-            <IconBtn icon={Type} title="Add text layer" onClick={addLayer} />
+            <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />
           </div>
         }>
           <LayerList
@@ -299,19 +301,19 @@ export default function TextPanel({
           return (
           <>
             {/* Content */}
-            <Section label="Content">
+            <Section label={t("text.content")}>
               <textarea
                 className="w-full resize-y rounded-md border border-border/60 bg-app px-2.5 py-2 text-[12px] leading-relaxed text-text outline-none transition-colors placeholder:text-muted2 focus:border-[rgb(var(--accent-color))]"
                 rows={2}
                 value={current.text}
                 onChange={(e) => update(current.id, { text: e.target.value })}
-                placeholder="Enter text…"
+                placeholder={t("text.enterText")}
               />
             </Section>
 
 
             {/* Font */}
-            <Section label="Font">
+            <Section label={t("text.font")}>
               <div className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <FontSelect value={current.fontFamily} onChange={(f) => update(current.id, { fontFamily: f })} />
@@ -321,7 +323,7 @@ export default function TextPanel({
             </Section>
 
             {/* Style */}
-            <Section label="Style">
+            <Section label={t("text.style")}>
               <div className="flex items-center gap-1.5">
                 <WeightSelect value={current.fontWeight ?? (current.bold ? 700 : 400)} onChange={(w) => update(current.id, { fontWeight: w, bold: w >= 600 })} />
                 <ToggleBtn active={current.italic} onClick={() => update(current.id, { italic: !current.italic })}><span className="text-[11px] italic">I</span></ToggleBtn>
@@ -330,7 +332,7 @@ export default function TextPanel({
             </Section>
 
             {/* Fill */}
-            <Section label="Fill">
+            <Section label={t("text.fill")}>
               <PaintRow
                 paint={paintFromFields(current, "fill")}
                 availableModes={["solid", "gradient"]}
@@ -341,7 +343,7 @@ export default function TextPanel({
             </Section>
 
             {/* Stroke */}
-            <Section label="Stroke" right={<Switch on={current.strokeEnabled} onToggle={() => update(current.id, { strokeEnabled: !current.strokeEnabled })} />}>
+            <Section label={t("text.stroke")} right={<Switch on={current.strokeEnabled} onToggle={() => update(current.id, { strokeEnabled: !current.strokeEnabled })} />}>
               {current.strokeEnabled && (
                 <StrokeFieldRow
                   paint={paintFromFields(current, "stroke")}
@@ -355,7 +357,7 @@ export default function TextPanel({
             </Section>
 
             {/* Background */}
-            <Section label="Background" right={<Switch on={current.bgMode !== "none"} onToggle={() => update(current.id, { bgMode: current.bgMode !== "none" ? "none" : "solid" })} />}>
+            <Section label={t("text.background")} right={<Switch on={current.bgMode !== "none"} onToggle={() => update(current.id, { bgMode: current.bgMode !== "none" ? "none" : "solid" })} />}>
               {current.bgMode !== "none" && (
                 <>
                   <PaintRow
@@ -383,21 +385,21 @@ export default function TextPanel({
                     };
                     return (
                       <div className="mt-2">
-                        <div className="mb-1 text-[10px] text-muted2">Padding</div>
+                        <div className="mb-1 text-[10px] text-muted2">{t("text.padding")}</div>
                         <div className="flex items-stretch gap-3">
                           <PairedFields
                             leftLabel="T" leftValue={pad.top} onLeftChange={setTop}
                             rightLabel="B" rightValue={pad.bottom} onRightChange={setBottom}
                             min={-50} max={80}
                             linked={vPadLinked} onToggleLink={toggleV}
-                            linkTitle={vPadLinked ? "Unlink top/bottom" : "Link top/bottom"}
+                            linkTitle={vPadLinked ? t("text.unlinkTopBottom") : t("text.linkTopBottom")}
                           />
                           <PairedFields
                             leftLabel="L" leftValue={pad.left} onLeftChange={setLeft}
                             rightLabel="R" rightValue={pad.right} onRightChange={setRight}
                             min={-50} max={80}
                             linked={hPadLinked} onToggleLink={toggleH}
-                            linkTitle={hPadLinked ? "Unlink left/right" : "Link left/right"}
+                            linkTitle={hPadLinked ? t("text.unlinkLeftRight") : t("text.linkLeftRight")}
                           />
                         </div>
                       </div>
@@ -408,7 +410,7 @@ export default function TextPanel({
             </Section>
 
             {/* Shadow */}
-            <Section label="Shadow" right={<Switch on={current.shadow} onToggle={() => update(current.id, { shadow: !current.shadow })} />}>
+            <Section label={t("text.shadow")} right={<Switch on={current.shadow} onToggle={() => update(current.id, { shadow: !current.shadow })} />}>
               {current.shadow && (
                 <ShadowFieldRow layer={current} onChange={(patch) => update(current.id, patch)} />
               )}
@@ -427,7 +429,7 @@ export default function TextPanel({
 
       {/* Footer */}
       <div className="flex items-center gap-1 border-t border-border/60 px-3 py-2">
-        <FooterBtn icon={RotateCcw} label="Reset" onClick={onReset} />
+        <FooterBtn icon={RotateCcw} label={t("text.reset")} onClick={onReset} />
         <FooterBtn icon={Undo2} onClick={onUndo} disabled={!canUndo} />
         <FooterBtn icon={Redo2} onClick={onRedo} disabled={!canRedo} />
         <button
@@ -457,6 +459,7 @@ function Section({ label, action, right, children }) {
 }
 
 function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) {
+  const { t } = useTranslation("editor");
   const dragSrcIdRef = useRef(null);
   const [overInfo, setOverInfo] = useState(null); // { id, position: 'above'|'below' } in display order
 
@@ -547,7 +550,7 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
                 type="button"
                 draggable={false}
                 className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[rgb(var(--error-color)/0.15)] hover:text-[rgb(var(--error-color))]"
-                title="Delete layer"
+                title={t("text.deleteLayer")}
                 onClick={(e) => { e.stopPropagation(); onDelete(l.id); }}
               >
                 <Trash2 className="h-3 w-3" />
@@ -631,6 +634,7 @@ function StackedField({ label, value, onChange, min, max }) {
 // Stacked color field — small square swatch + label below. Width hugs the
 // swatch so the rest of the row's stacked fields can share remaining space.
 function StackedColorField({ label, color, onChange, opacity, onOpacityChange, presets }) {
+  const { t } = useTranslation("editor");
   const [open, setOpen] = useState(false);
   const swatchRef = useRef(null);
   const checker = "repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 6px 6px";
@@ -642,7 +646,7 @@ function StackedColorField({ label, color, onChange, opacity, onOpacityChange, p
         type="button"
         onClick={() => setOpen(!open)}
         className="h-6 w-6 cursor-pointer rounded p-px outline-none bg-transparent"
-        title="Edit color"
+        title={t("text.editColor")}
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: fill }} />
       </button>
@@ -732,6 +736,7 @@ function WeightSelect({ value, onChange }) {
 }
 
 function FontSelect({ value, onChange }) {
+  const { t } = useTranslation("editor");
   const [open, setOpen] = useState(false);
   const [systemFonts, setSystemFonts] = useState([]);
   const [filter, setFilter] = useState("");
@@ -843,7 +848,7 @@ function FontSelect({ value, onChange }) {
               ref={inputRef}
               type="text"
               className="w-full bg-transparent text-[11px] text-text outline-none placeholder:text-muted2"
-              placeholder="Search fonts…"
+              placeholder={t("text.searchFonts")}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -868,7 +873,7 @@ function FontSelect({ value, onChange }) {
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="px-2.5 py-2 text-[11px] text-muted2">No fonts found</div>
+              <div className="px-2.5 py-2 text-[11px] text-muted2">{t("text.noFonts")}</div>
             )}
           </div>
         </div>
@@ -962,6 +967,7 @@ function paintToFields(patch, kind) {
 // All children are 24px tall. Swatch is a 36x24 rectangle so a gradient is legible
 // without the endpoint colors looking like a "band" at the edge of a tiny square.
 function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChange, opacityMax = 100, trailing }) {
+  const { t } = useTranslation("editor");
   const [open, setOpen] = useState(false);
   const swatchRef = useRef(null);
   const isGrad = paint.mode === "gradient";
@@ -976,7 +982,7 @@ function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChan
         type="button"
         onClick={() => setOpen(!open)}
         className="h-6 w-6 flex-shrink-0 cursor-pointer rounded p-px outline-none bg-transparent"
-        title={isGrad ? "Edit gradient" : "Edit color"}
+        title={isGrad ? t("text.editGradient") : t("text.editColor")}
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: swatchBg }} />
       </button>
@@ -985,8 +991,8 @@ function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChan
         onChange={(e) => onUpdate({ mode: e.target.value })}
         className="h-6 flex-1 rounded border border-border/60 bg-app px-2 text-[11px] text-text outline-none cursor-pointer hover:border-border"
       >
-        {availableModes.includes("solid") && <option value="solid">Solid</option>}
-        {availableModes.includes("gradient") && <option value="gradient">Linear</option>}
+        {availableModes.includes("solid") && <option value="solid">{t("text.solid")}</option>}
+        {availableModes.includes("gradient") && <option value="gradient">{t("text.linear")}</option>}
       </select>
       {onOpacityChange && (
         <>
@@ -1050,10 +1056,11 @@ function StrokeFieldRow({ paint, availableModes, onPaintUpdate, width, maxWidth,
 // text and sticker shadows (field names are identical: shadowColor/X/Y/Blur/
 // shadowOpacity). Caller passes the layer and a patch-style onChange.
 function ShadowFieldRow({ layer, onChange }) {
+  const { t } = useTranslation("editor");
   return (
     <div className="mt-2 flex items-stretch gap-2">
       <StackedColorField
-        label="Color"
+        label={t("text.color")}
         color={layer.shadowColor}
         onChange={(c) => onChange({ shadowColor: c })}
         opacity={(layer.shadowOpacity ?? 60) / 100}
@@ -1062,7 +1069,7 @@ function ShadowFieldRow({ layer, onChange }) {
       />
       <StackedField label="X" value={layer.shadowX} min={-50} max={50} onChange={(v) => onChange({ shadowX: v })} />
       <StackedField label="Y" value={layer.shadowY} min={-50} max={50} onChange={(v) => onChange({ shadowY: v })} />
-      <StackedField label="Blur" value={layer.shadowBlur} min={0} max={100} onChange={(v) => onChange({ shadowBlur: v })} />
+      <StackedField label={t("text.blur")} value={layer.shadowBlur} min={0} max={100} onChange={(v) => onChange({ shadowBlur: v })} />
     </div>
   );
 }
@@ -1125,6 +1132,7 @@ function PresetPreview({ preset }) {
 }
 
 function AlignBar({ layers, onLayersChange, allLayers }) {
+  const { t } = useTranslation("editor");
   const ids = new Set(layers.map((l) => l.id));
   const apply = (fn) => {
     const updated = fn(layers);
@@ -1137,16 +1145,16 @@ function AlignBar({ layers, onLayersChange, allLayers }) {
 
   return (
     <div className="mt-2 flex items-center gap-0.5 rounded-md bg-app p-1">
-      <button type="button" className={abtn} title="Align left" onClick={() => apply(alignLeft)}><AlignHorizontalJustifyStart className="h-3.5 w-3.5" /></button>
-      <button type="button" className={abtn} title="Center H" onClick={() => apply(alignCenterH)}><AlignHorizontalJustifyCenter className="h-3.5 w-3.5" /></button>
-      <button type="button" className={abtn} title="Align right" onClick={() => apply(alignRight)}><AlignHorizontalJustifyEnd className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.left")} onClick={() => apply(alignLeft)}><AlignHorizontalJustifyStart className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.centerH")} onClick={() => apply(alignCenterH)}><AlignHorizontalJustifyCenter className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.right")} onClick={() => apply(alignRight)}><AlignHorizontalJustifyEnd className="h-3.5 w-3.5" /></button>
       <div className={sep} />
-      <button type="button" className={abtn} title="Align top" onClick={() => apply(alignTop)}><AlignVerticalJustifyStart className="h-3.5 w-3.5" /></button>
-      <button type="button" className={abtn} title="Center V" onClick={() => apply(alignCenterV)}><AlignVerticalJustifyCenter className="h-3.5 w-3.5" /></button>
-      <button type="button" className={abtn} title="Align bottom" onClick={() => apply(alignBottom)}><AlignVerticalJustifyEnd className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.top")} onClick={() => apply(alignTop)}><AlignVerticalJustifyStart className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.centerV")} onClick={() => apply(alignCenterV)}><AlignVerticalJustifyCenter className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.bottom")} onClick={() => apply(alignBottom)}><AlignVerticalJustifyEnd className="h-3.5 w-3.5" /></button>
       <div className={sep} />
-      <button type="button" className={abtn} title="Distribute H" onClick={() => apply(distributeH)}><Columns2 className="h-3.5 w-3.5" /></button>
-      <button type="button" className={abtn} title="Distribute V" onClick={() => apply(distributeV)}><Rows2 className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.distributeH")} onClick={() => apply(distributeH)}><Columns2 className="h-3.5 w-3.5" /></button>
+      <button type="button" className={abtn} title={t("text.align.distributeV")} onClick={() => apply(distributeV)}><Rows2 className="h-3.5 w-3.5" /></button>
     </div>
   );
 }
@@ -1154,22 +1162,23 @@ function AlignBar({ layers, onLayersChange, allLayers }) {
 /* ─── Sticker layer inspector ─────────────────────────────── */
 
 function StickerLayerInspector({ layer, update, hasSceneDepth }) {
+  const { t } = useTranslation("editor");
   const hasOutline = (layer.outlineWidth || 0) > 0;
   return (
     <>
-      <Section label="Transform">
-        <SliderRow label="Size" min={2} max={200} value={Math.round((layer.scale ?? 0.4) * 100)} onChange={(v) => update(layer.id, { scale: v / 100 })} suffix="%" />
-        <SliderRow label="Opacity" min={0} max={100} value={layer.opacity ?? 100} onChange={(v) => update(layer.id, { opacity: v })} suffix="%" />
+      <Section label={t("text.transform")}>
+        <SliderRow label={t("text.size")} min={2} max={200} value={Math.round((layer.scale ?? 0.4) * 100)} onChange={(v) => update(layer.id, { scale: v / 100 })} suffix="%" />
+        <SliderRow label={t("text.opacity")} min={0} max={100} value={layer.opacity ?? 100} onChange={(v) => update(layer.id, { opacity: v })} suffix="%" />
       </Section>
 
       {hasSceneDepth && (
-        <Section label="Depth Position">
+        <Section label={t("text.depthPosition")}>
           <SliderRow min={0} max={100} value={Math.round((layer.zPosition ?? 1) * 100)} onChange={(v) => update(layer.id, { zPosition: v / 100 })} suffix="%" compact />
         </Section>
       )}
 
       {/* Outline — same shape as text Stroke (StrokeFieldRow handles both) */}
-      <Section label="Outline" right={
+      <Section label={t("text.outline")} right={
         <Switch on={hasOutline} onToggle={() => update(layer.id, { outlineWidth: hasOutline ? 0 : 8 })} />
       }>
         {hasOutline && (
@@ -1191,7 +1200,7 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
         )}
       </Section>
 
-      <Section label="Shadow" right={
+      <Section label={t("text.shadow")} right={
         <Switch on={layer.shadow} onToggle={() => update(layer.id, { shadow: !layer.shadow })} />
       }>
         {layer.shadow && (
@@ -1205,6 +1214,7 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
 /* ─── Sticker library picker modal ────────────────────────── */
 
 function StickerPickerModal({ onPick, onClose }) {
+  const { t } = useTranslation("editor");
   const [stickers, setStickers] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1243,12 +1253,12 @@ function StickerPickerModal({ onPick, onClose }) {
     <div className="absolute inset-0 z-30 flex flex-col bg-chrome/97 backdrop-blur-sm">
       <div className="px-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">Pick a sticker</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("text.pickSticker")}</div>
           <button
             type="button"
             className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
             onClick={onClose}
-            title="Done"
+            title={t("text.done")}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1256,17 +1266,17 @@ function StickerPickerModal({ onPick, onClose }) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search…"
+          placeholder={t("text.search")}
           autoFocus
           className="mt-3 h-7 w-full rounded-md border border-border/60 bg-app px-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-border/60 px-3 py-3">
         {loading ? (
-          <div className="grid place-items-center py-12 text-[11px] text-muted">Loading…</div>
+          <div className="grid place-items-center py-12 text-[11px] text-muted">{t("text.loading")}</div>
         ) : filtered.length === 0 ? (
           <div className="grid place-items-center py-12 text-center text-[10px] leading-relaxed text-muted2">
-            {query ? "No matches" : "No stickers in library — switch to the Sticker tool to make one."}
+            {query ? t("text.noMatches") : t("text.noStickers")}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
