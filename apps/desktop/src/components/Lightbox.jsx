@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Minus, Pencil, Plus, SwatchBook, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl } from "../utils/format";
 
 const MAX_SCALE = 8;
@@ -64,6 +65,7 @@ export default function Lightbox({
   onClose,
   onIndexChange,
 }) {
+  const { t } = useTranslation("nav");
   const viewportRef = useRef(null);
   const imageRef = useRef(null);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
@@ -377,7 +379,7 @@ export default function Lightbox({
           {onEdit && (
             <ActionPill
               icon={Pencil}
-              label="Edit"
+              label={t("lightbox.edit")}
               shortcut="E"
               onClick={(event) => {
                 event.stopPropagation();
@@ -388,7 +390,7 @@ export default function Lightbox({
           {onToggleProof && (
             <ActionPill
               icon={SwatchBook}
-              label="Proof"
+              label={t("lightbox.proof")}
               shortcut="P"
               active={proofMode}
               onClick={onToggleProof}
@@ -441,7 +443,7 @@ export default function Lightbox({
       >
         {loadState === "error" ? (
           <div className="absolute inset-0 grid place-items-center text-[14px] text-white/70">
-            Failed to load image
+            {t("lightbox.failedToLoad")}
           </div>
         ) : null}
 
@@ -467,7 +469,7 @@ export default function Lightbox({
 
         {loadState === "loading" && showLoadingText ? (
           <div className="absolute inset-0 grid place-items-center text-[14px] text-white/70">
-            Loading large image...
+            {t("lightbox.loadingLarge")}
           </div>
         ) : null}
       </div>
@@ -494,7 +496,7 @@ export default function Lightbox({
             value={Math.log(Math.max(scale, fitScale, MIN_SCALE))}
             onChange={handleSliderChange}
             className="lightbox-slider pointer-events-auto w-32"
-            aria-label="Zoom level"
+            aria-label={t("lightbox.zoomLevel")}
           />
           <button
             type="button"
@@ -507,7 +509,7 @@ export default function Lightbox({
             type="button"
             className="pointer-events-auto ml-1 rounded-md px-2 py-0.5 text-[11px] tabular-nums text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
             onClick={() => resetToFit()}
-            title="Reset to fit"
+            title={t("lightbox.resetToFit")}
           >
             {formatPercent(scale)}
           </button>

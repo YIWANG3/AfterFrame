@@ -90,6 +90,14 @@
       "ai_repaint": "AI Repaint"
     }
   },
+  "lightbox": {
+    "edit": "Edit",
+    "proof": "Proof",
+    "zoomLevel": "Zoom level",
+    "resetToFit": "Reset to fit",
+    "failedToLoad": "Failed to load image",
+    "loadingLarge": "Loading large image..."
+  },
   "gallery": {
     "loading": "Loading…",
     "noPreview": "No preview",

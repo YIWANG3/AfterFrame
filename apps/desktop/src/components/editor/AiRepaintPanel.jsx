@@ -756,7 +756,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
               disabled={isUpscaleModel}
               onChange={(event) => setTemperature(Number(event.target.value))}
               className="mt-3 w-full"
-              aria-label="Temperature"
+              aria-label={t("repaint.temperature")}
             />
           </div>
 
@@ -853,7 +853,7 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
                   title={t("repaint.saveAsStyle")}
                 >
                   <Plus className="h-3 w-3" />
-                  Save as style
+                  {t("repaint.saveAsStyle")}
                 </button>
               )}
             </div>

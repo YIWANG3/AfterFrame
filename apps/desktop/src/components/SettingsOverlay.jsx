@@ -53,7 +53,7 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
             type="button"
             onClick={onClose}
             className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
-            title="Close (Esc)"
+            title={t("close")}
           >
             <X className="h-4 w-4" />
           </button>

@@ -89,6 +89,14 @@
       "ai_repaint": "AI 重绘"
     }
   },
+  "lightbox": {
+    "edit": "编辑",
+    "proof": "校样",
+    "zoomLevel": "缩放级别",
+    "resetToFit": "重置到适应",
+    "failedToLoad": "图片加载失败",
+    "loadingLarge": "正在加载大图…"
+  },
   "gallery": {
     "loading": "加载中…",
     "noPreview": "无预览",

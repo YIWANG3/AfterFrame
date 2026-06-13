@@ -1310,7 +1310,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         <div className="absolute left-3 flex items-center gap-2 text-[12px]">
           <span className="max-w-[40vw] truncate text-muted2">{sourceLabel}</span>
           {!stateEquals(editorState, baseSnapshotRef.current || BASE_STATE) ? (
-            <span className="text-[11px] text-muted2/60">Edited</span>
+            <span className="text-[11px] text-muted2/60">{t("overlay.edited")}</span>
           ) : null}
           {(() => {
             if (!sourceImage || !imageRect) return null;
