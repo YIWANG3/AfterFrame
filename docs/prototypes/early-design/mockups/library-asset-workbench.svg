@@ -1,0 +1,265 @@
+<svg width="1440" height="960" viewBox="0 0 1440 960" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="960" fill="#1B1F23"/>
+  <rect x="0" y="0" width="1440" height="56" fill="#171B1F"/>
+  <rect x="0" y="56" width="224" height="904" fill="#20262B"/>
+  <rect x="1120" y="56" width="320" height="904" fill="#20262B"/>
+  <rect x="224" y="56" width="896" height="904" fill="#1B1F23"/>
+
+  <text x="24" y="34" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="18" font-weight="700">Workspace.mwcatalog</text>
+  <text x="220" y="34" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">RAW 7566   Export 3092   Matched 1597   Unmatched 1495</text>
+  <rect x="516" y="14" width="300" height="28" rx="14" fill="#242B31" stroke="#313A42"/>
+  <text x="540" y="32" fill="#7E8992" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Search filename, shoot, caption, platform draft</text>
+  <rect x="1262" y="14" width="74" height="28" rx="14" fill="#2D353C"/>
+  <text x="1284" y="32" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Sync</text>
+  <rect x="1348" y="14" width="68" height="28" rx="14" fill="#B98A4A"/>
+  <text x="1368" y="32" fill="#111417" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="700">Export</text>
+
+  <text x="24" y="92" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">NAVIGATION</text>
+  <rect x="12" y="106" width="200" height="36" rx="10" fill="#2A3137"/>
+  <text x="28" y="128" fill="#F6F7F8" font-family="SF Pro Text, Inter, sans-serif" font-size="13" font-weight="600">All Assets</text>
+  <text x="178" y="128" fill="#9FABB4" font-family="SF Pro Text, Inter, sans-serif" font-size="12">10658</text>
+  <text x="28" y="170" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Matched Exports</text>
+  <text x="178" y="170" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="12">1597</text>
+  <text x="28" y="202" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Unmatched Queue</text>
+  <text x="178" y="202" fill="#D18D71" font-family="SF Pro Text, Inter, sans-serif" font-size="12">1495</text>
+  <text x="28" y="234" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Pending Review</text>
+  <text x="178" y="234" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="12">0</text>
+
+  <text x="24" y="290" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">SHOOTS</text>
+  <text x="28" y="322" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">260111 Monterey</text>
+  <text x="178" y="322" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="12">482</text>
+  <text x="28" y="354" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">260110 San Francisco</text>
+  <text x="178" y="354" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="12">318</text>
+  <text x="28" y="386" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">250927 Yosemite</text>
+  <text x="178" y="386" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="12">204</text>
+
+  <text x="24" y="442" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">CONTENT</text>
+  <text x="28" y="474" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Topics</text>
+  <text x="28" y="506" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Cover Versions</text>
+  <text x="28" y="538" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Platform Drafts</text>
+  <text x="28" y="570" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Publish State</text>
+
+  <rect x="248" y="76" width="848" height="44" rx="12" fill="#20262B" stroke="#2E3740"/>
+  <rect x="260" y="86" width="86" height="24" rx="12" fill="#B98A4A"/>
+  <text x="284" y="102" fill="#121518" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="700">Grid</text>
+  <rect x="352" y="86" width="98" height="24" rx="12" fill="#252D34"/>
+  <text x="378" y="102" fill="#B9C1C8" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Filmstrip</text>
+  <rect x="456" y="86" width="118" height="24" rx="12" fill="#252D34"/>
+  <text x="484" y="102" fill="#B9C1C8" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Inspector On</text>
+  <rect x="610" y="86" width="86" height="24" rx="12" fill="#252D34"/>
+  <text x="634" y="102" fill="#B9C1C8" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Matched</text>
+  <rect x="704" y="86" width="106" height="24" rx="12" fill="#252D34"/>
+  <text x="730" y="102" fill="#B9C1C8" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Has Preview</text>
+  <text x="976" y="102" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Sort: Capture Time</text>
+  <text x="1040" y="102" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Density: M</text>
+
+  <text x="248" y="148" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="22" font-weight="700">Library</text>
+  <text x="248" y="170" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Center pane is for assets, not prose. Selection drives the inspector.</text>
+
+  <rect x="248" y="188" width="848" height="744" rx="18" fill="#171B1F" stroke="#2D353C"/>
+
+  <g>
+    <rect x="268" y="208" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="268" y="208" width="148" height="148" rx="14" fill="url(#thumbA)"/>
+    <rect x="276" y="216" width="48" height="20" rx="10" fill="#15191D" fill-opacity="0.7"/>
+    <text x="290" y="230" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="10">RAW</text>
+    <text x="278" y="372" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6380-Edit</text>
+    <text x="278" y="390" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Matched to 0Y1A6380.CR3</text>
+  </g>
+  <g>
+    <rect x="428" y="208" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="428" y="208" width="148" height="148" rx="14" fill="url(#thumbB)"/>
+    <rect x="436" y="216" width="60" height="20" rx="10" fill="#15191D" fill-opacity="0.7"/>
+    <text x="452" y="230" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="10">EXPORT</text>
+    <text x="438" y="372" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6352</text>
+    <text x="438" y="390" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Instagram portrait</text>
+  </g>
+  <g>
+    <rect x="588" y="208" width="148" height="190" rx="14" fill="#2B3137" stroke="#B98A4A" stroke-width="2"/>
+    <rect x="588" y="208" width="148" height="148" rx="14" fill="url(#thumbC)"/>
+    <rect x="596" y="216" width="74" height="20" rx="10" fill="#15191D" fill-opacity="0.78"/>
+    <text x="610" y="230" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="10">SELECTED</text>
+    <text x="598" y="372" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6360</text>
+    <text x="598" y="390" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Cover candidate</text>
+  </g>
+  <g>
+    <rect x="748" y="208" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="748" y="208" width="148" height="148" rx="14" fill="url(#thumbD)"/>
+    <rect x="756" y="216" width="72" height="20" rx="10" fill="#15191D" fill-opacity="0.7"/>
+    <text x="770" y="230" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="10">UNMATCHED</text>
+    <text x="758" y="372" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A0040</text>
+    <text x="758" y="390" fill="#D7A084" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Needs source review</text>
+  </g>
+  <g>
+    <rect x="908" y="208" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="908" y="208" width="148" height="148" rx="14" fill="url(#thumbE)"/>
+    <rect x="916" y="216" width="48" height="20" rx="10" fill="#15191D" fill-opacity="0.7"/>
+    <text x="930" y="230" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="10">RAW</text>
+    <text x="918" y="372" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A5686</text>
+    <text x="918" y="390" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Monterey sequence</text>
+  </g>
+
+  <g>
+    <rect x="268" y="414" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="268" y="414" width="148" height="148" rx="14" fill="url(#thumbF)"/>
+    <text x="278" y="578" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A5832-2</text>
+    <text x="278" y="596" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Matched</text>
+  </g>
+  <g>
+    <rect x="428" y="414" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="428" y="414" width="148" height="148" rx="14" fill="url(#thumbG)"/>
+    <text x="438" y="578" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A5901</text>
+    <text x="438" y="596" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">TikTok cover</text>
+  </g>
+  <g>
+    <rect x="588" y="414" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="588" y="414" width="148" height="148" rx="14" fill="url(#thumbH)"/>
+    <text x="598" y="578" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A5960</text>
+    <text x="598" y="596" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Draft attached</text>
+  </g>
+  <g>
+    <rect x="748" y="414" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="748" y="414" width="148" height="148" rx="14" fill="url(#thumbI)"/>
+    <text x="758" y="578" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6011</text>
+    <text x="758" y="596" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Proxy ready</text>
+  </g>
+  <g>
+    <rect x="908" y="414" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="908" y="414" width="148" height="148" rx="14" fill="url(#thumbJ)"/>
+    <text x="918" y="578" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6039</text>
+    <text x="918" y="596" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Selected before publish</text>
+  </g>
+
+  <g>
+    <rect x="268" y="620" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="268" y="620" width="148" height="148" rx="14" fill="url(#thumbK)"/>
+    <text x="278" y="784" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6102</text>
+    <text x="278" y="802" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Matched</text>
+  </g>
+  <g>
+    <rect x="428" y="620" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="428" y="620" width="148" height="148" rx="14" fill="url(#thumbL)"/>
+    <text x="438" y="784" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6155</text>
+    <text x="438" y="802" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Caption v3</text>
+  </g>
+  <g>
+    <rect x="588" y="620" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="588" y="620" width="148" height="148" rx="14" fill="url(#thumbM)"/>
+    <text x="598" y="784" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6218</text>
+    <text x="598" y="802" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Collage derived</text>
+  </g>
+  <g>
+    <rect x="748" y="620" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="748" y="620" width="148" height="148" rx="14" fill="url(#thumbN)"/>
+    <text x="758" y="784" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6290</text>
+    <text x="758" y="802" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Queued for export</text>
+  </g>
+  <g>
+    <rect x="908" y="620" width="148" height="190" rx="14" fill="#2B3137"/>
+    <rect x="908" y="620" width="148" height="148" rx="14" fill="url(#thumbO)"/>
+    <text x="918" y="784" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="600">0Y1A6331</text>
+    <text x="918" y="802" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Publishing ready</text>
+  </g>
+
+  <text x="1144" y="94" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="20" font-weight="700">Inspector</text>
+  <text x="1144" y="116" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Selection keeps context visible.</text>
+  <rect x="1144" y="140" width="272" height="184" rx="16" fill="#262E34"/>
+  <rect x="1160" y="156" width="240" height="136" rx="12" fill="url(#thumbC)"/>
+  <text x="1160" y="306" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="18" font-weight="700">0Y1A6360</text>
+  <text x="1160" y="326" fill="#98A3AC" font-family="SF Pro Text, Inter, sans-serif" font-size="12">RAW -> Export -> Cover Draft</text>
+
+  <text x="1144" y="368" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">LINEAGE</text>
+  <rect x="1144" y="384" width="272" height="108" rx="14" fill="#262E34"/>
+  <circle cx="1172" cy="418" r="8" fill="#B98A4A"/>
+  <circle cx="1172" cy="452" r="8" fill="#D8DDE2"/>
+  <circle cx="1172" cy="486" r="8" fill="#7B8A95"/>
+  <line x1="1172" y1="426" x2="1172" y2="478" stroke="#4B565F" stroke-width="2"/>
+  <text x="1192" y="422" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">RAW: /RAW/2026/.../0Y1A6360.CR3</text>
+  <text x="1192" y="456" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Export: /Desktop/Export/0Y1A6360.jpg</text>
+  <text x="1192" y="490" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Derived: cover-text-v2.jpg</text>
+
+  <text x="1144" y="530" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">METADATA</text>
+  <rect x="1144" y="546" width="272" height="172" rx="14" fill="#262E34"/>
+  <text x="1160" y="574" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Camera</text>
+  <text x="1248" y="574" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Canon EOS R6m2</text>
+  <text x="1160" y="604" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Lens</text>
+  <text x="1248" y="604" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">EF70-200mm f/2.8L IS II</text>
+  <text x="1160" y="634" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Capture</text>
+  <text x="1248" y="634" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">2026-01-11 15:03:52</text>
+  <text x="1160" y="664" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Match</text>
+  <text x="1248" y="664" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="12">auto-bound 0.94</text>
+  <text x="1160" y="694" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Draft</text>
+  <text x="1248" y="694" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Instagram cover / pending</text>
+
+  <text x="1144" y="756" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">QUICK ACTIONS</text>
+  <rect x="1144" y="772" width="272" height="132" rx="14" fill="#262E34"/>
+  <rect x="1160" y="790" width="116" height="32" rx="10" fill="#B98A4A"/>
+  <text x="1192" y="810" fill="#111417" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="700">Locate RAW</text>
+  <rect x="1284" y="790" width="116" height="32" rx="10" fill="#313A42"/>
+  <text x="1310" y="810" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Reveal Export</text>
+  <rect x="1160" y="834" width="240" height="32" rx="10" fill="#313A42"/>
+  <text x="1230" y="854" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Open Content Draft</text>
+
+  <defs>
+    <linearGradient id="thumbA" x1="268" y1="208" x2="416" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5A7286"/>
+      <stop offset="1" stop-color="#D2B38D"/>
+    </linearGradient>
+    <linearGradient id="thumbB" x1="428" y1="208" x2="576" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3F5A66"/>
+      <stop offset="1" stop-color="#C9A57D"/>
+    </linearGradient>
+    <linearGradient id="thumbC" x1="588" y1="208" x2="736" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6A7F96"/>
+      <stop offset="1" stop-color="#E0C098"/>
+    </linearGradient>
+    <linearGradient id="thumbD" x1="748" y1="208" x2="896" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6B5C57"/>
+      <stop offset="1" stop-color="#B48B69"/>
+    </linearGradient>
+    <linearGradient id="thumbE" x1="908" y1="208" x2="1056" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#50666F"/>
+      <stop offset="1" stop-color="#D3AF7F"/>
+    </linearGradient>
+    <linearGradient id="thumbF" x1="268" y1="414" x2="416" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4E6476"/>
+      <stop offset="1" stop-color="#A6B7C3"/>
+    </linearGradient>
+    <linearGradient id="thumbG" x1="428" y1="414" x2="576" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5C756A"/>
+      <stop offset="1" stop-color="#C8B28F"/>
+    </linearGradient>
+    <linearGradient id="thumbH" x1="588" y1="414" x2="736" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#815E4E"/>
+      <stop offset="1" stop-color="#D3C09C"/>
+    </linearGradient>
+    <linearGradient id="thumbI" x1="748" y1="414" x2="896" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5F6D82"/>
+      <stop offset="1" stop-color="#C1A57C"/>
+    </linearGradient>
+    <linearGradient id="thumbJ" x1="908" y1="414" x2="1056" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#607A6A"/>
+      <stop offset="1" stop-color="#D2BF9D"/>
+    </linearGradient>
+    <linearGradient id="thumbK" x1="268" y1="620" x2="416" y2="768" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4A5E68"/>
+      <stop offset="1" stop-color="#D1A883"/>
+    </linearGradient>
+    <linearGradient id="thumbL" x1="428" y1="620" x2="576" y2="768" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#576A7D"/>
+      <stop offset="1" stop-color="#D0B38C"/>
+    </linearGradient>
+    <linearGradient id="thumbM" x1="588" y1="620" x2="736" y2="768" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6F5F53"/>
+      <stop offset="1" stop-color="#CBAE8A"/>
+    </linearGradient>
+    <linearGradient id="thumbN" x1="748" y1="620" x2="896" y2="768" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F6A70"/>
+      <stop offset="1" stop-color="#C69E75"/>
+    </linearGradient>
+    <linearGradient id="thumbO" x1="908" y1="620" x2="1056" y2="768" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5D7789"/>
+      <stop offset="1" stop-color="#D0B998"/>
+    </linearGradient>
+  </defs>
+</svg>

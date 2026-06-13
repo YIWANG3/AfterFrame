@@ -1,0 +1,124 @@
+<svg width="1440" height="960" viewBox="0 0 1440 960" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="960" fill="#1A1E22"/>
+  <rect x="0" y="0" width="1440" height="56" fill="#161A1E"/>
+  <rect x="0" y="56" width="284" height="904" fill="#20262B"/>
+  <rect x="284" y="56" width="856" height="904" fill="#1A1E22"/>
+  <rect x="1140" y="56" width="300" height="904" fill="#20262B"/>
+
+  <text x="24" y="34" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="18" font-weight="700">Reverse Lookup Review</text>
+  <text x="220" y="34" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Unmatched first. Keyboard-first review. Commit registry once.</text>
+  <rect x="1138" y="14" width="112" height="28" rx="14" fill="#2C343B"/>
+  <text x="1160" y="32" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Batch Confirm</text>
+  <rect x="1260" y="14" width="156" height="28" rx="14" fill="#B98A4A"/>
+  <text x="1298" y="32" fill="#111417" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="700">Remember Mapping</text>
+
+  <text x="24" y="92" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">REVIEW QUEUE</text>
+  <rect x="12" y="108" width="260" height="48" rx="12" fill="#2A3137"/>
+  <text x="26" y="136" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="14" font-weight="600">0Y1A0040.jpg</text>
+  <text x="26" y="152" fill="#D5A38A" font-family="SF Pro Text, Inter, sans-serif" font-size="11">No high-confidence RAW in current catalog</text>
+  <rect x="16" y="171" width="252" height="72" rx="12" fill="#262D33"/>
+  <text x="28" y="194" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="13" font-weight="600">0Y1A6380-Edit.jpg</text>
+  <text x="28" y="212" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Top candidate score 0.78</text>
+  <text x="28" y="230" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Monterey batch, camera matches</text>
+  <rect x="16" y="251" width="252" height="72" rx="12" fill="#262D33"/>
+  <text x="28" y="274" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="13" font-weight="600">0Y1A5832-2.jpg</text>
+  <text x="28" y="292" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Top candidate score 0.74</text>
+  <text x="28" y="310" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Suffix variant, lens unknown</text>
+  <rect x="16" y="331" width="252" height="72" rx="12" fill="#262D33"/>
+  <text x="28" y="354" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="13" font-weight="600">0Y1A5901.jpg</text>
+  <text x="28" y="372" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Top candidate score 0.70</text>
+  <text x="28" y="390" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Filename family match only</text>
+
+  <text x="24" y="452" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">SMART FILTERS</text>
+  <rect x="16" y="468" width="86" height="28" rx="14" fill="#2A3137"/>
+  <text x="38" y="486" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">No Preview</text>
+  <rect x="108" y="468" width="84" height="28" rx="14" fill="#2A3137"/>
+  <text x="132" y="486" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Same Stem</text>
+  <rect x="198" y="468" width="58" height="28" rx="14" fill="#B98A4A"/>
+  <text x="216" y="486" fill="#111417" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="700">EXIF</text>
+
+  <text x="308" y="92" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="22" font-weight="700">Review Candidate Mapping</text>
+  <text x="308" y="114" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Center stage is a compare workflow, not a generic details page.</text>
+
+  <rect x="308" y="140" width="808" height="780" rx="18" fill="#171B1F" stroke="#2D353C"/>
+  <rect x="332" y="164" width="360" height="334" rx="16" fill="#252C32"/>
+  <rect x="716" y="164" width="376" height="334" rx="16" fill="#252C32"/>
+  <text x="352" y="190" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="14" font-weight="600">Export</text>
+  <text x="736" y="190" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="14" font-weight="600">Candidate RAW</text>
+  <rect x="352" y="206" width="320" height="248" rx="12" fill="url(#exportThumb)"/>
+  <rect x="736" y="206" width="336" height="248" rx="12" fill="url(#rawThumb)"/>
+  <rect x="368" y="468" width="110" height="22" rx="11" fill="#313A42"/>
+  <text x="398" y="483" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Desktop Export</text>
+  <rect x="752" y="468" width="124" height="22" rx="11" fill="#313A42"/>
+  <text x="786" y="483" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="11">RAW 2026 Catalog</text>
+
+  <text x="332" y="540" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">COMPARE</text>
+  <rect x="332" y="556" width="760" height="144" rx="16" fill="#252C32"/>
+  <line x1="586" y1="572" x2="586" y2="684" stroke="#39424A"/>
+  <line x1="840" y1="572" x2="840" y2="684" stroke="#39424A"/>
+  <text x="352" y="586" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Filename</text>
+  <text x="352" y="610" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="13">0Y1A6380-Edit.jpg</text>
+  <text x="606" y="586" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Candidate</text>
+  <text x="606" y="610" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="13">0Y1A6380.CR3</text>
+  <text x="860" y="586" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Signals</text>
+  <text x="860" y="610" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Exact stem key</text>
+  <text x="860" y="632" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Camera model match</text>
+  <text x="860" y="654" fill="#D8C8A4" font-family="SF Pro Text, Inter, sans-serif" font-size="13">Capture time differs</text>
+
+  <text x="332" y="736" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">ALTERNATE CANDIDATES</text>
+  <rect x="332" y="752" width="760" height="144" rx="16" fill="#252C32"/>
+  <rect x="348" y="768" width="728" height="32" rx="10" fill="#2C343B"/>
+  <text x="364" y="788" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">1. 0Y1A6380.CR3   Score 0.78   Canon EOS R6m2   Monterey</text>
+  <rect x="348" y="808" width="728" height="32" rx="10" fill="#21282E"/>
+  <text x="364" y="828" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="12">2. 0Y1A6388.CR3   Score 0.41   Same shoot, weaker name similarity</text>
+  <rect x="348" y="848" width="728" height="32" rx="10" fill="#21282E"/>
+  <text x="364" y="868" fill="#C5CBD1" font-family="SF Pro Text, Inter, sans-serif" font-size="12">3. 0Y1A6386.CR3   Score 0.39   Same camera, no confident lineage</text>
+
+  <text x="1164" y="92" fill="#F3F5F7" font-family="SF Pro Display, Inter, sans-serif" font-size="20" font-weight="700">Decision Rail</text>
+  <text x="1164" y="114" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Everything needed to confirm stays in one narrow lane.</text>
+
+  <text x="1164" y="152" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">TOP CANDIDATE</text>
+  <rect x="1164" y="168" width="252" height="108" rx="14" fill="#262E34"/>
+  <text x="1180" y="196" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="14" font-weight="600">0Y1A6380.CR3</text>
+  <text x="1180" y="220" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Score 0.78   Manual review</text>
+  <text x="1180" y="242" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Canon EOS R6m2   6000 x 4000</text>
+
+  <text x="1164" y="314" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">FEATURES</text>
+  <rect x="1164" y="330" width="252" height="178" rx="14" fill="#262E34"/>
+  <text x="1180" y="358" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">exact_stem_key</text>
+  <text x="1350" y="358" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="11">1.00</text>
+  <text x="1180" y="388" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">alnum_stem_key</text>
+  <text x="1350" y="388" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="11">1.00</text>
+  <text x="1180" y="418" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">stem_similarity</text>
+  <text x="1350" y="418" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="11">0.89</text>
+  <text x="1180" y="448" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">camera_model</text>
+  <text x="1350" y="448" fill="#A8D7AE" font-family="SF Pro Text, Inter, sans-serif" font-size="11">1.00</text>
+  <text x="1180" y="478" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">capture_time</text>
+  <text x="1350" y="478" fill="#D8C8A4" font-family="SF Pro Text, Inter, sans-serif" font-size="11">0.00</text>
+
+  <text x="1164" y="546" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">ACTIONS</text>
+  <rect x="1164" y="562" width="252" height="194" rx="14" fill="#262E34"/>
+  <rect x="1180" y="580" width="220" height="36" rx="10" fill="#B98A4A"/>
+  <text x="1256" y="603" fill="#111417" font-family="SF Pro Text, Inter, sans-serif" font-size="12" font-weight="700">Confirm Match</text>
+  <rect x="1180" y="626" width="220" height="36" rx="10" fill="#313A42"/>
+  <text x="1250" y="649" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Skip for Now</text>
+  <rect x="1180" y="672" width="220" height="36" rx="10" fill="#313A42"/>
+  <text x="1240" y="695" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Locate Both Files</text>
+  <text x="1180" y="730" fill="#8C969F" font-family="SF Pro Text, Inter, sans-serif" font-size="11">Shortcut: Return confirm   Space next   L locate</text>
+
+  <text x="1164" y="794" fill="#7F8A93" font-family="SF Pro Text, Inter, sans-serif" font-size="11" letter-spacing="2">POLICY</text>
+  <rect x="1164" y="810" width="252" height="88" rx="14" fill="#262E34"/>
+  <text x="1180" y="836" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">First decision can be probabilistic.</text>
+  <text x="1180" y="858" fill="#F3F5F7" font-family="SF Pro Text, Inter, sans-serif" font-size="12">Second decision is registry-backed and permanent.</text>
+
+  <defs>
+    <linearGradient id="exportThumb" x1="352" y1="206" x2="672" y2="454" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#577389"/>
+      <stop offset="1" stop-color="#D5B28A"/>
+    </linearGradient>
+    <linearGradient id="rawThumb" x1="736" y1="206" x2="1072" y2="454" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#51636F"/>
+      <stop offset="1" stop-color="#CBA478"/>
+    </linearGradient>
+  </defs>
+</svg>
