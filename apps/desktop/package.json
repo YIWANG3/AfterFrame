@@ -17,8 +17,7 @@
     "dist:linux": "npm run build:sidecar && npm run build && electron-builder --linux",
     "e2e": "npm run build && playwright test",
     "e2e:only": "playwright test",
-    "build:sidecar": "cd ../../services/sidecar && pyinstaller media-workspace.spec --distpath dist --noconfirm",
-    "e2e:record": "node e2e/record.js"
+    "build:sidecar": "cd ../../services/sidecar && pyinstaller media-workspace.spec --distpath dist --noconfirm"
   },
   "build": {
     "appId": "com.afterframe.app",
