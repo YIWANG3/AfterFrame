@@ -36,8 +36,18 @@ test("switching to 中文 flips the renderer UI live", async () => {
 });
 
 test("switching to 中文 rebuilds the native menu", async () => {
-  const fileLabel = await ctx.app.evaluate(({ Menu }) =>
-    Menu.getApplicationMenu()?.items.map((i) => i.label).find((l) => /^File$|^文件$/.test(l)),
+  const labels = await ctx.app.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()?.items.map((i) => i.label),
   );
-  expect(fileLabel).toBe("文件");
+  expect(labels).toContain("文件");
+  expect(labels).toContain("编辑");
+});
+
+test("the Edit submenu labels follow the app language", async () => {
+  const editItems = await ctx.app.evaluate(({ Menu }) => {
+    const edit = Menu.getApplicationMenu()?.items.find((i) => i.label === "编辑");
+    return edit?.submenu?.items.map((i) => i.label).filter(Boolean);
+  });
+  expect(editItems).toContain("撤销");
+  expect(editItems).toContain("全选");
 });

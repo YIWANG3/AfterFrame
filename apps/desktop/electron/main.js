@@ -882,7 +882,22 @@ function buildAppMenu() {
       ],
     },
     {
-      role: "editMenu",
+      // Custom Edit submenu (instead of role:"editMenu") so the labels follow
+      // the app language, not the OS language. Each item keeps its role for
+      // native behavior + standard accelerators. macOS still appends its own
+      // services (Emoji & Symbols, Dictation, …) which stay OS-localized.
+      label: t("menu.edit"),
+      submenu: [
+        { label: t("menu.undo"), role: "undo" },
+        { label: t("menu.redo"), role: "redo" },
+        { type: "separator" },
+        { label: t("menu.cut"), role: "cut" },
+        { label: t("menu.copy"), role: "copy" },
+        { label: t("menu.paste"), role: "paste" },
+        { label: t("menu.pasteMatchStyle"), role: "pasteAndMatchStyle" },
+        { label: t("menu.delete"), role: "delete" },
+        { label: t("menu.selectAll"), role: "selectAll" },
+      ],
     },
     {
       label: t("menu.view"),

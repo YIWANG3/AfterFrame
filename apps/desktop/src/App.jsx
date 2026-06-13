@@ -328,6 +328,15 @@ export default function App() {
         setSettingsOpen((open) => !open);
         return;
       }
+      // Cmd+A selects all assets in the gallery. Skipped when focus is in a
+      // text field (native text select-all wins) or in the editor/stickers.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a" && !event.shiftKey && !event.altKey) {
+        if (editorItem || viewMode === "stickers" || shouldIgnoreKey(event)) return;
+        if (!orderedIds.length) return;
+        event.preventDefault();
+        setSelectedIds(new Set(orderedIds));
+        return;
+      }
       if (editorItem) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (shouldIgnoreKey(event)) return;

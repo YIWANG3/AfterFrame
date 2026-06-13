@@ -44,4 +44,16 @@ test.describe("Catalog browse", () => {
     // The selection ring is on an inner div (not the button itself).
     await expect(firstCard).toHaveAttribute("data-selected", "true");
   });
+
+  test("Cmd+A selects every card in the gallery", async () => {
+    // Click a card first so focus is in the gallery (not a text field).
+    await window.locator("[data-gallery-item='true']").first().click();
+    await window.keyboard.press("ControlOrMeta+a");
+    const cards = window.locator("[data-gallery-item='true']");
+    const count = await cards.count();
+    expect(count).toBe(13);
+    for (let i = 0; i < count; i += 1) {
+      await expect(cards.nth(i)).toHaveAttribute("data-selected", "true");
+    }
+  });
 });
