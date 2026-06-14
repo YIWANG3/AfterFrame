@@ -88,7 +88,7 @@ for (idx, instanceIndex) in instances.enumerated() {
         let maskedBuffer = try observation.generateMaskedImage(
             ofInstances: IndexSet(integer: instanceIndex),
             from: handler,
-            croppedToInstancesExtent: false,
+            croppedToInstancesExtent: false
         )
 
         let ciImage = CIImage(cvPixelBuffer: maskedBuffer)
@@ -109,7 +109,7 @@ for (idx, instanceIndex) in instances.enumerated() {
                 x: max(0, bbox.origin.x - pad),
                 y: max(0, bbox.origin.y - pad),
                 width: min(CGFloat(fullCG.width) - max(0, bbox.origin.x - pad), bbox.size.width + pad * 2),
-                height: min(CGFloat(fullCG.height) - max(0, bbox.origin.y - pad), bbox.size.height + pad * 2),
+                height: min(CGFloat(fullCG.height) - max(0, bbox.origin.y - pad), bbox.size.height + pad * 2)
             )
             outCG = fullCG.cropping(to: crop) ?? fullCG
         } else {
@@ -133,11 +133,11 @@ for (idx, instanceIndex) in instances.enumerated() {
                 "x": bbox.origin.x,
                 "y": bbox.origin.y,
                 "w": bbox.size.width,
-                "h": bbox.size.height,
+                "h": bbox.size.height
             ],
             // dimensions of the cropped PNG that was actually written
             "width": outCG.width,
-            "height": outCG.height,
+            "height": outCG.height
         ])
     } catch {
         FileHandle.standardError.write(Data("Instance \(idx) failed: \(error.localizedDescription)\n".utf8))
@@ -147,7 +147,7 @@ for (idx, instanceIndex) in instances.enumerated() {
 let manifest: [String: Any] = [
     "instances": manifestEntries,
     "sourceWidth": Int(imageW),
-    "sourceHeight": Int(imageH),
+    "sourceHeight": Int(imageH)
 ]
 let manifestURL = outDirURL.appendingPathComponent("manifest.json")
 let manifestData = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])

@@ -139,7 +139,7 @@ guard let ctx = pixels.withUnsafeMutableBytes({ buf -> CGContext? in
         bitsPerComponent: 8,
         bytesPerRow: bytesPerRowOut,
         space: space,
-        bitmapInfo: bitmapInfo,
+        bitmapInfo: bitmapInfo
     )
 }), let cgImage = ctx.makeImage() else {
     FileHandle.standardError.write(Data("Failed to compose output PNG\n".utf8))
