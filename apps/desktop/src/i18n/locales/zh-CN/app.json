@@ -19,7 +19,7 @@
   "deleteTitle": "从图库移除",
   "deleteMsg_one": "确定要从图库移除这个素材吗？",
   "deleteMsg_other": "确定要从图库移除这 {{count}} 个素材吗？",
-  "deleteDetail": "磁盘上的原始文件不会被删除——仅移除图库中的记录。",
+  "deleteDetail": "原始文件不会被删除,仅移除图库记录。",
   "remove": "移除",
   "cancel": "取消",
   "copiedPath_other": "已复制 {{count}} 个路径",

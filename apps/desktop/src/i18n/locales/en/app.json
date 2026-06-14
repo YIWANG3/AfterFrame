@@ -19,7 +19,7 @@
   "deleteTitle": "Remove from catalog",
   "deleteMsg_one": "Remove this asset from the catalog?",
   "deleteMsg_other": "Remove these {{count}} assets from the catalog?",
-  "deleteDetail": "The original files on disk are not deleted — only the catalog records are removed.",
+  "deleteDetail": "Original files aren't deleted — only the catalog records.",
   "remove": "Remove",
   "cancel": "Cancel",
   "copiedPath_one": "Path copied",
