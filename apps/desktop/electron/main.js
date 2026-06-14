@@ -1080,28 +1080,6 @@ ipcMain.handle("app:copy-text", (_event, text) => {
   return true;
 });
 
-// Native confirmation before removing assets from the catalog. Returns true if
-// the user confirmed. Strings come from the (interpolation-free) main-process
-// translator, so the {count} token is substituted manually.
-ipcMain.handle("app:confirm-delete", async (event, count) => {
-  const t = makeT(currentLocale);
-  const n = Math.max(1, Number(count) || 1);
-  const message = n === 1
-    ? t("dialog.deleteMessageOne")
-    : t("dialog.deleteMessageMany").replace("{count}", String(n));
-  const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
-  const { response } = await dialog.showMessageBox(win, {
-    type: "warning",
-    buttons: [t("dialog.deleteConfirm"), t("dialog.deleteCancel")],
-    defaultId: 0,
-    cancelId: 1,
-    title: t("dialog.deleteTitle"),
-    message,
-    detail: t("dialog.deleteDetail"),
-  });
-  return response === 0;
-});
-
 saveFileIpc.register({
   ipcMain, dialog,
   rootDir,

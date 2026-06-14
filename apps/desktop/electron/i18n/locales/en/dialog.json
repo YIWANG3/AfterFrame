@@ -1,10 +1,4 @@
 {
   "relinkTitle": "Relink to file",
-  "relinkMessage": "Choose the moved or renamed original file",
-  "deleteTitle": "Remove from catalog",
-  "deleteMessageOne": "Remove this asset from the catalog?",
-  "deleteMessageMany": "Remove these {count} assets from the catalog?",
-  "deleteDetail": "The original files on disk are not deleted — only the catalog records are removed.",
-  "deleteConfirm": "Remove",
-  "deleteCancel": "Cancel"
+  "relinkMessage": "Choose the moved or renamed original file"
 }

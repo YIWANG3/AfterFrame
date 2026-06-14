@@ -71,4 +71,23 @@ test.describe("Catalog browse", () => {
       await expect(cards.nth(i)).toHaveAttribute("data-selected", "true");
     }
   });
+
+  // Keep this last: it mutates the (temp-copied) catalog.
+  test("Delete opens the in-app confirm dialog and removes on confirm", async () => {
+    await window.locator("[data-gallery-item='true']").first().click();
+    await window.keyboard.press("Delete");
+    // App-styled dialog, not the native one.
+    await expect(window.getByText("Remove from catalog")).toBeVisible();
+
+    // Cancel leaves the catalog untouched.
+    await window.getByRole("button", { name: "Cancel" }).click();
+    await expect(window.getByText("Remove from catalog")).toHaveCount(0);
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(13);
+
+    // Confirm removes exactly the selected asset.
+    await window.locator("[data-gallery-item='true']").first().click();
+    await window.keyboard.press("Delete");
+    await window.getByRole("button", { name: "Remove" }).click();
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(12);
+  });
 });
