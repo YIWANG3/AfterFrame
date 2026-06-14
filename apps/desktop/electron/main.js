@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { pathToFileURL } = require("node:url");
@@ -845,24 +845,27 @@ function sendMenuAction(action) {
 }
 
 function buildAppMenu() {
-  // Custom labels are translated; Electron `role` items are auto-localized by
-  // the OS, and the app-menu title stays the brand name.
+  // We give every `role` item an explicit translated `label` so the whole menu
+  // follows the app language, not the OS language. (macOS still auto-injects a
+  // few items into the Edit menu — Writing Tools, AutoFill, Dictation, Emoji &
+  // Symbols — which we don't create and can't relabel; those stay OS-localized,
+  // exactly like every other Mac app.) The app-menu title stays the brand name.
   const t = makeT(currentLocale);
   const template = [
     {
       label: "AfterFrame",
       submenu: [
-        { role: "about" },
+        { label: t("menu.about"), role: "about" },
         { type: "separator" },
         { label: t("menu.scratchCatalog"), click: () => sendMenuAction("catalog:scratch") },
         { type: "separator" },
-        { role: "services" },
+        { label: t("menu.services"), role: "services" },
         { type: "separator" },
-        { role: "hide" },
-        { role: "hideOthers" },
-        { role: "unhide" },
+        { label: t("menu.hide"), role: "hide" },
+        { label: t("menu.hideOthers"), role: "hideOthers" },
+        { label: t("menu.showAll"), role: "unhide" },
         { type: "separator" },
-        { role: "quit" },
+        { label: t("menu.quit"), role: "quit" },
       ],
     },
     {
@@ -882,12 +885,9 @@ function buildAppMenu() {
       ],
     },
     {
-      // Custom Edit submenu (instead of role:"editMenu") so the labels follow
-      // the app language, not the OS language. Each item keeps its role for
-      // native behavior + standard accelerators. macOS still appends its own
-      // services (Emoji & Symbols, Dictation, …) which stay OS-localized.
       label: t("menu.edit"),
       submenu: [
+        // Text-editing roles target the focused element natively.
         { label: t("menu.undo"), role: "undo" },
         { label: t("menu.redo"), role: "redo" },
         { type: "separator" },
@@ -895,8 +895,17 @@ function buildAppMenu() {
         { label: t("menu.copy"), role: "copy" },
         { label: t("menu.paste"), role: "paste" },
         { label: t("menu.pasteMatchStyle"), role: "pasteAndMatchStyle" },
-        { label: t("menu.delete"), role: "delete" },
-        { label: t("menu.selectAll"), role: "selectAll" },
+        { type: "separator" },
+        // Asset-level actions — the renderer acts on the current selection.
+        { label: t("menu.copyPath"), click: () => sendMenuAction("edit:copy-path") },
+        { label: t("menu.copyName"), click: () => sendMenuAction("edit:copy-name") },
+        // No accelerator: a global ⌫ would hijack typing. The renderer owns the
+        // Delete/Backspace shortcut and skips it inside text fields.
+        { label: t("menu.delete"), click: () => sendMenuAction("edit:delete") },
+        { type: "separator" },
+        // ⌘A is routed to the renderer so it can pick text-select vs gallery
+        // select-all based on focus, instead of role:"selectAll" (text only).
+        { label: t("menu.selectAll"), accelerator: "CmdOrCtrl+A", click: () => sendMenuAction("edit:select-all") },
       ],
     },
     {
@@ -905,14 +914,20 @@ function buildAppMenu() {
         { label: t("menu.refresh"), accelerator: "CmdOrCtrl+R", click: () => sendMenuAction("view:refresh") },
         { label: t("menu.toggleTheme"), click: () => sendMenuAction("view:toggle-theme") },
         { type: "separator" },
-        { role: "toggleDevTools", accelerator: "Alt+CommandOrControl+I" },
+        { label: t("menu.devTools"), role: "toggleDevTools", accelerator: "Alt+CommandOrControl+I" },
         { type: "separator" },
+        // Left as a role so macOS keeps the dynamic Enter/Exit Full Screen label.
         { role: "togglefullscreen" },
       ],
     },
     {
       label: t("menu.window"),
-      submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }],
+      submenu: [
+        { label: t("menu.minimize"), role: "minimize" },
+        { label: t("menu.zoom"), role: "zoom" },
+        { type: "separator" },
+        { label: t("menu.front"), role: "front" },
+      ],
     },
   ];
   return Menu.buildFromTemplate(template);
@@ -1056,6 +1071,35 @@ ipcMain.handle("app:set-locale", (_event, lng) => {
   void updateAppSettings((s) => ({ ...s, locale: lng }));
   Menu.setApplicationMenu(buildAppMenu());
   return currentLocale;
+});
+
+// Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
+// main process so it works regardless of renderer focus / gesture state.
+ipcMain.handle("app:copy-text", (_event, text) => {
+  clipboard.writeText(String(text ?? ""));
+  return true;
+});
+
+// Native confirmation before removing assets from the catalog. Returns true if
+// the user confirmed. Strings come from the (interpolation-free) main-process
+// translator, so the {count} token is substituted manually.
+ipcMain.handle("app:confirm-delete", async (event, count) => {
+  const t = makeT(currentLocale);
+  const n = Math.max(1, Number(count) || 1);
+  const message = n === 1
+    ? t("dialog.deleteMessageOne")
+    : t("dialog.deleteMessageMany").replace("{count}", String(n));
+  const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+  const { response } = await dialog.showMessageBox(win, {
+    type: "warning",
+    buttons: [t("dialog.deleteConfirm"), t("dialog.deleteCancel")],
+    defaultId: 0,
+    cancelId: 1,
+    title: t("dialog.deleteTitle"),
+    message,
+    detail: t("dialog.deleteDetail"),
+  });
+  return response === 0;
 });
 
 saveFileIpc.register({

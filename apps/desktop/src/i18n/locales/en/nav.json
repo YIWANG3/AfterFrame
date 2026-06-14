@@ -114,7 +114,9 @@
       "annotate": "Annotate with AI",
       "annotateSkip": "Annotate{{suffix}} (skip done)",
       "reannotate": "Re-annotate{{suffix}}",
-      "reveal": "Reveal in Finder"
+      "reveal": "Reveal in Finder",
+      "copyPath": "Copy File Path",
+      "copyName": "Copy Name"
     }
   }
 }

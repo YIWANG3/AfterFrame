@@ -45,6 +45,21 @@ test.describe("Catalog browse", () => {
     await expect(firstCard).toHaveAttribute("data-selected", "true");
   });
 
+  test("context menu copies the file path and name to the clipboard", async () => {
+    const firstCard = window.locator("[data-gallery-item='true']").first();
+    await firstCard.click({ button: "right" });
+    await window.getByText("Copy File Path", { exact: true }).click();
+    const fullPath = await app.evaluate(({ clipboard }) => clipboard.readText());
+    expect(fullPath).toMatch(/\.[a-z0-9]+$/i);
+    expect(fullPath).toContain("/");
+
+    await firstCard.click({ button: "right" });
+    await window.getByText("Copy Name", { exact: true }).click();
+    const name = await app.evaluate(({ clipboard }) => clipboard.readText());
+    expect(name).not.toContain("/");
+    expect(fullPath).toContain(name);
+  });
+
   test("Cmd+A selects every card in the gallery", async () => {
     // Click a card first so focus is in the gallery (not a text field).
     await window.locator("[data-gallery-item='true']").first().click();

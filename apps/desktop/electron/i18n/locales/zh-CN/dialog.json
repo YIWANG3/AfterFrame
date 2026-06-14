@@ -1,4 +1,10 @@
 {
   "relinkTitle": "重新连接文件",
-  "relinkMessage": "选择被移动或重命名的原始文件"
+  "relinkMessage": "选择被移动或重命名的原始文件",
+  "deleteTitle": "从图库移除",
+  "deleteMessageOne": "确定要从图库移除这个素材吗？",
+  "deleteMessageMany": "确定要从图库移除这 {count} 个素材吗？",
+  "deleteDetail": "磁盘上的原始文件不会被删除——仅移除图库中的记录。",
+  "deleteConfirm": "移除",
+  "deleteCancel": "取消"
 }

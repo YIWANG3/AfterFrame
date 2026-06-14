@@ -16,6 +16,8 @@
   "missingMsg": "在检视器中重新连接原文件,以进行全质量编辑。",
   "saved": "已保存",
   "collageExported": "拼图已导出",
+  "copiedPath_other": "已复制 {{count}} 个路径",
+  "copiedName_other": "已复制 {{count}} 个名称",
   "verifyMissing_other": "{{count}} 个文件缺失",
   "verifyMissingMsg": "已检查 {{checked}} 个。它们的原文件已移动或删除 —— 在检视器中重新连接。",
   "verifyAllPresent": "所有文件都在",

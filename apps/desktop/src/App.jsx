@@ -141,6 +141,74 @@ export default function App() {
     },
   });
 
+  // ── Edit-menu / keyboard asset actions ──────────────────────────────────
+  // Shared by the gallery keyboard shortcuts and the native Edit menu (which
+  // routes through onMenuAction). The native menu items send IPC actions so
+  // ⌘A / Delete / Copy can be resolved against the live React selection.
+
+  // Assets the Edit menu acts on: the multi-selection, else the primary one.
+  const targetAssetIds = () => {
+    if (selectedIds.size) return [...selectedIds];
+    if (workspace.selectedAssetId) return [workspace.selectedAssetId];
+    return [];
+  };
+
+  const selectAllAssets = () => {
+    if (editorItem || viewMode === "stickers") return false;
+    if (!orderedIds.length) return false;
+    setSelectedIds(new Set(orderedIds));
+    return true;
+  };
+
+  const deleteAssets = async (ids) => {
+    const list = [...new Set((ids || []).filter(Boolean))];
+    if (!list.length) return;
+    const ok = await api.confirmDeleteAssets(list.length);
+    if (!ok) return;
+    await workspaceRef.current.deleteExportAssets(list);
+  };
+
+  const copyAssetField = async (ids, field) => {
+    const paths = (ids || [])
+      .map((id) => itemById.get(id)?.export_path)
+      .filter(Boolean);
+    if (!paths.length) return;
+    const texts = field === "name" ? paths.map((p) => p.split("/").pop()) : paths;
+    await api.copyText(texts.join("\n"));
+    pushToast?.({
+      title: t(field === "name" ? "copiedName" : "copiedPath", { count: texts.length }),
+      ttl: 2000,
+    });
+  };
+
+  // Fresh-closure handle so the menu subscription below can stay a one-time
+  // effect (mirrors useWorkspace's menuActionRef pattern).
+  const editMenuRef = useRef(null);
+  editMenuRef.current = (action) => {
+    const el = document.activeElement;
+    const editable = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+    if (action === "edit:select-all") {
+      // In a text field the menu's ⌘A should select text, like role:selectAll.
+      if (editable) {
+        if (typeof el.select === "function") el.select();
+        else document.execCommand?.("selectAll");
+        return;
+      }
+      selectAllAssets();
+    } else if (action === "edit:delete") {
+      if (editable || editorItem || viewMode === "stickers") return;
+      void deleteAssets(targetAssetIds());
+    } else if (action === "edit:copy-path") {
+      void copyAssetField(targetAssetIds(), "path");
+    } else if (action === "edit:copy-name") {
+      void copyAssetField(targetAssetIds(), "name");
+    }
+  };
+  useEffect(() => {
+    if (!api.has("onMenuAction")) return undefined;
+    return api.onMenuAction((action) => editMenuRef.current?.(action));
+  }, []);
+
   // Unified finish handling: annotation results (toast + cache invalidation)
   // and auto-annotate-on-import both react to the workspace's finish events.
   useEffect(() => {
@@ -331,15 +399,24 @@ export default function App() {
       // Cmd+A selects all assets in the gallery. Skipped when focus is in a
       // text field (native text select-all wins) or in the editor/stickers.
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a" && !event.shiftKey && !event.altKey) {
-        if (editorItem || viewMode === "stickers" || shouldIgnoreKey(event)) return;
-        if (!orderedIds.length) return;
-        event.preventDefault();
-        setSelectedIds(new Set(orderedIds));
+        if (shouldIgnoreKey(event)) return; // text field: native select-all wins
+        if (selectAllAssets()) event.preventDefault();
         return;
       }
       if (editorItem) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (shouldIgnoreKey(event)) return;
+
+      // Delete / Backspace removes the selected assets (with confirmation).
+      // Skipped in stickers view, which has its own deletion path.
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (viewMode === "stickers") return;
+        const ids = targetAssetIds();
+        if (!ids.length) return;
+        event.preventDefault();
+        void deleteAssets(ids);
+        return;
+      }
 
       if (event.code === "Space") {
         if (viewMode === "stickers") {
@@ -579,7 +656,9 @@ export default function App() {
                   activeCollectionId={workspace.activeCollectionId}
                   onAddToCollection={workspace.addToCollection}
                   onRemoveFromCollection={workspace.removeFromCollection}
-                  onDeleteFromCatalog={workspace.deleteExportAssets}
+                  onDeleteFromCatalog={deleteAssets}
+                  onCopyPath={(ids) => copyAssetField(ids, "path")}
+                  onCopyName={(ids) => copyAssetField(ids, "name")}
                   onEdit={openEditor}
                   onCompare={handleCompare}
                   onCollage={handleCollage}

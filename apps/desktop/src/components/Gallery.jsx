@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
@@ -159,7 +159,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, onAddTo, onRemoveFrom, onReveal, onEdit, onDeleteFromCatalog, onCompare, onCollage, onAnnotate, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, onAddTo, onRemoveFrom, onReveal, onEdit, onDeleteFromCatalog, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
@@ -228,6 +228,8 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
         </button>
       </MenuItem>
       <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
+      <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
+      <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
 
       {(manualFolders.length > 0 || inActiveFolder) && (
@@ -403,6 +405,8 @@ export default function Gallery({
   onAddToCollection,
   onRemoveFromCollection,
   onDeleteFromCatalog,
+  onCopyPath,
+  onCopyName,
   onEdit,
   onCompare,
   onCollage,
@@ -802,6 +806,8 @@ export default function Gallery({
           onAddTo={(collectionId) => onAddToCollection?.(collectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onRemoveFrom={() => onRemoveFromCollection?.(activeCollectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onDeleteFromCatalog={() => onDeleteFromCatalog?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
+          onCopyPath={() => onCopyPath?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
+          onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onReveal={(path) => window.mediaWorkspace?.revealPath?.(path)}
           onEdit={onEdit}
           onCompare={onCompare}

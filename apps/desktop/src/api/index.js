@@ -14,6 +14,8 @@ const api = {
   // ── files & external ──
   getPathForFile: (...args) => invoke("getPathForFile", ...args),
   revealPath: (...args) => invoke("revealPath", ...args),
+  copyText: (...args) => invoke("copyText", ...args),
+  confirmDeleteAssets: (...args) => invoke("confirmDeleteAssets", ...args),
   openExternal: (...args) => invoke("openExternal", ...args),
   pickSavePath: (...args) => invoke("pickSavePath", ...args),
   pickDirectories: (...args) => invoke("pickDirectories", ...args),

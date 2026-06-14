@@ -113,7 +113,9 @@
       "annotate": "用 AI 标注",
       "annotateSkip": "标注{{suffix}}(跳过已标注)",
       "reannotate": "重新标注{{suffix}}",
-      "reveal": "在访达中显示"
+      "reveal": "在访达中显示",
+      "copyPath": "复制文件路径",
+      "copyName": "复制名称"
     }
   }
 }
