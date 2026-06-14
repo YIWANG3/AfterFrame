@@ -13,6 +13,7 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build:sidecar && npm run build && electron-builder",
     "dist:mac": "npm run build:sidecar && npm run build && electron-builder --mac",
+    "dist:mac:release": "npm run build:sidecar && npm run build && electron-builder --mac -c.mac.notarize=true",
     "dist:win": "npm run build:sidecar && npm run build && electron-builder --win",
     "dist:linux": "npm run build:sidecar && npm run build && electron-builder --linux",
     "e2e": "npm run build && playwright test",
@@ -62,7 +63,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": true
+      "notarize": false
     },
     "dmg": {
       "contents": [
