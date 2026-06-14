@@ -1338,7 +1338,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             title={t("overlay.save")}
           >
             <Download className="h-3.5 w-3.5" />
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("overlay.saving") : t("overlay.saveButton")}
           </button>
           <button
             type="button"

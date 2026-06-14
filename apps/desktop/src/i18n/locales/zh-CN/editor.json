@@ -4,6 +4,8 @@
     "decodeError": "无法解码源图像。",
     "close": "关闭编辑器 (Esc)",
     "save": "保存图像",
+    "saveButton": "保存",
+    "saving": "保存中…",
     "saveFailed": "保存失败",
     "saveFailedMsg": "图像保存失败",
     "edited": "已编辑",

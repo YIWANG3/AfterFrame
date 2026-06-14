@@ -4,6 +4,8 @@
     "decodeError": "The source image cannot be decoded.",
     "close": "Close editor (Esc)",
     "save": "Save image",
+    "saveButton": "Save",
+    "saving": "Saving…",
     "saveFailed": "Save failed",
     "saveFailedMsg": "Failed to save image",
     "edited": "Edited",
