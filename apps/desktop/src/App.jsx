@@ -21,7 +21,7 @@ import FilterBar from "./components/FilterBar";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
-import ConfirmDialog from "./components/ConfirmDialog";
+import { ConfirmHost, confirm } from "./components/confirm";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
 
@@ -147,21 +147,6 @@ export default function App() {
   // routes through onMenuAction). The native menu items send IPC actions so
   // ⌘A / Delete / Copy can be resolved against the live React selection.
 
-  // App-styled confirm dialog (replaces the native one). requestConfirm()
-  // resolves true/false when the user picks a button.
-  const [confirmState, setConfirmState] = useState(null);
-  const confirmResolveRef = useRef(null);
-  const requestConfirm = (opts) =>
-    new Promise((resolve) => {
-      confirmResolveRef.current = resolve;
-      setConfirmState(opts);
-    });
-  const settleConfirm = (result) => {
-    setConfirmState(null);
-    confirmResolveRef.current?.(result);
-    confirmResolveRef.current = null;
-  };
-
   // Assets the Edit menu acts on: the multi-selection, else the primary one.
   const targetAssetIds = () => {
     if (selectedIds.size) return [...selectedIds];
@@ -179,7 +164,7 @@ export default function App() {
   const deleteAssets = async (ids) => {
     const list = [...new Set((ids || []).filter(Boolean))];
     if (!list.length) return;
-    const ok = await requestConfirm({
+    const ok = await confirm({
       title: t("deleteTitle"),
       message: t("deleteMsg", { count: list.length }),
       detail: t("deleteDetail"),
@@ -771,12 +756,7 @@ export default function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-      <ConfirmDialog
-        open={!!confirmState}
-        {...(confirmState || {})}
-        onConfirm={() => settleConfirm(true)}
-        onCancel={() => settleConfirm(false)}
-      />
+      <ConfirmHost />
       <EditorOverlay
         open={!!editorItem}
         item={editorItem}
