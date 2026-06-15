@@ -10,7 +10,7 @@ import AppKit
 // `frames` samples evenly across the clip (or one frame every INTERVAL seconds)
 // and writes frame_0.jpg, frame_1.jpg, … plus a manifest.json. Picture only —
 // audio is ignored by design. Frames feed the multi-image AI annotator; poster
-// feeds the gallery thumbnail.
+// feeds the gallery thumbnail. Uses the async AVFoundation load APIs (macOS 13+).
 
 func fail(_ message: String, _ code: Int32 = 1) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
@@ -58,9 +58,23 @@ func loadAsset(_ inputPath: String) -> AVURLAsset {
     return AVURLAsset(url: url)
 }
 
-func videoTrack(_ asset: AVURLAsset) -> AVAssetTrack {
-    guard let track = asset.tracks(withMediaType: .video).first else { fail("no video track", 65) }
-    return track
+func firstVideoTrack(_ asset: AVURLAsset) async -> AVAssetTrack {
+    do {
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+            fail("no video track", 65)
+        }
+        return track
+    } catch {
+        fail("failed to load tracks: \(error.localizedDescription)", 65)
+    }
+}
+
+func durationSeconds(_ asset: AVURLAsset) async -> Double {
+    do {
+        return CMTimeGetSeconds(try await asset.load(.duration))
+    } catch {
+        fail("failed to load duration: \(error.localizedDescription)", 65)
+    }
 }
 
 func makeGenerator(_ asset: AVURLAsset, maxEdge: Int) -> AVAssetImageGenerator {
@@ -72,29 +86,40 @@ func makeGenerator(_ asset: AVURLAsset, maxEdge: Int) -> AVAssetImageGenerator {
     return gen
 }
 
-func cmd_probe(_ inputPath: String) {
-    let asset = loadAsset(inputPath)
-    let track = videoTrack(asset)
-    let duration = CMTimeGetSeconds(asset.duration)
-    let size = track.naturalSize.applying(track.preferredTransform)
-    let width = Int(abs(size.width))
-    let height = Int(abs(size.height))
-    let fps = Double(track.nominalFrameRate)
-    let hasAudio = !asset.tracks(withMediaType: .audio).isEmpty
+func copyFrame(_ gen: AVAssetImageGenerator, at seconds: Double) async throws -> CGImage {
+    let (image, _) = try await gen.image(at: CMTime(seconds: seconds, preferredTimescale: 600))
+    return image
+}
 
+func cmd_probe(_ inputPath: String) async {
+    let asset = loadAsset(inputPath)
+    let track = await firstVideoTrack(asset)
+    let duration = await durationSeconds(asset)
+
+    var width = 0, height = 0, fps = 0.0
     var codec = ""
-    if let desc = track.formatDescriptions.first {
-        // swiftlint:disable:next force_cast
-        let fd = desc as! CMFormatDescription
-        let sub = CMFormatDescriptionGetMediaSubType(fd)
-        let bytes = [UInt8((sub >> 24) & 0xff), UInt8((sub >> 16) & 0xff), UInt8((sub >> 8) & 0xff), UInt8(sub & 0xff)]
-        codec = String(bytes: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces) ?? ""
+    do {
+        let (naturalSize, transform, frameRate, formats) = try await track.load(
+            .naturalSize, .preferredTransform, .nominalFrameRate, .formatDescriptions
+        )
+        let size = naturalSize.applying(transform)
+        width = Int(abs(size.width))
+        height = Int(abs(size.height))
+        fps = Double(frameRate)
+        if let fd = formats.first {
+            let sub = CMFormatDescriptionGetMediaSubType(fd)
+            let bytes = [UInt8((sub >> 24) & 0xff), UInt8((sub >> 16) & 0xff), UInt8((sub >> 8) & 0xff), UInt8(sub & 0xff)]
+            codec = String(bytes: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces) ?? ""
+        }
+    } catch {
+        fail("failed to load track metadata: \(error.localizedDescription)", 65)
     }
 
+    let hasAudio = ((try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false)
+
     var creationDate: String? = nil
-    if let date = asset.creationDate?.dateValue {
-        let fmt = ISO8601DateFormatter()
-        creationDate = fmt.string(from: date)
+    if let item = try? await asset.load(.creationDate), let date = try? await item.load(.dateValue) {
+        creationDate = ISO8601DateFormatter().string(from: date)
     }
 
     var out: [String: Any] = [
@@ -111,14 +136,14 @@ func cmd_probe(_ inputPath: String) {
     FileHandle.standardOutput.write(Data("\n".utf8))
 }
 
-func cmd_poster(_ inputPath: String, _ outPath: String, maxEdge: Int) {
+func cmd_poster(_ inputPath: String, _ outPath: String, maxEdge: Int) async {
     let asset = loadAsset(inputPath)
-    _ = videoTrack(asset)
-    let duration = CMTimeGetSeconds(asset.duration)
+    _ = await firstVideoTrack(asset)
+    let duration = await durationSeconds(asset)
     let t = duration.isFinite && duration > 0 ? min(1.0, duration / 2.0) : 0.0
     let gen = makeGenerator(asset, maxEdge: maxEdge)
     do {
-        let cg = try gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil)
+        let cg = try await copyFrame(gen, at: t)
         writeJPEG(cg, to: outPath, maxEdge: maxEdge)
     } catch {
         fail("poster extraction failed: \(error.localizedDescription)", 74)
@@ -162,10 +187,10 @@ func sampleTimes(duration: Double, interval: Double?, count: Int?, maxFrames: In
     return dedup
 }
 
-func cmd_frames(_ inputPath: String, _ outDir: String, maxEdge: Int) {
+func cmd_frames(_ inputPath: String, _ outDir: String, maxEdge: Int) async {
     let asset = loadAsset(inputPath)
-    _ = videoTrack(asset)
-    let duration = CMTimeGetSeconds(asset.duration)
+    _ = await firstVideoTrack(asset)
+    let duration = await durationSeconds(asset)
     guard duration.isFinite && duration > 0 else { fail("invalid duration", 65) }
 
     let maxFrames = Int(arg("--max") ?? "20") ?? 20
@@ -179,7 +204,7 @@ func cmd_frames(_ inputPath: String, _ outDir: String, maxEdge: Int) {
     var manifest: [[String: Any]] = []
     for (idx, t) in times.enumerated() {
         do {
-            let cg = try gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil)
+            let cg = try await copyFrame(gen, at: t)
             let name = "frame_\(idx).jpg"
             writeJPEG(cg, to: (outDir as NSString).appendingPathComponent(name), maxEdge: maxEdge)
             manifest.append(["index": idx, "time": t, "filename": name])
@@ -206,13 +231,13 @@ let maxEdge = Int(arg("--max-edge") ?? "0") ?? 0
 
 switch sub {
 case "probe":
-    cmd_probe(input)
+    await cmd_probe(input)
 case "poster":
     guard args.count >= 4 else { fail("usage: video-tool poster <input> <out.jpg>", 64) }
-    cmd_poster(input, args[3], maxEdge: maxEdge > 0 ? maxEdge : 1024)
+    await cmd_poster(input, args[3], maxEdge: maxEdge > 0 ? maxEdge : 1024)
 case "frames":
     guard args.count >= 4 else { fail("usage: video-tool frames <input> <out-dir>", 64) }
-    cmd_frames(input, args[3], maxEdge: maxEdge > 0 ? maxEdge : 512)
+    await cmd_frames(input, args[3], maxEdge: maxEdge > 0 ? maxEdge : 512)
 default:
     fail("unknown subcommand: \(sub)", 64)
 }
