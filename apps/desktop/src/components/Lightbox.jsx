@@ -101,6 +101,11 @@ export default function Lightbox({
     [currentItem],
   );
   const imagePath = sources[sourceIndex] || null;
+  // Video: play the original directly (Chromium decodes h264/HEVC on macOS),
+  // bypassing the image zoom/pan machinery. Falls back to the poster <img>
+  // below when the original is missing.
+  const isVideo = currentItem?.asset_type === "video";
+  const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.export_path : null;
   const title = fileName(currentItem?.export_path) || currentItem?.stem || "Selected asset";
 
   const metaWidth = Number(currentItem?.export_metadata?.width || 0);
@@ -447,7 +452,16 @@ export default function Lightbox({
           </div>
         ) : null}
 
-        {imagePath ? (
+        {isVideo && videoSrc ? (
+          <video
+            key={localFileUrl(videoSrc)}
+            src={localFileUrl(videoSrc)}
+            controls
+            autoPlay
+            playsInline
+            className="absolute inset-0 m-auto max-h-full max-w-full select-none"
+          />
+        ) : imagePath ? (
           <img
             key={localFileUrl(imagePath)}
             src={localFileUrl(imagePath)}
@@ -467,7 +481,7 @@ export default function Lightbox({
           />
         ) : null}
 
-        {loadState === "loading" && showLoadingText ? (
+        {!isVideo && loadState === "loading" && showLoadingText ? (
           <div className="absolute inset-0 grid place-items-center text-[14px] text-white/70">
             {t("lightbox.loadingLarge")}
           </div>

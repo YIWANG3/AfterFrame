@@ -302,6 +302,7 @@ def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sq
         """
         SELECT
             assets.asset_id,
+            assets.asset_type,
             assets.stem,
             assets.canonical_path AS export_path,
             assets.metadata_json AS export_metadata_json,
@@ -373,6 +374,7 @@ def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path:
         """
         SELECT
             assets.asset_id,
+            assets.asset_type,
             assets.stem,
             registry.export_path AS export_path,
             assets.metadata_json AS export_metadata_json,

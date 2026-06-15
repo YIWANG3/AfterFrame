@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type, Play } from "lucide-react";
+
+// mm:ss (or h:mm:ss) for the video duration badge.
+function formatDuration(seconds) {
+  const total = Math.round(Number(seconds) || 0);
+  if (total <= 0) return "0:00";
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
 import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
@@ -358,6 +369,12 @@ const CardContent = memo(function CardContent({
           >
             <Unlink className="h-2.5 w-2.5" />
             {t("gallery.missing")}
+          </div>
+        ) : null}
+        {item.asset_type === "video" ? (
+          <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
+            <Play className="h-2.5 w-2.5 fill-current" />
+            {formatDuration(item.export_metadata?.duration)}
           </div>
         ) : null}
       </div>

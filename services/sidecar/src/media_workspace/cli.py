@@ -1061,6 +1061,7 @@ def _cmd_browse_exports(args, connection, catalog, parser):
         payload.append(
             {
                 "asset_id": row["asset_id"],
+                "asset_type": row["asset_type"],
                 "stem": row["stem"],
                 "export_path": row["export_path"],
                 "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
@@ -1103,6 +1104,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
     present = os.path.exists(row["export_path"]) if row["export_path"] else True
     payload = {
         "asset_id": row["asset_id"],
+        "asset_type": row["asset_type"],
         "stem": row["stem"],
         "export_path": row["export_path"],
         "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
@@ -1434,6 +1436,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
         payload.append(
             {
                 "asset_id": row["asset_id"],
+                "asset_type": row["asset_type"],
                 "stem": row["stem"],
                 "export_path": row["export_path"],
                 "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
