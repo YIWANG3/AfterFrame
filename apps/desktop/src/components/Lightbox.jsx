@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Minus, Pencil, Plus, SwatchBook, X } from "l
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
+import VideoPlayer from "./VideoPlayer";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
@@ -399,7 +400,7 @@ export default function Lightbox({
           </div>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
-          {onEdit && (
+          {onEdit && !isVideo && (
             <ActionPill
               icon={Pencil}
               label={t("lightbox.edit")}
@@ -410,7 +411,7 @@ export default function Lightbox({
               }}
             />
           )}
-          {onToggleProof && (
+          {onToggleProof && !isVideo && (
             <ActionPill
               icon={SwatchBook}
               label={t("lightbox.proof")}
@@ -472,17 +473,13 @@ export default function Lightbox({
 
         {isVideo && videoSrc ? (
           <>
-            <video
+            <VideoPlayer
               key={httpMediaUrl(proxySrc || videoSrc)}
               src={httpMediaUrl(proxySrc || videoSrc)}
-              controls
-              autoPlay
-              playsInline
-              className="absolute inset-0 m-auto max-h-full max-w-full select-none"
               onError={requestVideoProxy}
             />
             {proxyPending ? (
-              <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/50 text-[13px] text-white/85">
+              <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-black/50 text-[13px] text-white/85">
                 {t("lightbox.preparingVideo")}
               </div>
             ) : null}
@@ -514,13 +511,14 @@ export default function Lightbox({
         ) : null}
       </div>
 
-      <div
-        className={[
-          "pointer-events-none flex shrink-0 items-center justify-center gap-3 py-4",
-          proofMode ? "invisible" : "",
-        ].join(" ")}
-        onClick={(event) => event.stopPropagation()}
-      >
+      {!isVideo && (
+        <div
+          className={[
+            "pointer-events-none flex shrink-0 items-center justify-center gap-3 py-4",
+            proofMode ? "invisible" : "",
+          ].join(" ")}
+          onClick={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
             className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
@@ -553,7 +551,8 @@ export default function Lightbox({
           >
             {formatPercent(scale)}
           </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -351,6 +351,8 @@ export default function App() {
           ? itemById.get(target.asset_id) || target
           : itemById.get(workspace.selectedAssetId);
     if (!nextItem) return;
+    // The image editor (crop/text/stickers/repaint) doesn't apply to video.
+    if (nextItem.asset_type === "video") return;
     // Decision (a): no full-quality editing on a missing original — the editor
     // would have only the downscaled preview to work from. Send them to relink.
     if (nextItem.exists_on_disk === false) {
