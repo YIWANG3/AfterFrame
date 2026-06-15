@@ -110,6 +110,10 @@ Then just ask: *"Find my photos of California and show them in the app."*
 
 ![Browse with Inspector](docs/assets/browse-inspector.png)
 
+The full interface in 简体中文 (switch live in Settings → General):
+
+![AfterFrame in Simplified Chinese](docs/assets/browse-zh.png)
+
 ## Getting Started
 
 ### Requirements

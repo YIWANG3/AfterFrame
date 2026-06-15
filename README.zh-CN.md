@@ -16,7 +16,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 > 仅支持 macOS（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
 
-![AfterFrame — 浏览与检查](docs/assets/browse-grid.png)
+![AfterFrame — 浏览与检查](docs/assets/browse-zh.png)
 
 ## 功能
 
