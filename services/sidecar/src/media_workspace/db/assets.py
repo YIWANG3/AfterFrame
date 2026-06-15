@@ -149,6 +149,89 @@ def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, comm
         connection.commit()
 
 
+def upsert_video_asset(
+    connection: sqlite3.Connection,
+    *,
+    path: str,
+    asset_id: str,
+    stem: str,
+    normalized_stem: str,
+    stem_key: str,
+    extension: str,
+    fingerprint: str,
+    file_size: int,
+    modified_time: str,
+    metadata: dict,
+    commit: bool = True,
+) -> str:
+    existing = connection.execute(
+        "SELECT asset_id FROM asset_files WHERE path = ?",
+        (path,),
+    ).fetchone()
+    asset_id = str(existing["asset_id"]) if existing else asset_id
+    # Mirror the export metadata keys browse/inspector already read
+    # (width/height/capture_time/normalized_stem/stem_key/…) and add the
+    # video-specific ones (duration/fps/codec/has_audio).
+    asset_metadata = {
+        "capture_time": metadata.get("creationDate"),
+        "width": metadata.get("width"),
+        "height": metadata.get("height"),
+        "duration": metadata.get("duration"),
+        "fps": metadata.get("fps"),
+        "codec": metadata.get("codec"),
+        "has_audio": metadata.get("hasAudio"),
+        "normalized_stem": normalized_stem,
+        "stem_key": stem_key,
+        "file_size": file_size,
+        "modified_time": modified_time,
+    }
+    connection.execute(
+        """
+        INSERT INTO assets (
+            asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
+            fingerprint, file_size, modified_time, metadata_json
+        ) VALUES (?, 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(asset_id) DO UPDATE SET
+            canonical_path = excluded.canonical_path,
+            stem = excluded.stem,
+            normalized_stem = excluded.normalized_stem,
+            stem_key = excluded.stem_key,
+            extension = excluded.extension,
+            fingerprint = excluded.fingerprint,
+            file_size = excluded.file_size,
+            modified_time = excluded.modified_time,
+            metadata_json = excluded.metadata_json,
+            exists_on_disk = 1,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            asset_id,
+            path,
+            stem,
+            normalized_stem,
+            stem_key,
+            extension,
+            fingerprint,
+            file_size,
+            modified_time,
+            _json(asset_metadata),
+        ),
+    )
+    connection.execute(
+        """
+        INSERT INTO asset_files (file_id, asset_id, path, role)
+        VALUES (?, ?, ?, 'primary')
+        ON CONFLICT(path) DO UPDATE SET
+            asset_id = excluded.asset_id,
+            role = excluded.role
+        """,
+        (_file_id(asset_id, path), asset_id, path),
+    )
+    if commit:
+        connection.commit()
+    return asset_id
+
+
 def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate, commit: bool = True) -> str:
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?",

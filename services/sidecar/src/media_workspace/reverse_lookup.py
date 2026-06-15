@@ -16,10 +16,21 @@ from .db import (
     load_raw_candidates_by_capture_window,
     upsert_catalog_root,
     upsert_export_asset,
+    upsert_video_asset,
     upsert_registry,
 )
-from .metadata import camera_stem_token, extract_export_candidate, stem_alnum_key
+from .metadata import (
+    camera_stem_token,
+    extract_export_candidate,
+    iso_mtime,
+    normalize_stem,
+    quick_fingerprint_from_handle,
+    stable_asset_id,
+    stem_alnum_key,
+    stem_key as compute_stem_key,
+)
 from .models import ExportCandidate, MatchDecision
+from .video import VIDEO_EXTENSIONS, is_video, probe as probe_video
 
 RESOLVE_BATCH_COMMIT_SIZE = 200
 RECALL_LIMIT = 200
@@ -300,14 +311,17 @@ def resolve_export_batch(
     for export_dir in export_dirs:
         upsert_catalog_root(connection, "export", export_dir.resolve(), commit=False)
         for path in iter_export_files([export_dir.resolve()]):
-            decision = resolve_export(
-                connection,
-                path.resolve(),
-                thresholds=thresholds,
-                refresh=refresh,
-                persist_root=False,
-                commit=False,
-            )
+            if is_video(path):
+                decision = index_video_file(connection, path.resolve(), commit=False)
+            else:
+                decision = resolve_export(
+                    connection,
+                    path.resolve(),
+                    thresholds=thresholds,
+                    refresh=refresh,
+                    persist_root=False,
+                    commit=False,
+                )
             counts.setdefault(decision.status, 0)
             counts[decision.status] += 1
             if decision.preexisting:
@@ -328,19 +342,61 @@ def resolve_export_batch(
     }
 
 
+def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecision:
+    """Index a video as asset_type='video' — probe metadata, no RAW matching."""
+    resolved = path.resolve()
+    existing = connection.execute(
+        "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
+    ).fetchone()
+    preexisting = existing is not None
+    stat = resolved.stat()
+    with resolved.open("rb") as handle:
+        fingerprint = quick_fingerprint_from_handle(handle, stat.st_size, mode="head-tail")
+    asset_id = str(existing["asset_id"]) if existing else stable_asset_id("video", fingerprint, str(resolved))
+    metadata = probe_video(resolved) or {}
+    upsert_video_asset(
+        connection,
+        path=str(resolved),
+        asset_id=asset_id,
+        stem=resolved.stem,
+        normalized_stem=normalize_stem(resolved.stem),
+        stem_key=compute_stem_key(resolved.stem),
+        extension=resolved.suffix.lower(),
+        fingerprint=fingerprint,
+        file_size=stat.st_size,
+        modified_time=iso_mtime(resolved, stat),
+        metadata=metadata,
+        commit=commit,
+    )
+    return MatchDecision(
+        export_asset_id=asset_id,
+        export_path=resolved,
+        status="video",
+        score=0.0,
+        raw_asset_id=None,
+        feature_vector={},
+        preexisting=preexisting,
+    )
+
+
 def count_export_files(export_dir: Path) -> int:
     return sum(1 for _ in iter_export_files([export_dir.resolve()]))
+
+
+# Image exports + videos share the "import an image folder" scan; the batch
+# loop branches by type (videos skip RAW matching).
+MEDIA_EXTENSIONS = EXPORT_EXTENSIONS | VIDEO_EXTENSIONS
 
 
 def iter_export_files(export_paths: list[Path]):
     for export_path in export_paths:
         export_path = export_path.resolve()
         if export_path.is_file():
-            if export_path.suffix.lower() in EXPORT_EXTENSIONS:
+            if export_path.suffix.lower() in MEDIA_EXTENSIONS:
                 yield export_path
             continue
         for path in sorted(export_path.rglob("*")):
-            if path.is_file() and path.suffix.lower() in EXPORT_EXTENSIONS:
+            if path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
                 yield path
 
 
