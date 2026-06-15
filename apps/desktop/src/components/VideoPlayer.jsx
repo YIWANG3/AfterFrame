@@ -83,7 +83,7 @@ export default function VideoPlayer({ src, onError }) {
         className="flex shrink-0 items-center gap-3 px-5 py-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <button type="button" onClick={togglePlay} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white">
+        <button type="button" onClick={togglePlay} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white focus:outline-none">
           {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
         </button>
 
@@ -103,10 +103,10 @@ export default function VideoPlayer({ src, onError }) {
 
         <span className="w-12 shrink-0 text-[11px] tabular-nums text-white/70">{fmtTime(duration)}</span>
 
-        <button type="button" onClick={toggleMute} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white">
+        <button type="button" onClick={toggleMute} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white focus:outline-none">
           {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
         </button>
-        <button type="button" onClick={toggleFullscreen} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white">
+        <button type="button" onClick={toggleFullscreen} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white focus:outline-none">
           <Maximize2 className="h-4 w-4" />
         </button>
       </div>

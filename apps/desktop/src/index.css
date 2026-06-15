@@ -139,17 +139,29 @@ input[type="range"]::-webkit-slider-thumb:hover {
   appearance: none;
   height: 4px;
   border-radius: 999px;
+  outline: none;
+}
+.video-scrubber:focus,
+.video-scrubber:focus-visible {
+  outline: none;
 }
 .video-scrubber::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
   background: transparent;
+  border: none;
 }
 .video-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
   width: 12px;
   height: 12px;
   margin-top: -4px;
+  border-radius: 999px;
   background: rgb(255 255 255);
+  border: none;
+  box-shadow: none;
+  outline: none;
   opacity: 1;
 }
 
