@@ -769,21 +769,45 @@ def _cmd_ai_repaint(args, connection, catalog, parser):
 
 
 def _cmd_annotate_asset(args, connection, catalog, parser):
+    import shutil
+    import tempfile
+    from pathlib import Path as _Path
     from . import annotation as _annotation
+    from . import video as _video
+
     langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
     existing = _annotation.list_top_tags(connection)
-    result = _annotation.annotate(
-        image_paths=[args.image],
-        provider=args.provider,
-        api_key=args.api_key,
-        model=args.model,
-        base_url=args.base_url,
-        languages=langs,
-        max_tags=args.max_tags,
-        max_caption_chars=args.max_caption_chars,
-        custom_instructions=args.custom_instructions,
-        existing_tags=existing,
-    )
+
+    src = _Path(args.image)
+    tmp_dir = None
+    try:
+        # Video: PIL can't open it — sample frames and send them as one
+        # multi-image call (same as the batch path).
+        if _video.is_video(src):
+            tmp_dir = tempfile.mkdtemp(prefix="afvframes-")
+            frames = _video.frames(src, _Path(tmp_dir))
+            image_paths = [_Path(tmp_dir) / f["filename"] for f in frames]
+            is_video = bool(image_paths)
+            if not image_paths:
+                image_paths, is_video = [src], False
+        else:
+            image_paths, is_video = [src], False
+        result = _annotation.annotate(
+            image_paths=image_paths,
+            provider=args.provider,
+            api_key=args.api_key,
+            model=args.model,
+            base_url=args.base_url,
+            languages=langs,
+            max_tags=args.max_tags,
+            max_caption_chars=args.max_caption_chars,
+            custom_instructions=args.custom_instructions,
+            existing_tags=existing,
+            is_video=is_video,
+        )
+    finally:
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     saved = _annotation.save_annotation(connection, args.asset_id, result)
     print(json.dumps(saved, ensure_ascii=False, indent=2))
     return 0
