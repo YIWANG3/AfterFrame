@@ -81,7 +81,10 @@
     "cacheSubtitle": "所有缓存位于 ~/Library/Application Support/AfterFrame。",
     "previewThumbnails": "预览缩略图",
     "depthMaps": "深度图",
-    "stickerLibrary": "贴纸库"
+    "stickerLibrary": "贴纸库",
+    "previewsTitle": "预览图",
+    "generateHd": "生成高清预览图(2000px)",
+    "generateHdHint": "用于原图缺失时的查看、拼图合成、以及 AI 助手。日常浏览用的是原图,大多数照片其实用不到它。默认关闭 —— 每张约省 0.5–1 MB 磁盘。仅对之后的导入生效。"
   },
   "about": {
     "tagline": "面向摄影师的本地优先照片工作台。",

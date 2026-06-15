@@ -650,6 +650,10 @@ async function startImportTask(options) {
   }
   const job = await createJob("import", { raw_dirs: rawDirs, export_dirs: exportDirs, mode });
   const command = ["run-import-job", "--job-id", job.job_id, "--mode", mode];
+  // HD (2000px) previews are opt-in — Settings ▸ Library. Off by default.
+  if (readAppSettings()?.previews?.generateHd === true) {
+    command.push("--generate-hd");
+  }
   for (const rawDir of rawDirs) {
     command.push("--raw-dir", rawDir);
   }
@@ -1071,6 +1075,13 @@ ipcMain.handle("app:set-locale", (_event, lng) => {
   void updateAppSettings((s) => ({ ...s, locale: lng }));
   Menu.setApplicationMenu(buildAppMenu());
   return currentLocale;
+});
+
+// Preview settings (e.g. HD generation toggle). Stored under settings.previews.
+ipcMain.handle("app:get-preview-settings", () => readAppSettings()?.previews ?? {});
+ipcMain.handle("app:save-preview-settings", (_event, next) => {
+  void updateAppSettings((s) => ({ ...s, previews: { ...(s?.previews || {}), ...(next || {}) } }));
+  return readAppSettings()?.previews ?? {};
 });
 
 // Copy arbitrary text (asset paths/names) to the system clipboard. Done in the

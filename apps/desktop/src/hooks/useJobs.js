@@ -45,8 +45,10 @@ export default function useJobs(bridgeRef) {
       }
     } else if (meta.jobType === "preview") {
       // Chain preview-hd only after a SUCCESSFUL small-preview pass — a failed
-      // or indeterminate run would just fail again at HD size.
-      if ((meta.kind || "preview") === "preview" && final?.status === "succeeded") {
+      // or indeterminate run would just fail again at HD size. HD is opt-in
+      // (Settings ▸ Library), so skip the chain when it's off.
+      const hdEnabled = (await api.getPreviewSettings().catch(() => null))?.generateHd === true;
+      if (hdEnabled && (meta.kind || "preview") === "preview" && final?.status === "succeeded") {
         const hdTask = await api.startPreviewGeneration("preview-hd");
         bridge.mirrorTask("preview", { ...hdTask, _kind: "preview-hd" });
         pokeJobs(hdTask?.jobId ? { jobId: hdTask.jobId, jobType: "preview", kind: "preview-hd" } : undefined);

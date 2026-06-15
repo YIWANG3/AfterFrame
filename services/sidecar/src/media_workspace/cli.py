@@ -397,6 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_import_job_parser.add_argument("--raw-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--export-dir", type=Path, action="append", default=[])
+    run_import_job_parser.add_argument("--generate-hd", action="store_true", help="also generate 2000px HD previews")
 
     run_enrichment_job_parser = subparsers.add_parser("run-enrichment-job", parents=[common])
     run_enrichment_job_parser.add_argument("--job-id", required=True)
@@ -942,6 +943,7 @@ def _cmd_run_import_job(args, connection, catalog, parser):
         raw_dirs=args.raw_dir,
         export_dirs=args.export_dir,
         mode=args.mode,
+        generate_hd=args.generate_hd,
     )
     print(json.dumps(payload, indent=2))
     return 0

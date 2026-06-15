@@ -71,27 +71,38 @@ def _phase_result(phase: dict[str, object], result: dict[str, object]) -> dict[s
     return {"key": phase["key"], "label": phase["label"], "result": result}
 
 
-def _build_import_phases(mode: str, has_raw_dirs: bool, has_export_dirs: bool) -> list[dict[str, object]]:
+_HD_PHASE = {"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0}
+
+
+def _build_import_phases(
+    mode: str, has_raw_dirs: bool, has_export_dirs: bool, generate_hd: bool = True
+) -> list[dict[str, object]]:
+    # HD (2000px) previews are opt-in (Settings ▸ Library). When off we skip the
+    # phase entirely — the execution loop is driven by this same list, so a
+    # missing phase is both unplanned and unrun.
     if mode == "source_only":
         return [{"key": "scan_sources", "label": "Index Sources", "progress": 1.0}]
     if mode == "processed_only":
         phases = [{"key": "index_processed_media", "label": "Index Images", "progress": 0.5}]
         if has_export_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
-            phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
+            if generate_hd:
+                phases.append(dict(_HD_PHASE))
         return phases
     if mode == "processed_with_sources":
         phases = [{"key": "match_processed_media", "label": "Match with RAW", "progress": 0.5}]
         if has_export_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
-            phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
+            if generate_hd:
+                phases.append(dict(_HD_PHASE))
         return phases
     if mode == "source_with_media":
         phases = [{"key": "scan_sources", "label": "Index Sources", "progress": 1 / 4}]
         if has_export_dirs:
             phases.append({"key": "match_processed_media", "label": "Match with RAW", "progress": 2 / 4})
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 3 / 4})
-            phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
+            if generate_hd:
+                phases.append(dict(_HD_PHASE))
         return phases
     phases: list[dict[str, object]] = []
     if has_raw_dirs:
@@ -99,7 +110,8 @@ def _build_import_phases(mode: str, has_raw_dirs: bool, has_export_dirs: bool) -
     if has_export_dirs:
         phases.append({"key": "match_processed_media", "label": "Match with RAW", "progress": 2 / 4 if has_raw_dirs else 0.5})
         phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 3 / 4 if has_raw_dirs else 0.75})
-        phases.append({"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0})
+        if generate_hd:
+            phases.append(dict(_HD_PHASE))
     return phases
 
 
@@ -110,10 +122,11 @@ def run_import_job(
     raw_dirs: list[Path],
     export_dirs: list[Path],
     mode: str = "combined",
+    generate_hd: bool = True,
 ) -> dict[str, object]:
     thresholds = Thresholds()
     phase_results: list[dict[str, object]] = []
-    phases = _build_import_phases(mode, bool(raw_dirs), bool(export_dirs))
+    phases = _build_import_phases(mode, bool(raw_dirs), bool(export_dirs), generate_hd)
     if not phases:
         result = {"phase_results": [], "current_phase": None}
         update_job(

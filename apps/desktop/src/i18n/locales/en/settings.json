@@ -81,7 +81,10 @@
     "cacheSubtitle": "All caches live under ~/Library/Application Support/AfterFrame.",
     "previewThumbnails": "Preview thumbnails",
     "depthMaps": "Depth maps",
-    "stickerLibrary": "Sticker library"
+    "stickerLibrary": "Sticker library",
+    "previewsTitle": "Previews",
+    "generateHd": "Generate HD previews (2000px)",
+    "generateHdHint": "Used to view photos when the original is missing, for collage rendering, and by the AI assistant. Day-to-day viewing uses the original, so most photos never need it. Off by default — saves roughly 0.5–1 MB per photo on disk. Applies to future imports."
   },
   "about": {
     "tagline": "A local-first photo workspace for photographers.",

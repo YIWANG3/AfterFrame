@@ -26,10 +26,14 @@ test("AI Repaint tab renders the provider list", async () => {
   await expect(ctx.window.getByText(/No repaint provider configured/i)).toBeVisible({ timeout: 5_000 });
 });
 
-test("Library tab renders catalog/cache groups", async () => {
+test("Library tab renders catalog/cache groups + HD preview toggle", async () => {
   await ctx.window.getByRole("button", { name: "Library" }).click();
   await expect(ctx.window.getByText("Current catalog")).toBeVisible();
   await expect(ctx.window.getByText("Cache & storage")).toBeVisible();
+  // HD previews are opt-in: the toggle exists and defaults off.
+  const hdToggle = ctx.window.getByRole("switch").first();
+  await expect(ctx.window.getByText("Generate HD previews (2000px)")).toBeVisible();
+  await expect(hdToggle).toHaveAttribute("aria-checked", "false");
 });
 
 test("About tab renders the product blurb", async () => {

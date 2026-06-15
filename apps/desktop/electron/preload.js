@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getAssetDetailById: (assetId) => ipcRenderer.invoke("workspace:detail-by-id", assetId),
   revealPath: (targetPath) => ipcRenderer.invoke("workspace:reveal", targetPath),
   copyText: (text) => ipcRenderer.invoke("app:copy-text", text),
+  getPreviewSettings: () => ipcRenderer.invoke("app:get-preview-settings"),
+  savePreviewSettings: (next) => ipcRenderer.invoke("app:save-preview-settings", next),
   verifyAssets: (options) => ipcRenderer.invoke("workspace:verify-assets", options),
   relinkAsset: (options) => ipcRenderer.invoke("workspace:relink-asset", options),
   // i18n: synchronous so the first render is already in the right language.
