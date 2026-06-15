@@ -14,7 +14,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 从 [Releases](../../releases) 下载最新 `.dmg`。
 
-> 仅支持 macOS（Apple Silicon）。未签名 — 首次打开前，请在终端运行 `sudo xattr -rd com.apple.quarantine /Applications/AfterFrame.app`，或前往系统设置 > 隐私与安全性中允许打开。
+> 仅支持 macOS（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
 
 ![AfterFrame — 浏览与检查](docs/assets/browse-grid.png)
 
@@ -100,7 +100,9 @@ claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
 
 ### 素材库管理
 - 基于 Catalog 的工作流 — 每个项目一个 `.afcatalog`
+- 中英双语界面（English / 简体中文）—— 在 设置 → 通用 中实时切换
 - 导入流水线：自动提取元数据与生成预览
+- 两档预览：始终生成快速的 512px 缩略图,另有可选的 2000px 高清预览（设置 → 图库 开关,默认关闭以节省磁盘）
 - 可选的 RAW 源文件索引与按文件名匹配
 - HEIC / HEIF 支持 — 原图按需转码为 JPEG，iPhone 照片在 Lightbox、编辑器、拼图中以全分辨率正常显示
 - 统一后台活动面板：导入、预览、标注、AI 任务的进度集中显示，随时可取消
@@ -130,10 +132,11 @@ npm start
 
 ```bash
 cd apps/desktop
-npm run dist:mac   # 先重打 Python sidecar 二进制，再打包桌面应用
+npm run dist:mac          # 重打 sidecar，再打包 + 签名（Developer ID）
+npm run dist:mac:release  # 额外公证 —— 需设置 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
 ```
 
-`.dmg` 输出在 `apps/desktop/release/`。sidecar 步骤需要 `pyinstaller`（`pip3 install pyinstaller`）。
+`.dmg` 输出在 `apps/desktop/release/`。sidecar 步骤需要 `pyinstaller`（`pip3 install pyinstaller`）。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
 
 ## 项目结构
 

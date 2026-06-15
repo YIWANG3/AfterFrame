@@ -14,7 +14,7 @@ AfterFrame is built for photographers who work with thousands of exported images
 
 Download the latest `.dmg` from [Releases](../../releases).
 
-> macOS only (Apple Silicon). Not code-signed — on first launch, run `sudo xattr -rd com.apple.quarantine /Applications/AfterFrame.app` or open System Settings > Privacy & Security to allow it.
+> macOS only (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
 
 ![AfterFrame — Browse & Inspect](docs/assets/browse-grid.png)
 
@@ -100,7 +100,9 @@ Then just ask: *"Find my photos of California and show them in the app."*
 
 ### Library Management
 - Catalog-based workflow — one `.afcatalog` per project
+- Bilingual interface (English / 简体中文) — switch live in Settings → General
 - Import pipeline with automatic metadata extraction and preview generation
+- Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
 - Optional RAW source indexing and matching by filename
 - HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
@@ -130,10 +132,11 @@ npm start
 
 ```bash
 cd apps/desktop
-npm run dist:mac   # rebuilds the Python sidecar binary, then packages the app
+npm run dist:mac          # rebuild sidecar, then package + sign (Developer ID)
+npm run dist:mac:release  # also notarize — set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
 ```
 
-The `.dmg` will be in `apps/desktop/release/`. Requires `pyinstaller` (`pip3 install pyinstaller`) for the sidecar step.
+The `.dmg` will be in `apps/desktop/release/`. Requires `pyinstaller` (`pip3 install pyinstaller`) for the sidecar step. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
 
 ## Project Structure
 
