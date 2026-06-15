@@ -1,7 +1,14 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { Readable } = require("node:stream");
 const { pathToFileURL } = require("node:url");
+
+const VIDEO_MEDIA_RE = /\.(mp4|m4v|mov|webm|mkv|avi)$/i;
+const VIDEO_MIME = {
+  ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
+  ".webm": "video/webm", ".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
+};
 const { spawn, spawnSync } = require("node:child_process");
 const os = require("node:os");
 const crypto = require("node:crypto");
@@ -1237,10 +1244,34 @@ app.whenReady().then(() => {
       if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
       // Fall through to original on failure (will surface the load error).
     }
-    // Forward the request headers (notably Range) so <video> can stream and
-    // seek — net.fetch on a file URL honors Range and replies 206. Images send
-    // no Range header, so they still get a full 200.
-    return net.fetch(pathToFileURL(resolved).toString(), { headers: request.headers });
+    // Video: serve with explicit Range/Content-Length so <video> treats it as a
+    // seekable stream. net.fetch(file://) returns no length/ranges, which leaves
+    // the media element stuck at 0:00. Images keep the simple net.fetch path.
+    if (existsOnDisk && VIDEO_MEDIA_RE.test(resolved)) {
+      const total = fs.statSync(resolved).size;
+      const mime = VIDEO_MIME[path.extname(resolved).toLowerCase()] || "application/octet-stream";
+      const rangeHeader = request.headers.get("range");
+      if (rangeHeader) {
+        const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
+        const start = match ? parseInt(match[1], 10) : 0;
+        const end = match && match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
+        const body = Readable.toWeb(fs.createReadStream(resolved, { start, end }));
+        return new Response(body, {
+          status: 206,
+          headers: {
+            "Content-Type": mime,
+            "Content-Length": String(end - start + 1),
+            "Content-Range": `bytes ${start}-${end}/${total}`,
+            "Accept-Ranges": "bytes",
+          },
+        });
+      }
+      return new Response(Readable.toWeb(fs.createReadStream(resolved)), {
+        status: 200,
+        headers: { "Content-Type": mime, "Content-Length": String(total), "Accept-Ranges": "bytes" },
+      });
+    }
+    return net.fetch(pathToFileURL(resolved).toString());
   });
 
   prepareCatalogPath();
