@@ -7,6 +7,17 @@ export function localFileUrl(filePath) {
   return `media://${encoded}`;
 }
 
+// Video must be served over HTTP — Chromium's <video> media loader rejects the
+// custom media:// scheme. The localhost media server (main process) streams with
+// Range support. Port is fetched once and memoized.
+let _mediaPort = 0;
+export function httpMediaUrl(filePath) {
+  if (!filePath) return "";
+  if (!_mediaPort) _mediaPort = window.mediaWorkspace?.getMediaServerPort?.() || 0;
+  if (!_mediaPort) return "";
+  return `http://127.0.0.1:${_mediaPort}/media?path=${encodeURIComponent(filePath)}`;
+}
+
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }

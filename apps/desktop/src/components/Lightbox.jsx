@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Minus, Pencil, Plus, SwatchBook, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fileName, localFileUrl } from "../utils/format";
+import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
@@ -81,6 +81,9 @@ export default function Lightbox({
   const [loadState, setLoadState] = useState("loading");
   const [showLoadingText, setShowLoadingText] = useState(false);
   const [sourceIndex, setSourceIndex] = useState(0);
+  // H.264 proxy fallback for videos Chromium can't decode (e.g. 10-bit HEVC).
+  const [proxySrc, setProxySrc] = useState(null);
+  const [proxyPending, setProxyPending] = useState(false);
 
   const clampedIndex = Math.max(0, Math.min(currentIndex, Math.max((items?.length || 1) - 1, 0)));
   const currentItem = items?.[clampedIndex] || null;
@@ -107,6 +110,21 @@ export default function Lightbox({
   const isVideo = currentItem?.asset_type === "video";
   const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.export_path : null;
   const title = fileName(currentItem?.export_path) || currentItem?.stem || "Selected asset";
+
+  // Reset the proxy when switching items.
+  useEffect(() => { setProxySrc(null); setProxyPending(false); }, [currentItem?.asset_id]);
+
+  // On native decode failure (Chromium can't play this codec), transcode an
+  // H.264 proxy on demand and swap the <video> source to it.
+  const requestVideoProxy = () => {
+    if (!isVideo || proxySrc || proxyPending) return;
+    const orig = currentItem?.export_path;
+    if (!orig) return;
+    setProxyPending(true);
+    Promise.resolve(window.mediaWorkspace?.videoProxy?.(orig))
+      .then((url) => { setProxyPending(false); if (url) setProxySrc(url); })
+      .catch(() => setProxyPending(false));
+  };
 
   const metaWidth = Number(currentItem?.export_metadata?.width || 0);
   const metaHeight = Number(currentItem?.export_metadata?.height || 0);
@@ -453,14 +471,22 @@ export default function Lightbox({
         ) : null}
 
         {isVideo && videoSrc ? (
-          <video
-            key={localFileUrl(videoSrc)}
-            src={localFileUrl(videoSrc)}
-            controls
-            autoPlay
-            playsInline
-            className="absolute inset-0 m-auto max-h-full max-w-full select-none"
-          />
+          <>
+            <video
+              key={httpMediaUrl(proxySrc || videoSrc)}
+              src={httpMediaUrl(proxySrc || videoSrc)}
+              controls
+              autoPlay
+              playsInline
+              className="absolute inset-0 m-auto max-h-full max-w-full select-none"
+              onError={requestVideoProxy}
+            />
+            {proxyPending ? (
+              <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/50 text-[13px] text-white/85">
+                {t("lightbox.preparingVideo")}
+              </div>
+            ) : null}
+          </>
         ) : imagePath ? (
           <img
             key={localFileUrl(imagePath)}

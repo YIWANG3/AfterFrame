@@ -221,9 +221,32 @@ func cmd_frames(_ inputPath: String, _ outDir: String, maxEdge: Int) async {
     FileHandle.standardOutput.write(Data("\n".utf8))
 }
 
+// Transcode to an H.264 (≤1080p) MP4 proxy for playback — Electron's Chromium
+// can't decode some HEVC variants (notably 10-bit), so we re-encode a proxy via
+// VideoToolbox. macOS 15+ only (uses the non-deprecated async export API).
+func cmd_transcode(_ inputPath: String, _ outPath: String) async {
+    let asset = loadAsset(inputPath)
+    _ = await firstVideoTrack(asset)
+    guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1920x1080) else {
+        fail("cannot create export session", 75)
+    }
+    let outURL = URL(fileURLWithPath: outPath)
+    try? FileManager.default.removeItem(at: outURL)
+    if #available(macOS 15.0, *) {
+        do {
+            try await session.export(to: outURL, as: .mp4)
+        } catch {
+            fail("transcode failed: \(error.localizedDescription)", 75)
+        }
+    } else {
+        fail("transcode requires macOS 15+", 75)
+    }
+    FileHandle.standardOutput.write(Data((outPath + "\n").utf8))
+}
+
 let args = CommandLine.arguments
 guard args.count >= 3 else {
-    fail("usage: video-tool <probe|poster|frames> <input> [args]", 64)
+    fail("usage: video-tool <probe|poster|frames|transcode> <input> [args]", 64)
 }
 let sub = args[1]
 let input = args[2]
@@ -238,6 +261,9 @@ case "poster":
 case "frames":
     guard args.count >= 4 else { fail("usage: video-tool frames <input> <out-dir>", 64) }
     await cmd_frames(input, args[3], maxEdge: maxEdge > 0 ? maxEdge : 512)
+case "transcode":
+    guard args.count >= 4 else { fail("usage: video-tool transcode <input> <out.mp4>", 64) }
+    await cmd_transcode(input, args[3])
 default:
     fail("unknown subcommand: \(sub)", 64)
 }
