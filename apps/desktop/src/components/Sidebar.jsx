@@ -59,7 +59,7 @@ export default function Sidebar({
   const { t } = useTranslation("nav");
   const browse = navItems(summary);
   const rootSummary = [];
-  if (Number(summary?.export_assets ?? 0)) rootSummary.push(t("sidebar.assetsCount", { count: summary.export_assets }));
+  if (Number(summary?.image_assets ?? 0)) rootSummary.push(t("sidebar.assetsCount", { count: summary.image_assets }));
   if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at) }));
 
   const [creatingFolder, setCreatingFolder] = useState(false);

@@ -171,7 +171,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
 
   function getPreviewSrc(item) {
     if (!item) return null;
-    return item.preview_hd_path || item.export_preview_hd_path || item.preview_path || item.export_preview_path || item.export_path;
+    return item.preview_hd_path || item.image_preview_hd_path || item.preview_path || item.image_preview_path || item.image_path;
   }
 
   function redraw() {

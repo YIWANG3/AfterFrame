@@ -45,7 +45,7 @@ class RawMetadata:
 
 
 @dataclass(slots=True)
-class ExportCandidate:
+class ImageCandidate:
     asset_id: str
     path: Path
     stem: str
@@ -83,8 +83,8 @@ class ExportCandidate:
 
 @dataclass(slots=True)
 class MatchDecision:
-    export_asset_id: str
-    export_path: Path
+    image_asset_id: str
+    image_path: Path
     status: str
     score: float
     raw_asset_id: str | None

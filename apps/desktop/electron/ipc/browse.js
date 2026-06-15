@@ -5,7 +5,7 @@ function register({ ipcMain, commands, getCatalogState }) {
   ipcMain.handle("workspace:browse", async (_event, options) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];
-    return await commands.browseExports(options);
+    return await commands.browseImages(options);
   });
 
   ipcMain.handle("workspace:facet-values", async () => {
@@ -32,8 +32,8 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
-  ipcMain.handle("workspace:detail", async (_event, exportPath) => {
-    return await commands.assetDetail({ exportPath });
+  ipcMain.handle("workspace:detail", async (_event, imagePath) => {
+    return await commands.assetDetail({ imagePath });
   });
 
   ipcMain.handle("workspace:detail-by-id", async (_event, assetId) => {

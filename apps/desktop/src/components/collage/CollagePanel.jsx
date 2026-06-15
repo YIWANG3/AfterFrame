@@ -114,8 +114,8 @@ export default function CollagePanel({
       <Section label={t("images")}>
         <div className="space-y-0.5">
           {images.map((item, i) => {
-            const src = item.preview_path || item.export_preview_path || item.export_path;
-            const name = fileName(item.export_path || item.stem || "");
+            const src = item.preview_path || item.image_preview_path || item.image_path;
+            const name = fileName(item.image_path || item.stem || "");
             return (
               <div
                 key={item.asset_id || i}

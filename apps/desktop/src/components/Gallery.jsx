@@ -215,7 +215,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
       className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu"
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
-      <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut="E" onClick={() => { onEdit?.(item.export_path); onClose(); }} />
+      <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut="E" onClick={() => { onEdit?.(item.image_path); onClose(); }} />
       {assetIds?.length === 2 && (
         <MenuItem icon={Columns2} label={t("gallery.menu.compare")} onClick={() => { onCompare?.(assetIds); onClose(); }} />
       )}
@@ -238,7 +238,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
           {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
         </button>
       </MenuItem>
-      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.export_path); onClose(); }} />
+      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.image_path); onClose(); }} />
       <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
@@ -287,7 +287,7 @@ const CardContent = memo(function CardContent({
   showVersionBadge = false, // deprecated — kept for compat
 }) {
   const { t } = useTranslation("nav");
-  const title = fileName(item.export_path) || item.stem;
+  const title = fileName(item.image_path) || item.stem;
   const totalHeight = height + captionHeight;
 
   // Video hover-scrub: lazily fetch a keyframe filmstrip on first hover, then
@@ -297,10 +297,10 @@ const CardContent = memo(function CardContent({
   const [hoverIdx, setHoverIdx] = useState(-1);
   const onVideoEnter = useCallback(() => {
     if (!isVideo || hoverFrames) return;
-    Promise.resolve(window.mediaWorkspace?.videoKeyframes?.(item.export_path, 12))
+    Promise.resolve(window.mediaWorkspace?.videoKeyframes?.(item.image_path, 12))
       .then((frames) => { if (Array.isArray(frames) && frames.length) setHoverFrames(frames); })
       .catch(() => {});
-  }, [isVideo, hoverFrames, item.export_path]);
+  }, [isVideo, hoverFrames, item.image_path]);
   const onVideoMove = useCallback((event) => {
     if (!isVideo || !hoverFrames?.length) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -319,7 +319,7 @@ const CardContent = memo(function CardContent({
       onDragStart={(event) => {
         const payload = onPrepareDragSelection?.(item.asset_id) || {
           assetIds: [item.asset_id],
-          exportPaths: [item.export_path],
+          imagePaths: [item.image_path],
         };
         const firstAssetId = payload.assetIds?.[0] ?? item.asset_id;
         window.__mediaWorkspaceDraggingAssetId = firstAssetId;
@@ -328,14 +328,14 @@ const CardContent = memo(function CardContent({
         event.dataTransfer.setData("application/x-media-workspace-asset", JSON.stringify({
           assetId: firstAssetId,
           assetIds: payload.assetIds || [firstAssetId],
-          exportPath: item.export_path,
-          exportPaths: payload.exportPaths || [item.export_path],
+          imagePath: item.image_path,
+          imagePaths: payload.imagePaths || [item.image_path],
         }));
         event.dataTransfer.setData("text/plain", JSON.stringify({
           assetId: firstAssetId,
           assetIds: payload.assetIds || [firstAssetId],
-          exportPath: item.export_path,
-          exportPaths: payload.exportPaths || [item.export_path],
+          imagePath: item.image_path,
+          imagePaths: payload.imagePaths || [item.image_path],
         }));
         const preview = createDragPreview(event.currentTarget, (payload.assetIds || [firstAssetId]).length);
         window.__mediaWorkspaceDragPreviewEl = preview.element;
@@ -352,7 +352,7 @@ const CardContent = memo(function CardContent({
       data-gallery-item="true"
       data-selected={selected ? "true" : "false"}
       data-asset-id={item.asset_id}
-      data-export-path={item.export_path}
+      data-export-path={item.image_path}
       draggable
       className="group absolute text-left focus:outline-none"
       style={{
@@ -374,9 +374,9 @@ const CardContent = memo(function CardContent({
         onMouseMove={isVideo ? onVideoMove : undefined}
         onMouseLeave={isVideo ? onVideoLeave : undefined}
       >
-        {item.preview_path || item.export_path ? (
+        {item.preview_path || item.image_path ? (
           <PreviewImage
-            src={localFileUrl(item.preview_path || item.export_path)}
+            src={localFileUrl(item.preview_path || item.image_path)}
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
@@ -405,7 +405,7 @@ const CardContent = memo(function CardContent({
         {item.asset_type === "video" ? (
           <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
             <Play className="h-2.5 w-2.5 fill-current" />
-            {formatDuration(item.export_metadata?.duration)}
+            {formatDuration(item.image_metadata?.duration)}
           </div>
         ) : null}
       </div>
@@ -575,9 +575,9 @@ export default function Gallery({
     const positions = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const exportMeta = item.export_metadata || {};
-      const w = Number(exportMeta.width || 0);
-      const h = Number(exportMeta.height || 0);
+      const imageMeta = item.image_metadata || {};
+      const w = Number(imageMeta.width || 0);
+      const h = Number(imageMeta.height || 0);
       const aspect = w > 0 && h > 0 ? w / h : 1;
       const imgHeight = colWidth / aspect;
       // Pick shortest column
@@ -604,7 +604,7 @@ export default function Gallery({
         : gridLayout?.positions;
     return (source || []).map((entry, index) => ({
       assetId: entry.item.asset_id,
-      exportPath: entry.item.export_path,
+      imagePath: entry.item.image_path,
       index,
       left: entry.left,
       top: entry.top,

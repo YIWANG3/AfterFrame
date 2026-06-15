@@ -52,8 +52,8 @@ test("clicking a card in the UI is visible to MCP get_selection", async () => {
   await expect(async () => {
     const selection = await callTool("get_selection");
     expect(selection.count).toBe(1);
-    expect(selection.assets[0].asset_id).toMatch(/^export_/);
-    expect(selection.assets[0].export_path).toBeTruthy();
+    expect(selection.assets[0].asset_id).toMatch(/^image_/);
+    expect(selection.assets[0].image_path).toBeTruthy();
   }).toPass({ timeout: 5_000 });
 });
 
@@ -62,7 +62,7 @@ test("MCP show_in_app selects and reveals assets in the gallery", async () => {
   const targets = assets.slice(1, 3).map((a) => a.asset_id); // not the already-selected first card
 
   const result = await callTool("show_in_app", { asset_ids: targets });
-  expect(result.found).toEqual(targets);
+  expect([...result.found].sort()).toEqual([...targets].sort());
   expect(result.missing).toEqual([]);
 
   // Both cards carry the selection ring, and the reveal toast appeared
@@ -78,9 +78,9 @@ test("MCP show_in_app selects and reveals assets in the gallery", async () => {
 
 test("MCP show_in_app reports ids that don't exist", async () => {
   const { assets } = await callTool("search_assets", { limit: 1 });
-  const result = await callTool("show_in_app", { asset_ids: [assets[0].asset_id, "export_does_not_exist"] });
+  const result = await callTool("show_in_app", { asset_ids: [assets[0].asset_id, "image_does_not_exist"] });
   expect(result.found).toEqual([assets[0].asset_id]);
-  expect(result.missing).toEqual(["export_does_not_exist"]);
+  expect(result.missing).toEqual(["image_does_not_exist"]);
 });
 
 test("MCP update_assets refreshes the UI and raises the agent toast", async () => {

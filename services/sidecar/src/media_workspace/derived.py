@@ -1,6 +1,6 @@
 """Derived-version operations callable without the UI.
 
-- register_export_file: file on disk → catalog asset, RAW binding inherited
+- register_image_file: file on disk → catalog asset, RAW binding inherited
   from its origin, attached to the origin's resource set as a derived version,
   previews generated. Shared by quick-register (editor exports) and
   create-derived (agent/CLI crops).
@@ -24,14 +24,14 @@ from .catalog import CatalogPaths
 from .config import Thresholds
 from .db import (
     attach_asset_to_resource_set,
-    upsert_export_asset,
+    upsert_image_asset,
     upsert_preview_entry,
     upsert_registry,
 )
-from .metadata import extract_export_candidate
+from .metadata import extract_image_candidate
 from .models import MatchDecision
 from .preview_service import PreviewService
-from .reverse_lookup import resolve_export
+from .reverse_lookup import resolve_image
 
 # Formats Pillow reads + writes losslessly enough for crop/export. HEIC and
 # RAW are out of scope here — exports in those formats are rare.
@@ -102,10 +102,10 @@ def crop_image_to_ratio(src: Path, dest: Path, ratio: str, gravity: str = "cente
         return {"width": cropped.width, "height": cropped.height, "box": list(box)}
 
 
-def register_export_file(
+def register_image_file(
     connection,
     catalog: CatalogPaths,
-    export_path: Path,
+    image_path: Path,
     origin_path: Optional[Path] = None,
     collage_source_ids: Optional[list[str]] = None,
     version_kind: str = "derived",
@@ -116,9 +116,9 @@ def register_export_file(
     matcher), attaches the asset to the origin's resource set as a derived
     version, and generates both preview sizes.
     """
-    export_path = export_path.resolve()
-    candidate = extract_export_candidate(export_path, fingerprint_mode="head-only")
-    asset_id = upsert_export_asset(connection, candidate, commit=True)
+    image_path = image_path.resolve()
+    candidate = extract_image_candidate(image_path, fingerprint_mode="head-only")
+    asset_id = upsert_image_asset(connection, candidate, commit=True)
     origin_asset_id = None
 
     match_status = "unmatched"
@@ -135,7 +135,7 @@ def register_export_file(
             """
             SELECT registry.raw_asset_id, registry.score
             FROM asset_files
-            JOIN export_lookup_registry AS registry ON registry.export_asset_id = asset_files.asset_id
+            JOIN image_lookup_registry AS registry ON registry.image_asset_id = asset_files.asset_id
             WHERE asset_files.path = ?
               AND registry.raw_asset_id IS NOT NULL
             """,
@@ -148,14 +148,14 @@ def register_export_file(
 
     if not raw_asset_id:
         thresholds = Thresholds()
-        decision = resolve_export(connection, export_path, thresholds=thresholds, refresh=True)
+        decision = resolve_image(connection, image_path, thresholds=thresholds, refresh=True)
         match_status = decision.status
         match_score = decision.score
         raw_asset_id = decision.raw_asset_id
     else:
         reg_decision = MatchDecision(
-            export_asset_id=asset_id,
-            export_path=export_path,
+            image_asset_id=asset_id,
+            image_path=image_path,
             status=match_status,
             score=match_score,
             raw_asset_id=raw_asset_id,
@@ -216,7 +216,7 @@ def register_export_file(
 
     return {
         "asset_id": asset_id,
-        "export_path": str(export_path),
+        "image_path": str(image_path),
         "match_status": match_status,
         "score": match_score,
         "raw_asset_id": raw_asset_id,
@@ -243,7 +243,7 @@ def create_derived_crop(connection, catalog: CatalogPaths, asset_id: str, ratio:
     ratio_label = ratio.replace(":", "x")
     dest = catalog.derived_dir / f"{stem}_crop{ratio_label}_{uuid4().hex[:8]}{src.suffix.lower()}"
     crop_info = crop_image_to_ratio(src, dest, ratio, gravity=gravity)
-    payload = register_export_file(connection, catalog, dest, origin_path=src)
+    payload = register_image_file(connection, catalog, dest, origin_path=src)
     payload.update(
         source_asset_id=asset_id,
         crop_ratio=ratio,
@@ -355,7 +355,7 @@ def create_derived_text(connection, catalog: CatalogPaths, asset_id: str, output
         return {"path": str(output), "registered": False, **info}
     dest = catalog.derived_dir / f"{stem}_text_{uuid4().hex[:8]}{src.suffix.lower()}"
     info = render_text_overlay(src, dest, **opts)
-    payload = register_export_file(connection, catalog, dest, origin_path=src)
+    payload = register_image_file(connection, catalog, dest, origin_path=src)
     payload.update(source_asset_id=asset_id, registered=True, **info)
     return payload
 

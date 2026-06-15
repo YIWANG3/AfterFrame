@@ -9,7 +9,7 @@
 // timer chain never sees stale closures):
 //   refreshAll(opts)              reload browser/collections/facets
 //   startIncrementalImport(opts)  continue queued import dirs
-//   consumeQueuedImport()         → {rawDirs, exportDirs}, clearing the queue
+//   consumeQueuedImport()         → {rawDirs, imageDirs}, clearing the queue
 //   mirrorTask(type, task)        legacy per-type task states (import card &c.)
 
 import { useEffect, useRef, useState } from "react";
@@ -37,11 +37,11 @@ export default function useJobs(bridgeRef) {
 
     if (meta.jobType === "import") {
       bridge.mirrorTask("import", final);
-      const queued = bridge.consumeQueuedImport() || { rawDirs: [], exportDirs: [] };
+      const queued = bridge.consumeQueuedImport() || { rawDirs: [], imageDirs: [] };
       await bridge.refreshAll({ preserveView: true });
       // Continue queued dirs — but not after a user cancel.
-      if (!cancelled && (queued.rawDirs.length || queued.exportDirs.length)) {
-        await bridge.startIncrementalImport({ rawDirs: queued.rawDirs, exportDirs: queued.exportDirs });
+      if (!cancelled && (queued.rawDirs.length || queued.imageDirs.length)) {
+        await bridge.startIncrementalImport({ rawDirs: queued.rawDirs, imageDirs: queued.imageDirs });
       }
     } else if (meta.jobType === "preview") {
       // Chain preview-hd only after a SUCCESSFUL small-preview pass — a failed

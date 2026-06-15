@@ -4,11 +4,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from .config import DEFAULT_EXPORT_EXTENSIONS, DEFAULT_RAW_EXTENSIONS
-from .metadata import extract_export_candidate, extract_raw_metadata
+from .config import DEFAULT_IMAGE_EXTENSIONS, DEFAULT_RAW_EXTENSIONS
+from .metadata import extract_image_candidate, extract_raw_metadata
 
 RAW_FIELDS = ("capture_time", "camera_model", "lens_model", "width", "height")
-EXPORT_FIELDS = ("capture_time", "camera_model", "lens_model", "width", "height")
+IMAGE_FIELDS = ("capture_time", "camera_model", "lens_model", "width", "height")
 
 
 def _field_value(metadata, field: str):
@@ -37,10 +37,10 @@ def _analyze_group(directory: Path, kind: str) -> dict[str, object]:
         extractor = extract_raw_metadata
         extensions = DEFAULT_RAW_EXTENSIONS
         fields = RAW_FIELDS
-    elif kind == "export":
-        extractor = extract_export_candidate
-        extensions = DEFAULT_EXPORT_EXTENSIONS
-        fields = EXPORT_FIELDS
+    elif kind == "image":
+        extractor = extract_image_candidate
+        extensions = DEFAULT_IMAGE_EXTENSIONS
+        fields = IMAGE_FIELDS
     else:
         raise ValueError(f"unsupported group kind: {kind}")
 
@@ -98,10 +98,10 @@ def _analyze_group(directory: Path, kind: str) -> dict[str, object]:
     }
 
 
-def analyze_metadata_coverage(raw_dirs: list[Path], export_dirs: list[Path]) -> dict[str, object]:
+def analyze_metadata_coverage(raw_dirs: list[Path], image_dirs: list[Path]) -> dict[str, object]:
     raw_reports = [_analyze_group(directory.resolve(), "raw") for directory in raw_dirs]
-    export_reports = [_analyze_group(directory.resolve(), "export") for directory in export_dirs]
+    image_reports = [_analyze_group(directory.resolve(), "image") for directory in image_dirs]
     return {
         "raw_reports": raw_reports,
-        "export_reports": export_reports,
+        "image_reports": image_reports,
     }

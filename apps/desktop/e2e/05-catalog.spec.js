@@ -20,7 +20,7 @@ test.describe("Catalog browse", () => {
 
   test("gallery shows the 13 seeded images", async () => {
     // Wait for any gallery item to render — uses the data attribute set on
-    // each card. If sidecar / browse-exports / Gallery rendering is broken,
+    // each card. If sidecar / browse-images / Gallery rendering is broken,
     // this fails fast.
     await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
     const count = await window.locator("[data-gallery-item='true']").count();

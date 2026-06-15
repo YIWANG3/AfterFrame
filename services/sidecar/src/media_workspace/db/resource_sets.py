@@ -11,7 +11,7 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from ..models import ExportCandidate, MatchDecision, RawMetadata
+from ..models import ImageCandidate, MatchDecision, RawMetadata
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()
@@ -154,7 +154,7 @@ def attach_asset_to_resource_set(
     return target_set
 
 
-def list_export_assets_missing_resource_set(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+def list_image_assets_missing_resource_set(connection: sqlite3.Connection) -> list[sqlite3.Row]:
     return connection.execute(
         """
         SELECT
@@ -165,21 +165,21 @@ def list_export_assets_missing_resource_set(connection: sqlite3.Connection) -> l
         FROM assets
         LEFT JOIN resource_set_items AS rsi
             ON rsi.asset_id = assets.asset_id
-        LEFT JOIN export_lookup_registry AS registry
-            ON registry.export_asset_id = assets.asset_id
-        WHERE assets.asset_type = 'export'
+        LEFT JOIN image_lookup_registry AS registry
+            ON registry.image_asset_id = assets.asset_id
+        WHERE assets.asset_type = 'image'
           AND rsi.set_id IS NULL
         ORDER BY assets.created_at, assets.canonical_path
         """
     ).fetchall()
 
 
-def find_export_asset_ids_by_stem(connection: sqlite3.Connection, stem: str) -> list[str]:
+def find_image_asset_ids_by_stem(connection: sqlite3.Connection, stem: str) -> list[str]:
     rows = connection.execute(
         """
         SELECT asset_id
         FROM assets
-        WHERE asset_type = 'export'
+        WHERE asset_type = 'image'
           AND stem = ?
         ORDER BY created_at, canonical_path
         """,
@@ -219,11 +219,11 @@ def list_incorrectly_merged_resource_sets(connection: sqlite3.Connection) -> lis
     # Find sets with 2+ export members
     candidate_sets = connection.execute(
         """
-        SELECT rsi.set_id, COUNT(*) AS export_count
+        SELECT rsi.set_id, COUNT(*) AS image_count
         FROM resource_set_items AS rsi
-        JOIN assets ON assets.asset_id = rsi.asset_id AND assets.asset_type = 'export'
+        JOIN assets ON assets.asset_id = rsi.asset_id AND assets.asset_type = 'image'
         GROUP BY rsi.set_id
-        HAVING export_count > 1
+        HAVING image_count > 1
         """
     ).fetchall()
 
@@ -234,7 +234,7 @@ def list_incorrectly_merged_resource_sets(connection: sqlite3.Connection) -> lis
             """
             SELECT rsi.asset_id, assets.canonical_path, rsi.role, rsi.version_kind, rsi.parent_asset_id
             FROM resource_set_items AS rsi
-            JOIN assets ON assets.asset_id = rsi.asset_id AND assets.asset_type = 'export'
+            JOIN assets ON assets.asset_id = rsi.asset_id AND assets.asset_type = 'image'
             WHERE rsi.set_id = ?
             ORDER BY rsi.sort_order
             """,
@@ -314,21 +314,21 @@ def split_shared_asset_ids(connection: sqlite3.Connection, commit: bool = True) 
     from ..metadata import stable_asset_id
 
     dupes = connection.execute("""
-        SELECT export_asset_id, COUNT(*) AS cnt
-        FROM export_lookup_registry
-        GROUP BY export_asset_id
+        SELECT image_asset_id, COUNT(*) AS cnt
+        FROM image_lookup_registry
+        GROUP BY image_asset_id
         HAVING cnt > 1
     """).fetchall()
 
     split_count = 0
     for dupe in dupes:
-        old_id = str(dupe["export_asset_id"])
+        old_id = str(dupe["image_asset_id"])
         entries = connection.execute("""
-            SELECT export_path, raw_asset_id, match_status, score,
+            SELECT image_path, raw_asset_id, match_status, score,
                    resolver_version, feature_vector_json, candidate_json, confirmed_at
-            FROM export_lookup_registry
-            WHERE export_asset_id = ?
-            ORDER BY export_path
+            FROM image_lookup_registry
+            WHERE image_asset_id = ?
+            ORDER BY image_path
         """, (old_id,)).fetchall()
 
         asset_row = connection.execute("""
@@ -340,11 +340,11 @@ def split_shared_asset_ids(connection: sqlite3.Connection, commit: bool = True) 
         # Keep first entry on original asset, split the rest
         canonical_path = str(asset_row["canonical_path"])
         for entry in entries:
-            entry_path = str(entry["export_path"])
+            entry_path = str(entry["image_path"])
             if entry_path == canonical_path:
                 continue  # Keep original
 
-            new_id = stable_asset_id("export", str(asset_row["fingerprint"]), entry_path)
+            new_id = stable_asset_id("image", str(asset_row["fingerprint"]), entry_path)
             if new_id == old_id:
                 continue  # Would collide, skip
 
@@ -372,9 +372,9 @@ def split_shared_asset_ids(connection: sqlite3.Connection, commit: bool = True) 
 
             # Update registry to point to new asset
             connection.execute("""
-                UPDATE export_lookup_registry
-                SET export_asset_id = ?
-                WHERE export_path = ? AND export_asset_id = ?
+                UPDATE image_lookup_registry
+                SET image_asset_id = ?
+                WHERE image_path = ? AND image_asset_id = ?
             """, (new_id, entry_path, old_id))
 
             # Update asset_files

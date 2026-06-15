@@ -115,14 +115,14 @@ export default function useSelection({
   function prepareDragSelection(assetId) {
     if (selectedIdSet.has(assetId) && selectedIds.length > 1) {
       setPrimaryId(assetId);
-      const exportPaths = selectedIds.map((id) => itemById.get(id)?.export_path).filter(Boolean);
-      return { assetIds: selectedIds, exportPaths };
+      const imagePaths = selectedIds.map((id) => itemById.get(id)?.image_path).filter(Boolean);
+      return { assetIds: selectedIds, imagePaths };
     }
     selectSingle(assetId);
     const item = itemById.get(assetId);
     return {
       assetIds: [assetId].filter(Boolean),
-      exportPaths: [item?.export_path].filter(Boolean),
+      imagePaths: [item?.image_path].filter(Boolean),
     };
   }
 

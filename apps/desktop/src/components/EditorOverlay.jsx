@@ -462,7 +462,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const textClipboardRef = useRef(null);
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
-  const sourcePath = item?.export_path || item?.export_preview_path || item?.raw_preview_path || null;
+  const sourcePath = item?.image_path || item?.image_preview_path || item?.raw_preview_path || null;
   const depth = useSceneDepth({ sourcePath });
   const {
     generating: depthGenerating,

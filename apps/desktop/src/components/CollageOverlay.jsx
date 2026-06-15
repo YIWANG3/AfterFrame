@@ -58,7 +58,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
 
   const sourceTotal = useMemo(() => {
     const totalSummary = summary || {};
-    if (source === "all") return Number(totalSummary.export_assets || 0);
+    if (source === "all") return Number(totalSummary.image_assets || 0);
     if (source === "matched") return Number(totalSummary.confirmed_matches || 0);
     if (source === "rated") return Number(totalSummary.rated_count || 0);
     const col = manualCollections.find((c) => c.collection_id === source);
@@ -82,7 +82,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
           limit: PAGE_SIZE,
           offset: nextOffset,
         })
-        : await window.mediaWorkspace?.browseExports?.({
+        : await window.mediaWorkspace?.browseImages?.({
           status: source,
           limit: PAGE_SIZE,
           offset: nextOffset,
@@ -308,7 +308,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
           ) : (
             <div className="relative" style={{ height: `${totalHeight}px` }}>
               {visibleItems.map(({ item, left, top }) => {
-                const src = item.preview_path || item.export_preview_path || item.raw_preview_path;
+                const src = item.preview_path || item.image_preview_path || item.raw_preview_path;
                 const selected = selectedIds.has(item.asset_id);
                 return (
                   <button
@@ -441,7 +441,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
 
       // Derive filename from source images
       const sourceAssetIds = images.map((img) => img.asset_id).filter(Boolean);
-      const firstStem = images[0]?.stem || images[0]?.export_path?.split("/").pop()?.replace(/\.[^.]+$/, "") || "collage";
+      const firstStem = images[0]?.stem || images[0]?.image_path?.split("/").pop()?.replace(/\.[^.]+$/, "") || "collage";
       const allSameSet = images.length > 1 && images.every((img) => img.resource_set_id && img.resource_set_id === images[0].resource_set_id);
       const baseStem = allSameSet ? (images[0].primary_stem || firstStem) : firstStem;
       const defaultName = `${baseStem}_collage.jpg`;
@@ -453,7 +453,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
       if (!savePath) return;
 
       const buffer = await blob.arrayBuffer();
-      const firstSrc = images[0]?.export_path || null;
+      const firstSrc = images[0]?.image_path || null;
       await window.mediaWorkspace?.saveImage?.(savePath, buffer, firstSrc);
       await window.mediaWorkspace?.quickRegister?.(savePath, firstSrc, sourceAssetIds);
       onExportComplete?.(savePath);
@@ -482,7 +482,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             disabled={exporting || images.length < 2}
           >
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {exporting ? t("exporting") : t("export")}
+            {exporting ? t("exporting") : t("image")}
           </button>
           <button
             type="button"

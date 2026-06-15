@@ -4,7 +4,7 @@ import csv
 from pathlib import Path
 
 from .db import get_registry
-from .reverse_lookup import resolve_export
+from .reverse_lookup import resolve_image
 
 
 def _normalize_path(value: str | None) -> str | None:
@@ -13,8 +13,8 @@ def _normalize_path(value: str | None) -> str | None:
     return str(Path(value).resolve())
 
 
-def _lookup_matched_raw_path(connection, export_path: Path) -> str | None:
-    row = get_registry(connection, export_path)
+def _lookup_matched_raw_path(connection, image_path: Path) -> str | None:
+    row = get_registry(connection, image_path)
     if row is None or not row["raw_asset_id"]:
         return None
     asset = connection.execute(
@@ -38,15 +38,15 @@ def evaluate_ground_truth(connection, truth_csv: Path, refresh: bool = False) ->
     with truth_csv.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for record in reader:
-            export_path = Path(record["export_path"]).resolve()
+            image_path = Path(record["image_path"]).resolve()
             expected_raw_path = _normalize_path(record.get("raw_path"))
             notes = (record.get("notes") or "").strip()
             counts["total"] += 1
 
             if refresh:
-                resolve_export(connection, export_path)
+                resolve_image(connection, image_path)
 
-            matched_raw_path = _lookup_matched_raw_path(connection, export_path)
+            matched_raw_path = _lookup_matched_raw_path(connection, image_path)
 
             if expected_raw_path and matched_raw_path == expected_raw_path:
                 outcome = "correct_match"
@@ -66,7 +66,7 @@ def evaluate_ground_truth(connection, truth_csv: Path, refresh: bool = False) ->
 
             rows.append(
                 {
-                    "export_path": str(export_path),
+                    "image_path": str(image_path),
                     "expected_raw_path": expected_raw_path,
                     "matched_raw_path": matched_raw_path,
                     "outcome": outcome,

@@ -19,7 +19,7 @@ DEFAULT_RAW_EXTENSIONS = {
     ".sr2",
 }
 
-DEFAULT_EXPORT_EXTENSIONS = {
+DEFAULT_IMAGE_EXTENSIONS = {
     ".avif",
     ".heic",
     ".jpeg",
@@ -41,7 +41,7 @@ class Thresholds:
 class WorkspaceConfig:
     catalog_path: Path
     raw_dirs: tuple[Path, ...] = ()
-    export_dirs: tuple[Path, ...] = ()
+    image_dirs: tuple[Path, ...] = ()
     poll_interval_seconds: float = 2.0
     thresholds: Thresholds = field(default_factory=Thresholds)
 

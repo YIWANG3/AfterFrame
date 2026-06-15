@@ -10,9 +10,9 @@ from .db import (
     attach_asset_to_resource_set,
     get_app_setting,
     is_cancel_requested,
-    list_export_assets_missing_resource_set,
+    list_image_assets_missing_resource_set,
     update_job,
-    upsert_export_asset,
+    upsert_image_asset,
     upsert_preview_entry,
     upsert_registry,
 )
@@ -45,11 +45,11 @@ def _mark_cancelled(connection, job_id: str, payload: dict, result: dict | None 
         error_text=None,
     )
     return final
-from .metadata import extract_export_candidate
+from .metadata import extract_image_candidate
 from .models import MatchDecision
 from .preview_service import PreviewService
-from .reverse_lookup import resolve_export
-from .reverse_lookup import resolve_export_batch
+from .reverse_lookup import resolve_image
+from .reverse_lookup import resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 
 
@@ -75,7 +75,7 @@ _HD_PHASE = {"key": "generate_previews_hd", "label": "Generate HD Previews", "pr
 
 
 def _build_import_phases(
-    mode: str, has_raw_dirs: bool, has_export_dirs: bool, generate_hd: bool = True
+    mode: str, has_raw_dirs: bool, has_image_dirs: bool, generate_hd: bool = True
 ) -> list[dict[str, object]]:
     # HD (2000px) previews are opt-in (Settings ▸ Library). When off we skip the
     # phase entirely — the execution loop is driven by this same list, so a
@@ -84,21 +84,21 @@ def _build_import_phases(
         return [{"key": "scan_sources", "label": "Index Sources", "progress": 1.0}]
     if mode == "processed_only":
         phases = [{"key": "index_processed_media", "label": "Index Images", "progress": 0.5}]
-        if has_export_dirs:
+        if has_image_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
             if generate_hd:
                 phases.append(dict(_HD_PHASE))
         return phases
     if mode == "processed_with_sources":
         phases = [{"key": "match_processed_media", "label": "Match with RAW", "progress": 0.5}]
-        if has_export_dirs:
+        if has_image_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
             if generate_hd:
                 phases.append(dict(_HD_PHASE))
         return phases
     if mode == "source_with_media":
         phases = [{"key": "scan_sources", "label": "Index Sources", "progress": 1 / 4}]
-        if has_export_dirs:
+        if has_image_dirs:
             phases.append({"key": "match_processed_media", "label": "Match with RAW", "progress": 2 / 4})
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 3 / 4})
             if generate_hd:
@@ -107,7 +107,7 @@ def _build_import_phases(
     phases: list[dict[str, object]] = []
     if has_raw_dirs:
         phases.append({"key": "scan_sources", "label": "Index Sources", "progress": 1 / 4})
-    if has_export_dirs:
+    if has_image_dirs:
         phases.append({"key": "match_processed_media", "label": "Match with RAW", "progress": 2 / 4 if has_raw_dirs else 0.5})
         phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 3 / 4 if has_raw_dirs else 0.75})
         if generate_hd:
@@ -120,13 +120,13 @@ def run_import_job(
     catalog_path: Path,
     job_id: str,
     raw_dirs: list[Path],
-    export_dirs: list[Path],
+    image_dirs: list[Path],
     mode: str = "combined",
     generate_hd: bool = True,
 ) -> dict[str, object]:
     thresholds = Thresholds()
     phase_results: list[dict[str, object]] = []
-    phases = _build_import_phases(mode, bool(raw_dirs), bool(export_dirs), generate_hd)
+    phases = _build_import_phases(mode, bool(raw_dirs), bool(image_dirs), generate_hd)
     if not phases:
         result = {"phase_results": [], "current_phase": None}
         update_job(
@@ -135,7 +135,7 @@ def run_import_job(
             status="succeeded",
             payload={
                 "raw_dirs": [str(path.resolve()) for path in raw_dirs],
-                "export_dirs": [str(path.resolve()) for path in export_dirs],
+                "image_dirs": [str(path.resolve()) for path in image_dirs],
                 "mode": mode,
                 "phase": None,
                 "phase_label": None,
@@ -149,7 +149,7 @@ def run_import_job(
         return result
     payload = {
         "raw_dirs": [str(path.resolve()) for path in raw_dirs],
-        "export_dirs": [str(path.resolve()) for path in export_dirs],
+        "image_dirs": [str(path.resolve()) for path in image_dirs],
         "mode": mode,
         "phase": phases[0]["key"],
         "phase_label": phases[0]["label"],
@@ -251,15 +251,15 @@ def run_import_job(
                     commit=True,
                 )
 
-            resolve_result = resolve_export_batch(
+            resolve_result = resolve_image_batch(
                 connection,
-                export_dirs,
+                image_dirs,
                 thresholds=thresholds,
                 refresh=True,
                 progress_callback=resolve_progress,
             )
             # Create resource sets for any exports that don't have one yet
-            for row in list_export_assets_missing_resource_set(connection):
+            for row in list_image_assets_missing_resource_set(connection):
                 attach_asset_to_resource_set(
                     connection, str(row["asset_id"]),
                     version_kind="import", commit=False,
@@ -306,9 +306,9 @@ def run_import_job(
             preview_result = PreviewService(ensure_catalog(catalog_path)).generate_batch(
                 connection,
                 kind="preview",
-                asset_type="export",
+                asset_type="image",
                 progress_callback=preview_progress,
-                paths=export_dirs,
+                paths=image_dirs,
             )
             # Video poster frames share the standard preview tier (no HD).
             PreviewService(ensure_catalog(catalog_path)).generate_batch(
@@ -316,7 +316,7 @@ def run_import_job(
                 kind="preview",
                 asset_type="video",
                 progress_callback=preview_progress,
-                paths=export_dirs,
+                paths=image_dirs,
             )
             phase_results.append(_phase_result(preview_phase, preview_result))
             phase_cursor += 1
@@ -359,9 +359,9 @@ def run_import_job(
             preview_hd_result = PreviewService(ensure_catalog(catalog_path)).generate_batch(
                 connection,
                 kind="preview-hd",
-                asset_type="export",
+                asset_type="image",
                 progress_callback=preview_hd_progress,
-                paths=export_dirs,
+                paths=image_dirs,
             )
             phase_results.append(_phase_result(preview_hd_phase, preview_hd_result))
         result = {"phase_results": phase_results, "current_phase": None}
@@ -462,7 +462,7 @@ def run_preview_job(
     job_id: str,
     *,
     kind: str = "preview",
-    asset_type: str | None = "export",
+    asset_type: str | None = "image",
     limit: int | None = None,
     force: bool = False,
 ) -> dict[str, object]:
@@ -531,7 +531,7 @@ def run_annotation_job(
     api_key: str | None,
     model: str,
     base_url: str | None = None,
-    asset_type: str | None = "export",
+    asset_type: str | None = "image",
     only_missing: bool = True,
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
@@ -722,9 +722,9 @@ def run_ai_repaint_job(
         # resource-set attach → previews). Replaces a hand-copied version that
         # had drifted: preview failures here used to fail the whole job even
         # though the asset was already committed.
-        from .derived import register_export_file
+        from .derived import register_image_file
 
-        register_payload = register_export_file(
+        register_payload = register_image_file(
             connection,
             ensure_catalog(catalog_path),
             Path(result.output_path),

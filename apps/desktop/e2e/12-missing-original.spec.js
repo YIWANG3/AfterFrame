@@ -26,13 +26,13 @@ test.describe("Missing original handling", () => {
 
     // Find the framed-portrait asset (B0016108) and its on-disk original.
     const info = await window.evaluate(async () => {
-      const rows = await window.mediaWorkspace.browseExports({ status: "all", limit: 50 });
+      const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 50 });
       const r = rows.find((x) => x.stem === "B0016108");
-      return r ? { assetId: r.asset_id, exportPath: r.export_path } : null;
+      return r ? { assetId: r.asset_id, imagePath: r.image_path } : null;
     });
     expect(info, "B0016108 should be in the seeded catalog").toBeTruthy();
     assetId = info.assetId;
-    committedPath = info.exportPath;
+    committedPath = info.imagePath;
 
     // Relink to a tmp copy (same bytes → fingerprint matches, no force needed).
     tmpCopy = path.join(os.tmpdir(), `af-missing-${Date.now()}-B0016108.jpg`);
@@ -88,7 +88,7 @@ test.describe("Missing original handling", () => {
     await expect(cardById().getByText(/Missing/i)).toHaveCount(0, { timeout: 10_000 });
     // B0016108 carries a 5-star XMP rating; relink must not have disturbed it.
     const rating = await window.evaluate(async (id) => {
-      const rows = await window.mediaWorkspace.browseExports({ status: "all", limit: 50 });
+      const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 50 });
       return rows.find((r) => r.asset_id === id)?.app_rating;
     }, assetId);
     expect(rating).toBe(5);

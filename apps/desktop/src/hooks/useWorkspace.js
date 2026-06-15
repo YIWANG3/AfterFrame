@@ -36,7 +36,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const [importTask, setImportTask] = useState(null);
   const [previewTask, setPreviewTask] = useState(null);
   const [enrichmentTask, setEnrichmentTask] = useState(null);
-  const [pendingImport, setPendingImport] = useState({ rawDirs: [], exportDirs: [] });
+  const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [] });
   const [collections, setCollections] = useState([]);
   const [activeCollectionId, setActiveCollectionId] = useState(null);
   const browserRequestIdRef = useRef(0);
@@ -48,8 +48,8 @@ export default function useWorkspace({ pushToast } = {}) {
     () => roots.filter((item) => item.root_type === "raw").map((item) => item.path),
     [roots],
   );
-  const exportDirs = useMemo(
-    () => roots.filter((item) => item.root_type === "export").map((item) => item.path),
+  const imageDirs = useMemo(
+    () => roots.filter((item) => item.root_type === "image").map((item) => item.path),
     [roots],
   );
 
@@ -61,7 +61,7 @@ export default function useWorkspace({ pushToast } = {}) {
     startIncrementalImport: (opts) => startIncrementalImport(opts),
     consumeQueuedImport: () => {
       const queued = pendingImport;
-      setPendingImport({ rawDirs: [], exportDirs: [] });
+      setPendingImport({ rawDirs: [], imageDirs: [] });
       return queued;
     },
     mirrorTask: (type, task) => {
@@ -95,10 +95,10 @@ export default function useWorkspace({ pushToast } = {}) {
       [
         item.stem,
         item.primary_stem,
-        item.export_path,
+        item.image_path,
         item.raw_path,
         item.version_kind,
-        item.export_metadata?.camera_model,
+        item.image_metadata?.camera_model,
         item.raw_metadata?.camera_model,
       ]
         .some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery)),
@@ -136,12 +136,12 @@ export default function useWorkspace({ pushToast } = {}) {
   useEffect(() => {
     if (!browserReady) return;
     void api.getFacetValues().then(setFacetValues).catch(() => {});
-  }, [browserReady, summary?.export_assets]);
+  }, [browserReady, summary?.image_assets]);
 
   // Queued-changes note for the import card in the unified JobDock.
   const queuedImportNote = useMemo(() => {
     const queuedRawCount = pendingImport.rawDirs.length;
-    const queuedExportCount = pendingImport.exportDirs.length;
+    const queuedExportCount = pendingImport.imageDirs.length;
     if (!queuedRawCount && !queuedExportCount) return null;
     return `Queued changes: ${queuedExportCount} media · ${queuedRawCount} sources`;
   }, [pendingImport]);
@@ -179,7 +179,7 @@ export default function useWorkspace({ pushToast } = {}) {
           offset: nextOffset,
         });
       } else {
-        payload = await api.browseExports({
+        payload = await api.browseImages({
           status: nextStatus,
           limit: pageLimit,
           offset: nextOffset,
@@ -276,7 +276,7 @@ export default function useWorkspace({ pushToast } = {}) {
       let offset = 0;
       let lastPageFull = false;
       for (let page = 0; page < MAX_PAGES; page += 1) {
-        const payload = await api.browseExports({
+        const payload = await api.browseImages({
           status: "all",
           limit: PAGE_SIZE,
           offset,
@@ -363,10 +363,10 @@ export default function useWorkspace({ pushToast } = {}) {
     }
   }
 
-  async function deleteExportAssets(assetIds) {
+  async function deleteImageAssets(assetIds) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
-    await api.deleteExportAssets(targetIds);
+    await api.deleteImageAssets(targetIds);
     const deletedSet = new Set(targetIds);
     setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
     if (selectedAssetId && deletedSet.has(selectedAssetId)) {
@@ -441,33 +441,33 @@ export default function useWorkspace({ pushToast } = {}) {
     void api.getFacetValues().then(setFacetValues).catch(() => {});
   }
 
-  async function startIncrementalImport({ rawDirs: nextRawDirs = [], exportDirs: nextExportDirs = [], fullCatalog = false }) {
+  async function startIncrementalImport({ rawDirs: nextRawDirs = [], imageDirs: nextImageDirs = [], fullCatalog = false }) {
     let resolvedRawDirs = collapseRootPaths(nextRawDirs);
-    let resolvedExportDirs = collapseRootPaths(nextExportDirs);
+    let resolvedImageDirs = collapseRootPaths(nextImageDirs);
 
     if (fullCatalog) {
       resolvedRawDirs = collapseRootPaths(rawDirs);
-      resolvedExportDirs = collapseRootPaths(exportDirs);
+      resolvedImageDirs = collapseRootPaths(imageDirs);
     }
-    if (!resolvedRawDirs.length && !resolvedExportDirs.length) return;
+    if (!resolvedRawDirs.length && !resolvedImageDirs.length) return;
 
-    let mode = determineImportMode(summary, { rawDirs: resolvedRawDirs, exportDirs: resolvedExportDirs });
-    if (mode === "source_with_media" && !resolvedExportDirs.length) {
-      resolvedExportDirs = collapseRootPaths(exportDirs);
+    let mode = determineImportMode(summary, { rawDirs: resolvedRawDirs, imageDirs: resolvedImageDirs });
+    if (mode === "source_with_media" && !resolvedImageDirs.length) {
+      resolvedImageDirs = collapseRootPaths(imageDirs);
     }
     if (mode === "processed_with_sources" && resolvedRawDirs.length) {
       resolvedRawDirs = [];
     }
-    mode = determineImportMode(summary, { rawDirs: resolvedRawDirs, exportDirs: resolvedExportDirs });
+    mode = determineImportMode(summary, { rawDirs: resolvedRawDirs, imageDirs: resolvedImageDirs });
 
     const modeNeedsSources = mode === "source_only" || mode === "source_with_media" || mode === "combined";
     const modeNeedsProcessed = mode === "processed_only" || mode === "processed_with_sources" || mode === "combined";
     if (modeNeedsSources && !resolvedRawDirs.length) return;
-    if (modeNeedsProcessed && !resolvedExportDirs.length) return;
+    if (modeNeedsProcessed && !resolvedImageDirs.length) return;
 
     const task = await api.startImport({
       rawDirs: resolvedRawDirs,
-      exportDirs: resolvedExportDirs,
+      imageDirs: resolvedImageDirs,
       mode,
     });
     setImportTask(task);
@@ -475,20 +475,20 @@ export default function useWorkspace({ pushToast } = {}) {
   }
 
   async function addImages() {
-    const selected = await api.pickDirectories("export");
+    const selected = await api.pickDirectories("image");
     await addImagesFromPaths(selected);
   }
 
   async function addImagesFromPaths(selected) {
     if (!selected || !selected.length) return;
-    await api.registerRoots("export", selected);
-    const nextRoots = mergeRoots(exportDirs, selected);
-    setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "export", path }))]);
+    await api.registerRoots("image", selected);
+    const nextRoots = mergeRoots(imageDirs, selected);
+    setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "image", path }))]);
     if (importTask?.running) {
-      setPendingImport((current) => ({ ...current, exportDirs: mergeRoots(current.exportDirs, selected) }));
+      setPendingImport((current) => ({ ...current, imageDirs: mergeRoots(current.imageDirs, selected) }));
       return;
     }
-    await startIncrementalImport({ exportDirs: nextRoots.length ? selected : [] });
+    await startIncrementalImport({ imageDirs: nextRoots.length ? selected : [] });
     await refreshAll();
   }
 
@@ -501,7 +501,7 @@ export default function useWorkspace({ pushToast } = {}) {
       setPendingImport((current) => ({ ...current, rawDirs: mergeRoots(current.rawDirs, selected) }));
       return;
     }
-    await startIncrementalImport({ rawDirs: selected, exportDirs });
+    await startIncrementalImport({ rawDirs: selected, imageDirs });
     await refreshAll();
   }
 
@@ -539,7 +539,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportTask(null);
     setPreviewTask(null);
     setEnrichmentTask(null);
-    setPendingImport({ rawDirs: [], exportDirs: [] });
+    setPendingImport({ rawDirs: [], imageDirs: [] });
     setCollections([]);
     setActiveCollectionId(null);
     resetJobs();
@@ -699,7 +699,7 @@ export default function useWorkspace({ pushToast } = {}) {
     deleteCollection,
     addToCollection,
     removeFromCollection,
-    deleteExportAssets,
+    deleteImageAssets,
     setAssetRating,
   };
 }

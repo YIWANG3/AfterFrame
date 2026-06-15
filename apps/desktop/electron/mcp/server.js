@@ -60,11 +60,11 @@ function jsonRpcError(id, code, message) {
 }
 
 function compactAsset(row, port) {
-  const meta = row.export_metadata || {};
+  const meta = row.image_metadata || {};
   return {
     asset_id: row.asset_id,
     stem: row.stem,
-    export_path: row.export_path,
+    image_path: row.image_path,
     rating: row.app_rating || 0,
     capture_time: meta.capture_time || null,
     camera: meta.camera_model || null,
@@ -123,7 +123,7 @@ function createMcpServer(deps) {
       if (!/unknown export asset/i.test(error.message)) throw error;
       return { preview: null, previewHd: null };
     }
-    rememberPreview(assetId, detail?.export_preview_path, detail?.export_preview_hd_path);
+    rememberPreview(assetId, detail?.image_preview_path, detail?.image_preview_hd_path);
     return previewPathCache.get(assetId) || { preview: null, previewHd: null };
   }
 
@@ -193,7 +193,7 @@ function createMcpServer(deps) {
         ]) {
           if (args[key] !== undefined && args[key] !== null && args[key] !== "") filters[key] = args[key];
         }
-        const rows = await commands.browseExports({
+        const rows = await commands.browseImages({
           status: args.status || "all",
           limit: args.limit || 24,
           offset: args.offset || 0,
@@ -221,7 +221,7 @@ function createMcpServer(deps) {
       async handler(args) {
         requireCatalog();
         const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
-        rememberPreview(detail?.asset_id, detail?.export_preview_path, detail?.export_preview_hd_path);
+        rememberPreview(detail?.asset_id, detail?.image_preview_path, detail?.image_preview_hd_path);
         return detail;
       },
     },
@@ -496,8 +496,8 @@ function createMcpServer(deps) {
         }
         const mode = imageDirs.length && rawDirs.length ? "combined" : imageDirs.length ? "processed_only" : "source_only";
         if (rawDirs.length) await registerRoots("raw", rawDirs);
-        if (imageDirs.length) await registerRoots("export", imageDirs);
-        let status = await startImportTask({ mode, rawDirs, exportDirs: imageDirs });
+        if (imageDirs.length) await registerRoots("image", imageDirs);
+        let status = await startImportTask({ mode, rawDirs, imageDirs: imageDirs });
         deps.broadcastCatalogChanged?.("jobs", { jobId: status.jobId, jobType: "import" });
         const deadline = Date.now() + IMPORT_WAIT_MS;
         while (status.running && status.jobId && Date.now() < deadline) {
@@ -550,7 +550,7 @@ function createMcpServer(deps) {
               new_asset_id: payload.asset_id,
               width: payload.width,
               height: payload.height,
-              path: payload.export_path,
+              path: payload.image_path,
               thumbnail_url: `http://127.0.0.1:${port}/assets/${payload.asset_id}`,
             });
           } catch (error) {
@@ -625,7 +625,7 @@ function createMcpServer(deps) {
         requireCatalog();
         if (!deps.startAiRepaintTask || !deps.readAppSettings) throw new Error("Repaint bridge unavailable.");
         const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
-        if (!detail?.export_path) throw new Error(`No file path for asset ${args.asset_id}.`);
+        if (!detail?.image_path) throw new Error(`No file path for asset ${args.asset_id}.`);
         const prefs = deps.readAppSettings()?.aiPreferences || {};
         const providers = Array.isArray(prefs.providers) ? prefs.providers : [];
         const active = providers.find((p) => p.id === prefs.activeProvider) || providers[0];
@@ -634,7 +634,7 @@ function createMcpServer(deps) {
         // (selectedModels) > sidecar's per-provider default.
         const uiModel = prefs.selectedModels?.[active.id] || "";
         const status = await deps.startAiRepaintTask({
-          sourcePath: detail.export_path,
+          sourcePath: detail.image_path,
           prompt: String(args.prompt),
           provider: active.id,
           providerType: active.type,
@@ -666,7 +666,7 @@ function createMcpServer(deps) {
         requireCatalog();
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
         if (!ids.length) throw new Error("asset_ids is empty.");
-        const results = await commands.deleteExportAssets(ids);
+        const results = await commands.deleteImageAssets(ids);
         for (const id of ids) previewPathCache.delete(id);
         deps.broadcastCatalogChanged?.("assets", { ids });
         return { deleted: results.length, results };

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import DEFAULT_EXPORT_EXTENSIONS, DEFAULT_RAW_EXTENSIONS
+from .config import DEFAULT_IMAGE_EXTENSIONS, DEFAULT_RAW_EXTENSIONS
 
 RAW_SIGNATURE_SAMPLE_BYTES = 4096
 
@@ -82,4 +82,4 @@ def is_raw_file(path: Path) -> bool:
 
 
 def is_source_file(path: Path) -> bool:
-    return is_raw_file(path) or path.suffix.lower() in DEFAULT_EXPORT_EXTENSIONS
+    return is_raw_file(path) or path.suffix.lower() in DEFAULT_IMAGE_EXTENSIONS

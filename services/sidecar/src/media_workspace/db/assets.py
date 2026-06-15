@@ -11,7 +11,7 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from ..models import ExportCandidate, MatchDecision, RawMetadata
+from ..models import ImageCandidate, MatchDecision, RawMetadata
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()
@@ -232,7 +232,7 @@ def upsert_video_asset(
     return asset_id
 
 
-def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate, commit: bool = True) -> str:
+def upsert_image_asset(connection: sqlite3.Connection, export: ImageCandidate, commit: bool = True) -> str:
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?",
         (str(export.path),),
@@ -267,7 +267,7 @@ def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate,
         INSERT INTO assets (
             asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
             fingerprint, file_size, modified_time, metadata_json, app_rating
-        ) VALUES (?, 'export', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, 'image', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(asset_id) DO UPDATE SET
             canonical_path = excluded.canonical_path,
             stem = excluded.stem,
@@ -314,12 +314,12 @@ def upsert_export_asset(connection: sqlite3.Connection, export: ExportCandidate,
 def upsert_registry(connection: sqlite3.Connection, decision: MatchDecision, commit: bool = True) -> None:
     connection.execute(
         """
-        INSERT INTO export_lookup_registry (
-            export_path, export_asset_id, raw_asset_id, match_status, score, resolver_version,
+        INSERT INTO image_lookup_registry (
+            image_path, image_asset_id, raw_asset_id, match_status, score, resolver_version,
             feature_vector_json, candidate_json, confirmed_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? IN ('auto_bound', 'manual_confirmed') THEN CURRENT_TIMESTAMP END)
-        ON CONFLICT(export_path) DO UPDATE SET
-            export_asset_id = excluded.export_asset_id,
+        ON CONFLICT(image_path) DO UPDATE SET
+            image_asset_id = excluded.image_asset_id,
             raw_asset_id = excluded.raw_asset_id,
             match_status = excluded.match_status,
             score = excluded.score,
@@ -328,13 +328,13 @@ def upsert_registry(connection: sqlite3.Connection, decision: MatchDecision, com
             candidate_json = excluded.candidate_json,
             confirmed_at = CASE
                 WHEN excluded.match_status IN ('auto_bound', 'manual_confirmed') THEN CURRENT_TIMESTAMP
-                ELSE export_lookup_registry.confirmed_at
+                ELSE image_lookup_registry.confirmed_at
             END,
             updated_at = CURRENT_TIMESTAMP
         """,
         (
-            str(decision.export_path),
-            decision.export_asset_id,
+            str(decision.image_path),
+            decision.image_asset_id,
             decision.raw_asset_id,
             decision.status,
             decision.score,
@@ -348,7 +348,7 @@ def upsert_registry(connection: sqlite3.Connection, decision: MatchDecision, com
         link_assets(
             connection,
             parent_asset_id=decision.raw_asset_id,
-            child_asset_id=decision.export_asset_id,
+            child_asset_id=decision.image_asset_id,
             relation_type="source_of",
             confidence=decision.score,
             confirmed_by="system" if decision.status == "auto_bound" else "user",
@@ -357,10 +357,10 @@ def upsert_registry(connection: sqlite3.Connection, decision: MatchDecision, com
         connection.commit()
 
 
-def get_registry(connection: sqlite3.Connection, export_path: Path) -> sqlite3.Row | None:
+def get_registry(connection: sqlite3.Connection, image_path: Path) -> sqlite3.Row | None:
     return connection.execute(
-        "SELECT * FROM export_lookup_registry WHERE export_path = ?",
-        (str(export_path.resolve()),),
+        "SELECT * FROM image_lookup_registry WHERE image_path = ?",
+        (str(image_path.resolve()),),
     ).fetchone()
 
 
@@ -578,7 +578,7 @@ def list_assets_for_preview(
 def list_assets_for_annotation(
     connection: sqlite3.Connection,
     *,
-    asset_type: str | None = "export",
+    asset_type: str | None = "image",
     only_missing: bool = True,
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
@@ -605,12 +605,12 @@ def list_assets_for_annotation(
         joins.append("JOIN collection_items AS ci ON ci.asset_id = assets.asset_id")
         where.append("ci.collection_id = ?")
         params.append(collection_id)
-    # "export" (the default) means annotatable media — images AND videos; only
+    # "image" (the default) means annotatable media — images AND videos; only
     # an explicit "raw" narrows to raw. Videos go through the multi-frame path.
     if asset_type == "raw":
         where.append("assets.asset_type = 'raw'")
     else:
-        where.append("assets.asset_type IN ('export', 'video')")
+        where.append("assets.asset_type IN ('image', 'video')")
     if only_missing:
         where.append("anno.asset_id IS NULL")
     if asset_ids:
@@ -640,7 +640,7 @@ def list_assets_for_annotation(
 def count_assets_for_annotation(
     connection: sqlite3.Connection,
     *,
-    asset_type: str | None = "export",
+    asset_type: str | None = "image",
     only_missing: bool = True,
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
@@ -780,23 +780,23 @@ def list_repaint_history(connection: sqlite3.Connection, asset_path: str) -> lis
     return results
 
 
-def confirm_match(connection: sqlite3.Connection, export_path: Path, raw_asset_id: str) -> None:
-    registry = get_registry(connection, export_path)
+def confirm_match(connection: sqlite3.Connection, image_path: Path, raw_asset_id: str) -> None:
+    registry = get_registry(connection, image_path)
     if registry is None:
-        raise ValueError(f"no registry entry for {export_path}")
+        raise ValueError(f"no registry entry for {image_path}")
 
     connection.execute(
         """
-        UPDATE export_lookup_registry
+        UPDATE image_lookup_registry
         SET raw_asset_id = ?, match_status = 'manual_confirmed', confirmed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-        WHERE export_path = ?
+        WHERE image_path = ?
         """,
-        (raw_asset_id, str(export_path.resolve())),
+        (raw_asset_id, str(image_path.resolve())),
     )
     link_assets(
         connection,
         parent_asset_id=raw_asset_id,
-        child_asset_id=registry["export_asset_id"],
+        child_asset_id=registry["image_asset_id"],
         relation_type="source_of",
         confidence=max(float(registry["score"]), 0.7),
         confirmed_by="user",
@@ -807,8 +807,8 @@ def confirm_match(connection: sqlite3.Connection, export_path: Path, raw_asset_i
 def list_pending(connection: sqlite3.Connection) -> list[sqlite3.Row]:
     return connection.execute(
         """
-        SELECT export_path, export_asset_id, score, candidate_json
-        FROM export_lookup_registry
+        SELECT image_path, image_asset_id, score, candidate_json
+        FROM image_lookup_registry
         WHERE match_status = 'pending_confirmation'
         ORDER BY updated_at DESC
         """
@@ -824,9 +824,9 @@ def get_duplicate_assets(connection: sqlite3.Connection, asset_id: str) -> list[
         return []
     return connection.execute(
         """
-        SELECT asset_id, canonical_path AS export_path, stem
+        SELECT asset_id, canonical_path AS image_path, stem
         FROM assets
-        WHERE fingerprint = ? AND asset_id != ? AND asset_type = 'export'
+        WHERE fingerprint = ? AND asset_id != ? AND asset_type = 'image'
         ORDER BY canonical_path
         """,
         (row["fingerprint"], asset_id),
@@ -862,7 +862,7 @@ def list_collage_sources(connection: sqlite3.Connection, asset_id: str) -> list[
         SELECT al.child_asset_id AS source_asset_id,
                json_extract(al.recipe_json, '$.sort_order') AS sort_order,
                a.stem, a.canonical_path,
-               af.path AS export_path,
+               af.path AS image_path,
                pe.relative_path AS preview_relative_path
         FROM asset_links al
         JOIN assets a ON a.asset_id = al.child_asset_id
@@ -881,7 +881,7 @@ def list_collages_using_asset(connection: sqlite3.Connection, asset_id: str) -> 
         """
         SELECT al.parent_asset_id AS collage_asset_id,
                a.stem, a.canonical_path,
-               af.path AS export_path,
+               af.path AS image_path,
                pe.relative_path AS preview_relative_path
         FROM asset_links al
         JOIN assets a ON a.asset_id = al.parent_asset_id

@@ -11,7 +11,7 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from ..models import ExportCandidate, MatchDecision, RawMetadata
+from ..models import ImageCandidate, MatchDecision, RawMetadata
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()
@@ -36,12 +36,12 @@ def verify_assets(
     menu action. Browsing reconciles the visible page lazily; this catches the
     rest. Stat is cheap (microseconds/file), so we run it synchronously.
 
-    scope: 'all' | 'export' | 'raw'.
+    scope: 'all' | 'image' | 'raw'.
     Returns {checked, present, missing, newly_missing, recovered}.
     """
     where = ""
     params: list[object] = []
-    if scope in ("export", "raw"):
+    if scope in ("image", "raw"):
         where = "WHERE asset_type = ?"
         params = [scope]
     elif scope != "all":
@@ -126,12 +126,12 @@ def relink_asset(
         "UPDATE asset_files SET path = ? WHERE asset_id = ? AND path = ?",
         (new_str, asset_id, old_path),
     )
-    # The gallery reads export_path from the registry, not assets.canonical_path,
+    # The gallery reads image_path from the registry, not assets.canonical_path,
     # so the registry's path (its PRIMARY KEY) has to move too.
-    if str(row["asset_type"]) == "export":
+    if str(row["asset_type"]) == "image":
         connection.execute(
-            "UPDATE export_lookup_registry SET export_path = ?, updated_at = CURRENT_TIMESTAMP "
-            "WHERE export_asset_id = ? AND export_path = ?",
+            "UPDATE image_lookup_registry SET image_path = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE image_asset_id = ? AND image_path = ?",
             (new_str, asset_id, old_path),
         )
 
@@ -145,20 +145,20 @@ def relink_asset(
         "forced": actual_fp != expected_fp,
     }
 
-def cleanup_orphan_export_assets(connection: sqlite3.Connection, commit: bool = True) -> dict[str, int]:
+def cleanup_orphan_image_assets(connection: sqlite3.Connection, commit: bool = True) -> dict[str, int]:
     orphan_rows = connection.execute(
         """
         SELECT orphan.asset_id AS orphan_asset_id, active.asset_id AS active_asset_id
         FROM assets AS orphan
         JOIN assets AS active
-            ON active.asset_type = 'export'
+            ON active.asset_type = 'image'
            AND active.canonical_path = orphan.canonical_path
         JOIN asset_files AS active_files
             ON active_files.asset_id = active.asset_id
            AND active_files.path = active.canonical_path
         LEFT JOIN asset_files AS orphan_files
             ON orphan_files.asset_id = orphan.asset_id
-        WHERE orphan.asset_type = 'export'
+        WHERE orphan.asset_type = 'image'
           AND orphan.asset_id != active.asset_id
           AND orphan_files.asset_id IS NULL
         ORDER BY orphan.canonical_path, orphan.asset_id
@@ -200,9 +200,9 @@ def cleanup_orphan_export_assets(connection: sqlite3.Connection, commit: bool = 
 
         metrics["registry_relinked"] += connection.execute(
             """
-            UPDATE export_lookup_registry
-            SET export_asset_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE export_asset_id = ?
+            UPDATE image_lookup_registry
+            SET image_asset_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE image_asset_id = ?
             """,
             (active_asset_id, orphan_asset_id),
         ).rowcount
@@ -258,7 +258,7 @@ def cleanup_orphan_export_assets(connection: sqlite3.Connection, commit: bool = 
     return metrics
 
 
-def delete_export_asset_from_catalog(
+def delete_image_asset_from_catalog(
     connection: sqlite3.Connection,
     catalog_root: Path,
     asset_id: str,
@@ -273,7 +273,7 @@ def delete_export_asset_from_catalog(
         """,
         (asset_id,),
     ).fetchone()
-    if asset_row is None or str(asset_row["asset_type"]) not in ("export", "video"):
+    if asset_row is None or str(asset_row["asset_type"]) not in ("image", "video"):
         raise ValueError(f"unknown export asset: {asset_id}")
 
     deleted_preview_paths: list[str] = []
@@ -336,7 +336,7 @@ def delete_export_asset_from_catalog(
     )
     connection.execute("DELETE FROM collection_items WHERE asset_id = ?", (asset_id,))
     connection.execute(
-        "DELETE FROM export_lookup_registry WHERE export_asset_id = ? OR raw_asset_id = ?",
+        "DELETE FROM image_lookup_registry WHERE image_asset_id = ? OR raw_asset_id = ?",
         (asset_id, asset_id),
     )
     connection.execute(
@@ -354,7 +354,7 @@ def delete_export_asset_from_catalog(
 
     return {
         "asset_id": asset_id,
-        "export_path": str(asset_row["canonical_path"]),
+        "image_path": str(asset_row["canonical_path"]),
         "preview_files_deleted": deleted_preview_paths,
     }
 
@@ -377,12 +377,12 @@ def summary(connection: sqlite3.Connection) -> dict[str, int]:
             WHERE assets.asset_type = 'raw' AND assets.exists_on_disk = 1
             """
         ).fetchone()[0],
-        "export_assets": connection.execute(
+        "image_assets": connection.execute(
             """
             SELECT COUNT(DISTINCT asset_files.asset_id)
             FROM asset_files
             JOIN assets ON assets.asset_id = asset_files.asset_id
-            WHERE assets.asset_type = 'export' AND assets.exists_on_disk = 1
+            WHERE assets.asset_type = 'image' AND assets.exists_on_disk = 1
             """
         ).fetchone()[0],
         "roots": connection.execute("SELECT COUNT(*) FROM catalog_roots WHERE is_active = 1").fetchone()[0],
@@ -393,13 +393,13 @@ def summary(connection: sqlite3.Connection) -> dict[str, int]:
             "SELECT COUNT(*) FROM preview_entries WHERE kind = 'preview-hd' AND status = 'ready'"
         ).fetchone()[0],
         "pending_matches": connection.execute(
-            "SELECT COUNT(*) FROM export_lookup_registry WHERE match_status = 'pending_confirmation'"
+            "SELECT COUNT(*) FROM image_lookup_registry WHERE match_status = 'pending_confirmation'"
         ).fetchone()[0],
         "confirmed_matches": connection.execute(
-            "SELECT COUNT(*) FROM export_lookup_registry WHERE match_status IN ('auto_bound', 'manual_confirmed')"
+            "SELECT COUNT(*) FROM image_lookup_registry WHERE match_status IN ('auto_bound', 'manual_confirmed')"
         ).fetchone()[0],
-        "unmatched_exports": connection.execute(
-            "SELECT COUNT(*) FROM export_lookup_registry WHERE match_status = 'unmatched'"
+        "unmatched_images": connection.execute(
+            "SELECT COUNT(*) FROM image_lookup_registry WHERE match_status = 'unmatched'"
         ).fetchone()[0],
         "raw_fast_only": connection.execute(
             "SELECT COUNT(*) FROM raw_metadata_cache WHERE metadata_level != 'full' OR enrichment_status != 'done'"
@@ -409,17 +409,17 @@ def summary(connection: sqlite3.Connection) -> dict[str, int]:
         ).fetchone()[0],
         "rated_count": connection.execute(
             """
-            SELECT COUNT(DISTINCT registry.export_asset_id)
-            FROM export_lookup_registry AS registry
-            JOIN assets ON assets.asset_id = registry.export_asset_id
+            SELECT COUNT(DISTINCT registry.image_asset_id)
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
             WHERE assets.app_rating > 0
             """
         ).fetchone()[0],
         "recently_added_count": connection.execute(
             """
-            SELECT COUNT(DISTINCT registry.export_asset_id)
-            FROM export_lookup_registry AS registry
-            JOIN assets ON assets.asset_id = registry.export_asset_id
+            SELECT COUNT(DISTINCT registry.image_asset_id)
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
             WHERE assets.created_at >= datetime('now', '-7 days')
             """
         ).fetchone()[0],

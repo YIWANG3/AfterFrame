@@ -11,7 +11,7 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from ..models import ExportCandidate, MatchDecision, RawMetadata
+from ..models import ImageCandidate, MatchDecision, RawMetadata
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()
@@ -20,14 +20,14 @@ from ..schema import SCHEMA_STATEMENTS
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
 SCHEMA_VERSION = 5
 
-# Shared between list_export_assets and browse_collection — the two SELECTs
+# Shared between list_image_assets and browse_collection — the two SELECTs
 # went out of sync by hand twice before (annotation columns). Single source.
 _BROWSE_SELECT_COLUMNS = """\
             assets.asset_id,
             assets.asset_type,
             assets.stem,
-            registry.export_path AS export_path,
-            assets.metadata_json AS export_metadata_json,
+            registry.image_path AS image_path,
+            assets.metadata_json AS image_metadata_json,
             assets.app_rating,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
@@ -85,7 +85,7 @@ _BROWSE_SHARED_JOINS = """\
 
 def _browse_order_clause(sort: str | None) -> str:
     if sort == "name-desc":
-        return "assets.stem DESC, registry.export_path"
+        return "assets.stem DESC, registry.image_path"
     if sort == "imported-desc":
         return "assets.created_at DESC, assets.stem"
     if sort == "imported-asc":
@@ -97,7 +97,7 @@ def _browse_order_clause(sort: str | None) -> str:
     if sort == "rating-desc":
         return "CASE WHEN assets.app_rating IS NULL OR assets.app_rating = 0 THEN 1 ELSE 0 END, assets.app_rating DESC, assets.stem"
     # default: name-asc
-    return "assets.stem, registry.export_path"
+    return "assets.stem, registry.image_path"
 
 
 def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
@@ -149,7 +149,7 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     return "AND " + " AND ".join(clauses), params
 
 
-def list_export_assets(
+def list_image_assets(
     connection: sqlite3.Connection,
     status: str,
     limit: int = 120,
@@ -178,7 +178,7 @@ def list_export_assets(
         # annotation (caption, detected OCR text, tags). LIKE is plenty fast at
         # this scale; FTS5 can replace it later if libraries grow very large.
         search_clause = (
-            "AND (assets.stem LIKE ? OR registry.export_path LIKE ? "
+            "AND (assets.stem LIKE ? OR registry.image_path LIKE ? "
             "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
             "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
             "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
@@ -194,9 +194,9 @@ def list_export_assets(
         f"""
         SELECT
 {_BROWSE_SELECT_COLUMNS}
-        FROM export_lookup_registry AS registry
+        FROM image_lookup_registry AS registry
         JOIN assets
-            ON assets.asset_id = registry.export_asset_id
+            ON assets.asset_id = registry.image_asset_id
 {_BROWSE_SHARED_JOINS}
         WHERE {status_clause}
           {search_clause}
@@ -214,7 +214,7 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
     Returns distinct cameras/lenses with counts, numeric min/max for the range
     sliders, and the capture-time span — all scoped to export assets.
     """
-    base = "FROM assets WHERE asset_type = 'export'"
+    base = "FROM assets WHERE asset_type = 'image'"
 
     def value_counts(col: str) -> list[dict[str, object]]:
         rows = connection.execute(
@@ -236,7 +236,7 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
         """
         SELECT t.tag AS v, COUNT(*) AS c
         FROM asset_tags AS t
-        JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'export'
+        JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'image'
         GROUP BY t.tag
         ORDER BY c DESC, t.tag
         LIMIT 60
@@ -270,7 +270,7 @@ def search_facet_values(
             """
             SELECT t.tag AS v, COUNT(*) AS c
             FROM asset_tags AS t
-            JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'export'
+            JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'image'
             WHERE t.tag LIKE ?
             GROUP BY t.tag
             ORDER BY c DESC, t.tag
@@ -284,7 +284,7 @@ def search_facet_values(
             f"""
             SELECT assets.{col} AS v, COUNT(*) AS c
             FROM assets
-            WHERE asset_type = 'export' AND assets.{col} IS NOT NULL
+            WHERE asset_type = 'image' AND assets.{col} IS NOT NULL
               AND assets.{col} != '' AND assets.{col} LIKE ?
             GROUP BY assets.{col}
             ORDER BY c DESC
@@ -297,15 +297,15 @@ def search_facet_values(
     return [{"value": r["v"], "count": r["c"]} for r in rows]
 
 
-def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
+def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
     return connection.execute(
         """
         SELECT
             assets.asset_id,
             assets.asset_type,
             assets.stem,
-            assets.canonical_path AS export_path,
-            assets.metadata_json AS export_metadata_json,
+            assets.canonical_path AS image_path,
+            assets.metadata_json AS image_metadata_json,
             assets.app_rating,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
@@ -316,9 +316,9 @@ def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sq
             registry.candidate_json,
             raw_assets.canonical_path AS raw_path,
             raw_assets.metadata_json AS raw_metadata_json,
-            export_preview.relative_path AS export_preview_relative_path,
+            image_preview.relative_path AS image_preview_relative_path,
             raw_preview.relative_path AS raw_preview_relative_path,
-            export_preview_hd.relative_path AS export_preview_hd_relative_path,
+            image_preview_hd.relative_path AS image_preview_hd_relative_path,
             rsi.set_id AS resource_set_id,
             rsi.role AS resource_role,
             rsi.version_kind AS version_kind,
@@ -328,12 +328,12 @@ def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sq
             primary_assets.stem AS primary_stem,
             set_counts.set_item_count AS set_item_count
         FROM assets
-        LEFT JOIN export_lookup_registry AS registry
+        LEFT JOIN image_lookup_registry AS registry
             ON registry.rowid = (
                 SELECT reg.rowid
-                FROM export_lookup_registry AS reg
-                WHERE reg.export_asset_id = assets.asset_id
-                ORDER BY reg.updated_at DESC, reg.created_at DESC, reg.export_path DESC
+                FROM image_lookup_registry AS reg
+                WHERE reg.image_asset_id = assets.asset_id
+                ORDER BY reg.updated_at DESC, reg.created_at DESC, reg.image_path DESC
                 LIMIT 1
             )
         LEFT JOIN assets AS raw_assets
@@ -350,34 +350,34 @@ def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sq
             GROUP BY set_id
         ) AS set_counts
             ON set_counts.set_id = rs.set_id
-        LEFT JOIN preview_entries AS export_preview
-            ON export_preview.asset_id = assets.asset_id
-           AND export_preview.kind = 'preview'
-           AND export_preview.status = 'ready'
+        LEFT JOIN preview_entries AS image_preview
+            ON image_preview.asset_id = assets.asset_id
+           AND image_preview.kind = 'preview'
+           AND image_preview.status = 'ready'
         LEFT JOIN preview_entries AS raw_preview
             ON raw_preview.asset_id = registry.raw_asset_id
            AND raw_preview.kind = 'preview'
            AND raw_preview.status = 'ready'
-        LEFT JOIN preview_entries AS export_preview_hd
-            ON export_preview_hd.asset_id = assets.asset_id
-           AND export_preview_hd.kind = 'preview-hd'
-           AND export_preview_hd.status = 'ready'
+        LEFT JOIN preview_entries AS image_preview_hd
+            ON image_preview_hd.asset_id = assets.asset_id
+           AND image_preview_hd.kind = 'preview-hd'
+           AND image_preview_hd.status = 'ready'
         WHERE assets.asset_id = ?
-          AND assets.asset_type IN ('export', 'video')
+          AND assets.asset_type IN ('image', 'video')
         """,
         (asset_id,),
     ).fetchone()
 
 
-def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path: str) -> sqlite3.Row | None:
+def get_image_asset_detail_by_path(connection: sqlite3.Connection, image_path: str) -> sqlite3.Row | None:
     return connection.execute(
         """
         SELECT
             assets.asset_id,
             assets.asset_type,
             assets.stem,
-            registry.export_path AS export_path,
-            assets.metadata_json AS export_metadata_json,
+            registry.image_path AS image_path,
+            assets.metadata_json AS image_metadata_json,
             assets.app_rating,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
@@ -388,9 +388,9 @@ def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path:
             registry.candidate_json,
             raw_assets.canonical_path AS raw_path,
             raw_assets.metadata_json AS raw_metadata_json,
-            export_preview.relative_path AS export_preview_relative_path,
+            image_preview.relative_path AS image_preview_relative_path,
             raw_preview.relative_path AS raw_preview_relative_path,
-            export_preview_hd.relative_path AS export_preview_hd_relative_path,
+            image_preview_hd.relative_path AS image_preview_hd_relative_path,
             rsi.set_id AS resource_set_id,
             rsi.role AS resource_role,
             rsi.version_kind AS version_kind,
@@ -399,10 +399,10 @@ def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path:
             rs.raw_asset_id AS set_raw_asset_id,
             primary_assets.stem AS primary_stem,
             set_counts.set_item_count AS set_item_count
-        FROM export_lookup_registry AS registry
+        FROM image_lookup_registry AS registry
         JOIN assets
-            ON assets.asset_id = registry.export_asset_id
-           AND assets.asset_type IN ('export', 'video')
+            ON assets.asset_id = registry.image_asset_id
+           AND assets.asset_type IN ('image', 'video')
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
         LEFT JOIN resource_set_items AS rsi
@@ -417,21 +417,21 @@ def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path:
             GROUP BY set_id
         ) AS set_counts
             ON set_counts.set_id = rs.set_id
-        LEFT JOIN preview_entries AS export_preview
-            ON export_preview.asset_id = assets.asset_id
-           AND export_preview.kind = 'preview'
-           AND export_preview.status = 'ready'
+        LEFT JOIN preview_entries AS image_preview
+            ON image_preview.asset_id = assets.asset_id
+           AND image_preview.kind = 'preview'
+           AND image_preview.status = 'ready'
         LEFT JOIN preview_entries AS raw_preview
             ON raw_preview.asset_id = registry.raw_asset_id
            AND raw_preview.kind = 'preview'
            AND raw_preview.status = 'ready'
-        LEFT JOIN preview_entries AS export_preview_hd
-            ON export_preview_hd.asset_id = assets.asset_id
-           AND export_preview_hd.kind = 'preview-hd'
-           AND export_preview_hd.status = 'ready'
-        WHERE registry.export_path = ?
+        LEFT JOIN preview_entries AS image_preview_hd
+            ON image_preview_hd.asset_id = assets.asset_id
+           AND image_preview_hd.kind = 'preview-hd'
+           AND image_preview_hd.status = 'ready'
+        WHERE registry.image_path = ?
         """,
-        (export_path,),
+        (image_path,),
     ).fetchone()
 
 
@@ -447,11 +447,11 @@ def browse_collection(
 {_BROWSE_SELECT_COLUMNS}
         FROM collection_items ci
         JOIN assets ON assets.asset_id = ci.asset_id
-        JOIN export_lookup_registry AS registry
-            ON registry.export_asset_id = assets.asset_id
+        JOIN image_lookup_registry AS registry
+            ON registry.image_asset_id = assets.asset_id
 {_BROWSE_SHARED_JOINS}
         WHERE ci.collection_id = ?
-          AND assets.asset_type IN ('export', 'video')
+          AND assets.asset_type IN ('image', 'video')
         ORDER BY ci.added_at DESC, assets.stem
         LIMIT ? OFFSET ?
         """,
@@ -465,7 +465,7 @@ def list_version_siblings(connection: sqlite3.Connection, set_id: str, exclude_a
         """
         SELECT rsi.asset_id, rsi.role, rsi.version_kind, rsi.sort_order,
                a.stem, a.canonical_path,
-               af.path AS export_path,
+               af.path AS image_path,
                pe.relative_path AS preview_relative_path
         FROM resource_set_items rsi
         JOIN assets a ON a.asset_id = rsi.asset_id

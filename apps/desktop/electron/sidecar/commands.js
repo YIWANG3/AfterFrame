@@ -9,9 +9,9 @@
 function createSidecarCommands(callJson) {
   return {
     // ── Browse / read ────────────────────────────────────────────────────
-    browseExports({ status = "all", limit = 120, offset = 0, search, sort, filters } = {}) {
+    browseImages({ status = "all", limit = 120, offset = 0, search, sort, filters } = {}) {
       const argv = [
-        "browse-exports",
+        "browse-images",
         "--status", String(status),
         "--limit", String(limit),
         "--offset", String(offset),
@@ -31,9 +31,9 @@ function createSidecarCommands(callJson) {
       ]).then((rows) => rows || []);
     },
 
-    assetDetail({ assetId, exportPath } = {}) {
+    assetDetail({ assetId, imagePath } = {}) {
       if (assetId) return callJson(["asset-detail", "--asset-id", String(assetId)]);
-      return callJson(["asset-detail", "--export-path", String(exportPath)]);
+      return callJson(["asset-detail", "--image-path", String(imagePath)]);
     },
 
     // ── Missing-original handling ────────────────────────────────────────
@@ -130,14 +130,14 @@ function createSidecarCommands(callJson) {
       return callJson(["get-annotation", "--asset-id", String(assetId)]);
     },
 
-    deleteExportAssets(assetIds) {
-      const argv = ["delete-export-assets"];
+    deleteImageAssets(assetIds) {
+      const argv = ["delete-image-assets"];
       for (const id of assetIds) argv.push("--asset-id", String(id));
       return callJson(argv).then((rows) => rows || []);
     },
 
-    quickRegister({ exportPath, originPath, collageSourceIds } = {}) {
-      const argv = ["quick-register", "--export-path", String(exportPath)];
+    quickRegister({ imagePath, originPath, collageSourceIds } = {}) {
+      const argv = ["quick-register", "--image-path", String(imagePath)];
       if (originPath) argv.push("--origin-path", String(originPath));
       if (Array.isArray(collageSourceIds) && collageSourceIds.length) {
         argv.push("--collage-source-ids", ...collageSourceIds.map(String));

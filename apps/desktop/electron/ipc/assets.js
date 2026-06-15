@@ -1,5 +1,5 @@
 // Asset-level IPC: quick-register (after a save), collage-sources lookup,
-// delete-export-assets, and the cross-platform "reveal in Finder/Explorer".
+// delete-image-assets, and the cross-platform "reveal in Finder/Explorer".
 
 function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecarJsonAsync, addAllowedMediaDir, getCatalogState, t }) {
   const fs = require("node:fs");
@@ -58,11 +58,11 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
     return true;
   });
 
-  ipcMain.handle("workspace:quick-register", async (_event, exportPath, originPath, collageSourceIds) => {
-    if (!exportPath) return null;
+  ipcMain.handle("workspace:quick-register", async (_event, imagePath, originPath, collageSourceIds) => {
+    if (!imagePath) return null;
     // The renderer will media:// this file right after registering it.
-    addAllowedMediaDir?.(require("node:path").dirname(exportPath));
-    return await commands.quickRegister({ exportPath, originPath, collageSourceIds });
+    addAllowedMediaDir?.(require("node:path").dirname(imagePath));
+    return await commands.quickRegister({ imagePath, originPath, collageSourceIds });
   });
 
   ipcMain.handle("workspace:collage-sources", async (_event, assetId) => {
@@ -70,10 +70,10 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
     return await callSidecarJsonAsync(["collage-sources", "--asset-id", assetId]);
   });
 
-  ipcMain.handle("workspace:delete-export-assets", async (_event, assetIds) => {
+  ipcMain.handle("workspace:delete-image-assets", async (_event, assetIds) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];
     if (!ids.length) return [];
-    const command = ["delete-export-assets"];
+    const command = ["delete-image-assets"];
     for (const assetId of ids) command.push("--asset-id", String(assetId));
     return await callSidecarJsonAsync(command) || [];
   });

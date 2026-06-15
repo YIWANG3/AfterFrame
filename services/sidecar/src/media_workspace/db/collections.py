@@ -11,7 +11,7 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from ..models import ExportCandidate, MatchDecision, RawMetadata
+from ..models import ImageCandidate, MatchDecision, RawMetadata
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()

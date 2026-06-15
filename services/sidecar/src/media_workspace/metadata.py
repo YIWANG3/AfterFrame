@@ -10,9 +10,9 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from .models import ExportCandidate, RawMetadata
+from .models import ImageCandidate, RawMetadata
 
-EXPORT_VARIANT_WORDS = {
+IMAGE_VARIANT_WORDS = {
     "copy",
     "cover",
     "denoise",
@@ -20,7 +20,7 @@ EXPORT_VARIANT_WORDS = {
     "edit",
     "edited",
     "enhanced",
-    "export",
+    "image",
     "final",
     "ig",
     "instagram",
@@ -124,7 +124,7 @@ def stem_key(stem: str) -> str:
         value = next_value
 
     parts = [part for part in re.split(r"[-_ ]+", value) if part]
-    while parts and (parts[-1] in EXPORT_VARIANT_WORDS or re.fullmatch(r"v\d+", parts[-1])):
+    while parts and (parts[-1] in IMAGE_VARIANT_WORDS or re.fullmatch(r"v\d+", parts[-1])):
         parts.pop()
     key = "-".join(parts).strip("-")
     return key or value
@@ -626,7 +626,7 @@ def extract_raw_metadata(
     )
 
 
-def extract_export_candidate(path: Path, fingerprint_mode: str = "head-tail") -> ExportCandidate:
+def extract_image_candidate(path: Path, fingerprint_mode: str = "head-tail") -> ImageCandidate:
     stat = path.stat()
     resolved_path = path.resolve()
     with path.open("rb") as handle:
@@ -636,8 +636,8 @@ def extract_export_candidate(path: Path, fingerprint_mode: str = "head-tail") ->
     height = metadata["height"]
     if width is None or height is None:
         width, height = read_image_dimensions_from_bytes(sample) if stat.st_size else (None, None)
-    return ExportCandidate(
-        asset_id=stable_asset_id("export", fingerprint, str(resolved_path)),
+    return ImageCandidate(
+        asset_id=stable_asset_id("image", fingerprint, str(resolved_path)),
         path=resolved_path,
         stem=path.stem,
         normalized_stem=normalize_stem(path.stem),

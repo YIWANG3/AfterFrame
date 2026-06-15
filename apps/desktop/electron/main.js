@@ -482,9 +482,9 @@ function readSourceMetadataForExport(sourcePath) {
 import json
 import sys
 from pathlib import Path
-from media_workspace.metadata import extract_export_candidate
+from media_workspace.metadata import extract_image_candidate
 
-meta = extract_export_candidate(Path(sys.argv[1]))
+meta = extract_image_candidate(Path(sys.argv[1]))
 print(json.dumps({
     "capture_time": meta.capture_time,
     "camera_make": meta.camera_make,
@@ -552,7 +552,7 @@ function formatJobStatus(job) {
       phaseIndex: 0,
       phaseCount: 0,
       rawDirs: [],
-      exportDirs: [],
+      imageDirs: [],
       mode: null,
       kind: null,
       phaseResults: [],
@@ -578,7 +578,7 @@ function formatJobStatus(job) {
     phaseIndex: Number(payload.phase_index || 0),
     phaseCount: Number(payload.phase_count || 0),
     rawDirs: Array.isArray(payload.raw_dirs) ? payload.raw_dirs : [],
-    exportDirs: Array.isArray(payload.export_dirs) ? payload.export_dirs : [],
+    imageDirs: Array.isArray(payload.image_dirs) ? payload.image_dirs : [],
     mode: payload.mode || null,
     kind: payload.kind || null,
     phaseResults: Array.isArray(result.phase_results) ? result.phase_results : [],
@@ -688,20 +688,20 @@ async function startEnrichmentTask() {
 async function startImportTask(options) {
   const mode = String(options?.mode || "combined");
   const rawDirs = [...new Set((options?.rawDirs || []).filter(Boolean))];
-  const exportDirs = [...new Set((options?.exportDirs || []).filter(Boolean))];
+  const imageDirs = [...new Set((options?.imageDirs || []).filter(Boolean))];
   const needsSources = mode === "source_only" || mode === "source_with_media" || mode === "combined";
   const needsProcessed = mode === "processed_only" || mode === "processed_with_sources" || mode === "combined";
   if (needsSources && !rawDirs.length) {
     throw new Error("choose at least one Source file or folder");
   }
-  if (needsProcessed && !exportDirs.length) {
+  if (needsProcessed && !imageDirs.length) {
     throw new Error("choose at least one image folder");
   }
   const current = await latestJobStatus("import");
   if (current.running) {
     return current;
   }
-  const job = await createJob("import", { raw_dirs: rawDirs, export_dirs: exportDirs, mode });
+  const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode });
   const command = ["run-import-job", "--job-id", job.job_id, "--mode", mode];
   // HD (2000px) previews are opt-in — Settings ▸ Library. Off by default.
   if (readAppSettings()?.previews?.generateHd === true) {
@@ -710,8 +710,8 @@ async function startImportTask(options) {
   for (const rawDir of rawDirs) {
     command.push("--raw-dir", rawDir);
   }
-  for (const exportDir of exportDirs) {
-    command.push("--export-dir", exportDir);
+  for (const imageDir of imageDirs) {
+    command.push("--image-dir", imageDir);
   }
   launchSidecarJob(command);
   return formatJobStatus(job);
@@ -722,8 +722,8 @@ async function startPreviewTask(kind = "preview") {
   if (current.running) {
     return current;
   }
-  const job = await createJob("preview", { kind, asset_type: "export" });
-  launchSidecarJob(["run-preview-job", "--job-id", job.job_id, "--kind", kind, "--asset-type", "export"]);
+  const job = await createJob("preview", { kind, asset_type: "image" });
+  launchSidecarJob(["run-preview-job", "--job-id", job.job_id, "--kind", kind, "--asset-type", "image"]);
   return formatJobStatus(job);
 }
 
@@ -993,14 +993,14 @@ function buildAppMenu() {
 ipcMain.handle("workspace:summary", async () => {
   console.log("[ipc:summary] catalogPath:", currentCatalogPath, "hasDb:", catalogHasDb());
   if (!currentCatalogPath || !catalogHasDb()) {
-    return { total_exports: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
+    return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   }
   try {
     const payload = await callSidecarAsync(["summary", "--json"]);
-    return payload ? JSON.parse(payload) : { total_exports: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
+    return payload ? JSON.parse(payload) : { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   } catch (err) {
     console.warn("[workspace:summary] sidecar error:", err.message);
-    return { total_exports: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
+    return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   }
 });
 
@@ -1016,7 +1016,7 @@ ipcMain.handle("workspace:roots", async () => {
 
 ipcMain.handle("workspace:pick-directories", async (_event, kind) => {
   const result = await dialog.showOpenDialog({
-    title: kind === "export" ? "Import files or folders" : "Add raw source files or folders",
+    title: kind === "image" ? "Import files or folders" : "Add raw source files or folders",
     properties: ["openFile", "openDirectory", "multiSelections"],
   });
   return result.canceled ? [] : result.filePaths;
@@ -1226,7 +1226,7 @@ saveFileIpc.register({
   addAllowedMediaDir,
 });
 
-// quick-register / collage-sources / delete-export-assets are in ipc/assets.js
+// quick-register / collage-sources / delete-image-assets are in ipc/assets.js
 // (registered above), so the inline handlers for those are removed here.
 
 

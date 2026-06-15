@@ -60,7 +60,7 @@ export default function App() {
     window.__afterframeTest = {
       openEditor(pathOrItem) {
         const item = typeof pathOrItem === "string"
-          ? { export_path: pathOrItem, stem: pathOrItem.split("/").pop() }
+          ? { image_path: pathOrItem, stem: pathOrItem.split("/").pop() }
           : pathOrItem;
         setEditorItem(item);
       },
@@ -85,11 +85,11 @@ export default function App() {
       : stickerView.stickers;
     return list.map((s) => ({
       asset_id: s.id,
-      export_path: s.path,
-      export_preview_path: s.path,
+      image_path: s.path,
+      image_preview_path: s.path,
       raw_preview_path: s.path,
       stem: s.name || s.sourceLabel || s.filename,
-      export_metadata: { width: s.width, height: s.height },
+      image_metadata: { width: s.width, height: s.height },
     }));
   }, [stickerView.stickers, stickerView.query]);
 
@@ -173,12 +173,12 @@ export default function App() {
       danger: true,
     });
     if (!ok) return;
-    await workspaceRef.current.deleteExportAssets(list);
+    await workspaceRef.current.deleteImageAssets(list);
   };
 
   const copyAssetField = async (ids, field) => {
     const paths = (ids || [])
-      .map((id) => itemById.get(id)?.export_path)
+      .map((id) => itemById.get(id)?.image_path)
       .filter(Boolean);
     if (!paths.length) return;
     const texts = field === "name" ? paths.map((p) => p.split("/").pop()) : paths;
@@ -371,8 +371,8 @@ export default function App() {
     if (assetIds?.length !== 2) return;
     const a = itemById.get(assetIds[0]);
     const b = itemById.get(assetIds[1]);
-    if (!a?.export_path || !b?.export_path) return;
-    setCompareState({ beforePath: a.export_path, afterPath: b.export_path, layout: "side" });
+    if (!a?.image_path || !b?.image_path) return;
+    setCompareState({ beforePath: a.image_path, afterPath: b.image_path, layout: "side" });
   }
 
   function handleCollage(assetIds) {
@@ -661,7 +661,7 @@ export default function App() {
                   onLoadMore={workspace.loadMoreBrowser}
                   displayMode={displayMode}
                   thumbSize={thumbSize}
-                  totalCount={Number(workspace.summary?.export_assets ?? 0)}
+                  totalCount={Number(workspace.summary?.image_assets ?? 0)}
                   collections={workspace.collections}
                   activeCollectionId={workspace.activeCollectionId}
                   onAddToCollection={workspace.addToCollection}

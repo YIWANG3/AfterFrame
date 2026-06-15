@@ -68,7 +68,7 @@ export default function useAgentBridge({
     const payload = ids
       .map((id) => itemById.get(id))
       .filter(Boolean)
-      .map((item) => ({ asset_id: item.asset_id, stem: item.stem, export_path: item.export_path }));
+      .map((item) => ({ asset_id: item.asset_id, stem: item.stem, image_path: item.image_path }));
     const serialized = JSON.stringify(payload);
     if (serialized === lastSentRef.current) return;
     lastSentRef.current = serialized;

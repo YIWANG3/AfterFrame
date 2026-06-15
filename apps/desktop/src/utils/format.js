@@ -142,12 +142,12 @@ export function hasIndexedSources(summary) {
 }
 
 export function hasIndexedImages(summary) {
-  return Number(summary?.export_assets ?? 0) > 0;
+  return Number(summary?.image_assets ?? 0) > 0;
 }
 
-export function determineImportMode(summary, { rawDirs = [], exportDirs = [] }) {
+export function determineImportMode(summary, { rawDirs = [], imageDirs = [] }) {
   const hasRawInput = rawDirs.length > 0;
-  const hasImageInput = exportDirs.length > 0;
+  const hasImageInput = imageDirs.length > 0;
   if (hasRawInput && hasImageInput) {
     if (hasIndexedSources(summary) && !hasIndexedImages(summary)) return "processed_with_sources";
     if (!hasIndexedSources(summary) && hasIndexedImages(summary)) return "source_with_media";
@@ -176,7 +176,7 @@ export function progressNote(task) {
 
 export function navItems(summary) {
   const items = [
-    { key: "all", label: "All Assets", count: summary?.export_assets ?? 0, icon: "Archive" },
+    { key: "all", label: "All Assets", count: summary?.image_assets ?? 0, icon: "Archive" },
     { key: "recent", label: "Recently Added", count: summary?.recently_added_count ?? 0, icon: "Clock" },
   ];
   if (Number(summary?.rated_count ?? 0) > 0) {
@@ -189,9 +189,9 @@ export function navItems(summary) {
 }
 
 export function galleryInfoLabel(item) {
-  const exportMeta = item.export_metadata || {};
-  const dimensions = exportMeta.width && exportMeta.height ? `${exportMeta.width} × ${exportMeta.height}` : null;
-  const sizeLabel = formatBytes(exportMeta.file_size || exportMeta.size_bytes);
+  const imageMeta = item.image_metadata || {};
+  const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : null;
+  const sizeLabel = formatBytes(imageMeta.file_size || imageMeta.size_bytes);
   return [dimensions, sizeLabel].filter(Boolean).join(" · ");
 }
 
@@ -201,9 +201,9 @@ export function buildJustifiedLayout(items, containerWidth, targetHeight, gap, c
   }
   const geometry = justifiedLayout(
     items.map((item) => {
-      const exportMeta = item.export_metadata || {};
-      const width = Number(exportMeta.width || 0);
-      const height = Number(exportMeta.height || 0);
+      const imageMeta = item.image_metadata || {};
+      const width = Number(imageMeta.width || 0);
+      const height = Number(imageMeta.height || 0);
       return {
         width: width > 0 ? width : 1,
         height: height > 0 ? height : 1,

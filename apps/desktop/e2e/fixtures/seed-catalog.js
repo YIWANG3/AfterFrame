@@ -85,7 +85,7 @@ async function main() {
   runSidecar([
     "--catalog", CATALOG_DIR,
     "register-roots",
-    "--root-type", "export",
+    "--root-type", "image",
     "--path", IMAGES_DIR,
   ]);
 
@@ -96,7 +96,7 @@ async function main() {
     runSidecar([
       "--catalog", CATALOG_DIR,
       "quick-register",
-      "--export-path", p,
+      "--image-path", p,
     ]);
   }
 
@@ -117,7 +117,7 @@ async function main() {
   runSidecar([
     "--catalog", CATALOG_DIR,
     "register-roots",
-    "--root-type", "export",
+    "--root-type", "image",
     "--path", REAL_IMAGES_DIR,
   ]);
   for (const name of REAL_IMAGES) {
@@ -125,7 +125,7 @@ async function main() {
     runSidecar([
       "--catalog", CATALOG_DIR,
       "quick-register",
-      "--export-path", path.join(REAL_IMAGES_DIR, name),
+      "--image-path", path.join(REAL_IMAGES_DIR, name),
     ]);
   }
 
@@ -133,7 +133,7 @@ async function main() {
   //    are exercisable in e2e (previously zero ratings made them no-ops).
   console.log("Rating 001/002 and tagging 003…");
   const browse = JSON.parse(runSidecar([
-    "--catalog", CATALOG_DIR, "browse-exports", "--status", "all", "--limit", "10", "--offset", "0",
+    "--catalog", CATALOG_DIR, "browse-images", "--status", "all", "--limit", "10", "--offset", "0",
   ]));
   const byStem = Object.fromEntries(browse.map((r) => [r.stem, r.asset_id]));
   runSidecar(["--catalog", CATALOG_DIR, "set-asset-rating", "--rating", "4",

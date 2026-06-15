@@ -41,7 +41,7 @@ const api = {
   onMenuAction: (...args) => invoke("onMenuAction", ...args),
 
   // ── browse & assets ──
-  browseExports: (...args) => invoke("browseExports", ...args),
+  browseImages: (...args) => invoke("browseImages", ...args),
   getFacetValues: (...args) => invoke("getFacetValues", ...args),
   searchFacet: (...args) => invoke("searchFacet", ...args),
   getAssetDetail: (...args) => invoke("getAssetDetail", ...args),
@@ -53,7 +53,7 @@ const api = {
   getPending: (...args) => invoke("getPending", ...args),
   quickRegister: (...args) => invoke("quickRegister", ...args),
   getCollageSources: (...args) => invoke("getCollageSources", ...args),
-  deleteExportAssets: (...args) => invoke("deleteExportAssets", ...args),
+  deleteImageAssets: (...args) => invoke("deleteImageAssets", ...args),
   setAssetRating: (...args) => invoke("setAssetRating", ...args),
   saveImage: (...args) => invoke("saveImage", ...args),
   processAndSave: (...args) => invoke("processAndSave", ...args),

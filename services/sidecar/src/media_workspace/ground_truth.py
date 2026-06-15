@@ -24,28 +24,28 @@ def export_ground_truth(
     rows = connection.execute(
         f"""
         SELECT
-            registry.export_path,
+            registry.image_path,
             raw_assets.canonical_path AS raw_path,
             registry.match_status,
             registry.score
-        FROM export_lookup_registry AS registry
+        FROM image_lookup_registry AS registry
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
         WHERE registry.match_status IN ({",".join("?" for _ in sql_statuses)})
-        ORDER BY registry.export_path
+        ORDER BY registry.image_path
         """,
         sql_statuses,
     ).fetchall()
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     with output_csv.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["export_path", "raw_path", "notes"])
+        writer = csv.DictWriter(handle, fieldnames=["image_path", "raw_path", "notes"])
         writer.writeheader()
         for row in rows:
             note_status = _logical_status_label(str(row["match_status"]))
             writer.writerow(
                 {
-                    "export_path": row["export_path"],
+                    "image_path": row["image_path"],
                     "raw_path": row["raw_path"] or "",
                     "notes": f"{note_status};score={float(row['score']):.2f}",
                 }

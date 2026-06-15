@@ -14,29 +14,29 @@ from .analysis import analyze_metadata_coverage
 from .ai_repaint import DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, OPENAI_PROVIDER, list_provider_models, run_mock_repaint, run_nanobanana_repaint, run_openai_repaint
 from .db import (
     attach_asset_to_resource_set,
-    cleanup_orphan_export_assets,
+    cleanup_orphan_image_assets,
     confirm_match,
     connect,
     verify_assets,
     relink_asset,
     create_job,
     delete_app_setting,
-    delete_export_asset_from_catalog,
-    find_export_asset_ids_by_stem,
+    delete_image_asset_from_catalog,
+    find_image_asset_ids_by_stem,
     get_duplicate_assets,
-    get_export_asset_detail,
+    get_image_asset_detail,
     remove_raw_from_resource_sets,
     split_shared_asset_ids,
-    get_export_asset_detail_by_path,
+    get_image_asset_detail_by_path,
     get_app_setting,
     get_job,
     get_latest_job,
     init_db,
     list_singleton_primary_resource_sets,
-    list_export_assets_missing_resource_set,
+    list_image_assets_missing_resource_set,
     list_jobs,
     list_catalog_roots,
-    list_export_assets,
+    list_image_assets,
     list_pending,
     set_catalog_path,
     summary,
@@ -52,18 +52,18 @@ from .db import (
     browse_collection,
     set_asset_rating,
     set_app_setting,
-    upsert_export_asset,
+    upsert_image_asset,
     upsert_registry,
 )
 from .evaluation import evaluate_ground_truth
 from .ground_truth import export_ground_truth
 from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_preview_job
 from .preview_service import PreviewService
-from .metadata import extract_export_candidate
+from .metadata import extract_image_candidate
 from .models import MatchDecision
-from .reverse_lookup import resolve_export, resolve_export_batch
+from .reverse_lookup import resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
-from .watcher import ExportWatcher
+from .watcher import ImageWatcher
 
 
 def _provider_token_key(provider: str) -> str:
@@ -105,7 +105,7 @@ def _serve_loop(args) -> int:
     """Resident mode: amortize interpreter startup across many commands.
 
     Protocol (line-delimited JSON on stdio):
-      request  {"id": <any>, "argv": ["browse-exports", "--status", "all", ...]}
+      request  {"id": <any>, "argv": ["browse-images", "--status", "all", ...]}
       response {"id": <any>, "code": <int>, "stdout": <str>, "error": <str|null>}
 
     Each request re-enters main() with a fresh parse and DB connection — the
@@ -196,7 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     analyze = subparsers.add_parser("analyze-metadata", parents=[common])
     analyze.add_argument("--raw-dir", type=Path, action="append", default=[])
-    analyze.add_argument("--export-dir", type=Path, action="append", default=[])
+    analyze.add_argument("--image-dir", type=Path, action="append", default=[])
 
     evaluate = subparsers.add_parser("evaluate-ground-truth", parents=[common])
     evaluate.add_argument("--truth-csv", type=Path, required=True)
@@ -213,7 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     benchmark = subparsers.add_parser("benchmark-dataset", parents=[common])
     benchmark.add_argument("--raw-dir", type=Path, action="append", required=True)
-    benchmark.add_argument("--export-dir", type=Path, action="append", required=True)
+    benchmark.add_argument("--image-dir", type=Path, action="append", required=True)
     benchmark.add_argument("--truth-csv", type=Path)
     benchmark.add_argument("--auto-threshold", type=float, default=0.85)
     benchmark.add_argument("--manual-threshold", type=float, default=0.7)
@@ -225,31 +225,31 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--metadata-profile", choices=["full", "matcher"], default="full")
     benchmark.add_argument("--report-json", type=Path)
 
-    resolve = subparsers.add_parser("resolve-export", parents=[common])
+    resolve = subparsers.add_parser("resolve-image", parents=[common])
     resolve.add_argument("--path", type=Path, required=True)
     resolve.add_argument("--auto-threshold", type=float, default=0.85)
     resolve.add_argument("--manual-threshold", type=float, default=0.7)
     resolve.add_argument("--refresh", action="store_true")
 
     resolve_batch = subparsers.add_parser("resolve-export-batch", parents=[common])
-    resolve_batch.add_argument("--export-dir", type=Path, action="append", required=True)
+    resolve_batch.add_argument("--image-dir", type=Path, action="append", required=True)
     resolve_batch.add_argument("--auto-threshold", type=float, default=0.85)
     resolve_batch.add_argument("--manual-threshold", type=float, default=0.7)
     resolve_batch.add_argument("--refresh", action="store_true")
 
-    watch = subparsers.add_parser("watch-export", parents=[common])
-    watch.add_argument("--export-dir", type=Path, action="append", required=True)
+    watch = subparsers.add_parser("watch-images", parents=[common])
+    watch.add_argument("--image-dir", type=Path, action="append", required=True)
     watch.add_argument("--interval", type=float, default=2.0)
     watch.add_argument("--auto-threshold", type=float, default=0.85)
     watch.add_argument("--manual-threshold", type=float, default=0.7)
 
     previews = subparsers.add_parser("generate-previews", parents=[common])
     previews.add_argument("--kind", choices=["preview", "preview-hd"], default="preview")
-    previews.add_argument("--asset-type", choices=["raw", "export"])
+    previews.add_argument("--asset-type", choices=["raw", "image"])
     previews.add_argument("--limit", type=int)
     previews.add_argument("--force", action="store_true")
 
-    browse = subparsers.add_parser("browse-exports", parents=[common])
+    browse = subparsers.add_parser("browse-images", parents=[common])
     browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], required=True)
     browse.add_argument("--limit", type=int, default=120)
     browse.add_argument("--offset", type=int, default=0)
@@ -269,12 +269,12 @@ def build_parser() -> argparse.ArgumentParser:
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
     detail_group.add_argument("--asset-id")
-    detail_group.add_argument("--export-path", type=Path)
+    detail_group.add_argument("--image-path", type=Path)
 
     subparsers.add_parser("list-pending", parents=[common])
 
     confirm = subparsers.add_parser("confirm-match", parents=[common])
-    confirm.add_argument("--export-path", type=Path, required=True)
+    confirm.add_argument("--image-path", type=Path, required=True)
     confirm.add_argument("--raw-asset-id", required=True)
 
     # Collections
@@ -312,7 +312,7 @@ def build_parser() -> argparse.ArgumentParser:
     browse_col.add_argument("--offset", type=int, default=0)
 
     quick_reg = subparsers.add_parser("quick-register", parents=[common])
-    quick_reg.add_argument("--export-path", type=Path, required=True)
+    quick_reg.add_argument("--image-path", type=Path, required=True)
     quick_reg.add_argument("--origin-path", type=Path, default=None)
     quick_reg.add_argument("--collage-source-ids", nargs="*", default=None)
 
@@ -350,13 +350,13 @@ def build_parser() -> argparse.ArgumentParser:
     repaint_history = subparsers.add_parser("list-repaint-history", parents=[common])
     repaint_history.add_argument("--asset-path", type=Path, required=True)
 
-    delete_export = subparsers.add_parser("delete-export-assets", parents=[common])
-    delete_export.add_argument("--asset-id", action="append", required=True)
+    delete_image = subparsers.add_parser("delete-image-assets", parents=[common])
+    delete_image.add_argument("--asset-id", action="append", required=True)
 
-    subparsers.add_parser("cleanup-orphan-exports", parents=[common])
+    subparsers.add_parser("cleanup-orphan-images", parents=[common])
 
     verify_assets_p = subparsers.add_parser("verify-assets", parents=[common])
-    verify_assets_p.add_argument("--scope", choices=["all", "export", "raw"], default="all")
+    verify_assets_p.add_argument("--scope", choices=["all", "image", "raw"], default="all")
 
     relink_asset_p = subparsers.add_parser("relink-asset", parents=[common])
     relink_asset_p.add_argument("--asset-id", required=True)
@@ -366,7 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("catalog-roots", parents=[common])
     register_roots_parser = subparsers.add_parser("register-roots", parents=[common])
-    register_roots_parser.add_argument("--root-type", choices=["raw", "export"], required=True)
+    register_roots_parser.add_argument("--root-type", choices=["raw", "image"], required=True)
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
@@ -396,7 +396,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="combined",
     )
     run_import_job_parser.add_argument("--raw-dir", type=Path, action="append", default=[])
-    run_import_job_parser.add_argument("--export-dir", type=Path, action="append", default=[])
+    run_import_job_parser.add_argument("--image-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--generate-hd", action="store_true", help="also generate 2000px HD previews")
 
     run_enrichment_job_parser = subparsers.add_parser("run-enrichment-job", parents=[common])
@@ -406,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_preview_job_parser = subparsers.add_parser("run-preview-job", parents=[common])
     run_preview_job_parser.add_argument("--job-id", required=True)
     run_preview_job_parser.add_argument("--kind", choices=["preview", "preview-hd"], default="preview")
-    run_preview_job_parser.add_argument("--asset-type", choices=["raw", "export"])
+    run_preview_job_parser.add_argument("--asset-type", choices=["raw", "image"])
     run_preview_job_parser.add_argument("--limit", type=int)
     run_preview_job_parser.add_argument("--force", action="store_true")
 
@@ -473,7 +473,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--model", required=True)
     run_annotation_job_parser.add_argument("--api-key")
     run_annotation_job_parser.add_argument("--base-url")
-    run_annotation_job_parser.add_argument("--asset-type", choices=["raw", "export"], default="export")
+    run_annotation_job_parser.add_argument("--asset-type", choices=["raw", "image"], default="image")
     # only-missing defaults ON ("annotate all" skips already-annotated); pass
     # --reannotate to overwrite existing annotations.
     run_annotation_job_parser.add_argument("--reannotate", action="store_true")
@@ -488,7 +488,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--limit", type=int)
 
     annotation_count_p = subparsers.add_parser("annotation-count", parents=[common])
-    annotation_count_p.add_argument("--asset-type", choices=["raw", "export"], default="export")
+    annotation_count_p.add_argument("--asset-type", choices=["raw", "image"], default="image")
     annotation_count_p.add_argument("--reannotate", action="store_true")
     annotation_count_p.add_argument("--asset-ids")
     annotation_count_p.add_argument("--collection-id")
@@ -540,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = benchmark_dataset(
             catalog_path=args.catalog,
             raw_dirs=args.raw_dir,
-            export_dirs=args.export_dir,
+            image_dirs=args.image_dir,
             truth_csv=args.truth_csv,
             thresholds=thresholds,
             include_previews=not args.skip_previews,
@@ -629,14 +629,14 @@ def _cmd_repair_resource_sets(args, connection, catalog, parser):
     repaired = 0
     primaries_created = 0
     versions_attached = 0
-    missing = list_export_assets_missing_resource_set(connection)
+    missing = list_image_assets_missing_resource_set(connection)
     for row in missing:
         asset_id = str(row["asset_id"])
         stem = str(row["stem"])
         origin_stem, version_kind = _infer_origin_stem(stem)
         origin_asset_id = None
         if origin_stem:
-            candidate_ids = [candidate for candidate in find_export_asset_ids_by_stem(connection, origin_stem) if candidate != asset_id]
+            candidate_ids = [candidate for candidate in find_image_asset_ids_by_stem(connection, origin_stem) if candidate != asset_id]
             if candidate_ids:
                 origin_asset_id = candidate_ids[0]
         if origin_asset_id:
@@ -667,7 +667,7 @@ def _cmd_repair_resource_sets(args, connection, catalog, parser):
         origin_stem, version_kind = _infer_origin_stem(stem)
         if not origin_stem:
             continue
-        candidate_ids = [candidate for candidate in find_export_asset_ids_by_stem(connection, origin_stem) if candidate != row["primary_asset_id"]]
+        candidate_ids = [candidate for candidate in find_image_asset_ids_by_stem(connection, origin_stem) if candidate != row["primary_asset_id"]]
         if not candidate_ids:
             continue
         origin_asset_id = candidate_ids[0]
@@ -923,7 +923,7 @@ def _cmd_enrich_raw(args, connection, catalog, parser):
 def _cmd_analyze_metadata(args, connection, catalog, parser):
     payload = analyze_metadata_coverage(
         raw_dirs=[path.resolve() for path in args.raw_dir],
-        export_dirs=[path.resolve() for path in args.export_dir],
+        image_dirs=[path.resolve() for path in args.image_dir],
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -968,7 +968,7 @@ def _cmd_run_import_job(args, connection, catalog, parser):
         catalog.root,
         args.job_id,
         raw_dirs=args.raw_dir,
-        export_dirs=args.export_dir,
+        image_dirs=args.image_dir,
         mode=args.mode,
         generate_hd=args.generate_hd,
     )
@@ -1008,9 +1008,9 @@ def _cmd_export_ground_truth(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_resolve_export(args, connection, catalog, parser):
+def _cmd_resolve_image(args, connection, catalog, parser):
     thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-    decision = resolve_export(connection, args.path, thresholds=thresholds, refresh=args.refresh)
+    decision = resolve_image(connection, args.path, thresholds=thresholds, refresh=args.refresh)
     print(
         json.dumps(
             {
@@ -1025,18 +1025,18 @@ def _cmd_resolve_export(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_resolve_export_batch(args, connection, catalog, parser):
+def _cmd_resolve_image_batch(args, connection, catalog, parser):
     thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-    payload = resolve_export_batch(connection, args.export_dir, thresholds=thresholds, refresh=args.refresh)
+    payload = resolve_image_batch(connection, args.image_dir, thresholds=thresholds, refresh=args.refresh)
     print(json.dumps(payload, indent=2))
     return 0
 
 
-def _cmd_watch_export(args, connection, catalog, parser):
+def _cmd_watch_images(args, connection, catalog, parser):
     thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-    watcher = ExportWatcher(
+    watcher = ImageWatcher(
         connection,
-        export_dirs=tuple(args.export_dir),
+        image_dirs=tuple(args.image_dir),
         thresholds=thresholds,
         poll_interval_seconds=args.interval,
     )
@@ -1069,7 +1069,7 @@ def _cmd_search_facet(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_browse_exports(args, connection, catalog, parser):
+def _cmd_browse_images(args, connection, catalog, parser):
     facet_filters = json.loads(args.filters) if args.filters else None
     payload = []
     # Lazy detection (layer 1): stat the visible page so missing badges appear
@@ -1077,21 +1077,21 @@ def _cmd_browse_exports(args, connection, catalog, parser):
     # it must stay read-only — reconciling assets.exists_on_disk is left to the
     # explicit verify-assets sweep. The live `present` value below is what the
     # UI badges/blocks read; the DB flag only gates preview/export batches.
-    for row in list_export_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
+    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
         preview_path = None
         if row["preview_relative_path"]:
             preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
         preview_hd_path = None
         if row["preview_hd_relative_path"]:
             preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
-        present = os.path.exists(row["export_path"]) if row["export_path"] else True
+        present = os.path.exists(row["image_path"]) if row["image_path"] else True
         payload.append(
             {
                 "asset_id": row["asset_id"],
                 "asset_type": row["asset_type"],
                 "stem": row["stem"],
-                "export_path": row["export_path"],
-                "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
+                "image_path": row["image_path"],
+                "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
                 "exists_on_disk": present,
                 "imported_at": row["imported_at"],
@@ -1118,23 +1118,23 @@ def _cmd_browse_exports(args, connection, catalog, parser):
 
 
 def _cmd_asset_detail(args, connection, catalog, parser):
-    if args.export_path:
-        row = get_export_asset_detail_by_path(connection, str(args.export_path.resolve()))
-        identifier = str(args.export_path)
+    if args.image_path:
+        row = get_image_asset_detail_by_path(connection, str(args.image_path.resolve()))
+        identifier = str(args.image_path)
     else:
-        row = get_export_asset_detail(connection, args.asset_id)
+        row = get_image_asset_detail(connection, args.asset_id)
         identifier = args.asset_id
     if row is None:
         raise SystemExit(f"unknown export asset: {identifier}")
     duplicates = get_duplicate_assets(connection, row["asset_id"])
-    # Read-only live stat (see _cmd_browse_exports) — no write-back on this path.
-    present = os.path.exists(row["export_path"]) if row["export_path"] else True
+    # Read-only live stat (see _cmd_browse_images) — no write-back on this path.
+    present = os.path.exists(row["image_path"]) if row["image_path"] else True
     payload = {
         "asset_id": row["asset_id"],
         "asset_type": row["asset_type"],
         "stem": row["stem"],
-        "export_path": row["export_path"],
-        "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
+        "image_path": row["image_path"],
+        "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
         "app_rating": row["app_rating"],
         "exists_on_disk": present,
         "imported_at": row["imported_at"],
@@ -1145,14 +1145,14 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
         "feature_vector": json.loads(row["feature_vector_json"] or "{}"),
         "candidates": json.loads(row["candidate_json"] or "[]"),
-        "export_preview_path": str((catalog.root / row["export_preview_relative_path"]).resolve())
-        if row["export_preview_relative_path"]
+        "image_preview_path": str((catalog.root / row["image_preview_relative_path"]).resolve())
+        if row["image_preview_relative_path"]
         else None,
         "raw_preview_path": str((catalog.root / row["raw_preview_relative_path"]).resolve())
         if row["raw_preview_relative_path"]
         else None,
-        "export_preview_hd_path": str((catalog.root / row["export_preview_hd_relative_path"]).resolve())
-        if row["export_preview_hd_relative_path"]
+        "image_preview_hd_path": str((catalog.root / row["image_preview_hd_relative_path"]).resolve())
+        if row["image_preview_hd_relative_path"]
         else None,
         "resource_set_id": row["resource_set_id"],
         "resource_role": row["resource_role"],
@@ -1163,7 +1163,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "primary_stem": row["primary_stem"],
         "set_item_count": row["set_item_count"],
         "duplicates": [
-            {"asset_id": d["asset_id"], "export_path": d["export_path"], "stem": d["stem"]}
+            {"asset_id": d["asset_id"], "image_path": d["image_path"], "stem": d["stem"]}
             for d in duplicates
         ],
     }
@@ -1180,7 +1180,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
                 "role": s["role"],
                 "version_kind": s["version_kind"],
                 "stem": s["stem"],
-                "export_path": s["export_path"],
+                "image_path": s["image_path"],
                 "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
                 if s["preview_relative_path"] else None,
             }
@@ -1196,7 +1196,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         {
             "asset_id": s["source_asset_id"],
             "stem": s["stem"],
-            "export_path": s["export_path"],
+            "image_path": s["image_path"],
             "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
             if s["preview_relative_path"] else None,
         }
@@ -1208,7 +1208,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         {
             "asset_id": s["collage_asset_id"],
             "stem": s["stem"],
-            "export_path": s["export_path"],
+            "image_path": s["image_path"],
             "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
             if s["preview_relative_path"] else None,
         }
@@ -1223,8 +1223,8 @@ def _cmd_list_pending(args, connection, catalog, parser):
     for row in list_pending(connection):
         payload.append(
             {
-                "export_path": row["export_path"],
-                "export_asset_id": row["export_asset_id"],
+                "image_path": row["image_path"],
+                "image_asset_id": row["image_asset_id"],
                 "score": row["score"],
                 "candidates": json.loads(row["candidate_json"]),
             }
@@ -1234,8 +1234,8 @@ def _cmd_list_pending(args, connection, catalog, parser):
 
 
 def _cmd_confirm_match(args, connection, catalog, parser):
-    confirm_match(connection, args.export_path, args.raw_asset_id)
-    print(f"confirmed {args.export_path} -> {args.raw_asset_id}")
+    confirm_match(connection, args.image_path, args.raw_asset_id)
+    print(f"confirmed {args.image_path} -> {args.raw_asset_id}")
     return 0
 
 
@@ -1260,11 +1260,11 @@ def _cmd_collage_sources(args, connection, catalog, parser):
 
 
 def _cmd_quick_register(args, connection, catalog, parser):
-    from .derived import register_export_file
-    payload = register_export_file(
+    from .derived import register_image_file
+    payload = register_image_file(
         connection,
         catalog,
-        args.export_path.resolve(),
+        args.image_path.resolve(),
         origin_path=args.origin_path.resolve() if args.origin_path else None,
         collage_source_ids=getattr(args, "collage_source_ids", None) or [],
     )
@@ -1321,8 +1321,8 @@ def _cmd_export_assets(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_cleanup_orphan_exports(args, connection, catalog, parser):
-    payload = cleanup_orphan_export_assets(connection)
+def _cmd_cleanup_orphan_images(args, connection, catalog, parser):
+    payload = cleanup_orphan_image_assets(connection)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -1339,9 +1339,9 @@ def _cmd_relink_asset(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_delete_export_assets(args, connection, catalog, parser):
+def _cmd_delete_image_assets(args, connection, catalog, parser):
     payload = [
-        delete_export_asset_from_catalog(connection, catalog.root, asset_id, commit=False)
+        delete_image_asset_from_catalog(connection, catalog.root, asset_id, commit=False)
         for asset_id in args.asset_id
     ]
     connection.commit()
@@ -1465,8 +1465,8 @@ def _cmd_browse_collection(args, connection, catalog, parser):
                 "asset_id": row["asset_id"],
                 "asset_type": row["asset_type"],
                 "stem": row["stem"],
-                "export_path": row["export_path"],
-                "export_metadata": json.loads(row["export_metadata_json"] or "{}"),
+                "image_path": row["image_path"],
+                "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
                 "imported_at": row["imported_at"],
                 "match_status": row["match_status"],
@@ -1522,13 +1522,13 @@ COMMAND_HANDLERS = {
     "run-preview-job": _cmd_run_preview_job,
     "evaluate-ground-truth": _cmd_evaluate_ground_truth,
     "export-ground-truth": _cmd_export_ground_truth,
-    "resolve-export": _cmd_resolve_export,
-    "resolve-export-batch": _cmd_resolve_export_batch,
-    "watch-export": _cmd_watch_export,
+    "resolve-image": _cmd_resolve_image,
+    "resolve-export-batch": _cmd_resolve_image_batch,
+    "watch-images": _cmd_watch_images,
     "generate-previews": _cmd_generate_previews,
     "facet-values": _cmd_facet_values,
     "search-facet": _cmd_search_facet,
-    "browse-exports": _cmd_browse_exports,
+    "browse-images": _cmd_browse_images,
     "asset-detail": _cmd_asset_detail,
     "list-pending": _cmd_list_pending,
     "confirm-match": _cmd_confirm_match,
@@ -1538,10 +1538,10 @@ COMMAND_HANDLERS = {
     "create-derived": _cmd_create_derived,
     "add-text": _cmd_add_text,
     "export-assets": _cmd_export_assets,
-    "cleanup-orphan-exports": _cmd_cleanup_orphan_exports,
+    "cleanup-orphan-images": _cmd_cleanup_orphan_images,
     "verify-assets": _cmd_verify_assets,
     "relink-asset": _cmd_relink_asset,
-    "delete-export-assets": _cmd_delete_export_assets,
+    "delete-image-assets": _cmd_delete_image_assets,
     "catalog-roots": _cmd_catalog_roots,
     "register-roots": _cmd_register_roots,
     "summary": _cmd_summary,

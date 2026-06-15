@@ -93,11 +93,11 @@ export default function Lightbox({
       if (!currentItem) return [];
       // When the original is known-missing, don't even attempt to load it (that
       // would flash a broken image) — fall back to the HD preview for viewing.
-      const original = currentItem.exists_on_disk === false ? null : currentItem.export_path;
+      const original = currentItem.exists_on_disk === false ? null : currentItem.image_path;
       return [
         original,
         currentItem.preview_hd_path,
-        currentItem.export_preview_path,
+        currentItem.image_preview_path,
         currentItem.preview_path,
         currentItem.raw_preview_path,
       ].filter(Boolean);
@@ -109,8 +109,8 @@ export default function Lightbox({
   // bypassing the image zoom/pan machinery. Falls back to the poster <img>
   // below when the original is missing.
   const isVideo = currentItem?.asset_type === "video";
-  const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.export_path : null;
-  const title = fileName(currentItem?.export_path) || currentItem?.stem || "Selected asset";
+  const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.image_path : null;
+  const title = fileName(currentItem?.image_path) || currentItem?.stem || "Selected asset";
 
   // Reset the proxy when switching items.
   useEffect(() => { setProxySrc(null); setProxyPending(false); }, [currentItem?.asset_id]);
@@ -119,7 +119,7 @@ export default function Lightbox({
   // H.264 proxy on demand and swap the <video> source to it.
   const requestVideoProxy = () => {
     if (!isVideo || proxySrc || proxyPending) return;
-    const orig = currentItem?.export_path;
+    const orig = currentItem?.image_path;
     if (!orig) return;
     setProxyPending(true);
     Promise.resolve(window.mediaWorkspace?.videoProxy?.(orig))
@@ -127,8 +127,8 @@ export default function Lightbox({
       .catch(() => setProxyPending(false));
   };
 
-  const metaWidth = Number(currentItem?.export_metadata?.width || 0);
-  const metaHeight = Number(currentItem?.export_metadata?.height || 0);
+  const metaWidth = Number(currentItem?.image_metadata?.width || 0);
+  const metaHeight = Number(currentItem?.image_metadata?.height || 0);
   const scale = displayScale;
   const isZoomed = scale > fitScale + 0.001;
   const canGoPrev = clampedIndex > 0;
@@ -218,7 +218,7 @@ export default function Lightbox({
   useEffect(() => {
     if (!open) return;
     resetImageState();
-  }, [open, currentItem?.asset_id, currentItem?.export_path, currentItem?.export_preview_path, currentItem?.raw_preview_path]);
+  }, [open, currentItem?.asset_id, currentItem?.image_path, currentItem?.image_preview_path, currentItem?.raw_preview_path]);
 
   useEffect(() => () => {
     if (paintFrameRef.current) cancelAnimationFrame(paintFrameRef.current);

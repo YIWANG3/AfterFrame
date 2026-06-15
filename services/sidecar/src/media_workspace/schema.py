@@ -87,9 +87,9 @@ SCHEMA_STATEMENTS = [
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS export_lookup_registry (
-        export_path TEXT PRIMARY KEY,
-        export_asset_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS image_lookup_registry (
+        image_path TEXT PRIMARY KEY,
+        image_asset_id TEXT NOT NULL,
         raw_asset_id TEXT,
         match_status TEXT NOT NULL,
         score REAL NOT NULL DEFAULT 0,
@@ -99,7 +99,7 @@ SCHEMA_STATEMENTS = [
         confirmed_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(export_asset_id) REFERENCES assets(asset_id),
+        FOREIGN KEY(image_asset_id) REFERENCES assets(asset_id),
         FOREIGN KEY(raw_asset_id) REFERENCES assets(asset_id)
     )
     """,
@@ -170,9 +170,9 @@ SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_asset_links_child ON asset_links(child_asset_id)",
     "CREATE INDEX IF NOT EXISTS idx_raw_cache_stem_key ON raw_metadata_cache(stem_key)",
     "CREATE INDEX IF NOT EXISTS idx_raw_cache_capture_time ON raw_metadata_cache(capture_time)",
-    "CREATE INDEX IF NOT EXISTS idx_registry_status ON export_lookup_registry(match_status)",
-    # browse_collection and origin-binding lookups join on export_asset_id
-    "CREATE INDEX IF NOT EXISTS idx_registry_export_asset ON export_lookup_registry(export_asset_id)",
+    "CREATE INDEX IF NOT EXISTS idx_registry_status ON image_lookup_registry(match_status)",
+    # browse_collection and origin-binding lookups join on image_asset_id
+    "CREATE INDEX IF NOT EXISTS idx_registry_image_asset ON image_lookup_registry(image_asset_id)",
     # The browse query LEFT JOINs preview_entries twice on (asset_id, kind) —
     # without this index SQLite builds a transient index on every browse call.
     "CREATE INDEX IF NOT EXISTS idx_preview_entries_asset ON preview_entries(asset_id, kind)",

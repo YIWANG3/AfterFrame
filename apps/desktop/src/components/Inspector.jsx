@@ -91,7 +91,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const { t } = useTranslation("inspector");
   const [localRating, setLocalRating] = useState(null);
   const [relinking, setRelinking] = useState(false);
-  const currentAssetId = detail?.asset_id || detail?.export_path || null;
+  const currentAssetId = detail?.asset_id || detail?.image_path || null;
 
   useEffect(() => {
     setLocalRating(null);
@@ -135,23 +135,23 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   }
 
   const missing = detail.exists_on_disk === false;
-  const previewPath = detail.export_preview_path || detail.raw_preview_path;
-  const exportMeta = detail.export_metadata || {};
+  const previewPath = detail.image_preview_path || detail.raw_preview_path;
+  const imageMeta = detail.image_metadata || {};
   const rawMeta = detail.raw_metadata || {};
-  const exportName = fileName(detail.export_path);
+  const imageName = fileName(detail.image_path);
   const rawName = fileName(detail.raw_path || "");
-  const formatValue = (detail.export_path || "").split(".").pop()?.toUpperCase() || t("unknown");
-  const dimensions = exportMeta.width && exportMeta.height ? `${exportMeta.width} × ${exportMeta.height}` : t("unknown");
-  const fileSize = formatBytes(exportMeta.file_size || exportMeta.size_bytes) || t("unknown");
+  const formatValue = (detail.image_path || "").split(".").pop()?.toUpperCase() || t("unknown");
+  const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : t("unknown");
+  const fileSize = formatBytes(imageMeta.file_size || imageMeta.size_bytes) || t("unknown");
 
-  const metaRating = Number(detail.app_rating ?? rawMeta.rating ?? exportMeta.rating ?? 0);
+  const metaRating = Number(detail.app_rating ?? rawMeta.rating ?? imageMeta.rating ?? 0);
   const rating = localRating ?? metaRating;
   const gps = formatGPS(
-    rawMeta.gps_latitude ?? exportMeta.gps_latitude,
-    rawMeta.gps_longitude ?? exportMeta.gps_longitude,
+    rawMeta.gps_latitude ?? imageMeta.gps_latitude,
+    rawMeta.gps_longitude ?? imageMeta.gps_longitude,
   );
 
-  const exposureMeta = rawMeta.capture_time ? rawMeta : exportMeta;
+  const exposureMeta = rawMeta.capture_time ? rawMeta : imageMeta;
   const aperture = formatAperture(exposureMeta.aperture);
   const shutter = formatShutterSpeed(exposureMeta.shutter_speed);
   const iso = formatISO(exposureMeta.iso);
@@ -160,7 +160,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
 
   const isVideo = detail.asset_type === "video";
   const videoDuration = (() => {
-    const total = Math.round(Number(exportMeta.duration) || 0);
+    const total = Math.round(Number(imageMeta.duration) || 0);
     if (total <= 0) return null;
     const h = Math.floor(total / 3600);
     const m = Math.floor((total % 3600) / 60);
@@ -168,8 +168,8 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
     const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
     return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
   })();
-  const videoFps = exportMeta.fps ? `${Math.round(Number(exportMeta.fps))} fps` : null;
-  const videoCodec = exportMeta.codec ? String(exportMeta.codec).toUpperCase() : null;
+  const videoFps = imageMeta.fps ? `${Math.round(Number(imageMeta.fps))} fps` : null;
+  const videoCodec = imageMeta.codec ? String(imageMeta.codec).toUpperCase() : null;
 
   return (
     <aside className="flex h-full flex-col overflow-hidden border-l border-border/40 bg-chrome">
@@ -186,7 +186,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
         </div>
 
         <div className="px-0.5">
-          <h2 className="text-[13px] font-medium leading-tight text-text">{exportName || detail.stem}</h2>
+          <h2 className="text-[13px] font-medium leading-tight text-text">{imageName || detail.stem}</h2>
 
           {missing ? (
             <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[rgba(239,159,39,0.42)] bg-[rgba(120,70,8,0.18)] px-2.5 py-2">
@@ -244,7 +244,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
 
           <AnnotationsSection
             assetId={detail.asset_id}
-            imagePath={detail.export_path || detail.export_preview_path || detail.raw_preview_path}
+            imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
             onTagClick={onTagFilter}
             pushToast={pushToast}
           />
@@ -254,16 +254,16 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
               {missing ? (
                 <span className="flex min-w-0 items-center justify-end gap-1.5">
                   <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">{t("missing.badge")}</span>
-                  <span className="truncate text-muted2 line-through">{escapePathLabel(detail.export_path)}</span>
+                  <span className="truncate text-muted2 line-through">{escapePathLabel(detail.image_path)}</span>
                 </span>
               ) : (
                 <button
                   type="button"
                   className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                  onClick={() => void window.mediaWorkspace?.revealPath?.(detail.export_path)}
+                  onClick={() => void window.mediaWorkspace?.revealPath?.(detail.image_path)}
                   title={t("reveal")}
                 >
-                  {escapePathLabel(detail.export_path)}
+                  {escapePathLabel(detail.image_path)}
                 </button>
               )}
             </DetailRow>
@@ -279,13 +279,13 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                 </button>
               ) : t("notLinked")}
             </DetailRow>
-            {exportMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{exportMeta.software}</DetailRow> : null}
+            {imageMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{imageMeta.software}</DetailRow> : null}
           </Section>
 
           {!isVideo ? (
             <Section title={t("sections.camera")}>
-              <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || exportMeta.camera_model || "—"}</DetailRow>
-              <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || exportMeta.lens_model || "—"}</DetailRow>
+              <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || imageMeta.camera_model || "—"}</DetailRow>
+              <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || imageMeta.lens_model || "—"}</DetailRow>
             </Section>
           ) : null}
 
@@ -299,9 +299,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           ) : null}
 
           <Section title={t("sections.dates")}>
-            <DetailRow label={t("rows.imported")}>{formatTimestamp(detail.imported_at || exportMeta.imported_at)}</DetailRow>
-            <DetailRow label={t("rows.captured")}>{formatTimestamp(rawMeta.capture_time || exportMeta.capture_time)}</DetailRow>
-            <DetailRow label={t("rows.modified")}>{formatTimestamp(exportMeta.modified_time || detail.updated_at)}</DetailRow>
+            <DetailRow label={t("rows.imported")}>{formatTimestamp(detail.imported_at || imageMeta.imported_at)}</DetailRow>
+            <DetailRow label={t("rows.captured")}>{formatTimestamp(rawMeta.capture_time || imageMeta.capture_time)}</DetailRow>
+            <DetailRow label={t("rows.modified")}>{formatTimestamp(imageMeta.modified_time || detail.updated_at)}</DetailRow>
           </Section>
 
           {gps ? (
@@ -318,13 +318,13 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                     key={dup.asset_id}
                     type="button"
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover"
-                    onClick={() => void window.mediaWorkspace?.revealPath?.(dup.export_path)}
+                    onClick={() => void window.mediaWorkspace?.revealPath?.(dup.image_path)}
                     title={t("reveal")}
                   >
                     <Copy className="h-3 w-3 shrink-0 text-muted2" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[12px] text-text">{dup.stem}</div>
-                      <div className="truncate text-[10px] text-muted">{escapePathLabel(dup.export_path)}</div>
+                      <div className="truncate text-[10px] text-muted">{escapePathLabel(dup.image_path)}</div>
                     </div>
                   </button>
                 ))}
