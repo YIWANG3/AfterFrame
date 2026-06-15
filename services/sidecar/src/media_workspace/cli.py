@@ -483,6 +483,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--max-tags", type=int, default=10)
     run_annotation_job_parser.add_argument("--max-caption-chars", type=int, default=200)
     run_annotation_job_parser.add_argument("--custom-instructions")
+    run_annotation_job_parser.add_argument("--video-frame-interval", type=float, default=0.0,
+                                           help="Seconds between sampled video frames (0 = first/middle/last).")
     run_annotation_job_parser.add_argument("--limit", type=int)
 
     annotation_count_p = subparsers.add_parser("annotation-count", parents=[common])
@@ -806,6 +808,7 @@ def _cmd_run_annotation_job(args, connection, catalog, parser):
         max_tags=args.max_tags,
         max_caption_chars=args.max_caption_chars,
         custom_instructions=args.custom_instructions,
+        video_frame_interval=args.video_frame_interval,
         limit=args.limit,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))

@@ -455,6 +455,7 @@ def annotate_batch(
     max_tags: int = DEFAULT_MAX_TAGS,
     max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
     custom_instructions: Optional[str] = None,
+    video_frame_interval: float = 0.0,
     progress_callback: Optional[Callable[[dict[str, int]], None]] = None,
     max_workers: int = 3,
 ) -> dict[str, Any]:
@@ -495,7 +496,8 @@ def annotate_batch(
                 # Sample frames from the original clip (default: first/middle/last)
                 # and send them as one multi-image call describing the whole video.
                 tmp_dir = tempfile.mkdtemp(prefix="afvframes-")
-                frames = video.frames(Path(row["canonical_path"]), Path(tmp_dir))
+                interval = video_frame_interval if video_frame_interval and video_frame_interval > 0 else None
+                frames = video.frames(Path(row["canonical_path"]), Path(tmp_dir), interval=interval)
                 image_paths = [Path(tmp_dir) / f["filename"] for f in frames]
                 if not image_paths:  # tool missing / failed → fall back to poster
                     image_paths = [_batch_image_path(catalog_root, row)]

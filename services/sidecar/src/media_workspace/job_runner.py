@@ -539,6 +539,7 @@ def run_annotation_job(
     max_tags: int = 10,
     max_caption_chars: int = 200,
     custom_instructions: str | None = None,
+    video_frame_interval: float = 0.0,
     limit: int | None = None,
 ) -> dict[str, object]:
     from . import annotation as _annotation
@@ -589,6 +590,7 @@ def run_annotation_job(
             max_tags=max_tags,
             max_caption_chars=max_caption_chars,
             custom_instructions=custom_instructions,
+            video_frame_interval=video_frame_interval,
             progress_callback=annotation_progress,
         )
         update_job(

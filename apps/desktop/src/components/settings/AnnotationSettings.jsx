@@ -83,6 +83,7 @@ function defaultSettings() {
     autoOnImport: false,
     maxTags: 10,
     maxCaptionChars: 200,
+    videoFrameInterval: 0,
     customInstructions: "",
   };
 }
@@ -268,6 +269,20 @@ export default function AnnotationSettings() {
             step={10}
             onChange={(v) => persist({ maxCaptionChars: v })}
             suffix={t("annotation.chars")}
+          />
+        </FieldRow>
+
+        <FieldRow
+          label={t("annotation.videoFrameInterval")}
+          hint={t("annotation.videoFrameIntervalHint")}
+        >
+          <NumberInput
+            value={settings.videoFrameInterval}
+            min={0}
+            max={3600}
+            step={10}
+            onChange={(v) => persist({ videoFrameInterval: v })}
+            suffix={t("annotation.seconds")}
           />
         </FieldRow>
 
