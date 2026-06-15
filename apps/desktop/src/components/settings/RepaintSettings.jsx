@@ -127,7 +127,7 @@ export default function RepaintSettings() {
                 <select
                   value={prefs.selectedModels?.[inst.id] || ""}
                   onChange={(e) => persist({ selectedModels: { ...prefs.selectedModels, [inst.id]: e.target.value } })}
-                  className="h-7 max-w-[180px] rounded-md border border-border/60 bg-app px-1.5 text-[11px] text-text outline-none hover:border-border focus:border-accent/50"
+                  className="h-7 w-[180px] shrink-0 rounded-md border border-border/60 bg-app px-1.5 text-[11px] text-text outline-none hover:border-border focus:border-accent/50"
                 >
                   {modelOptions(inst).map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
