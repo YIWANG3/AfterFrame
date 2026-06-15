@@ -1,7 +1,55 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const http = require("node:http");
 const { pathToFileURL } = require("node:url");
+
+const VIDEO_MIME = {
+  ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
+  ".webm": "video/webm", ".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
+};
+
+// Dedicated localhost HTTP server for <video>. Chromium's media element refuses
+// to load from the custom media:// scheme even with stream:true (it uses a
+// different loader than fetch), but plays HTTP range streams perfectly. Images
+// keep media://; only video uses this. Path is allowlist-checked like media://.
+let mediaHttpPort = 0;
+const mediaHttpServer = http.createServer(async (req, res) => {
+  try {
+    const u = new URL(req.url, "http://127.0.0.1");
+    if (u.pathname !== "/media") { res.writeHead(404).end(); return; }
+    const filePath = path.resolve(u.searchParams.get("path") || "");
+    if (!isAllowedMediaPath(filePath)) {
+      await ensureMediaRootsLoaded();
+      if (!isAllowedMediaPath(filePath)) { res.writeHead(403).end(); return; }
+    }
+    if (!fs.existsSync(filePath)) { res.writeHead(404).end(); return; }
+    const stat = fs.statSync(filePath);
+    const mime = VIDEO_MIME[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+    const range = req.headers.range;
+    if (range) {
+      const m = /bytes=(\d+)-(\d*)/.exec(range);
+      const start = m ? parseInt(m[1], 10) : 0;
+      const end = m && m[2] ? Math.min(parseInt(m[2], 10), stat.size - 1) : stat.size - 1;
+      res.writeHead(206, {
+        "Content-Type": mime,
+        "Content-Length": end - start + 1,
+        "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+        "Accept-Ranges": "bytes",
+      });
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size, "Accept-Ranges": "bytes" });
+      fs.createReadStream(filePath).pipe(res);
+    }
+  } catch (err) {
+    try { res.writeHead(500).end(); } catch { /* ignore */ }
+  }
+});
+mediaHttpServer.listen(0, "127.0.0.1", () => {
+  mediaHttpPort = mediaHttpServer.address().port;
+  console.log("[media-http] listening on 127.0.0.1:" + mediaHttpPort);
+});
 const { spawn, spawnSync } = require("node:child_process");
 const os = require("node:os");
 const crypto = require("node:crypto");
@@ -29,8 +77,13 @@ if (process.env.AFTERFRAME_USER_DATA) {
   app.setPath("userData", process.env.AFTERFRAME_USER_DATA);
 }
 
+// Enable the platform HEVC decoder (macOS VideoToolbox) so <video> can play
+// HEVC/hvc1 clips (iPhone / 剪映 exports). Must run before app ready, else the
+// media element rejects HEVC sources with MEDIA_ERR_SRC_NOT_SUPPORTED (code 4).
+app.commandLine.appendSwitch("enable-features", "PlatformHEVCDecoderSupport");
+
 protocol.registerSchemesAsPrivileged([
-  { scheme: "media", privileges: { standard: false, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: "media", privileges: { standard: false, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
 
 const configuredCatalogPath = process.env.MEDIA_WORKSPACE_CATALOG;
@@ -1069,6 +1122,9 @@ assetsIpc.register({
 ipcMain.on("app:get-locale", (event) => {
   event.returnValue = currentLocale;
 });
+ipcMain.on("app:get-media-port", (event) => {
+  event.returnValue = mediaHttpPort;
+});
 ipcMain.handle("app:set-locale", (_event, lng) => {
   if (!SUPPORTED_LOCALES.includes(lng)) return currentLocale;
   currentLocale = lng;
@@ -1082,6 +1138,78 @@ ipcMain.handle("app:get-preview-settings", () => readAppSettings()?.previews ?? 
 ipcMain.handle("app:save-preview-settings", (_event, next) => {
   void updateAppSettings((s) => ({ ...s, previews: { ...(s?.previews || {}), ...(next || {}) } }));
   return readAppSettings()?.previews ?? {};
+});
+
+// On-demand H.264 playback proxy for videos Chromium can't decode (e.g. 10-bit
+// HEVC). Transcodes via the bundled video-tool, caches under userData (already
+// an allowed media dir), and returns a media:// URL to the proxy. Idempotent.
+ipcMain.handle("app:video-proxy", async (_event, originalPath) => {
+  try {
+    const resolved = path.resolve(String(originalPath || ""));
+    if (!isAllowedMediaPath(resolved)) {
+      await ensureMediaRootsLoaded();
+      if (!isAllowedMediaPath(resolved)) return null;
+    }
+    if (!fs.existsSync(resolved)) return null;
+    const stat = fs.statSync(resolved);
+    const key = crypto.createHash("sha1").update(`${resolved}:${stat.size}:${stat.mtimeMs}`).digest("hex");
+    const dir = path.join(app.getPath("userData"), "video-proxies");
+    fs.mkdirSync(dir, { recursive: true });
+    addAllowedMediaDir(dir);
+    const out = path.join(dir, `${key}.mp4`);
+    if (!fs.existsSync(out)) {
+      const bin = isPackaged
+        ? path.join(process.resourcesPath, "native", "bin", "video-tool")
+        : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool");
+      const ok = await new Promise((resolve) => {
+        const child = spawn(bin, ["transcode", resolved, out]);
+        child.on("error", () => resolve(false));
+        child.on("close", (code) => resolve(code === 0 && fs.existsSync(out)));
+      });
+      if (!ok) { try { fs.unlinkSync(out); } catch { /* ignore */ } return null; }
+    }
+    return out; // absolute path; renderer serves it via the media HTTP server
+  } catch (err) {
+    console.error("[video-proxy] failed:", err);
+    return null;
+  }
+});
+
+// Keyframe filmstrip for gallery hover-scrub — small JPEGs (codec-agnostic, no
+// playback), generated once via video-tool and cached under userData. Returns
+// absolute frame paths (served as images via media://).
+ipcMain.handle("app:video-keyframes", async (_event, originalPath, count) => {
+  try {
+    const resolved = path.resolve(String(originalPath || ""));
+    if (!isAllowedMediaPath(resolved)) {
+      await ensureMediaRootsLoaded();
+      if (!isAllowedMediaPath(resolved)) return [];
+    }
+    if (!fs.existsSync(resolved)) return [];
+    const stat = fs.statSync(resolved);
+    const n = Math.max(2, Math.min(24, Number(count) || 12));
+    const key = crypto.createHash("sha1").update(`${resolved}:${stat.size}:${stat.mtimeMs}:${n}`).digest("hex");
+    const dir = path.join(app.getPath("userData"), "video-keyframes", key);
+    if (!fs.existsSync(path.join(dir, "manifest.json"))) {
+      fs.mkdirSync(dir, { recursive: true });
+      const bin = isPackaged
+        ? path.join(process.resourcesPath, "native", "bin", "video-tool")
+        : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool");
+      const ok = await new Promise((resolve) => {
+        const child = spawn(bin, ["frames", resolved, dir, "--count", String(n), "--max-edge", "320"]);
+        child.on("error", () => resolve(false));
+        child.on("close", (code) => resolve(code === 0));
+      });
+      if (!ok) return [];
+    }
+    return fs.readdirSync(dir)
+      .filter((f) => /^frame_\d+\.jpg$/.test(f))
+      .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10))
+      .map((f) => path.join(dir, f));
+  } catch (err) {
+    console.error("[video-keyframes] failed:", err);
+    return [];
+  }
 });
 
 // Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
@@ -1237,6 +1365,8 @@ app.whenReady().then(() => {
       if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
       // Fall through to original on failure (will surface the load error).
     }
+    // Video plays over the localhost media HTTP server (see mediaHttpServer);
+    // the media:// scheme stays image-only.
     return net.fetch(pathToFileURL(resolved).toString());
   });
 

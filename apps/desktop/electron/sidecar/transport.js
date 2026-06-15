@@ -217,6 +217,12 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     ? path.join(resourcesPath, "sidecar", "media-workspace", "media-workspace")
     : null;
 
+  // Bundled AVFoundation video helper — the sidecar shells out to it for video
+  // probe/poster/frames via this env var.
+  const videoToolPath = isPackaged
+    ? path.join(resourcesPath, "native", "bin", "video-tool")
+    : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool");
+
   function sidecarCommand(command) {
     if (!getCatalogPath()) {
       console.error("[sidecarCommand] No catalog is open! command:", command);
@@ -224,12 +230,16 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     }
     if (sidecarBin) {
       console.log("[sidecarCommand] using binary:", sidecarBin, "exists:", fs.existsSync(sidecarBin));
-      return { cmd: sidecarBin, args: ["--catalog", getCatalogPath(), ...command], env: process.env };
+      return {
+        cmd: sidecarBin,
+        args: ["--catalog", getCatalogPath(), ...command],
+        env: { ...process.env, VIDEO_TOOL_PATH: videoToolPath },
+      };
     }
     return {
       cmd: "python3",
       args: ["-m", "media_workspace", "--catalog", getCatalogPath(), ...command],
-      env: { ...process.env, PYTHONPATH: sidecarSrc },
+      env: { ...process.env, PYTHONPATH: sidecarSrc, VIDEO_TOOL_PATH: videoToolPath },
     };
   }
 

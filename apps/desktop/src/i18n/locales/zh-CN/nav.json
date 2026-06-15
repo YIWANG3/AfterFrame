@@ -95,7 +95,8 @@
     "zoomLevel": "缩放级别",
     "resetToFit": "重置到适应",
     "failedToLoad": "图片加载失败",
-    "loadingLarge": "正在加载大图…"
+    "loadingLarge": "正在加载大图…",
+    "preparingVideo": "正在准备视频…"
   },
   "gallery": {
     "loading": "加载中…",

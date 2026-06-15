@@ -158,6 +158,19 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const focal = formatFocalLength(exposureMeta.focal_length);
   const hasExposure = aperture || shutter || iso || focal;
 
+  const isVideo = detail.asset_type === "video";
+  const videoDuration = (() => {
+    const total = Math.round(Number(exportMeta.duration) || 0);
+    if (total <= 0) return null;
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+    return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+  })();
+  const videoFps = exportMeta.fps ? `${Math.round(Number(exportMeta.fps))} fps` : null;
+  const videoCodec = exportMeta.codec ? String(exportMeta.codec).toUpperCase() : null;
+
   return (
     <aside className="flex h-full flex-col overflow-hidden border-l border-border/40 bg-chrome">
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -221,8 +234,12 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
               />
             </DetailRow>
             <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
+            {isVideo && videoDuration ? <DetailRow label={t("rows.duration")}>{videoDuration}</DetailRow> : null}
             <DetailRow label={t("rows.size")}>{fileSize}</DetailRow>
             <DetailRow label={t("rows.type")}>{formatValue}</DetailRow>
+            {isVideo && videoCodec ? (
+              <DetailRow label={t("rows.codec")}>{videoCodec}{videoFps ? ` · ${videoFps}` : ""}</DetailRow>
+            ) : null}
           </Section>
 
           <AnnotationsSection
@@ -265,10 +282,12 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             {exportMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{exportMeta.software}</DetailRow> : null}
           </Section>
 
-          <Section title={t("sections.camera")}>
-            <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || exportMeta.camera_model || "—"}</DetailRow>
-            <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || exportMeta.lens_model || "—"}</DetailRow>
-          </Section>
+          {!isVideo ? (
+            <Section title={t("sections.camera")}>
+              <DetailRow label={t("rows.camera")}>{rawMeta.camera_model || exportMeta.camera_model || "—"}</DetailRow>
+              <DetailRow label={t("rows.lens")}>{rawMeta.lens_model || exportMeta.lens_model || "—"}</DetailRow>
+            </Section>
+          ) : null}
 
           {hasExposure ? (
             <Section title={t("sections.exposure")}>

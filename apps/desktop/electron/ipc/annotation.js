@@ -53,6 +53,10 @@ function register({
     if (Number.isFinite(settings.maxTags)) args.push("--max-tags", String(settings.maxTags));
     if (Number.isFinite(settings.maxCaptionChars)) args.push("--max-caption-chars", String(settings.maxCaptionChars));
     if (settings.customInstructions) args.push("--custom-instructions", String(settings.customInstructions));
+    // Video frame sampling interval (seconds). 0 / unset → default 3 frames.
+    if (Number.isFinite(settings.videoFrameInterval) && settings.videoFrameInterval > 0) {
+      args.push("--video-frame-interval", String(settings.videoFrameInterval));
+    }
     return args;
   }
 

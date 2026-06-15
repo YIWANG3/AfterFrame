@@ -96,7 +96,8 @@
     "zoomLevel": "Zoom level",
     "resetToFit": "Reset to fit",
     "failedToLoad": "Failed to load image",
-    "loadingLarge": "Loading large image..."
+    "loadingLarge": "Loading large image...",
+    "preparingVideo": "Preparing video…"
   },
   "gallery": {
     "loading": "Loading…",

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type, Play } from "lucide-react";
+
+// mm:ss (or h:mm:ss) for the video duration badge.
+function formatDuration(seconds) {
+  const total = Math.round(Number(seconds) || 0);
+  if (total <= 0) return "0:00";
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
 import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
@@ -279,6 +290,26 @@ const CardContent = memo(function CardContent({
   const title = fileName(item.export_path) || item.stem;
   const totalHeight = height + captionHeight;
 
+  // Video hover-scrub: lazily fetch a keyframe filmstrip on first hover, then
+  // map cursor-x → frame so dragging across the card scrubs the clip.
+  const isVideo = item.asset_type === "video";
+  const [hoverFrames, setHoverFrames] = useState(null);
+  const [hoverIdx, setHoverIdx] = useState(-1);
+  const onVideoEnter = useCallback(() => {
+    if (!isVideo || hoverFrames) return;
+    Promise.resolve(window.mediaWorkspace?.videoKeyframes?.(item.export_path, 12))
+      .then((frames) => { if (Array.isArray(frames) && frames.length) setHoverFrames(frames); })
+      .catch(() => {});
+  }, [isVideo, hoverFrames, item.export_path]);
+  const onVideoMove = useCallback((event) => {
+    if (!isVideo || !hoverFrames?.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(0.999, Math.max(0, (event.clientX - rect.left) / rect.width));
+    setHoverIdx(Math.floor(ratio * hoverFrames.length));
+  }, [isVideo, hoverFrames]);
+  const onVideoLeave = useCallback(() => setHoverIdx(-1), []);
+  const hoverFrameSrc = isVideo && hoverIdx >= 0 && hoverFrames ? localFileUrl(hoverFrames[hoverIdx]) : null;
+
   return (
     <button
       type="button"
@@ -339,6 +370,9 @@ const CardContent = memo(function CardContent({
             : "ring-1 ring-border/40 group-hover:ring-accent/40 group-hover:shadow-card-hover",
         ].join(" ")}
         style={{ height: `${height}px` }}
+        onMouseEnter={isVideo ? onVideoEnter : undefined}
+        onMouseMove={isVideo ? onVideoMove : undefined}
+        onMouseLeave={isVideo ? onVideoLeave : undefined}
       >
         {item.preview_path || item.export_path ? (
           <PreviewImage
@@ -351,6 +385,14 @@ const CardContent = memo(function CardContent({
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">{t("gallery.noPreview")}</div>
         )}
+        {hoverFrameSrc ? (
+          <img
+            src={hoverFrameSrc}
+            alt=""
+            draggable={false}
+            className={`pointer-events-none absolute inset-0 h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"}`}
+          />
+        ) : null}
         {item.exists_on_disk === false ? (
           <div
             className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-[rgba(120,70,8,0.94)] px-1.5 py-0.5 text-[10px] font-medium text-[#FAEEDA]"
@@ -358,6 +400,12 @@ const CardContent = memo(function CardContent({
           >
             <Unlink className="h-2.5 w-2.5" />
             {t("gallery.missing")}
+          </div>
+        ) : null}
+        {item.asset_type === "video" ? (
+          <div className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
+            <Play className="h-2.5 w-2.5 fill-current" />
+            {formatDuration(item.export_metadata?.duration)}
           </div>
         ) : null}
       </div>
