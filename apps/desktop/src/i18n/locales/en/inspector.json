@@ -18,6 +18,8 @@
   "rows": {
     "rating": "Rating",
     "dimensions": "Dimensions",
+    "duration": "Duration",
+    "codec": "Codec",
     "size": "Size",
     "type": "Type",
     "asset": "Asset",

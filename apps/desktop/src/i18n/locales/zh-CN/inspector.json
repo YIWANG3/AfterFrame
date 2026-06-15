@@ -18,6 +18,8 @@
   "rows": {
     "rating": "评分",
     "dimensions": "尺寸",
+    "duration": "时长",
+    "codec": "编码",
     "size": "大小",
     "type": "类型",
     "asset": "成品",
