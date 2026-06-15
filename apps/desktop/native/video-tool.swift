@@ -125,6 +125,43 @@ func cmd_poster(_ inputPath: String, _ outPath: String, maxEdge: Int) {
     }
 }
 
+// Sample timestamps. Floor is always 3 frames — first, middle, last — for any
+// duration. An optional interval (one frame every N seconds) densifies longer
+// clips; the first/middle/last anchors are always included, results are
+// deduped, and capped to maxFrames (endpoints preserved).
+func sampleTimes(duration: Double, interval: Double?, count: Int?, maxFrames: Int) -> [Double] {
+    let eps = min(0.1, duration * 0.02)
+    let last = max(0, duration - eps)
+    func inset(_ t: Double) -> Double { return min(max(t, 0), last) }
+    let anchors = [eps, duration / 2.0, last] // first, middle, last
+
+    var times: [Double]
+    if let iv = interval, iv > 0 {
+        var grid: [Double] = []
+        var t = 0.0
+        while t < duration {
+            grid.append(inset(t))
+            t += iv
+        }
+        times = anchors + grid
+    } else {
+        let n = max(3, count ?? 3)
+        times = (0..<n).map { inset(duration * Double($0) / Double(n - 1)) }
+    }
+
+    let sortedTimes = times.sorted()
+    var dedup: [Double] = []
+    for t in sortedTimes {
+        if let prev = dedup.last, abs(prev - t) < 0.25 { continue }
+        dedup.append(t)
+    }
+    if dedup.count > maxFrames && maxFrames >= 2 {
+        let step = Double(dedup.count - 1) / Double(maxFrames - 1)
+        dedup = (0..<maxFrames).map { dedup[Int((Double($0) * step).rounded())] }
+    }
+    return dedup
+}
+
 func cmd_frames(_ inputPath: String, _ outDir: String, maxEdge: Int) {
     let asset = loadAsset(inputPath)
     _ = videoTrack(asset)
@@ -132,27 +169,9 @@ func cmd_frames(_ inputPath: String, _ outDir: String, maxEdge: Int) {
     guard duration.isFinite && duration > 0 else { fail("invalid duration", 65) }
 
     let maxFrames = Int(arg("--max") ?? "20") ?? 20
-
-    // Build sample timestamps: by interval, by explicit count, or adaptive.
-    var times: [Double] = []
-    if let intervalStr = arg("--interval"), let interval = Double(intervalStr), interval > 0 {
-        var t = interval / 2.0
-        while t < duration && times.count < maxFrames {
-            times.append(t)
-            t += interval
-        }
-        if times.isEmpty { times = [duration / 2.0] }
-    } else {
-        let count: Int
-        if let cStr = arg("--count"), let c = Int(cStr), c > 0 {
-            count = min(c, maxFrames)
-        } else {
-            count = max(3, min(8, Int((duration / 10.0).rounded())))
-        }
-        for i in 0..<count {
-            times.append(duration * (Double(i) + 0.5) / Double(count))
-        }
-    }
+    let interval = arg("--interval").flatMap { Double($0) }
+    let count = arg("--count").flatMap { Int($0) }
+    let times = sampleTimes(duration: duration, interval: interval, count: count, maxFrames: maxFrames)
 
     try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
     let gen = makeGenerator(asset, maxEdge: maxEdge)
