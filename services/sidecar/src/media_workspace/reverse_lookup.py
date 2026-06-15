@@ -368,15 +368,19 @@ def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecisi
         metadata=metadata,
         commit=commit,
     )
-    return MatchDecision(
+    # Register as 'unmatched' (no RAW) so videos ride the registry-based browse /
+    # collection / detail queries exactly like un-paired exports.
+    decision = MatchDecision(
         export_asset_id=asset_id,
         export_path=resolved,
-        status="video",
+        status="unmatched",
         score=0.0,
         raw_asset_id=None,
         feature_vector={},
         preexisting=preexisting,
     )
+    upsert_registry(connection, decision, commit=commit)
+    return decision
 
 
 def count_export_files(export_dir: Path) -> int:

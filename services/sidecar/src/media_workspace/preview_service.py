@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import video
 from .catalog import CatalogPaths
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
@@ -62,7 +63,14 @@ class PreviewService:
                 status="ready",
             )
 
-        if source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
+        if video.is_video(source_path):
+            # Videos: a poster frame via the AVFoundation helper (sips can't do
+            # video); fall back to QuickLook if the tool is unavailable.
+            if video.poster(source_path, output_path, max_edge=KIND_SIZES[kind]):
+                rendered = output_path
+            else:
+                rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
+        elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
             rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
         else:
             rendered = self._render_with_sips(source_path, output_path, KIND_SIZES[kind])

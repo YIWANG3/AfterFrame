@@ -24,6 +24,7 @@ SCHEMA_VERSION = 5
 # went out of sync by hand twice before (annotation columns). Single source.
 _BROWSE_SELECT_COLUMNS = """\
             assets.asset_id,
+            assets.asset_type,
             assets.stem,
             registry.export_path AS export_path,
             assets.metadata_json AS export_metadata_json,
@@ -361,7 +362,7 @@ def get_export_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sq
            AND export_preview_hd.kind = 'preview-hd'
            AND export_preview_hd.status = 'ready'
         WHERE assets.asset_id = ?
-          AND assets.asset_type = 'export'
+          AND assets.asset_type IN ('export', 'video')
         """,
         (asset_id,),
     ).fetchone()
@@ -399,7 +400,7 @@ def get_export_asset_detail_by_path(connection: sqlite3.Connection, export_path:
         FROM export_lookup_registry AS registry
         JOIN assets
             ON assets.asset_id = registry.export_asset_id
-           AND assets.asset_type = 'export'
+           AND assets.asset_type IN ('export', 'video')
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
         LEFT JOIN resource_set_items AS rsi
@@ -448,7 +449,7 @@ def browse_collection(
             ON registry.export_asset_id = assets.asset_id
 {_BROWSE_SHARED_JOINS}
         WHERE ci.collection_id = ?
-          AND assets.asset_type = 'export'
+          AND assets.asset_type IN ('export', 'video')
         ORDER BY ci.added_at DESC, assets.stem
         LIMIT ? OFFSET ?
         """,

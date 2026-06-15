@@ -310,6 +310,14 @@ def run_import_job(
                 progress_callback=preview_progress,
                 paths=export_dirs,
             )
+            # Video poster frames share the standard preview tier (no HD).
+            PreviewService(ensure_catalog(catalog_path)).generate_batch(
+                connection,
+                kind="preview",
+                asset_type="video",
+                progress_callback=preview_progress,
+                paths=export_dirs,
+            )
             phase_results.append(_phase_result(preview_phase, preview_result))
             phase_cursor += 1
 
