@@ -771,7 +771,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
     langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
     existing = _annotation.list_top_tags(connection)
     result = _annotation.annotate(
-        image_path=args.image,
+        image_paths=[args.image],
         provider=args.provider,
         api_key=args.api_key,
         model=args.model,

@@ -605,9 +605,12 @@ def list_assets_for_annotation(
         joins.append("JOIN collection_items AS ci ON ci.asset_id = assets.asset_id")
         where.append("ci.collection_id = ?")
         params.append(collection_id)
-    if asset_type:
-        where.append("assets.asset_type = ?")
-        params.append(asset_type)
+    # "export" (the default) means annotatable media — images AND videos; only
+    # an explicit "raw" narrows to raw. Videos go through the multi-frame path.
+    if asset_type == "raw":
+        where.append("assets.asset_type = 'raw'")
+    else:
+        where.append("assets.asset_type IN ('export', 'video')")
     if only_missing:
         where.append("anno.asset_id IS NULL")
     if asset_ids:
@@ -618,6 +621,7 @@ def list_assets_for_annotation(
     sql = f"""
         SELECT
             assets.asset_id,
+            assets.asset_type,
             assets.canonical_path,
             assets.extension,
             hd.relative_path AS preview_hd_relative_path,

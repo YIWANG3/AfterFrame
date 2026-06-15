@@ -20,7 +20,9 @@ import base64
 import io
 import json
 import re
+import shutil
 import sqlite3
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -29,6 +31,8 @@ from typing import Any, Callable, Optional, Sequence
 
 import urllib.request
 import urllib.error
+
+from . import video
 
 try:
     from PIL import Image  # noqa: F401 — needed for image preprocessing
@@ -157,26 +161,20 @@ def call_anthropic(
     api_key: str,
     model: str,
     system_prompt: str,
-    image_b64: str,
-    image_mime: str,
+    images: list[tuple[str, str]],
+    prompt_text: str = "Annotate this image as instructed.",
 ) -> str:
-    """Call Anthropic Messages API with vision. Returns the assistant text content."""
+    """Call Anthropic Messages API with vision (one or more images)."""
+    content: list[dict[str, Any]] = [
+        {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
+        for (b64, mime) in images
+    ]
+    content.append({"type": "text", "text": prompt_text})
     body = {
         "model": model,
         "max_tokens": 1024,
         "system": system_prompt,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": image_mime, "data": image_b64},
-                    },
-                    {"type": "text", "text": "Annotate this image as instructed."},
-                ],
-            }
-        ],
+        "messages": [{"role": "user", "content": content}],
     }
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
@@ -210,20 +208,19 @@ def call_openai_compatible(
     api_key: Optional[str],
     model: str,
     system_prompt: str,
-    image_b64: str,
-    image_mime: str,
+    images: list[tuple[str, str]],
+    prompt_text: str = "Annotate this image as instructed.",
 ) -> str:
+    content: list[dict[str, Any]] = [
+        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+        for (b64, mime) in images
+    ]
+    content.append({"type": "text", "text": prompt_text})
     body = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_b64}"}},
-                    {"type": "text", "text": "Annotate this image as instructed."},
-                ],
-            },
+            {"role": "user", "content": content},
         ],
         "max_tokens": 1024,
     }
@@ -301,7 +298,7 @@ def merge_with_existing_tags(connection: sqlite3.Connection, raw_tags: list[str]
 
 def annotate(
     *,
-    image_path: Path,
+    image_paths: list[Path],
     provider: str,
     api_key: Optional[str],
     model: str,
@@ -311,12 +308,19 @@ def annotate(
     max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
     custom_instructions: Optional[str] = None,
     existing_tags: Optional[list[str]] = None,
+    is_video: bool = False,
 ) -> AnnotationResult:
-    """Run a single-asset annotation. Pure: no DB writes; caller persists."""
+    """Annotate one asset from one or more frames. Pure: no DB writes.
+
+    Images pass a single frame; videos pass several sampled frames in one
+    multi-image call so the caption/tags describe the whole clip.
+    """
     languages = languages or ["en", "zh"]
     existing_tags = existing_tags or []
+    if not image_paths:
+        raise RuntimeError("no frames to annotate")
 
-    image_b64, mime = encode_image_for_llm(image_path)
+    images = [encode_image_for_llm(p) for p in image_paths]
     system = build_system_prompt(
         languages=languages,
         max_tags=max_tags,
@@ -324,14 +328,20 @@ def annotate(
         existing_tags=existing_tags,
         custom_instructions=custom_instructions,
     )
+    prompt_text = (
+        f"These {len(images)} images are frames sampled in order from a single short video clip. "
+        "Describe the clip as a whole and annotate it as instructed."
+        if is_video and len(images) > 1
+        else "Annotate this image as instructed."
+    )
 
     if provider == "anthropic":
         if not api_key:
             raise RuntimeError("Anthropic provider requires an API key")
-        text = call_anthropic(api_key=api_key, model=model, system_prompt=system, image_b64=image_b64, image_mime=mime)
+        text = call_anthropic(api_key=api_key, model=model, system_prompt=system, images=images, prompt_text=prompt_text)
     elif provider in ("openai", "openai_compatible"):
         url = base_url or "https://api.openai.com/v1"
-        text = call_openai_compatible(base_url=url, api_key=api_key, model=model, system_prompt=system, image_b64=image_b64, image_mime=mime)
+        text = call_openai_compatible(base_url=url, api_key=api_key, model=model, system_prompt=system, images=images, prompt_text=prompt_text)
     else:
         raise RuntimeError(f"Unsupported provider for annotation: {provider}")
 
@@ -477,19 +487,37 @@ def annotate_batch(
         return {"total": 0, "succeeded": 0, "failed": 0, "errors": []}
 
     def work(row: sqlite3.Row) -> AnnotationResult:
-        image_path = _batch_image_path(catalog_root, row)
-        return annotate(
-            image_path=image_path,
-            provider=provider,
-            api_key=api_key,
-            model=model,
-            base_url=base_url,
-            languages=languages,
-            max_tags=max_tags,
-            max_caption_chars=max_caption_chars,
-            custom_instructions=custom_instructions,
-            existing_tags=existing_tags,
-        )
+        keys = row.keys() if hasattr(row, "keys") else []
+        is_video = "asset_type" in keys and str(row["asset_type"]) == "video"
+        tmp_dir: str | None = None
+        try:
+            if is_video:
+                # Sample frames from the original clip (default: first/middle/last)
+                # and send them as one multi-image call describing the whole video.
+                tmp_dir = tempfile.mkdtemp(prefix="afvframes-")
+                frames = video.frames(Path(row["canonical_path"]), Path(tmp_dir))
+                image_paths = [Path(tmp_dir) / f["filename"] for f in frames]
+                if not image_paths:  # tool missing / failed → fall back to poster
+                    image_paths = [_batch_image_path(catalog_root, row)]
+                    is_video = False
+            else:
+                image_paths = [_batch_image_path(catalog_root, row)]
+            return annotate(
+                image_paths=image_paths,
+                provider=provider,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+                languages=languages,
+                max_tags=max_tags,
+                max_caption_chars=max_caption_chars,
+                custom_instructions=custom_instructions,
+                existing_tags=existing_tags,
+                is_video=is_video,
+            )
+        finally:
+            if tmp_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     # All futures are submitted upfront; if the progress callback raises
     # (cooperative job cancellation) cancel the queued API calls before
