@@ -16,6 +16,7 @@ const api = {
   revealPath: (...args) => invoke("revealPath", ...args),
   copyText: (...args) => invoke("copyText", ...args),
   videoProxy: (...args) => invoke("videoProxy", ...args),
+  videoKeyframes: (...args) => invoke("videoKeyframes", ...args),
   getPreviewSettings: (...args) => invoke("getPreviewSettings", ...args),
   savePreviewSettings: (...args) => invoke("savePreviewSettings", ...args),
   openExternal: (...args) => invoke("openExternal", ...args),

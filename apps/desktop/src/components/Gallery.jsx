@@ -290,6 +290,26 @@ const CardContent = memo(function CardContent({
   const title = fileName(item.export_path) || item.stem;
   const totalHeight = height + captionHeight;
 
+  // Video hover-scrub: lazily fetch a keyframe filmstrip on first hover, then
+  // map cursor-x → frame so dragging across the card scrubs the clip.
+  const isVideo = item.asset_type === "video";
+  const [hoverFrames, setHoverFrames] = useState(null);
+  const [hoverIdx, setHoverIdx] = useState(-1);
+  const onVideoEnter = useCallback(() => {
+    if (!isVideo || hoverFrames) return;
+    Promise.resolve(window.mediaWorkspace?.videoKeyframes?.(item.export_path, 12))
+      .then((frames) => { if (Array.isArray(frames) && frames.length) setHoverFrames(frames); })
+      .catch(() => {});
+  }, [isVideo, hoverFrames, item.export_path]);
+  const onVideoMove = useCallback((event) => {
+    if (!isVideo || !hoverFrames?.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(0.999, Math.max(0, (event.clientX - rect.left) / rect.width));
+    setHoverIdx(Math.floor(ratio * hoverFrames.length));
+  }, [isVideo, hoverFrames]);
+  const onVideoLeave = useCallback(() => setHoverIdx(-1), []);
+  const hoverFrameSrc = isVideo && hoverIdx >= 0 && hoverFrames ? localFileUrl(hoverFrames[hoverIdx]) : null;
+
   return (
     <button
       type="button"
@@ -350,6 +370,9 @@ const CardContent = memo(function CardContent({
             : "ring-1 ring-border/40 group-hover:ring-accent/40 group-hover:shadow-card-hover",
         ].join(" ")}
         style={{ height: `${height}px` }}
+        onMouseEnter={isVideo ? onVideoEnter : undefined}
+        onMouseMove={isVideo ? onVideoMove : undefined}
+        onMouseLeave={isVideo ? onVideoLeave : undefined}
       >
         {item.preview_path || item.export_path ? (
           <PreviewImage
@@ -362,6 +385,14 @@ const CardContent = memo(function CardContent({
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">{t("gallery.noPreview")}</div>
         )}
+        {hoverFrameSrc ? (
+          <img
+            src={hoverFrameSrc}
+            alt=""
+            draggable={false}
+            className={`pointer-events-none absolute inset-0 h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"}`}
+          />
+        ) : null}
         {item.exists_on_disk === false ? (
           <div
             className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-[rgba(120,70,8,0.94)] px-1.5 py-0.5 text-[10px] font-medium text-[#FAEEDA]"

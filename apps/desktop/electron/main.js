@@ -1175,6 +1175,43 @@ ipcMain.handle("app:video-proxy", async (_event, originalPath) => {
   }
 });
 
+// Keyframe filmstrip for gallery hover-scrub — small JPEGs (codec-agnostic, no
+// playback), generated once via video-tool and cached under userData. Returns
+// absolute frame paths (served as images via media://).
+ipcMain.handle("app:video-keyframes", async (_event, originalPath, count) => {
+  try {
+    const resolved = path.resolve(String(originalPath || ""));
+    if (!isAllowedMediaPath(resolved)) {
+      await ensureMediaRootsLoaded();
+      if (!isAllowedMediaPath(resolved)) return [];
+    }
+    if (!fs.existsSync(resolved)) return [];
+    const stat = fs.statSync(resolved);
+    const n = Math.max(2, Math.min(24, Number(count) || 12));
+    const key = crypto.createHash("sha1").update(`${resolved}:${stat.size}:${stat.mtimeMs}:${n}`).digest("hex");
+    const dir = path.join(app.getPath("userData"), "video-keyframes", key);
+    if (!fs.existsSync(path.join(dir, "manifest.json"))) {
+      fs.mkdirSync(dir, { recursive: true });
+      const bin = isPackaged
+        ? path.join(process.resourcesPath, "native", "bin", "video-tool")
+        : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool");
+      const ok = await new Promise((resolve) => {
+        const child = spawn(bin, ["frames", resolved, dir, "--count", String(n), "--max-edge", "320"]);
+        child.on("error", () => resolve(false));
+        child.on("close", (code) => resolve(code === 0));
+      });
+      if (!ok) return [];
+    }
+    return fs.readdirSync(dir)
+      .filter((f) => /^frame_\d+\.jpg$/.test(f))
+      .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10))
+      .map((f) => path.join(dir, f));
+  } catch (err) {
+    console.error("[video-keyframes] failed:", err);
+    return [];
+  }
+});
+
 // Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
 // main process so it works regardless of renderer focus / gesture state.
 ipcMain.handle("app:copy-text", (_event, text) => {
