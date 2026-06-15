@@ -30,7 +30,7 @@ if (process.env.AFTERFRAME_USER_DATA) {
 }
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: "media", privileges: { standard: false, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: "media", privileges: { standard: false, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
 
 const configuredCatalogPath = process.env.MEDIA_WORKSPACE_CATALOG;
@@ -1237,7 +1237,10 @@ app.whenReady().then(() => {
       if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
       // Fall through to original on failure (will surface the load error).
     }
-    return net.fetch(pathToFileURL(resolved).toString());
+    // Forward the request headers (notably Range) so <video> can stream and
+    // seek — net.fetch on a file URL honors Range and replies 206. Images send
+    // no Range header, so they still get a full 200.
+    return net.fetch(pathToFileURL(resolved).toString(), { headers: request.headers });
   });
 
   prepareCatalogPath();
