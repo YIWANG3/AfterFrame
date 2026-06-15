@@ -53,7 +53,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
     const built = builtInItems.find((s) => s.id === source);
     if (built) return t(built.labelKey);
     const col = manualCollections.find((c) => c.collection_id === source);
-    return col?.name || t("collage.filterAll");
+    return col?.name || t("filterAll");
   }, [source, builtInItems, manualCollections, t]);
 
   const sourceTotal = useMemo(() => {
@@ -225,7 +225,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-              {t("collage.addImagesTitle")}
+              {t("addImagesTitle")}
               <span className="ml-2 text-muted2">{loading ? "…" : countLabel}</span>
             </div>
           </div>
@@ -273,7 +273,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                 <>
                   <div className="mx-3 my-1 border-t border-border/60" />
                   <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted2">
-                    {t("collage.folders")}
+                    {t("folders")}
                   </div>
                   {manualCollections.map((col) => (
                     <button
@@ -304,7 +304,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-muted2">{t("collage.noMore")}</div>
+            <div className="py-8 text-center text-[12px] text-muted2">{t("noMore")}</div>
           ) : (
             <div className="relative" style={{ height: `${totalHeight}px` }}>
               {visibleItems.map(({ item, left, top }) => {
@@ -337,7 +337,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-app text-[10px] text-muted2">{t("collage.noPreview")}</div>
+                      <div className="flex h-full w-full items-center justify-center bg-app text-[10px] text-muted2">{t("noPreview")}</div>
                     )}
                     <span
                       className={[
@@ -473,7 +473,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     <div className="fixed inset-0 z-[10200] flex flex-col bg-app text-text">
       {/* Header */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-chrome px-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("collage.title")}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("title")}</div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -482,13 +482,13 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             disabled={exporting || images.length < 2}
           >
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {exporting ? t("collage.exporting") : t("collage.export")}
+            {exporting ? t("exporting") : t("export")}
           </button>
           <button
             type="button"
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
             onClick={onClose}
-            title={t("collage.close")}
+            title={t("close")}
           >
             <X className="h-3.5 w-3.5" />
           </button>

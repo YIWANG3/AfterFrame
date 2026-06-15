@@ -111,7 +111,7 @@ export default function CollagePanel({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <Section label={t("collage.images")}>
+      <Section label={t("images")}>
         <div className="space-y-0.5">
           {images.map((item, i) => {
             const src = item.preview_path || item.export_preview_path || item.export_path;
@@ -146,32 +146,32 @@ export default function CollagePanel({
           onClick={onAddImages}
         >
           <Plus className="h-3 w-3" />
-          {t("collage.addImages")}
+          {t("addImages")}
         </button>
       </Section>
 
       {selectedCellIdx >= 0 && (
         <div className="border-b border-border/60 bg-app/40 px-4 py-3">
           <div className="flex items-center justify-between">
-            <PanelLabel>{t("collage.cell", { n: selectedCellIdx + 1 })}</PanelLabel>
+            <PanelLabel>{t("cell", { n: selectedCellIdx + 1 })}</PanelLabel>
             <button
               type="button"
               className="rounded p-0.5 text-muted2 hover:bg-hover hover:text-text"
               onClick={onDeselect}
-              title={t("collage.deselect")}
+              title={t("deselect")}
             >
               <X className="h-3 w-3" />
             </button>
           </div>
           <div className="mt-3">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] text-muted">{t("collage.zoom")}</div>
+              <div className="text-[11px] text-muted">{t("zoom")}</div>
               <div className="text-[11px] tabular-nums text-muted2">{selectedCellZoom.toFixed(2)}×</div>
             </div>
             <div className="mt-1 flex items-center gap-1.5">
               <button
                 type="button"
-                title={t("collage.zoomOut")}
+                title={t("zoomOut")}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
                 onClick={() => onSelectedZoomChange?.(Math.max(0.5, selectedCellZoom / 1.05))}
               >
@@ -188,7 +188,7 @@ export default function CollagePanel({
               />
               <button
                 type="button"
-                title={t("collage.zoomIn")}
+                title={t("zoomIn")}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
                 onClick={() => onSelectedZoomChange?.(Math.min(5, selectedCellZoom * 1.05))}
               >
@@ -201,7 +201,7 @@ export default function CollagePanel({
               type="button"
               className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-app py-1.5 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
               onClick={onCenterSelected}
-              title={t("collage.centerInCell")}
+              title={t("centerInCell")}
             >
               <Crosshair className="h-3 w-3" />
               Center
@@ -210,19 +210,19 @@ export default function CollagePanel({
               type="button"
               className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-app py-1.5 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
               onClick={onResetSelected}
-              title={t("collage.resetPosZoom")}
+              title={t("resetPosZoom")}
             >
               <RotateCcw className="h-3 w-3" />
               Reset
             </button>
           </div>
           <div className="mt-2 text-[10px] leading-relaxed text-muted2">
-            {t("collage.panHint")}
+            {t("panHint")}
           </div>
         </div>
       )}
 
-      <Section label={t("collage.layout")}>
+      <Section label={t("layout")}>
         <div className="grid grid-cols-5 gap-0.5">
           {templates.map((tmpl) => {
             const isActive = template?.id === tmpl.id;
@@ -241,10 +241,10 @@ export default function CollagePanel({
         </div>
       </Section>
 
-      <Section label={t("collage.canvas")}>
+      <Section label={t("canvas")}>
         <div className="space-y-3">
           <div>
-            <div className="text-[11px] text-muted">{t("collage.aspectRatio")}</div>
+            <div className="text-[11px] text-muted">{t("aspectRatio")}</div>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {ASPECT_OPTIONS.map((opt) => (
                 <button
@@ -295,7 +295,7 @@ export default function CollagePanel({
 
           <div>
             <div className="flex items-center justify-between">
-              <div className="text-[11px] text-muted">{t("collage.gap")}</div>
+              <div className="text-[11px] text-muted">{t("gap")}</div>
               <div className="text-[11px] text-muted2">{gap}px</div>
             </div>
             <input type="range" min={0} max={Math.round(exportWidth * 0.1)} step={1} value={gap}
@@ -304,7 +304,7 @@ export default function CollagePanel({
 
           <div>
             <div className="flex items-center justify-between">
-              <div className="text-[11px] text-muted">{t("collage.padding")}</div>
+              <div className="text-[11px] text-muted">{t("padding")}</div>
               <div className="text-[11px] text-muted2">{padding}px</div>
             </div>
             <input type="range" min={0} max={Math.round(exportWidth * 0.1)} step={1} value={padding}
@@ -313,7 +313,7 @@ export default function CollagePanel({
 
           <div>
             <div className="flex items-center justify-between">
-              <div className="text-[11px] text-muted">{t("collage.borderRadius")}</div>
+              <div className="text-[11px] text-muted">{t("borderRadius")}</div>
               <div className="text-[11px] text-muted2">{borderRadius}px</div>
             </div>
             <input type="range" min={0} max={Math.round(exportWidth * 0.15)} step={1} value={borderRadius}
@@ -321,7 +321,7 @@ export default function CollagePanel({
           </div>
 
           <div>
-            <div className="text-[11px] text-muted">{t("collage.background")}</div>
+            <div className="text-[11px] text-muted">{t("background")}</div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {BG_PRESETS.map((color) => {
                 const isActive = bgColor.toLowerCase() === color.toLowerCase();
@@ -356,7 +356,7 @@ export default function CollagePanel({
                     : "border-transparent hover:border-border",
                 ].join(" ")}
                 onClick={() => setShowColorPicker((v) => !v)}
-                title={t("collage.customColor")}
+                title={t("customColor")}
               >
                 <div
                   className="h-full w-full rounded-full"
@@ -382,7 +382,7 @@ export default function CollagePanel({
         </div>
       </Section>
 
-      <Section label={t("collage.export")}>
+      <Section label={t("export")}>
         <div className="flex flex-wrap gap-1">
           {[1080, 2048, 3000, 4096].map((w) => (
             <button

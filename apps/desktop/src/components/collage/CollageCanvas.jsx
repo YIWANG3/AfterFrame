@@ -572,7 +572,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
               onReplaceRef.current?.(idx);
             }}
           >
-            {t("collage.replace")}
+            {t("replace")}
           </button>
         </div>
       )}
