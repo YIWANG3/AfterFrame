@@ -89,17 +89,24 @@ export default function VideoPlayer({ src, onError }) {
 
         <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-white/70">{fmtTime(time)}</span>
 
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={0.05}
-          value={Math.min(time, duration || 0)}
-          onChange={(e) => seek(Number(e.target.value))}
-          aria-label="Seek"
-          className="video-scrubber h-1 flex-1 cursor-pointer"
-          style={{ background: `linear-gradient(to right, rgb(var(--accent-color)) ${progress}%, rgba(255,255,255,0.22) ${progress}%)` }}
-        />
+        {/* Div-based bar (solid accent fill, round thumb, no border); the native
+            range sits transparent on top for drag + keyboard seeking. */}
+        <div className="relative flex h-4 flex-1 items-center">
+          <div className="relative h-1 w-full rounded-full bg-white/25">
+            <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${progress}%` }} />
+            <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white" style={{ left: `calc(${progress}% - 6px)` }} />
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.05}
+            value={Math.min(time, duration || 0)}
+            onChange={(e) => seek(Number(e.target.value))}
+            aria-label="Seek"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+        </div>
 
         <span className="w-12 shrink-0 text-[11px] tabular-nums text-white/70">{fmtTime(duration)}</span>
 

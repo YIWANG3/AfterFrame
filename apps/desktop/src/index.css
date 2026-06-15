@@ -133,38 +133,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   opacity: 1;
 }
 
-/* Video scrubber — the element's inline linear-gradient is the track fill. */
-.video-scrubber {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 999px;
-  outline: none;
-}
-.video-scrubber:focus,
-.video-scrubber:focus-visible {
-  outline: none;
-}
-.video-scrubber::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
-  border: none;
-}
-.video-scrubber::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -4px;
-  border-radius: 999px;
-  background: rgb(255 255 255);
-  border: none;
-  box-shadow: none;
-  outline: none;
-  opacity: 1;
-}
-
 /* Hide the native number-input spin buttons (filter range value boxes). */
 .no-spinner::-webkit-outer-spin-button,
 .no-spinner::-webkit-inner-spin-button {
