@@ -273,7 +273,7 @@ def delete_export_asset_from_catalog(
         """,
         (asset_id,),
     ).fetchone()
-    if asset_row is None or str(asset_row["asset_type"]) != "export":
+    if asset_row is None or str(asset_row["asset_type"]) not in ("export", "video"):
         raise ValueError(f"unknown export asset: {asset_id}")
 
     deleted_preview_paths: list[str] = []
