@@ -84,7 +84,12 @@
     "cacheSubtitle": "所有缓存位于 ~/Library/Application Support/AfterFrame。",
     "previewThumbnails": "预览缩略图",
     "depthMaps": "深度图",
+    "depthMapsHint": "深度感知文字用的深度图缓存。可放心删除——需要时会重新生成。",
     "stickerLibrary": "贴纸库",
+    "stickerLibraryHint": "抠出的贴纸及其缩略图。删除会移除已保存的贴纸。",
+    "videoProxies": "视频播放代理",
+    "videoProxiesHint": "为播放器无法解码的片段(如 10-bit HEVC)转码的 H.264 版本。可放心删除——需要时会重新生成。",
+    "openFolder": "在访达中打开",
     "previewsTitle": "预览图",
     "generateHd": "生成高清预览图(2000px)",
     "generateHdHint": "用于原图缺失时的查看、拼图合成、以及 AI 助手。日常浏览用的是原图,大多数照片其实用不到它。默认关闭 —— 每张约省 0.5–1 MB 磁盘。仅对之后的导入生效。"

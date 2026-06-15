@@ -1133,6 +1133,25 @@ ipcMain.handle("app:set-locale", (_event, lng) => {
   return currentLocale;
 });
 
+// Open an app cache directory in Finder (for manual cleanup). These live under
+// userData, independent of any catalog.
+ipcMain.handle("app:open-cache-dir", (_event, kind) => {
+  const dirs = {
+    depth: path.join(app.getPath("userData"), "depth-cache"),
+    stickers: path.join(app.getPath("userData"), "stickers"),
+    videoProxies: path.join(app.getPath("userData"), "video-proxies"),
+  };
+  const dir = dirs[kind];
+  if (!dir) return false;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    void shell.openPath(dir);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 // Preview settings (e.g. HD generation toggle). Stored under settings.previews.
 ipcMain.handle("app:get-preview-settings", () => readAppSettings()?.previews ?? {});
 ipcMain.handle("app:save-preview-settings", (_event, next) => {

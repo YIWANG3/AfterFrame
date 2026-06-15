@@ -84,7 +84,12 @@
     "cacheSubtitle": "All caches live under ~/Library/Application Support/AfterFrame.",
     "previewThumbnails": "Preview thumbnails",
     "depthMaps": "Depth maps",
+    "depthMapsHint": "Cached depth fields for depth-aware text. Safe to delete — regenerated on demand.",
     "stickerLibrary": "Sticker library",
+    "stickerLibraryHint": "Extracted stickers and their thumbnails. Deleting removes saved stickers.",
+    "videoProxies": "Video playback proxies",
+    "videoProxiesHint": "H.264 versions transcoded for clips the player can't decode (e.g. 10-bit HEVC). Safe to delete — regenerated when needed.",
+    "openFolder": "Open in Finder",
     "previewsTitle": "Previews",
     "generateHd": "Generate HD previews (2000px)",
     "generateHdHint": "Used to view photos when the original is missing, for collage rendering, and by the AI assistant. Day-to-day viewing uses the original, so most photos never need it. Off by default — saves roughly 0.5–1 MB per photo on disk. Applies to future imports."

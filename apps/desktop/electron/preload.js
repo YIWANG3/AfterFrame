@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getMediaServerPort: () => { try { return ipcRenderer.sendSync("app:get-media-port"); } catch { return 0; } },
   videoProxy: (originalPath) => ipcRenderer.invoke("app:video-proxy", originalPath),
   videoKeyframes: (originalPath, count) => ipcRenderer.invoke("app:video-keyframes", originalPath, count),
+  openCacheDir: (kind) => ipcRenderer.invoke("app:open-cache-dir", kind),
   getPreviewSettings: () => ipcRenderer.invoke("app:get-preview-settings"),
   savePreviewSettings: (next) => ipcRenderer.invoke("app:save-preview-settings", next),
   verifyAssets: (options) => ipcRenderer.invoke("workspace:verify-assets", options),
