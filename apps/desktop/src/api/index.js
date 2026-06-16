@@ -47,6 +47,7 @@ const api = {
   searchFacet: (...args) => invoke("searchFacet", ...args),
   getAssetDetail: (...args) => invoke("getAssetDetail", ...args),
   getAssetDetailById: (...args) => invoke("getAssetDetailById", ...args),
+  ensureHdPreviews: (...args) => invoke("ensureHdPreviews", ...args),
   verifyAssets: (...args) => invoke("verifyAssets", ...args),
   relinkAsset: (...args) => invoke("relinkAsset", ...args),
   getInitialLocale: (...args) => invoke("getInitialLocale", ...args),

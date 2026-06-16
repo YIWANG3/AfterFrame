@@ -248,6 +248,8 @@ def build_parser() -> argparse.ArgumentParser:
     previews.add_argument("--asset-type", choices=["raw", "image"])
     previews.add_argument("--limit", type=int)
     previews.add_argument("--force", action="store_true")
+    previews.add_argument("--path", action="append", dest="paths",
+                          help="Limit to specific source file(s)/dir(s); repeatable. Used for on-demand HD generation.")
 
     browse = subparsers.add_parser("browse-images", parents=[common])
     browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], required=True)
@@ -1046,12 +1048,14 @@ def _cmd_watch_images(args, connection, catalog, parser):
 
 def _cmd_generate_previews(args, connection, catalog, parser):
     service = PreviewService(catalog)
+    paths = [Path(p) for p in (getattr(args, "paths", None) or [])] or None
     payload = service.generate_batch(
         connection,
         kind=args.kind,
         asset_type=args.asset_type,
         limit=args.limit,
         force=args.force,
+        paths=paths,
     )
     print(json.dumps(payload, indent=2))
     return 0

@@ -40,6 +40,21 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.assetDetail({ assetId });
   });
 
+  // On-demand HD previews for specific source paths (collage cells). Skips files
+  // that already have an HD preview, so it's cheap to call on every open.
+  ipcMain.handle("workspace:ensure-hd-previews", async (_event, paths) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return { generated: 0, skipped: 0 };
+    const list = [...new Set((paths || []).map(String).filter(Boolean))];
+    if (!list.length) return { generated: 0, skipped: 0 };
+    try {
+      return await commands.ensureHdPreviews(list);
+    } catch (err) {
+      console.warn("[workspace:ensure-hd-previews] sidecar error:", err.message);
+      return { error: String(err.message) };
+    }
+  });
+
   ipcMain.handle("workspace:pending", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];

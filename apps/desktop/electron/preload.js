@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   searchFacet: (options) => ipcRenderer.invoke("workspace:search-facet", options),
   getAssetDetail: (imagePath) => ipcRenderer.invoke("workspace:detail", imagePath),
   getAssetDetailById: (assetId) => ipcRenderer.invoke("workspace:detail-by-id", assetId),
+  ensureHdPreviews: (paths) => ipcRenderer.invoke("workspace:ensure-hd-previews", paths),
   revealPath: (targetPath) => ipcRenderer.invoke("workspace:reveal", targetPath),
   copyText: (text) => ipcRenderer.invoke("app:copy-text", text),
   getMediaServerPort: () => { try { return ipcRenderer.sendSync("app:get-media-port"); } catch { return 0; } },

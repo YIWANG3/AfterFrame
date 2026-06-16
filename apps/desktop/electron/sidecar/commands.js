@@ -66,6 +66,15 @@ function createSidecarCommands(callJson) {
       return callJson(["catalog-roots"]).then((rows) => rows || []);
     },
 
+    // On-demand HD (2000px) preview generation scoped to specific source files.
+    // Used by the collage editor so cells render/export from HD instead of the
+    // 512px thumbnail when the catalog-wide HD pass hasn't run.
+    ensureHdPreviews(paths) {
+      const argv = ["generate-previews", "--kind", "preview-hd"];
+      for (const p of paths) argv.push("--path", String(p));
+      return callJson(argv);
+    },
+
     registerRoots(rootType, paths) {
       const argv = ["register-roots", "--root-type", String(rootType)];
       for (const p of paths) argv.push("--path", String(p));

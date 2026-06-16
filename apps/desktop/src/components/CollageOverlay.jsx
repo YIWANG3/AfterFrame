@@ -405,6 +405,43 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     setTemplate(templates[0] || null);
   }, [open, items]);
 
+  // Lazily generate 2000px HD previews for cells that lack one, so the canvas
+  // and export render from HD rather than the 512px thumbnail. HD generation is
+  // off by default catalog-wide; here we generate just for the cells in use and
+  // patch the HD path back in once ready. Tracked per asset so it runs once.
+  const hdAttemptedRef = useRef(new Set());
+  useEffect(() => {
+    if (!open || !images.length) return undefined;
+    const targets = images.filter(
+      (img) => img?.asset_id && img?.image_path
+        && !img.image_preview_hd_path && !img.preview_hd_path
+        && !hdAttemptedRef.current.has(img.asset_id),
+    );
+    if (!targets.length) return undefined;
+    let cancelled = false;
+    (async () => {
+      for (const img of targets) hdAttemptedRef.current.add(img.asset_id);
+      try {
+        await window.mediaWorkspace?.ensureHdPreviews?.(targets.map((t) => t.image_path));
+        const details = await Promise.all(
+          targets.map((t) => Promise.resolve(window.mediaWorkspace?.getAssetDetailById?.(t.asset_id)).catch(() => null)),
+        );
+        if (cancelled) return;
+        const hdById = new Map();
+        for (const d of details) {
+          if (d?.asset_id && d.image_preview_hd_path) hdById.set(d.asset_id, d.image_preview_hd_path);
+        }
+        if (!hdById.size) return;
+        setImages((prev) => prev.map((img) =>
+          hdById.has(img.asset_id) ? { ...img, image_preview_hd_path: hdById.get(img.asset_id) } : img,
+        ));
+      } catch (err) {
+        console.warn("[Collage] HD preview generation failed:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, images]);
+
   // Auto-select template when image count changes
   useEffect(() => {
     if (!images.length) return;
