@@ -18,7 +18,37 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![AfterFrame — Browse & Inspect](docs/assets/browse-grid.png)
 
+## Table of Contents
+
+- [Features](#features)
+  - [Library Management](#library-management)
+  - [Browse & Organize](#browse--organize)
+  - [Search & Filter](#search--filter)
+  - [Edit](#edit)
+  - [Video](#video)
+  - [AI Repaint (BYOK)](#ai-repaint-byok)
+  - [AI Auto-Annotation (BYOK)](#ai-auto-annotation-byok)
+  - [Agent-Native (MCP)](#agent-native-mcp)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [Customization](#customization)
+- [Built With](#built-with)
+
 ## Features
+
+### Library Management
+The core of AfterFrame — a catalog-based workflow that keeps your originals on disk and everything else indexed and fast.
+
+- Catalog-based workflow — one `.afcatalog` per project
+- Import pipeline with automatic metadata extraction and preview generation
+- Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
+- Optional RAW source indexing and matching by filename
+- HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
+- Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
+- Bilingual interface (English / 简体中文) — switch live in Settings → General
+- Local-first: your files stay on your drives, nothing is uploaded
+
+![Browse with Inspector](docs/assets/browse-inspector.png)
 
 ### Browse & Organize
 - Grid, tiles, justified, and waterfall layout modes
@@ -103,18 +133,6 @@ Working inside this repo? Nothing to do — the bundled `.mcp.json` connects Cla
 Then just ask: *"Find my photos of California and show them in the app."*
 
 ![Agent-driven workflow](docs/assets/agent-claude-code.png)
-
-### Library Management
-- Catalog-based workflow — one `.afcatalog` per project
-- Bilingual interface (English / 简体中文) — switch live in Settings → General
-- Import pipeline with automatic metadata extraction and preview generation
-- Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
-- Optional RAW source indexing and matching by filename
-- HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
-- Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
-- Local-first: your files stay on your drives, nothing is uploaded
-
-![Browse with Inspector](docs/assets/browse-inspector.png)
 
 The full interface in 简体中文 (switch live in Settings → General):
 
