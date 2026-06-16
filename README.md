@@ -56,6 +56,12 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 ![Collage](docs/assets/collage.png)
 
+### Video
+- Index video files alongside photos — each clip is probed for duration, dimensions, and codec on import, and a poster frame is generated automatically
+- Gallery cards show the poster with a duration badge; hover to scrub a keyframe filmstrip without opening anything
+- Full playback in the lightbox via a custom player (play/pause, scrubber, volume, fullscreen, spacebar)
+- Automatic on-the-fly H.264 proxy for codecs the OS can't decode natively (e.g. 10-bit HEVC), so clips still play back
+
 ### AI Repaint (BYOK)
 Bring your own API key. AfterFrame does not bundle or proxy any AI service — you connect your own provider and all requests go directly from your machine to the API.
 
