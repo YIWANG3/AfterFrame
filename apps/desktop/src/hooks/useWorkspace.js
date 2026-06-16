@@ -72,9 +72,20 @@ export default function useWorkspace({ pushToast } = {}) {
   };
   const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, resetJobs } = useJobs(jobsBridgeRef);
 
+  // theme is a *preference*: "dark" | "light" | "system". "system" follows the
+  // OS color scheme live; explicit values pin it. The applied value lands on
+  // documentElement.dataset.theme (the only thing the CSS keys off).
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_STORAGE_KEY, theme);
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const effective = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = effective;
+    };
+    apply();
+    if (theme !== "system") return undefined;
+    mql.addEventListener("change", apply);
+    return () => mql.removeEventListener("change", apply);
   }, [theme]);
 
   useEffect(() => {
@@ -633,7 +644,9 @@ export default function useWorkspace({ pushToast } = {}) {
         }
         await refreshAll();
       } else if (action === "view:toggle-theme") {
-        setTheme((current) => (current === "dark" ? "light" : "dark"));
+        // Toggle off whatever is *applied* (handles "system" → explicit flip).
+        const applied = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+        setTheme(applied === "dark" ? "light" : "dark");
       } else if (action === "view:refresh") {
         await refreshAll();
       }

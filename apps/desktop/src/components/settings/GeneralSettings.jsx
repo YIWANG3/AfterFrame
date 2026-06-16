@@ -2,9 +2,8 @@ import { useTranslation } from "react-i18next";
 import i18n, { SUPPORTED_LOCALES } from "../../i18n";
 import api from "../../api";
 
-// General app settings. For now just the interface language; theme and other
-// global prefs can move here later.
-export default function GeneralSettings() {
+// General app settings: interface language + color theme.
+export default function GeneralSettings({ theme = "dark", setTheme }) {
   const { t } = useTranslation("settings");
   const { t: tc } = useTranslation("common");
   const current = i18n.language;
@@ -35,6 +34,22 @@ export default function GeneralSettings() {
           {SUPPORTED_LOCALES.map((l) => (
             <option key={l} value={l}>{tc(`language.${l}`)}</option>
           ))}
+        </select>
+      </div>
+
+      <div className="flex items-center justify-between border-b border-border/50 py-3">
+        <div>
+          <div className="text-[12px] text-text">{t("general.theme")}</div>
+          <div className="mt-0.5 text-[10px] text-muted2">{t("general.themeHint")}</div>
+        </div>
+        <select
+          value={theme}
+          onChange={(e) => setTheme?.(e.target.value)}
+          className="h-7 max-w-[180px] rounded-md border border-border/60 bg-app px-1.5 text-[11px] text-text outline-none hover:border-border focus:border-accent/50"
+        >
+          <option value="dark">{t("general.themeDark")}</option>
+          <option value="light">{t("general.themeLight")}</option>
+          <option value="system">{t("general.themeSystem")}</option>
         </select>
       </div>
     </div>

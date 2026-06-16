@@ -11,7 +11,12 @@
   "general": {
     "title": "General",
     "language": "Language",
-    "languageHint": "Interface language. Takes effect immediately."
+    "languageHint": "Interface language. Takes effect immediately.",
+    "theme": "Appearance",
+    "themeHint": "Color theme. Takes effect immediately.",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "themeSystem": "Follow system"
   },
   "annotation": {
     "loading": "Loading settings…",
@@ -79,7 +84,15 @@
   },
   "library": {
     "currentCatalog": "Current catalog",
-    "comingSoon": "Catalog management — coming soon.",
+    "catalogScratch": "Scratch catalog",
+    "catalogScratchHint": "Unsaved working library. Create or open a catalog to persist it on disk.",
+    "catalogContents": "Contents",
+    "catalogStats": "{{assets}} assets · {{photos}} photos · {{videos}} videos",
+    "revealInFinder": "Reveal in Finder",
+    "switchCatalog": "Switch catalog",
+    "switchCatalogHint": "Open an existing .afcatalog, or create a new one. The current view reloads.",
+    "openCatalog": "Open…",
+    "newCatalog": "New…",
     "cacheStorage": "Cache & storage",
     "cacheSubtitle": "All caches live under ~/Library/Application Support/AfterFrame.",
     "previewThumbnails": "Preview thumbnails",

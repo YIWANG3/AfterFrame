@@ -20,6 +20,22 @@ test("opens from the sidebar and shows the AI Annotation tab by default", async 
   await expect(ctx.window.getByText("Auto-annotation providers")).toBeVisible({ timeout: 5_000 });
 });
 
+test("General tab — theme selector flips the applied theme live", async () => {
+  await ctx.window.getByRole("button", { name: "General" }).click();
+  await expect(ctx.window.getByText("Appearance")).toBeVisible();
+  // Two selects on this tab: language (0), theme (1).
+  const themeSelect = ctx.window.getByRole("combobox").nth(1);
+  await themeSelect.selectOption("light");
+  await expect
+    .poll(() => ctx.window.evaluate(() => document.documentElement.dataset.theme))
+    .toBe("light");
+  // Revert so the rest of the suite / gallery see the default dark theme.
+  await themeSelect.selectOption("dark");
+  await expect
+    .poll(() => ctx.window.evaluate(() => document.documentElement.dataset.theme))
+    .toBe("dark");
+});
+
 test("AI Repaint tab renders the provider list", async () => {
   await ctx.window.getByRole("button", { name: "AI Repaint" }).click();
   // Fresh test profile has no providers configured — the empty-state callout
@@ -29,6 +45,8 @@ test("AI Repaint tab renders the provider list", async () => {
 test("Library tab renders catalog/cache groups + HD preview toggle", async () => {
   await ctx.window.getByRole("button", { name: "Library" }).click();
   await expect(ctx.window.getByText("Current catalog")).toBeVisible();
+  // Catalog contents reflect the seeded fixture: 13 images + 1 video = 14.
+  await expect(ctx.window.getByText("14 assets · 13 photos · 1 videos")).toBeVisible();
   await expect(ctx.window.getByText("Cache & storage")).toBeVisible();
   // HD previews are opt-in: the toggle exists and defaults off.
   const hdToggle = ctx.window.getByRole("switch").first();

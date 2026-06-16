@@ -20,7 +20,16 @@ const TABS = [
   { id: "about", key: "about", icon: Info },
 ];
 
-export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
+export default function SettingsOverlay({
+  open,
+  initialTab = "ai",
+  onClose,
+  theme,
+  setTheme,
+  info,
+  summary,
+  onSwitchCatalog,
+}) {
   const [tab, setTab] = useState(initialTab);
   const { t } = useTranslation("settings");
   const modalRef = useRef(null);
@@ -81,10 +90,12 @@ export default function SettingsOverlay({ open, initialTab = "ai", onClose }) {
             })}
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
-            {tab === "general" && <GeneralSettings />}
+            {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
             {tab === "ai" && <AnnotationSettings />}
             {tab === "repaint" && <RepaintSettings />}
-            {tab === "library" && <LibrarySettings />}
+            {tab === "library" && (
+              <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
+            )}
             {tab === "about" && <AboutSettings />}
           </div>
         </div>

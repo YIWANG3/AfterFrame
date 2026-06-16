@@ -757,6 +757,11 @@ export default function App() {
       <SettingsOverlay
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        theme={workspace.theme}
+        setTheme={workspace.setTheme}
+        info={workspace.info}
+        summary={workspace.summary}
+        onSwitchCatalog={workspace.switchCatalog}
       />
       <ConfirmHost />
       <EditorOverlay

@@ -11,7 +11,12 @@
   "general": {
     "title": "通用",
     "language": "语言",
-    "languageHint": "界面语言,立即生效。"
+    "languageHint": "界面语言,立即生效。",
+    "theme": "外观",
+    "themeHint": "配色主题,立即生效。",
+    "themeDark": "深色",
+    "themeLight": "浅色",
+    "themeSystem": "跟随系统"
   },
   "annotation": {
     "loading": "正在加载设置…",
@@ -79,7 +84,15 @@
   },
   "library": {
     "currentCatalog": "当前图库",
-    "comingSoon": "图库管理 —— 即将推出。",
+    "catalogScratch": "临时图库",
+    "catalogScratchHint": "未保存的工作图库。新建或打开一个图库即可持久化到磁盘。",
+    "catalogContents": "内容",
+    "catalogStats": "{{assets}} 个资产 · {{photos}} 张照片 · {{videos}} 个视频",
+    "revealInFinder": "在 Finder 中显示",
+    "switchCatalog": "切换图库",
+    "switchCatalogHint": "打开已有的 .afcatalog,或新建一个。当前视图会重新加载。",
+    "openCatalog": "打开…",
+    "newCatalog": "新建…",
     "cacheStorage": "缓存与存储",
     "cacheSubtitle": "所有缓存位于 ~/Library/Application Support/AfterFrame。",
     "previewThumbnails": "预览缩略图",
