@@ -644,7 +644,20 @@ function ensureMediaRootsLoaded() {
       if (!currentCatalogPath || !catalogHasDb()) return;
       try {
         const roots = await sidecarCommands.catalogRoots();
-        for (const root of roots) addAllowedMediaDir(root.path);
+        for (const root of roots) {
+          if (!root?.path) continue;
+          addAllowedMediaDir(root.path);
+          // Roots are often registered per-file (the user imports individual
+          // images from anywhere), which would only allow that exact file and
+          // block sibling derivatives written next to it — AI repaint outputs,
+          // editor saves, crops. Allow the containing directory too so anything
+          // in a folder the user imported from can be served.
+          try {
+            if (!fs.statSync(root.path).isDirectory()) {
+              addAllowedMediaDir(path.dirname(root.path));
+            }
+          } catch { /* path vanished from disk — skip */ }
+        }
       } catch (err) {
         console.warn("[media] failed to load catalog roots for allowlist:", err.message);
         mediaRootsLoaded = null; // retry on next request
@@ -767,6 +780,11 @@ async function startAiRepaintTask(options) {
     throw new Error(`No API token configured for provider.`);
   }
   const outputPath = options?.outputPath || deriveAiRepaintOutputPath(sourcePath);
+  // The sidecar writes the result next to the source; allow the renderer to
+  // load it back via media:// (same as editor saves / crops / video proxies).
+  // Repaint outputs aren't registered as catalog roots, so without this the
+  // before/after compare 403s on the freshly-written file.
+  addAllowedMediaDir(path.dirname(outputPath));
   const payload = {
     provider: providerType,
     source_path: sourcePath,
