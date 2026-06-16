@@ -37,8 +37,10 @@ test.describe("Sidebar navigation", () => {
     const recent = window.getByRole("button", { name: /Recently Added/i }).first();
     await expect(recent).toBeVisible();
     await recent.click();
-    // The toolbar title reflects the active filter
-    await expect(window.getByText("Recently Added").nth(1)).toBeVisible({ timeout: 5_000 });
+    // Filter applied + real data loaded: the gallery shows items (more robust
+    // than matching the duplicated "Recently Added" label by index, which raced
+    // the toolbar title's render).
+    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 10_000 });
 
     // Four rated assets exist, so the Rated entry renders (gated on
     // rated_count > 0) and filters down to exactly them: two synthetic
