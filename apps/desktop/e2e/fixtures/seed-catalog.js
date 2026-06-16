@@ -56,10 +56,14 @@ async function generateImage(file, rgb) {
     .toFile(file);
 }
 
+// video-tool is needed for video probe + poster during the import job below.
+const VIDEO_TOOL_BIN = path.join(REPO_ROOT, "apps", "desktop", "native", "bin", "video-tool");
+const VIDEOS_DIR = path.join(FIXTURES_DIR, "test-videos");
+
 function runSidecar(args) {
   return execFileSync("python3", ["-m", "media_workspace", ...args], {
     encoding: "utf-8",
-    env: { ...process.env, PYTHONPATH: SIDECAR_SRC },
+    env: { ...process.env, PYTHONPATH: SIDECAR_SRC, VIDEO_TOOL_PATH: VIDEO_TOOL_BIN },
   });
 }
 
@@ -128,6 +132,23 @@ async function main() {
       "--image-path", path.join(REAL_IMAGES_DIR, name),
     ]);
   }
+
+  // 4c. Import the committed sample video (test-videos/) through the real import
+  //     job so it indexes as asset_type='video' (probe metadata + poster frame
+  //     via video-tool). Exercises the video ingest + gallery/playback paths.
+  if (!fs.existsSync(VIDEO_TOOL_BIN)) {
+    throw new Error(`video-tool missing at ${VIDEO_TOOL_BIN}.\nRun: npm run build:native`);
+  }
+  console.log("Importing sample video from:", VIDEOS_DIR);
+  runSidecar(["--catalog", CATALOG_DIR, "register-roots", "--root-type", "image", "--path", VIDEOS_DIR]);
+  const videoJob = JSON.parse(runSidecar(["--catalog", CATALOG_DIR, "create-job", "--job-type", "import"]));
+  runSidecar([
+    "--catalog", CATALOG_DIR,
+    "run-import-job",
+    "--job-id", videoJob.job_id,
+    "--mode", "processed_only",
+    "--image-dir", VIDEOS_DIR,
+  ]);
 
   // 5. Rate two images and tag one so the Rated filter and tag-search paths
   //    are exercisable in e2e (previously zero ratings made them no-ops).

@@ -352,7 +352,8 @@ const CardContent = memo(function CardContent({
       data-gallery-item="true"
       data-selected={selected ? "true" : "false"}
       data-asset-id={item.asset_id}
-      data-export-path={item.image_path}
+      data-asset-type={item.asset_type}
+      data-image-path={item.image_path}
       draggable
       className="group absolute text-left focus:outline-none"
       style={{

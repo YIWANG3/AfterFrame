@@ -18,14 +18,14 @@ test.describe("Catalog browse", () => {
     await closeApp(app, userDataDir);
   });
 
-  test("gallery shows the 13 seeded images", async () => {
+  test("gallery shows the 14 seeded assets", async () => {
     // Wait for any gallery item to render — uses the data attribute set on
     // each card. If sidecar / browse-images / Gallery rendering is broken,
     // this fails fast.
     await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
     const count = await window.locator("[data-gallery-item='true']").count();
-    // 10 synthetic gradients + 3 real photographs (see seed-catalog.js).
-    expect(count).toBe(13);
+    // 10 synthetic gradients + 3 real photographs + 1 sample video (seed-catalog.js).
+    expect(count).toBe(14);
   });
 
   test("filenames render in caption", async () => {
@@ -66,7 +66,7 @@ test.describe("Catalog browse", () => {
     await window.keyboard.press("ControlOrMeta+a");
     const cards = window.locator("[data-gallery-item='true']");
     const count = await cards.count();
-    expect(count).toBe(13);
+    expect(count).toBe(14);
     for (let i = 0; i < count; i += 1) {
       await expect(cards.nth(i)).toHaveAttribute("data-selected", "true");
     }
@@ -82,12 +82,12 @@ test.describe("Catalog browse", () => {
     // Cancel leaves the catalog untouched.
     await window.getByRole("button", { name: "Cancel" }).click();
     await expect(window.getByText("Remove from catalog")).toHaveCount(0);
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(13);
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(14);
 
     // Confirm removes exactly the selected asset.
     await window.locator("[data-gallery-item='true']").first().click();
     await window.keyboard.press("Delete");
     await window.getByRole("button", { name: "Remove" }).click();
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(12);
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(13);
   });
 });
