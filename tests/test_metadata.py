@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from media_workspace.metadata import camera_stem_token, extract_export_candidate, extract_raw_metadata, quick_fingerprint, stem_key
+from media_workspace.metadata import camera_stem_token, extract_image_candidate, extract_raw_metadata, quick_fingerprint, stem_key
 
 
 def _build_tiff(
@@ -134,7 +134,7 @@ class MetadataExtractionTest(unittest.TestCase):
         self.assertEqual(camera_stem_token("0Y1A6139-Edit"), "0y1a6139")
         self.assertIsNone(camera_stem_token("cover-final"))
 
-    def test_extract_export_candidate_reads_jpeg_exif(self) -> None:
+    def test_extract_image_candidate_reads_jpeg_exif(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             tiff = _build_tiff(
                 ifd0=[
@@ -165,7 +165,7 @@ class MetadataExtractionTest(unittest.TestCase):
             path = Path(temp_dir) / "0Y1A6380-Edit.jpg"
             path.write_bytes(jpeg)
 
-            candidate = extract_export_candidate(path)
+            candidate = extract_image_candidate(path)
 
             self.assertEqual(candidate.camera_make, "Canon")
             self.assertEqual(candidate.camera_model, "Canon EOS R6m2")
@@ -185,7 +185,7 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(candidate.width, 5926)
             self.assertEqual(candidate.height, 3870)
 
-    def test_extract_export_candidate_reads_embedded_xmp_rating(self) -> None:
+    def test_extract_image_candidate_reads_embedded_xmp_rating(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             tiff = _build_tiff(
                 ifd0=[(0x0110, 2, "CFV 100C/907X")],
@@ -200,7 +200,7 @@ class MetadataExtractionTest(unittest.TestCase):
             path = Path(temp_dir) / "B0023524-2.jpg"
             path.write_bytes(jpeg)
 
-            candidate = extract_export_candidate(path)
+            candidate = extract_image_candidate(path)
 
             self.assertEqual(candidate.rating, 5)
 

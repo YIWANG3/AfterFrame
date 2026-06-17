@@ -8,7 +8,7 @@ from pathlib import Path
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import connect, init_db, set_catalog_path
 from media_workspace.evaluation import evaluate_ground_truth
-from media_workspace.reverse_lookup import resolve_export
+from media_workspace.reverse_lookup import resolve_image
 from media_workspace.scanner import scan_raw_directory
 
 
@@ -33,11 +33,11 @@ class EvaluationTest(unittest.TestCase):
 
             truth_csv = root / "truth.csv"
             with truth_csv.open("w", encoding="utf-8", newline="") as handle:
-                writer = csv.DictWriter(handle, fieldnames=["export_path", "raw_path", "notes"])
+                writer = csv.DictWriter(handle, fieldnames=["image_path", "raw_path", "notes"])
                 writer.writeheader()
                 writer.writerow(
                     {
-                        "export_path": str(export_file.resolve()),
+                        "image_path": str(export_file.resolve()),
                         "raw_path": str(raw_file.resolve()),
                         "notes": "same-name-variant",
                     }
@@ -47,7 +47,7 @@ class EvaluationTest(unittest.TestCase):
             init_db(connection)
             set_catalog_path(connection, catalog.root)
             scan_raw_directory(connection, raw_dir)
-            resolve_export(connection, export_file)
+            resolve_image(connection, export_file)
 
             result = evaluate_ground_truth(connection, truth_csv)
             self.assertEqual(result["summary"]["correct_match"], 1)

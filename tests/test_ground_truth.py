@@ -8,7 +8,7 @@ from pathlib import Path
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import connect, init_db, set_catalog_path
 from media_workspace.ground_truth import export_ground_truth
-from media_workspace.reverse_lookup import resolve_export
+from media_workspace.reverse_lookup import resolve_image
 from media_workspace.scanner import scan_raw_directory
 
 
@@ -36,8 +36,8 @@ class GroundTruthExportTest(unittest.TestCase):
             init_db(connection)
             set_catalog_path(connection, catalog.root)
             scan_raw_directory(connection, raw_dir)
-            resolve_export(connection, matched_export)
-            resolve_export(connection, unmatched_export)
+            resolve_image(connection, matched_export)
+            resolve_image(connection, unmatched_export)
 
             output_csv = root / "truth.csv"
             result = export_ground_truth(

@@ -29,11 +29,11 @@ class BenchmarkDatasetTest(unittest.TestCase):
 
             truth_csv = root / "truth.csv"
             with truth_csv.open("w", encoding="utf-8", newline="") as handle:
-                writer = csv.DictWriter(handle, fieldnames=["export_path", "raw_path", "notes"])
+                writer = csv.DictWriter(handle, fieldnames=["image_path", "raw_path", "notes"])
                 writer.writeheader()
                 writer.writerow(
                     {
-                        "export_path": str(export_file.resolve()),
+                        "image_path": str(export_file.resolve()),
                         "raw_path": str(raw_file.resolve()),
                         "notes": "same-name-variant",
                     }
@@ -42,19 +42,19 @@ class BenchmarkDatasetTest(unittest.TestCase):
             result = benchmark_dataset(
                 catalog_path=catalog,
                 raw_dirs=[raw_dir],
-                export_dirs=[export_dir],
+                image_dirs=[export_dir],
                 truth_csv=truth_csv,
                 include_previews=False,
             )
 
             self.assertEqual(result["dataset"]["raw_file_count"], 1)
-            self.assertEqual(result["dataset"]["export_file_count"], 1)
+            self.assertEqual(result["dataset"]["image_file_count"], 1)
             self.assertIn("metadata_analysis", result["stages"])
             self.assertIn("scan_raw", result["stages"])
-            self.assertIn("resolve_exports", result["stages"])
+            self.assertIn("resolve_images", result["stages"])
             self.assertNotIn("generate_previews", result["stages"])
             self.assertEqual(result["summary"]["raw_assets"], 1)
-            self.assertEqual(result["summary"]["export_assets"], 1)
+            self.assertEqual(result["summary"]["image_assets"], 1)
             # Stem-only match lands in pending (auto-bind threshold 0.9).
             self.assertEqual(result["summary"]["confirmed_matches"], 0)
             self.assertEqual(result["summary"]["pending_matches"], 1)

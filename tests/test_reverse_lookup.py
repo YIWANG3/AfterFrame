@@ -8,18 +8,18 @@ from pathlib import Path
 
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import (
-    cleanup_orphan_export_assets,
+    cleanup_orphan_image_assets,
     connect,
     get_registry,
     init_db,
     load_raw_candidates_by_camera_token,
     set_catalog_path,
     summary,
-    upsert_export_asset,
+    upsert_image_asset,
     upsert_preview_entry,
 )
-from media_workspace.metadata import extract_export_candidate
-from media_workspace.reverse_lookup import resolve_export, resolve_export_batch
+from media_workspace.metadata import extract_image_candidate
+from media_workspace.reverse_lookup import resolve_image, resolve_image_batch
 from media_workspace.scanner import scan_raw_directory
 
 
@@ -49,7 +49,7 @@ class ReverseLookupTest(unittest.TestCase):
             scan_result = scan_raw_directory(connection, raw_dir)
             self.assertEqual(scan_result["indexed"], 1)
 
-            decision = resolve_export(connection, export_file)
+            decision = resolve_image(connection, export_file)
             # Stem-only matches (no metadata corroboration) score 0.88, below
             # the 0.9 auto-bind threshold (commit 879ecb6) — they now require
             # user confirmation instead of binding silently.
@@ -81,7 +81,7 @@ class ReverseLookupTest(unittest.TestCase):
             set_catalog_path(connection, catalog.root)
 
             scan_raw_directory(connection, raw_dir)
-            decision = resolve_export(connection, export_file)
+            decision = resolve_image(connection, export_file)
 
             self.assertEqual(decision.status, "unmatched")
             self.assertIsNone(decision.raw_asset_id)
@@ -110,7 +110,7 @@ class ReverseLookupTest(unittest.TestCase):
             set_catalog_path(connection, catalog.root)
 
             scan_raw_directory(connection, raw_dir)
-            result = resolve_export_batch(connection, [export_dir])
+            result = resolve_image_batch(connection, [export_dir])
 
             self.assertEqual(result["processed"], 2)
             self.assertEqual(result["status_counts"]["pending_confirmation"], 1)
@@ -141,7 +141,7 @@ class ReverseLookupTest(unittest.TestCase):
             set_catalog_path(connection, catalog.root)
 
             scan_raw_directory(connection, raw_dir)
-            decision = resolve_export(connection, export_file)
+            decision = resolve_image(connection, export_file)
 
             self.assertEqual(decision.status, "unmatched")
             self.assertIsNone(decision.raw_asset_id)
@@ -164,17 +164,17 @@ class ReverseLookupTest(unittest.TestCase):
             init_db(connection)
             set_catalog_path(connection, catalog.root)
 
-            export = extract_export_candidate(export_file)
-            asset_id = upsert_export_asset(connection, export)
+            export = extract_image_candidate(export_file)
+            asset_id = upsert_image_asset(connection, export)
 
-            replacement = extract_export_candidate(export_file)
+            replacement = extract_image_candidate(export_file)
             replacement.asset_id = f"export_{sha1(b'alt').hexdigest()[:24]}"
-            reused_asset_id = upsert_export_asset(connection, replacement)
+            reused_asset_id = upsert_image_asset(connection, replacement)
 
             self.assertEqual(reused_asset_id, asset_id)
-            self.assertEqual(summary(connection)["export_assets"], 1)
+            self.assertEqual(summary(connection)["image_assets"], 1)
 
-    def test_cleanup_orphan_export_assets_migrates_preview(self) -> None:
+    def test_cleanup_orphan_image_assets_migrates_preview(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             catalog = ensure_catalog(root / "demo.afcatalog")
@@ -191,8 +191,8 @@ class ReverseLookupTest(unittest.TestCase):
             init_db(connection)
             set_catalog_path(connection, catalog.root)
 
-            export = extract_export_candidate(export_file)
-            active_asset_id = upsert_export_asset(connection, export)
+            export = extract_image_candidate(export_file)
+            active_asset_id = upsert_image_asset(connection, export)
 
             orphan_asset_id = f"export_{sha1(b'orphan').hexdigest()[:24]}"
             connection.execute(
@@ -200,7 +200,7 @@ class ReverseLookupTest(unittest.TestCase):
                 INSERT INTO assets (
                     asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
                     fingerprint, file_size, modified_time, metadata_json
-                ) VALUES (?, 'export', ?, ?, ?, ?, ?, ?, ?, ?, '{}')
+                ) VALUES (?, 'image', ?, ?, ?, ?, ?, ?, ?, ?, '{}')
                 """,
                 (
                     orphan_asset_id,
@@ -224,12 +224,12 @@ class ReverseLookupTest(unittest.TestCase):
                 status="ready",
             )
 
-            payload = cleanup_orphan_export_assets(connection)
+            payload = cleanup_orphan_image_assets(connection)
 
             self.assertEqual(payload["found"], 1)
             self.assertEqual(payload["deleted"], 1)
             self.assertEqual(payload["previews_migrated"], 1)
-            self.assertEqual(summary(connection)["export_assets"], 1)
+            self.assertEqual(summary(connection)["image_assets"], 1)
             self.assertIsNone(
                 connection.execute("SELECT 1 FROM assets WHERE asset_id = ?", (orphan_asset_id,)).fetchone()
             )

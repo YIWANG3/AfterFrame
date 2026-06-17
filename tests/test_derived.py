@@ -13,7 +13,7 @@ from media_workspace.derived import (
     create_derived_crop,
     export_assets_to_dir,
     parse_ratio,
-    register_export_file,
+    register_image_file,
 )
 
 
@@ -70,13 +70,13 @@ class RegisterAndCropTest(unittest.TestCase):
             source = root / "shot.jpg"
             _write_jpeg(source, 800, 600)
 
-            registered = register_export_file(connection, catalog, source)
+            registered = register_image_file(connection, catalog, source)
             self.assertTrue(registered["asset_id"])
             self.assertEqual(registered["match_status"], "unmatched")
 
             derived = create_derived_crop(connection, catalog, registered["asset_id"], "1:1")
             self.assertEqual((derived["width"], derived["height"]), (600, 600))
-            self.assertTrue(Path(derived["export_path"]).exists())
+            self.assertTrue(Path(derived["image_path"]).exists())
             self.assertEqual(derived["source_asset_id"], registered["asset_id"])
 
             # Both assets share one resource set; the crop is a derived version
@@ -112,11 +112,11 @@ class RegisterAndCropTest(unittest.TestCase):
 
             source = root / "base.jpg"
             _write_jpeg(source)
-            base = register_export_file(connection, catalog, source)
+            base = register_image_file(connection, catalog, source)
 
             repaint = root / "base_ai-repaint.jpg"
             _write_jpeg(repaint)
-            payload = register_export_file(
+            payload = register_image_file(
                 connection, catalog, repaint, origin_path=source, version_kind="ai_repaint"
             )
             row = connection.execute(
@@ -138,7 +138,7 @@ class ExportAssetsTest(unittest.TestCase):
 
             source = root / "big.jpg"
             _write_jpeg(source, 2000, 1000)
-            registered = register_export_file(connection, catalog, source)
+            registered = register_image_file(connection, catalog, source)
 
             dest = root / "out"
             results = export_assets_to_dir(
