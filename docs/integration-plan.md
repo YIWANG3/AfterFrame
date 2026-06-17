@@ -1,125 +1,112 @@
-# Integration with Photo-Editing Software — Implementation Plan
+# Integration with Photo-Editing Software — Plan
 
-Goal: make AfterFrame integrate cleanly into a photographer's editing workflow
-(Lightroom / Photoshop / 像素蛋糕 / etc.).
+Goal: fit AfterFrame into a photographer's editing workflow (Photoshop /
+Lightroom / 像素蛋糕 / etc.).
 
-## Through-line: the round-trip editing loop
+## Design decision: TWO independent features, no managed round-trip
 
-Right-click → open the original in PS / 像素蛋糕 → edit & export to a watched
-directory → AfterFrame auto-reimports the result. So #3 and #1 are not isolated;
-together they form the core value. Build order is chosen to ship value early
-while moving toward this loop.
+These are two separate, independent features. **Every imported asset is treated
+the same — any format (JPG / PNG / TIFF / HEIC / RAW / …) can be opened in an
+external editor.** This is NOT RAW-specific.
 
-## Current state (as of v0.3.1)
+AfterFrame does **not** create edit-copies, does **not** orchestrate a
+Lightroom-style "Edit in…" / copy-prep loop, and does **not** force version
+stacking. Keep it simple and user-controlled:
 
-| Capability | Status |
-|---|---|
-| **Watch dir → auto-import** | ❌ None for the catalog. `ImageWatcher` exists in the sidecar but it is a *polling RAW-matcher*, not a generic auto-importer, and is **not wired into the desktop app**. Only `open-file` (macOS "Open with AfterFrame") exists as a manual entry. |
-| **Batch export** | ⚠️ Backend ready: sidecar `export-assets` (dest / max-edge / format / quality) + MCP `export_assets`. **Not exposed in the UI** — only agents can use it. |
-| **Open in external editor** | ❌ None. Gallery `ContextMenu` (Gallery.jsx) has edit/compare/collage/annotate/reveal/copy/delete/add-to-folder and **supports submenus**, so "Open with →" slots in cleanly. |
-| Smart collections | `kind` / `rules_json` columns exist but rule logic is **not implemented** (placeholder). |
+1. **Open in external editor** — right-click, open the original file(s) in the
+   user's chosen app. That's it. Works for any imported asset, regardless of format.
+2. **Watched directories** — user designates folders; anything that lands there
+   auto-imports into the catalog.
 
-## Shared groundwork (all three)
+The two combine naturally: open a photo in PS, edit, save/export into a watched
+directory → it auto-imports. No copy-prep, no managed stacking — the user decides
+where the result goes.
 
-- **Settings storage**: reuse `readAppSettings` / `updateAppSettings` (already used
-  for previews / aiPreferences). Add `settings.integrations = { watchedDirs: [], externalEditors: [] }`.
-- **New Settings tab `Integrations`** in SettingsOverlay (TABS array), holding the
-  watched-dirs and external-editors sections.
+**Emergent round-trip (no code for it):** if the user points their editor's
+export target at a watched directory, edits flow back automatically as new
+browseable assets. We don't manage the copy or the stacking — the user controls
+it by choosing where they export. Existing import logic still applies (e.g.
+name-based RAW↔JPEG grouping for the "Add RAW source" flow).
 
----
+A third, unrelated feature — **batch export to a directory** (push photos to a
+cloud-sync / phone folder) — is deferred and tracked separately at the bottom.
 
-## #3 — Right-click "Open with" (do first; lowest cost)
+## Shared groundwork
 
-**Sidecar**: no change.
-
-**Main process** (electron/main.js or a new ipc module)
-- `app:detect-editors` → scan `/Applications` (+ `~/Applications`) against a
-  built-in list (Photoshop, 像素蛋糕, Affinity Photo, GIMP, Pixelmator…), return
-  `[{ label, appPath }]`.
-- `app:open-in-editor` `(filePaths[], appPath)` → `execFile("open", ["-a", appPath, ...filePaths])`. Multi-select supported.
-- Merge built-in detected list + user-defined editors from settings.
-
-**preload / api**: `detectEditors()`, `openInEditor(paths, appPath)`.
-
-**Renderer**
-- Settings → Integrations: external-editor list (detected + "Add custom app…",
-  persisted to `externalEditors`).
-- Gallery `ContextMenu`: add "Open with →" submenu (reuse existing `MenuItem`
-  children pattern), list editors, click → `openInEditor(selected originals, appPath)`.
-
-**Edge cases**: app missing → toast; multi-select → pass all files at once.
-**Effort**: low (~half day). App source decision: auto-detect + user-custom.
+- New Settings **"Integrations"** tab (SettingsOverlay TABS) hosting both lists.
+- `settings.integrations = { externalEditors: [], watchedDirs: [] }`
+  (reuse `readAppSettings` / `updateAppSettings`).
 
 ---
 
-## #2 — Batch export UI (medium; backend ready)
+## Feature A — Open in external editor (right-click, multi-select)
 
-**Sidecar**: `export-assets` already exists. Only add: wrap as a **job** with
-progress for large batches; small batches call synchronously.
+**Behavior**
+- Gallery context menu gains an **"Open with →"** submenu (reuses the existing
+  `MenuItem` children pattern in Gallery.jsx).
+- **Multi-select**: opens every selected asset's file at once.
+- Available for **every imported asset, any format** (JPG/PNG/TIFF/HEIC/RAW/…).
+- Opens the **original** file(s) — `image_path` / canonical path, as-is. (External
+  apps decode their own formats incl. RAW; an app that can't read a given format
+  surfaces its own error — not our concern.)
+- Assets with `exists_on_disk === false` are skipped/disabled.
 
-**Main process**: `workspace:export-assets` `({ assetIds, dest, maxEdge, format, quality })`
-→ dest chosen via existing `pickDirectories` → call sidecar export-assets →
-return result / job. Add dest dir to media allowlist (`addAllowedMediaDir`).
+**Editor list**
+- Auto-detect a built-in list under `/Applications` (+ `~/Applications`):
+  Photoshop, 像素蛋糕, Affinity Photo, Pixelmator Pro, GIMP, …
+- User can add custom apps in Settings → Integrations (label + app path).
+- Submenu = detected ∪ user-defined.
 
-**preload / api**: `exportAssets(opts)`.
+**Wiring**
+- Main: `app:detect-editors` (scan) and `app:open-in-editor(filePaths[], appPath)`
+  → `execFile("open", ["-a", appPath, ...filePaths])`.
+- preload/api: `detectEditors()`, `openInEditor(paths, appPath)`.
+- Settings → Integrations: external-editor list UI.
 
-**Renderer**
-- Gallery `ContextMenu`: add "Export…", opening a small panel for
-  **dest dir + max-edge + format + quality** (remember last as default).
-- Progress in existing JobDock; completion toast "Reveal in Finder".
-
-**Cloud / phone**: target dir = the user's iCloud Drive / Dropbox / 阿里云盘 sync
-folder; the app doesn't handle upload itself. Covers ~80% of the use case.
-**(Later) Smart export**: depends on implementing smart-collection rules — out of
-scope for this milestone.
-**Effort**: low-medium (~1 day).
+**Effort**: low (~half day).
 
 ---
 
-## #1 — Watched directories → auto-import (heaviest; most value)
+## Feature B — Watched directories (auto-import)
 
-**Main process** (core; use `chokidar`, new dependency)
-- Watch `settings.integrations.watchedDirs`. Key config:
-  - `ignoreInitial: true` (don't treat existing files as new events)
+**Behavior**
+- Settings → Integrations: list of watched directories (add via `pickDirectories`,
+  remove). Persisted in `settings.integrations.watchedDirs`.
+- Main process watches them (chokidar; new dependency):
+  - `ignoreInitial: true` (don't re-import existing files on startup)
   - `awaitWriteFinish: { stabilityThreshold: 1500, pollInterval: 300 }`
-    — **handles Lightroom's write-temp-then-rename** so we never import a partial file
-  - only image/video extensions (reuse `DEFAULT_IMAGE_EXTENSIONS` + video exts)
-- On stable new file → enqueue (debounced batch) → `registerRoots` that dir + run
-  the existing import job (`processed_only`) → reuse "already-in-catalog" dedup +
-  optional "auto-annotate on import".
-- Lifecycle: start watchers from settings on launch; `add`/`unwatch` on edit;
-  reset on catalog switch.
-
-**preload / api**: `getWatchedDirs()`, `addWatchedDir()` (via `pickDirectories`),
-`removeWatchedDir(path)`. Changes notify main to reload watchers.
-
-**Renderer**: Settings → Integrations: watched-dir list + add/remove + an
-"auto-annotate on watch import" toggle. New file imported → toast + gallery
-refresh (reuse existing `onCatalogChanged` / import-job-complete refresh chain).
+    — handles editors that write-temp-then-rename on export (no partial imports)
+  - only image / video / RAW extensions (reuse the known extension sets)
+- New stable file → enqueue (debounced batch) → run the existing import job
+  (`processed_only`) → reuse "already-in-catalog" dedup + optional
+  "auto-annotate on import".
+- Lifecycle: start watchers from settings on launch; add/unwatch on edit; reset
+  on catalog switch.
+- New imports → toast + gallery refresh (existing import-complete chain).
 
 **Edge cases**
-- Same file written repeatedly (editor re-saves) → awaitWriteFinish + dedup.
-- Large drop (Lightroom exports 200 at once) → batch enqueue, single import job.
+- Editor re-saves the same file repeatedly → awaitWriteFinish + dedup.
+- Large export drop (e.g. Lightroom exports 200) → batch enqueue, one import job.
 - Watched dir deleted / unreachable → skip gracefully + status hint.
-- Avoid loops if the app's own export dest is also a watched dir → dedup safety net.
 
-**Effort**: medium-high (~2–3 days: chokidar wiring, debounced batching,
-lifecycle, settings UI, job-chain integration).
+**Effort**: medium-high (~2–3 days: chokidar wiring, debounce, lifecycle,
+settings UI, job-chain integration).
 
 ---
 
-## Milestones
+## Suggested order
 
-1. **M1 — #3 Open with** (independently shippable)
-2. **M2 — #2 Batch export** (independently shippable)
-3. **M3 — #1 Watched directories** (closes the round-trip loop)
+1. **Feature A** (low cost, immediately useful) — ship "Open with".
+2. **Feature B** (the heavier one) — watched directories.
 
-Each milestone ships with e2e coverage (context-menu item renders / export job /
-mock watched-dir import).
+Each ships with e2e (context-menu item renders / opens; mock watched-dir import).
 
-## Deferred
+## Deferred / separate
 
-- Smart-folder auto-export (needs smart-collection rules implemented first).
-- `author` field in apps/desktop/package.json (electron-builder warning).
-- Lightbox: load HD/preview first, lazy-swap to original on zoom (kills the
-  day-to-day GPU tile-memory warnings from 50MB+ originals).
+- **Batch export to a directory** — push selected assets to a chosen folder
+  (e.g. iCloud Drive / Dropbox / 阿里云盘 sync dir) for cloud/phone. Backend
+  (`export-assets`) already exists; only needs a UI. Independent of the above.
+- `package.json` `author` — done.
+- Lightbox: load HD/preview first, lazy-swap to original on zoom (GPU
+  tile-memory warnings from 50MB+ originals).
+- Facet camera/lens for RAW — done (browseable assets now included).
