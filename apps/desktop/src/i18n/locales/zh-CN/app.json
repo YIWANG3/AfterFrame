@@ -41,5 +41,6 @@
   "importMixed": "已导入 {{added}} 个新文件 · {{already}} 个已在库中",
   "importAllExisting": "{{already}} 个已在库中",
   "importMixedMsg_other": "{{count}} 个所选文件已导入过,已跳过。",
-  "importAllExistingMsg": "所有所选文件都已导入过，没有新增。"
+  "importAllExistingMsg": "所有所选文件都已导入过，没有新增。",
+  "openWithFailed": "无法在编辑器中打开"
 }

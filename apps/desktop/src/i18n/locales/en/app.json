@@ -45,5 +45,6 @@
   "importAllExisting": "{{already}} already in catalog",
   "importMixedMsg_one": "{{count}} of the selected files was already imported and skipped.",
   "importMixedMsg_other": "{{count}} of the selected files were already imported and skipped.",
-  "importAllExistingMsg": "Every selected file was already imported — nothing new added."
+  "importAllExistingMsg": "Every selected file was already imported — nothing new added.",
+  "openWithFailed": "Couldn't open in editor"
 }

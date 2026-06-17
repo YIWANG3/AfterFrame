@@ -118,7 +118,8 @@
       "reannotate": "重新标注{{suffix}}",
       "reveal": "在访达中显示",
       "copyPath": "复制文件路径",
-      "copyName": "复制名称"
+      "copyName": "复制名称",
+      "openWith": "打开方式"
     }
   }
 }

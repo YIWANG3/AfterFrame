@@ -66,6 +66,7 @@ const browseIpc = require("./ipc/browse");
 const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
+const editorsIpc = require("./ipc/editors");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
@@ -1102,6 +1103,8 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   }
   return true;
 });
+
+editorsIpc.register({ ipcMain });
 
 jobsIpc.register({
   ipcMain,

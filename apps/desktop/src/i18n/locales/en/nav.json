@@ -119,7 +119,8 @@
       "reannotate": "Re-annotate{{suffix}}",
       "reveal": "Reveal in Finder",
       "copyPath": "Copy File Path",
-      "copyName": "Copy Name"
+      "copyName": "Copy Name",
+      "openWith": "Open With"
     }
   }
 }

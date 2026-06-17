@@ -45,6 +45,7 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editorItem, setEditorItem] = useState(null);
+  const [externalEditors, setExternalEditors] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [proofMode, setProofMode] = useState(false);
   const [layoutItems, setLayoutItems] = useState([]);
@@ -294,6 +295,22 @@ export default function App() {
   async function handleOpenCatalog() {
     const selected = await api.pickCatalog();
     if (selected) await workspace.switchCatalog(selected);
+  }
+
+  // External editors for the right-click "Open with" submenu (auto-detected once).
+  useEffect(() => {
+    Promise.resolve(api.detectEditors?.())
+      .then((list) => setExternalEditors(Array.isArray(list) ? list : []))
+      .catch(() => {});
+  }, []);
+  async function handleOpenWith(assetIds, appPath) {
+    const ids = assetIds?.length ? assetIds : selectedAssetIds;
+    const paths = (ids || []).map((id) => itemById.get(id)?.image_path).filter(Boolean);
+    if (!paths.length || !appPath) return;
+    const res = await api.openInEditor(paths, appPath);
+    if (res && res.ok === false) {
+      pushToast({ title: t("openWithFailed"), message: res.error || "", tone: "error", ttl: 5000 });
+    }
   }
 
   // Block the browser's default behavior on file drops anywhere outside the
@@ -695,6 +712,8 @@ export default function App() {
                   onCopyPath={(ids) => copyAssetField(ids, "path")}
                   onCopyName={(ids) => copyAssetField(ids, "name")}
                   onEdit={openEditor}
+                  onOpenWith={handleOpenWith}
+                  editors={externalEditors}
                   onCompare={handleCompare}
                   onCollage={handleCollage}
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
