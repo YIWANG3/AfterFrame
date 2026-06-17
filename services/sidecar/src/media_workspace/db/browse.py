@@ -216,9 +216,15 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
     """Available facet options for building the filter bar.
 
     Returns distinct cameras/lenses with counts, numeric min/max for the range
-    sliders, and the capture-time span — all scoped to export assets.
+    sliders, and the capture-time span — scoped to *browseable* assets (those
+    with a registry image_asset_id row, same universe as the gallery). This
+    includes RAW imported via "Import" but excludes RAW added as reverse-lookup
+    sources. WHERE 1=1 lets each helper append "AND assets.<col> …".
     """
-    base = "FROM assets WHERE asset_type = 'image'"
+    base = (
+        "FROM image_lookup_registry AS registry "
+        "JOIN assets ON assets.asset_id = registry.image_asset_id WHERE 1=1"
+    )
 
     def value_counts(col: str) -> list[dict[str, object]]:
         rows = connection.execute(
@@ -240,7 +246,7 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
         """
         SELECT t.tag AS v, COUNT(*) AS c
         FROM asset_tags AS t
-        JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'image'
+        JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
         GROUP BY t.tag
         ORDER BY c DESC, t.tag
         LIMIT 60
@@ -290,7 +296,7 @@ def search_facet_values(
             """
             SELECT t.tag AS v, COUNT(*) AS c
             FROM asset_tags AS t
-            JOIN assets AS a ON a.asset_id = t.asset_id AND a.asset_type = 'image'
+            JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
             WHERE t.tag LIKE ?
             GROUP BY t.tag
             ORDER BY c DESC, t.tag
@@ -303,8 +309,9 @@ def search_facet_values(
         rows = connection.execute(
             f"""
             SELECT assets.{col} AS v, COUNT(*) AS c
-            FROM assets
-            WHERE asset_type = 'image' AND assets.{col} IS NOT NULL
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            WHERE assets.{col} IS NOT NULL
               AND assets.{col} != '' AND assets.{col} LIKE ?
             GROUP BY assets.{col}
             ORDER BY c DESC
