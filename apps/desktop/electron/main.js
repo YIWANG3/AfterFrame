@@ -123,6 +123,10 @@ const reviewCatalogPath = isPackaged
   : path.join(rootDir, "data", "review-2026.afcatalog");
 
 function resolveCatalogPath() {
+  // Simulate packaged first-run (no default catalog) in dev / e2e, where a
+  // scratch catalog would otherwise always be present. Lets you exercise the
+  // WelcomeOverlay locally: AFTERFRAME_NO_DEFAULT_CATALOG=1 npm run dev
+  if (process.env.AFTERFRAME_NO_DEFAULT_CATALOG) return null;
   if (configuredCatalogPath) {
     return path.isAbsolute(configuredCatalogPath)
       ? configuredCatalogPath
@@ -931,6 +935,8 @@ function buildAppMenu() {
       label: "AfterFrame",
       submenu: [
         { label: t("menu.about"), role: "about" },
+        { type: "separator" },
+        { label: t("menu.settings"), accelerator: "CmdOrCtrl+,", click: () => sendMenuAction("app:open-settings") },
         { type: "separator" },
         { label: t("menu.scratchCatalog"), click: () => sendMenuAction("catalog:scratch") },
         { type: "separator" },

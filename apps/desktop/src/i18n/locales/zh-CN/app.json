@@ -3,6 +3,15 @@
     "title": "拖放以导入",
     "subtitle": "文件和文件夹将被添加到图库"
   },
+  "welcome": {
+    "title": "欢迎使用 AfterFrame",
+    "subtitle": "新建一个图库开始整理照片，或打开已有的图库。",
+    "explainer": "图库是一个 .afcatalog 文件夹，用来索引你的照片；原始文件留在原处，不会被移动或上传。",
+    "create": "新建图库",
+    "open": "打开已有…"
+  },
+  "noCatalogTitle": "未打开图库",
+  "noCatalogMsg": "导入前请先新建或打开一个图库。",
   "dismiss": "关闭",
   "showInFinder": "在访达中显示",
   "annotationComplete": "标注完成",
@@ -25,12 +34,12 @@
   "copiedPath_other": "已复制 {{count}} 个路径",
   "copiedName_other": "已复制 {{count}} 个名称",
   "verifyMissing_other": "{{count}} 个文件缺失",
-  "verifyMissingMsg": "已检查 {{checked}} 个。它们的原文件已移动或删除 —— 在检视器中重新连接。",
+  "verifyMissingMsg": "已检查 {{checked}} 个。它们的原文件已移动或删除，在检视器中重新连接。",
   "verifyAllPresent": "所有文件都在",
   "verifyCheckedMsg": "已检查 {{checked}} 个。",
   "verifyCheckedRecoveredMsg": "已检查 {{checked}} 个,恢复 {{recovered}} 个。",
   "importMixed": "已导入 {{added}} 个新文件 · {{already}} 个已在库中",
   "importAllExisting": "{{already}} 个已在库中",
   "importMixedMsg_other": "{{count}} 个所选文件已导入过,已跳过。",
-  "importAllExistingMsg": "所有所选文件都已导入过 —— 没有新增。"
+  "importAllExistingMsg": "所有所选文件都已导入过，没有新增。"
 }

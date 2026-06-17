@@ -15,6 +15,7 @@ import JobDock from "./components/JobDock";
 import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
+import WelcomeOverlay from "./components/WelcomeOverlay";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import FilterBar from "./components/FilterBar";
@@ -272,6 +273,28 @@ export default function App() {
     // function identity) which would now accumulate listeners.
     return api.onExternalImport((paths) => externalImportRef.current?.(paths));
   }, []);
+
+  // Native menu → Settings (⌘,). onMenuAction is a multi-listener ipcRenderer
+  // channel, so this coexists with useWorkspace's own menu handler.
+  useEffect(() => {
+    if (!api.has("onMenuAction")) return undefined;
+    return api.onMenuAction((action) => {
+      if (action === "app:open-settings") setSettingsOpen(true);
+    });
+  }, []);
+
+  // First-run / no-catalog gate. info loads via refreshAll; until then info is
+  // null (don't flash the welcome). In packaged mode a fresh install has no
+  // catalog at all (catalogPath null) — show the welcome to create/open one.
+  const noCatalog = !!workspace.info && !workspace.info.catalogPath;
+  async function handleCreateCatalog() {
+    const created = await api.createCatalog();
+    if (created) await workspace.switchCatalog(created);
+  }
+  async function handleOpenCatalog() {
+    const selected = await api.pickCatalog();
+    if (selected) await workspace.switchCatalog(selected);
+  }
 
   // Block the browser's default behavior on file drops anywhere outside the
   // gallery drop zone — without this, dropping a file on the sidebar/inspector
@@ -570,7 +593,9 @@ export default function App() {
           onDragLeave={viewMode === "assets" ? handleGalleryDragLeave : undefined}
           onDrop={viewMode === "assets" ? handleGalleryDrop : undefined}
         >
-          {viewMode === "stickers" ? (
+          {noCatalog ? (
+            <WelcomeOverlay onCreate={handleCreateCatalog} onOpen={handleOpenCatalog} />
+          ) : viewMode === "stickers" ? (
             <>
               <StickerToolbar
                 count={stickerView.stickers.length}

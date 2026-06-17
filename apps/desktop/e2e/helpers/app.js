@@ -23,7 +23,7 @@ const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.a
 // which would make MCP-dependent specs flake in confusing ways.
 let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
 
-async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false } = {}) {
   // Fresh userData so each run starts from a clean slate
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
   const mcpPort = nextMcpPort++;
@@ -35,10 +35,14 @@ async function launchApp({ testName = "e2e", withCatalog = true } = {}) {
     NODE_ENV: "test",
   };
 
+  // Simulate packaged first-run (no default catalog) — exercises the
+  // no-catalog welcome state, which dev's scratch catalog would otherwise hide.
+  if (noCatalog) env.AFTERFRAME_NO_DEFAULT_CATALOG = "1";
+
   // Copy the seeded catalog into a tmp dir so save/import tests can't
   // contaminate the version-controlled fixture between runs.
   let workCatalog = null;
-  if (withCatalog) {
+  if (withCatalog && !noCatalog) {
     workCatalog = path.join(userDataDir, "test-catalog.afcatalog");
     fs.cpSync(SEEDED_CATALOG, workCatalog, { recursive: true });
     env.MEDIA_WORKSPACE_CATALOG = workCatalog;

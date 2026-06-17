@@ -399,10 +399,11 @@ export default function DesignSystemPanel() {
 
   return (
     <>
-      {/* Trigger button — fixed bottom-left */}
+      {/* Trigger button — fixed bottom-left, raised above the sidebar's
+          Settings entry so the two don't overlap (dev-only panel). */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 left-4 z-[8999] flex h-8 w-8 items-center justify-center rounded-lg border border-border/50 bg-panel text-muted shadow-lg transition-colors hover:bg-hover hover:text-accent"
+        className="fixed bottom-16 left-4 z-[8999] flex h-8 w-8 items-center justify-center rounded-lg border border-border/50 bg-panel text-muted shadow-lg transition-colors hover:bg-hover hover:text-accent"
         title="Design System"
       >
         <Palette size={14} />

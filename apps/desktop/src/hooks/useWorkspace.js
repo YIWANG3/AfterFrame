@@ -485,13 +485,24 @@ export default function useWorkspace({ pushToast } = {}) {
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
   }
 
+  // Importing needs a catalog. In packaged first-run there is none open, so
+  // guard every import entry (toolbar, drop, Finder open-with) with a clear
+  // toast instead of a silent sidecar failure against a null catalog.
+  function requireCatalog() {
+    if (info?.catalogPath) return true;
+    pushToast?.({ title: t("noCatalogTitle"), message: t("noCatalogMsg"), tone: "error", ttl: 5000 });
+    return false;
+  }
+
   async function addImages() {
+    if (!requireCatalog()) return;
     const selected = await api.pickDirectories("image");
     await addImagesFromPaths(selected);
   }
 
   async function addImagesFromPaths(selected) {
     if (!selected || !selected.length) return;
+    if (!requireCatalog()) return;
     await api.registerRoots("image", selected);
     const nextRoots = mergeRoots(imageDirs, selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "image", path }))]);
@@ -504,6 +515,7 @@ export default function useWorkspace({ pushToast } = {}) {
   }
 
   async function addSources() {
+    if (!requireCatalog()) return;
     const selected = await api.pickDirectories("raw");
     if (!selected.length) return;
     await api.registerRoots("raw", selected);
@@ -517,6 +529,7 @@ export default function useWorkspace({ pushToast } = {}) {
   }
 
   async function runImportPipeline() {
+    if (!requireCatalog()) return;
     if (importTask?.running) return;
     await startIncrementalImport({ fullCatalog: true });
     await refreshAll();

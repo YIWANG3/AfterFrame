@@ -97,9 +97,13 @@ export default function Sidebar({
   return (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-border/40 bg-chrome px-3 py-3">
       <div className="mb-5 px-1">
-        <div className="text-[13px] font-semibold tracking-[0.01em] text-text">{baseName(info?.catalogPath || t("sidebar.untitledCatalog"))}</div>
+        <div className="text-[13px] font-semibold tracking-[0.01em] text-text">
+          {info?.catalogPath ? baseName(info.catalogPath) : t("sidebar.noCatalog")}
+        </div>
         <div className="mt-1 text-[11px] text-muted2">
-          {rootSummary.length ? rootSummary.join(" · ") : t("sidebar.noAssets")}
+          {!info?.catalogPath
+            ? t("sidebar.noCatalogHint")
+            : rootSummary.length ? rootSummary.join(" · ") : t("sidebar.noAssets")}
         </div>
       </div>
 

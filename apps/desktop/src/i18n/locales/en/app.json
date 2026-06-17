@@ -3,6 +3,15 @@
     "title": "Drop to import",
     "subtitle": "Files and folders will be added to the catalog"
   },
+  "welcome": {
+    "title": "Welcome to AfterFrame",
+    "subtitle": "Create a catalog to start organizing your photos, or open one you already have.",
+    "explainer": "A catalog is a single .afcatalog folder that indexes your photos. Your original files stay where they are; nothing is moved or uploaded.",
+    "create": "New Catalog",
+    "open": "Open Existing…"
+  },
+  "noCatalogTitle": "No catalog open",
+  "noCatalogMsg": "Create or open a catalog before importing.",
   "dismiss": "Dismiss",
   "showInFinder": "Show in Finder",
   "annotationComplete": "Annotation complete",
