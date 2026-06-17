@@ -783,7 +783,9 @@ async function startAiRepaintTask(options) {
   if (!apiKey) {
     throw new Error(`No API token configured for provider.`);
   }
-  const outputPath = options?.outputPath || deriveAiRepaintOutputPath(sourcePath);
+  // Output lands next to the original file. For RAW the editor's sourcePath is
+  // the (catalog) preview, so callers pass outputBasePath = the original path.
+  const outputPath = options?.outputPath || deriveAiRepaintOutputPath(options?.outputBasePath || sourcePath);
   // The sidecar writes the result next to the source; allow the renderer to
   // load it back via media:// (same as editor saves / crops / video proxies).
   // Repaint outputs aren't registered as catalog roots, so without this the

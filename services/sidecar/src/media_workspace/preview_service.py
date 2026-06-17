@@ -71,7 +71,14 @@ class PreviewService:
             else:
                 rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
         elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
-            rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
+            # RAW has no displayable original (the renderer can't decode .cr3/.arw),
+            # so its preview IS the ceiling. The HD tier is rendered at full native
+            # resolution via sips (Image I/O demosaic) so the lightbox can show real
+            # detail / focus; the thumbnail tier stays a small QuickLook render.
+            if kind == "preview-hd":
+                rendered = self._render_raw_fullres(source_path, output_path)
+            else:
+                rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
         else:
             rendered = self._render_with_sips(source_path, output_path, KIND_SIZES[kind])
 
@@ -205,6 +212,19 @@ class PreviewService:
                 capture_output=True,
                 text=True,
             )
+        return output_path
+
+    def _render_raw_fullres(self, source_path: Path, output_path: Path) -> Path:
+        # Full native-resolution JPEG straight from the RAW (Image I/O decodes
+        # CR2/CR3/ARW/NEF/DNG). No --resampleHeightWidthMax, so the long edge is
+        # the sensor's native size — the displayable stand-in for the RAW.
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["sips", "-s", "format", "jpeg", "--out", str(output_path), str(source_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         return output_path
 
 

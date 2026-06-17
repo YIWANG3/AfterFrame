@@ -303,21 +303,35 @@ def run_import_job(
                     commit=True,
                 )
 
-            preview_result = PreviewService(ensure_catalog(catalog_path)).generate_batch(
-                connection,
-                kind="preview",
-                asset_type="image",
-                progress_callback=preview_progress,
-                paths=image_dirs,
-            )
-            # Video poster frames share the standard preview tier (no HD).
-            PreviewService(ensure_catalog(catalog_path)).generate_batch(
-                connection,
-                kind="preview",
-                asset_type="video",
-                progress_callback=preview_progress,
-                paths=image_dirs,
-            )
+            preview_service = PreviewService(ensure_catalog(catalog_path))
+            batch_results = [
+                preview_service.generate_batch(
+                    connection, kind="preview", asset_type="image",
+                    progress_callback=preview_progress, paths=image_dirs,
+                ),
+                # Video poster frames share the standard preview tier (no HD).
+                preview_service.generate_batch(
+                    connection, kind="preview", asset_type="video",
+                    progress_callback=preview_progress, paths=image_dirs,
+                ),
+                # RAW: 512 thumbnail + a full-resolution HD preview. RAW has no
+                # displayable original, so the HD (full-res) tier is generated
+                # unconditionally — unlike the opt-in HD for regular images.
+                preview_service.generate_batch(
+                    connection, kind="preview", asset_type="raw",
+                    progress_callback=preview_progress, paths=image_dirs,
+                ),
+                preview_service.generate_batch(
+                    connection, kind="preview-hd", asset_type="raw",
+                    progress_callback=preview_progress, paths=image_dirs,
+                ),
+            ]
+            # Merge all batches (image + video + raw ×2) so the phase result
+            # reflects everything generated, not just the image tier.
+            preview_result = {
+                key: sum(int((r or {}).get(key, 0)) for r in batch_results)
+                for key in ("generated", "skipped", "failed", "total")
+            }
             phase_results.append(_phase_result(preview_phase, preview_result))
             phase_cursor += 1
 

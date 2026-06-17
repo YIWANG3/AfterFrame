@@ -462,7 +462,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const textClipboardRef = useRef(null);
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
-  const sourcePath = item?.image_path || item?.image_preview_path || item?.raw_preview_path || null;
+  // RAW originals (.cr3/.3fr/…) can't be decoded by the renderer or sharp, so
+  // edit from the full-res HD preview generated on import. The save target still
+  // derives from the original path (saveBasePath) → edits land next to the
+  // source file as <stem>_edited.jpg, not in the catalog previews dir.
+  const isRaw = item?.asset_type === "raw";
+  const sourcePath = (isRaw
+    ? (item?.preview_hd_path || item?.image_preview_hd_path || item?.image_preview_path || item?.preview_path)
+    : item?.image_path) || item?.image_preview_path || item?.raw_preview_path || null;
+  const saveBasePath = item?.image_path || sourcePath;
   const depth = useSceneDepth({ sourcePath });
   const {
     generating: depthGenerating,
@@ -1163,7 +1171,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
   async function handleExport() {
     if (!cropRect || !imageRect || saving) return;
-    const defaultPath = replaceFileName(sourcePath, deriveEditedFileName(sourcePath));
+    const defaultPath = replaceFileName(saveBasePath, deriveEditedFileName(saveBasePath));
     const savePath = await window.mediaWorkspace?.pickSavePath?.({
       defaultPath,
       filters: [
@@ -1179,7 +1187,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   async function handleQuickSave() {
     if (!cropRect || !imageRect || saving) return;
     if (!quickSavePathRef.current) {
-      quickSavePathRef.current = replaceFileName(sourcePath, deriveEditedFileName(sourcePath));
+      quickSavePathRef.current = replaceFileName(saveBasePath, deriveEditedFileName(saveBasePath));
     }
     await executeSave(quickSavePathRef.current);
   }
@@ -1599,7 +1607,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
-              <AiRepaintPanel sourcePath={sourcePath} sourceLabel={sourceLabel} onCompareChange={setCompareState} compareState={compareState} onRepaintComplete={onSaveComplete} />
+              <AiRepaintPanel sourcePath={sourcePath} outputBasePath={saveBasePath} sourceLabel={sourceLabel} onCompareChange={setCompareState} compareState={compareState} onRepaintComplete={onSaveComplete} />
             </div>
           </div>
 

@@ -143,6 +143,10 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
         add("assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL")
     if filters.get("tag"):
         add("EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = assets.asset_id AND t.tag = ?)", filters["tag"])
+    if filters.get("extension"):
+        # File-format filter (jpg / png / mp4 / cr2 / 3fr / …); stored extension
+        # keeps a leading dot, so trim it both sides for a clean compare.
+        add("LOWER(TRIM(assets.extension, '.')) = ?", str(filters["extension"]).lower().lstrip("."))
 
     if not clauses:
         return "", []
@@ -243,10 +247,26 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
         """
     ).fetchall()
 
+    # File-format facet, scoped to *browseable* assets only — i.e. those with a
+    # registry image_asset_id row (same universe as the gallery). This excludes
+    # RAW added via "Add RAW source", which are reverse-lookup sources, not tiles.
+    # Values are dot-stripped + lowercased (jpg, png, mp4, cr2, 3fr, …).
+    ext_rows = connection.execute(
+        """
+        SELECT LOWER(TRIM(assets.extension, '.')) AS v, COUNT(*) AS c
+        FROM image_lookup_registry AS registry
+        JOIN assets ON assets.asset_id = registry.image_asset_id
+        WHERE assets.extension IS NOT NULL AND assets.extension != ''
+        GROUP BY v
+        ORDER BY c DESC, v
+        """
+    ).fetchall()
+
     return {
         "cameras": value_counts("meta_camera_model"),
         "lenses": value_counts("meta_lens_model"),
         "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
+        "extensions": [{"value": r["v"], "count": r["c"]} for r in ext_rows],
         "iso": min_max("meta_iso"),
         "aperture": min_max("meta_aperture"),
         "focal": min_max("meta_focal"),
@@ -363,7 +383,7 @@ def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sql
            AND image_preview_hd.kind = 'preview-hd'
            AND image_preview_hd.status = 'ready'
         WHERE assets.asset_id = ?
-          AND assets.asset_type IN ('image', 'video')
+          AND assets.asset_type IN ('image', 'video', 'raw')
         """,
         (asset_id,),
     ).fetchone()
@@ -402,7 +422,7 @@ def get_image_asset_detail_by_path(connection: sqlite3.Connection, image_path: s
         FROM image_lookup_registry AS registry
         JOIN assets
             ON assets.asset_id = registry.image_asset_id
-           AND assets.asset_type IN ('image', 'video')
+           AND assets.asset_type IN ('image', 'video', 'raw')
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
         LEFT JOIN resource_set_items AS rsi
@@ -451,7 +471,7 @@ def browse_collection(
             ON registry.image_asset_id = assets.asset_id
 {_BROWSE_SHARED_JOINS}
         WHERE ci.collection_id = ?
-          AND assets.asset_type IN ('image', 'video')
+          AND assets.asset_type IN ('image', 'video', 'raw')
         ORDER BY ci.added_at DESC, assets.stem
         LIMIT ? OFFSET ?
         """,

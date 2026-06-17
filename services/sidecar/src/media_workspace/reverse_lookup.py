@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 from sqlite3 import Row
 
-from .config import Thresholds
+from .config import DEFAULT_RAW_EXTENSIONS, Thresholds
 from .db import (
     get_registry,
     load_raw_cache,
@@ -16,12 +17,14 @@ from .db import (
     load_raw_candidates_by_capture_window,
     upsert_catalog_root,
     upsert_image_asset,
+    upsert_raw_asset,
     upsert_video_asset,
     upsert_registry,
 )
 from .metadata import (
     camera_stem_token,
     extract_image_candidate,
+    extract_raw_metadata,
     iso_mtime,
     normalize_stem,
     quick_fingerprint_from_handle,
@@ -313,6 +316,8 @@ def resolve_image_batch(
         for path in iter_image_files([image_dir.resolve()]):
             if is_video(path):
                 decision = index_video_file(connection, path.resolve(), commit=False)
+            elif is_raw(path):
+                decision = index_raw_file(connection, path.resolve(), commit=False)
             else:
                 decision = resolve_image(
                     connection,
@@ -340,6 +345,69 @@ def resolve_image_batch(
         "already_in_catalog": already_in_catalog,
         "newly_added": processed - already_in_catalog,
     }
+
+
+def is_raw(path: Path) -> bool:
+    return path.suffix.lower() in DEFAULT_RAW_EXTENSIONS
+
+
+def _native_raw_dimensions(path: Path) -> tuple[int, int] | None:
+    """True sensor dimensions via Image I/O (sips). RAW EXIF often reports the
+    embedded *preview* size — e.g. Hasselblad .3FR yields 3888×2918 instead of
+    the real ~11664×8750 — so read the decoded dimensions for display."""
+    try:
+        result = subprocess.run(
+            ["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(path)],
+            check=True, capture_output=True, text=True,
+        )
+    except Exception:
+        return None
+    width = height = None
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        value = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
+        # sips emits "pixelWidth: <nil>" for formats it can't decode dimensions
+        # for; skip non-numeric values and fall back to the EXIF dims (None).
+        if stripped.startswith("pixelWidth:") and value.isdigit():
+            width = int(value)
+        elif stripped.startswith("pixelHeight:") and value.isdigit():
+            height = int(value)
+    return (width, height) if width and height else None
+
+
+def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision:
+    """Index a RAW as a browseable asset_type='raw' entry — EXIF + dims, no RAW
+    matching. The original RAW can't be displayed by the renderer, so its preview
+    (rendered by macOS) is the stand-in everywhere; see the preview pipeline.
+    Mirrors index_video_file: rides the registry-based browse as 'unmatched'."""
+    resolved = path.resolve()
+    existing = connection.execute(
+        "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
+    ).fetchone()
+    preexisting = existing is not None
+    metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
+    # EXIF dims can be the embedded preview's size, not the sensor's — override
+    # with the true decoded dimensions so the gallery shows real resolution.
+    native = _native_raw_dimensions(resolved)
+    if native:
+        metadata.width, metadata.height = native
+    upsert_raw_asset(connection, metadata, commit=False)
+    # Imported RAW is a browseable photo in its own right, NOT a reverse-lookup
+    # source. Keep it out of the candidate pool so a sibling JPG imported the
+    # same way won't bind it as its "raw source" — only the dedicated
+    # "Add RAW source" flow registers RAW as a matchable source.
+    connection.execute("DELETE FROM raw_metadata_cache WHERE raw_asset_id = ?", (metadata.asset_id,))
+    decision = MatchDecision(
+        image_asset_id=metadata.asset_id,
+        image_path=resolved,
+        status="unmatched",
+        score=0.0,
+        raw_asset_id=None,
+        feature_vector={},
+        preexisting=preexisting,
+    )
+    upsert_registry(connection, decision, commit=commit)
+    return decision
 
 
 def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecision:
@@ -389,7 +457,7 @@ def count_image_files(image_dir: Path) -> int:
 
 # Image exports + videos share the "import an image folder" scan; the batch
 # loop branches by type (videos skip RAW matching).
-MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | DEFAULT_RAW_EXTENSIONS
 
 
 def iter_image_files(image_paths: list[Path]):

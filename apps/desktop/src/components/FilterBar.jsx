@@ -283,6 +283,7 @@ export default function FilterBar({ facetValues, filters, onChange }) {
   const cameras = facetValues?.cameras || [];
   const lenses = facetValues?.lenses || [];
   const tags = facetValues?.tags || [];
+  const extensions = facetValues?.extensions || [];
   const activeCount = Object.keys(f).length;
 
   return (
@@ -300,6 +301,14 @@ export default function FilterBar({ facetValues, filters, onChange }) {
           options={tags}
           onSearch={(q) => window.mediaWorkspace?.searchFacet?.({ field: "tag", q, limit: 60 })}
           onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
+        />
+      )}
+      {extensions.length > 0 && (
+        <ListPopover
+          label={t("filter.format")}
+          value={f.extension}
+          options={extensions.map((e) => ({ value: String(e.value).toUpperCase(), count: e.count }))}
+          onSelect={(v) => onChange(setOrDelete(f, "extension", v))}
         />
       )}
 

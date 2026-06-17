@@ -273,8 +273,11 @@ def delete_image_asset_from_catalog(
         """,
         (asset_id,),
     ).fetchone()
-    if asset_row is None or str(asset_row["asset_type"]) not in ("image", "video"):
-        raise ValueError(f"unknown export asset: {asset_id}")
+    # Anything in the catalog is deletable — the only guard is existence. (No
+    # per-asset_type allowlist: it just breaks delete every time a new type is
+    # added, and the cleanup below is type-agnostic.)
+    if asset_row is None:
+        raise ValueError(f"unknown asset: {asset_id}")
 
     deleted_preview_paths: list[str] = []
     preview_rows = connection.execute(

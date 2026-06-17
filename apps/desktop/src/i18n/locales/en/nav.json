@@ -60,6 +60,7 @@
     "camera": "Camera",
     "lens": "Lens",
     "tag": "Tag",
+    "format": "Format",
     "iso": "ISO",
     "aperture": "Aperture",
     "focal": "Focal",

@@ -93,7 +93,10 @@ export default function Lightbox({
       if (!currentItem) return [];
       // When the original is known-missing, don't even attempt to load it (that
       // would flash a broken image) — fall back to the HD preview for viewing.
-      const original = currentItem.exists_on_disk === false ? null : currentItem.image_path;
+      // RAW originals (.cr3/.arw/…) can't be decoded by the renderer either, so
+      // skip the original and lead with the full-res HD preview generated on import.
+      const isRawOriginal = currentItem.asset_type === "raw";
+      const original = (currentItem.exists_on_disk === false || isRawOriginal) ? null : currentItem.image_path;
       return [
         original,
         currentItem.preview_hd_path,

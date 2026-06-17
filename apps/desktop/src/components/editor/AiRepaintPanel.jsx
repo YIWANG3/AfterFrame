@@ -255,7 +255,7 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
 
 /* ── Provider instance modal: create new / edit existing ── */
 
-export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current image", onCompareChange, compareState, onRepaintComplete }) {
+export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel = "Current image", onCompareChange, compareState, onRepaintComplete }) {
   const { t } = useTranslation("editor");
   const repaintPollRef = useRef(null);
   const prefsRef = useRef({});
@@ -619,6 +619,9 @@ export default function AiRepaintPanel({ sourcePath, sourceLabel = "Current imag
         provider: activeProviderId,
         providerType: inst?.type || "nanobanana",
         sourcePath,
+        // RAW sources are edited from the preview, but the repaint output should
+        // land next to the original file, not in the catalog previews dir.
+        outputBasePath: outputBasePath || sourcePath,
         prompt: isUpscaleModel ? "" : effectivePrompt,
         aspectRatio: aspectRatio === "auto" ? null : aspectRatio,
         resolution,
