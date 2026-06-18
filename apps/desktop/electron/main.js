@@ -67,6 +67,7 @@ const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
 const editorsIpc = require("./ipc/editors");
+const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
@@ -1106,6 +1107,13 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
 
 editorsIpc.register({ ipcMain });
 
+const watcherApi = watcherModule.register({
+  ipcMain,
+  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  readAppSettings,
+  updateAppSettings,
+});
+
 jobsIpc.register({
   ipcMain,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
@@ -1421,6 +1429,7 @@ app.whenReady().then(() => {
   prepareCatalogPath();
   Menu.setApplicationMenu(buildAppMenu());
   createWindow();
+  try { watcherApi.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
 
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
   // through this while it runs. Failures must never affect the app itself.

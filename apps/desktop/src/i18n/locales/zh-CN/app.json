@@ -42,5 +42,9 @@
   "importAllExisting": "{{already}} 个已在库中",
   "importMixedMsg_other": "{{count}} 个所选文件已导入过,已跳过。",
   "importAllExistingMsg": "所有所选文件都已导入过，没有新增。",
-  "openWithFailed": "无法在编辑器中打开"
+  "openWithFailed": "无法在编辑器中打开",
+  "watchPromptTitle": "监控这个文件夹?",
+  "watchPromptMsg": "自动导入「{{dir}}」中新增的文件。",
+  "watchPromptMsgN": "自动导入这 {{count}} 个文件夹中新增的文件。",
+  "watchAdd": "加入监控"
 }

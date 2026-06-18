@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Brain, FolderOpen, Info, Wand2, Languages } from "lucide-react";
+import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug } from "lucide-react";
 import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
 import RepaintSettings from "./settings/RepaintSettings";
 import LibrarySettings from "./settings/LibrarySettings";
+import IntegrationsSettings from "./settings/IntegrationsSettings";
 import AboutSettings from "./settings/AboutSettings";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
@@ -17,6 +18,7 @@ const TABS = [
   { id: "ai", key: "ai", icon: Brain },
   { id: "repaint", key: "repaint", icon: Wand2 },
   { id: "library", key: "library", icon: FolderOpen },
+  { id: "integrations", key: "integrations", icon: Plug },
   { id: "about", key: "about", icon: Info },
 ];
 
@@ -96,6 +98,7 @@ export default function SettingsOverlay({
             {tab === "library" && (
               <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
             )}
+            {tab === "integrations" && <IntegrationsSettings />}
             {tab === "about" && <AboutSettings />}
           </div>
         </div>

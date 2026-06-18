@@ -500,9 +500,32 @@ export default function useWorkspace({ pushToast } = {}) {
     await addImagesFromPaths(selected);
   }
 
+  // When a folder is imported, offer to watch it (auto-import future drops).
+  // No-ops for file imports and for folders already watched — so it stays quiet
+  // for live watched-dir imports and drag-dropped individual files.
+  async function maybePromptWatch(selected) {
+    if (!api.has?.("statDirs")) return;
+    try {
+      const dirs = (await api.statDirs(selected)) || [];
+      if (!dirs.length) return;
+      const watched = (await api.getWatchedDirs?.()) || [];
+      const fresh = dirs.filter((d) => !watched.includes(d));
+      if (!fresh.length) return;
+      pushToast?.({
+        title: t("watchPromptTitle"),
+        message: fresh.length === 1
+          ? t("watchPromptMsg", { dir: fresh[0].split("/").filter(Boolean).pop() || fresh[0] })
+          : t("watchPromptMsgN", { count: fresh.length }),
+        ttl: 12000,
+        actions: [{ label: t("watchAdd"), primary: true, onClick: () => fresh.forEach((d) => api.addWatchedDir?.(d)) }],
+      });
+    } catch { /* best-effort */ }
+  }
+
   async function addImagesFromPaths(selected) {
     if (!selected || !selected.length) return;
     if (!requireCatalog()) return;
+    void maybePromptWatch(selected);
     await api.registerRoots("image", selected);
     const nextRoots = mergeRoots(imageDirs, selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "image", path }))]);

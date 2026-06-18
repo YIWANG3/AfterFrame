@@ -6,7 +6,8 @@
     "ai": "AI 标注",
     "repaint": "AI 重绘",
     "library": "图库",
-    "about": "关于"
+    "about": "关于",
+    "integrations": "集成"
   },
   "general": {
     "title": "通用",
@@ -149,5 +150,16 @@
     "save": "保存",
     "delete": "删除",
     "cancel": "取消"
+  },
+  "integrations": {
+    "title": "集成",
+    "editorsTitle": "外部编辑器",
+    "editorsSubtitle": "自动探测到的图片编辑器,可在画廊右键 →「打开方式」中使用。",
+    "noEditors": "未探测到支持的编辑器。",
+    "watchedTitle": "监控目录",
+    "watchedSubtitle": "落入这些文件夹的新文件会被自动导入。把编辑器的导出目录指到这里即可。",
+    "noWatched": "尚无监控目录。",
+    "addFolder": "添加文件夹…",
+    "remove": "移除"
   }
 }

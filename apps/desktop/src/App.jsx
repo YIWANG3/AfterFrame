@@ -275,6 +275,25 @@ export default function App() {
     return api.onExternalImport((paths) => externalImportRef.current?.(paths));
   }, []);
 
+  // Watched directories: live FSEvents imports (main → renderer) reuse the same
+  // import path as drag-drop / Finder-open (via externalImportRef).
+  useEffect(() => {
+    if (!api.has("onWatchedImport")) return undefined;
+    return api.onWatchedImport((paths) => externalImportRef.current?.(paths));
+  }, []);
+  // Catch-up: re-import each watched dir once per catalog (covers files that
+  // landed while the app was closed + a freshly-opened catalog). Dedup-safe.
+  const watchedCatchUpRef = useRef(null);
+  useEffect(() => {
+    const cat = workspace.info?.catalogPath;
+    if (!cat || watchedCatchUpRef.current === cat) return;
+    watchedCatchUpRef.current = cat;
+    (async () => {
+      const dirs = await api.getWatchedDirs?.();
+      if (dirs?.length) workspace.addImagesFromPaths(dirs);
+    })();
+  }, [workspace.info?.catalogPath]);
+
   // Native menu → Settings (⌘,). onMenuAction is a multi-listener ipcRenderer
   // channel, so this coexists with useWorkspace's own menu handler.
   useEffect(() => {
