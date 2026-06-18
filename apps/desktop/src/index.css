@@ -128,10 +128,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: rgba(255, 255, 255, 0.26);
 }
 
-.lightbox-slider::-webkit-slider-thumb {
+/* Selector matches the base `input[type="range"]::-webkit-slider-thumb`
+   specificity (which would otherwise win and force background:var(--text-color),
+   i.e. a dark thumb). The slider sits over the photo, so use a white thumb with
+   a dark hairline + shadow so it's visible on any background. */
+input[type="range"].lightbox-slider::-webkit-slider-thumb {
   background: rgb(255 255 255);
-  /* The slider sits over the photo, so a bare white thumb vanishes on light
-     areas. A dark hairline + shadow keeps it visible on any background. */
   border: 1px solid rgba(0, 0, 0, 0.5);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
   opacity: 1;
