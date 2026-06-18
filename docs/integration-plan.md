@@ -69,28 +69,62 @@ cloud-sync / phone folder) — is deferred and tracked separately at the bottom.
 
 ## Feature B — Watched directories (auto-import)
 
-**Behavior**
-- Settings → Integrations: list of watched directories (add via `pickDirectories`,
-  remove). Persisted in `settings.integrations.watchedDirs`.
-- Main process watches them (chokidar; new dependency):
-  - `ignoreInitial: true` (don't re-import existing files on startup)
-  - `awaitWriteFinish: { stabilityThreshold: 1500, pollInterval: 300 }`
-    — handles editors that write-temp-then-rename on export (no partial imports)
-  - only image / video / RAW extensions (reuse the known extension sets)
-- New stable file → enqueue (debounced batch) → run the existing import job
-  (`processed_only`) → reuse "already-in-catalog" dedup + optional
-  "auto-annotate on import".
-- Lifecycle: start watchers from settings on launch; add/unwatch on edit; reset
-  on catalog switch.
-- New imports → toast + gallery refresh (existing import-complete chain).
+**Watched ≠ import source.** This is a small, explicit, opt-in set of "live"
+folders (default empty) — NOT every directory the user has ever imported from.
+Typical use: 1–2 folders (an editor's export target, a download/incoming folder).
+Global (app settings), not per-catalog — files import into whichever catalog is
+currently open.
+
+**How the list is populated**
+- **Settings → Integrations**: manual add/remove (the editors list from Feature A
+  moves to this tab too). Persisted in `settings.integrations.watchedDirs`.
+- **Contextual prompt**: when the user imports by selecting a **folder** (folder
+  picker or drag-dropped folder), after import show a bottom-right toast
+  *"Add ‹folder› to watched directories?"* with a one-click **Add** action.
+  Only when the folder isn't already watched. (Needs main-process `app:stat-dirs`
+  so the renderer knows which selected paths are directories.)
+
+**Watcher (main process, chokidar — new dep)**
+- `chokidar.watch(dirs, { ignoreInitial: true, depth: 10,
+  awaitWriteFinish: { stabilityThreshold: 1500, pollInterval: 300 } })`
+- Listen to **`add`** only; filter to image/video/RAW extensions; skip dotfiles
+  and editor temp files (awaitWriteFinish covers write-then-rename).
+- **Debounce-batch**: collect new file paths into a pending Set, flush after
+  ~1s idle → one batch (a 200-file export = one import, not 200).
+- On flush, **send `workspace:watched-import` IPC to the renderer with the new
+  file paths** — the renderer runs its existing `addImagesFromPaths(paths)` flow
+  (registerRoots + import job + dedup + refresh + requireCatalog guard). We send
+  the specific new files (not the whole dir) so we don't re-scan large trees.
+  Mirrors the existing `onExternalImport` (open-file) bridge.
+
+**Startup catch-up (FSEvents only fires while running)**
+- A live watcher misses anything added while the app was closed, and
+  `ignoreInitial` means a restart won't re-emit it. So pair the live watcher with
+  a **catch-up scan**: on launch (and when a dir is newly added), run a normal
+  import over each watched dir. Catalog **dedup makes it idempotent** — already-
+  imported files are skipped; only what landed while closed (or a freshly-added
+  dir's existing contents) is imported.
+- Two mechanisms, one import path:
+  - running → FSEvents live watcher (new files only, no full scan);
+  - launch / dir-added → catch-up scan (dir scan + dedup).
+- Future optimization: store a last-scan timestamp and only consider
+  mtime-newer files in catch-up, to avoid full re-scans of large dirs.
+
+**Lifecycle**
+- Start watchers + run catch-up from settings after the window is ready.
+- Add/remove dir → update settings + `watcher.add/unwatch` (+ catch-up the new
+  dir), no full restart.
+- No catalog open (welcome state) → renderer's `requireCatalog` guard handles it
+  (toast instead of importing).
 
 **Edge cases**
-- Editor re-saves the same file repeatedly → awaitWriteFinish + dedup.
-- Large export drop (e.g. Lightroom exports 200) → batch enqueue, one import job.
-- Watched dir deleted / unreachable → skip gracefully + status hint.
+- Editor re-saves same file → awaitWriteFinish + catalog dedup.
+- Large export drop → debounce-batch → single import.
+- Watched dir deleted / unreachable → chokidar error handled, skipped.
+- Recursion capped at depth 10 (avoid watching pathologically deep trees).
 
 **Effort**: medium-high (~2–3 days: chokidar wiring, debounce, lifecycle,
-settings UI, job-chain integration).
+settings UI, contextual toast, job-chain integration).
 
 ---
 
