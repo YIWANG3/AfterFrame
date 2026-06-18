@@ -418,6 +418,11 @@ export default function App() {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return false;
       const tagName = target.tagName;
+      // Range sliders (e.g. the lightbox zoom slider) take no text, so they
+      // shouldn't swallow global shortcuts — otherwise Esc with the zoom slider
+      // focused never reaches the close-lightbox handler (it just leaves the
+      // slider showing its focus ring).
+      if (tagName === "INPUT" && target.type === "range") return false;
       return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
     }
 
