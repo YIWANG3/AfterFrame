@@ -130,6 +130,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .lightbox-slider::-webkit-slider-thumb {
   background: rgb(255 255 255);
+  /* The slider sits over the photo, so a bare white thumb vanishes on light
+     areas. A dark hairline + shadow keeps it visible on any background. */
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
   opacity: 1;
 }
 

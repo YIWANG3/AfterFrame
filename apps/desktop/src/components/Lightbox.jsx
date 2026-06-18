@@ -531,10 +531,10 @@ export default function Lightbox({
           </button>
           <input
             type="range"
-            min={Math.log(Math.max(fitScale * 0.25, MIN_SCALE))}
+            min={Math.log(MIN_SCALE)}
             max={Math.log(MAX_SCALE)}
             step={0.01}
-            value={Math.log(Math.max(scale, fitScale, MIN_SCALE))}
+            value={Math.log(Math.min(MAX_SCALE, Math.max(scale, MIN_SCALE)))}
             onChange={handleSliderChange}
             className="lightbox-slider pointer-events-auto w-32"
             aria-label={t("lightbox.zoomLevel")}
