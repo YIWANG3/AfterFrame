@@ -134,7 +134,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
    a dark hairline + shadow so it's visible on any background. */
 input[type="range"].lightbox-slider::-webkit-slider-thumb {
   background: rgb(255 255 255);
-  border: 1px solid rgba(0, 0, 0, 0.5);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
   opacity: 1;
 }
