@@ -12,6 +12,8 @@ const { execFile } = require("child_process");
 // are covered by matching the prefix.
 const KNOWN_EDITORS = [
   { label: "Photoshop", re: /^adobe photoshop/i },
+  { label: "Lightroom Classic", re: /^adobe lightroom classic/i },
+  { label: "Lightroom", re: /^adobe lightroom(?! classic)/i },
   { label: "像素蛋糕", re: /^(像素蛋糕|pixcake)/i },
   { label: "Affinity Photo", re: /^affinity photo/i },
   { label: "Pixelmator Pro", re: /^pixelmator/i },
@@ -20,23 +22,41 @@ const KNOWN_EDITORS = [
   { label: "Preview", re: /^preview$/i },
 ];
 
-function detectEditors() {
-  const dirs = ["/Applications", path.join(os.homedir(), "Applications")];
-  const found = new Map(); // label -> appPath (first match wins)
-  for (const dir of dirs) {
-    let entries = [];
-    try { entries = fs.readdirSync(dir); } catch { continue; }
-    for (const entry of entries) {
-      if (!entry.toLowerCase().endsWith(".app")) continue;
-      const name = entry.slice(0, -4);
-      for (const known of KNOWN_EDITORS) {
-        if (!found.has(known.label) && known.re.test(name)) {
-          found.set(known.label, path.join(dir, entry));
+// Collect .app bundles in a dir AND one level deeper — Adobe installs e.g.
+// Photoshop/Lightroom inside a per-app subfolder
+// (/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app).
+function collectApps(dir, out) {
+  let entries = [];
+  try { entries = fs.readdirSync(dir); } catch { return; }
+  for (const entry of entries) {
+    const full = path.join(dir, entry);
+    if (entry.toLowerCase().endsWith(".app")) {
+      out.push({ name: entry.slice(0, -4), appPath: full });
+    } else {
+      let sub = [];
+      try { sub = fs.readdirSync(full); } catch { continue; }
+      for (const s of sub) {
+        if (s.toLowerCase().endsWith(".app")) {
+          out.push({ name: s.slice(0, -4), appPath: path.join(full, s) });
         }
       }
     }
   }
-  return [...found.entries()].map(([label, appPath]) => ({ label, appPath }));
+}
+
+function detectEditors() {
+  const candidates = [];
+  collectApps("/Applications", candidates);
+  collectApps(path.join(os.homedir(), "Applications"), candidates);
+  const byLabel = new Map();
+  for (const known of KNOWN_EDITORS) {
+    const matches = candidates.filter((c) => known.re.test(c.name));
+    if (!matches.length) continue;
+    // Prefer the highest-sorting bundle name → latest version (2026 > 2024).
+    matches.sort((a, b) => a.name.localeCompare(b.name));
+    byLabel.set(known.label, matches[matches.length - 1].appPath);
+  }
+  return [...byLabel.entries()].map(([label, appPath]) => ({ label, appPath }));
 }
 
 function register({ ipcMain }) {
