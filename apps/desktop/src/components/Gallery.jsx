@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type, Play } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type, Play, ExternalLink } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -170,7 +170,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, onAddTo, onRemoveFrom, onReveal, onEdit, onDeleteFromCatalog, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onEdit, onOpenWith, onDeleteFromCatalog, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
@@ -238,6 +238,21 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, on
           {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
         </button>
       </MenuItem>
+      {editors?.length > 0 && (
+        <MenuItem icon={ExternalLink} label={t("gallery.menu.openWith")}>
+          {editors.map((ed) => (
+            <button
+              key={ed.appPath}
+              type="button"
+              className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+              onClick={() => { onOpenWith?.(ed.appPath); onClose(); }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {ed.label}
+            </button>
+          ))}
+        </MenuItem>
+      )}
       <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.image_path); onClose(); }} />
       <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
@@ -457,6 +472,8 @@ export default function Gallery({
   onCopyPath,
   onCopyName,
   onEdit,
+  onOpenWith,
+  editors,
   onCompare,
   onCollage,
   onAnnotate,
@@ -858,6 +875,8 @@ export default function Gallery({
           onCopyPath={() => onCopyPath?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onReveal={(path) => window.mediaWorkspace?.revealPath?.(path)}
+          editors={editors}
+          onOpenWith={(appPath) => onOpenWith?.(contextMenu.assetIds || [contextMenu.item.asset_id], appPath)}
           onEdit={onEdit}
           onCompare={onCompare}
           onCollage={onCollage}

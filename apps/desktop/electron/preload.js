@@ -55,6 +55,17 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getAssetDetail: (imagePath) => ipcRenderer.invoke("workspace:detail", imagePath),
   getAssetDetailById: (assetId) => ipcRenderer.invoke("workspace:detail-by-id", assetId),
   ensureHdPreviews: (paths) => ipcRenderer.invoke("workspace:ensure-hd-previews", paths),
+  detectEditors: () => ipcRenderer.invoke("app:detect-editors"),
+  openInEditor: (paths, appPath) => ipcRenderer.invoke("app:open-in-editor", paths, appPath),
+  getWatchedDirs: () => ipcRenderer.invoke("app:get-watched-dirs"),
+  addWatchedDir: (dir) => ipcRenderer.invoke("app:add-watched-dir", dir),
+  removeWatchedDir: (dir) => ipcRenderer.invoke("app:remove-watched-dir", dir),
+  statDirs: (paths) => ipcRenderer.invoke("app:stat-dirs", paths),
+  onWatchedImport: (callback) => {
+    const listener = (_event, paths) => callback(paths);
+    ipcRenderer.on("workspace:watched-import", listener);
+    return () => ipcRenderer.removeListener("workspace:watched-import", listener);
+  },
   revealPath: (targetPath) => ipcRenderer.invoke("workspace:reveal", targetPath),
   copyText: (text) => ipcRenderer.invoke("app:copy-text", text),
   getMediaServerPort: () => { try { return ipcRenderer.sendSync("app:get-media-port"); } catch { return 0; } },

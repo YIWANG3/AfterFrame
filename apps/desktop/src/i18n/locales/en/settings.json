@@ -6,7 +6,8 @@
     "ai": "AI Annotation",
     "repaint": "AI Repaint",
     "library": "Library",
-    "about": "About"
+    "about": "About",
+    "integrations": "Integrations"
   },
   "general": {
     "title": "General",
@@ -149,5 +150,16 @@
     "save": "Save",
     "delete": "Delete",
     "cancel": "Cancel"
+  },
+  "integrations": {
+    "title": "Integrations",
+    "editorsTitle": "External editors",
+    "editorsSubtitle": "Auto-detected photo editors available in the gallery right-click → Open With.",
+    "noEditors": "No supported editors detected.",
+    "watchedTitle": "Watched directories",
+    "watchedSubtitle": "New files added to these folders are imported automatically. Point your editor's export folder here.",
+    "noWatched": "No watched directories yet.",
+    "addFolder": "Add Folder…",
+    "remove": "Remove"
   }
 }
