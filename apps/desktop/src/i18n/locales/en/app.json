@@ -31,6 +31,13 @@
   "deleteDetail": "Original files aren't deleted — only the catalog records.",
   "remove": "Remove",
   "cancel": "Cancel",
+  "diskDeleteTitle": "Delete from disk",
+  "diskDeleteMsg_one": "Move this file to the Trash and remove it from the catalog?",
+  "diskDeleteMsg_other": "Move these {{count}} files to the Trash and remove them from the catalog?",
+  "diskDeleteDetail": "The original files are moved to the Trash (recoverable from there).",
+  "diskDeleteConfirm": "Move to Trash",
+  "diskDeleteFailed_one": "Couldn't trash {{count}} file",
+  "diskDeleteFailed_other": "Couldn't trash {{count}} files",
   "copiedPath_one": "Path copied",
   "copiedPath_other": "{{count}} paths copied",
   "copiedName_one": "Name copied",
@@ -50,5 +57,8 @@
   "watchPromptTitle": "Watch this folder?",
   "watchPromptMsg": "Auto-import new files added to “{{dir}}”.",
   "watchPromptMsgN": "Auto-import new files added to these {{count}} folders.",
-  "watchAdd": "Add to Watched"
+  "watchAdd": "Add to Watched",
+  "watchedCatchUpTitle_one": "1 new file in watched folders",
+  "watchedCatchUpTitle_other": "{{count}} new files in watched folders",
+  "watchedCatchUpMsg": "Importing them now…"
 }

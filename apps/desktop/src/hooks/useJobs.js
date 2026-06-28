@@ -37,11 +37,13 @@ export default function useJobs(bridgeRef) {
 
     if (meta.jobType === "import") {
       bridge.mirrorTask("import", final);
-      const queued = bridge.consumeQueuedImport() || { rawDirs: [], imageDirs: [] };
+      const queued = bridge.consumeQueuedImport() || { rawDirs: [], imageDirs: [], auto: false };
       await bridge.refreshAll({ preserveView: true });
-      // Continue queued dirs — but not after a user cancel.
+      // Continue queued dirs — but not after a user cancel. auto wins so a queued
+      // watched import still honors delete-tombstones (resurrecting a removed
+      // file is worse than suppressing one manual re-import).
       if (!cancelled && (queued.rawDirs.length || queued.imageDirs.length)) {
-        await bridge.startIncrementalImport({ rawDirs: queued.rawDirs, imageDirs: queued.imageDirs });
+        await bridge.startIncrementalImport({ rawDirs: queued.rawDirs, imageDirs: queued.imageDirs, auto: queued.auto === true });
       }
     } else if (meta.jobType === "preview") {
       // Chain preview-hd only after a SUCCESSFUL small-preview pass — a failed

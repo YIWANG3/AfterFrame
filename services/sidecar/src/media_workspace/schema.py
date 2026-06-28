@@ -231,4 +231,19 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag)",
     "CREATE INDEX IF NOT EXISTS idx_asset_tags_asset ON asset_tags(asset_id)",
+    # Tombstones for files removed from the catalog while left on disk. A watched
+    # directory would otherwise auto-re-import them on the next catch-up scan. We
+    # record one only when the file still exists on disk at delete time (a
+    # disk-delete trashes the file first, so its stat fails and no row is written
+    # — exactly the rows we'd never need). file_size + mtime let an auto-import
+    # tell "the same file the user removed" (suppress) from "the editor re-saved
+    # to this path" (let it back in, dropping the stale tombstone).
+    """
+    CREATE TABLE IF NOT EXISTS deleted_files (
+        path TEXT PRIMARY KEY,
+        file_size INTEGER NOT NULL,
+        mtime REAL NOT NULL,
+        deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
 ]

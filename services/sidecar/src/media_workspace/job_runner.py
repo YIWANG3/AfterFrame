@@ -123,6 +123,7 @@ def run_import_job(
     image_dirs: list[Path],
     mode: str = "combined",
     generate_hd: bool = True,
+    respect_tombstones: bool = False,
 ) -> dict[str, object]:
     thresholds = Thresholds()
     phase_results: list[dict[str, object]] = []
@@ -257,6 +258,7 @@ def run_import_job(
                 thresholds=thresholds,
                 refresh=True,
                 progress_callback=resolve_progress,
+                respect_tombstones=respect_tombstones,
             )
             # Create resource sets for any exports that don't have one yet
             for row in list_image_assets_missing_resource_set(connection):

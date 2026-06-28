@@ -70,12 +70,50 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
     return await callSidecarJsonAsync(["collage-sources", "--asset-id", assetId]);
   });
 
+  // Cheap watched-dir catch-up check (startup): returns only media files not yet
+  // in the catalog (and not user-deleted). No EXIF/matching — the renderer then
+  // imports just the new files, so an unchanged library shows no import at all.
+  ipcMain.handle("workspace:scan-new-media", async (_event, dirs) => {
+    const ds = [...new Set((dirs || []).filter(Boolean))];
+    if (!ds.length) return { new_files: [], scanned: 0 };
+    const command = ["scan-new-media"];
+    for (const d of ds) command.push("--image-dir", String(d));
+    return await callSidecarJsonAsync(command) || { new_files: [], scanned: 0 };
+  });
+
   ipcMain.handle("workspace:delete-image-assets", async (_event, assetIds) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];
     if (!ids.length) return [];
     const command = ["delete-image-assets"];
     for (const assetId of ids) command.push("--asset-id", String(assetId));
     return await callSidecarJsonAsync(command) || [];
+  });
+
+  // Delete from disk: move the originals to the OS trash (recoverable), THEN
+  // drop them from the catalog. Trashing first means the file is already gone
+  // when the sidecar delete runs, so no tombstone is written (none is needed —
+  // a trashed file can't reappear in a watched dir). Paths come from the
+  // renderer (it has image_path per asset); we still trash defensively.
+  ipcMain.handle("workspace:delete-image-assets-from-disk", async (_event, payload) => {
+    const ids = [...new Set((payload?.assetIds || []).filter(Boolean))];
+    if (!ids.length) return { deleted: [], trashed: 0, failed: [] };
+    const paths = [...new Set((payload?.paths || []).filter(Boolean))];
+    const failed = [];
+    let trashed = 0;
+    for (const p of paths) {
+      try {
+        if (fs.existsSync(p)) {
+          await shell.trashItem(p);
+          trashed += 1;
+        }
+      } catch (err) {
+        failed.push({ path: p, error: err?.message || String(err) });
+      }
+    }
+    const command = ["delete-image-assets"];
+    for (const assetId of ids) command.push("--asset-id", String(assetId));
+    const deleted = await callSidecarJsonAsync(command) || [];
+    return { deleted, trashed, failed };
   });
 }
 

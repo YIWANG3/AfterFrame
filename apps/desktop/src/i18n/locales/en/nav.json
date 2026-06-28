@@ -114,6 +114,7 @@
       "addToFolder": "Add to Folder",
       "removeFromFolder": "Remove from Folder",
       "delete": "Delete from Catalog",
+      "deleteFromDisk": "Delete from Disk…",
       "annotate": "Annotate with AI",
       "annotateSkip": "Annotate{{suffix}} (skip done)",
       "reannotate": "Re-annotate{{suffix}}",

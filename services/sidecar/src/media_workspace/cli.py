@@ -61,7 +61,7 @@ from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_j
 from .preview_service import PreviewService
 from .metadata import extract_image_candidate
 from .models import MatchDecision
-from .reverse_lookup import resolve_image, resolve_image_batch
+from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 from .watcher import ImageWatcher
 
@@ -400,6 +400,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_import_job_parser.add_argument("--raw-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--image-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--generate-hd", action="store_true", help="also generate 2000px HD previews")
+    run_import_job_parser.add_argument(
+        "--respect-tombstones",
+        action="store_true",
+        help="skip files the user removed from the catalog but left on disk (auto imports: watched dirs / catch-up)",
+    )
 
     run_enrichment_job_parser = subparsers.add_parser("run-enrichment-job", parents=[common])
     run_enrichment_job_parser.add_argument("--job-id", required=True)
@@ -441,6 +446,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     summary_parser = subparsers.add_parser("summary", parents=[common])
     summary_parser.add_argument("--json", action="store_true")
+
+    scan_new_media_parser = subparsers.add_parser("scan-new-media", parents=[common])
+    scan_new_media_parser.add_argument("--image-dir", type=Path, action="append", required=True)
 
     list_models_parser = subparsers.add_parser("list-ai-models", parents=[common])
     list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng"], default="nanobanana")
@@ -973,6 +981,7 @@ def _cmd_run_import_job(args, connection, catalog, parser):
         image_dirs=args.image_dir,
         mode=args.mode,
         generate_hd=args.generate_hd,
+        respect_tombstones=args.respect_tombstones,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -1393,6 +1402,35 @@ def _cmd_summary(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_scan_new_media(args, connection, catalog, parser):
+    # Cheap watched-dir catch-up check: which media files under these dirs are not
+    # yet in the catalog (and not user-deleted)? Pure directory walk + indexed
+    # lookups — no EXIF read, no RAW matching. The caller imports only the new
+    # files, so a normal startup over an unchanged library does ~nothing visible.
+    known = {row["path"] for row in connection.execute("SELECT path FROM asset_files")}
+    tombstoned = {row["path"] for row in connection.execute("SELECT path FROM deleted_files")}
+    new_files: list[str] = []
+    seen: set[str] = set()  # nested watched dirs (a dir inside another) yield dupes
+    scanned = known_hit = tombstoned_hit = 0
+    for path in iter_image_files([Path(d) for d in args.image_dir]):
+        scanned += 1
+        key = str(path)
+        if key in tombstoned:
+            tombstoned_hit += 1
+        elif key in known:
+            known_hit += 1
+        elif key not in seen:
+            seen.add(key)
+            new_files.append(key)
+    print(json.dumps({
+        "new_files": new_files,
+        "scanned": scanned,
+        "known": known_hit,
+        "tombstoned": tombstoned_hit,
+    }))
+    return 0
+
+
 def _cmd_list_collections(args, connection, catalog, parser):
     payload = []
     for row in list_collections(connection):
@@ -1549,6 +1587,7 @@ COMMAND_HANDLERS = {
     "catalog-roots": _cmd_catalog_roots,
     "register-roots": _cmd_register_roots,
     "summary": _cmd_summary,
+    "scan-new-media": _cmd_scan_new_media,
     "list-collections": _cmd_list_collections,
     "create-collection": _cmd_create_collection,
     "update-collection": _cmd_update_collection,

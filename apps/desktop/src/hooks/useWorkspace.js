@@ -36,7 +36,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const [importTask, setImportTask] = useState(null);
   const [previewTask, setPreviewTask] = useState(null);
   const [enrichmentTask, setEnrichmentTask] = useState(null);
-  const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [] });
+  const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [], auto: false });
   const [collections, setCollections] = useState([]);
   const [activeCollectionId, setActiveCollectionId] = useState(null);
   const browserRequestIdRef = useRef(0);
@@ -61,7 +61,7 @@ export default function useWorkspace({ pushToast } = {}) {
     startIncrementalImport: (opts) => startIncrementalImport(opts),
     consumeQueuedImport: () => {
       const queued = pendingImport;
-      setPendingImport({ rawDirs: [], imageDirs: [] });
+      setPendingImport({ rawDirs: [], imageDirs: [], auto: false });
       return queued;
     },
     mirrorTask: (type, task) => {
@@ -386,6 +386,22 @@ export default function useWorkspace({ pushToast } = {}) {
     }
   }
 
+  // Delete from disk: trash the originals AND drop the catalog records. Main
+  // trashes the files first, so no tombstone is written (a trashed file can't
+  // reappear in a watched dir). Paths are resolved by the caller (it has them).
+  async function deleteImageAssetsFromDisk(assetIds, paths) {
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    if (!targetIds.length) return null;
+    const result = await api.deleteImageAssetsFromDisk(targetIds, paths || []);
+    const deletedSet = new Set(targetIds);
+    setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
+    if (selectedAssetId && deletedSet.has(selectedAssetId)) {
+      setSelectedAssetId(null);
+      setDetail(null);
+    }
+    return result;
+  }
+
   async function setAssetRating(assetIds, rating) {
     const normalized = Number(rating) || 0;
     const nextRating = normalized > 0 ? normalized : null;
@@ -452,7 +468,7 @@ export default function useWorkspace({ pushToast } = {}) {
     void api.getFacetValues().then(setFacetValues).catch(() => {});
   }
 
-  async function startIncrementalImport({ rawDirs: nextRawDirs = [], imageDirs: nextImageDirs = [], fullCatalog = false }) {
+  async function startIncrementalImport({ rawDirs: nextRawDirs = [], imageDirs: nextImageDirs = [], fullCatalog = false, auto = false }) {
     let resolvedRawDirs = collapseRootPaths(nextRawDirs);
     let resolvedImageDirs = collapseRootPaths(nextImageDirs);
 
@@ -480,6 +496,7 @@ export default function useWorkspace({ pushToast } = {}) {
       rawDirs: resolvedRawDirs,
       imageDirs: resolvedImageDirs,
       mode,
+      auto,
     });
     setImportTask(task);
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
@@ -522,18 +539,21 @@ export default function useWorkspace({ pushToast } = {}) {
     } catch { /* best-effort */ }
   }
 
-  async function addImagesFromPaths(selected) {
+  // `auto` marks background imports (watched dirs live + catch-up). They honor
+  // delete-tombstones so a removed-but-on-disk file isn't resurrected; manual
+  // imports (default) clear tombstones instead — see startIncrementalImport.
+  async function addImagesFromPaths(selected, { auto = false } = {}) {
     if (!selected || !selected.length) return;
     if (!requireCatalog()) return;
-    void maybePromptWatch(selected);
+    if (!auto) void maybePromptWatch(selected);
     await api.registerRoots("image", selected);
     const nextRoots = mergeRoots(imageDirs, selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "image", path }))]);
     if (importTask?.running) {
-      setPendingImport((current) => ({ ...current, imageDirs: mergeRoots(current.imageDirs, selected) }));
+      setPendingImport((current) => ({ ...current, imageDirs: mergeRoots(current.imageDirs, selected), auto: current.auto || auto }));
       return;
     }
-    await startIncrementalImport({ imageDirs: nextRoots.length ? selected : [] });
+    await startIncrementalImport({ imageDirs: nextRoots.length ? selected : [], auto });
     await refreshAll();
   }
 
@@ -586,7 +606,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportTask(null);
     setPreviewTask(null);
     setEnrichmentTask(null);
-    setPendingImport({ rawDirs: [], imageDirs: [] });
+    setPendingImport({ rawDirs: [], imageDirs: [], auto: false });
     setCollections([]);
     setActiveCollectionId(null);
     resetJobs();
@@ -749,6 +769,7 @@ export default function useWorkspace({ pushToast } = {}) {
     addToCollection,
     removeFromCollection,
     deleteImageAssets,
+    deleteImageAssetsFromDisk,
     setAssetRating,
   };
 }

@@ -258,6 +258,31 @@ def cleanup_orphan_image_assets(connection: sqlite3.Connection, commit: bool = T
     return metrics
 
 
+def _record_tombstone(connection: sqlite3.Connection, paths: list[str]) -> None:
+    """Remember files removed from the catalog while still on disk, so a watched
+    directory's catch-up scan won't auto-re-import them. We only tombstone paths
+    that still exist (a disk-delete trashes the file first, so its stat fails and
+    nothing is recorded — those rows would never be needed anyway)."""
+    for path in paths:
+        if not path:
+            continue
+        try:
+            stat = os.stat(path)
+        except OSError:
+            continue  # gone (e.g. disk-delete) → no suppression needed
+        connection.execute(
+            """
+            INSERT INTO deleted_files (path, file_size, mtime)
+            VALUES (?, ?, ?)
+            ON CONFLICT(path) DO UPDATE SET
+                file_size = excluded.file_size,
+                mtime = excluded.mtime,
+                deleted_at = CURRENT_TIMESTAMP
+            """,
+            (path, stat.st_size, stat.st_mtime),
+        )
+
+
 def delete_image_asset_from_catalog(
     connection: sqlite3.Connection,
     catalog_root: Path,
@@ -278,6 +303,15 @@ def delete_image_asset_from_catalog(
     # added, and the cleanup below is type-agnostic.)
     if asset_row is None:
         raise ValueError(f"unknown asset: {asset_id}")
+
+    # Tombstone every on-disk source file for this asset (canonical + any grouped
+    # asset_files) so a watched dir won't silently re-import it later.
+    file_rows = connection.execute(
+        "SELECT path FROM asset_files WHERE asset_id = ?", (asset_id,)
+    ).fetchall()
+    tombstone_paths = {str(asset_row["canonical_path"] or "")}
+    tombstone_paths.update(str(row["path"] or "") for row in file_rows)
+    _record_tombstone(connection, [p for p in tombstone_paths if p])
 
     deleted_preview_paths: list[str] = []
     preview_rows = connection.execute(

@@ -178,6 +178,29 @@ export default function App() {
     await workspaceRef.current.deleteImageAssets(list);
   };
 
+  const deleteFromDisk = async (ids) => {
+    const list = [...new Set((ids || []).filter(Boolean))];
+    if (!list.length) return;
+    const ok = await confirm({
+      title: t("diskDeleteTitle"),
+      message: t("diskDeleteMsg", { count: list.length }),
+      detail: t("diskDeleteDetail"),
+      confirmLabel: t("diskDeleteConfirm"),
+      cancelLabel: t("cancel"),
+      danger: true,
+    });
+    if (!ok) return;
+    const paths = list.map((id) => itemById.get(id)?.image_path).filter(Boolean);
+    const result = await workspaceRef.current.deleteImageAssetsFromDisk(list, paths);
+    if (result?.failed?.length) {
+      pushToast?.({
+        title: t("diskDeleteFailed", { count: result.failed.length }),
+        tone: "error",
+        ttl: 5000,
+      });
+    }
+  };
+
   const copyAssetField = async (ids, field) => {
     const paths = (ids || [])
       .map((id) => itemById.get(id)?.image_path)
@@ -265,8 +288,8 @@ export default function App() {
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
   // and (via main.js `open-file`) for files dropped onto the dock icon.
   const externalImportRef = useRef(null);
-  externalImportRef.current = (paths) => {
-    if (paths?.length) workspace.addImagesFromPaths(paths);
+  externalImportRef.current = (paths, opts) => {
+    if (paths?.length) workspace.addImagesFromPaths(paths, opts);
   };
   useEffect(() => {
     if (!api.has("onExternalImport")) return undefined;
@@ -276,13 +299,18 @@ export default function App() {
   }, []);
 
   // Watched directories: live FSEvents imports (main → renderer) reuse the same
-  // import path as drag-drop / Finder-open (via externalImportRef).
+  // import path as drag-drop / Finder-open (via externalImportRef). Marked
+  // auto so they honor delete-tombstones (won't resurrect removed-on-disk files).
   useEffect(() => {
     if (!api.has("onWatchedImport")) return undefined;
-    return api.onWatchedImport((paths) => externalImportRef.current?.(paths));
+    return api.onWatchedImport((paths) => externalImportRef.current?.(paths, { auto: true }));
   }, []);
-  // Catch-up: re-import each watched dir once per catalog (covers files that
-  // landed while the app was closed + a freshly-opened catalog). Dedup-safe.
+  // Catch-up: once per opened catalog, find files that landed in watched dirs
+  // while the app was closed. This is a CHEAP CHECK, not a re-import — a silent
+  // scan-new-media pass (walk + index lookup, no EXIF/matching) lists only files
+  // not yet in the catalog, then we import just those. An unchanged library
+  // therefore shows nothing on startup; an import (and its toast) appears only
+  // when something genuinely new is found.
   const watchedCatchUpRef = useRef(null);
   useEffect(() => {
     const cat = workspace.info?.catalogPath;
@@ -290,7 +318,21 @@ export default function App() {
     watchedCatchUpRef.current = cat;
     (async () => {
       const dirs = await api.getWatchedDirs?.();
-      if (dirs?.length) workspace.addImagesFromPaths(dirs);
+      if (!dirs?.length) return;
+      // Fallback for an older preload without the cheap scan: import dirs as before.
+      if (!api.has?.("scanNewMedia")) {
+        workspace.addImagesFromPaths(dirs, { auto: true });
+        return;
+      }
+      const res = await api.scanNewMedia(dirs);
+      const newFiles = res?.new_files || [];
+      if (!newFiles.length) return; // nothing new → stay quiet
+      pushToast?.({
+        title: t("watchedCatchUpTitle", { count: newFiles.length }),
+        message: t("watchedCatchUpMsg"),
+        ttl: 5000,
+      });
+      workspace.addImagesFromPaths(newFiles, { auto: true });
     })();
   }, [workspace.info?.catalogPath]);
 
@@ -733,6 +775,7 @@ export default function App() {
                   onAddToCollection={workspace.addToCollection}
                   onRemoveFromCollection={workspace.removeFromCollection}
                   onDeleteFromCatalog={deleteAssets}
+                  onDeleteFromDisk={deleteFromDisk}
                   onCopyPath={(ids) => copyAssetField(ids, "path")}
                   onCopyName={(ids) => copyAssetField(ids, "name")}
                   onEdit={openEditor}

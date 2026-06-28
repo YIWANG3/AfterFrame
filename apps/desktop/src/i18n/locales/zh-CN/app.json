@@ -31,6 +31,13 @@
   "deleteDetail": "原始文件不会被删除,仅移除图库记录。",
   "remove": "移除",
   "cancel": "取消",
+  "diskDeleteTitle": "从磁盘删除",
+  "diskDeleteMsg_one": "将这个文件移到废纸篓,并从图库移除?",
+  "diskDeleteMsg_other": "将这 {{count}} 个文件移到废纸篓,并从图库移除?",
+  "diskDeleteDetail": "原始文件会被移到废纸篓,可从那里恢复。",
+  "diskDeleteConfirm": "移到废纸篓",
+  "diskDeleteFailed_one": "有 {{count}} 个文件未能移入废纸篓",
+  "diskDeleteFailed_other": "有 {{count}} 个文件未能移入废纸篓",
   "copiedPath_other": "已复制 {{count}} 个路径",
   "copiedName_other": "已复制 {{count}} 个名称",
   "verifyMissing_other": "{{count}} 个文件缺失",
@@ -46,5 +53,8 @@
   "watchPromptTitle": "监控这个文件夹?",
   "watchPromptMsg": "自动导入「{{dir}}」中新增的文件。",
   "watchPromptMsgN": "自动导入这 {{count}} 个文件夹中新增的文件。",
-  "watchAdd": "加入监控"
+  "watchAdd": "加入监控",
+  "watchedCatchUpTitle_one": "监控文件夹有 1 个新文件",
+  "watchedCatchUpTitle_other": "监控文件夹有 {{count}} 个新文件",
+  "watchedCatchUpMsg": "正在导入"
 }

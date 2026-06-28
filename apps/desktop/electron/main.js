@@ -726,6 +726,12 @@ async function startImportTask(options) {
   if (readAppSettings()?.previews?.generateHd === true) {
     command.push("--generate-hd");
   }
+  // Auto imports (watched dirs live + catch-up) must not resurrect files the
+  // user removed from the catalog but left on disk. Manual imports omit this so
+  // an explicit re-import clears the tombstone.
+  if (options?.auto === true) {
+    command.push("--respect-tombstones");
+  }
   for (const rawDir of rawDirs) {
     command.push("--raw-dir", rawDir);
   }

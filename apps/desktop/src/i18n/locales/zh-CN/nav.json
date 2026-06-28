@@ -113,6 +113,7 @@
       "addToFolder": "加入文件夹",
       "removeFromFolder": "移出文件夹",
       "delete": "从图库删除",
+      "deleteFromDisk": "从磁盘删除…",
       "annotate": "用 AI 标注",
       "annotateSkip": "标注{{suffix}}(跳过已标注)",
       "reannotate": "重新标注{{suffix}}",

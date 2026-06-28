@@ -292,12 +292,41 @@ def resolve_image(
     return decision
 
 
+def _load_tombstones(connection) -> dict[str, tuple[int, float]]:
+    return {
+        str(row["path"]): (int(row["file_size"]), float(row["mtime"]))
+        for row in connection.execute("SELECT path, file_size, mtime FROM deleted_files")
+    }
+
+
+def _is_tombstoned(connection, tombstones: dict[str, tuple[int, float]], path: Path) -> bool:
+    """True if `path` is a file the user removed from the catalog and hasn't been
+    rewritten since (suppress the auto re-import). If the path has a tombstone but
+    its size/mtime changed — e.g. an editor re-exported over it — the tombstone is
+    stale: drop it and let the file back in."""
+    key = str(path)
+    record = tombstones.get(key)
+    if record is None:
+        return False
+    size, mtime = record
+    try:
+        stat = path.stat()
+    except OSError:
+        stat = None
+    if stat is not None and stat.st_size == size and abs(stat.st_mtime - mtime) < 2:
+        return True
+    tombstones.pop(key, None)
+    connection.execute("DELETE FROM deleted_files WHERE path = ?", (key,))
+    return False
+
+
 def resolve_image_batch(
     connection,
     image_dirs: list[Path],
     thresholds: Thresholds | None = None,
     refresh: bool = False,
     progress_callback=None,
+    respect_tombstones: bool = False,
 ) -> dict[str, object]:
     thresholds = thresholds or Thresholds()
     counts: dict[str, int] = {
@@ -308,12 +337,26 @@ def resolve_image_batch(
     }
     processed = 0
     already_in_catalog = 0
+    skipped_deleted = 0
+    # Auto imports (watched dirs / catch-up) respect tombstones. A manual import
+    # is an explicit "bring this back" — clear any tombstone for the files it
+    # touches so a later delete behaves predictably.
+    tombstones = _load_tombstones(connection)
     total = sum(count_image_files(image_dir.resolve()) for image_dir in image_dirs)
     report_progress(progress_callback, phase="resolve_images", processed=0, total=total, status_counts=counts)
 
     for image_dir in image_dirs:
         upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
         for path in iter_image_files([image_dir.resolve()]):
+            if respect_tombstones:
+                if _is_tombstoned(connection, tombstones, path):
+                    processed += 1
+                    skipped_deleted += 1
+                    report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
+                    continue
+            elif str(path) in tombstones:
+                tombstones.pop(str(path), None)
+                connection.execute("DELETE FROM deleted_files WHERE path = ?", (str(path),))
             if is_video(path):
                 decision = index_video_file(connection, path.resolve(), commit=False)
             elif is_raw(path):
@@ -343,7 +386,8 @@ def resolve_image_batch(
         "total": total,
         "status_counts": {key: value for key, value in counts.items() if value > 0},
         "already_in_catalog": already_in_catalog,
-        "newly_added": processed - already_in_catalog,
+        "newly_added": processed - already_in_catalog - skipped_deleted,
+        "skipped_deleted": skipped_deleted,
     }
 
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Sparkles, Unlink, Link2, Type, Play, ExternalLink } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -170,7 +170,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onEdit, onOpenWith, onDeleteFromCatalog, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
@@ -257,6 +257,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
+      <MenuItem icon={Trash} label={t("gallery.menu.deleteFromDisk")} onClick={() => { onDeleteFromDisk?.(); onClose(); }} />
 
       {(manualFolders.length > 0 || inActiveFolder) && (
         <div className="my-1 border-t border-border/40" />
@@ -469,6 +470,7 @@ export default function Gallery({
   onAddToCollection,
   onRemoveFromCollection,
   onDeleteFromCatalog,
+  onDeleteFromDisk,
   onCopyPath,
   onCopyName,
   onEdit,
@@ -872,6 +874,7 @@ export default function Gallery({
           onAddTo={(collectionId) => onAddToCollection?.(collectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onRemoveFrom={() => onRemoveFromCollection?.(activeCollectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onDeleteFromCatalog={() => onDeleteFromCatalog?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
+          onDeleteFromDisk={() => onDeleteFromDisk?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyPath={() => onCopyPath?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onReveal={(path) => window.mediaWorkspace?.revealPath?.(path)}
