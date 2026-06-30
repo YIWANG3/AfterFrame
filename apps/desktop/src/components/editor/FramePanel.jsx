@@ -3,8 +3,27 @@
 
 import { Download, LoaderCircle } from "lucide-react";
 
+function ScaleSlider({ label, value, onChange }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-12 shrink-0 text-[11px] text-muted2">{label}</span>
+      <input
+        type="range" min="0.6" max="1.6" step="0.01" value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1 flex-1 cursor-pointer accent-[rgb(var(--accent-color))]"
+      />
+      <button
+        type="button" onClick={() => onChange(1)}
+        className="w-9 shrink-0 text-right text-[10.5px] tabular-nums text-muted2 hover:text-text"
+        title="重置"
+      >{Math.round(value * 100)}%</button>
+    </div>
+  );
+}
+
 export default function FramePanel({ frameTool }) {
-  const { templates, templateId, setTemplateId, thumbs, cellAspect, logosReady, exporting, rendering, exportFramed } = frameTool;
+  const { templates, templateId, setTemplateId, thumbs, cellAspect, logosReady, exporting, rendering, exportFramed,
+    textScale, setTextScale, marginScale, setMarginScale } = frameTool;
   return (
     <div className="flex max-h-[calc(100vh-10rem)] flex-col">
       <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -37,6 +56,10 @@ export default function FramePanel({ frameTool }) {
         {!logosReady && <div className="mt-3 px-1 text-[11px] text-muted2">正在加载 logo…</div>}
       </div>
       <div className="border-t border-border/60 px-3 py-2.5">
+        <div className="mb-2.5 flex flex-col gap-2">
+          <ScaleSlider label="文字" value={textScale} onChange={setTextScale} />
+          <ScaleSlider label="留白" value={marginScale} onChange={setMarginScale} />
+        </div>
         <button
           type="button"
           onClick={() => void exportFramed()}

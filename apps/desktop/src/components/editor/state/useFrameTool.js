@@ -67,6 +67,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
   const [cellAspect, setCellAspect] = useState(0.8); // uniform thumb cell w/h, adapts to the photo
   const [rendering, setRendering] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [textScale, setTextScale] = useState(1); // "文字大小" knob
+  const [marginScale, setMarginScale] = useState(1); // "留白" knob
   const logoCacheRef = useRef(new Map());
 
   const template = useMemo(() => FRAME_TEMPLATES.find((t) => t.id === templateId), [templateId]);
@@ -93,12 +95,14 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
     }
   }
 
+  const adjust = { text: textScale, margin: marginScale };
+
   function compose() {
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
-    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current });
+    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust });
   }
 
-  // Live preview: re-render when active / photo / crop / template / logos change.
+  // Live preview: re-render when active / photo / crop / template / logos / knobs change.
   useEffect(() => {
     if (!active || !transformedPreview || !logos || !template) return;
     let alive = true;
@@ -110,7 +114,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
       setRendering(false);
     })();
     return () => { alive = false; };
-  }, [active, transformedPreview, logos, templateId, cropKey, exifKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Small framed previews of every template, so the panel shows what each looks
   // like (logo included) instead of a bare name list.
@@ -167,6 +171,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
     templates: FRAME_TEMPLATES,
     templateId, setTemplateId,
     framedCanvas, thumbs, cellAspect, rendering, exporting,
+    textScale, setTextScale, marginScale, setMarginScale,
     logosReady: !!logos,
     exportFramed,
   };

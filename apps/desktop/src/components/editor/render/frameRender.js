@@ -82,11 +82,12 @@ function resolveTokens(str, exif, profile) {
 // Resolve an anchor to a point on the OUTPUT canvas (fractional x/y) + text
 // align. `region` selects which padding band; h/v place within it; inset is a
 // margin from the edges; dy nudges vertically. All fractions are of WREF.
-function resolveAnchor(anchor, geom) {
+function resolveAnchor(anchor, geom, adjust) {
   const { outW, outH, padPx, wref } = geom;
-  const inset = (anchor.inset ?? 0.05) * wref;
-  const dy = (anchor.dy ?? 0) * wref;
-  const dx = (anchor.dx ?? 0) * wref;
+  const m = adjust?.margin ?? 1; // offsets scale with the band so layout stays proportional
+  const inset = (anchor.inset ?? 0.05) * wref * m;
+  const dy = (anchor.dy ?? 0) * wref * m;
+  const dx = (anchor.dx ?? 0) * wref * m;
 
   // Side strips — a left/right padding band; content (usually rotated text) is
   // centered across the narrow strip and placed by v over the FULL height.
@@ -138,19 +139,37 @@ export function collectLogoNeeds(template, exif, registry, geom) {
   return needs;
 }
 
-function geometry(photo, template) {
+function geometry(photo, template, adjust) {
   const wref = photo.width || photo.naturalWidth;
   const href = photo.height || photo.naturalHeight;
   const pad = template.canvas?.pad || {};
+  const m = adjust?.margin ?? 1; // "blank area" knob scales the padding bands
   const padPx = {
-    top: (pad.top || 0) * wref,
-    right: (pad.right || 0) * wref,
-    bottom: (pad.bottom || 0) * wref,
-    left: (pad.left || 0) * wref,
+    top: (pad.top || 0) * wref * m,
+    right: (pad.right || 0) * wref * m,
+    bottom: (pad.bottom || 0) * wref * m,
+    left: (pad.left || 0) * wref * m,
   };
   const outW = Math.round(wref + padPx.left + padPx.right);
   const outH = Math.round(href + padPx.top + padPx.bottom);
   return { wref, href, padPx, outW, outH };
+}
+
+// Average luminance (0..1) of a canvas region — for picking legible text color
+// on a photo. Sampled AFTER the photo + scrim are drawn, so the scrim counts.
+function sampleLuminance(ctx, cx, cy, w, h) {
+  const x = Math.max(0, Math.round(cx - w / 2));
+  const y = Math.max(0, Math.round(cy - h / 2));
+  const ww = Math.max(1, Math.min(ctx.canvas.width - x, Math.round(w)));
+  const hh = Math.max(1, Math.min(ctx.canvas.height - y, Math.round(h)));
+  let data;
+  try { data = ctx.getImageData(x, y, ww, hh).data; } catch { return 0.3; }
+  let sum = 0, n = 0;
+  for (let i = 0; i < data.length; i += 16) { // every 4th pixel
+    sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    n++;
+  }
+  return n ? sum / n / 255 : 0.3;
 }
 
 /**
@@ -164,10 +183,12 @@ function geometry(photo, template) {
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map() }) {
-  const g = geometry(photo, template);
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust }) {
+  const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
+  const g = geometry(photo, template, adj);
   const { wref, padPx, outW, outH } = g;
   const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
+  const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
 
   const canvas = document.createElement("canvas");
   canvas.width = outW;
@@ -200,9 +221,20 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
   const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
   const brand = brandId ? registry.byId.get(brandId) : null;
 
+  // Dual-logo templates degrade gracefully on single-mark brands: if only one
+  // of the two logo slots resolves, center it via each element's `soloAnchor`.
+  let resolvedLogos = 0;
+  if (template.family === "dual" && brand) {
+    for (const el of template.elements) {
+      if (el.type === "logo" && pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict })) resolvedLogos++;
+    }
+  }
+  const solo = template.family === "dual" && resolvedLogos === 1;
+
   const layers = [];
   for (const el of template.elements) {
-    const a = resolveAnchor(el.anchor, g);
+    const anchorDef = solo && el.soloAnchor ? { ...el.anchor, ...el.soloAnchor } : el.anchor;
+    const a = resolveAnchor(anchorDef, g, adj);
 
     if (el.type === "logo") {
       if (!brand) continue;
@@ -217,7 +249,7 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       // brand's mark at a consistent visual weight. drawLayers wants the sticker
       // scale as a WIDTH fraction of the output, so convert via the real aspect.
       const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : (variant.aspect || 1);
-      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1);
+      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text;
       const scale = heightFrac * aspect * factor;
       // Stickers are CENTER-anchored. Shift by half the logo width so its edge
       // (not its center) sits flush at the margin — matching the text's edge.
@@ -229,6 +261,10 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
         x: lx, y: a.y, scale,
         rotation: el.style?.rotation ?? 0, opacity: el.style?.opacity ?? 100,
         outlineWidth: 0, outlineColor: "#fff",
+        // On a photo, give the mark a soft shadow so a light logo survives a
+        // bright background (we can't re-tint the cached image per-region).
+        shadow: isOverlay, shadowColor: "#000000", shadowOpacity: 45,
+        shadowBlur: 10, shadowX: 0, shadowY: 0,
       });
       continue;
     }
@@ -243,28 +279,47 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
     const weight = el.style?.weight ?? 400;
     const italic = !!el.style?.italic;
     const tracking = el.style?.tracking ?? 0;
-    const fontPx = (el.style?.size || 0.02) * wref; // rendered px
+    const sizeFrac = (el.style?.size || 0.02) * adj.text;
+    const fontPx = sizeFrac * wref; // rendered px
     const tw = measureTextWidth(text, { fontPx, weight, italic, family, tracking });
     let x = a.x;
     if (a.align === "left") x = a.x - (tw / 2) / outW;
     else if (a.align === "right") x = a.x + (tw / 2) / outW;
 
+    // On-photo text: choose black/white by the luminance behind it (scrim
+    // included) and add an opposite-color soft shadow, so it's legible on any
+    // photo — solving "dark text vanishes on a dark photo" and vice versa.
+    let fillColor = el.style?.color || "#141414";
+    let shadow = false, shadowColor = "#000000";
+    if (isOverlay) {
+      const lum = sampleLuminance(ctx, a.x * outW, a.y * outH, outW * 0.34, fontPx * 1.6);
+      const dark = lum < 0.55;
+      fillColor = dark ? "#ffffff" : "#141414";
+      shadowColor = dark ? "#000000" : "#ffffff";
+      shadow = true;
+    }
+
     layers.push({
       type: "text", text,
       x, y: a.y, align: a.align,
       fontFamily: family,
-      fontSize: (el.style?.size || 0.02) * 1920 * factor,
+      fontSize: sizeFrac * 1920 * factor,
       fontWeight: weight,
       bold: false,
       italic,
       tracking,
       fillMode: "solid",
-      fillColor: el.style?.color || "#141414",
+      fillColor,
       fillOpacity: 100,
       opacity: el.style?.opacity ?? 100,
       bgMode: "none",
       strokeEnabled: false,
-      shadow: false,
+      shadow,
+      shadowColor,
+      shadowOpacity: 38,
+      shadowBlur: sizeFrac * 1920 * factor * 0.4,
+      shadowX: 0,
+      shadowY: 0,
       rotation: el.style?.rotation ?? 0,
     });
   }

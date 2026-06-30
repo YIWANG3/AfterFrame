@@ -19,8 +19,8 @@ const BRANDS = [
   { label: "Fujifilm", exif: { camera_model: "FUJIFILM X-T5", lens_model: "XF 33mm F1.4 R LM WR", make: "FUJIFILM", focal_length: 33, aperture: 1.4, shutter_speed: 1 / 640, iso: 160, capture_time: "2024-05-20T16:40:00Z" } },
 ];
 
-function samplePhoto(w = 1200) {
-  const h = Math.round(w * 1.25);
+function samplePhoto(w = 1400) {
+  const h = Math.round(w * 0.667); // landscape 3:2 — matches typical camera output
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
   const x = c.getContext("2d");
