@@ -276,6 +276,42 @@ export const FRAME_TEMPLATES = [
         style: { font: "grotesk", weight: 400, size: 0.0145, color: "#8a8a8a" } },
     ],
   },
+
+  // ───────────────────────── 竖排 Vertical ─────────────────────────
+  // A solid strip beside the photo holds the logo + rotated (vertical) text.
+  {
+    id: "vbar-right", name: "竖排 · 右侧条", family: "vertical",
+    canvas: { pad: { right: 0.12 }, bg: { type: "solid", color: "#ffffff" } },
+    elements: [
+      { type: "logo", variant: "symbol",
+        anchor: { region: "right", h: "center", v: 0.1 }, style: { size: 0.05 } },
+      { type: "exif", fields: ["focal", "aperture", "shutter", "iso"],
+        anchor: { region: "right", h: "center", v: 0.58 },
+        style: { font: "grotesk", weight: 400, size: 0.013, color: "#8a8a8a", tracking: 0.08, rotation: 90 } },
+    ],
+  },
+  {
+    id: "vbar-left", name: "竖排 · 左侧条", family: "vertical",
+    canvas: { pad: { left: 0.11 }, bg: { type: "solid", color: "#ffffff" } },
+    elements: [
+      { type: "logo", variant: "symbol",
+        anchor: { region: "left", h: "center", v: 0.1 }, style: { size: 0.05 } },
+      { type: "text", content: "{camera_model}",
+        anchor: { region: "left", h: "center", v: 0.6 },
+        style: { font: "grotesk", weight: 400, size: 0.016, color: "#1a1a1a", rotation: 90 } },
+    ],
+  },
+  {
+    id: "corner-vert", name: "大留白 · 角标竖参数", family: "vertical",
+    canvas: { pad: { top: 0.07, left: 0.06, right: 0.1, bottom: 0.06 }, bg: { type: "solid", color: "#ffffff" } },
+    elements: [
+      { type: "logo", variant: "symbol",
+        anchor: { region: "top", h: "left", v: "center", inset: 0.05 }, style: { size: 0.05 } },
+      { type: "exif", fields: ["focal", "aperture", "shutter", "iso"],
+        anchor: { region: "right", h: "center", v: 0.5 },
+        style: { font: "grotesk", weight: 400, size: 0.0125, color: "#8a8a8a", tracking: 0.06, rotation: 90 } },
+    ],
+  },
 ];
 
 // Logical font name -> a loaded font-family. Outfit (bundled, OFL) is the

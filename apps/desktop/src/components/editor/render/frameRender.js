@@ -86,6 +86,18 @@ function resolveAnchor(anchor, geom) {
   const { outW, outH, padPx, wref } = geom;
   const inset = (anchor.inset ?? 0.05) * wref;
   const dy = (anchor.dy ?? 0) * wref;
+  const dx = (anchor.dx ?? 0) * wref;
+
+  // Side strips — a left/right padding band; content (usually rotated text) is
+  // centered across the narrow strip and placed by v over the FULL height.
+  if (anchor.region === "left" || anchor.region === "right") {
+    const bandLeft = anchor.region === "left" ? 0 : outW - padPx.right;
+    const bandW = anchor.region === "left" ? padPx.left : padPx.right;
+    const hFrac = anchor.h === "left" ? 0.3 : anchor.h === "right" ? 0.7 : 0.5;
+    const vF = typeof anchor.v === "number" ? anchor.v
+      : anchor.v === "top" ? 0.12 : anchor.v === "bottom" ? 0.88 : 0.5;
+    return { x: (bandLeft + bandW * hFrac + dx) / outW, y: (outH * vF + dy) / outH, align: "center" };
+  }
 
   let bandTop, bandH;
   if (anchor.region === "top") { bandTop = 0; bandH = padPx.top; }
@@ -100,6 +112,7 @@ function resolveAnchor(anchor, geom) {
   if (anchor.h === "left") { xPx = inset; align = "left"; }
   else if (anchor.h === "right") { xPx = outW - inset; align = "right"; }
   else { xPx = outW / 2; align = "center"; }
+  xPx += dx;
 
   return { x: xPx / outW, y: yPx / outH, align };
 }
@@ -252,7 +265,7 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       bgMode: "none",
       strokeEnabled: false,
       shadow: false,
-      rotation: 0,
+      rotation: el.style?.rotation ?? 0,
     });
   }
 
