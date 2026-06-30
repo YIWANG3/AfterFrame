@@ -69,12 +69,11 @@
       ],
       "variants": [
         {
-          "id": "lockup",
-          "kind": "lockup",
-          "file": "nikon/lockup.svg",
-          "aspect": 1.0,
-          "colorLocked": true,
-          "h": 0.8
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "nikon/wordmark.svg",
+          "aspect": 3.62,
+          "h": 0.45
         }
       ]
     },
@@ -135,7 +134,7 @@
           "file": "leica/symbol.svg",
           "aspect": 1.0,
           "colorLocked": true,
-          "h": 1.0
+          "h": 0.72
         }
       ]
     }

@@ -17,6 +17,8 @@ const BRANDS = [
   { label: "Leica", exif: { camera_model: "Leica M11", lens_model: "Summilux-M 1:1.4/35 ASPH.", make: "Leica Camera AG", focal_length: 35, aperture: 1.4, shutter_speed: 1 / 500, iso: 100, capture_time: "2024-06-02T09:30:00Z" } },
   { label: "Canon", exif: { camera_model: "Canon EOS R5", lens_model: "RF 50mm F1.2 L USM", make: "Canon", focal_length: 50, aperture: 1.2, shutter_speed: 1 / 800, iso: 200, capture_time: "2024-07-15T18:05:00Z" } },
   { label: "Fujifilm", exif: { camera_model: "FUJIFILM X-T5", lens_model: "XF 33mm F1.4 R LM WR", make: "FUJIFILM", focal_length: 33, aperture: 1.4, shutter_speed: 1 / 640, iso: 160, capture_time: "2024-05-20T16:40:00Z" } },
+  { label: "Nikon", exif: { camera_model: "NIKON Z f", lens_model: "NIKKOR Z 40mm f/2", make: "NIKON CORPORATION", focal_length: 40, aperture: 2, shutter_speed: 1/250, iso: 320, capture_time: "2024-08-01T10:00:00Z" } },
+  { label: "Sony", exif: { camera_model: "ILCE-7CR", lens_model: "FE 35mm F1.4 GM", make: "Sony", focal_length: 35, aperture: 1.4, shutter_speed: 1/320, iso: 125, capture_time: "2024-08-02T11:00:00Z" } },
 ];
 
 function samplePhoto(w = 1400) {
