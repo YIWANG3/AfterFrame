@@ -40,9 +40,9 @@ export default function FramePanel({ frameTool }) {
       </div>
       <div className="border-t border-border/60 px-3 py-3">
         <div className="mb-3.5 flex flex-col gap-3.5">
-          <SliderRow compact label="文字" min={60} max={160} suffix="%"
+          <SliderRow compact label="文字" min={60} max={160} suffix="%" resetValue={100}
             value={Math.round(textScale * 100)} onChange={(v) => setTextScale(v / 100)} />
-          <SliderRow compact label="留白" min={60} max={160} suffix="%"
+          <SliderRow compact label="留白" min={60} max={160} suffix="%" resetValue={100}
             value={Math.round(marginScale * 100)} onChange={(v) => setMarginScale(v / 100)} />
         </div>
         <button

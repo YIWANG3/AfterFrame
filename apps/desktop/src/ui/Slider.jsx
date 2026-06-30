@@ -52,13 +52,15 @@ export function NumberDragInput({ value, min, max, onChange, className = "w-11" 
 
 // Label + range + scrubable value. The single SliderRow — TextPanel and
 // StickerPanel previously each had their own.
-export function SliderRow({ label, min, max, value, onChange, suffix, compact, className }) {
+export function SliderRow({ label, min, max, value, onChange, suffix, compact, className, resetValue }) {
   return (
     <div className={cx("flex items-center gap-2", compact ? "" : "mt-2", className)}>
       {label && <label className="min-w-[48px] text-[10px] text-muted2">{label}</label>}
       <input
         type="range" min={min} max={max} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
+        // Opt-in: double-click the track to snap back to a default value.
+        onDoubleClick={resetValue != null ? () => onChange(resetValue) : undefined}
         className="slider flex-1"
       />
       <NumberDragInput value={value} min={min} max={max} onChange={onChange} />
