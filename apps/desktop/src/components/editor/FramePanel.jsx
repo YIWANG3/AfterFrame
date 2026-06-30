@@ -2,24 +2,7 @@
 // (header) is provided by EditorOverlay, like the other tool panels.
 
 import { Download, LoaderCircle } from "lucide-react";
-
-function ScaleSlider({ label, value, onChange }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-[11px] text-muted2">{label}</span>
-      <input
-        type="range" min="0.6" max="1.6" step="0.01" value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1 flex-1 cursor-pointer accent-[rgb(var(--accent-color))]"
-      />
-      <button
-        type="button" onClick={() => onChange(1)}
-        className="w-9 shrink-0 text-right text-[10.5px] tabular-nums text-muted2 hover:text-text"
-        title="重置"
-      >{Math.round(value * 100)}%</button>
-    </div>
-  );
-}
+import { SliderRow } from "../../ui";
 
 export default function FramePanel({ frameTool }) {
   const { templates, templateId, setTemplateId, thumbs, cellAspect, logosReady, exporting, rendering, exportFramed,
@@ -55,10 +38,12 @@ export default function FramePanel({ frameTool }) {
         </div>
         {!logosReady && <div className="mt-3 px-1 text-[11px] text-muted2">正在加载 logo…</div>}
       </div>
-      <div className="border-t border-border/60 px-3 py-2.5">
-        <div className="mb-2.5 flex flex-col gap-2">
-          <ScaleSlider label="文字" value={textScale} onChange={setTextScale} />
-          <ScaleSlider label="留白" value={marginScale} onChange={setMarginScale} />
+      <div className="border-t border-border/60 px-3 py-3">
+        <div className="mb-3.5 flex flex-col gap-3.5">
+          <SliderRow compact label="文字" min={60} max={160} suffix="%"
+            value={Math.round(textScale * 100)} onChange={(v) => setTextScale(v / 100)} />
+          <SliderRow compact label="留白" min={60} max={160} suffix="%"
+            value={Math.round(marginScale * 100)} onChange={(v) => setMarginScale(v / 100)} />
         </div>
         <button
           type="button"
