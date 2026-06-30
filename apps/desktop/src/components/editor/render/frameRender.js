@@ -118,6 +118,21 @@ function resolveAnchor(anchor, geom, adjust) {
   return { x: xPx / outW, y: yPx / outH, align };
 }
 
+// A logo's color is normally template-driven (dark on light frames, white on
+// dark). But brands with an ICONIC color (Canon red, Sony α orange) carry a
+// `color` in the manifest and should keep it — except when a template forces a
+// specific non-neutral color (e.g. the gold preset). colorLocked brands (Leica)
+// keep their SVG colors regardless.
+const NEUTRAL_LOGO_COLORS = new Set([undefined, "#141414", "#f4f4f4", "#ffffff"]);
+function logoColorFor(el, variant) {
+  const base = el.color || "#141414";
+  // Per-VARIANT iconic color: Canon's wordmark is red, Sony's α symbol is orange,
+  // but Sony's corporate SONY wordmark stays mono — so the color lives on the
+  // variant, not the brand.
+  if (!variant?.colorLocked && variant?.color && NEUTRAL_LOGO_COLORS.has(el.color)) return variant.color;
+  return base;
+}
+
 /** Logos a template needs for this photo: [{ brandId, variant, color, colorLocked, key, heightPx }]. */
 export function collectLogoNeeds(template, exif, registry, geom) {
   const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
@@ -127,7 +142,7 @@ export function collectLogoNeeds(template, exif, registry, geom) {
     if (el.type !== "logo" || !brand) continue;
     const variant = pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict });
     if (!variant) continue;
-    const color = el.color || "#141414";
+    const color = logoColorFor(el, variant);
     const colorLocked = !!variant.colorLocked;
     const key = `${brandId}:${variant.id}:${colorLocked ? "orig" : color}`;
     // Prepare at a generous size so the same cached logo stays crisp in both the
@@ -240,7 +255,7 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       if (!brand) continue;
       const variant = pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict });
       if (!variant) continue;
-      const color = el.color || "#141414";
+      const color = logoColorFor(el, variant);
       const key = `${brandId}:${variant.id}:${variant.colorLocked ? "orig" : color}`;
       const img = logoImages.get(key);
       if (!img) continue; // caller didn't prepare it

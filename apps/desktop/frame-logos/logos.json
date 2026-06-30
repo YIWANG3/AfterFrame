@@ -56,7 +56,8 @@
           "kind": "wordmark",
           "file": "canon/wordmark.svg",
           "aspect": 4.78,
-          "h": 0.45
+          "h": 0.45,
+          "color": "#cc0011"
         }
       ]
     },
@@ -90,7 +91,8 @@
           "kind": "symbol",
           "file": "sony/symbol.svg",
           "aspect": 0.95,
-          "h": 1.0
+          "h": 1.0,
+          "color": "#f47521"
         },
         {
           "id": "wordmark",
