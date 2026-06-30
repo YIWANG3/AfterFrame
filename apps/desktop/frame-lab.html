@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Frame Lab · P1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:ital@0;1&family=Space+Mono&family=Caveat&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #0c0c0c; color: #eee; font-family: system-ui, sans-serif; padding: 24px; }
+  h1 { font-size: 15px; font-weight: 500; color: #ccc; margin: 0 0 18px; }
+  .brand h2 { font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #cdb07a; margin: 30px 0 14px; padding-bottom: 6px; border-bottom: 1px solid #242424; }
+  .grid { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+  .cell { background: #161616; padding: 10px; border-radius: 9px; }
+  .cell h3 { font-size: 10.5px; font-weight: 500; margin: 7px 0 0; color: #888; }
+  canvas { max-width: 210px; height: auto; display: block; }
+  #err { color: #e88; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Frame Lab · P1 引擎预览（真实 logo + 复用 drawLayers）</h1>
+<div id="err"></div>
+<div id="root" class="grid"></div>
+<script type="module" src="/src/frame-lab.js"></script>
+</body>
+</html>

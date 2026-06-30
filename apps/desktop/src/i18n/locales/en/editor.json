@@ -23,7 +23,8 @@
       "transform": "Transform",
       "text": "Text",
       "sticker": "Sticker",
-      "repaint": "AI Repaint"
+      "repaint": "AI Repaint",
+      "frame": "Frame"
     }
   },
   "text": {

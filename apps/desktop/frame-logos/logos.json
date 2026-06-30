@@ -1,0 +1,153 @@
+{
+  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md.",
+  "logos": [
+    {
+      "id": "hasselblad",
+      "name": "Hasselblad",
+      "accent": "#ff6a00",
+      "tags": [
+        "camera",
+        "medium-format"
+      ],
+      "variants": [
+        {
+          "id": "symbol",
+          "kind": "symbol",
+          "file": "hasselblad/symbol.svg",
+          "aspect": 1.26,
+          "h": 1.0
+        },
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "hasselblad/wordmark.svg",
+          "aspect": 10.58,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "fujifilm",
+      "name": "Fujifilm",
+      "accent": "#ed1c24",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "fujifilm/wordmark.svg",
+          "aspect": 6.01,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "canon",
+      "name": "Canon",
+      "accent": "#bc0024",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "canon/wordmark.svg",
+          "aspect": 4.78,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "nikon",
+      "name": "Nikon",
+      "accent": "#ffe100",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "lockup",
+          "kind": "lockup",
+          "file": "nikon/lockup.svg",
+          "aspect": 1.0,
+          "colorLocked": true,
+          "h": 0.8
+        }
+      ]
+    },
+    {
+      "id": "sony",
+      "name": "Sony",
+      "accent": "#000000",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "symbol",
+          "kind": "symbol",
+          "file": "sony/symbol.svg",
+          "aspect": 0.95,
+          "h": 1.0
+        },
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "sony/wordmark.svg",
+          "aspect": 5.68,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "dji",
+      "name": "DJI",
+      "accent": "#000000",
+      "tags": [
+        "camera",
+        "drone",
+        "gimbal"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "dji/wordmark.svg",
+          "aspect": 1.0,
+          "h": 0.7
+        }
+      ]
+    },
+    {
+      "id": "leica",
+      "name": "Leica",
+      "accent": "#e20612",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "symbol",
+          "kind": "symbol",
+          "file": "leica/symbol.svg",
+          "aspect": 1.0,
+          "colorLocked": true,
+          "h": 1.0
+        }
+      ]
+    }
+  ],
+  "match": {
+    "hasselblad": "hasselblad",
+    "fujifilm": "fujifilm",
+    "fuji": "fujifilm",
+    "canon": "canon",
+    "nikon": "nikon",
+    "sony": "sony",
+    "dji": "dji",
+    "leica": "leica"
+  }
+}

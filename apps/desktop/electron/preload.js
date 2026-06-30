@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   quickRegister: (imagePath, originPath, collageSourceIds) => ipcRenderer.invoke("workspace:quick-register", imagePath, originPath, collageSourceIds),
   getCollageSources: (assetId) => ipcRenderer.invoke("workspace:collage-sources", assetId),
   scanNewMedia: (dirs) => ipcRenderer.invoke("workspace:scan-new-media", dirs),
+  getFrameLogos: () => ipcRenderer.invoke("app:frame-logos"),
   deleteImageAssets: (assetIds) => ipcRenderer.invoke("workspace:delete-image-assets", assetIds),
   deleteImageAssetsFromDisk: (assetIds, paths) => ipcRenderer.invoke("workspace:delete-image-assets-from-disk", { assetIds, paths }),
   getAiProviderToken: (provider) => ipcRenderer.invoke("workspace:get-ai-provider-token", provider),

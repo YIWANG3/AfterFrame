@@ -44,6 +44,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "frame-logos",
+        "to": "frame-logos",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,

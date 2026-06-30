@@ -63,6 +63,7 @@ const api = {
   quickRegister: (...args) => invoke("quickRegister", ...args),
   getCollageSources: (...args) => invoke("getCollageSources", ...args),
   scanNewMedia: (...args) => invoke("scanNewMedia", ...args),
+  getFrameLogos: (...args) => invoke("getFrameLogos", ...args),
   deleteImageAssets: (...args) => invoke("deleteImageAssets", ...args),
   deleteImageAssetsFromDisk: (...args) => invoke("deleteImageAssetsFromDisk", ...args),
   setAssetRating: (...args) => invoke("setAssetRating", ...args),

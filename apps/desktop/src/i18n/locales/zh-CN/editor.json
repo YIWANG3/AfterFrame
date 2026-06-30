@@ -23,7 +23,8 @@
       "transform": "变换",
       "text": "文字",
       "sticker": "贴纸",
-      "repaint": "AI 重绘"
+      "repaint": "AI 重绘",
+      "frame": "边框"
     }
   },
   "text": {

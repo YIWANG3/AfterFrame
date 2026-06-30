@@ -447,7 +447,9 @@ export default function App() {
   function openEditor(target) {
     const nextItem =
       typeof target === "string"
-        ? itemById.get(target)
+        // The gallery context menu passes image_path; the lightbox passes an
+        // asset_id. itemById is keyed by asset_id, so fall back to a path match.
+        ? itemById.get(target) || [...itemById.values()].find((it) => it.image_path === target)
         : target?.asset_id
           ? itemById.get(target.asset_id) || target
           : itemById.get(workspace.selectedAssetId);
