@@ -529,6 +529,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     flipX,
     flipY,
     normalizedCrop: getNormalizedCrop(),
+    canvasPad: editorState.canvas?.pad,
+    canvasBg: editorState.canvas?.bg,
     layers,
     depthFieldCanvas: depthFieldCanvasRef.current,
     depthFeather,

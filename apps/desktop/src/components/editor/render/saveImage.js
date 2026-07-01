@@ -31,6 +31,8 @@ export async function saveEditedImage(ctx) {
     flipX,
     flipY,
     normalizedCrop,
+    canvasPad,
+    canvasBg,
     layers,
     depthFieldCanvas,
     depthFeather,
@@ -39,10 +41,12 @@ export async function saveEditedImage(ctx) {
     isLayerRenderable,
   } = ctx;
 
+  const hasPad = canvasPad && (canvasPad.top || canvasPad.right || canvasPad.bottom || canvasPad.left);
+
   // Native sharp fast-path: full source resolution, no canvas overhead. Only
-  // valid when there are zero overlay layers (we don't ship layer rendering
-  // to sharp).
-  if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePath && layers.length === 0) {
+  // valid when there are zero overlay layers AND no canvas margin (sharp can't
+  // do the padded-canvas composite).
+  if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePath && layers.length === 0 && !hasPad) {
     try {
       await window.mediaWorkspace.processAndSave({
         sourcePath: nativeSaveSourcePath,
@@ -75,58 +79,77 @@ export async function saveEditedImage(ctx) {
     sourceImage, sourceWidth, sourceHeight, rotationDeg, flipX, flipY,
   );
 
-  const exportRect = normalizedCrop
-    ? {
-        x: Math.round(normalizedCrop.x * transformedFull.width),
-        y: Math.round(normalizedCrop.y * transformedFull.height),
-        width: Math.max(1, Math.round(normalizedCrop.width * transformedFull.width)),
-        height: Math.max(1, Math.round(normalizedCrop.height * transformedFull.height)),
-      }
-    : { x: 0, y: 0, width: transformedFull.width, height: transformedFull.height };
-
-  const outputCanvas = document.createElement("canvas");
-  outputCanvas.width = exportRect.width;
-  outputCanvas.height = exportRect.height;
-  const outCtx = outputCanvas.getContext("2d");
-  outCtx.imageSmoothingEnabled = true;
-  outCtx.imageSmoothingQuality = "high";
-  outCtx.drawImage(
-    transformedFull,
-    exportRect.x, exportRect.y, exportRect.width, exportRect.height,
-    0, 0, exportRect.width, exportRect.height,
-  );
-
-  // Composite layers in stack order. Each renderable layer is drawn to a temp
-  // canvas, optionally masked by the depth field, then blitted to the output.
   const fullW = transformedFull.width;
   const fullH = transformedFull.height;
   const isSticker = (layer) => layer?.type === "sticker";
 
+  // Two output shapes:
+  //  • hasPad → output = photo + margins (bg-filled); layers are already
+  //    fractions of that output (matches the live editor's outputRect).
+  //  • else   → output = the crop rect; layers are full-photo fractions
+  //    remapped into the crop (the pre-unified behavior, byte-identical).
+  const outputCanvas = document.createElement("canvas");
+  let compW, compH, mapLayer, outCtx;
+
+  if (hasPad) {
+    const short = Math.min(fullW, fullH);
+    const padL = Math.round(canvasPad.left * short);
+    const padR = Math.round(canvasPad.right * short);
+    const padT = Math.round(canvasPad.top * short);
+    const padB = Math.round(canvasPad.bottom * short);
+    compW = fullW + padL + padR;
+    compH = fullH + padT + padB;
+    outputCanvas.width = compW;
+    outputCanvas.height = compH;
+    outCtx = outputCanvas.getContext("2d");
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = "high";
+    outCtx.fillStyle = canvasBg?.color || "#ffffff";
+    outCtx.fillRect(0, 0, compW, compH);
+    outCtx.drawImage(transformedFull, padL, padT);
+    mapLayer = (layer) => layer; // x/y/scale already output-relative
+  } else {
+    const exportRect = normalizedCrop
+      ? {
+          x: Math.round(normalizedCrop.x * fullW),
+          y: Math.round(normalizedCrop.y * fullH),
+          width: Math.max(1, Math.round(normalizedCrop.width * fullW)),
+          height: Math.max(1, Math.round(normalizedCrop.height * fullH)),
+        }
+      : { x: 0, y: 0, width: fullW, height: fullH };
+    compW = exportRect.width;
+    compH = exportRect.height;
+    outputCanvas.width = compW;
+    outputCanvas.height = compH;
+    outCtx = outputCanvas.getContext("2d");
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = "high";
+    outCtx.drawImage(transformedFull, exportRect.x, exportRect.y, compW, compH, 0, 0, compW, compH);
+    mapLayer = (layer) => {
+      const absX = layer.x * fullW - exportRect.x;
+      const absY = layer.y * fullH - exportRect.y;
+      const scaleAdjust = isSticker(layer)
+        ? { scale: (layer.scale ?? 0.4) * (fullW / exportRect.width) }
+        : null;
+      return { ...layer, x: absX / exportRect.width, y: absY / exportRect.height, ...(scaleAdjust || {}) };
+    };
+  }
+
+  // Composite layers in stack order. Each renderable layer is drawn to a temp
+  // canvas, optionally masked by the depth field, then blitted to the output.
   for (const layer of layers) {
     if (!isLayerRenderable(layer)) continue;
-    const absX = layer.x * fullW - exportRect.x;
-    const absY = layer.y * fullH - exportRect.y;
-    // Sticker scale is fraction of source image width; rescale when exporting
-    // a cropped sub-rect so the visible sticker stays the same physical size.
-    const scaleAdjust = isSticker(layer)
-      ? { scale: (layer.scale ?? 0.4) * (fullW / exportRect.width) }
-      : null;
-    const mappedLayer = {
-      ...layer,
-      x: absX / exportRect.width,
-      y: absY / exportRect.height,
-      ...(scaleAdjust || {}),
-    };
+    const mappedLayer = mapLayer(layer);
     const useDepth = depthFieldCanvas && layer.zPosition != null && layer.zPosition < 1;
     if (!useDepth) {
-      drawLayersToCtx(outCtx, exportRect.width, exportRect.height, [mappedLayer]);
+      drawLayersToCtx(outCtx, compW, compH, [mappedLayer]);
       continue;
     }
     const tmp = document.createElement("canvas");
-    tmp.width = exportRect.width;
-    tmp.height = exportRect.height;
-    drawLayersToCtx(tmp.getContext("2d"), exportRect.width, exportRect.height, [mappedLayer]);
-    const mask = buildDepthMaskCanvas(depthFieldCanvas, exportRect.width, exportRect.height, layer.zPosition, depthFeather);
+    tmp.width = compW;
+    tmp.height = compH;
+    drawLayersToCtx(tmp.getContext("2d"), compW, compH, [mappedLayer]);
+    const mask = buildDepthMaskCanvas(depthFieldCanvas, compW, compH, layer.zPosition, depthFeather);
     const t = tmp.getContext("2d");
     t.globalCompositeOperation = "destination-in";
     t.drawImage(mask, 0, 0);
