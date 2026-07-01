@@ -17,7 +17,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { fileName, localFileUrl } from "../utils/format";
+import { fileName } from "../utils/format";
 import { ASPECT_PRESETS, getAspectRatio, resizeCropRect } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
@@ -44,6 +44,10 @@ import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { saveEditedImage } from "./editor/render/saveImage";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import CropOverlay from "./editor/components/CropOverlay";
+import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
+import { useEditorHistory } from "./editor/state/useEditorHistory";
+import { useEditorImage } from "./editor/state/useEditorImage";
+import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -70,49 +74,10 @@ import {
   removeLayerById,
 } from "./editor/layerStack";
 
-const PREVIEW_MAX_EDGE = 2200;
 const MIN_FREE_ANGLE = -45;
 const MAX_FREE_ANGLE = 45;
-const BASE_STATE = {
-  aspectKey: "free",
-  freeAngle: 0,
-  quarterTurns: 0,
-  flipX: false,
-  flipY: false,
-  cropRect: null,
-  imageZoom: 1,
-  imageOffsetX: 0,
-  imageOffsetY: 0,
-};
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function rectEquals(a, b) {
-  if (!a || !b) return a === b;
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-}
-
-function cloneState(state) {
-  return {
-    ...state,
-    cropRect: state.cropRect ? { ...state.cropRect } : null,
-  };
-}
-
-function stateEquals(a, b) {
-  return (
-    a.aspectKey === b.aspectKey &&
-    a.freeAngle === b.freeAngle &&
-    a.quarterTurns === b.quarterTurns &&
-    a.flipX === b.flipX &&
-    a.flipY === b.flipY &&
-    a.imageZoom === b.imageZoom &&
-    a.imageOffsetX === b.imageOffsetX &&
-    a.imageOffsetY === b.imageOffsetY &&
-    rectEquals(a.cropRect, b.cropRect)
-  );
 }
 
 function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false }) {
@@ -434,28 +399,22 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
 
 export default function EditorOverlay({ open, item, onClose, onSaveComplete, pushToast }) {
   const { t } = useTranslation("editor");
-  const viewportRef = useRef(null);
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
-  const sourceImageRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
   const pointerStateRef = useRef(null);
-  const editorStateRef = useRef(cloneState(BASE_STATE));
-  const historyRef = useRef([]);
-  const historyIndexRef = useRef(-1);
-  const baseSnapshotRef = useRef(null);
   const angleDragStartRef = useRef(null);
   const quickSavePathRef = useRef(null);
-  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const [loadState, setLoadState] = useState("idle");
+  // Transform state machine + undo/redo (destructured with original names so the
+  // many call sites are unchanged).
+  const {
+    editorState, editorStateRef,
+    history, historyIndex, historyRef, historyIndexRef, baseSnapshotRef,
+    syncHistory, apply: applyState, record: recordState, undo: handleUndo, redo: handleRedo,
+  } = useEditorHistory();
   const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
-  const [sourceImage, setSourceImage] = useState(null);
-  const [previewSource, setPreviewSource] = useState(null);
   const [tool, setTool] = useState("crop");
-  const [editorState, setEditorState] = useState(cloneState(BASE_STATE));
-  const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [activeInteraction, setActiveInteraction] = useState(null);
@@ -475,6 +434,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ? (item?.preview_hd_path || item?.image_preview_hd_path || item?.image_preview_path || item?.preview_path)
     : item?.image_path) || item?.image_preview_path || item?.raw_preview_path || null;
   const saveBasePath = item?.image_path || sourcePath;
+  // Image load lives in its own hook. `setSourceImage`/`setPreviewSource` + the
+  // ref are exposed so Apply/Text-apply can promote a freshly baked canvas.
+  const {
+    sourceImage, previewSource, loadState, loadError, sourceImageRef,
+    setSourceImage, setPreviewSource,
+  } = useEditorImage({ open, sourcePath, decodeErrorLabel: t("overlay.decodeError") });
   const depth = useSceneDepth({ sourcePath });
   const {
     generating: depthGenerating,
@@ -530,28 +495,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           : tool === "frame"
             ? { title: t("overlay.tools.frame"), badge: null }
             : { title: "", badge: null };
-
-  function syncHistory(nextHistory, nextIndex) {
-    historyRef.current = nextHistory;
-    historyIndexRef.current = nextIndex;
-    setHistory(nextHistory);
-    setHistoryIndex(nextIndex);
-  }
-
-  function applyState(nextState) {
-    const snapshot = cloneState(nextState);
-    editorStateRef.current = snapshot;
-    setEditorState(snapshot);
-    return snapshot;
-  }
-
-  function recordState(nextState) {
-    const snapshot = applyState(nextState);
-    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-    nextHistory.push(snapshot);
-    syncHistory(nextHistory, nextHistory.length - 1);
-    return snapshot;
-  }
 
   const commitLayers = layerHistory.commit;
   const layerUndo = layerHistory.undo;
@@ -639,15 +582,14 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setMessage("Text applied");
   }
 
+  // Reset editor state for a new source image (the image load itself lives in
+  // useEditorImage). Also kicks off a cached-depth lookup for this source.
   useEffect(() => {
     if (!open || !sourcePath) return undefined;
     let active = true;
     setTool("crop");
     setMessage("");
     setCompareState(null);
-    setLoadState("loading");
-    setSourceImage(null);
-    setPreviewSource(null);
     setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
@@ -668,147 +610,37 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         .catch(() => {});
     }
 
-    // Release previous source image canvas memory
-    const prevSource = sourceImageRef.current;
-    releaseCanvasImage(prevSource);
-    sourceImageRef.current = null;
-
-    async function load() {
-      try {
-        const url = localFileUrl(sourcePath);
-        let image;
-        let alreadyDownsampled = false;
-
-        try {
-          image = new Image();
-          image.decoding = "async";
-          image.src = url;
-          await image.decode();
-        } catch {
-          // Image.decode() failed — likely too large for full decode.
-          // Fall back to createImageBitmap which can decode+resize in one pass.
-          image = null;
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const blob = await response.blob();
-
-          let bitmap;
-          try {
-            bitmap = await createImageBitmap(blob);
-          } catch {
-            // Full-size bitmap also fails — force a capped decode
-            bitmap = await createImageBitmap(blob, {
-              resizeWidth: PREVIEW_MAX_EDGE,
-              resizeQuality: "high",
-            });
-          }
-
-          // Downscale if still larger than preview max
-          const maxEdge = Math.max(bitmap.width, bitmap.height);
-          if (maxEdge > PREVIEW_MAX_EDGE) {
-            const scale = PREVIEW_MAX_EDGE / maxEdge;
-            const small = await createImageBitmap(blob, {
-              resizeWidth: Math.round(bitmap.width * scale),
-              resizeHeight: Math.round(bitmap.height * scale),
-              resizeQuality: "high",
-            });
-            bitmap.close();
-            bitmap = small;
-          }
-
-          // Bail early if component unmounted during async work
-          if (!active) {
-            bitmap.close();
-            return;
-          }
-
-          // Transfer bitmap → canvas (canvas is a valid CanvasImageSource everywhere)
-          const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          canvas.naturalWidth = bitmap.width;
-          canvas.naturalHeight = bitmap.height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(bitmap, 0, 0);
-          bitmap.close();
-          image = canvas;
-          alreadyDownsampled = true;
-        }
-
-        if (!active) return;
-        sourceImageRef.current = image;
-        setSourceImage(image);
-        setPreviewSource(alreadyDownsampled ? image : buildPreviewSource(image));
-        setLoadState("ready");
-      } catch (error) {
-        if (!active) return;
-        setLoadState("error");
-        setMessage(error instanceof Error ? error.message : t("overlay.decodeError"));
-      }
-    }
-
-    void load();
     return () => {
       active = false;
     };
-  }, [open, sourcePath]);
+  }, [open, sourcePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Release canvas memory when editor closes
-  useEffect(() => () => {
-    const src = sourceImageRef.current;
-    releaseCanvasImage(src);
-    sourceImageRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (!open || typeof ResizeObserver === "undefined") return undefined;
-    const element = viewportRef.current;
-    if (!element) return undefined;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      setViewportSize({ width, height });
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [open]);
-
+  // Photo + rotation/flip — bridges the loaded image and the transform state;
+  // feeds the viewport geometry, save, and the frame tool.
   const transformedPreview = useMemo(() => {
     if (!previewSource) return null;
     return buildTransformedCanvas(previewSource, previewSource.width, previewSource.height, discreteRotationDeg, flipX, flipY);
   }, [previewSource, discreteRotationDeg, flipX, flipY]);
 
-  const placement = useMemo(
-    () => getBasePlacement(viewportSize, transformedPreview),
-    [viewportSize, transformedPreview],
-  );
+  // Viewport geometry (ref, measured size, placement, image rect, coord mapping).
+  const { viewportRef, viewportSize, placement, imageRect, pointFromClient } =
+    useEditorViewport({ open, transformedPreview, editorState });
 
+  // Once the preview + viewport are ready, seed the initial centered-crop
+  // snapshot (also the "Reset" target). Stays here — it records into history.
   useEffect(() => {
     if (!transformedPreview || !placement || baseSnapshotRef.current) return;
     const initial = createInitialSnapshot(viewportSize, transformedPreview);
     baseSnapshotRef.current = cloneState(initial);
     recordState(initial);
-  }, [placement, transformedPreview, viewportSize]);
+  }, [placement, transformedPreview, viewportSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const imageRect = useMemo(
-    () => getImageRect(editorState, transformedPreview, placement),
-    [editorState, transformedPreview, placement],
-  );
   const cropCenter = cropRect
     ? {
         x: cropRect.x + cropRect.width / 2,
         y: cropRect.y + cropRect.height / 2,
       }
     : null;
-
-  function pointFromClient(clientX, clientY) {
-    const viewport = viewportRef.current;
-    if (!viewport) return { x: 0, y: 0 };
-    const rect = viewport.getBoundingClientRect();
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    };
-  }
 
   function commitAspect(nextAspectKey) {
     if (!transformedPreview || !imageRect || !editorStateRef.current.cropRect) return;
@@ -1040,22 +872,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ctx.drawImage(depthCanvas, 0, 0, canvas.width, canvas.height);
   }, [depthMapVisible, depthFieldVersion, transformedPreview]);
 
-
-  function handleUndo() {
-    if (historyIndexRef.current <= 0) return;
-    const nextIndex = historyIndexRef.current - 1;
-    historyIndexRef.current = nextIndex;
-    setHistoryIndex(nextIndex);
-    applyState(historyRef.current[nextIndex]);
-  }
-
-  function handleRedo() {
-    if (historyIndexRef.current >= historyRef.current.length - 1) return;
-    const nextIndex = historyIndexRef.current + 1;
-    historyIndexRef.current = nextIndex;
-    setHistoryIndex(nextIndex);
-    applyState(historyRef.current[nextIndex]);
-  }
 
   function handleReset() {
     if (!baseSnapshotRef.current) return;
@@ -1420,7 +1236,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         onPointerCancel={handlePointerEnd}
       >
         {loadState === "loading" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{t("overlay.loading")}</div> : null}
-        {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{message || "Failed to load image"}</div> : null}
+        {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{loadError || message || "Failed to load image"}</div> : null}
 
         {imageRect ? (
           <>
