@@ -5,12 +5,13 @@
 // the frame re-bakes from — the box you grab is the element you move, exactly
 // like a text layer.
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 const ACCENT = "rgb(210, 160, 90)";
 
 export default function FrameEditOverlay({ rect, layers, selectedElement, onSelect, onMove }) {
   const dragRef = useRef(null);
+  const [snap, setSnap] = useState({ h: false, v: false }); // h = vertical center line, v = horizontal
   if (!rect || !layers?.length) return null;
 
   function beginDrag(e, layer) {
@@ -18,6 +19,8 @@ export default function FrameEditOverlay({ rect, layers, selectedElement, onSele
     e.preventDefault();
     onSelect(layer.ei);
     dragRef.current = { ei: layer.ei, startX: e.clientX, startY: e.clientY, origX: layer.x, origY: layer.y };
+    const threshX = 6 / rect.width;  // ~6px snap zone → fraction
+    const threshY = 6 / rect.height;
 
     const onMoveEvt = (me) => {
       const d = dragRef.current;
@@ -26,10 +29,17 @@ export default function FrameEditOverlay({ rect, layers, selectedElement, onSele
       let ny = d.origY + (me.clientY - d.startY) / rect.height;
       nx = Math.max(0, Math.min(1, nx));
       ny = Math.max(0, Math.min(1, ny));
+      // Snap the element's center to the canvas center (like the text tool).
+      const snH = Math.abs(nx - 0.5) < threshX;
+      const snV = Math.abs(ny - 0.5) < threshY;
+      if (snH) nx = 0.5;
+      if (snV) ny = 0.5;
+      setSnap({ h: snH, v: snV });
       onMove(d.ei, nx, ny);
     };
     const onUp = () => {
       dragRef.current = null;
+      setSnap({ h: false, v: false });
       window.removeEventListener("pointermove", onMoveEvt);
       window.removeEventListener("pointerup", onUp);
     };
@@ -67,6 +77,12 @@ export default function FrameEditOverlay({ rect, layers, selectedElement, onSele
           />
         );
       })}
+      {snap.h && (
+        <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "100%", backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
+      )}
+      {snap.v && (
+        <div style={{ position: "absolute", left: 0, top: "50%", width: "100%", height: 1, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
+      )}
     </div>
   );
 }
