@@ -249,9 +249,34 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
   }
   const solo = template.family === "dual" && resolvedLogos === 1;
 
+  // Vertical auto-centering for text stacks: elements sharing a `group` are
+  // centered as a unit around their shared anchor. So when a line is empty —
+  // e.g. a fixed-lens camera (Ricoh GR, Fuji X100) has no lens_model — the
+  // remaining line(s) stay centered instead of hanging off to one side. The
+  // computed offset is ADDED to the group's shared base `dy`.
+  const groupDy = new Map();
+  const stacks = new Map();
+  template.elements.forEach((el, i) => {
+    if (!el.group || el.type === "logo") return;
+    const t = el.type === "exif"
+      ? formatExif(el.fields, exif, { labeled: el.labeled, sep: el.sep })
+      : resolveTokens(el.content, exif, profile);
+    if (!t) return; // empty line — excluded from the stack
+    if (!stacks.has(el.group)) stacks.set(el.group, []);
+    stacks.get(el.group).push(i);
+  });
+  for (const idxs of stacks.values()) {
+    const lh = idxs.map((i) => (template.elements[i].style?.size || 0.02) * adj.text * 1.6);
+    const total = lh.reduce((s, h) => s + h, 0);
+    let cur = -total / 2;
+    idxs.forEach((i, k) => { groupDy.set(i, cur + lh[k] / 2); cur += lh[k]; });
+  }
+
   const layers = [];
-  for (const el of template.elements) {
-    const anchorDef = solo && el.soloAnchor ? { ...el.anchor, ...el.soloAnchor } : el.anchor;
+  for (let ei = 0; ei < template.elements.length; ei++) {
+    const el = template.elements[ei];
+    let anchorDef = solo && el.soloAnchor ? { ...el.anchor, ...el.soloAnchor } : el.anchor;
+    if (groupDy.has(ei)) anchorDef = { ...anchorDef, dy: (anchorDef.dy || 0) + groupDy.get(ei) };
     const a = resolveAnchor(anchorDef, g, adj);
 
     if (el.type === "logo") {
