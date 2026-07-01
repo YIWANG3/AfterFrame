@@ -86,6 +86,14 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 
 ![拼图](docs/assets/collage.png)
 
+- **相框**：由 EXIF 驱动的品牌相机水印相框。提供 20+ 预设（底栏、双 logo、竖排侧边条），以哈苏、索尼、佳能、尼康、徕卡、富士、松下 Lumix、理光的真实品牌 logo 与配色渲染，另有一套简洁通用版。自适应明暗对比、logo 颜色选择（原色 / 黑 / 白 / 灰 / 金）、文字与留白缩放，并可按原图分辨率导出
+
+![相框 · 哈苏字标](docs/assets/frame-hasselblad.png)
+
+![相框 · 索尼底栏](docs/assets/frame-sony.png)
+
+![相框 · 品牌预设](docs/assets/frame-presets.png)
+
 ### 视频
 - 视频与照片一同索引 —— 导入时探测时长、分辨率与编码，并自动生成封面帧
 - 画廊卡片显示封面与时长徽章；鼠标悬停即可在关键帧胶片条上拖动预览，无需打开
