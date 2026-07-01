@@ -1279,7 +1279,7 @@ function StickerPickerModal({ onPick, onClose }) {
   // doesn't block the canvas/toolbar, and stays open while the user adds
   // multiple stickers in a row (click sticker → layer added → picker stays).
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-chrome/97 backdrop-blur-sm">
+    <div className="absolute inset-0 z-30 flex flex-col bg-chrome">
       <div className="px-3 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("text.pickSticker")}</div>
