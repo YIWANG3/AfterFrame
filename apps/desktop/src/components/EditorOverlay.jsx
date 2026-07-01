@@ -35,19 +35,17 @@ import {
   buildPreviewSource,
   buildDepthMaskCanvas,
   buildTransformedCanvas,
-  deriveEditedFileName,
-  replaceFileName,
   inferMimeType,
   canvasToBlob,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
-import { saveEditedImage } from "./editor/render/saveImage";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import CropOverlay from "./editor/components/CropOverlay";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
 import { useEditorViewport } from "./editor/state/useEditorViewport";
+import { useEditorSave } from "./editor/state/useEditorSave";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -416,7 +414,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const [spacePressed, setSpacePressed] = useState(false);
   const [tool, setTool] = useState("crop");
   const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
   const [activeInteraction, setActiveInteraction] = useState(null);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
   const layerHistory = useLayerHistory();
@@ -911,6 +908,38 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     };
   }
 
+  // Save / export pipeline. buildSaveArgs assembles the full saveEditedImage
+  // context from current state; the hook reads it through a ref so a backdoor
+  // save after a transform runs against the latest state.
+  const buildSaveArgs = (savePath) => ({
+    savePath,
+    sourcePath,
+    sourceImage,
+    transformedPreview,
+    rotationDeg,
+    quarterTurns,
+    freeAngle,
+    flipX,
+    flipY,
+    normalizedCrop: getNormalizedCrop(),
+    layers,
+    depthFieldCanvas: depthFieldCanvasRef.current,
+    depthFeather,
+    drawLayersToCtx: drawTextLayersOnCanvas,
+    nativeSaveSourcePath: nativeSaveSourcePathRef.current,
+    isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer),
+  });
+  const { saving, executeSave, executeSaveRef, handleExport, handleQuickSave } = useEditorSave({
+    saveBasePath,
+    buildSaveArgs,
+    canSave: () => !!(cropRect && imageRect),
+    quickSavePathRef,
+    onSaveComplete,
+    pushToast,
+    t,
+    onSaveStart: () => setMessage(""),
+  });
+
   // Frame tool (5th tool) — its own module so EditorOverlay stays the
   // orchestrator. Frames the cropped/transformed photo; renders its own preview
   // surface (FrameStage) since the frame expands the canvas.
@@ -996,68 +1025,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     };
   }, [open, saving, layers, tool, selectedIds]);
 
-  const executeSaveRef = useRef(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  executeSaveRef.current = (savePath) => executeSave(savePath);
   const previewReadyRef = useRef(false);
   previewReadyRef.current = !!previewSource;
-
-  async function executeSave(savePath) {
-    setSaving(true);
-    setMessage("");
-    try {
-      await saveEditedImage({
-        savePath,
-        sourcePath,
-        sourceImage,
-        transformedPreview,
-        rotationDeg,
-        quarterTurns,
-        freeAngle,
-        flipX,
-        flipY,
-        normalizedCrop: getNormalizedCrop(),
-        layers,
-        depthFieldCanvas: depthFieldCanvasRef.current,
-        depthFeather,
-        drawLayersToCtx: drawTextLayersOnCanvas,
-        nativeSaveSourcePath: nativeSaveSourcePathRef.current,
-        isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer),
-      });
-      onSaveComplete?.(savePath);
-    } catch (error) {
-      pushToast?.({
-        title: t("overlay.saveFailed"),
-        message: error instanceof Error ? error.message : t("overlay.saveFailedMsg"),
-        ttl: 20_000,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleExport() {
-    if (!cropRect || !imageRect || saving) return;
-    const defaultPath = replaceFileName(saveBasePath, deriveEditedFileName(saveBasePath));
-    const savePath = await window.mediaWorkspace?.pickSavePath?.({
-      defaultPath,
-      filters: [
-        { name: "JPEG", extensions: ["jpg", "jpeg"] },
-        { name: "PNG", extensions: ["png"] },
-        { name: "WebP", extensions: ["webp"] },
-      ],
-    });
-    if (!savePath) return;
-    await executeSave(savePath);
-  }
-
-  async function handleQuickSave() {
-    if (!cropRect || !imageRect || saving) return;
-    if (!quickSavePathRef.current) {
-      quickSavePathRef.current = replaceFileName(saveBasePath, deriveEditedFileName(saveBasePath));
-    }
-    await executeSave(quickSavePathRef.current);
-  }
 
   function handleApply() {
     if (!sourceImage || !cropRect || !imageRect) return;
