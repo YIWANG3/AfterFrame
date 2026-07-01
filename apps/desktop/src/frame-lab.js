@@ -18,6 +18,8 @@ const BRANDS = [
   { label: "Canon", exif: { camera_model: "Canon EOS R5", lens_model: "RF 50mm F1.2 L USM", make: "Canon", focal_length: 50, aperture: 1.2, shutter_speed: 1 / 800, iso: 200, capture_time: "2024-07-15T18:05:00Z" } },
   { label: "Fujifilm", exif: { camera_model: "FUJIFILM X-T5", lens_model: "XF 33mm F1.4 R LM WR", make: "FUJIFILM", focal_length: 33, aperture: 1.4, shutter_speed: 1 / 640, iso: 160, capture_time: "2024-05-20T16:40:00Z" } },
   { label: "Nikon", exif: { camera_model: "NIKON Z f", lens_model: "NIKKOR Z 40mm f/2", make: "NIKON CORPORATION", focal_length: 40, aperture: 2, shutter_speed: 1/250, iso: 320, capture_time: "2024-08-01T10:00:00Z" } },
+  { label: "Lumix", exif: { camera_model: "DC-S5M2", lens_model: "LUMIX S 20-60mm F3.5-5.6", make: "Panasonic", focal_length: 35, aperture: 4, shutter_speed: 1/200, iso: 200, capture_time: "2024-09-10T12:00:00Z" } },
+  { label: "Ricoh", exif: { camera_model: "RICOH GR III", lens_model: "GR 18.3mm F2.8", make: "RICOH IMAGING COMPANY, LTD.", focal_length: 28, aperture: 2.8, shutter_speed: 1/250, iso: 400, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "Sony", exif: { camera_model: "ILCE-7CR", lens_model: "FE 35mm F1.4 GM", make: "Sony", focal_length: 35, aperture: 1.4, shutter_speed: 1/320, iso: 125, capture_time: "2024-08-02T11:00:00Z" } },
 ];
 

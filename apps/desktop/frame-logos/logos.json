@@ -139,6 +139,46 @@
           "h": 0.72
         }
       ]
+    },
+    {
+      "id": "lumix",
+      "name": "Lumix",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "lumix/wordmark.svg",
+          "aspect": 5.14,
+          "h": 0.45
+        },
+        {
+          "id": "corp",
+          "kind": "wordmark",
+          "file": "panasonic/wordmark.svg",
+          "aspect": 6.54,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "ricoh",
+      "name": "Ricoh",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "ricoh/wordmark.svg",
+          "aspect": 5.54,
+          "h": 0.45,
+          "color": "#d7063b"
+        }
+      ]
     }
   ],
   "match": {
@@ -149,6 +189,9 @@
     "nikon": "nikon",
     "sony": "sony",
     "dji": "dji",
-    "leica": "leica"
+    "leica": "leica",
+    "panasonic": "lumix",
+    "lumix": "lumix",
+    "ricoh": "ricoh"
   }
 }
