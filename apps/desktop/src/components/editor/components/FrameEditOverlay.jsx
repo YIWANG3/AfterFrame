@@ -1,9 +1,10 @@
 // Interactive overlay for the Frame tool: draggable selection boxes over the
-// baked frame canvas, one per editable element. Positioned in percentages of
-// `rect` (the on-screen box of the framed canvas), so it stays aligned at any
-// fit-scale / zoom. Dragging writes an absolute position back (onMove), which
-// the frame re-bakes from — the box you grab is the element you move, exactly
-// like a text layer.
+// baked frame canvas, one per editable element. Rendered INSIDE the stage's
+// zoom/pan transform, filling the same box as the canvas — so it scales with
+// the canvas via CSS (no per-frame measuring) and its percentage-positioned
+// boxes always line up. Dragging writes an absolute position back (onMove),
+// which the frame re-bakes from — the box you grab is the element you move,
+// exactly like a text layer.
 //
 // Snapping: while dragging, the element's left/center/right (and top/center/
 // bottom) edges snap to the other elements' edges + the canvas center, showing
@@ -31,21 +32,25 @@ function snapAxis(center, half, targets, thresh) {
   return best;
 }
 
-export default function FrameEditOverlay({ rect, layers, selectedElement, onSelect, onMove }) {
+export default function FrameEditOverlay({ layers, selectedElement, onSelect, onMove }) {
+  const rootRef = useRef(null);
   const dragRef = useRef(null);
-  const [guides, setGuides] = useState({ x: null, y: null }); // guide-line fractions, or null
-  if (!rect || !layers?.length) return null;
+  const [guides, setGuides] = useState({ x: null, y: null });
+  if (!layers?.length) return null;
 
   function beginDrag(e, layer) {
     e.stopPropagation();
     e.preventDefault();
     onSelect(layer.ei);
+    // On-screen size of the overlay (== canvas box, zoom included) — measured
+    // once per drag so screen-px deltas map to fractions correctly at any zoom.
+    const r = rootRef.current?.getBoundingClientRect();
+    if (!r?.width || !r?.height) return;
     const halfW = (layer.box?.w || 0.1) / 2;
     const halfH = (layer.box?.h || 0.05) / 2;
-    dragRef.current = { ei: layer.ei, startX: e.clientX, startY: e.clientY, origX: layer.x, origY: layer.y, halfW, halfH };
-    const threshX = 6 / rect.width;
-    const threshY = 6 / rect.height;
-    // Alignment targets from the OTHER elements' edges + centers, plus the canvas center.
+    dragRef.current = { ei: layer.ei, startX: e.clientX, startY: e.clientY, origX: layer.x, origY: layer.y, halfW, halfH, w: r.width, h: r.height };
+    const threshX = 6 / r.width;
+    const threshY = 6 / r.height;
     const targetsX = [0.5];
     const targetsY = [0.5];
     for (const l of layers) {
@@ -58,9 +63,9 @@ export default function FrameEditOverlay({ rect, layers, selectedElement, onSele
 
     const onMoveEvt = (me) => {
       const d = dragRef.current;
-      if (!d || !rect.width || !rect.height) return;
-      let nx = Math.max(0, Math.min(1, d.origX + (me.clientX - d.startX) / rect.width));
-      let ny = Math.max(0, Math.min(1, d.origY + (me.clientY - d.startY) / rect.height));
+      if (!d) return;
+      let nx = Math.max(0, Math.min(1, d.origX + (me.clientX - d.startX) / d.w));
+      let ny = Math.max(0, Math.min(1, d.origY + (me.clientY - d.startY) / d.h));
       const sx = snapAxis(nx, d.halfW, targetsX, threshX);
       const sy = snapAxis(ny, d.halfH, targetsY, threshY);
       if (sx) nx = sx.center;
@@ -80,8 +85,9 @@ export default function FrameEditOverlay({ rect, layers, selectedElement, onSele
 
   return (
     <div
-      className="absolute"
-      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height, zIndex: 20 }}
+      ref={rootRef}
+      className="absolute inset-0"
+      style={{ zIndex: 20 }}
       onPointerDown={(e) => { if (e.target === e.currentTarget) onSelect(null); }}
     >
       {layers.map((l) => {

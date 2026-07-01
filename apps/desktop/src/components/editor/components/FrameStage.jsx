@@ -3,6 +3,10 @@
 // scroll-to-zoom + drag-to-pan (double-click to reset). It covers the normal
 // crop/layer editing surface (the frame expands the canvas, so it does NOT
 // reuse the crop placement geometry).
+//
+// The canvas and the edit overlay share ONE fit-sized box inside the zoom/pan
+// transform, so zooming is a pure CSS transform (smooth, no per-frame measuring)
+// and the overlay's percentage-positioned boxes always line up with the canvas.
 
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
@@ -10,40 +14,40 @@ import FrameEditOverlay from "./FrameEditOverlay";
 
 const MAX_ZOOM = 8;
 const MIN_ZOOM = 0.25;
+const PAD = 24;
 
 export default function FrameStage({ canvas, rendering, rightInset = 0, layers, selectedElement, onSelectElement, onMoveElement }) {
-  const hostRef = useRef(null);
   const outerRef = useRef(null);
+  const canvasHostRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
   const [dragging, setDragging] = useState(false);
-  const [canvasRect, setCanvasRect] = useState(null); // on-screen box of the canvas, relative to the stage — for the edit overlay
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
-  // Keep the edit overlay glued to the displayed canvas across fit / zoom / pan
-  // / resize by measuring the canvas rect relative to the stage container.
+  // Container size drives the fit — only changes on real resize, NOT on zoom.
   useEffect(() => {
-    function measure() {
-      const outer = outerRef.current;
-      const cv = hostRef.current?.firstChild;
-      if (!outer || !cv?.getBoundingClientRect) { setCanvasRect(null); return; }
-      const o = outer.getBoundingClientRect();
-      const c = cv.getBoundingClientRect();
-      setCanvasRect({ x: c.left - o.left, y: c.top - o.top, width: c.width, height: c.height });
-    }
-    measure();
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    if (ro && outerRef.current) ro.observe(outerRef.current);
-    return () => ro?.disconnect();
-  }, [canvas, zoom, pan]);
+    const outer = outerRef.current;
+    if (!outer || typeof ResizeObserver === "undefined") return undefined;
+    const update = () => {
+      const r = outer.getBoundingClientRect();
+      setContainerSize({ w: r.width, h: r.height });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(outer);
+    return () => ro.disconnect();
+  }, []);
 
+  // Append the canvas; it fills the fit-sized box.
   useEffect(() => {
-    const host = hostRef.current;
+    const host = canvasHostRef.current;
     if (!host) return;
     host.innerHTML = "";
     if (canvas) {
-      canvas.style.maxWidth = "100%";
-      canvas.style.maxHeight = "100%";
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.display = "block";
       canvas.style.boxShadow = "none";
       host.appendChild(canvas);
     }
@@ -56,7 +60,7 @@ export default function FrameStage({ canvas, rendering, rightInset = 0, layers, 
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
     setZoom((z) => {
       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * factor));
-      if (next <= 1) setPan({ x: 0, y: 0 }); // pan only matters when zoomed in
+      if (next <= 1) setPan({ x: 0, y: 0 });
       return next;
     });
   }
@@ -78,11 +82,21 @@ export default function FrameStage({ canvas, rendering, rightInset = 0, layers, 
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   }
 
+  // Fit the canvas into the available (padded) area — unzoomed display size.
+  const availW = Math.max(1, containerSize.w - PAD - (rightInset || PAD));
+  const availH = Math.max(1, containerSize.h - PAD * 2);
+  let dispW = 0, dispH = 0;
+  if (canvas?.width && canvas?.height) {
+    const fit = Math.min(availW / canvas.width, availH / canvas.height);
+    dispW = canvas.width * fit;
+    dispH = canvas.height * fit;
+  }
+
   return (
     <div
       ref={outerRef}
-      className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden bg-app p-6"
-      style={{ paddingRight: rightInset || undefined }}
+      className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden bg-app"
+      style={{ padding: PAD, paddingRight: rightInset || PAD }}
       onWheel={onWheel}
       onDoubleClick={reset}
       onPointerDown={onPointerDown}
@@ -91,22 +105,23 @@ export default function FrameStage({ canvas, rendering, rightInset = 0, layers, 
       onPointerCancel={onPointerUp}
     >
       <div
-        ref={hostRef}
-        className="flex h-full w-full items-center justify-center"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
         }}
-      />
-      {canvas && onMoveElement && (
-        <FrameEditOverlay
-          rect={canvasRect}
-          layers={layers}
-          selectedElement={selectedElement}
-          onSelect={onSelectElement}
-          onMove={onMoveElement}
-        />
-      )}
+      >
+        <div style={{ position: "relative", width: dispW, height: dispH }}>
+          <div ref={canvasHostRef} style={{ width: "100%", height: "100%" }} />
+          {canvas && onMoveElement && (
+            <FrameEditOverlay
+              layers={layers}
+              selectedElement={selectedElement}
+              onSelect={onSelectElement}
+              onMove={onMoveElement}
+            />
+          )}
+        </div>
+      </div>
       {!canvas && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <LoaderCircle className="h-6 w-6 animate-spin text-muted2" />
