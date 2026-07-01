@@ -2,7 +2,26 @@ import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
 import { getBgPadding } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
-import { snapAngle, resizeRatio } from "./selectionMath";
+import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
+
+// Half-width / half-height of a layer as fractions of the image rect — for
+// element-to-element alignment snapping. Text is measured; stickers use scale.
+let _measureCtx = null;
+function layerHalfFrac(layer, imageRect) {
+  if (!imageRect?.width) return { hw: 0, hh: 0 };
+  const s = imageRect.width / 1920; // same display scale TextCanvas renders at
+  if (layer.type === "sticker") {
+    const aspect = layer.naturalHeight && layer.naturalWidth ? layer.naturalHeight / layer.naturalWidth : 1;
+    const wPx = (layer.scale || 0.4) * imageRect.width;
+    return { hw: (wPx / 2) / imageRect.width, hh: (wPx * aspect / 2) / imageRect.height };
+  }
+  if (!_measureCtx) _measureCtx = document.createElement("canvas").getContext("2d");
+  const fontPx = (layer.fontSize || 0) * s;
+  const weight = layer.fontWeight ?? (layer.bold ? 700 : 400);
+  _measureCtx.font = `${layer.italic ? "italic" : "normal"} ${weight} ${fontPx}px "${layer.fontFamily}", sans-serif`;
+  const wPx = _measureCtx.measureText(layer.text || " ").width;
+  return { hw: (wPx / 2) / imageRect.width, hh: (fontPx * 1.2 / 2) / imageRect.height };
+}
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
    re-render so React never touches the DOM text. Initial content is set via
@@ -60,7 +79,7 @@ export default function TextCanvas({
   const dragRef = useRef(null);
   const containerRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
-  const [snapLines, setSnapLines] = useState({ h: false, v: false });
+  const [guides, setGuides] = useState({ x: null, y: null }); // alignment guide-line fractions, or null
 
   const handleBgPointerDown = useCallback((e) => {
     if (e.target === e.currentTarget) {
@@ -87,6 +106,18 @@ export default function TextCanvas({
     const startX = e.clientX;
     const startY = e.clientY;
 
+    // Alignment targets: the OTHER layers' left/center/right (+ canvas 0/0.5/1),
+    // computed once at drag start (they don't move during the drag).
+    const half = layerHalfFrac(layer, imageRect);
+    const targetsX = [0, 0.5, 1];
+    const targetsY = [0, 0.5, 1];
+    for (const l of layers) {
+      if (l.id === layerId) continue;
+      const h = layerHalfFrac(l, imageRect);
+      targetsX.push(l.x - h.hw, l.x, l.x + h.hw);
+      targetsY.push(l.y - h.hh, l.y, l.y + h.hh);
+    }
+
     dragRef.current = {
       type,
       layerId,
@@ -98,6 +129,7 @@ export default function TextCanvas({
       origRotation: layer.rotation,
       origFontSize: layer.fontSize,
       origScale: layer.scale,
+      half, targetsX, targetsY,
     };
 
     const onMove = (me) => {
@@ -109,12 +141,13 @@ export default function TextCanvas({
       if (drag.type === "move") {
         let nx = drag.origX + dx / imageRect.width;
         let ny = drag.origY + dy / imageRect.height;
-        const SNAP_THRESHOLD = 8 / imageRect.width; // ~8px snap zone
-        const snH = Math.abs(nx - 0.5) < SNAP_THRESHOLD;
-        const snV = Math.abs(ny - 0.5) < SNAP_THRESHOLD;
-        if (snH) nx = 0.5;
-        if (snV) ny = 0.5;
-        setSnapLines({ h: snH, v: snV });
+        // Element-to-element (and canvas) alignment snapping: the dragged layer's
+        // left/center/right edges snap to other layers' edges/centers.
+        const sx = snapAxis(nx, drag.half.hw, drag.targetsX, 6 / imageRect.width);
+        const sy = snapAxis(ny, drag.half.hh, drag.targetsY, 6 / imageRect.height);
+        if (sx) nx = sx.center;
+        if (sy) ny = sy.center;
+        setGuides({ x: sx ? sx.line : null, y: sy ? sy.line : null });
         onLayersChange(layers.map((l) =>
           l.id === drag.layerId ? { ...l, x: nx, y: ny } : l
         ));
@@ -151,7 +184,7 @@ export default function TextCanvas({
 
     const onUp = () => {
       dragRef.current = null;
-      setSnapLines({ h: false, v: false });
+      setGuides({ x: null, y: null });
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
@@ -295,12 +328,12 @@ export default function TextCanvas({
           </div>
         );
       })}
-      {/* Snap guide lines */}
-      {snapLines.h && (
-        <div style={{ position: "absolute", left: imageRect.x + imageRect.width * 0.5, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.6, pointerEvents: "none" }} />
+      {/* Alignment guide lines — at the snapped fraction (element edge/center or canvas). */}
+      {guides.x != null && (
+        <div style={{ position: "absolute", left: imageRect.x + imageRect.width * guides.x, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
-      {snapLines.v && (
-        <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * 0.5, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.6, pointerEvents: "none" }} />
+      {guides.y != null && (
+        <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * guides.y, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
     </div>
   );
