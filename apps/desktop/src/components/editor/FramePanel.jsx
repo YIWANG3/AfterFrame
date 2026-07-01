@@ -3,6 +3,13 @@
 
 import { Download, LoaderCircle } from "lucide-react";
 import { SliderRow } from "../../ui";
+import { ASPECT_PRESETS } from "./cropMath";
+
+// Same ratio set as the Crop tool, so a framed export can be padded to a common
+// aspect. "free" keeps the frame's natural size; "original" targets the photo's
+// own ratio. Labels localized for this (Chinese) panel.
+const FRAME_ASPECT_LABELS = { free: "自由", original: "原图" };
+const FRAME_ASPECTS = ASPECT_PRESETS.map((p) => ({ key: p.key, label: FRAME_ASPECT_LABELS[p.key] || p.label }));
 
 // Logo tint choices. `value: null` = 原色 (brand color where iconic, else
 // frame-appropriate mono). Others force that color on the mark.
@@ -16,7 +23,8 @@ const LOGO_COLORS = [
 
 export default function FramePanel({ frameTool }) {
   const { templates, templateId, setTemplateId, thumbs, cellAspect, logosReady, exporting, rendering, exportFramed,
-    textScale, setTextScale, marginScale, setMarginScale, logoColor, setLogoColor } = frameTool;
+    textScale, setTextScale, marginScale, setMarginScale, logoColor, setLogoColor,
+    frameAspectKey, setFrameAspectKey } = frameTool;
   return (
     <div className="flex max-h-[calc(100vh-10rem)] flex-col">
       <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -49,6 +57,25 @@ export default function FramePanel({ frameTool }) {
         {!logosReady && <div className="mt-3 px-1 text-[11px] text-muted2">正在加载 logo…</div>}
       </div>
       <div className="border-t border-border/60 px-3 py-3">
+        <div className="mb-3.5 flex items-start gap-2">
+          <span className="min-w-[48px] pt-1 text-[10px] text-muted2">比例</span>
+          <div className="flex flex-1 flex-wrap gap-1.5">
+            {FRAME_ASPECTS.map((a) => {
+              const active = a.key === frameAspectKey;
+              return (
+                <button
+                  key={a.key} type="button" title={a.label}
+                  onClick={() => setFrameAspectKey(a.key)}
+                  className={`rounded px-2 py-1 text-[10.5px] leading-none transition ${
+                    active ? "bg-[rgb(var(--accent-color)/0.18)] text-[rgb(var(--accent-color))]" : "bg-app text-muted hover:bg-hover hover:text-text"
+                  }`}
+                >
+                  {a.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className="mb-3.5 flex items-center gap-2">
           <span className="min-w-[48px] text-[10px] text-muted2">标志</span>
           <div className="flex items-center gap-2">
