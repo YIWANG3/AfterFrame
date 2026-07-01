@@ -936,6 +936,16 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
                 onApply={handleApply}
                 canApply={loadState === "ready"}
+                canvasPad={editorState.canvas?.pad}
+                canvasBg={editorState.canvas?.bg}
+                onCanvasPad={(edge, val) => {
+                  const s = editorStateRef.current;
+                  recordState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, [edge]: val } } });
+                }}
+                onCanvasBg={(color) => {
+                  const s = editorStateRef.current;
+                  recordState({ ...s, canvas: { ...s.canvas, bg: { color } } });
+                }}
               />
             ) : tool === "text" ? (
               <TextPanel

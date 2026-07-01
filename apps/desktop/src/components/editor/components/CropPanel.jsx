@@ -79,6 +79,7 @@ export default function CropPanel({
   onUndo, canUndo,
   onRedo, canRedo,
   onApply, canApply,
+  canvasPad, onCanvasPad, canvasBg, onCanvasBg,
 }) {
   return (
     <>
@@ -157,6 +158,40 @@ export default function CropPanel({
             aria-label={t("overlay.imageScale")}
           />
         </div>
+
+        {onCanvasPad ? (
+          <div className="border-b border-border/60 px-4 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">边框</div>
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+              {[["top", "上"], ["bottom", "下"], ["left", "左"], ["right", "右"]].map(([edge, label]) => (
+                <label key={edge} className="flex items-center gap-2 text-[11px] text-muted">
+                  <span className="w-3 shrink-0 text-muted2">{label}</span>
+                  <input
+                    type="range" min="0" max="0.4" step="0.005"
+                    value={canvasPad?.[edge] ?? 0}
+                    onChange={(e) => onCanvasPad(edge, Number(e.target.value))}
+                    className="min-w-0 flex-1"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-[10px] text-muted2">底色</span>
+              {["#ffffff", "#000000"].map((c) => (
+                <button
+                  key={c} type="button"
+                  onClick={() => onCanvasBg(c)}
+                  className={`h-4 w-4 rounded-full border transition ${
+                    (canvasBg?.color || "#ffffff") === c
+                      ? "border-[rgb(var(--accent-color))] ring-1 ring-[rgb(var(--accent-color))]"
+                      : "border-border/70 hover:border-muted"
+                  }`}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
       </div>
 
