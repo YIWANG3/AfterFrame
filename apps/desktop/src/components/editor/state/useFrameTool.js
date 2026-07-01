@@ -168,7 +168,12 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     if (!m) return;
     const x = (xFinal * m.finalW - m.offX) / m.outW;
     const y = (yFinal * m.finalH - m.offY) / m.outH;
-    setElementOverrides((prev) => ({ ...prev, [ei]: { ...(prev[ei] || {}), pos: { x, y } } }));
+    updateElement(ei, { pos: { x, y } });
+  }
+
+  // Merge a partial override (scale / rotation / pos) for one element.
+  function updateElement(ei, patch) {
+    setElementOverrides((prev) => ({ ...prev, [ei]: { ...(prev[ei] || {}), ...patch } }));
   }
 
   // Small framed previews of every template, so the panel shows what each looks
@@ -251,7 +256,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     logoColor, setLogoColor,
     frameAspectKey, setFrameAspectKey,
     template, elementOverrides, setElementOverrides,
-    frameLayers, selectedElement, setSelectedElement, moveElement,
+    frameLayers, selectedElement, setSelectedElement, moveElement, updateElement,
     resetElement: (ei) => setElementOverrides((prev) => {
       if (!prev[ei]) return prev;
       const next = { ...prev }; delete next[ei]; return next;

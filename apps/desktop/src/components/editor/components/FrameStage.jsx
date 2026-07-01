@@ -16,7 +16,7 @@ const MAX_ZOOM = 8;
 const MIN_ZOOM = 0.25;
 const PAD = 24;
 
-export default function FrameStage({ canvas, rendering, rightInset = 0, layers, selectedElement, onSelectElement, onMoveElement }) {
+export default function FrameStage({ canvas, rendering, rightInset = 0, layers, overrides, selectedElement, onSelectElement, onMoveElement, onUpdateElement }) {
   const outerRef = useRef(null);
   const canvasHostRef = useRef(null);
   const [zoom, setZoom] = useState(1);
@@ -124,9 +124,11 @@ export default function FrameStage({ canvas, rendering, rightInset = 0, layers, 
           {canvas && onMoveElement && (
             <FrameEditOverlay
               layers={layers}
+              overrides={overrides}
               selectedElement={selectedElement}
               onSelect={onSelectElement}
               onMove={onMoveElement}
+              onUpdate={onUpdateElement}
             />
           )}
         </div>

@@ -264,12 +264,12 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       // brand's mark at a consistent visual weight. drawLayers wants the sticker
       // scale as a WIDTH fraction of the output, so convert via the real aspect.
       const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : (variant.aspect || 1);
-      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text;
+      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text * (ov?.scale ?? 1);
       const scale = heightFrac * aspect * factor;
       // In a narrow side strip a wide wordmark won't fit horizontally — rotate it
       // to read vertically. Square-ish marks (symbols/roundels) stay upright.
       const inStrip = anchorDef.region === "left" || anchorDef.region === "right";
-      const rotation = (inStrip && aspect > 1.6) ? 90 : (el.style?.rotation ?? 0);
+      const rotation = ov?.rotation != null ? ov.rotation : ((inStrip && aspect > 1.6) ? 90 : (el.style?.rotation ?? 0));
       // Stickers are CENTER-anchored. Shift by half the logo width so its edge
       // (not its center) sits flush at the margin — matching the text's edge.
       let lx = a.x;
@@ -302,7 +302,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     const weight = el.style?.weight ?? 400;
     const italic = !!el.style?.italic;
     const tracking = el.style?.tracking ?? 0;
-    const sizeFrac = (el.style?.size || 0.02) * adj.text;
+    const sizeFrac = (el.style?.size || 0.02) * adj.text * (ov?.scale ?? 1);
     const fontPx = sizeFrac * wref; // rendered px
     const tw = measureTextWidth(text, { fontPx, weight, italic, family, tracking });
     let x = a.x;
@@ -359,7 +359,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       shadowBlur: sizeFrac * 1920 * factor * 0.4,
       shadowX: 0,
       shadowY: 0,
-      rotation: el.style?.rotation ?? 0,
+      rotation: ov?.rotation != null ? ov.rotation : (el.style?.rotation ?? 0),
     });
   }
   return layers;

@@ -1,21 +1,23 @@
-// Interactive overlay for the Frame tool: draggable selection boxes over the
-// baked frame canvas, one per editable element. Rendered INSIDE the stage's
-// zoom/pan transform, filling the same box as the canvas — so it scales with
-// the canvas via CSS (no per-frame measuring) and its percentage-positioned
-// boxes always line up. Dragging writes an absolute position back (onMove),
-// which the frame re-bakes from — the box you grab is the element you move,
-// exactly like a text layer.
+// Interactive overlay for the Frame tool: draggable / resizable / rotatable
+// selection boxes over the baked frame canvas, one per editable element.
+// Rendered INSIDE the stage's zoom/pan transform, filling the same box as the
+// canvas — so it scales with the canvas via CSS (no per-frame measuring) and
+// its percentage-positioned boxes always line up. Move/resize/rotate write
+// overrides (pos / scale / rotation) that the frame re-bakes from — just like
+// a text layer.
 //
-// Snapping: while dragging, the element's left/center/right (and top/center/
+// Snapping: while MOVING, the element's left/center/right (and top/center/
 // bottom) edges snap to the other elements' edges + the canvas center, showing
 // alignment guides — the smart-guide behavior of a design tool.
 
 import { useRef, useState } from "react";
 
 const ACCENT = "rgb(210, 160, 90)";
+const HANDLE = 8;
+const ROT_DIST = 22;
+const MIN_SCALE = 0.2;
+const MAX_SCALE = 5;
 
-// Best snap for one axis: try the dragged element's [left, center, right]
-// against each target line; return the adjusted center + the guide line.
 function snapAxis(center, half, targets, thresh) {
   const cands = [
     { pos: center - half, adj: half },
@@ -32,55 +34,88 @@ function snapAxis(center, half, targets, thresh) {
   return best;
 }
 
-export default function FrameEditOverlay({ layers, selectedElement, onSelect, onMove }) {
+export default function FrameEditOverlay({ layers, overrides, selectedElement, onSelect, onMove, onUpdate }) {
   const rootRef = useRef(null);
   const dragRef = useRef(null);
   const [guides, setGuides] = useState({ x: null, y: null });
   if (!layers?.length) return null;
 
-  function beginDrag(e, layer) {
+  // Screen center of an element + the overlay rect (zoom included).
+  function centerOf(layer) {
+    const r = rootRef.current?.getBoundingClientRect();
+    if (!r?.width) return null;
+    return { r, cx: r.left + layer.x * r.width, cy: r.top + layer.y * r.height };
+  }
+
+  function beginMove(e, layer) {
     e.stopPropagation();
     e.preventDefault();
     onSelect(layer.ei);
-    // On-screen size of the overlay (== canvas box, zoom included) — measured
-    // once per drag so screen-px deltas map to fractions correctly at any zoom.
     const r = rootRef.current?.getBoundingClientRect();
     if (!r?.width || !r?.height) return;
     const halfW = (layer.box?.w || 0.1) / 2;
     const halfH = (layer.box?.h || 0.05) / 2;
-    dragRef.current = { ei: layer.ei, startX: e.clientX, startY: e.clientY, origX: layer.x, origY: layer.y, halfW, halfH, w: r.width, h: r.height };
-    const threshX = 6 / r.width;
-    const threshY = 6 / r.height;
-    const targetsX = [0.5];
-    const targetsY = [0.5];
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: layer.x, origY: layer.y, w: r.width, h: r.height };
+    const threshX = 6 / r.width, threshY = 6 / r.height;
+    const targetsX = [0.5], targetsY = [0.5];
     for (const l of layers) {
       if (l.ei === layer.ei) continue;
-      const hw = (l.box?.w || 0) / 2;
-      const hh = (l.box?.h || 0) / 2;
+      const hw = (l.box?.w || 0) / 2, hh = (l.box?.h || 0) / 2;
       targetsX.push(l.x - hw, l.x, l.x + hw);
       targetsY.push(l.y - hh, l.y, l.y + hh);
     }
-
-    const onMoveEvt = (me) => {
+    listen((me) => {
       const d = dragRef.current;
-      if (!d) return;
       let nx = Math.max(0, Math.min(1, d.origX + (me.clientX - d.startX) / d.w));
       let ny = Math.max(0, Math.min(1, d.origY + (me.clientY - d.startY) / d.h));
-      const sx = snapAxis(nx, d.halfW, targetsX, threshX);
-      const sy = snapAxis(ny, d.halfH, targetsY, threshY);
+      const sx = snapAxis(nx, halfW, targetsX, threshX);
+      const sy = snapAxis(ny, halfH, targetsY, threshY);
       if (sx) nx = sx.center;
       if (sy) ny = sy.center;
       setGuides({ x: sx ? sx.line : null, y: sy ? sy.line : null });
-      onMove(d.ei, nx, ny);
-    };
-    const onUp = () => {
-      dragRef.current = null;
-      setGuides({ x: null, y: null });
+      onMove(layer.ei, nx, ny);
+    }, () => setGuides({ x: null, y: null }));
+  }
+
+  function beginResize(e, layer) {
+    e.stopPropagation();
+    e.preventDefault();
+    onSelect(layer.ei);
+    const c = centerOf(layer);
+    if (!c) return;
+    const origScale = overrides?.[layer.ei]?.scale ?? 1;
+    const startDist = Math.hypot(e.clientX - c.cx, e.clientY - c.cy) || 1;
+    listen((me) => {
+      const ratio = Math.hypot(me.clientX - c.cx, me.clientY - c.cy) / startDist;
+      onUpdate(layer.ei, { scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, origScale * ratio)) });
+    });
+  }
+
+  function beginRotate(e, layer) {
+    e.stopPropagation();
+    e.preventDefault();
+    onSelect(layer.ei);
+    const c = centerOf(layer);
+    if (!c) return;
+    const origRot = layer.rotation || 0;
+    const startAngle = Math.atan2(e.clientY - c.cy, e.clientX - c.cx);
+    listen((me) => {
+      const cur = Math.atan2(me.clientY - c.cy, me.clientX - c.cx);
+      let deg = origRot + ((cur - startAngle) * 180) / Math.PI;
+      for (const s of [0, 90, 180, 270, -90, -180, -270]) if (Math.abs(deg - s) < 3) { deg = s; break; }
+      onUpdate(layer.ei, { rotation: deg });
+    });
+  }
+
+  // Shared pointer-capture loop.
+  function listen(onMoveEvt, onEnd) {
+    const up = () => {
+      onEnd?.();
       window.removeEventListener("pointermove", onMoveEvt);
-      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointerup", up);
     };
     window.addEventListener("pointermove", onMoveEvt);
-    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointerup", up);
   }
 
   return (
@@ -97,8 +132,8 @@ export default function FrameEditOverlay({ layers, selectedElement, onSelect, on
         return (
           <div
             key={l.ei}
-            title="拖动调整位置"
-            onPointerDown={(e) => beginDrag(e, l)}
+            title="拖动移动 · 角柄缩放 · 顶柄旋转"
+            onPointerDown={(e) => beginMove(e, l)}
             style={{
               position: "absolute",
               left: `${(l.x - w / 2) * 100}%`,
@@ -111,7 +146,24 @@ export default function FrameEditOverlay({ layers, selectedElement, onSelect, on
               borderRadius: 2,
               background: selected ? "rgba(210,160,90,0.10)" : "transparent",
             }}
-          />
+          >
+            {selected && (
+              <>
+                {[["0","0"],["100%","0"],["0","100%"],["100%","100%"]].map(([hx, hy], i) => (
+                  <div
+                    key={i}
+                    onPointerDown={(e) => beginResize(e, l)}
+                    style={{ position: "absolute", left: hx, top: hy, width: HANDLE, height: HANDLE, marginLeft: -HANDLE / 2, marginTop: -HANDLE / 2, background: ACCENT, border: "1.5px solid #fff", borderRadius: 1, cursor: "nwse-resize" }}
+                  />
+                ))}
+                <div style={{ position: "absolute", left: "50%", top: 0, width: 1.5, height: ROT_DIST, background: ACCENT, opacity: 0.5, transform: "translate(-50%,-100%)", pointerEvents: "none" }} />
+                <div
+                  onPointerDown={(e) => beginRotate(e, l)}
+                  style={{ position: "absolute", left: "50%", top: -ROT_DIST, width: 10, height: 10, marginLeft: -5, marginTop: -5, background: ACCENT, border: "1.5px solid #fff", borderRadius: "50%", cursor: "grab" }}
+                />
+              </>
+            )}
+          </div>
         );
       })}
       {guides.x != null && (

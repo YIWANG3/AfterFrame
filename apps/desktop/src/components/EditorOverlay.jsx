@@ -876,9 +876,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             rendering={frameTool.rendering}
             rightInset={PANEL_WIDTH + PANEL_GAP + 72}
             layers={frameTool.frameLayers}
+            overrides={frameTool.elementOverrides}
             selectedElement={frameTool.selectedElement}
             onSelectElement={frameTool.setSelectedElement}
             onMoveElement={frameTool.moveElement}
+            onUpdateElement={frameTool.updateElement}
           />
         )}
 
