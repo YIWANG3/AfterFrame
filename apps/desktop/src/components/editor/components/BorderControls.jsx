@@ -1,16 +1,18 @@
 // Border/frame controls, shown inside the Text tool (no separate frame tool).
-//  1. Frame presets — a compact horizontal strip (expandable to a grid); click
-//     one to drop its text + logo layers and margins in (via onApplyPreset).
+//  1. Frame presets — a compact strip (scroll horizontally; the chevron expands
+//     to a full grid). Click one to drop its text + logo layers + margins.
 //  2. Manual border — a uniform "margin" slider (synced) with an optional
 //     per-edge breakout, plus a background color. Margins are fractions of the
-//     photo's short edge. Slider drags are live; onPadCommit records history.
+//     photo's short edge. Slider drags are live; onPadCommit records one history
+//     entry on release.
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
+import { SliderRow } from "../../../ui";
 
-const MAX_PAD = 0.4;
 const EDGE_KEYS = ["top", "bottom", "left", "right"];
+const toPct = (v) => Math.round((v || 0) * 100);
 
 export default function BorderControls({ templates = [], thumbs, cellAspect, onApplyPreset, pad, onPad, onPadCommit, bg, onBg }) {
   const { t } = useTranslation("editor");
@@ -43,11 +45,11 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           <span>{t("border.presets")}</span>
           <button
             type="button"
+            title={expanded ? "收起" : "展开"}
             onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-hover hover:text-text"
+            className="flex h-5 w-5 items-center justify-center rounded hover:bg-hover hover:text-text"
           >
-            {expanded ? "−" : "+"}
-            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
           </button>
         </div>
         {expanded ? (
@@ -55,8 +57,8 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
             {templates.map(Thumb)}
           </div>
         ) : (
-          // Compact strip: a few visible, scroll horizontally for the rest.
-          <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
+          // Compact strip: scroll horizontally; scrollbar hidden (drag/wheel to scroll).
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {templates.map((tpl) => (
               <div key={tpl.id} className="w-[30%] shrink-0">{Thumb(tpl)}</div>
             ))}
@@ -64,8 +66,8 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
         )}
       </div>
 
-      <div>
-        <div className="mb-1.5 flex items-center justify-between text-[10px] text-muted2">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between text-[10px] text-muted2">
           <span>{t("border.margin")}</span>
           <button
             type="button"
@@ -76,30 +78,20 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           </button>
         </div>
         {perEdge ? (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {EDGE_KEYS.map((edge) => (
-              <label key={edge} className="flex items-center gap-2 text-[11px] text-muted">
-                <span className="w-8 shrink-0 text-muted2">{t(`border.${edge}`)}</span>
-                <input
-                  type="range" min="0" max={MAX_PAD} step="0.005"
-                  value={p[edge] || 0}
-                  onChange={(e) => onPad({ [edge]: Number(e.target.value) })}
-                  onPointerUp={onPadCommit}
-                  className="min-w-0 flex-1"
-                />
-              </label>
-            ))}
-          </div>
+          EDGE_KEYS.map((edge) => (
+            <SliderRow
+              key={edge} compact label={t(`border.${edge}`)} min={0} max={40} suffix="%" resetValue={0}
+              value={toPct(p[edge])}
+              onChange={(v) => onPad({ [edge]: v / 100 })}
+              onCommit={onPadCommit}
+            />
+          ))
         ) : (
-          <input
-            type="range" min="0" max={MAX_PAD} step="0.005"
-            value={uniform}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              onPad({ top: v, right: v, bottom: v, left: v });
-            }}
-            onPointerUp={onPadCommit}
-            className="w-full"
+          <SliderRow
+            compact min={0} max={40} suffix="%" resetValue={0}
+            value={toPct(uniform)}
+            onChange={(v) => { const f = v / 100; onPad({ top: f, right: f, bottom: f, left: f }); }}
+            onCommit={onPadCommit}
           />
         )}
       </div>
