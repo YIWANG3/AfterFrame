@@ -47,6 +47,7 @@ import CropOverlay from "./editor/components/CropOverlay";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
+import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -398,7 +399,6 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
 
 export default function EditorOverlay({ open, item, onClose, onSaveComplete, pushToast }) {
   const { t } = useTranslation("editor");
-  const viewportRef = useRef(null);
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
@@ -412,7 +412,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     history, historyIndex, historyRef, historyIndexRef, baseSnapshotRef,
     syncHistory, apply: applyState, record: recordState, undo: handleUndo, redo: handleRedo,
   } = useEditorHistory();
-  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
   const [tool, setTool] = useState("crop");
@@ -616,55 +615,32 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     };
   }, [open, sourcePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!open || typeof ResizeObserver === "undefined") return undefined;
-    const element = viewportRef.current;
-    if (!element) return undefined;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      setViewportSize({ width, height });
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [open]);
-
+  // Photo + rotation/flip — bridges the loaded image and the transform state;
+  // feeds the viewport geometry, save, and the frame tool.
   const transformedPreview = useMemo(() => {
     if (!previewSource) return null;
     return buildTransformedCanvas(previewSource, previewSource.width, previewSource.height, discreteRotationDeg, flipX, flipY);
   }, [previewSource, discreteRotationDeg, flipX, flipY]);
 
-  const placement = useMemo(
-    () => getBasePlacement(viewportSize, transformedPreview),
-    [viewportSize, transformedPreview],
-  );
+  // Viewport geometry (ref, measured size, placement, image rect, coord mapping).
+  const { viewportRef, viewportSize, placement, imageRect, pointFromClient } =
+    useEditorViewport({ open, transformedPreview, editorState });
 
+  // Once the preview + viewport are ready, seed the initial centered-crop
+  // snapshot (also the "Reset" target). Stays here — it records into history.
   useEffect(() => {
     if (!transformedPreview || !placement || baseSnapshotRef.current) return;
     const initial = createInitialSnapshot(viewportSize, transformedPreview);
     baseSnapshotRef.current = cloneState(initial);
     recordState(initial);
-  }, [placement, transformedPreview, viewportSize]);
+  }, [placement, transformedPreview, viewportSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const imageRect = useMemo(
-    () => getImageRect(editorState, transformedPreview, placement),
-    [editorState, transformedPreview, placement],
-  );
   const cropCenter = cropRect
     ? {
         x: cropRect.x + cropRect.width / 2,
         y: cropRect.y + cropRect.height / 2,
       }
     : null;
-
-  function pointFromClient(clientX, clientY) {
-    const viewport = viewportRef.current;
-    if (!viewport) return { x: 0, y: 0 };
-    const rect = viewport.getBoundingClientRect();
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    };
-  }
 
   function commitAspect(nextAspectKey) {
     if (!transformedPreview || !imageRect || !editorStateRef.current.cropRect) return;
