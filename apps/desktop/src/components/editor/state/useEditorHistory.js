@@ -43,6 +43,14 @@ export function useEditorHistory() {
     return snapshot;
   }
 
+  // Push the CURRENT live state onto history — used at the end of a drag, which
+  // applies intermediate states without recording, then commits the final one.
+  function commitCurrent() {
+    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+    nextHistory.push(cloneState(editorStateRef.current));
+    syncHistory(nextHistory, nextHistory.length - 1);
+  }
+
   function undo() {
     if (historyIndexRef.current <= 0) return;
     const nextIndex = historyIndexRef.current - 1;
@@ -63,6 +71,6 @@ export function useEditorHistory() {
     editorState, editorStateRef,
     history, historyIndex, historyRef, historyIndexRef,
     baseSnapshotRef,
-    syncHistory, apply, record, undo, redo,
+    syncHistory, apply, record, commitCurrent, undo, redo,
   };
 }
