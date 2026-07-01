@@ -48,8 +48,7 @@ import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
 import { useCropTool } from "./editor/state/useCropTool";
 import { useTextTool } from "./editor/state/useTextTool";
-import { useStickerImageCache } from "./editor/state/useStickerImageCache";
-import { useStickerRegion } from "./editor/state/useStickerRegion";
+import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useLayerHistory } from "./editor/state/useLayerHistory";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
@@ -393,8 +392,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const handleComputeDepth = depth.compute;
   const handleClearDepth = depth.clearAll;
 
-  const stickerImageCache = useStickerImageCache(layers);
-  const sticker = useStickerRegion(item?.asset_id);
+  const { imageCache: stickerImageCache, region: sticker } = useStickerTool({
+    layers,
+    assetId: item?.asset_id,
+  });
 
   const { depthModel, pickDepthModel: handlePickDepthModel, resetDepthModel: handleResetDepthModel } =
     useDepthModel({
