@@ -12,6 +12,11 @@ export const BASE_STATE = {
   imageZoom: 1,
   imageOffsetX: 0,
   imageOffsetY: 0,
+  // Canvas expansion: the photo becomes a sub-rect of an output canvas padded by
+  // `pad` (fractions of the photo short edge) and filled with `bg`. All zero /
+  // null by default → output === photo, i.e. today's behavior exactly. Consumed
+  // by the unified canvas/layer model (docs/unified-canvas-plan.md).
+  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null },
 };
 
 export function rectEquals(a, b) {
@@ -19,10 +24,26 @@ export function rectEquals(a, b) {
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
+function padEquals(a, b) {
+  if (!a || !b) return a === b;
+  return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left;
+}
+
+export function canvasEquals(a, b) {
+  if (!a || !b) return a === b;
+  return (a.bg?.color ?? null) === (b.bg?.color ?? null) && padEquals(a.pad, b.pad);
+}
+
+function cloneCanvas(canvas) {
+  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null };
+  return { pad: { ...canvas.pad }, bg: canvas.bg ? { ...canvas.bg } : null };
+}
+
 export function cloneState(state) {
   return {
     ...state,
     cropRect: state.cropRect ? { ...state.cropRect } : null,
+    canvas: cloneCanvas(state.canvas),
   };
 }
 
@@ -36,6 +57,7 @@ export function stateEquals(a, b) {
     a.imageZoom === b.imageZoom &&
     a.imageOffsetX === b.imageOffsetX &&
     a.imageOffsetY === b.imageOffsetY &&
-    rectEquals(a.cropRect, b.cropRect)
+    rectEquals(a.cropRect, b.cropRect) &&
+    canvasEquals(a.canvas, b.canvas)
   );
 }
