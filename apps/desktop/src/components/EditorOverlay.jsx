@@ -17,7 +17,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { fileName, localFileUrl } from "../utils/format";
+import { fileName } from "../utils/format";
 import { ASPECT_PRESETS, getAspectRatio, resizeCropRect } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
@@ -44,6 +44,7 @@ import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { saveEditedImage } from "./editor/render/saveImage";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import CropOverlay from "./editor/components/CropOverlay";
+import { useEditorImage } from "./editor/state/useEditorImage";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -70,7 +71,6 @@ import {
   removeLayerById,
 } from "./editor/layerStack";
 
-const PREVIEW_MAX_EDGE = 2200;
 const MIN_FREE_ANGLE = -45;
 const MAX_FREE_ANGLE = 45;
 const BASE_STATE = {
@@ -437,7 +437,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const viewportRef = useRef(null);
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
-  const sourceImageRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
   const pointerStateRef = useRef(null);
   const editorStateRef = useRef(cloneState(BASE_STATE));
@@ -447,11 +446,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const angleDragStartRef = useRef(null);
   const quickSavePathRef = useRef(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const [loadState, setLoadState] = useState("idle");
   const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
-  const [sourceImage, setSourceImage] = useState(null);
-  const [previewSource, setPreviewSource] = useState(null);
   const [tool, setTool] = useState("crop");
   const [editorState, setEditorState] = useState(cloneState(BASE_STATE));
   const [history, setHistory] = useState([]);
@@ -475,6 +471,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ? (item?.preview_hd_path || item?.image_preview_hd_path || item?.image_preview_path || item?.preview_path)
     : item?.image_path) || item?.image_preview_path || item?.raw_preview_path || null;
   const saveBasePath = item?.image_path || sourcePath;
+  // Image load lives in its own hook. `setSourceImage`/`setPreviewSource` + the
+  // ref are exposed so Apply/Text-apply can promote a freshly baked canvas.
+  const {
+    sourceImage, previewSource, loadState, loadError, sourceImageRef,
+    setSourceImage, setPreviewSource,
+  } = useEditorImage({ open, sourcePath, decodeErrorLabel: t("overlay.decodeError") });
   const depth = useSceneDepth({ sourcePath });
   const {
     generating: depthGenerating,
@@ -639,15 +641,14 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setMessage("Text applied");
   }
 
+  // Reset editor state for a new source image (the image load itself lives in
+  // useEditorImage). Also kicks off a cached-depth lookup for this source.
   useEffect(() => {
     if (!open || !sourcePath) return undefined;
     let active = true;
     setTool("crop");
     setMessage("");
     setCompareState(null);
-    setLoadState("loading");
-    setSourceImage(null);
-    setPreviewSource(null);
     setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
@@ -668,97 +669,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         .catch(() => {});
     }
 
-    // Release previous source image canvas memory
-    const prevSource = sourceImageRef.current;
-    releaseCanvasImage(prevSource);
-    sourceImageRef.current = null;
-
-    async function load() {
-      try {
-        const url = localFileUrl(sourcePath);
-        let image;
-        let alreadyDownsampled = false;
-
-        try {
-          image = new Image();
-          image.decoding = "async";
-          image.src = url;
-          await image.decode();
-        } catch {
-          // Image.decode() failed — likely too large for full decode.
-          // Fall back to createImageBitmap which can decode+resize in one pass.
-          image = null;
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const blob = await response.blob();
-
-          let bitmap;
-          try {
-            bitmap = await createImageBitmap(blob);
-          } catch {
-            // Full-size bitmap also fails — force a capped decode
-            bitmap = await createImageBitmap(blob, {
-              resizeWidth: PREVIEW_MAX_EDGE,
-              resizeQuality: "high",
-            });
-          }
-
-          // Downscale if still larger than preview max
-          const maxEdge = Math.max(bitmap.width, bitmap.height);
-          if (maxEdge > PREVIEW_MAX_EDGE) {
-            const scale = PREVIEW_MAX_EDGE / maxEdge;
-            const small = await createImageBitmap(blob, {
-              resizeWidth: Math.round(bitmap.width * scale),
-              resizeHeight: Math.round(bitmap.height * scale),
-              resizeQuality: "high",
-            });
-            bitmap.close();
-            bitmap = small;
-          }
-
-          // Bail early if component unmounted during async work
-          if (!active) {
-            bitmap.close();
-            return;
-          }
-
-          // Transfer bitmap → canvas (canvas is a valid CanvasImageSource everywhere)
-          const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          canvas.naturalWidth = bitmap.width;
-          canvas.naturalHeight = bitmap.height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(bitmap, 0, 0);
-          bitmap.close();
-          image = canvas;
-          alreadyDownsampled = true;
-        }
-
-        if (!active) return;
-        sourceImageRef.current = image;
-        setSourceImage(image);
-        setPreviewSource(alreadyDownsampled ? image : buildPreviewSource(image));
-        setLoadState("ready");
-      } catch (error) {
-        if (!active) return;
-        setLoadState("error");
-        setMessage(error instanceof Error ? error.message : t("overlay.decodeError"));
-      }
-    }
-
-    void load();
     return () => {
       active = false;
     };
-  }, [open, sourcePath]);
-
-  // Release canvas memory when editor closes
-  useEffect(() => () => {
-    const src = sourceImageRef.current;
-    releaseCanvasImage(src);
-    sourceImageRef.current = null;
-  }, []);
+  }, [open, sourcePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open || typeof ResizeObserver === "undefined") return undefined;
@@ -1420,7 +1334,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         onPointerCancel={handlePointerEnd}
       >
         {loadState === "loading" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{t("overlay.loading")}</div> : null}
-        {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{message || "Failed to load image"}</div> : null}
+        {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{loadError || message || "Failed to load image"}</div> : null}
 
         {imageRect ? (
           <>
