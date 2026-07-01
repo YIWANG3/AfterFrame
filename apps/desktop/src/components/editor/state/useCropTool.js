@@ -209,9 +209,13 @@ export function useCropTool({
   });
 
   // Re-clamp image placement whenever the geometry changes so the crop never
-  // drifts off the image.
+  // drifts off the image. Skipped while a canvas margin (border) is active — the
+  // border wraps the whole photo (crop is ignored), and the stale crop rect
+  // would otherwise force the image to zoom in to "cover" it → overflow.
   useEffect(() => {
-    if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
+    const pad = editorStateRef.current.canvas?.pad;
+    const hasPad = pad && (pad.top || pad.right || pad.bottom || pad.left);
+    if (hasPad || !transformedPreview || !placement || !editorStateRef.current.cropRect) return;
     const clamped = clampImagePlacement(editorStateRef.current, transformedPreview, placement);
     if (!stateEquals(clamped, editorStateRef.current)) {
       apply(clamped);
