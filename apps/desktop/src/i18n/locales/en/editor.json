@@ -176,5 +176,17 @@
     "topBottom": "Top / Bottom",
     "close": "Close (Esc)",
     "hint": "Scroll to zoom · Drag to pan · Esc to close"
+  },
+  "border": {
+    "title": "Border",
+    "margin": "Margin",
+    "edges": "Edges",
+    "background": "Background",
+    "presets": "Presets",
+    "applyHint": "Pick a preset → added as editable layers",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right"
   }
 }

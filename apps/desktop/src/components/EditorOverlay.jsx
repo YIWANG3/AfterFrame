@@ -551,7 +551,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   // orchestrator. Frames the cropped/transformed photo; renders its own preview
   // surface (FrameStage) since the frame expands the canvas.
   const frameTool = useFrameTool({
-    active: open,
+    active: tool === "text",
     item,
     transformedPreview,
     // Full-res source (+ its transforms) so export isn't capped at the 2200px preview.
@@ -576,8 +576,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const res = await frameToolRef.current?.generatePresetLayers?.(tpl);
     if (!res) return;
     const s = editorStateRef.current;
-    recordState({ ...s, canvas: { pad: res.pad, bg: res.bg } });
-    const cur = layerHistoryRef.current[layerHistoryIndexRef.current] || [];
+    // Set the margins + reset image zoom/offset so the framed result fits fresh.
+    recordState({ ...s, canvas: { pad: res.pad, bg: res.bg }, imageZoom: 1, imageOffsetX: 0, imageOffsetY: 0 });
+    // Re-applying a preset REPLACES the previous preset's layers (don't stack).
+    const cur = (layerHistoryRef.current[layerHistoryIndexRef.current] || []).filter((l) => !l.fromPreset);
     commitLayers([...cur, ...res.layers]);
     setTool("text");
   }
@@ -973,9 +975,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
                 onCanvasPad={(patch) => {
+                  // Live (no history) while dragging the slider — keeps it smooth.
                   const s = editorStateRef.current;
-                  recordState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, ...patch } } });
+                  applyState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, ...patch } } });
                 }}
+                onCanvasPadCommit={() => recordState(editorStateRef.current)}
                 onCanvasBg={(color) => {
                   const s = editorStateRef.current;
                   recordState({ ...s, canvas: { ...s.canvas, bg: { color } } });

@@ -240,14 +240,14 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
       const cx = box?.cx ?? l.x;
       const cy = box?.cy ?? l.y;
       if (l.type === "text") {
-        return { ...createDefaultLayer({}), ...rest, x: cx, y: cy, align: "center" };
+        return { ...createDefaultLayer({}), ...rest, x: cx, y: cy, align: "center", fromPreset: true };
       }
       if (l.type === "sticker") {
         const img = logoCacheRef.current.get(l.stickerPath);
         if (!img?.src) return null;
         return createStickerLayer(
           { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
-          { x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100 },
+          { x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100, fromPreset: true },
         );
       }
       return null;
@@ -273,7 +273,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     const base = buildExportBase();
     await ensureLogos(template, base.height || 1200, logoColor);
     const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
-    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect, overrides: elementOverrides });
+    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos?.registry || { byId: new Map() }, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect, overrides: elementOverrides });
     const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
     await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), saveBasePath);
     return { width: out.width, height: out.height };

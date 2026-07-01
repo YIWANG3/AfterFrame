@@ -69,6 +69,7 @@ export default function TextPanel({
   onApplyPreset,
   canvasPad,
   onCanvasPad,
+  onCanvasPadCommit,
   canvasBg,
   onCanvasBg,
 }) {
@@ -177,7 +178,7 @@ export default function TextPanel({
         {/* Border / frame — presets that drop text+logo layers + margins, plus
             manual canvas margins & background. Replaces the standalone frame tool. */}
         {onCanvasPad ? (
-          <Section label="边框">
+          <Section label={t("border.title")}>
             <BorderControls
               templates={framePresets}
               thumbs={frameThumbs}
@@ -185,6 +186,7 @@ export default function TextPanel({
               onApplyPreset={onApplyPreset}
               pad={canvasPad}
               onPad={onCanvasPad}
+              onPadCommit={onCanvasPadCommit}
               bg={canvasBg}
               onBg={onCanvasBg}
             />

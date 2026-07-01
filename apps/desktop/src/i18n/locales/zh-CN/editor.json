@@ -176,5 +176,17 @@
     "topBottom": "上 / 下",
     "close": "关闭 (Esc)",
     "hint": "滚动缩放 · 拖动平移 · Esc 关闭"
+  },
+  "border": {
+    "title": "边框",
+    "margin": "边距",
+    "edges": "各边",
+    "background": "底色",
+    "presets": "预设",
+    "applyHint": "点预设 → 作为可编辑图层加入",
+    "top": "上",
+    "bottom": "下",
+    "left": "左",
+    "right": "右"
   }
 }
