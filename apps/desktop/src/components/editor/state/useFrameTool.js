@@ -8,6 +8,7 @@ import { FRAME_TEMPLATES } from "../frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
 import { renderFrame, collectLogoNeeds } from "../render/frameRender";
 import { buildTransformedCanvas, getSourceDimensions } from "../render/canvasHelpers";
+import { getAspectRatio } from "../cropMath";
 
 // EXIF lives in nested image_metadata / raw_metadata (same shape the Inspector
 // reads), NOT flat fields. Prefer RAW metadata when it carries the capture.
@@ -71,6 +72,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
   const [textScale, setTextScale] = useState(1); // "文字大小" knob
   const [marginScale, setMarginScale] = useState(1); // "留白" knob
   const [logoColor, setLogoColor] = useState(null); // logo tint override; null = 原色 (auto)
+  const [frameAspectKey, setFrameAspectKey] = useState("free"); // pad output to a target ratio; "free" = frame's natural size
   const logoCacheRef = useRef(new Map());
 
   const template = useMemo(() => FRAME_TEMPLATES.find((t) => t.id === templateId), [templateId]);
@@ -101,7 +103,8 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
 
   function compose() {
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
-    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor });
+    const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
+    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect });
   }
 
   // Live preview: re-render when active / photo / crop / template / logos / knobs change.
@@ -116,7 +119,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
       setRendering(false);
     })();
     return () => { alive = false; };
-  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor, frameAspectKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Small framed previews of every template, so the panel shows what each looks
   // like (logo included) instead of a bare name list.
@@ -163,7 +166,8 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
   async function exportTo(savePath) {
     const base = buildExportBase();
     await ensureLogos(template, base.height || 1200, logoColor);
-    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor });
+    const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
+    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect });
     const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
     await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), saveBasePath);
     return { width: out.width, height: out.height };
@@ -195,6 +199,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     framedCanvas, thumbs, cellAspect, rendering, exporting,
     textScale, setTextScale, marginScale, setMarginScale,
     logoColor, setLogoColor,
+    frameAspectKey, setFrameAspectKey,
     logosReady: !!logos,
     exportFramed,
     exportTo, // e2e: export to a given path, skipping the native dialog

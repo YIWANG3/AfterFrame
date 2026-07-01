@@ -612,13 +612,14 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       undo: () => handleUndo(),
       redo: () => handleRedo(),
       exportFrame: (savePath) => frameToolRef.current?.exportTo?.(savePath),
+      setFrameAspect: (key) => frameToolRef.current?.setFrameAspectKey?.(key),
     };
     return () => {
       if (window.__afterframeTest) {
         for (const k of [
           "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
           "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
-          "selectLayers", "undo", "redo", "exportFrame",
+          "selectLayers", "undo", "redo", "exportFrame", "setFrameAspect",
         ]) delete window.__afterframeTest[k];
       }
     };

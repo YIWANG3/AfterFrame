@@ -70,4 +70,23 @@ test.describe("Golden: frame export", () => {
     expect(dims.width).toBe(m.width);
     expect(dims.height).toBe(m.height);
   });
+
+  test("aspect option pads the export to the chosen ratio (1:1), still full-res", async () => {
+    await window.evaluate(() => window.__afterframeTest.setFrameAspect("1:1"));
+    await window.waitForTimeout(500); // let the ref pick up the new aspect
+
+    const outPath = path.join(tmp, "framed-1x1.jpg");
+    const dims = await window.evaluate((p) => window.__afterframeTest.exportFrame(p), outPath);
+    const m = await sharp(outPath).metadata();
+
+    // square within rounding tolerance
+    expect(Math.abs(m.width / m.height - 1)).toBeLessThan(0.01);
+    // landscape source → padding is added to HEIGHT, so width stays the full-res
+    // source width (proves it didn't fall back to the 2200px preview).
+    expect(m.width).toBe(SRC_W);
+    expect(dims.width).toBe(m.width);
+    expect(dims.height).toBe(m.height);
+
+    await window.evaluate(() => window.__afterframeTest.setFrameAspect("free")); // restore
+  });
 });

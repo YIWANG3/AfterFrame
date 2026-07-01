@@ -201,7 +201,7 @@ function sampleLuminance(ctx, cx, cy, w, h) {
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null }) {
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
   const { wref, padPx, outW, outH } = g;
@@ -372,5 +372,29 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
   }
 
   drawLayersOnCanvas(ctx, outW, outH, layers, logoImages);
+
+  // Optional: pad the finished frame out to a target aspect ratio (e.g. 3:4,
+  // 16:9) so the export matches a common ratio. The whole framed unit is
+  // centered on a larger background-colored canvas — nothing inside is
+  // distorted or cropped, we only add margin in the frame's own background.
+  if (frameAspect && frameAspect > 0) {
+    const cur = outW / outH;
+    let finalW = outW;
+    let finalH = outH;
+    if (cur < frameAspect) finalW = Math.round(outH * frameAspect); // too tall → widen
+    else finalH = Math.round(outW / frameAspect); // too wide → heighten
+    if (finalW > outW || finalH > outH) {
+      const padded = document.createElement("canvas");
+      padded.width = finalW;
+      padded.height = finalH;
+      const pctx = padded.getContext("2d");
+      pctx.imageSmoothingEnabled = true;
+      pctx.imageSmoothingQuality = "high";
+      pctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
+      pctx.fillRect(0, 0, finalW, finalH);
+      pctx.drawImage(canvas, Math.round((finalW - outW) / 2), Math.round((finalH - outH) / 2));
+      return padded;
+    }
+  }
   return canvas;
 }
