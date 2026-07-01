@@ -261,3 +261,61 @@ export function resizeCropRect(rect, handle, point, bounds, aspect) {
   }
   return resizeFixedCropRect(rect, handle, point, bounds, aspect);
 }
+
+// Free-rotation clamp (degrees) — the straighten ruler's range.
+export const MIN_FREE_ANGLE = -45;
+export const MAX_FREE_ANGLE = 45;
+
+// A crop of `aspect` (or the full box if null) centered at (cx, cy), fitted
+// within maxWidth × maxHeight.
+export function createCenteredCrop(maxWidth, maxHeight, aspect, cx, cy) {
+  let width = maxWidth;
+  let height = maxHeight;
+  if (aspect) {
+    height = width / aspect;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * aspect;
+    }
+  }
+  return { x: cx - width / 2, y: cy - height / 2, width, height };
+}
+
+// Resize a crop rect from its center by dragging `handle` toward `point`,
+// honoring an optional aspect ratio and the minimum crop size.
+export function symmetricResize(cropRect, handle, point, aspect) {
+  if (!cropRect) return cropRect;
+  const cx = cropRect.x + cropRect.width / 2;
+  const cy = cropRect.y + cropRect.height / 2;
+  let halfW = cropRect.width / 2;
+  let halfH = cropRect.height / 2;
+
+  if (handle.includes("e") || handle.includes("w")) {
+    halfW = Math.max(MIN_CROP_SIZE / 2, Math.abs(point.x - cx));
+  }
+  if (handle.includes("s") || handle.includes("n")) {
+    halfH = Math.max(MIN_CROP_SIZE / 2, Math.abs(point.y - cy));
+  }
+  if (handle === "n" || handle === "s") halfW = cropRect.width / 2;
+  if (handle === "e" || handle === "w") halfH = cropRect.height / 2;
+
+  if (aspect) {
+    if (handle === "n" || handle === "s") {
+      halfW = halfH * aspect;
+    } else if (handle === "e" || handle === "w") {
+      halfH = halfW / aspect;
+    } else {
+      const candidateH = halfW / aspect;
+      if (candidateH > halfH) {
+        halfW = halfH * aspect;
+      } else {
+        halfH = candidateH;
+      }
+    }
+  }
+
+  halfW = Math.max(MIN_CROP_SIZE / 2, halfW);
+  halfH = Math.max(MIN_CROP_SIZE / 2, halfH);
+
+  return { x: cx - halfW, y: cy - halfH, width: halfW * 2, height: halfH * 2 };
+}

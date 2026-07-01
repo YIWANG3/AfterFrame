@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { fileName } from "../utils/format";
-import { ASPECT_PRESETS, getAspectRatio, resizeCropRect } from "./editor/cropMath";
+import { ASPECT_PRESETS, getAspectRatio, resizeCropRect, MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
@@ -46,17 +46,16 @@ import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
 import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
+import { useCropTool } from "./editor/state/useCropTool";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useLayerHistory } from "./editor/state/useLayerHistory";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
-import { useViewportWheel } from "./editor/state/useViewportWheel";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
   CANVAS_SIDE_PADDING,
-  MIN_IMAGE_ZOOM,
   MAX_IMAGE_ZOOM,
   getStageBounds,
   getBasePlacement,
@@ -72,8 +71,6 @@ import {
   removeLayerById,
 } from "./editor/layerStack";
 
-const MIN_FREE_ANGLE = -45;
-const MAX_FREE_ANGLE = 45;
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -134,67 +131,6 @@ function createInitialSnapshot(viewportSize, transformedPreview) {
   };
 }
 
-function createCenteredCrop(maxWidth, maxHeight, aspect, cx, cy) {
-  let width = maxWidth;
-  let height = maxHeight;
-  if (aspect) {
-    height = width / aspect;
-    if (height > maxHeight) {
-      height = maxHeight;
-      width = height * aspect;
-    }
-  }
-  return {
-    x: cx - width / 2,
-    y: cy - height / 2,
-    width,
-    height,
-  };
-}
-
-function symmetricResize(cropRect, handle, point, aspect) {
-  if (!cropRect) return cropRect;
-  const cx = cropRect.x + cropRect.width / 2;
-  const cy = cropRect.y + cropRect.height / 2;
-  let halfW = cropRect.width / 2;
-  let halfH = cropRect.height / 2;
-
-  if (handle.includes("e") || handle.includes("w")) {
-    halfW = Math.max(MIN_CROP_SIZE / 2, Math.abs(point.x - cx));
-  }
-  if (handle.includes("s") || handle.includes("n")) {
-    halfH = Math.max(MIN_CROP_SIZE / 2, Math.abs(point.y - cy));
-  }
-  if (handle === "n" || handle === "s") halfW = cropRect.width / 2;
-  if (handle === "e" || handle === "w") halfH = cropRect.height / 2;
-
-  if (aspect) {
-    if (handle === "n" || handle === "s") {
-      halfW = halfH * aspect;
-    } else if (handle === "e" || handle === "w") {
-      halfH = halfW / aspect;
-    } else {
-      const candidateH = halfW / aspect;
-      if (candidateH > halfH) {
-        halfW = halfH * aspect;
-      } else {
-        halfH = candidateH;
-      }
-    }
-  }
-
-  halfW = Math.max(MIN_CROP_SIZE / 2, halfW);
-  halfH = Math.max(MIN_CROP_SIZE / 2, halfH);
-
-  return {
-    x: cx - halfW,
-    y: cy - halfH,
-    width: halfW * 2,
-    height: halfH * 2,
-  };
-}
-
-const MIN_CROP_SIZE = 48;
 
 function getAspectPreviewBox(aspectKey) {
   const aspect = getAspectRatio(aspectKey, 1);
@@ -400,21 +336,18 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
-  const pointerStateRef = useRef(null);
-  const angleDragStartRef = useRef(null);
   const quickSavePathRef = useRef(null);
   // Transform state machine + undo/redo (destructured with original names so the
   // many call sites are unchanged).
   const {
     editorState, editorStateRef,
     history, historyIndex, historyRef, historyIndexRef, baseSnapshotRef,
-    syncHistory, apply: applyState, record: recordState, undo: handleUndo, redo: handleRedo,
+    syncHistory, apply: applyState, record: recordState, commitCurrent, undo: handleUndo, redo: handleRedo,
   } = useEditorHistory();
   const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
   const [tool, setTool] = useState("crop");
   const [message, setMessage] = useState("");
-  const [activeInteraction, setActiveInteraction] = useState(null);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
   const layerHistory = useLayerHistory();
   const { layers, setLayers, historyRef: layerHistoryRef, indexRef: layerHistoryIndexRef } = layerHistory;
@@ -639,210 +572,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       }
     : null;
 
-  function commitAspect(nextAspectKey) {
-    if (!transformedPreview || !imageRect || !editorStateRef.current.cropRect) return;
-    const aspect = getAspectRatio(nextAspectKey, imageRect.width / imageRect.height);
-    const cx = editorStateRef.current.cropRect.x + editorStateRef.current.cropRect.width / 2;
-    const cy = editorStateRef.current.cropRect.y + editorStateRef.current.cropRect.height / 2;
-    const nextCrop = createCenteredCrop(imageRect.width, imageRect.height, aspect, cx, cy);
-    const next = clampImagePlacement(
-      {
-        ...editorStateRef.current,
-        aspectKey: nextAspectKey,
-        cropRect: nextCrop,
-      },
-      transformedPreview,
-      placement,
-    );
-    recordState(next);
-  }
-
-  function commitTransform(patch) {
-    if (!previewSource) {
-      console.warn("[Editor] commitTransform: previewSource is null, aborting");
-      return;
-    }
-    console.log("[Editor] commitTransform called with patch:", patch);
-    const candidate = {
-      ...editorStateRef.current,
-      ...patch,
-      imageZoom: 1,
-      imageOffsetX: 0,
-      imageOffsetY: 0,
-    };
-    const nextPreview = buildTransformedCanvas(
-      previewSource,
-      previewSource.width,
-      previewSource.height,
-      candidate.quarterTurns * 90 + candidate.freeAngle,
-      candidate.flipX,
-      candidate.flipY,
-    );
-    const nextPlacement = getBasePlacement(viewportSize, nextPreview);
-    const nextImageRect = getImageRect(candidate, nextPreview, nextPlacement);
-    const aspect = getAspectRatio(candidate.aspectKey, nextImageRect.width / nextImageRect.height);
-    const nextCrop = createCenteredCrop(nextImageRect.width, nextImageRect.height, aspect, nextPlacement.centerX, nextPlacement.centerY);
-    console.log("[Editor] commitTransform result - nextImageRect:", nextImageRect, "quarterTurns:", candidate.quarterTurns);
-    recordState({
-      ...candidate,
-      cropRect: nextCrop,
-    });
-  }
-
-  function beginCropResize(handle, event) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!cropRect) return;
-    pointerStateRef.current = {
-      mode: "crop-resize",
-      handle,
-      pointerId: event.pointerId,
-      startState: cloneState(editorStateRef.current),
-    };
-    setActiveInteraction("crop-resize");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  function beginRotate(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!cropRect) return;
-    const point = pointFromClient(event.clientX, event.clientY);
-    const center = {
-      x: cropRect.x + cropRect.width / 2,
-      y: cropRect.y + cropRect.height / 2,
-    };
-    pointerStateRef.current = {
-      mode: "rotate",
-      pointerId: event.pointerId,
-      startState: cloneState(editorStateRef.current),
-      startAngle: Math.atan2(point.y - center.y, point.x - center.x),
-    };
-    setActiveInteraction("rotate");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  function beginImagePan(event) {
-    event.preventDefault();
-    if (!imageRect || !cropRect) return;
-    const point = pointFromClient(event.clientX, event.clientY);
-    pointerStateRef.current = {
-      mode: "image-pan",
-      pointerId: event.pointerId,
-      startPoint: point,
-      startState: cloneState(editorStateRef.current),
-    };
-    setActiveInteraction("image-pan");
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  function handlePointerMove(event) {
-    const active = pointerStateRef.current;
-    if (!active || active.pointerId !== event.pointerId || !transformedPreview || !placement) return;
-    const point = pointFromClient(event.clientX, event.clientY);
-
-
-    if (active.mode === "image-pan") {
-      const next = clampImagePlacement(
-        {
-          ...active.startState,
-          imageOffsetX: active.startState.imageOffsetX + (point.x - active.startPoint.x),
-          imageOffsetY: active.startState.imageOffsetY + (point.y - active.startPoint.y),
-        },
-        transformedPreview,
-        placement,
-      );
-      applyState(next);
-      return;
-    }
-
-    if (active.mode === "rotate") {
-      const center = {
-        x: active.startState.cropRect.x + active.startState.cropRect.width / 2,
-        y: active.startState.cropRect.y + active.startState.cropRect.height / 2,
-      };
-      const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
-      const deltaDegrees = ((currentAngle - active.startAngle) * 180) / Math.PI;
-      applyState({
-        ...active.startState,
-        freeAngle: clamp(active.startState.freeAngle + deltaDegrees, MIN_FREE_ANGLE, MAX_FREE_ANGLE),
-      });
-      return;
-    }
-
-    const nextCrop = symmetricResize(
-      active.startState.cropRect,
-      active.handle,
-      point,
-      getAspectRatio(active.startState.aspectKey, active.startState.cropRect.width / active.startState.cropRect.height),
-    );
-
-    const w = nextCrop.width;
-    const h = nextCrop.height;
-    const w0 = active.startState.cropRect.width;
-    const h0 = active.startState.cropRect.height;
-    
-    // Check if the new crop forces the image to zoom in
-    const minZ = getMinZoomForCrop(nextCrop, transformedPreview, placement);
-    const nextZ = clamp(Math.max(active.startState.imageZoom, minZ), MIN_IMAGE_ZOOM, MAX_IMAGE_ZOOM);
-    const factor = nextZ / active.startState.imageZoom;
-
-    // Calculate shift to keep the anchored corner/edge glued to the image pixel
-    let dx = 0;
-    let dy = 0;
-    if (active.handle.includes("w")) dx = (w - factor * w0) / 2;
-    if (active.handle.includes("e")) dx = (factor * w0 - w) / 2;
-    if (active.handle.includes("n")) dy = (h - factor * h0) / 2;
-    if (active.handle.includes("s")) dy = (factor * h0 - h) / 2;
-
-    const next = clampImagePlacement(
-      {
-        ...active.startState,
-        imageZoom: nextZ,
-        cropRect: nextCrop,
-        imageOffsetX: active.startState.imageOffsetX * factor + dx,
-        imageOffsetY: active.startState.imageOffsetY * factor + dy,
-      },
-      transformedPreview,
-      placement,
-    );
-    applyState(next);
-  }
-
-  function handlePointerEnd(event) {
-    const active = pointerStateRef.current;
-    if (!active || active.pointerId !== event.pointerId) return;
-    pointerStateRef.current = null;
-    setActiveInteraction(null);
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    if (JSON.stringify(active.startState) !== JSON.stringify(editorStateRef.current)) {
-      const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-      nextHistory.push(cloneState(editorStateRef.current));
-      syncHistory(nextHistory, nextHistory.length - 1);
-    } else {
-      applyState(active.startState);
-    }
-  }
-
-  useViewportWheel({
-    viewportRef,
-    open,
-    transformedPreview,
-    placement,
-    editorStateRef,
-    recordState,
+  // Crop / transform tool — pointer interactions + commit ops. Owns
+  // activeInteraction (cursor) and the in-flight pointer/angle drag state.
+  const {
+    activeInteraction,
+    commitAspect, commitTransform,
+    beginCropResize, beginRotate, beginImagePan,
+    handlePointerMove, handlePointerEnd,
+    beginAngleDrag, updateAngle, endAngleDrag,
+  } = useCropTool({
+    open, previewSource, transformedPreview, viewportSize, placement, imageRect,
+    viewportRef, editorState, editorStateRef, pointFromClient,
+    apply: applyState, record: recordState, commitCurrent,
   });
-
-
-  useEffect(() => {
-    if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
-    const clamped = clampImagePlacement(editorStateRef.current, transformedPreview, placement);
-    if (!stateEquals(clamped, editorStateRef.current)) {
-      applyState(clamped);
-    }
-  }, [transformedPreview, placement]);
 
   useEffect(() => {
     const canvas = imageCanvasRef.current;
@@ -874,28 +616,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     if (!baseSnapshotRef.current) return;
     recordState(baseSnapshotRef.current);
     setMessage("");
-  }
-
-  function beginAngleDrag() {
-    angleDragStartRef.current = cloneState(editorStateRef.current);
-  }
-
-  function updateAngle(nextAngle) {
-    console.log("[Editor] updateAngle called:", nextAngle, "cropRect:", editorStateRef.current.cropRect);
-    applyState({
-      ...editorStateRef.current,
-      freeAngle: clamp(nextAngle, MIN_FREE_ANGLE, MAX_FREE_ANGLE),
-    });
-  }
-
-  function endAngleDrag() {
-    if (!angleDragStartRef.current) return;
-    if (!stateEquals(angleDragStartRef.current, editorStateRef.current)) {
-      const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-      nextHistory.push(cloneState(editorStateRef.current));
-      syncHistory(nextHistory, nextHistory.length - 1);
-    }
-    angleDragStartRef.current = null;
   }
 
   function getNormalizedCrop() {
