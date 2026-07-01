@@ -141,9 +141,11 @@ export default function FrameEditOverlay({ layers, overrides, selectedElement, o
               height: `${h * 100}%`,
               transform: l.rotation ? `rotate(${l.rotation}deg)` : undefined,
               cursor: "move",
-              border: selected ? `1.5px solid ${ACCENT}` : "1.5px dashed rgba(210,160,90,0.5)",
+              // When selected, SelectionHandles draws the box + handles — don't
+              // draw our own border too (that was the double outline). Unselected
+              // elements get a faint dashed hint that they're editable.
+              border: selected ? "none" : "1.5px dashed rgba(210,160,90,0.45)",
               borderRadius: 2,
-              background: selected ? "rgba(210,160,90,0.10)" : "transparent",
             }}
           >
             {selected && (
