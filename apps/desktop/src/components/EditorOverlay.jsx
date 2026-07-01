@@ -8,7 +8,6 @@ import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
 import StickerPanel from "./editor/StickerPanel";
 import FramePanel from "./editor/FramePanel";
-import FrameStage from "./editor/components/FrameStage";
 import { useFrameTool } from "./editor/state/useFrameTool";
 import { getBgPadding } from "./editor/textState";
 import {
@@ -910,19 +909,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           </>
         ) : null}
 
-        {tool === "frame" && (
-          <FrameStage
-            canvas={frameTool.framedCanvas}
-            rendering={frameTool.rendering}
-            rightInset={PANEL_WIDTH + PANEL_GAP + 72}
-            layers={frameTool.frameLayers}
-            overrides={frameTool.elementOverrides}
-            selectedElement={frameTool.selectedElement}
-            onSelectElement={frameTool.setSelectedElement}
-            onMoveElement={frameTool.moveElement}
-            onUpdateElement={frameTool.updateElement}
-          />
-        )}
 
         <div className="pointer-events-none absolute right-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3">
           <PanelChrome panelMeta={panelMeta} width={PANEL_WIDTH}>
