@@ -9,6 +9,7 @@ import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { buildTransformedCanvas, getSourceDimensions } from "../render/canvasHelpers";
 import { getAspectRatio } from "../cropMath";
+import { createDefaultLayer } from "../textState";
 
 // EXIF lives in nested image_metadata / raw_metadata (same shape the Inspector
 // reads), NOT flat fields. Prefer RAW metadata when it carries the capture.
@@ -204,6 +205,41 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     return () => { alive = false; };
   }, [active, transformedPreview, logos, cropKey, exifKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Unified model (Phase 3): a frame preset becomes editable LAYERS instead of a
+  // baked image. Returns the canvas margins (converted from the template's
+  // width-based pad to the editor's short-edge basis) + text layers ready to
+  // drop into the layer stack. Logos are deferred (they're tint-keyed images,
+  // not file stickers) — text-only for now.
+  async function generatePresetLayers(tpl) {
+    if (!transformedPreview) return null;
+    const base = buildBaseCanvas(transformedPreview, normalizedCrop);
+    await ensureLogos(tpl, base.height || 1200, logoColor);
+    const g = geometry(base, tpl, adjust);
+    const built = buildFrameLayers(null, {
+      template: tpl, exif, profile: {}, geom: g, adjust, factor: g.wref / g.outW,
+      registry: logos?.registry || { byId: new Map() }, logoImages: logoCacheRef.current,
+      logoColor, isOverlay: tpl.family === "overlay",
+    });
+    // Convert width-based template pad → short-edge basis so the same pixel
+    // margin lands whatever the editor uses.
+    const tp = tpl.canvas?.pad || {};
+    const short = Math.min(base.width, base.height);
+    const k = base.width / short;
+    const pad = {
+      top: (tp.top || 0) * k, right: (tp.right || 0) * k,
+      bottom: (tp.bottom || 0) * k, left: (tp.left || 0) * k,
+    };
+    const bg = { color: tpl.canvas?.bg?.color || "#ffffff" };
+    // Only text layers become real layers for now. TextCanvas centers layers at
+    // x/y (ignores align), so anchor at the element's VISUAL center (box.cx/cy)
+    // and mark it center-aligned — matching both the live editor and drawLayers.
+    const textLayers = built.filter((l) => l.type === "text").map((l) => {
+      const { ei, box, ...rest } = l;
+      return { ...createDefaultLayer({}), ...rest, x: box?.cx ?? l.x, y: box?.cy ?? l.y, align: "center" };
+    });
+    return { pad, bg, layers: textLayers };
+  }
+
   // Full-resolution base for EXPORT: rebuild the transformed + cropped photo from
   // the original `sourceImage` (the live preview uses the 2200px-capped one), so
   // the framed output keeps the photo's native resolution. Falls back to the
@@ -257,6 +293,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     frameAspectKey, setFrameAspectKey,
     template, elementOverrides, setElementOverrides,
     frameLayers, selectedElement, setSelectedElement, moveElement, updateElement,
+    generatePresetLayers,
     resetElement: (ei) => setElementOverrides((prev) => {
       if (!prev[ei]) return prev;
       const next = { ...prev }; delete next[ei]; return next;

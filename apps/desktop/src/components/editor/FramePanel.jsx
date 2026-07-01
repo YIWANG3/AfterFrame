@@ -27,7 +27,7 @@ const LOGO_COLORS = [
   { label: "金", value: "#b08d4c", swatch: "#b08d4c" },
 ];
 
-export default function FramePanel({ frameTool }) {
+export default function FramePanel({ frameTool, onApplyPreset }) {
   const { templates, templateId, setTemplateId, thumbs, cellAspect, logosReady, exporting, rendering, exportFramed,
     textScale, setTextScale, marginScale, setMarginScale, logoColor, setLogoColor,
     frameAspectKey, setFrameAspectKey, template, elementOverrides,
@@ -140,6 +140,16 @@ export default function FramePanel({ frameTool }) {
             </div>
           </div>
         )}
+        {onApplyPreset ? (
+          <button
+            type="button"
+            onClick={() => void onApplyPreset(template)}
+            disabled={!template}
+            className="mb-2 flex w-full items-center justify-center gap-2 rounded-md border border-border/60 px-4 py-2 text-[12px] text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-50"
+          >
+            应用为图层
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => void exportFramed()}

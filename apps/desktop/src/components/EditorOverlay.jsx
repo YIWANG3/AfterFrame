@@ -571,6 +571,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const frameToolRef = useRef(null);
   frameToolRef.current = frameTool;
 
+  // Unified model (Phase 3): apply a frame preset as editable LAYERS + canvas
+  // margins, instead of the baked FrameStage path. Drops text layers into the
+  // stack and switches to the Text tool so they're immediately editable.
+  async function applyFramePreset(tpl) {
+    const res = await frameToolRef.current?.generatePresetLayers?.(tpl);
+    if (!res) return;
+    const s = editorStateRef.current;
+    recordState({ ...s, canvas: { pad: res.pad, bg: res.bg } });
+    const cur = layerHistoryRef.current[layerHistoryIndexRef.current] || [];
+    commitLayers([...cur, ...res.layers]);
+    setTool("text");
+  }
+
   // Test backdoor — let E2E specs trigger save to a known path without
   // driving the native save-as dialog. Registered while the editor is open.
   useEffect(() => {
@@ -615,6 +628,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         const s = editorStateRef.current;
         recordState({ ...s, canvas: { ...s.canvas, pad: { top: 0, right: 0, bottom: 0, left: 0, ...pad } } });
       },
+      applyFramePreset: (templateId) => {
+        const tpl = frameToolRef.current?.templates?.find((x) => x.id === templateId);
+        return tpl ? applyFramePreset(tpl) : undefined;
+      },
       deleteLayer: (id) => handleDeleteLayer(id),
       moveLayer: (id, dir) => handleMoveLayer(id, dir),
       selectLayers: (ids) => selectLayers(ids),
@@ -629,6 +646,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
           "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
           "selectLayers", "undo", "redo", "exportFrame", "setFrameAspect", "setPad",
+          "applyFramePreset",
         ]) delete window.__afterframeTest[k];
       }
     };
@@ -985,7 +1003,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 />
               </div>
             ) : tool === "frame" ? (
-              <FramePanel frameTool={frameTool} />
+              <FramePanel frameTool={frameTool} onApplyPreset={applyFramePreset} />
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>

@@ -80,4 +80,17 @@ test.describe("Canvas margin (pad) save", () => {
 
     await window.evaluate(() => window.__afterframeTest.setPad({})); // restore
   });
+
+  // Phase 3: applying a frame preset sets the canvas margins from the template
+  // and switches to the Text tool (text layers come from EXIF placeholders —
+  // empty on this synthetic fixture, so the observable here is the margin).
+  test("applyFramePreset sets canvas margins from the template + switches to text", async () => {
+    await window.evaluate(() => window.__afterframeTest.setPad({})); // reset
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getState().canvasPad?.bottom), { timeout: 5_000 })
+      .toBeGreaterThan(0.05); // bar-id has a bottom margin
+    expect(await window.evaluate(() => window.__afterframeTest.getState().tool)).toBe("text");
+    await window.evaluate(() => window.__afterframeTest.setPad({})); // restore
+  });
 });
