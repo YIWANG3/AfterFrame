@@ -609,6 +609,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         };
       },
       setAspect: (key) => commitAspect(key),
+      setPad: (pad) => {
+        const s = editorStateRef.current;
+        recordState({ ...s, canvas: { ...s.canvas, pad: { top: 0, right: 0, bottom: 0, left: 0, ...pad } } });
+      },
       deleteLayer: (id) => handleDeleteLayer(id),
       moveLayer: (id, dir) => handleMoveLayer(id, dir),
       selectLayers: (ids) => selectLayers(ids),
@@ -622,7 +626,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         for (const k of [
           "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
           "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
-          "selectLayers", "undo", "redo", "exportFrame", "setFrameAspect",
+          "selectLayers", "undo", "redo", "exportFrame", "setFrameAspect", "setPad",
         ]) delete window.__afterframeTest[k];
       }
     };
@@ -739,7 +743,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, transformedPreview, tool, selectedIds, layers]);
+  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, outputRect, transformedPreview, tool, selectedIds, layers]);
 
   if (!open) return null;
 
@@ -792,6 +796,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
         {imageRect ? (
           <>
+            {/* Canvas background — fills the expanded output (the margin area
+                around the photo). Sized to outputRect; at pad=0 it's fully
+                behind the photo (invisible). */}
+            {outputRect && editorState.canvas?.pad && (editorState.canvas.pad.top || editorState.canvas.pad.right || editorState.canvas.pad.bottom || editorState.canvas.pad.left) ? (
+              <div
+                className="absolute"
+                style={{
+                  left: `${outputRect.x}px`, top: `${outputRect.y}px`,
+                  width: `${outputRect.width}px`, height: `${outputRect.height}px`,
+                  background: editorState.canvas.bg?.color || "#ffffff",
+                }}
+              />
+            ) : null}
             {/* Rotating image layer — only the image rotates */}
             <div
               className="absolute inset-0"

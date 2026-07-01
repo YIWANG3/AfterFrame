@@ -111,4 +111,9 @@ test.describe("Golden: crop + transform", () => {
     expect(Math.abs(m.width - m.height)).toBeLessThanOrEqual(2);
     expect(m.width).toBeLessThan(srcW); // actually cropped, not full frame
   });
+
+  // NOTE: a pad>0 geometry/pixel guard lands with the save-honors-pad step
+  // (Phase 2b) — asserting saved output dimensions + a layer's pixel position in
+  // the padded canvas, which is far more robust than reading getState rects
+  // (null under headless viewport-measurement timing).
 });

@@ -74,8 +74,16 @@ export function getMinZoomForCrop(cropRect, transformedPreview, placement) {
 export function getImageRect(state, transformedPreview, placement) {
   if (!state || !transformedPreview || !placement) return null;
   const zoom = state.imageZoom;
-  const width = transformedPreview.width * placement.fitScale * zoom;
-  const height = transformedPreview.height * placement.fitScale * zoom;
+  const s = placement.fitScale * zoom;
+  const width = transformedPreview.width * s;
+  const height = transformedPreview.height * s;
+  const pad = state.canvas?.pad;
+  if (pad && (pad.top || pad.right || pad.bottom || pad.left)) {
+    // Photo is a sub-rect inset within the output canvas by the margins.
+    const out = getOutputRect(state, transformedPreview, placement);
+    const short = Math.min(transformedPreview.width, transformedPreview.height);
+    return { x: out.x + pad.left * short * s, y: out.y + pad.top * short * s, width, height };
+  }
   return {
     x: placement.centerX - width / 2 + state.imageOffsetX,
     y: placement.centerY - height / 2 + state.imageOffsetY,
