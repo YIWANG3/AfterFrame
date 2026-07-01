@@ -73,9 +73,12 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
   const [marginScale, setMarginScale] = useState(1); // "留白" knob
   const [logoColor, setLogoColor] = useState(null); // logo tint override; null = 原色 (auto)
   const [frameAspectKey, setFrameAspectKey] = useState("free"); // pad output to a target ratio; "free" = frame's natural size
+  const [elementOverrides, setElementOverrides] = useState({}); // element index -> { dx, dy } (position nudge)
   const logoCacheRef = useRef(new Map());
 
   const template = useMemo(() => FRAME_TEMPLATES.find((t) => t.id === templateId), [templateId]);
+  // Per-element nudges are template-specific (indices differ) — clear on switch.
+  useEffect(() => { setElementOverrides({}); }, [templateId]);
   const cropKey = normalizedCrop ? JSON.stringify(normalizedCrop) : "full";
   const exifKey = JSON.stringify(exif);
 
@@ -104,7 +107,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
   function compose() {
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
     const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
-    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect });
+    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect, overrides: elementOverrides });
   }
 
   // Live preview: re-render when active / photo / crop / template / logos / knobs change.
@@ -119,7 +122,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
       setRendering(false);
     })();
     return () => { alive = false; };
-  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor, frameAspectKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor, frameAspectKey, elementOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Small framed previews of every template, so the panel shows what each looks
   // like (logo included) instead of a bare name list.
@@ -167,7 +170,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     const base = buildExportBase();
     await ensureLogos(template, base.height || 1200, logoColor);
     const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
-    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect });
+    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect, overrides: elementOverrides });
     const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
     await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), saveBasePath);
     return { width: out.width, height: out.height };
@@ -200,6 +203,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     textScale, setTextScale, marginScale, setMarginScale,
     logoColor, setLogoColor,
     frameAspectKey, setFrameAspectKey,
+    template, elementOverrides, setElementOverrides,
     logosReady: !!logos,
     exportFramed,
     exportTo, // e2e: export to a given path, skipping the native dialog

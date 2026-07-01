@@ -195,7 +195,7 @@ function sampleLuminance(ctx, cx, cy, w, h) {
 // renderFrame so the same "template → layers" conversion can feed both the
 // baked export and (later) the editable layer stack. Takes `ctx` because
 // overlay (on-photo) text picks its color from the luminance already drawn.
-export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay }) {
+export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay, overrides }) {
   const g = geom;
   const adj = adjust;
   const { wref, outW, outH } = geom;
@@ -241,6 +241,11 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     const el = template.elements[ei];
     let anchorDef = solo && el.soloAnchor ? { ...el.anchor, ...el.soloAnchor } : el.anchor;
     if (groupDy.has(ei)) anchorDef = { ...anchorDef, dy: (anchorDef.dy || 0) + groupDy.get(ei) };
+    // Per-element user override: nudge position (dx/dy add to the anchor).
+    const ov = overrides?.[ei];
+    if (ov && (ov.dx || ov.dy)) {
+      anchorDef = { ...anchorDef, dx: (anchorDef.dx || 0) + (ov.dx || 0), dy: (anchorDef.dy || 0) + (ov.dy || 0) };
+    }
     const a = resolveAnchor(anchorDef, g, adj);
 
     if (el.type === "logo") {
@@ -356,7 +361,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null }) {
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null, overrides = null }) {
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
   const { wref, padPx, outW, outH } = g;
@@ -392,7 +397,7 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
 
   const layers = buildFrameLayers(ctx, {
     template, exif, profile, geom: g, adjust: adj, factor,
-    registry, logoImages, logoColor, isOverlay,
+    registry, logoImages, logoColor, isOverlay, overrides,
   });
 
   drawLayersOnCanvas(ctx, outW, outH, layers, logoImages);
