@@ -15,6 +15,7 @@ import { COLOR_SWATCHES } from "../textState";
 
 const EDGE_KEYS = ["top", "bottom", "left", "right"];
 const toPct = (v) => Math.round((v || 0) * 100);
+const DEFAULT_GRAD = { from: "#ffffff", to: "#000000", fromOpacity: 1, toOpacity: 1, angle: 180 };
 
 export default function BorderControls({ templates = [], thumbs, cellAspect, onApplyPreset, pad, onPad, onPadCommit, bg, onBg }) {
   const { t } = useTranslation("editor");
@@ -24,7 +25,12 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
   const swatchRef = useRef(null);
   const p = pad || { top: 0, right: 0, bottom: 0, left: 0 };
   const uniform = Math.max(p.top || 0, p.right || 0, p.bottom || 0, p.left || 0);
+  const bgMode = bg?.mode === "gradient" ? "gradient" : "solid";
   const bgColor = bg?.color || "#ffffff";
+  const grad = bg?.gradient || DEFAULT_GRAD;
+  const swatchBg = bgMode === "gradient"
+    ? `linear-gradient(${grad.angle ?? 180}deg, ${grad.from}, ${grad.to})`
+    : bgColor;
 
   const Thumb = (tpl) => {
     const thumb = thumbs?.get?.(tpl.id);
@@ -106,9 +112,9 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           {["#ffffff", "#000000", "#f2f2f2"].map((c) => (
             <button
               key={c} type="button"
-              onClick={() => onBg(c)}
+              onClick={() => onBg({ mode: "solid", color: c })}
               className={`h-[18px] w-[18px] rounded-full border transition ${
-                bgColor.toLowerCase() === c ? "border-[rgb(var(--accent-color))] ring-1 ring-[rgb(var(--accent-color))]" : "border-border/70 hover:border-muted"
+                bgMode === "solid" && bgColor.toLowerCase() === c ? "border-[rgb(var(--accent-color))] ring-1 ring-[rgb(var(--accent-color))]" : "border-border/70 hover:border-muted"
               }`}
               style={{ background: c }}
             />
@@ -116,18 +122,22 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           <button
             ref={swatchRef} type="button" title={t("text.editColor")}
             onClick={() => setPickerOpen((v) => !v)}
-            className="relative h-[18px] w-[18px] cursor-pointer overflow-hidden rounded-full border border-border/70"
-          >
-            <span className="absolute inset-0" style={{ background: "conic-gradient(red, orange, yellow, lime, cyan, blue, magenta, red)" }} />
-          </button>
+            className="h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
+            style={{ background: swatchBg }}
+          />
         </div>
         {pickerOpen && (
           <ColorPickerPopover
             anchorEl={swatchRef.current}
             onClose={() => setPickerOpen(false)}
             color={bgColor}
-            onChange={onBg}
+            onChange={(hex) => onBg({ ...bg, mode: "solid", color: hex })}
             presets={COLOR_SWATCHES}
+            availableModes={["solid", "gradient"]}
+            mode={bgMode}
+            onModeChange={(m) => onBg({ ...bg, mode: m, gradient: bg?.gradient || DEFAULT_GRAD })}
+            gradient={grad}
+            onGradientChange={(patch) => onBg({ ...bg, mode: "gradient", gradient: { ...grad, ...patch } })}
           />
         )}
       </div>

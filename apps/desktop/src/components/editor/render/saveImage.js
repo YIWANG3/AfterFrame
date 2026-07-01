@@ -9,7 +9,24 @@ import {
   canvasToBlob,
   inferMimeType,
   releaseCanvasImage,
+  hexToRgba,
 } from "./canvasHelpers";
+
+// Canvas fillStyle for the border background — solid color or a linear gradient
+// across the WxH output (same angle convention as the live preview / text).
+function bgFillStyle(ctx, bg, W, H) {
+  if (bg?.mode === "gradient" && bg.gradient) {
+    const g = bg.gradient;
+    const rad = ((g.angle ?? 180) * Math.PI) / 180;
+    const dx = Math.sin(rad), dy = -Math.cos(rad);
+    const half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
+    const grad = ctx.createLinearGradient(W / 2 - dx * half, H / 2 - dy * half, W / 2 + dx * half, H / 2 + dy * half);
+    grad.addColorStop(0, hexToRgba(g.from || "#fff", g.fromOpacity ?? 1));
+    grad.addColorStop(1, hexToRgba(g.to || "#000", g.toOpacity ?? 1));
+    return grad;
+  }
+  return bg?.color || "#ffffff";
+}
 
 /**
  * Save the current editor composition to `savePath`. Tries native sharp first
@@ -104,7 +121,7 @@ export async function saveEditedImage(ctx) {
     outCtx = outputCanvas.getContext("2d");
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.fillStyle = canvasBg?.color || "#ffffff";
+    outCtx.fillStyle = bgFillStyle(outCtx, canvasBg, compW, compH);
     outCtx.fillRect(0, 0, compW, compH);
     outCtx.drawImage(transformedFull, padL, padT);
     mapLayer = (layer) => layer; // x/y/scale already output-relative

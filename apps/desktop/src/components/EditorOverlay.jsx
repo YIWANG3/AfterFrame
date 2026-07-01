@@ -53,6 +53,16 @@ import {
   getTextLayers,
 } from "./editor/layerStack";
 
+// Canvas background (the border area) → a CSS value. Solid color or a linear
+// gradient (same angle convention as text gradients: 0deg = up).
+function bgToCss(bg) {
+  if (bg?.mode === "gradient" && bg.gradient) {
+    const g = bg.gradient;
+    return `linear-gradient(${g.angle ?? 180}deg, ${hexToRgba(g.from || "#fff", g.fromOpacity ?? 1)}, ${hexToRgba(g.to || "#000", g.toOpacity ?? 1)})`;
+  }
+  return bg?.color || "#ffffff";
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -825,7 +835,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 style={{
                   left: `${outputRect.x}px`, top: `${outputRect.y}px`,
                   width: `${outputRect.width}px`, height: `${outputRect.height}px`,
-                  background: editorState.canvas.bg?.color || "#ffffff",
+                  background: bgToCss(editorState.canvas.bg),
                 }}
               />
             ) : null}
@@ -980,9 +990,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   applyState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, ...patch } } });
                 }}
                 onCanvasPadCommit={() => recordState(editorStateRef.current)}
-                onCanvasBg={(color) => {
+                onCanvasBg={(nextBg) => {
                   const s = editorStateRef.current;
-                  recordState({ ...s, canvas: { ...s.canvas, bg: { color } } });
+                  recordState({ ...s, canvas: { ...s.canvas, bg: nextBg } });
                 }}
               />
             ) : tool === "sticker" ? (

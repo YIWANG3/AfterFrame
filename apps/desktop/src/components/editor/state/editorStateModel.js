@@ -31,12 +31,15 @@ function padEquals(a, b) {
 
 export function canvasEquals(a, b) {
   if (!a || !b) return a === b;
-  return (a.bg?.color ?? null) === (b.bg?.color ?? null) && padEquals(a.pad, b.pad);
+  return JSON.stringify(a.bg ?? null) === JSON.stringify(b.bg ?? null) && padEquals(a.pad, b.pad);
 }
 
 function cloneCanvas(canvas) {
   if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null };
-  return { pad: { ...canvas.pad }, bg: canvas.bg ? { ...canvas.bg } : null };
+  const bg = canvas.bg
+    ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: { ...canvas.bg.gradient } } : {}) }
+    : null;
+  return { pad: { ...canvas.pad }, bg };
 }
 
 export function cloneState(state) {
