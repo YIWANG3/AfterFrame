@@ -27,7 +27,7 @@ import StickerPanel from "./editor/StickerPanel";
 import FramePanel from "./editor/FramePanel";
 import FrameStage from "./editor/components/FrameStage";
 import { useFrameTool } from "./editor/state/useFrameTool";
-import { createDefaultLayer, getBgPadding } from "./editor/textState";
+import { getBgPadding } from "./editor/textState";
 import {
   hexToRgba,
   getSourceDimensions,
@@ -47,6 +47,7 @@ import { useEditorImage } from "./editor/state/useEditorImage";
 import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
 import { useCropTool } from "./editor/state/useCropTool";
+import { useTextTool } from "./editor/state/useTextTool";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -67,8 +68,6 @@ import {
   isTextLayer,
   isStickerLayer,
   getTextLayers,
-  moveLayerBy,
-  removeLayerById,
 } from "./editor/layerStack";
 
 function clamp(value, min, max) {
@@ -351,8 +350,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
   const layerHistory = useLayerHistory();
   const { layers, setLayers, historyRef: layerHistoryRef, indexRef: layerHistoryIndexRef } = layerHistory;
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const textClipboardRef = useRef(null);
+  // Text tool — selection + clipboard + layer CRUD (destructured with the
+  // original names so call sites are unchanged).
+  const {
+    selectedIds, setSelectedIds,
+    moveLayer: handleMoveLayer, deleteLayer: handleDeleteLayer,
+    addTextLayer, selectLayers, copySelection, pasteClipboard, deleteSelection,
+  } = useTextTool({ layers, layerHistory });
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
   // RAW originals (.cr3/.3fr/…) can't be decoded by the renderer or sharp, so
@@ -440,18 +444,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     clearSceneDepth();
   }
 
-  function handleMoveLayer(id, direction) {
-    commitLayers(moveLayerBy(layers, id, direction));
-  }
-
-  function handleDeleteLayer(id) {
-    commitLayers(removeLayerById(layers, id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }
 
   // Thin wrapper around the pure layer renderer that supplies the sticker
   // image cache from our closure.
@@ -696,15 +688,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       // aborts while the preview image is still decoding.
       getPreviewReady: () => previewReadyRef.current,
       getSaving: () => saving,
-      addTextLayer: (text) => {
-        const nl = createDefaultLayer({ text: text || "Test Text", x: 0.5, y: 0.5 });
-        const next = [...layers, nl];
-        commitLayers(next);
-        setSelectedIds(new Set([nl.id]));
-        // Return the post-add count so the test doesn't have to wait for a
-        // React re-render before reading state.
-        return { id: nl.id, count: next.length };
-      },
+      addTextLayer: (text) => addTextLayer(text),
       getLayerCount: () => layers.length,
       getTool: () => tool,
       setTool: (t) => setTool(t),
@@ -729,7 +713,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       setAspect: (key) => commitAspect(key),
       deleteLayer: (id) => handleDeleteLayer(id),
       moveLayer: (id, dir) => handleMoveLayer(id, dir),
-      selectLayers: (ids) => setSelectedIds(new Set(ids)),
+      selectLayers: (ids) => selectLayers(ids),
       undo: () => handleUndo(),
       redo: () => handleRedo(),
       exportFrame: (savePath) => frameToolRef.current?.exportTo?.(savePath),
@@ -823,25 +807,17 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && selectedIds.size > 0) {
         event.preventDefault();
-        const copied = layers.filter((l) => isTextLayer(l) && selectedIds.has(l.id)).map((l) => ({ ...l }));
-        if (copied.length > 0) textClipboardRef.current = copied;
+        copySelection();
         return;
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && tool === "text" && textClipboardRef.current?.length > 0) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && tool === "text") {
         event.preventDefault();
-        const pasted = textClipboardRef.current.map((l) => {
-          const { id, ...rest } = l;
-          return createDefaultLayer({ ...rest, x: l.x + 0.02, y: l.y + 0.02 });
-        });
-        const currentLayers = layerHistoryRef.current[layerHistoryIndexRef.current] || [];
-        commitLayers([...currentLayers, ...pasted]);
-        setSelectedIds(new Set(pasted.map((p) => p.id)));
+        pasteClipboard();
         return;
       }
       if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && selectedIds.size > 0) {
         event.preventDefault();
-        commitLayers(layers.filter((l) => !selectedIds.has(l.id)));
-        setSelectedIds(new Set());
+        deleteSelection();
         return;
       }
       if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
