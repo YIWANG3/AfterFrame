@@ -9,7 +9,7 @@ import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { buildTransformedCanvas, getSourceDimensions } from "../render/canvasHelpers";
 import { getAspectRatio } from "../cropMath";
-import { createDefaultLayer } from "../textState";
+import { createDefaultLayer, createStickerLayer } from "../textState";
 
 // EXIF lives in nested image_metadata / raw_metadata (same shape the Inspector
 // reads), NOT flat fields. Prefer RAW metadata when it carries the capture.
@@ -230,14 +230,29 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
       bottom: (tp.bottom || 0) * k, left: (tp.left || 0) * k,
     };
     const bg = { color: tpl.canvas?.bg?.color || "#ffffff" };
-    // Only text layers become real layers for now. TextCanvas centers layers at
-    // x/y (ignores align), so anchor at the element's VISUAL center (box.cx/cy)
-    // and mark it center-aligned — matching both the live editor and drawLayers.
-    const textLayers = built.filter((l) => l.type === "text").map((l) => {
+    // Convert generated elements to real editable layers. TextCanvas centers
+    // layers at x/y (ignores align), so anchor everything at the element's
+    // VISUAL center (box.cx/cy). Logos become sticker layers whose stickerPath
+    // is the tinted logo's data URL (prepareLogo returns an Image already backed
+    // by a data URL) so they load in TextCanvas + the save path.
+    const layers = built.map((l) => {
       const { ei, box, ...rest } = l;
-      return { ...createDefaultLayer({}), ...rest, x: box?.cx ?? l.x, y: box?.cy ?? l.y, align: "center" };
-    });
-    return { pad, bg, layers: textLayers };
+      const cx = box?.cx ?? l.x;
+      const cy = box?.cy ?? l.y;
+      if (l.type === "text") {
+        return { ...createDefaultLayer({}), ...rest, x: cx, y: cy, align: "center" };
+      }
+      if (l.type === "sticker") {
+        const img = logoCacheRef.current.get(l.stickerPath);
+        if (!img?.src) return null;
+        return createStickerLayer(
+          { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
+          { x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100 },
+        );
+      }
+      return null;
+    }).filter(Boolean);
+    return { pad, bg, layers };
   }
 
   // Full-resolution base for EXPORT: rebuild the transformed + cropped photo from

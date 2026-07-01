@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
 import { getBgPadding } from "./textState";
-import { localFileUrl } from "../../utils/format";
+import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio } from "./selectionMath";
 
@@ -554,7 +554,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
             </filter>
           </defs>
           <image
-            href={localFileUrl(layer.stickerPath)}
+            href={stickerSrc(layer.stickerPath)}
             x="0" y="0"
             width={Math.max(1, layer.naturalWidth || widthPx)}
             height={Math.max(1, layer.naturalHeight || heightPx)}
@@ -564,7 +564,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
         </svg>
       ) : (
         <img
-          src={localFileUrl(layer.stickerPath)}
+          src={stickerSrc(layer.stickerPath)}
           alt=""
           draggable={false}
           className="block h-full w-full select-none"
