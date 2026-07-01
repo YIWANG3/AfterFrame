@@ -190,51 +190,15 @@ function sampleLuminance(ctx, cx, cy, w, h) {
   return n ? sum / n / 255 : 0.3;
 }
 
-/**
- * Render the framed photo.
- * @param {object} args
- * @param {HTMLImageElement|HTMLCanvasElement} args.photo
- * @param {object} args.exif
- * @param {object} [args.profile]  { author, ... }
- * @param {object} args.template
- * @param {object} args.registry   buildLogoRegistry() output
- * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
- * @returns {HTMLCanvasElement}
- */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null }) {
-  const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
-  const g = geometry(photo, template, adj);
-  const { wref, padPx, outW, outH } = g;
-  const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
-  const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
-
-  const canvas = document.createElement("canvas");
-  canvas.width = outW;
-  canvas.height = outH;
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  // Background + photo.
-  ctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
-  ctx.fillRect(0, 0, outW, outH);
-  ctx.drawImage(photo, padPx.left, padPx.top, wref, g.href);
-
-  // Optional bottom scrim — keeps on-photo (overlay) text legible regardless of
-  // how bright the photo is at the edge.
-  const scrim = template.canvas?.scrim;
-  if (scrim) {
-    const sh = (scrim.height ?? 0.3) * g.href;
-    const top = scrim.edge === "top";
-    const y0 = top ? padPx.top : padPx.top + g.href - sh;
-    const grad = ctx.createLinearGradient(0, y0, 0, y0 + sh);
-    // gradient runs dark→transparent away from the edge it hugs
-    grad.addColorStop(0, top ? (scrim.to ?? "rgba(0,0,0,0.5)") : (scrim.from ?? "rgba(0,0,0,0)"));
-    grad.addColorStop(1, top ? (scrim.from ?? "rgba(0,0,0,0)") : (scrim.to ?? "rgba(0,0,0,0.5)"));
-    ctx.fillStyle = grad;
-    ctx.fillRect(padPx.left, y0, wref, sh);
-  }
-
+// Turn a template's declarative elements into concrete drawable layers
+// (text + sticker/logo) at anchor-resolved positions. Extracted from
+// renderFrame so the same "template → layers" conversion can feed both the
+// baked export and (later) the editable layer stack. Takes `ctx` because
+// overlay (on-photo) text picks its color from the luminance already drawn.
+function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay }) {
+  const g = geom;
+  const adj = adjust;
+  const { wref, outW, outH } = geom;
   // Resolve which brand applies, for logo lookup.
   const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
   const brand = brandId ? registry.byId.get(brandId) : null;
@@ -370,6 +334,58 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       rotation: el.style?.rotation ?? 0,
     });
   }
+  return layers;
+}
+
+/**
+ * Render the framed photo.
+ * @param {object} args
+ * @param {HTMLImageElement|HTMLCanvasElement} args.photo
+ * @param {object} args.exif
+ * @param {object} [args.profile]  { author, ... }
+ * @param {object} args.template
+ * @param {object} args.registry   buildLogoRegistry() output
+ * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
+ * @returns {HTMLCanvasElement}
+ */
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null }) {
+  const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
+  const g = geometry(photo, template, adj);
+  const { wref, padPx, outW, outH } = g;
+  const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
+  const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // Background + photo.
+  ctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
+  ctx.fillRect(0, 0, outW, outH);
+  ctx.drawImage(photo, padPx.left, padPx.top, wref, g.href);
+
+  // Optional bottom scrim — keeps on-photo (overlay) text legible regardless of
+  // how bright the photo is at the edge.
+  const scrim = template.canvas?.scrim;
+  if (scrim) {
+    const sh = (scrim.height ?? 0.3) * g.href;
+    const top = scrim.edge === "top";
+    const y0 = top ? padPx.top : padPx.top + g.href - sh;
+    const grad = ctx.createLinearGradient(0, y0, 0, y0 + sh);
+    // gradient runs dark→transparent away from the edge it hugs
+    grad.addColorStop(0, top ? (scrim.to ?? "rgba(0,0,0,0.5)") : (scrim.from ?? "rgba(0,0,0,0)"));
+    grad.addColorStop(1, top ? (scrim.from ?? "rgba(0,0,0,0)") : (scrim.to ?? "rgba(0,0,0,0.5)"));
+    ctx.fillStyle = grad;
+    ctx.fillRect(padPx.left, y0, wref, sh);
+  }
+
+  const layers = buildFrameLayers(ctx, {
+    template, exif, profile, geom: g, adjust: adj, factor,
+    registry, logoImages, logoColor, isOverlay,
+  });
 
   drawLayersOnCanvas(ctx, outW, outH, layers, logoImages);
 
