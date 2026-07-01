@@ -19,16 +19,48 @@ export function getStageBounds(viewportSize) {
   };
 }
 
-export function getBasePlacement(viewportSize, transformedPreview) {
+// Output canvas = the photo expanded by `pad` margins (fractions of the photo's
+// SHORT edge). Zero / null pad returns the photo's dimensions verbatim — the
+// pad=0 identity the whole unified-canvas refactor rests on.
+export function getOutputDimensions(transformedPreview, pad) {
+  const w = transformedPreview.width;
+  const h = transformedPreview.height;
+  if (!pad || (!pad.top && !pad.right && !pad.bottom && !pad.left)) return { width: w, height: h };
+  const short = Math.min(w, h);
+  return {
+    width: Math.round(w + (pad.left + pad.right) * short),
+    height: Math.round(h + (pad.top + pad.bottom) * short),
+  };
+}
+
+export function getBasePlacement(viewportSize, transformedPreview, pad) {
   if (!transformedPreview) return null;
   const stage = getStageBounds(viewportSize);
+  const out = getOutputDimensions(transformedPreview, pad);
   const fitScale = Math.min(
-    stage.width / transformedPreview.width,
-    stage.height / transformedPreview.height,
+    stage.width / out.width,
+    stage.height / out.height,
   ) * 0.94;
   const centerX = CANVAS_SIDE_PADDING + stage.width / 2 - 26;
   const centerY = viewportSize.height / 2 - 30;
   return { fitScale, centerX, centerY };
+}
+
+// The OUTPUT canvas rect on screen (photo + margins), centered like the photo.
+// The basis for LAYER positioning + layer pointer math. At pad=0 this is exactly
+// getImageRect (the photo rect), so text/sticker behavior is unchanged.
+export function getOutputRect(state, transformedPreview, placement) {
+  if (!state || !transformedPreview || !placement) return null;
+  const out = getOutputDimensions(transformedPreview, state.canvas?.pad);
+  const zoom = state.imageZoom;
+  const width = out.width * placement.fitScale * zoom;
+  const height = out.height * placement.fitScale * zoom;
+  return {
+    x: placement.centerX - width / 2 + state.imageOffsetX,
+    y: placement.centerY - height / 2 + state.imageOffsetY,
+    width,
+    height,
+  };
 }
 
 export function getMinZoomForCrop(cropRect, transformedPreview, placement) {

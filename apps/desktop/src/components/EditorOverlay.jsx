@@ -440,7 +440,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   }, [previewSource, discreteRotationDeg, flipX, flipY]);
 
   // Viewport geometry (ref, measured size, placement, image rect, coord mapping).
-  const { viewportRef, viewportSize, placement, imageRect, pointFromClient } =
+  const { viewportRef, viewportSize, placement, imageRect, outputRect, pointFromClient } =
     useEditorViewport({ open, transformedPreview, editorState });
 
   // Once the preview + viewport are ready, seed the initial centered-crop
@@ -603,6 +603,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           selectedIds: [...selectedIds],
           historyIndex: historyIndexRef.current,
           historyLength: historyRef.current.length,
+          canvasPad: s.canvas?.pad,
+          imageRect,
+          outputRect,
         };
       },
       setAspect: (key) => commitAspect(key),
@@ -834,7 +837,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 <TextCanvas
                   layers={layers}
                   selectedIds={selectedIds}
-                  imageRect={imageRect}
+                  imageRect={outputRect || imageRect}
                   onSelectionChange={setSelectedIds}
                   onLayersChange={(updated) => {
                     const byId = new Map(updated.map((l) => [l.id, l]));

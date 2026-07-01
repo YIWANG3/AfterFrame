@@ -8,7 +8,7 @@
 // (photo + rotation/flip, owned by EditorOverlay) and `editorState`.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getBasePlacement, getImageRect } from "../imageMath";
+import { getBasePlacement, getImageRect, getOutputRect } from "../imageMath";
 
 export function useEditorViewport({ open, transformedPreview, editorState }) {
   const viewportRef = useRef(null);
@@ -27,12 +27,20 @@ export function useEditorViewport({ open, transformedPreview, editorState }) {
   }, [open]);
 
   const placement = useMemo(
-    () => getBasePlacement(viewportSize, transformedPreview),
-    [viewportSize, transformedPreview],
+    () => getBasePlacement(viewportSize, transformedPreview, editorState.canvas?.pad),
+    [viewportSize, transformedPreview, editorState.canvas],
   );
 
+  // Photo rect (crop / image pan-zoom basis).
   const imageRect = useMemo(
     () => getImageRect(editorState, transformedPreview, placement),
+    [editorState, transformedPreview, placement],
+  );
+
+  // Output-canvas rect (photo + margins) — the basis for LAYER positioning.
+  // Identical to imageRect while pad=0.
+  const outputRect = useMemo(
+    () => getOutputRect(editorState, transformedPreview, placement),
     [editorState, transformedPreview, placement],
   );
 
@@ -46,5 +54,5 @@ export function useEditorViewport({ open, transformedPreview, editorState }) {
     };
   }
 
-  return { viewportRef, viewportSize, placement, imageRect, pointFromClient };
+  return { viewportRef, viewportSize, placement, imageRect, outputRect, pointFromClient };
 }
