@@ -69,6 +69,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
   const [exporting, setExporting] = useState(false);
   const [textScale, setTextScale] = useState(1); // "文字大小" knob
   const [marginScale, setMarginScale] = useState(1); // "留白" knob
+  const [logoColor, setLogoColor] = useState(null); // logo tint override; null = 原色 (auto)
   const logoCacheRef = useRef(new Map());
 
   const template = useMemo(() => FRAME_TEMPLATES.find((t) => t.id === templateId), [templateId]);
@@ -86,9 +87,9 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
     return () => { alive = false; };
   }, [active, logos]);
 
-  async function ensureLogos(tpl, geomH) {
+  async function ensureLogos(tpl, geomH, override) {
     if (!logos) return;
-    for (const n of collectLogoNeeds(tpl, exif, logos.registry, { outH: geomH })) {
+    for (const n of collectLogoNeeds(tpl, exif, logos.registry, { outH: geomH }, override)) {
       if (logoCacheRef.current.has(n.key)) continue;
       const svg = logos.svgs[n.file];
       if (svg) logoCacheRef.current.set(n.key, await prepareLogo(svg, { color: n.color, colorLocked: n.colorLocked, heightPx: n.heightPx }));
@@ -99,7 +100,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
 
   function compose() {
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
-    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust });
+    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor });
   }
 
   // Live preview: re-render when active / photo / crop / template / logos / knobs change.
@@ -108,13 +109,13 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
     let alive = true;
     setRendering(true);
     (async () => {
-      await ensureLogos(template, transformedPreview.height || 1200);
+      await ensureLogos(template, transformedPreview.height || 1200, logoColor);
       if (!alive) return;
       setFramedCanvas(compose());
       setRendering(false);
     })();
     return () => { alive = false; };
-  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Small framed previews of every template, so the panel shows what each looks
   // like (logo included) instead of a bare name list.
@@ -172,6 +173,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
     templateId, setTemplateId,
     framedCanvas, thumbs, cellAspect, rendering, exporting,
     textScale, setTextScale, marginScale, setMarginScale,
+    logoColor, setLogoColor,
     logosReady: !!logos,
     exportFramed,
   };

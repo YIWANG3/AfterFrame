@@ -124,7 +124,10 @@ function resolveAnchor(anchor, geom, adjust) {
 // specific non-neutral color (e.g. the gold preset). colorLocked brands (Leica)
 // keep their SVG colors regardless.
 const NEUTRAL_LOGO_COLORS = new Set([undefined, "#141414", "#f4f4f4", "#ffffff"]);
-function logoColorFor(el, variant) {
+function logoColorFor(el, variant, override) {
+  // User override (黑/白/灰/金) wins — except color-locked marks (Leica) that
+  // can't be cleanly re-tinted; those keep their original.
+  if (override && !variant?.colorLocked) return override;
   const base = el.color || "#141414";
   // Per-VARIANT iconic color: Canon's wordmark is red, Sony's α symbol is orange,
   // but Sony's corporate SONY wordmark stays mono — so the color lives on the
@@ -134,7 +137,7 @@ function logoColorFor(el, variant) {
 }
 
 /** Logos a template needs for this photo: [{ brandId, variant, color, colorLocked, key, heightPx }]. */
-export function collectLogoNeeds(template, exif, registry, geom) {
+export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
   const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
   const brand = brandId ? registry.byId.get(brandId) : null;
   const needs = [];
@@ -142,7 +145,7 @@ export function collectLogoNeeds(template, exif, registry, geom) {
     if (el.type !== "logo" || !brand) continue;
     const variant = pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict });
     if (!variant) continue;
-    const color = logoColorFor(el, variant);
+    const color = logoColorFor(el, variant, logoColor);
     const colorLocked = !!variant.colorLocked;
     const key = `${brandId}:${variant.id}:${colorLocked ? "orig" : color}`;
     // Prepare at a generous size so the same cached logo stays crisp in both the
@@ -198,7 +201,7 @@ function sampleLuminance(ctx, cx, cy, w, h) {
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust }) {
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
   const { wref, padPx, outW, outH } = g;
@@ -255,7 +258,7 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       if (!brand) continue;
       const variant = pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict });
       if (!variant) continue;
-      const color = logoColorFor(el, variant);
+      const color = logoColorFor(el, variant, logoColor);
       const key = `${brandId}:${variant.id}:${variant.colorLocked ? "orig" : color}`;
       const img = logoImages.get(key);
       if (!img) continue; // caller didn't prepare it
