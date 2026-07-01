@@ -6,10 +6,12 @@
 //     photo's short edge. Slider drags are live; onPadCommit records one history
 //     entry on release.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { SliderRow } from "../../../ui";
+import ColorPickerPopover from "../../collage/ColorPickerPopover";
+import { COLOR_SWATCHES } from "../textState";
 
 const EDGE_KEYS = ["top", "bottom", "left", "right"];
 const toPct = (v) => Math.round((v || 0) * 100);
@@ -18,6 +20,8 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
   const { t } = useTranslation("editor");
   const [perEdge, setPerEdge] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const swatchRef = useRef(null);
   const p = pad || { top: 0, right: 0, bottom: 0, left: 0 };
   const uniform = Math.max(p.top || 0, p.right || 0, p.bottom || 0, p.left || 0);
   const bgColor = bg?.color || "#ffffff";
@@ -109,11 +113,23 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
               style={{ background: c }}
             />
           ))}
-          <label className="relative h-[18px] w-[18px] cursor-pointer overflow-hidden rounded-full border border-border/70" title="Custom">
+          <button
+            ref={swatchRef} type="button" title={t("text.editColor")}
+            onClick={() => setPickerOpen((v) => !v)}
+            className="relative h-[18px] w-[18px] cursor-pointer overflow-hidden rounded-full border border-border/70"
+          >
             <span className="absolute inset-0" style={{ background: "conic-gradient(red, orange, yellow, lime, cyan, blue, magenta, red)" }} />
-            <input type="color" value={bgColor} onChange={(e) => onBg(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-          </label>
+          </button>
         </div>
+        {pickerOpen && (
+          <ColorPickerPopover
+            anchorEl={swatchRef.current}
+            onClose={() => setPickerOpen(false)}
+            color={bgColor}
+            onChange={onBg}
+            presets={COLOR_SWATCHES}
+          />
+        )}
       </div>
     </div>
   );
