@@ -386,7 +386,10 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
   const canvas = document.createElement("canvas");
   canvas.width = outW;
   canvas.height = outH;
-  const ctx = canvas.getContext("2d");
+  // Only overlay templates read pixels back (sampleLuminance for adaptive text
+  // contrast); flag those so getImageData is fast + silent. Non-overlay stays
+  // GPU-backed for fast drawing.
+  const ctx = canvas.getContext("2d", isOverlay ? { willReadFrequently: true } : undefined);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 

@@ -55,15 +55,25 @@ export default function FrameStage({ canvas, rendering, rightInset = 0, layers, 
 
   function reset() { setZoom(1); setPan({ x: 0, y: 0 }); }
 
-  function onWheel(e) {
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    setZoom((z) => {
-      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * factor));
-      if (next <= 1) setPan({ x: 0, y: 0 });
-      return next;
-    });
-  }
+  // Wheel-to-zoom via a NON-passive listener — React's onWheel is passive, so
+  // preventDefault() there is a no-op (page scrolls + warns). addEventListener
+  // with { passive: false } lets us actually swallow the scroll (like the crop
+  // tool), which is what keeps zooming smooth.
+  useEffect(() => {
+    const outer = outerRef.current;
+    if (!outer) return undefined;
+    function onWheel(e) {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      setZoom((z) => {
+        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * factor));
+        if (next <= 1) setPan({ x: 0, y: 0 });
+        return next;
+      });
+    }
+    outer.addEventListener("wheel", onWheel, { passive: false });
+    return () => outer.removeEventListener("wheel", onWheel);
+  }, []);
 
   function onPointerDown(e) {
     if (zoom <= 1) return;
@@ -97,7 +107,6 @@ export default function FrameStage({ canvas, rendering, rightInset = 0, layers, 
       ref={outerRef}
       className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden bg-app"
       style={{ padding: PAD, paddingRight: rightInset || PAD }}
-      onWheel={onWheel}
       onDoubleClick={reset}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
