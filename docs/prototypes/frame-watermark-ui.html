@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边框 / 水印 — UI Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:ital@1&family=Caveat&display=swap" rel="stylesheet">
+<style>
+:root{
+  --app-bg:12 12 12; --chrome:18 18 18; --panel:24 24 24; --panel2:32 32 32;
+  --hover:40 40 40; --selected:30 27 22; --border:32 32 32;
+  --text:240 240 240; --muted:160 160 160; --muted2:100 100 100;
+  --accent:210 160 90; --accent-soft:50 40 24;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:rgb(var(--app-bg)); color:rgb(var(--text));
+  font-family:"Plus Jakarta Sans",system-ui,sans-serif; font-size:13px;
+  -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+.app{display:flex; height:100vh; width:100vw}
+
+/* ---------- stage ---------- */
+.stage{flex:1; position:relative; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(120% 120% at 50% 30%, #161616 0%, rgb(var(--app-bg)) 70%); min-width:0}
+.topbar{position:absolute; top:0; left:0; right:0; height:52px; display:flex; align-items:center;
+  gap:14px; padding:0 18px; z-index:5}
+.iconbtn{width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:rgb(var(--muted));
+  border:1px solid transparent; cursor:pointer}
+.iconbtn:hover{background:rgb(var(--hover)); color:rgb(var(--text))}
+.crumb{display:flex; flex-direction:column; line-height:1.25}
+.crumb b{font-weight:600; font-size:13px}
+.crumb span{color:rgb(var(--muted2)); font-size:11px}
+.spacer{flex:1}
+.btn{height:32px; padding:0 16px; border-radius:8px; font-weight:600; font-size:12.5px; cursor:pointer; border:1px solid transparent}
+.btn.ghost{background:rgb(var(--panel2)); color:rgb(var(--text)); border-color:rgb(var(--border))}
+.btn.ghost:hover{background:rgb(var(--hover))}
+.btn.primary{background:rgb(var(--accent)); color:#1a1407}
+.btn.primary:hover{filter:brightness(1.06)}
+
+.previewwrap{display:flex; align-items:center; justify-content:center; max-width:62%; max-height:78vh}
+
+/* ---------- the framed photo ---------- */
+.photo{width:100%; height:100%; position:relative; overflow:hidden;
+  background:
+    radial-gradient(38% 30% at 68% 30%, rgba(255,238,210,.95), rgba(255,210,150,0) 60%),
+    linear-gradient(180deg,#8e7fb6 0%, #c98f78 46%, #5c6078 60%, #3a3248 74%, #221e2c 100%);}
+.photo::after{content:""; position:absolute; left:0; right:0; bottom:0; height:42%;
+  background:linear-gradient(180deg, rgba(40,34,52,0) 0%, #2a2234 55%, #1c1828 100%);
+  clip-path:polygon(0 38%,18% 22%,35% 34%,52% 18%,70% 30%,86% 16%,100% 26%,100% 100%,0 100%)}
+.frame{box-shadow:0 24px 60px rgba(0,0,0,.5); transition:background .2s, padding .2s}
+.frame .photo{transition:border-radius .2s}
+
+/* layouts */
+.frame.bar{background:#fff; padding:0}
+.frame.bar.dark{background:#0c0c0c}
+.bar-strip{display:flex; align-items:center; justify-content:space-between; padding:5.2% 5.5%}
+.frame.margin{background:#fafafa; padding:7% 7% 0}
+.frame.margin.dark{background:#0e0e0e}
+.cap{padding:6% 0 7%}
+.frame.overlay{background:transparent; padding:0; position:relative}
+.frame.polaroid{background:#fff; padding:5% 5% 0}
+.frame.polaroid.dark{background:#101010}
+.frame.film{background:#111; padding:6.5% 4%}
+.frame.editorial{background:#fff; padding:6.5% 5.5% 0}
+.frame.editorial.dark{background:#0e0e0e}
+
+/* content blocks */
+.blk{display:flex; align-items:center; gap:.7em; line-height:1.15}
+.col{display:flex; flex-direction:column; gap:.35em}
+.cam{font-weight:600; letter-spacing:.01em; color:#141414}
+.lens{color:#8a8a8a; font-weight:400}
+.exif{color:#6e6e6e; letter-spacing:.02em; white-space:nowrap}
+.dot{width:.46em; height:.46em; border-radius:50%; background:#ff6a00; flex:none}
+.hmark{font-family:"Playfair Display",serif; font-style:italic; font-weight:400; color:#141414}
+.word{font-family:"Playfair Display",serif; font-style:italic; letter-spacing:.42em; text-indent:.42em; color:#141414}
+.sig{font-family:"Caveat",cursive; opacity:.92}
+.dark .cam,.dark .word,.dark .hmark{color:#f2f2f2}
+.dark .lens{color:#9a9a9a}
+.dark .exif{color:#aaa}
+.rule{height:1px; background:#e4e4e4; margin:.5em 0}
+.dark .rule{background:#2a2a2a}
+.center{text-align:center; align-items:center; justify-content:center}
+.holes{position:absolute; left:0; right:0; display:flex; gap:2.6%; padding:0 3%}
+.holes.top{top:1.7%} .holes.bot{bottom:1.7%}
+.holes i{flex:1; height:9px; border-radius:2px; background:#2b2b2b}
+
+/* ---------- right panel ---------- */
+.panel{width:344px; flex:none; background:rgb(var(--chrome)); border-left:1px solid rgb(var(--border));
+  display:flex; flex-direction:column}
+.phead{padding:14px 16px 10px; border-bottom:1px solid rgb(var(--border))}
+.phead .t{font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:rgb(var(--accent)/.8)}
+.seg{display:flex; background:rgb(var(--panel)); border:1px solid rgb(var(--border)); border-radius:9px; padding:3px; margin-top:11px}
+.seg button{flex:1; height:30px; border:0; background:transparent; color:rgb(var(--muted)); font:inherit; font-weight:600; font-size:12.5px; border-radius:6px; cursor:pointer}
+.seg button.on{background:rgb(var(--panel2)); color:rgb(var(--text)); box-shadow:0 1px 0 rgba(0,0,0,.3)}
+.pbody{flex:1; overflow-y:auto; padding:6px 16px 18px}
+.pbody::-webkit-scrollbar{width:8px}.pbody::-webkit-scrollbar-thumb{background:rgb(var(--panel2)); border-radius:8px}
+.sec{padding:14px 0 4px; border-bottom:1px solid rgb(var(--border)/.6)}
+.sec:last-child{border:0}
+.sec h4{font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:rgb(var(--muted2)); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center}
+.sec h4 .hint{font-weight:500; letter-spacing:0; text-transform:none; color:rgb(var(--muted2))}
+
+/* preset chips */
+.chips{display:flex; gap:9px; overflow-x:auto; padding:2px 0 8px; scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none; width:74px; cursor:pointer}
+.chip .thumb{width:74px; height:90px; border-radius:7px; border:1.5px solid rgb(var(--border));
+  background:rgb(var(--panel2)); overflow:hidden; display:flex; align-items:center; justify-content:center; transition:border-color .15s}
+.chip.on .thumb{border-color:rgb(var(--accent))}
+.chip .nm{font-size:10.5px; color:rgb(var(--muted)); text-align:center; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.chip.on .nm{color:rgb(var(--text))}
+.mini{width:58px; transform-origin:center; box-shadow:none!important}
+.mini .photo{}
+
+/* element toggles */
+.elgrid{display:grid; grid-template-columns:1fr 1fr; gap:7px 10px}
+.tog{display:flex; align-items:center; justify-content:space-between; height:30px; padding:0 4px; cursor:pointer}
+.tog span{font-size:12.5px; color:rgb(var(--text))}
+.sw{width:34px; height:19px; border-radius:20px; background:rgb(var(--panel2)); position:relative; flex:none; transition:background .15s}
+.sw::after{content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:rgb(var(--muted)); transition:.15s}
+.tog.on .sw{background:rgb(var(--accent))}
+.tog.on .sw::after{left:17px; background:#1a1407}
+.tog.on span{color:rgb(var(--text))}
+.tog:not(.on) span{color:rgb(var(--muted))}
+
+/* placement grid + align */
+.row2{display:flex; gap:18px; align-items:flex-start}
+.place{display:grid; grid-template-columns:repeat(3,1fr); gap:5px; width:108px}
+.place button{aspect-ratio:1.2/1; border:1px solid rgb(var(--border)); background:rgb(var(--panel)); border-radius:6px; cursor:pointer; display:flex; padding:5px}
+.place button i{width:11px; height:3px; border-radius:2px; background:rgb(var(--muted2))}
+.place button.on{border-color:rgb(var(--accent)); background:rgb(var(--accent-soft))}
+.place button.on i{background:rgb(var(--accent))}
+.fld{flex:1}
+.fld label{display:block; font-size:11px; color:rgb(var(--muted2)); margin-bottom:6px}
+.aligns,.swatches{display:flex; gap:6px}
+.aligns button,.styopt{height:30px; border:1px solid rgb(var(--border)); background:rgb(var(--panel)); border-radius:7px; color:rgb(var(--muted)); cursor:pointer; display:grid; place-items:center; flex:1}
+.aligns button.on{border-color:rgb(var(--accent)); color:rgb(var(--text)); background:rgb(var(--panel2))}
+.aligns svg{width:15px;height:15px}
+
+/* style controls */
+.ctrl{margin-bottom:13px}
+.ctrl>label{display:flex; justify-content:space-between; font-size:11.5px; color:rgb(var(--muted)); margin-bottom:8px}
+.ctrl>label b{color:rgb(var(--text)); font-weight:600}
+.swatch{width:26px; height:26px; border-radius:7px; border:2px solid rgb(var(--border)); cursor:pointer}
+.swatch.on{border-color:rgb(var(--accent))}
+input[type=range]{width:100%; accent-color:rgb(var(--accent)); height:4px}
+.selbox{width:100%; height:32px; background:rgb(var(--panel)); border:1px solid rgb(var(--border)); border-radius:8px; color:rgb(var(--text)); padding:0 10px; font:inherit; font-size:12.5px}
+.sigbtn{width:100%; height:38px; border:1px dashed rgb(var(--border)); background:rgb(var(--panel)); border-radius:9px; color:rgb(var(--muted)); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:600}
+.sigbtn:hover{border-color:rgb(var(--accent)/.5); color:rgb(var(--text))}
+
+.pfoot{padding:12px 16px; border-top:1px solid rgb(var(--border)); display:flex; gap:10px}
+.pfoot .btn{flex:1; height:38px}
+
+/* tool rail */
+.rail{width:56px; flex:none; background:rgb(var(--chrome)); border-left:1px solid rgb(var(--border)); display:flex; flex-direction:column; align-items:center; padding-top:14px; gap:6px}
+.rail .tl{width:40px; height:44px; border-radius:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:rgb(var(--muted2)); cursor:pointer; font-size:9.5px}
+.rail .tl:hover{background:rgb(var(--hover)); color:rgb(var(--muted))}
+.rail .tl.on{background:rgb(var(--selected)); color:rgb(var(--accent))}
+.rail .tl svg{width:18px;height:18px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== STAGE ========== -->
+  <div class="stage">
+    <div class="topbar">
+      <div class="iconbtn">‹</div>
+      <div class="crumb"><b>边框</b><span>Hasselblad_CFV_8842.jpg · 5376 × 6720</span></div>
+      <div class="spacer"></div>
+      <button class="btn ghost">批量应用…</button>
+      <button class="btn ghost">导出</button>
+      <button class="btn primary">完成</button>
+    </div>
+    <div class="previewwrap">
+      <div id="frame" class="frame bar" style="width:440px"></div>
+    </div>
+  </div>
+
+  <!-- ========== PANEL ========== -->
+  <div class="panel">
+    <div class="phead">
+      <div class="t">边框 / 水印</div>
+    </div>
+
+    <div class="pbody">
+      <!-- presets -->
+      <div class="sec">
+        <h4>预设 <span class="hint" id="catHint">哈苏 · 徕卡 · 蔡司 · 留白 · 拍立得 · 胶片…</span></h4>
+        <div class="chips" id="chips"></div>
+      </div>
+
+      <!-- elements -->
+      <div class="sec">
+        <h4>显示元素 <span class="hint">点按开关</span></h4>
+        <div class="elgrid" id="elgrid"></div>
+      </div>
+
+      <!-- placement -->
+      <div class="sec">
+        <h4>放置位置</h4>
+        <div class="row2">
+          <div class="place" id="place"></div>
+          <div class="fld">
+            <label>文字对齐</label>
+            <div class="aligns" id="aligns">
+              <button data-a="left" title="左对齐"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h12M3 18h15"/></svg></button>
+              <button data-a="center" class="on" title="居中"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M5 18h14"/></svg></button>
+              <button data-a="right" title="右对齐"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M9 12h12M6 18h15"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- style -->
+      <div class="sec">
+        <h4>样式</h4>
+        <div class="ctrl">
+          <label>底色</label>
+          <div class="swatches" id="bgsw">
+            <div class="swatch on" data-bg="light" style="background:#fff"></div>
+            <div class="swatch" data-bg="dark" style="background:#0c0c0c"></div>
+            <div class="swatch" data-bg="sample" style="background:linear-gradient(135deg,#c98f78,#5c6078)" title="取自照片"></div>
+            <div class="swatch" data-bg="accent" style="background:rgb(210 160 90)"></div>
+          </div>
+        </div>
+        <div class="ctrl">
+          <label>留白厚度 <b id="padVal">12%</b></label>
+          <input type="range" min="6" max="28" value="12" oninput="setPad(this.value)">
+        </div>
+        <div class="ctrl">
+          <label>点缀色（品牌点）</label>
+          <div class="swatches">
+            <div class="swatch on" style="background:#ff6a00" onclick="setDot('#ff6a00',this)"></div>
+            <div class="swatch" style="background:#e00000" onclick="setDot('#e00000',this)"></div>
+            <div class="swatch" style="background:rgb(210 160 90)" onclick="setDot('rgb(210 160 90)',this)"></div>
+            <div class="swatch" style="background:#222" onclick="setDot('#222',this)"></div>
+          </div>
+        </div>
+        <div class="ctrl">
+          <label>字体</label>
+          <select class="selbox"><option>Grotesk · Geist</option><option>Mono · JetBrains</option><option>Serif · Fraunces</option><option>Inter</option></select>
+        </div>
+      </div>
+
+      <!-- signature -->
+      <div class="sec">
+        <h4>个人签名</h4>
+        <button class="sigbtn" onclick="toggleSig()"><span id="sigIco">✎</span><span id="sigTxt">添加签名</span></button>
+      </div>
+    </div>
+
+    <div class="pfoot">
+      <button class="btn ghost" style="flex:.7">存为预设</button>
+      <button class="btn primary">应用到照片</button>
+    </div>
+  </div>
+
+  <!-- ========== TOOL RAIL ========== -->
+  <div class="rail">
+    <div class="tl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2"/></svg>裁剪</div>
+    <div class="tl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>文字</div>
+    <div class="tl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>贴纸</div>
+    <div class="tl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg>AI</div>
+    <div class="tl on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><rect x="3" y="16" width="18" height="5"/></svg>边框</div>
+  </div>
+
+</div>
+
+<script>
+const EXIF={camera:"Hasselblad CFV 100C/907X", lens:"XCD 3,5-4,5 / 35-75", focal:"73mm", aperture:"f/4.5", shutter:"1/1399s", iso:"ISO80", date:"2024.09.03"};
+const ELEMENTS=[
+  ["logo","品牌 logo"],["wordmark","厂牌字标"],["camera","机型"],["lens","镜头"],
+  ["aperture","光圈"],["shutter","快门"],["iso","ISO"],["focal","焦段"],
+  ["date","日期"],["labels","参数标签"]
+];
+const PRESETS={
+  official:[
+    {id:"h-overlay",nm:"哈苏 叠加",layout:"overlay",bg:"dark",place:"bc",align:"center",el:{logo:1,camera:0,lens:0,aperture:1,shutter:1,iso:1,focal:0,date:0,wordmark:0,labels:1}},
+    {id:"h-bar",nm:"哈苏 信息条",layout:"bar",bg:"light",place:"split",align:"left",el:{logo:1,camera:1,lens:1,aperture:1,shutter:1,iso:1,focal:1,date:0,wordmark:0,labels:0}},
+    {id:"h-margin",nm:"哈苏 留白",layout:"margin",bg:"light",place:"bc",align:"center",el:{logo:0,wordmark:1,camera:0,lens:0,aperture:1,shutter:1,iso:1,focal:0,date:0,labels:1}},
+    {id:"h-border",nm:"哈苏 白边",layout:"polaroid",bg:"light",place:"bc",align:"center",el:{logo:1,camera:1,lens:1,aperture:0,shutter:0,iso:0,focal:0,date:0,wordmark:0,labels:0}},
+    {id:"leica",nm:"徕卡",layout:"bar",bg:"light",place:"split",align:"left",el:{logo:1,camera:1,lens:1,focal:1,aperture:1,shutter:1,iso:1,date:0,wordmark:0,labels:0}},
+    {id:"zeiss",nm:"蔡司",layout:"editorial",bg:"light",place:"bc",align:"center",el:{wordmark:1,camera:0,lens:0,aperture:1,shutter:1,iso:1,focal:1,date:1,logo:0,labels:0}},
+    {id:"xmage",nm:"XMAGE",layout:"bar",bg:"dark",place:"split",align:"left",el:{logo:1,camera:1,lens:0,aperture:1,shutter:1,iso:1,focal:1,date:1,wordmark:0,labels:0}},
+  ],
+  custom:[
+    {id:"gallery",nm:"美术馆",layout:"margin",bg:"light",place:"bc",align:"center",el:{wordmark:0,camera:1,date:1,aperture:1,shutter:1,iso:1,focal:1,lens:0,logo:0,labels:0}},
+    {id:"polaroid",nm:"拍立得",layout:"polaroid",bg:"light",place:"bc",align:"center",el:{camera:1,date:1,logo:0,lens:0,aperture:0,shutter:0,iso:0,focal:0,wordmark:0,labels:0}},
+    {id:"editorial",nm:"杂志",layout:"editorial",bg:"light",place:"bc",align:"center",el:{wordmark:1,camera:1,aperture:1,shutter:1,iso:1,focal:1,lens:0,date:0,logo:0,labels:0}},
+    {id:"film",nm:"胶片",layout:"film",bg:"dark",place:"split",align:"left",el:{camera:1,focal:1,aperture:1,shutter:1,iso:1,lens:0,date:0,logo:0,wordmark:0,labels:0}},
+    {id:"corner",nm:"极简角标",layout:"overlay",bg:"dark",place:"br",align:"right",el:{focal:1,aperture:1,shutter:1,iso:1,camera:0,lens:0,date:0,logo:0,wordmark:0,labels:0}},
+    {id:"minbar",nm:"极简条",layout:"bar",bg:"light",place:"split",align:"left",el:{camera:1,focal:1,aperture:1,shutter:1,iso:1,lens:0,date:0,logo:0,wordmark:0,labels:0}},
+  ]
+};
+
+const PRESETS_ALL=[...PRESETS.official, ...PRESETS.custom]; // 不分类,全部平铺
+let state=JSON.parse(JSON.stringify(PRESETS_ALL[1])); // default = 哈苏信息条
+let sigOn=false, dotColor="#ff6a00";
+
+function exifStr(el){
+  const order=[["focal","focal"],["aperture","aperture"],["shutter","shutter"],["iso","iso"]];
+  const parts=[];
+  for(const [k] of order){ if(el[k]){ let v=EXIF[k];
+    if(el.labels){ const L={focal:"Focal",aperture:"Aperture",shutter:"Shutter",iso:"ISO"}[k];
+      v = k==="iso" ? `ISO | ${EXIF.iso.replace("ISO","").trim()}` : `${L} | ${v}`; }
+    parts.push(v);} }
+  return parts.join(el.labels?"   ":" · ");
+}
+function hmark(s){return `<span class="hmark" style="font-size:${s}px">H</span>`}
+function sigEl(s){return sigOn?`<span class="sig" style="font-size:${s}px">Yi Wang</span>`:""}
+
+function renderFrame(){
+  const f=document.getElementById("frame");
+  const el=state.el, dark=state.bg==="dark";
+  f.className="frame "+state.layout+(dark?" dark":"");
+  const big=440, base=big/30;
+  let inner=`<div class="photo" style="aspect-ratio:4/5"></div>`;
+  const exif=exifStr(el);
+  const cam=el.camera?`<span class="cam">${EXIF.camera}</span>`:"";
+  const lens=el.lens?`<span class="lens">${EXIF.lens}</span>`:"";
+  const word=el.wordmark?`<div class="word" style="font-size:${base*0.62}px">HASSELBLAD</div>`:"";
+  const dotStyle=`style="background:${dotColor}"`;
+
+  if(state.layout==="bar"){
+    const left=`<div class="col" style="align-items:flex-start">${cam?`<span class="cam" style="font-size:${base*1.0}px">${EXIF.camera}</span>`:""}${lens?`<span class="lens" style="font-size:${base*0.74}px">${EXIF.lens}</span>`:""}</div>`;
+    const right=`<div class="col" style="align-items:flex-end; text-align:right">
+        ${el.logo?`<div>${hmark(base*1.25)}</div>`:""}
+        ${exif?`<div class="blk">${(el.labels?'':`<span class="dot" ${dotStyle}></span>`)}<span class="exif" style="font-size:${base*0.72}px">${exif}</span></div>`:""}
+      </div>`;
+    inner+=`<div class="bar-strip">${left}${right}</div>`;
+  }
+  else if(state.layout==="margin"){
+    inner+=`<div class="cap col center" style="gap:.5em">
+        ${word||(cam?`<span class="cam" style="letter-spacing:.18em; font-size:${base*0.82}px">${EXIF.camera}</span>`:"")}
+        ${exif?`<div class="rule" style="width:60px"></div><span class="exif" style="font-size:${base*0.7}px">${exif}</span>`:""}
+        ${el.date?`<span class="exif" style="font-size:${base*0.62}px">${EXIF.date}</span>`:""}
+      </div>`;
+  }
+  else if(state.layout==="polaroid"){
+    inner+=`<div class="cap col center" style="padding:7% 0 9%; gap:.45em">
+        ${el.logo?`<div>${hmark(base*1.3)}</div>`:""}
+        ${cam?`<span class="cam" style="font-size:${base*0.92}px">${EXIF.camera}</span>`:""}
+        ${lens?`<span class="lens" style="font-size:${base*0.66}px">${EXIF.lens}</span>`:""}
+        ${exif?`<span class="exif" style="font-size:${base*0.66}px">${exif}</span>`:""}
+        ${el.date?`<span class="exif" style="font-size:${base*0.6}px">${EXIF.date}</span>`:""}
+      </div>`;
+  }
+  else if(state.layout==="editorial"){
+    inner=`${word?`<div style="padding:0 0 5%">${word.replace('class="word"','class="word center" style="text-align:center;')}</div>`:""}
+      <div class="photo" style="aspect-ratio:4/5"></div>
+      <div class="bar-strip" style="padding:5% 0 6%">
+        <span class="cam" style="font-size:${base*0.74}px">${el.camera?EXIF.camera:"Helena"}</span>
+        <span class="exif" style="font-size:${base*0.68}px">${exif}</span>
+      </div>`;
+  }
+  else if(state.layout==="film"){
+    const holes=`<div class="holes %P%">${"<i></i>".repeat(11)}</div>`;
+    inner=`${holes.replace("%P%","top")}<div class="photo" style="aspect-ratio:4/5; margin:6% 0"></div>${holes.replace("%P%","bot")}
+      <div class="bar-strip" style="padding:0 1% 2.5%; position:absolute; bottom:0; left:0; right:0">
+        <span class="exif" style="font-size:${base*0.6}px; color:#d8b06a; letter-spacing:.12em">FILM 400 · 12A</span>
+        <span class="exif" style="font-size:${base*0.6}px">${exif}</span>
+      </div>`;
+    f.style.position="relative";
+  }
+  else if(state.layout==="overlay"){
+    const pos = state.place==="br" ? "right:5%; bottom:4%; text-align:right; align-items:flex-end"
+              : "left:0; right:0; bottom:5%; text-align:center; align-items:center";
+    inner=`<div class="photo" style="aspect-ratio:4/5"></div>
+      <div class="col" style="position:absolute; ${pos}; color:#fff; gap:.4em; text-shadow:0 1px 6px rgba(0,0,0,.45)">
+        ${el.logo?`<div>${hmark(base*1.2)}</div>`:""}
+        ${cam?`<span style="font-weight:600; font-size:${base*0.8}px">${EXIF.camera}</span>`:""}
+        ${exif?`<span style="font-size:${base*0.66}px; letter-spacing:.03em; opacity:.92">${exif}</span>`:""}
+        ${sigOn?sigEl(base*1.4):""}
+      </div>`;
+  }
+
+  // signature (non-overlay layouts: drop into photo bottom-right)
+  if(sigOn && state.layout!=="overlay"){
+    inner = inner.replace('class="photo" style="aspect-ratio:4/5"',
+      'class="photo" style="aspect-ratio:4/5; display:flex; align-items:flex-end; justify-content:flex-end"')
+      .replace('></div>', `><span class="sig" style="font-size:${base*1.5}px; color:#fff; margin:0 5% 5%; text-shadow:0 1px 5px rgba(0,0,0,.4)">Yi Wang</span></div>`);
+  }
+  f.innerHTML=inner;
+}
+
+function buildChips(){
+  const wrap=document.getElementById("chips"); wrap.innerHTML="";
+  PRESETS_ALL.forEach(p=>{
+    const on = p.id===state.id;
+    const d=document.createElement("div"); d.className="chip"+(on?" on":"");
+    d.innerHTML=`<div class="thumb"><div class="frame mini ${p.layout} ${p.bg==='dark'?'dark':''}" style="width:54px"><div class="photo" style="aspect-ratio:4/5"></div></div></div><div class="nm">${p.nm}</div>`;
+    d.onclick=()=>{ state=JSON.parse(JSON.stringify(p)); sigOn=false; document.getElementById("sigTxt").textContent="添加签名";
+      buildChips(); buildElements(); syncControls(); renderFrame(); };
+    wrap.appendChild(d);
+  });
+}
+function buildElements(){
+  const g=document.getElementById("elgrid"); g.innerHTML="";
+  ELEMENTS.forEach(([k,label])=>{
+    const on=!!state.el[k];
+    const d=document.createElement("div"); d.className="tog"+(on?" on":"");
+    d.innerHTML=`<span>${label}</span><div class="sw"></div>`;
+    d.onclick=()=>{ state.el[k]=state.el[k]?0:1; d.classList.toggle("on"); renderFrame(); };
+    g.appendChild(d);
+  });
+}
+function buildPlace(){
+  const codes=[["tl","tc","tr"],["ml","mc","mr"],["bl","bc","br"]];
+  const p=document.getElementById("place"); p.innerHTML="";
+  codes.flat().forEach(c=>{
+    const b=document.createElement("button"); b.dataset.c=c; b.innerHTML="<i></i>";
+    b.style.alignItems={t:"flex-start",m:"center",b:"flex-end"}[c[0]];
+    b.style.justifyContent={l:"flex-start",c:"center",r:"flex-end"}[c[1]];
+    b.title={tl:"左上",tc:"上中",tr:"右上",ml:"左中",mc:"居中",mr:"右中",bl:"左下",bc:"下中",br:"右下"}[c];
+    if(c===state.place||(state.place==="split"&&c==="bc")) b.classList.add("on");
+    b.onclick=()=>{ state.place=c; document.querySelectorAll("#place button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); renderFrame(); };
+    p.appendChild(b);
+  });
+}
+function syncControls(){
+  document.querySelectorAll("#bgsw .swatch").forEach(s=>s.classList.toggle("on", s.dataset.bg===state.bg));
+  document.querySelectorAll("#aligns button").forEach(b=>b.classList.toggle("on", b.dataset.a===state.align));
+  buildPlace();
+}
+function setPad(v){ document.getElementById("padVal").textContent=v+"%"; renderFrame(); }
+function setDot(c,el){ dotColor=c; el.parentElement.querySelectorAll(".swatch").forEach(s=>s.classList.remove("on")); el.classList.add("on"); renderFrame(); }
+function toggleSig(){ sigOn=!sigOn; document.getElementById("sigTxt").textContent=sigOn?"签名已添加 · 编辑":"添加签名"; renderFrame(); }
+
+document.getElementById("bgsw").addEventListener("click",e=>{ const s=e.target.closest(".swatch"); if(!s)return;
+  state.bg=s.dataset.bg; syncControls(); renderFrame(); });
+document.getElementById("aligns").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b)return;
+  state.align=b.dataset.a; document.querySelectorAll("#aligns button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); renderFrame(); });
+
+buildChips(); buildElements(); buildPlace(); syncControls(); renderFrame();
+</script>
+<!-- vibepin overlay (dev only): Alt+A to annotate → posts to the local daemon on :7331 -->
+<script src="http://127.0.0.1:7331/annotate.js"></script>
+</body>
+</html>

@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Outfit — bundled locally (OFL). The geometric sans Hasselblad & Leica use on
+   their own sites; the frame-watermark engine renders camera info in it. Bundled
+   (not CDN) so framing works offline. */
+@font-face { font-family: "Outfit"; font-weight: 300; font-style: normal; font-display: swap;
+  src: url("./assets/fonts/outfit/outfit-latin-300-normal.woff2") format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("./assets/fonts/outfit/outfit-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 500; font-style: normal; font-display: swap;
+  src: url("./assets/fonts/outfit/outfit-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 600; font-style: normal; font-display: swap;
+  src: url("./assets/fonts/outfit/outfit-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 700; font-style: normal; font-display: swap;
+  src: url("./assets/fonts/outfit/outfit-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Outfit"; font-weight: 800; font-style: normal; font-display: swap;
+  src: url("./assets/fonts/outfit/outfit-latin-800-normal.woff2") format("woff2"); }
+
 :root {
   color-scheme: dark;
   --app-bg: 12 12 12;

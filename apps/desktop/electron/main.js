@@ -66,6 +66,7 @@ const browseIpc = require("./ipc/browse");
 const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
+const frameLogosIpc = require("./ipc/frameLogos");
 const editorsIpc = require("./ipc/editors");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
@@ -1287,6 +1288,8 @@ saveFileIpc.register({
   writeImageWithSourceMetadata,
   addAllowedMediaDir,
 });
+
+frameLogosIpc.register({ ipcMain });
 
 // quick-register / collage-sources / delete-image-assets are in ipc/assets.js
 // (registered above), so the inline handlers for those are removed here.

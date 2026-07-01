@@ -13,6 +13,7 @@ import {
   Cannabis,
   Sparkles,
   Type,
+  Image as ImageIcon,
   Undo2,
   X,
 } from "lucide-react";
@@ -23,6 +24,9 @@ import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
 import StickerPanel from "./editor/StickerPanel";
+import FramePanel from "./editor/FramePanel";
+import FrameStage from "./editor/components/FrameStage";
+import { useFrameTool } from "./editor/state/useFrameTool";
 import { createDefaultLayer, getBgPadding } from "./editor/textState";
 import {
   hexToRgba,
@@ -523,7 +527,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         ? { title: t("overlay.tools.text"), badge: null }
         : tool === "sticker"
           ? { title: t("overlay.tools.sticker"), badge: null }
-          : { title: "", badge: null };
+          : tool === "frame"
+            ? { title: t("overlay.tools.frame"), badge: null }
+            : { title: "", badge: null };
 
   function syncHistory(nextHistory, nextIndex) {
     historyRef.current = nextHistory;
@@ -1089,6 +1095,24 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     };
   }
 
+  // Frame tool (5th tool) — its own module so EditorOverlay stays the
+  // orchestrator. Frames the cropped/transformed photo; renders its own preview
+  // surface (FrameStage) since the frame expands the canvas.
+  const frameTool = useFrameTool({
+    active: tool === "frame",
+    item,
+    transformedPreview,
+    // Full-res source (+ its transforms) so export isn't capped at the 2200px preview.
+    sourceImage,
+    rotationDeg: discreteRotationDeg,
+    flipX,
+    flipY,
+    normalizedCrop: getNormalizedCrop(),
+    saveBasePath,
+    pushToast,
+    onSaveComplete,
+  });
+
   // Test backdoor — let E2E specs trigger save to a known path without
   // driving the native save-as dialog. Registered while the editor is open.
   useEffect(() => {
@@ -1454,6 +1478,14 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           </>
         ) : null}
 
+        {tool === "frame" && (
+          <FrameStage
+            canvas={frameTool.framedCanvas}
+            rendering={frameTool.rendering}
+            rightInset={PANEL_WIDTH + PANEL_GAP + 72}
+          />
+        )}
+
         <div className="pointer-events-none absolute right-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3">
           <div
             className="pointer-events-auto overflow-hidden rounded-xl border border-border/60 bg-chrome/95 shadow-overlay backdrop-blur-xl"
@@ -1604,6 +1636,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   onClearRegion={sticker.clear}
                 />
               </div>
+            ) : tool === "frame" ? (
+              <FramePanel frameTool={frameTool} />
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
@@ -1619,6 +1653,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => setTool("text")} />
             <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => { setTool("sticker"); setDepthMapVisible(false); }} />
             <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => { setTool("ai"); setDepthMapVisible(false); }} />
+            <ToolTab active={tool === "frame"} icon={ImageIcon} label={t("overlay.tools.frame")} onClick={() => { setTool("frame"); setDepthMapVisible(false); }} />
           </div>
         </div>
 

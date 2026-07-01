@@ -100,6 +100,10 @@ function drawTextLayer(ctx, scale, px, py, layer) {
   ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${layer.fontFamily}", sans-serif`;
   ctx.textAlign = layer.align;
   ctx.textBaseline = "middle";
+  // Optional tracking (em fraction). Chromium canvas supports letterSpacing;
+  // measureText accounts for it, so width math below stays correct.
+  const letterSpacing = (layer.tracking ?? 0) * fontSize;
+  if ("letterSpacing" in ctx) ctx.letterSpacing = `${letterSpacing}px`;
 
   const metrics = ctx.measureText(layer.text || " ");
   const tw = metrics.width;
@@ -155,6 +159,7 @@ function drawTextLayer(ctx, scale, px, py, layer) {
   offCtx.textAlign = layer.align;
   offCtx.textBaseline = "middle";
   offCtx.imageSmoothingQuality = "high";
+  if ("letterSpacing" in offCtx) offCtx.letterSpacing = `${letterSpacing}px`;
 
   let offX;
   if (layer.align === "left") offX = padX;

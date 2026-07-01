@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hasselblad 排版探索</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Outfit = the geometric sans Hasselblad & Leica actually deploy on their sites -->
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Caveat:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{ --gap:34px; --w:500px; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{ background:#0c0c0c; color:#eee; font-family:"Outfit",system-ui,sans-serif; padding:28px 28px 90px; }
+  h1{ font-size:17px; font-weight:600; color:#ddd; margin-bottom:4px; letter-spacing:.01em }
+  .sub{ font-size:12px; color:#777; margin-bottom:8px; max-width:900px; line-height:1.6 }
+  .legend{ font-size:11.5px; color:#888; margin-bottom:26px }
+  .legend b{ color:#cdb07a }
+  .group{ font-size:12px; font-weight:600; color:#cdb07a; letter-spacing:.16em; text-transform:uppercase;
+          margin:34px 0 16px; padding-bottom:8px; border-bottom:1px solid #242424 }
+  .grid{ display:grid; grid-template-columns:repeat(2, var(--w)); gap:var(--gap); align-items:start }
+  .cell h3{ font-size:11.5px; font-weight:500; color:#9a9a9a; margin-top:10px }
+  .cell h3 .star{ color:#cdb07a; font-weight:700 }
+  .frame{ box-shadow:0 16px 44px rgba(0,0,0,.5); width:var(--w); overflow:hidden }
+
+  /* shared photo */
+  /* NO explicit width: a block div auto-fills its container minus margins.
+     (width:100% + margins overflows and gets clipped → a missing border.) */
+  .ph{ background:url(assets/hb-sample.jpg) center/cover; aspect-ratio:4/3 }
+  .photo-wrap{ position:relative; line-height:0 }
+
+  /* logos — tint to --ink via currentColor */
+  .h{ display:block; aspect-ratio:1.26; color:var(--ink,#141414); fill:currentColor }
+  .word{ display:block; aspect-ratio:10.58; color:var(--ink,#141414); fill:currentColor }
+
+  /* typography */
+  .cam{ font-weight:400; color:var(--ink,#1a1a1a); letter-spacing:.01em }
+  .lens{ color:var(--sub,#8a8a8a); font-weight:400 }
+  .exif{ color:var(--sub,#6e6e6e); white-space:nowrap; font-weight:400 }
+  .exif.mid{ color:var(--ink,#3a3a3a) }
+  .exif b{ font-weight:400 } /* label segment */
+  .sep{ opacity:.5; margin:0 .15em }
+
+  /* themes */
+  .light{ --ink:#1a1a1a; --sub:#8a8a8a; background:#fff }
+  .dark{ --ink:#f4f4f4; --sub:#a9a9a9; background:#0c0c0c }
+  .cream{ --ink:#b08d4c; --sub:#bfa06a; background:#fbfaf7 }
+
+  /* bar primitives */
+  .bar{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px }
+  .col{ display:flex; flex-direction:column; gap:4px }
+  .rt{ align-items:flex-end; text-align:right }
+  .center{ align-items:center; text-align:center }
+  /* vertical centered stack (logo above text), not a space-between row */
+  .stack{ display:flex; flex-direction:column; align-items:center; text-align:center; line-height:1.3 }
+  .tracked{ letter-spacing:.2em }
+  .tracked2{ letter-spacing:.34em }
+
+  /* overlay scrim */
+  .scrim{ position:absolute; inset:auto 0 0 0; height:46%;
+          background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.62)) }
+  /* line-height reset: .photo-wrap sets line-height:0, which would collapse
+     stacked overlay text onto itself */
+  .ovl{ position:absolute; color:#fff; --ink:#fff; --sub:rgba(255,255,255,.85); line-height:1.35 }
+
+  /* vertical */
+  .vert{ writing-mode:vertical-rl; text-orientation:mixed }
+  .vbar{ display:flex }
+
+  /* film perforations */
+  .perf{ height:16px; background:#111;
+         background-image:radial-gradient(circle, #444 38%, transparent 40%);
+         background-size:22px 16px; background-position:center }
+  .hline{ height:1px; background:currentColor; opacity:.45 }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="hb-h" viewBox="1.48 1.85 19.22 15.25"><g transform="matrix(1,0,0,1,-197,-72)">
+        <path d="M214.079,73.853L211.79,81.085L211.809,81.085L206.191,81.085L206.189,81.085L208.477,73.853L204.861,73.853L202.572,81.085L198.887,81.085L198.479,82.431L202.149,82.431L200.039,89.097L203.655,89.097L205.765,82.431L211.365,82.431L209.259,89.097L212.875,89.097L217.693,73.853L214.079,73.853Z" fill="currentColor"/>
+    </g></symbol><symbol id="hb-word" viewBox="0 0 201 19"><g transform="matrix(1,0,0,1,-197,-72)">
+        <path d="M304.518,89.098L309.677,89.098L310.119,87.733L304.963,87.733" fill="currentColor"/>
+        <path d="M344.968,89.098L350.129,89.098L350.571,87.733L345.411,87.733" fill="currentColor"/>
+        <path d="M231.366,83.87L232.679,83.87L233.631,89.098L237.248,89.098L234.448,73.854L232.036,73.854L226.997,82.591L227.02,82.591L223.048,82.591L222.605,83.87L226.26,83.87L223.243,89.098L225.193,89.098L228.215,83.875L228.208,83.87L231.366,83.87L231.134,82.591L228.951,82.591L228.959,82.588L231.611,78.003L232.446,82.591L231.134,82.591L231.366,83.87Z" fill="currentColor"/>
+        <path d="M286.934,82.221L285.197,87.681L291.366,87.681L290.941,89.098L280.942,89.098L283.118,82.221L283.105,82.221L280.872,82.221L281.299,80.944L283.53,80.944L283.521,80.941L285.765,73.854L295.761,73.854L295.371,75.202L289.167,75.202L287.341,80.944L291.366,80.944L290.941,82.221L286.934,82.221Z" fill="currentColor"/>
+        <path d="M304.968,87.736L309.357,73.854L305.67,73.854L300.849,89.098L304.519,89.098" fill="currentColor"/>
+        <path d="M345.418,87.736L349.81,73.854L346.123,73.854L341.299,89.098L344.969,89.098" fill="currentColor"/>
+        <path d="M214.079,73.853L211.79,81.085L211.809,81.085L206.191,81.085L206.189,81.085L208.477,73.853L204.861,73.853L202.572,81.085L198.887,81.085L198.479,82.431L202.149,82.431L200.039,89.097L203.655,89.097L205.765,82.431L211.365,82.431L209.259,89.097L212.875,89.097L217.693,73.853L214.079,73.853Z" fill="currentColor"/>
+        <path d="M366.368,83.87L368.017,83.87L368.971,89.098L372.586,89.098L369.786,73.854L367.373,73.854L362.338,82.591L362.359,82.591L358.39,82.591L357.943,83.87L361.597,83.87L358.584,89.098L360.533,89.098L363.554,83.875L363.546,83.87L366.368,83.87L366.368,82.591L364.29,82.591L364.298,82.588L366.95,78.003L367.785,82.591L367.782,82.591L366.368,82.591L366.368,83.87Z" fill="currentColor"/>
+        <path d="M198.425,82.431L198.852,81.085" fill="currentColor"/>
+        <path d="M248.713,81.869C243.65,78.516 248.806,70.872 255.958,74.836L255.192,76.113C250.76,73.173 247.138,77.308 250.801,78.927C251.867,79.481 252.676,79.736 254.041,80.72C255.415,81.704 255.873,83.061 255.49,84.723C254.383,89.528 248.374,90.647 244.751,87.491L245.732,86.217C250.503,90.219 255.021,85.747 251.996,83.745C250.757,82.922 249.566,82.465 248.713,81.869Z" fill="currentColor"/>
+        <path d="M266.122,81.869C261.062,78.516 266.214,70.872 273.366,74.836L272.601,76.113C268.167,73.173 264.547,77.308 268.211,78.927C269.278,79.481 270.085,79.736 271.45,80.72C272.824,81.704 273.281,83.061 272.899,84.723C271.79,89.528 265.782,90.647 262.16,87.491L263.14,86.217C267.913,90.219 272.43,85.747 269.405,83.745C268.166,82.922 266.974,82.465 266.122,81.869Z" fill="currentColor"/>
+        <path d="M324.907,80.859L325.566,80.859L325.158,82.253L324.48,82.253L324.401,82.253L322.598,87.747L318.815,87.697L320.636,82.257L320.565,82.257L318.273,82.257L318.735,80.873L319.64,80.873L321.1,80.876L323.449,73.854C323.449,73.854 323.946,73.857 328.415,73.854C334.54,73.846 335.341,79.549 329.26,81.408C334.54,82.634 332.133,88.972 325.15,89.098L318.344,89.098L318.815,87.697L323.905,87.747L325.188,87.747C327.949,87.703 330.821,82.295 326.555,82.253L325.158,82.253L325.566,80.859L326.766,80.859C330.611,80.775 331.455,75.114 327.562,75.201L326.711,75.201L324.907,80.859Z" fill="currentColor"/>
+        <path d="M386.5,89.098L386.112,89.098L386.112,87.681L386.358,87.681C393.095,87.681 395.789,75.272 390.118,75.272L388.91,75.272L384.657,87.681L386.112,87.681L386.112,89.098L380.616,89.098L385.58,73.854L390.118,73.854C400.626,73.72 398.387,88.676 386.5,89.098Z" fill="currentColor"/>
+    </g></symbol></svg>
+
+<h1>Hasselblad 排版探索</h1>
+<div class="sub">真实 H 符号 + HASSELBLAD 字标。字体 = <b style="color:#cdb07a">Outfit</b>(哈苏/徕卡官网在用的几何无衬线)。同一张样张,机型 <i>Hasselblad CFV 100C/907X</i> | 镜头 <i>XCD 3,5-4,5 / 35-75</i> | 28mm f/8 1/500s ISO100。</div>
+<div class="legend"><b>★</b> = 我推荐优先落地。已去掉橙点(那是 OPPO 手机水印的,非哈苏风);A6 单独保留一版橙点做对比。</div>
+
+<!-- ════════════ A · 信息条 BAR ════════════ -->
+<div class="group">A · 信息条 Bar</div>
+<div class="grid">
+
+  <div class="cell"><div class="frame light">
+    <div class="ph"></div>
+    <div class="bar">
+      <div class="col"><span class="cam" style="font-size:16px">Hasselblad CFV 100C/907X</span><span class="lens" style="font-size:12px">XCD 3,5-4,5 / 35-75</span></div>
+      <svg class="h" style="height:30px"><use href="#hb-h"/></svg>
+    </div>
+  </div><h3>A1 <span class="star">★</span> · 机型 + 镜头 左 / H 右（无 EXIF · Phocus #2）</h3></div>
+
+  <div class="cell"><div class="frame dark">
+    <div class="ph"></div>
+    <div class="bar">
+      <div class="col"><span class="cam" style="font-size:16px">Hasselblad CFV 100C/907X</span><span class="lens" style="font-size:12px">XCD 3,5-4,5 / 35-75</span></div>
+      <svg class="h" style="height:30px"><use href="#hb-h"/></svg>
+    </div>
+  </div><h3>A2 · 同上 · 黑底</h3></div>
+
+  <div class="cell"><div class="frame light">
+    <div class="ph"></div>
+    <div class="bar">
+      <svg class="h" style="height:26px"><use href="#hb-h"/></svg>
+      <span class="exif mid" style="font-size:13px">Aperture<span class="sep">|</span>f/8&nbsp;&nbsp;&nbsp;Shutter<span class="sep">|</span>1/500s&nbsp;&nbsp;&nbsp;ISO<span class="sep">|</span>100</span>
+    </div>
+  </div><h3>A3 <span class="star">★</span> · H 左 / 标签 EXIF 右（Phocus #0 横排）</h3></div>
+
+  <div class="cell"><div class="frame light">
+    <div class="ph"></div>
+    <div class="bar">
+      <div class="col"><span class="cam" style="font-size:15px">Hasselblad CFV 100C/907X</span><span class="lens" style="font-size:11.5px">XCD 3,5-4,5 / 35-75</span></div>
+      <div class="col rt"><svg class="h" style="height:22px"><use href="#hb-h"/></svg><span class="exif" style="font-size:11.5px;margin-top:5px">28mm <span class="sep">|</span> f/8 <span class="sep">|</span> 1/500s <span class="sep">|</span> ISO100</span></div>
+    </div>
+  </div><h3>A4 · 机型左 / EXIF + H 右（信息全 · 偏满）</h3></div>
+
+  <div class="cell"><div class="frame light">
+    <div class="bar center" style="gap:12px;padding:13px">
+      <svg class="h" style="height:17px"><use href="#hb-h"/></svg>
+      <span class="cam" style="font-size:13px">Hasselblad CFV 100C/907X</span>
+      <span class="exif" style="font-size:12px">28mm | f/8 | 1/500s | ISO100</span>
+    </div>
+    <div class="ph"></div>
+  </div><h3>A5 · 单行细条 · 置顶（全在一行）</h3></div>
+
+  <div class="cell"><div class="frame light">
+    <div class="ph"></div>
+    <div class="bar">
+      <span class="cam" style="font-size:14px">CFV 100C/907X</span>
+      <svg class="h" style="height:22px"><use href="#hb-h"/></svg>
+      <span class="exif" style="font-size:12px"><span class="dot" style="display:inline-block;width:.5em;height:.5em;border-radius:50%;background:#ff6a00;margin-right:.5em"></span>f/8 · 1/500s · ISO100</span>
+    </div>
+  </div><h3>A6 · 三栏 · 带橙点（OPPO 风对比）</h3></div>
+
+</div>
+
+<!-- ════════════ B · 留白 MARGIN ════════════ -->
+<div class="group">B · 留白 Margin / Border</div>
+<div class="grid">
+
+  <div class="cell"><div class="frame light" style="padding:0 0 0">
+    <div class="ph" style="margin:18px 18px 0"></div>
+    <div class="stack" style="padding:26px 18px 28px">
+      <svg class="word" style="height:15px"><use href="#hb-word"/></svg>
+    </div>
+  </div><h3>B1 <span class="star">★</span> · 字标居中留白（Phocus #1）</h3></div>
+
+  <div class="cell"><div class="frame cream" style="padding:0">
+    <div class="ph" style="margin:18px 18px 0"></div>
+    <div class="stack" style="padding:26px 18px 28px">
+      <svg class="word" style="height:15px"><use href="#hb-word"/></svg>
+    </div>
+  </div><h3>B2 <span class="star">★</span> · 金标 · 暖白底（Phocus #6）</h3></div>
+
+  <div class="cell"><div class="frame light" style="padding:0">
+    <div class="ph" style="margin:18px 18px 0"></div>
+    <div class="stack" style="gap:11px;padding:24px 18px 26px">
+      <svg class="word" style="height:13px"><use href="#hb-word"/></svg>
+      <span class="exif tracked" style="font-size:10.5px">28MM | F/8 | 1/500S | ISO100</span>
+    </div>
+  </div><h3>B3 · 字标 + 细 EXIF 居中</h3></div>
+
+  <div class="cell"><div class="frame light" style="padding:0">
+    <div class="ph" style="margin:18px 18px 0"></div>
+    <div class="stack" style="gap:9px;padding:24px 18px 30px">
+      <svg class="h" style="height:26px"><use href="#hb-h"/></svg>
+      <span class="cam" style="font-size:14px">Hasselblad CFV 100C/907X</span>
+      <span class="lens" style="font-size:11.5px">XCD 3,5-4,5 / 35-75</span>
+    </div>
+  </div><h3>B4 · 居中堆叠 H / 机型 / 镜头（Phocus #3）</h3></div>
+
+  <div class="cell"><div class="frame light" style="padding:0">
+    <div class="ph" style="margin:20px 20px 0"></div>
+    <div class="bar" style="align-items:flex-end;padding:22px 20px 26px">
+      <div class="col"><span class="cam" style="font-size:13px">Hasselblad CFV 100C/907X</span><span class="lens" style="font-size:11px">XCD 3,5-4,5 / 35-75</span></div>
+      <span class="exif" style="font-size:11px">28mm | f/8 | 1/500s | ISO100</span>
+    </div>
+  </div><h3>B5 <span class="star">★</span> · 画廊标签 · 两端对齐（左机型 / 右参数）</h3></div>
+
+  <div class="cell"><div class="frame light" style="padding:0">
+    <div class="stack" style="padding:22px 0 16px"><svg class="word" style="height:12px"><use href="#hb-word"/></svg></div>
+    <div class="ph" style="margin:0 20px"></div>
+    <div class="stack" style="padding:16px 0 22px"><span class="exif tracked" style="font-size:10.5px">28MM | F/8 | 1/500S | ISO100</span></div>
+  </div><h3>B6 · 上下分置（顶字标 / 底参数）</h3></div>
+
+</div>
+
+<!-- ════════════ C · 杂志 / 编辑 EDITORIAL ════════════ -->
+<div class="group">C · 杂志 / 编辑 Editorial</div>
+<div class="grid">
+
+  <div class="cell"><div class="frame light" style="padding:0">
+    <div class="ph" style="margin:20px 20px 0"></div>
+    <div class="bar" style="align-items:flex-end;padding:22px 20px 26px">
+      <div class="col" style="gap:8px">
+        <span class="cam" style="font-size:26px;font-weight:300;letter-spacing:.01em">CFV 100C</span>
+        <span class="exif tracked" style="font-size:10px">28MM | F/8 | 1/500S | ISO100</span>
+      </div>
+      <svg class="h" style="height:30px"><use href="#hb-h"/></svg>
+    </div>
+  </div><h3>C1 <span class="star">★</span> · 杂志封面 · 大号细体机型 + 角标 H</h3></div>
+
+  <div class="cell"><div class="frame light" style="padding:0;position:relative">
+    <div class="ph" style="margin:20px"></div>
+    <svg class="h" style="height:24px;position:absolute;top:30px;left:30px"><use href="#hb-h"/></svg>
+    <span class="vert exif" style="position:absolute;bottom:32px;right:24px;font-size:11px;letter-spacing:.05em">28mm | f/8 | 1/500s | ISO100</span>
+  </div><h3>C3 · 大留白角标（左上 H / 右侧竖排参数）</h3></div>
+
+
+</div>
+
+<!-- ════════════ E · 图内叠加 OVERLAY ════════════ -->
+<div class="group">E · 图内叠加 Overlay</div>
+<div class="grid">
+
+  <div class="cell"><div class="frame">
+    <div class="photo-wrap">
+      <div class="ph"></div>
+      <div class="scrim"></div>
+      <div class="ovl center" style="left:0;right:0;bottom:18px;display:flex;flex-direction:column;align-items:center;gap:9px">
+        <svg class="h" style="height:22px"><use href="#hb-h"/></svg>
+        <span class="exif" style="font-size:12px;color:#fff">Aperture<span class="sep">|</span>f/8&nbsp;&nbsp;&nbsp;Shutter<span class="sep">|</span>1/500s&nbsp;&nbsp;&nbsp;ISO<span class="sep">|</span>100</span>
+      </div>
+    </div>
+  </div><h3>E1 <span class="star">★</span> · 底部居中 H + 标签 EXIF（Phocus #0 叠加）</h3></div>
+
+  <div class="cell"><div class="frame">
+    <div class="photo-wrap">
+      <div class="ph"></div>
+      <div class="scrim" style="height:38%"></div>
+      <svg class="h" style="height:20px;position:absolute;top:18px;right:20px;color:#fff"><use href="#hb-h"/></svg>
+      <span class="exif" style="position:absolute;left:20px;top:20px;font-size:11px;color:rgba(255,255,255,.92)">2024.09.03</span>
+      <span class="cam" style="position:absolute;left:20px;bottom:18px;font-size:13px;color:#fff">Hasselblad CFV 100C/907X</span>
+      <span class="exif" style="position:absolute;right:20px;bottom:18px;font-size:11px;color:rgba(255,255,255,.85)">f/8 | 1/500s | ISO100</span>
+    </div>
+  </div><h3>E3 · 四角信息（日期 / H / 机型 / 参数）</h3></div>
+
+  <div class="cell"><div class="frame">
+    <div class="photo-wrap">
+      <div class="ph"></div>
+      <div class="scrim" style="inset:0 0 auto 0;height:32%;background:linear-gradient(to top, rgba(0,0,0,0), rgba(0,0,0,.5))"></div>
+      <div class="ovl center" style="left:0;right:0;top:16px"><svg class="word" style="height:11px;margin:0 auto"><use href="#hb-word"/></svg></div>
+    </div>
+  </div><h3>E4 · 顶部居中细字标叠加</h3></div>
+
+</div>
+
+<!-- ════════════ F · 竖排侧边 VERTICAL ════════════ -->
+<div class="group">F · 竖排侧边 Vertical</div>
+<div class="grid">
+
+  <div class="cell"><div class="frame light vbar" style="padding:0">
+    <div class="ph" style="aspect-ratio:auto;flex:1;align-self:stretch"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:22px;width:70px;padding:22px 0">
+      <svg class="h" style="height:22px"><use href="#hb-h"/></svg>
+      <span class="vert exif tracked" style="font-size:10.5px;line-height:1">28MM | F/8 | 1/500S | ISO100</span>
+    </div>
+  </div><h3>F1 · 右侧竖条（H + 竖排参数）</h3></div>
+
+  <div class="cell"><div class="frame light vbar" style="padding:0">
+    <div class="center" style="display:flex;flex-direction:column;justify-content:center;align-items:center;width:54px;gap:14px;padding:18px 0">
+      <svg class="h" style="height:20px"><use href="#hb-h"/></svg>
+      <span class="vert cam" style="font-size:12px">Hasselblad CFV 100C/907X</span>
+    </div>
+    <div class="ph" style="aspect-ratio:auto;flex:1;align-self:stretch"></div>
+  </div><h3>F2 · 左侧细边竖排机型</h3></div>
+
+</div>
+
+<!-- ════════════ G · 双 logo DUAL ════════════ -->
+<div class="group">G · 双 logo Dual</div>
+<div class="grid">
+
+  <div class="cell"><div class="frame light" style="padding:0">
+    <div class="ph" style="margin:18px 18px 0"></div>
+    <div class="stack" style="gap:12px;padding:22px 18px 26px">
+      <svg class="h" style="height:30px"><use href="#hb-h"/></svg>
+      <svg class="word" style="height:11px"><use href="#hb-word"/></svg>
+    </div>
+  </div><h3>G1 · H 主 + 字标副（居中竖叠）</h3></div>
+
+  <div class="cell"><div class="frame light">
+    <div class="ph"></div>
+    <div class="bar">
+      <svg class="word" style="height:13px"><use href="#hb-word"/></svg>
+      <div class="col rt" style="gap:4px">
+        <svg class="h" style="height:20px"><use href="#hb-h"/></svg>
+        <span class="exif" style="font-size:11px">f/8 | 1/500s | ISO100</span>
+      </div>
+    </div>
+  </div><h3>G2 · 字标条 + 角 H + 参数</h3></div>
+
+</div>
+
+</body>
+</html>
