@@ -157,7 +157,7 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
   return needs;
 }
 
-function geometry(photo, template, adjust) {
+export function geometry(photo, template, adjust) {
   const wref = photo.width || photo.naturalWidth;
   const href = photo.height || photo.naturalHeight;
   const pad = template.canvas?.pad || {};
@@ -247,6 +247,9 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       anchorDef = { ...anchorDef, dx: (anchorDef.dx || 0) + (ov.dx || 0), dy: (anchorDef.dy || 0) + (ov.dy || 0) };
     }
     const a = resolveAnchor(anchorDef, g, adj);
+    // Absolute-position override (from dragging the element on the canvas —
+    // "脱锚"): place its center directly at pos, ignoring anchor alignment.
+    if (ov?.pos) { a.x = ov.pos.x; a.y = ov.pos.y; a.align = "center"; }
 
     if (el.type === "logo") {
       if (!brand) continue;
@@ -273,8 +276,10 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       if (a.align === "left") lx = a.x + scale / 2;
       else if (a.align === "right") lx = a.x - scale / 2;
       layers.push({
-        type: "sticker", stickerPath: key,
+        type: "sticker", stickerPath: key, ei,
         x: lx, y: a.y, scale,
+        // Bounding box (output fractions) centered on x/y — for editor hit-testing.
+        box: { w: scale, h: aspect ? (scale / aspect) * (outW / outH) : scale },
         rotation, opacity: el.style?.opacity ?? 100,
         outlineWidth: 0, outlineColor: "#fff",
         // On a photo, give the mark a soft shadow so a light logo survives a
@@ -324,8 +329,10 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     }
 
     layers.push({
-      type: "text", text,
+      type: "text", text, ei,
       x, y: a.y, align: a.align,
+      // Bounding box (output fractions) centered on x/y — for editor hit-testing.
+      box: { w: tw / outW, h: (fontPx * 1.2) / outH },
       fontFamily: family,
       fontSize: sizeFrac * 1920 * factor,
       fontWeight: weight,
