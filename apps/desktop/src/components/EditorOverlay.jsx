@@ -44,6 +44,8 @@ import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { saveEditedImage } from "./editor/render/saveImage";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import CropOverlay from "./editor/components/CropOverlay";
+import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
+import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
 import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useStickerRegion } from "./editor/state/useStickerRegion";
@@ -73,46 +75,8 @@ import {
 
 const MIN_FREE_ANGLE = -45;
 const MAX_FREE_ANGLE = 45;
-const BASE_STATE = {
-  aspectKey: "free",
-  freeAngle: 0,
-  quarterTurns: 0,
-  flipX: false,
-  flipY: false,
-  cropRect: null,
-  imageZoom: 1,
-  imageOffsetX: 0,
-  imageOffsetY: 0,
-};
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function rectEquals(a, b) {
-  if (!a || !b) return a === b;
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-}
-
-function cloneState(state) {
-  return {
-    ...state,
-    cropRect: state.cropRect ? { ...state.cropRect } : null,
-  };
-}
-
-function stateEquals(a, b) {
-  return (
-    a.aspectKey === b.aspectKey &&
-    a.freeAngle === b.freeAngle &&
-    a.quarterTurns === b.quarterTurns &&
-    a.flipX === b.flipX &&
-    a.flipY === b.flipY &&
-    a.imageZoom === b.imageZoom &&
-    a.imageOffsetX === b.imageOffsetX &&
-    a.imageOffsetY === b.imageOffsetY &&
-    rectEquals(a.cropRect, b.cropRect)
-  );
 }
 
 function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false }) {
@@ -439,19 +403,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const depthOverlayCanvasRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
   const pointerStateRef = useRef(null);
-  const editorStateRef = useRef(cloneState(BASE_STATE));
-  const historyRef = useRef([]);
-  const historyIndexRef = useRef(-1);
-  const baseSnapshotRef = useRef(null);
   const angleDragStartRef = useRef(null);
   const quickSavePathRef = useRef(null);
+  // Transform state machine + undo/redo (destructured with original names so the
+  // many call sites are unchanged).
+  const {
+    editorState, editorStateRef,
+    history, historyIndex, historyRef, historyIndexRef, baseSnapshotRef,
+    syncHistory, apply: applyState, record: recordState, undo: handleUndo, redo: handleRedo,
+  } = useEditorHistory();
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
   const [tool, setTool] = useState("crop");
-  const [editorState, setEditorState] = useState(cloneState(BASE_STATE));
-  const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [activeInteraction, setActiveInteraction] = useState(null);
@@ -532,28 +496,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           : tool === "frame"
             ? { title: t("overlay.tools.frame"), badge: null }
             : { title: "", badge: null };
-
-  function syncHistory(nextHistory, nextIndex) {
-    historyRef.current = nextHistory;
-    historyIndexRef.current = nextIndex;
-    setHistory(nextHistory);
-    setHistoryIndex(nextIndex);
-  }
-
-  function applyState(nextState) {
-    const snapshot = cloneState(nextState);
-    editorStateRef.current = snapshot;
-    setEditorState(snapshot);
-    return snapshot;
-  }
-
-  function recordState(nextState) {
-    const snapshot = applyState(nextState);
-    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-    nextHistory.push(snapshot);
-    syncHistory(nextHistory, nextHistory.length - 1);
-    return snapshot;
-  }
 
   const commitLayers = layerHistory.commit;
   const layerUndo = layerHistory.undo;
@@ -954,22 +896,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ctx.drawImage(depthCanvas, 0, 0, canvas.width, canvas.height);
   }, [depthMapVisible, depthFieldVersion, transformedPreview]);
 
-
-  function handleUndo() {
-    if (historyIndexRef.current <= 0) return;
-    const nextIndex = historyIndexRef.current - 1;
-    historyIndexRef.current = nextIndex;
-    setHistoryIndex(nextIndex);
-    applyState(historyRef.current[nextIndex]);
-  }
-
-  function handleRedo() {
-    if (historyIndexRef.current >= historyRef.current.length - 1) return;
-    const nextIndex = historyIndexRef.current + 1;
-    historyIndexRef.current = nextIndex;
-    setHistoryIndex(nextIndex);
-    applyState(historyRef.current[nextIndex]);
-  }
 
   function handleReset() {
     if (!baseSnapshotRef.current) return;
