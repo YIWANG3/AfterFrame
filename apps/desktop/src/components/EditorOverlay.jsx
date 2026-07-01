@@ -1,24 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Check,
-  Crop,
-  Download,
-  FlipHorizontal2,
-  FlipVertical2,
-
-  Redo2,
-  RotateCcw,
-  RotateCw,
-  Cannabis,
-  Sparkles,
-  Type,
-  Image as ImageIcon,
-  Undo2,
-  X,
-} from "lucide-react";
 import { fileName } from "../utils/format";
-import { ASPECT_PRESETS, getAspectRatio, resizeCropRect, MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
+import { resizeCropRect, MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
@@ -40,6 +23,10 @@ import {
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
+import EditorHeader from "./editor/components/EditorHeader";
+import ToolRail from "./editor/components/ToolRail";
+import PanelChrome from "./editor/components/PanelChrome";
+import CropPanel from "./editor/components/CropPanel";
 import CropOverlay from "./editor/components/CropOverlay";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
@@ -56,7 +43,6 @@ import {
   PANEL_WIDTH,
   PANEL_GAP,
   CANVAS_SIDE_PADDING,
-  MAX_IMAGE_ZOOM,
   getStageBounds,
   getBasePlacement,
   getMinZoomForCrop,
@@ -71,45 +57,6 @@ import {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "inline-flex h-8 items-center rounded-md text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-35",
-        label ? "gap-1.5 px-3" : "w-8 justify-center",
-        primary
-          ? "bg-[rgb(var(--accent-color))] text-black hover:brightness-110"
-          : "text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label ? <span>{label}</span> : null}
-    </button>
-  );
-}
-
-function ToolTab({ active, icon: Icon, label, onClick }) {
-  return (
-    <button
-      type="button"
-      data-testid={`tool-${label.toLowerCase().replace(/\s+/g, "-")}`}
-      className={[
-        "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-        active
-          ? "bg-[rgb(var(--accent-color)/0.16)] text-[rgb(var(--accent-color))]"
-          : "text-muted2 hover:bg-hover hover:text-text",
-      ].join(" ")}
-      onClick={onClick}
-      title={label}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
-  );
 }
 
 function createInitialSnapshot(viewportSize, transformedPreview) {
@@ -129,59 +76,6 @@ function createInitialSnapshot(viewportSize, transformedPreview) {
   };
 }
 
-
-function getAspectPreviewBox(aspectKey) {
-  const aspect = getAspectRatio(aspectKey, 1);
-  if (!aspect) {
-    return {
-      width: 14,
-      height: 10,
-      dashed: true,
-    };
-  }
-
-  const max = 14;
-  if (aspect >= 1) {
-    return {
-      width: max,
-      height: Math.max(6, Math.round(max / aspect)),
-      dashed: false,
-    };
-  }
-  return {
-    width: Math.max(6, Math.round(max * aspect)),
-    height: max,
-    dashed: false,
-  };
-}
-
-function AspectButton({ preset, active, onClick }) {
-  const preview = getAspectPreviewBox(preset.key);
-
-  return (
-    <button
-      type="button"
-      className={[
-        "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] transition-colors",
-        active ? "bg-selected text-accent" : "text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-      onClick={onClick}
-    >
-      <span className="flex h-4 w-4 items-center justify-center shrink-0">
-        <span
-          className="block border border-current opacity-70"
-          style={{
-            width: `${preview.width}px`,
-            height: `${preview.height}px`,
-            borderStyle: preview.dashed ? "dashed" : "solid",
-            borderRadius: "3px",
-          }}
-        />
-      </span>
-      <span>{preset.label}</span>
-    </button>
-  );
-}
 
 function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeStart, onChange, onChangeEnd }) {
   const trackRef = useRef(null);
@@ -845,52 +739,40 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
   if (!open) return null;
 
+  const edited = !stateEquals(editorState, baseSnapshotRef.current || BASE_STATE);
+  const dimsLabel = (() => {
+    if (!sourceImage || !imageRect) return null;
+    const radians = (rotationDeg * Math.PI) / 180;
+    const absCos = Math.abs(Math.cos(radians));
+    const absSin = Math.abs(Math.sin(radians));
+    const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
+    const nativeWidth = sourceWidth * absCos + sourceHeight * absSin;
+    const scale = nativeWidth / imageRect.width;
+    const dims = `${sourceWidth} × ${sourceHeight}`;
+    if (!showCropUi || !cropRect) return `· ${dims}`;
+    const cropW = Math.round(cropRect.width * scale);
+    const cropH = Math.round(cropRect.height * scale);
+    return `· ${dims} · Crop ${cropW} × ${cropH}`;
+  })();
+  // Switching tools resets the depth-map debug overlay for every tool except
+  // text (which owns the depth toggle).
+  const selectTool = (next) => {
+    setTool(next);
+    if (next !== "text") setDepthMapVisible(false);
+  };
+
   return (
     <div className="fixed inset-0 z-[10100] flex flex-col bg-app text-text">
-      <div className="relative flex h-11 shrink-0 items-center justify-center border-b border-border/60 bg-chrome px-4">
-        <div className="absolute left-3 flex items-center gap-2 text-[12px]">
-          <span className="max-w-[40vw] truncate text-muted2">{sourceLabel}</span>
-          {!stateEquals(editorState, baseSnapshotRef.current || BASE_STATE) ? (
-            <span className="text-[11px] text-muted2/60">{t("overlay.edited")}</span>
-          ) : null}
-          {(() => {
-            if (!sourceImage || !imageRect) return null;
-            const radians = (rotationDeg * Math.PI) / 180;
-            const absCos = Math.abs(Math.cos(radians));
-            const absSin = Math.abs(Math.sin(radians));
-            const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
-            const nativeWidth = sourceWidth * absCos + sourceHeight * absSin;
-            const scale = nativeWidth / imageRect.width;
-            const dims = `${sourceWidth} × ${sourceHeight}`;
-            if (!showCropUi || !cropRect) {
-              return <span className="text-[11px] text-muted2/60">· {dims}</span>;
-            }
-            const cropW = Math.round(cropRect.width * scale);
-            const cropH = Math.round(cropRect.height * scale);
-            return <span className="text-[11px] text-muted2/60">· {dims} · Crop {cropW} × {cropH}</span>;
-          })()}
-        </div>
-        <div className="absolute right-3 flex items-center gap-1">
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)] disabled:opacity-60"
-            onClick={() => void handleExport()}
-            disabled={saving || loadState !== "ready"}
-            title={t("overlay.save")}
-          >
-            <Download className="h-3.5 w-3.5" />
-            {saving ? t("overlay.saving") : t("overlay.saveButton")}
-          </button>
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
-            onClick={onClose}
-            title={t("overlay.close")}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <EditorHeader
+        sourceLabel={sourceLabel}
+        edited={edited}
+        dimsLabel={dimsLabel}
+        saving={saving}
+        exportDisabled={saving || loadState !== "ready"}
+        onExport={handleExport}
+        onClose={onClose}
+        t={t}
+      />
 
       <div
         ref={viewportRef}
@@ -996,118 +878,36 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         )}
 
         <div className="pointer-events-none absolute right-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3">
-          <div
-            className="pointer-events-auto overflow-hidden rounded-xl border border-border/60 bg-chrome/95 shadow-overlay backdrop-blur-xl"
-            style={{ width: `${PANEL_WIDTH}px` }}
-            data-editor-wheel-scope="panel"
-          >
-            <div className="flex h-6 items-center justify-between border-b border-border/60 bg-panel2 px-3">
-              <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--accent-color)/0.72)]">{panelMeta.title}</div>
-              {panelMeta.badge ? (
-                <div className="rounded-full bg-[rgb(var(--accent-color)/0.10)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgb(var(--accent-color))]">
-                  {panelMeta.badge}
-                </div>
-              ) : null}
-            </div>
+          <PanelChrome panelMeta={panelMeta} width={PANEL_WIDTH}>
             {tool === "crop" ? (
-              <>
-                <div className="max-h-[calc(100vh-10rem)] overflow-y-auto">
-                  <div className="border-b border-border/60 px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.aspectRatio")}</div>
-                    <div className="mt-3 grid grid-cols-2 gap-1.5">
-                      {ASPECT_PRESETS.map((preset) => (
-                        <AspectButton
-                          key={preset.key}
-                          preset={preset}
-                          active={aspectKey === preset.key}
-                          onClick={() => commitAspect(preset.key)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="border-b border-border/60 px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.tools.transform")}</div>
-                    <div className="mt-3 grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        className="flex items-center justify-center gap-2 rounded-md bg-app px-3 py-2 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
-                        onClick={() => commitTransform({ quarterTurns: ((quarterTurns - 1) % 4 + 4) % 4, freeAngle: 0 })}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        {t("overlay.rotateLeft")}
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center justify-center gap-2 rounded-md bg-app px-3 py-2 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text"
-                        onClick={() => commitTransform({ quarterTurns: (quarterTurns + 1) % 4, freeAngle: 0 })}
-                      >
-                        <RotateCw className="h-3.5 w-3.5" />
-                        {t("overlay.rotateRight")}
-                      </button>
-                      <button
-                        type="button"
-                        className={[
-                          "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-[11px] transition-colors",
-                          flipX ? "bg-selected text-accent" : "bg-app text-muted hover:bg-hover hover:text-text",
-                        ].join(" ")}
-                        onClick={() => commitTransform({ flipX: !flipX })}
-                      >
-                        <FlipHorizontal2 className="h-3.5 w-3.5" />
-                        {t("overlay.flipH")}
-                      </button>
-                      <button
-                        type="button"
-                        className={[
-                          "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-[11px] transition-colors",
-                          flipY ? "bg-selected text-accent" : "bg-app text-muted hover:bg-hover hover:text-text",
-                        ].join(" ")}
-                        onClick={() => commitTransform({ flipY: !flipY })}
-                      >
-                        <FlipVertical2 className="h-3.5 w-3.5" />
-                        {t("overlay.flipV")}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-border/60 px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.scale")}</div>
-                      <div className="text-[11px] text-muted">{imageZoom.toFixed(2)}×</div>
-                    </div>
-                    <input
-                      type="range"
-                      min={String(getMinZoomForCrop(cropRect, transformedPreview, placement))}
-                      max={String(MAX_IMAGE_ZOOM)}
-                      step="0.01"
-                      value={imageZoom}
-                      onChange={(event) => {
-                        if (!transformedPreview || !placement) return;
-                        const next = clampImagePlacement(
-                          {
-                            ...editorStateRef.current,
-                            imageZoom: Number(event.target.value),
-                          },
-                          transformedPreview,
-                          placement,
-                        );
-                        recordState(next);
-                      }}
-                      className="mt-3 w-full"
-                      aria-label={t("overlay.imageScale")}
-                    />
-                  </div>
-
-                </div>
-
-                <div className="flex items-center gap-1 border-t border-border/60 px-3 py-2">
-                  <FooterButton icon={RotateCcw} label={t("overlay.reset")} onClick={handleReset} disabled={loadState !== "ready"} />
-                  <FooterButton icon={Undo2} label="" onClick={handleUndo} disabled={historyIndex <= 0} />
-                  <FooterButton icon={Redo2} label="" onClick={handleRedo} disabled={historyIndex < 0 || historyIndex >= history.length - 1} />
-                  <div className="flex-1" />
-                  <FooterButton icon={Check} label={t("overlay.apply")} onClick={handleApply} disabled={loadState !== "ready"} primary />
-                </div>
-              </>
+              <CropPanel
+                t={t}
+                aspectKey={aspectKey}
+                onCommitAspect={commitAspect}
+                quarterTurns={quarterTurns}
+                flipX={flipX}
+                flipY={flipY}
+                onCommitTransform={commitTransform}
+                imageZoom={imageZoom}
+                minZoom={getMinZoomForCrop(cropRect, transformedPreview, placement)}
+                onZoomChange={(value) => {
+                  if (!transformedPreview || !placement) return;
+                  const next = clampImagePlacement(
+                    { ...editorStateRef.current, imageZoom: value },
+                    transformedPreview,
+                    placement,
+                  );
+                  recordState(next);
+                }}
+                onReset={handleReset}
+                canReset={loadState === "ready"}
+                onUndo={handleUndo}
+                canUndo={historyIndex > 0}
+                onRedo={handleRedo}
+                canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
+                onApply={handleApply}
+                canApply={loadState === "ready"}
+              />
             ) : tool === "text" ? (
               <TextPanel
                 layers={layers}
@@ -1152,18 +952,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
               <AiRepaintPanel sourcePath={sourcePath} outputBasePath={saveBasePath} sourceLabel={sourceLabel} onCompareChange={setCompareState} compareState={compareState} onRepaintComplete={onSaveComplete} />
             </div>
-          </div>
+          </PanelChrome>
 
-          <div
-            className="pointer-events-auto flex w-12 flex-col items-center gap-2 rounded-xl border border-border/60 bg-chrome/95 p-1.5 shadow-overlay backdrop-blur-xl"
-            data-editor-wheel-scope="toolbar"
-          >
-            <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => { setTool("crop"); setDepthMapVisible(false); }} />
-            <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => setTool("text")} />
-            <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => { setTool("sticker"); setDepthMapVisible(false); }} />
-            <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => { setTool("ai"); setDepthMapVisible(false); }} />
-            <ToolTab active={tool === "frame"} icon={ImageIcon} label={t("overlay.tools.frame")} onClick={() => { setTool("frame"); setDepthMapVisible(false); }} />
-          </div>
+          <ToolRail tool={tool} onSelect={selectTool} t={t} />
         </div>
 
         {showCropUi ? (
