@@ -7,7 +7,6 @@ import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
 import StickerPanel from "./editor/StickerPanel";
-import FramePanel from "./editor/FramePanel";
 import { useFrameTool } from "./editor/state/useFrameTool";
 import { getBgPadding } from "./editor/textState";
 import {
@@ -552,7 +551,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   // orchestrator. Frames the cropped/transformed photo; renders its own preview
   // surface (FrameStage) since the frame expands the canvas.
   const frameTool = useFrameTool({
-    active: tool === "frame",
+    active: open,
     item,
     transformedPreview,
     // Full-res source (+ its transforms) so export isn't capped at the 2200px preview.
@@ -940,16 +939,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
                 onApply={handleApply}
                 canApply={loadState === "ready"}
-                canvasPad={editorState.canvas?.pad}
-                canvasBg={editorState.canvas?.bg}
-                onCanvasPad={(edge, val) => {
-                  const s = editorStateRef.current;
-                  recordState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, [edge]: val } } });
-                }}
-                onCanvasBg={(color) => {
-                  const s = editorStateRef.current;
-                  recordState({ ...s, canvas: { ...s.canvas, bg: { color } } });
-                }}
               />
             ) : tool === "text" ? (
               <TextPanel
@@ -977,6 +966,20 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 depthModel={depthModel}
                 onPickDepthModel={handlePickDepthModel}
                 onResetDepthModel={handleResetDepthModel}
+                framePresets={frameTool.templates}
+                frameThumbs={frameTool.thumbs}
+                frameCellAspect={frameTool.cellAspect}
+                onApplyPreset={applyFramePreset}
+                canvasPad={editorState.canvas?.pad}
+                canvasBg={editorState.canvas?.bg}
+                onCanvasPad={(patch) => {
+                  const s = editorStateRef.current;
+                  recordState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, ...patch } } });
+                }}
+                onCanvasBg={(color) => {
+                  const s = editorStateRef.current;
+                  recordState({ ...s, canvas: { ...s.canvas, bg: { color } } });
+                }}
               />
             ) : tool === "sticker" ? (
               <div className="flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden">
@@ -988,8 +991,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   onClearRegion={sticker.clear}
                 />
               </div>
-            ) : tool === "frame" ? (
-              <FramePanel frameTool={frameTool} onApplyPreset={applyFramePreset} />
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>

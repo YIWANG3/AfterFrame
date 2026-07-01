@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
+import BorderControls from "./components/BorderControls";
 import { isTextLayer, isStickerLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
@@ -61,6 +62,15 @@ export default function TextPanel({
   depthModel = null,
   onPickDepthModel,
   onResetDepthModel,
+  // Border / frame — presets + canvas margins (no separate frame tool).
+  framePresets = [],
+  frameThumbs,
+  frameCellAspect,
+  onApplyPreset,
+  canvasPad,
+  onCanvasPad,
+  canvasBg,
+  onCanvasBg,
 }) {
   const { t } = useTranslation("editor");
   const selected = layers.filter((l) => selectedIds.has(l.id));
@@ -163,6 +173,23 @@ export default function TextPanel({
             ))}
           </div>
         </Section>
+
+        {/* Border / frame — presets that drop text+logo layers + margins, plus
+            manual canvas margins & background. Replaces the standalone frame tool. */}
+        {onCanvasPad ? (
+          <Section label="边框">
+            <BorderControls
+              templates={framePresets}
+              thumbs={frameThumbs}
+              cellAspect={frameCellAspect}
+              onApplyPreset={onApplyPreset}
+              pad={canvasPad}
+              onPad={onCanvasPad}
+              bg={canvasBg}
+              onBg={onCanvasBg}
+            />
+          </Section>
+        ) : null}
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
             cached and shared by every text layer's z position slider. */}
