@@ -86,6 +86,14 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 ![Collage](docs/assets/collage.png)
 
+- **Frame** — brand-aware camera watermark frames driven by EXIF. Pick from 20+ presets (bottom bars, dual-logo, and vertical side-strip layouts), rendered with real brand logos and colors for Hasselblad, Sony, Canon, Nikon, Leica, Fujifilm, Lumix, and Ricoh, plus a clean generic set. Adaptive light/dark contrast, a logo color picker (原色 / black / white / grey / gold), text and margin scaling, and export at the original resolution
+
+![Frame — Hasselblad wordmark](docs/assets/frame-hasselblad.png)
+
+![Frame — Sony bottom bar](docs/assets/frame-sony.png)
+
+![Frame — brand-aware presets](docs/assets/frame-presets.png)
+
 ### Video
 - Index video files alongside photos — each clip is probed for duration, dimensions, and codec on import, and a poster frame is generated automatically
 - Gallery cards show the poster with a duration badge; hover to scrub a keyframe filmstrip without opening anything
