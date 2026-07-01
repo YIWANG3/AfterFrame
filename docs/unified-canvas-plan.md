@@ -64,6 +64,33 @@
 - 换句话说:把 `renderFrame` 里"建 layers"那段抽出来复用,终点从"丢弃数组"改成
   "图层栈"。
 
+### 工程文件(可重开编辑,单个 JSON,图片强依赖)
+
+统一模型后,**整个编辑状态都是声明式的**,所以「工程文件」= 把它序列化成
+**一个 JSON**,可重新打开继续编辑。**决策:图片强依赖路径,不内嵌**(不像 PS 把
+像素嵌进文件)。
+
+```jsonc
+{
+  "version": 1,
+  "source": { "path": "/abs/or/relative/photo.jpg", "assetId": "…?" }, // 强依赖,按路径解析
+  "transform": { "crop": {…}, "rotate": 0, "flip": {…}, "zoom": 1 },   // 复用 editorState
+  "canvas":    { "pad": {…}, "bg": {…} },                              // 画布外壳
+  "layers":    [ /* text(含动态 source) / sticker / logo,输出坐标 */ ] // 复用图层栈
+}
+```
+
+- **强依赖 = 按路径引用,不嵌像素**:工程文件极小(纯 JSON)。打开时解析
+  `source.path`;**找不到 → 提示重新定位**(Lightroom「查找缺失文件」式),不静默失败。
+- **图层里的图片资源同理不内嵌**:贴纸(`stickerPath`)、用户 logo 都按 key/路径引用
+  (它们在 catalog/用户目录里)。跨机器搬 JSON 需资源同在 —— 与"强依赖"立场一致。
+- **动态内容随源刷新**:`source` 在,EXIF 可从源图重读,`{camera_model}` 等动态层
+  重开时自动更新(也可缓存快照,见「待定 2」)。
+- **工程文件 ≠ 模板**:
+  - **工程** = 绑定某张照片(含 `source` + transform),重开这张图继续编辑。
+  - **模板** = 照片无关(只有 `canvas` + `layers` 排布,内容是占位符),套到任意图上。
+  - 两者都是同一套 `{canvas, layers}` 的序列化,区别只在带不带 `source`/是否占位符化。
+
 ### 渲染 / 导出:仍是一条路
 
 - 预览:编辑面按 `output` 尺寸,画照片子矩形 + `drawLayersOnCanvas(layers)`。
@@ -110,9 +137,12 @@
 - 删 `FrameStage` 烘焙展示;`renderFrame` 变纯导出渲染器(或并入 save)。
 - 打磨:留白区**吸附/对齐辅助线**、旋转元素命中、per-brand logo 变体切换。
 
-### Phase 6(= 原计划 P4)— 用户资产 / 自定义模板
-- **另存为模板** = 序列化当前 `{canvas, layers}` → `frame-templates.json`(用户目录,
-  沿用 `ai-styles.json` 持久化)。注册表 = 内置 ∪ 用户。
+### Phase 6(= 原计划 P4)— 工程文件 / 用户资产 / 自定义模板
+- **工程文件**(单 JSON,图片强依赖路径,不内嵌):保存/打开 `{source, transform,
+  canvas, layers}`;打开时解析 `source.path`,缺失则弹「重新定位」。**几乎白送**——
+  统一后编辑状态本就是序列化数据,只差存/读 + relink UI。
+- **另存为模板** = 同样序列化,但**去掉 `source`、内容占位符化**(照片无关)→
+  `frame-templates.json`(用户目录,沿用 `ai-styles.json` 持久化)。注册表 = 内置 ∪ 用户。
 - **用户导入 logo**(个人 + 品牌补充/替换)、**签名**(个人图片层 / 手写字体层)、
   **水印资料**(`{author}/{avatar}` 设置)。
 
@@ -139,6 +169,9 @@
 2. **模板套用后是否保留"重新套用/更新 EXIF"能力?** 建议:动态层保留 `source`,
    套用后仍能随 EXIF 刷新;用户手改过的层标记 dirty 不覆盖。
 3. **旧 frame 工具下线时机**:并行验证多久?是否保留一个"经典烘焙"开关兜底?
+4. **工程文件放哪 / 什么扩展名?** 用户自选路径的 sidecar(`.afedit` JSON)?还是
+   进 catalog 当版本栈的一员?`source.path` 存**绝对**还是**相对工程文件**(可搬运)?
+   建议:可选路径的 `.afedit`,路径存绝对 + 相对两份,打开时先相对后绝对再 relink。
 
 ---
 
@@ -150,8 +183,9 @@
   `EditorOverlay.jsx`(工具合并)、`FramePanel.jsx` → 融入图层面板。
 - 抽/复用:`frameRender.js` 的 `resolveAnchor` + 占位符 + logo 匹配 →
   `templateToLayers()`;`renderFrame` 降级为导出渲染器。
-- 新:留白/底色控件、`templateToLayers.js`、(Phase 6)`frame-templates.json` IPC、
-  logo 导入 IPC、水印资料设置。
+- 新:留白/底色控件、`templateToLayers.js`、(Phase 6)工程文件存/读 + relink IPC
+  (`.afedit` JSON,路径引用不内嵌)、`frame-templates.json` IPC、logo 导入 IPC、
+  水印资料设置。
 
 ## 风险
 
