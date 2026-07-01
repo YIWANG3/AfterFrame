@@ -918,6 +918,20 @@ function createWindow() {
     // Cold-launch via dock drop arrives before any window exists, so the
     // open-file events sit in `pendingExternalImports` until we're ready.
     if (pendingExternalImports.length) flushExternalImports();
+    // vibepin overlay (dev only): ⌥A to drop a pin on any UI element, type a
+    // note, Send → posts to the local daemon on :7331 → /vpin picks it up.
+    // The daemon must be running (see .vibepin/ + README); harmless if it isn't.
+    if (devServerUrl) {
+      window.webContents.executeJavaScript(`
+        (function () {
+          if (document.getElementById("__vibepin_overlay")) return;
+          var s = document.createElement("script");
+          s.id = "__vibepin_overlay";
+          s.src = "http://127.0.0.1:7331/annotate.js";
+          document.body.appendChild(s);
+        })();
+      `).catch(() => {});
+    }
   });
   if (devServerUrl) {
     window.loadURL(devServerUrl);
@@ -1290,6 +1304,15 @@ saveFileIpc.register({
 });
 
 frameLogosIpc.register({ ipcMain });
+
+// vibepin (dev only): pixel-perfect element/region screenshots for annotations.
+// The overlay calls window.__vibepinCapture(rect) → this handler → capturePage.
+if (devServerUrl) {
+  ipcMain.handle("annotate:capture", async (event, rect) => {
+    const img = await event.sender.capturePage(rect);
+    return img.toDataURL();
+  });
+}
 
 // quick-register / collage-sources / delete-image-assets are in ipc/assets.js
 // (registered above), so the inline handlers for those are removed here.

@@ -142,3 +142,11 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
     return () => ipcRenderer.removeListener("workspace:menu-action", listener);
   },
 });
+
+// vibepin (dev only): lets the annotate overlay grab pixel-perfect screenshots
+// via the main process. Absent in packaged builds, where the overlay isn't injected.
+if (process.env.VITE_DEV_SERVER_URL) {
+  contextBridge.exposeInMainWorld("__vibepinCapture", (rect) =>
+    ipcRenderer.invoke("annotate:capture", rect)
+  );
+}
