@@ -269,6 +269,10 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : (variant.aspect || 1);
       const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text;
       const scale = heightFrac * aspect * factor;
+      // In a narrow side strip a wide wordmark won't fit horizontally — rotate it
+      // to read vertically. Square-ish marks (symbols/roundels) stay upright.
+      const inStrip = anchorDef.region === "left" || anchorDef.region === "right";
+      const rotation = (inStrip && aspect > 1.6) ? 90 : (el.style?.rotation ?? 0);
       // Stickers are CENTER-anchored. Shift by half the logo width so its edge
       // (not its center) sits flush at the margin — matching the text's edge.
       let lx = a.x;
@@ -277,7 +281,7 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       layers.push({
         type: "sticker", stickerPath: key,
         x: lx, y: a.y, scale,
-        rotation: el.style?.rotation ?? 0, opacity: el.style?.opacity ?? 100,
+        rotation, opacity: el.style?.opacity ?? 100,
         outlineWidth: 0, outlineColor: "#fff",
         // On a photo, give the mark a soft shadow so a light logo survives a
         // bright background (we can't re-tint the cached image per-region).
