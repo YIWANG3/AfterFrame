@@ -278,8 +278,10 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       layers.push({
         type: "sticker", stickerPath: key, ei,
         x: lx, y: a.y, scale,
-        // Bounding box (output fractions) centered on x/y — for editor hit-testing.
-        box: { w: scale, h: aspect ? (scale / aspect) * (outW / outH) : scale },
+        // Bounding box for editor hit-testing: size (output fractions) + the
+        // element's VISUAL center (cx/cy). Stickers are center-anchored, so
+        // cx === the draw x.
+        box: { w: scale, h: aspect ? (scale / aspect) * (outW / outH) : scale, cx: lx, cy: a.y },
         rotation, opacity: el.style?.opacity ?? 100,
         outlineWidth: 0, outlineColor: "#fff",
         // On a photo, give the mark a soft shadow so a light logo survives a
@@ -331,8 +333,14 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     layers.push({
       type: "text", text, ei,
       x, y: a.y, align: a.align,
-      // Bounding box (output fractions) centered on x/y — for editor hit-testing.
-      box: { w: tw / outW, h: (fontPx * 1.2) / outH },
+      // Bounding box for editor hit-testing: size (output fractions) + the text's
+      // VISUAL center (cx/cy). drawLayers positions by align, so the center sits
+      // ±half-width off the anchor a.x depending on alignment.
+      box: {
+        w: tw / outW, h: (fontPx * 1.2) / outH,
+        cx: a.x + (a.align === "left" ? (tw / 2) / outW : a.align === "right" ? -(tw / 2) / outW : 0),
+        cy: a.y,
+      },
       fontFamily: family,
       fontSize: sizeFrac * 1920 * factor,
       fontWeight: weight,

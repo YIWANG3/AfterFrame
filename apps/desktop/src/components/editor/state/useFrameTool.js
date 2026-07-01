@@ -129,12 +129,18 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
       else finalH = Math.round(g.outW / frameAspect);
     }
     const offX = (finalW - g.outW) / 2, offY = (finalH - g.outH) / 2;
-    const layers = contentLayers.map((l) => ({
-      ei: l.ei, type: l.type, rotation: l.rotation || 0,
-      x: (l.x * g.outW + offX) / finalW,
-      y: (l.y * g.outH + offY) / finalH,
-      box: l.box ? { w: (l.box.w * g.outW) / finalW, h: (l.box.h * g.outH) / finalH } : { w: 0.1, h: 0.05 },
-    }));
+    const layers = contentLayers.map((l) => {
+      const cx = l.box?.cx ?? l.x;
+      const cy = l.box?.cy ?? l.y;
+      return {
+        ei: l.ei, type: l.type, rotation: l.rotation || 0,
+        // Overlay position is the element's VISUAL center, mapped into the final
+        // (aspect-padded) canvas fractions.
+        x: (cx * g.outW + offX) / finalW,
+        y: (cy * g.outH + offY) / finalH,
+        box: l.box ? { w: (l.box.w * g.outW) / finalW, h: (l.box.h * g.outH) / finalH } : { w: 0.1, h: 0.05 },
+      };
+    });
     return { canvas, layers, map: { outW: g.outW, outH: g.outH, finalW, finalH, offX, offY } };
   }
 
