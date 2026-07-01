@@ -11,10 +11,10 @@
 // alignment guides — the smart-guide behavior of a design tool.
 
 import { useRef, useState } from "react";
+import SelectionHandles from "./SelectionHandles";
+import { snapAngle, resizeRatio } from "../selectionMath";
 
 const ACCENT = "rgb(210, 160, 90)";
-const HANDLE = 8;
-const ROT_DIST = 22;
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 5;
 
@@ -84,9 +84,10 @@ export default function FrameEditOverlay({ layers, overrides, selectedElement, o
     const c = centerOf(layer);
     if (!c) return;
     const origScale = overrides?.[layer.ei]?.scale ?? 1;
-    const startDist = Math.hypot(e.clientX - c.cx, e.clientY - c.cy) || 1;
+    const center = { x: c.cx, y: c.cy };
+    const start = { x: e.clientX, y: e.clientY };
     listen((me) => {
-      const ratio = Math.hypot(me.clientX - c.cx, me.clientY - c.cy) / startDist;
+      const ratio = resizeRatio(center, start, { x: me.clientX, y: me.clientY });
       onUpdate(layer.ei, { scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, origScale * ratio)) });
     });
   }
@@ -101,9 +102,7 @@ export default function FrameEditOverlay({ layers, overrides, selectedElement, o
     const startAngle = Math.atan2(e.clientY - c.cy, e.clientX - c.cx);
     listen((me) => {
       const cur = Math.atan2(me.clientY - c.cy, me.clientX - c.cx);
-      let deg = origRot + ((cur - startAngle) * 180) / Math.PI;
-      for (const s of [0, 90, 180, 270, -90, -180, -270]) if (Math.abs(deg - s) < 3) { deg = s; break; }
-      onUpdate(layer.ei, { rotation: deg });
+      onUpdate(layer.ei, { rotation: snapAngle(origRot + ((cur - startAngle) * 180) / Math.PI) });
     });
   }
 
@@ -148,20 +147,10 @@ export default function FrameEditOverlay({ layers, overrides, selectedElement, o
             }}
           >
             {selected && (
-              <>
-                {[["0","0"],["100%","0"],["0","100%"],["100%","100%"]].map(([hx, hy], i) => (
-                  <div
-                    key={i}
-                    onPointerDown={(e) => beginResize(e, l)}
-                    style={{ position: "absolute", left: hx, top: hy, width: HANDLE, height: HANDLE, marginLeft: -HANDLE / 2, marginTop: -HANDLE / 2, background: ACCENT, border: "1.5px solid #fff", borderRadius: 1, cursor: "nwse-resize" }}
-                  />
-                ))}
-                <div style={{ position: "absolute", left: "50%", top: 0, width: 1.5, height: ROT_DIST, background: ACCENT, opacity: 0.5, transform: "translate(-50%,-100%)", pointerEvents: "none" }} />
-                <div
-                  onPointerDown={(e) => beginRotate(e, l)}
-                  style={{ position: "absolute", left: "50%", top: -ROT_DIST, width: 10, height: 10, marginLeft: -5, marginTop: -5, background: ACCENT, border: "1.5px solid #fff", borderRadius: "50%", cursor: "grab" }}
-                />
-              </>
+              <SelectionHandles
+                onResizeStart={(e) => beginResize(e, l)}
+                onRotateStart={(e) => beginRotate(e, l)}
+              />
             )}
           </div>
         );

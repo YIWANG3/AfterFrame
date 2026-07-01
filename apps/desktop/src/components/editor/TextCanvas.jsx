@@ -1,6 +1,8 @@
 import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
 import { getBgPadding } from "./textState";
 import { localFileUrl } from "../../utils/format";
+import SelectionHandles from "./components/SelectionHandles";
+import { snapAngle, resizeRatio } from "./selectionMath";
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
    re-render so React never touches the DOM text. Initial content is set via
@@ -42,9 +44,6 @@ const EditableDiv = memo(function EditableDiv({ initialText, style, onDone, onCa
   );
 }, () => true);
 
-const HANDLE_SIZE = 7;
-const ROT_HANDLE_DIST = 28;
-const ROT_HANDLE_RADIUS = 5;
 const ACCENT = "rgb(210, 160, 90)";
 
 export default function TextCanvas({
@@ -124,10 +123,7 @@ export default function TextCanvas({
         const cy = imageRect.y + layer.y * imageRect.height;
         const startAngle = Math.atan2(drag.startY - cy, drag.startX - cx);
         const curAngle = Math.atan2(me.clientY - cy, me.clientX - cx);
-        let deg = drag.origRotation + ((curAngle - startAngle) * 180) / Math.PI;
-        for (const snap of [0, 90, 180, 270, -90, -180, -270]) {
-          if (Math.abs(deg - snap) < 3) { deg = snap; break; }
-        }
+        const deg = snapAngle(drag.origRotation + ((curAngle - startAngle) * 180) / Math.PI);
         onLayersChange(layers.map((l) =>
           l.id === drag.layerId ? { ...l, rotation: deg } : l
         ));
@@ -137,9 +133,7 @@ export default function TextCanvas({
         // toward center shrinks it.
         const cx = imageRect.x + layer.x * imageRect.width;
         const cy = imageRect.y + layer.y * imageRect.height;
-        const startDist = Math.hypot(drag.startX - cx, drag.startY - cy);
-        const curDist = Math.hypot(me.clientX - cx, me.clientY - cy);
-        const ratio = startDist > 0 ? curDist / startDist : 1;
+        const ratio = resizeRatio({ x: cx, y: cy }, { x: drag.startX, y: drag.startY }, { x: me.clientX, y: me.clientY });
 
         if (drag.layerType === "sticker") {
           const newScale = Math.max(0.02, Math.min(2.0, drag.origScale * ratio));
@@ -493,7 +487,7 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       )}
 
       {isSelected && !isEditing && (
-        <SelectionOverlay onDragStart={onDragStart} />
+        <SelectionHandles onResizeStart={(e) => onDragStart(e, "resize")} onRotateStart={(e) => onDragStart(e, "rotate")} />
       )}
     </div>
   );
@@ -577,48 +571,8 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
           style={{ objectFit: "contain", pointerEvents: "none" }}
         />
       )}
-      {isSelected && <SelectionOverlay onDragStart={onDragStart} />}
+      {isSelected && <SelectionHandles onResizeStart={(e) => onDragStart(e, "resize")} onRotateStart={(e) => onDragStart(e, "rotate")} />}
     </div>
-  );
-}
-
-function SelectionOverlay({ onDragStart }) {
-  const pad = 8;
-  // Map percentage positions to account for the pad offset so handles sit on the dashed border
-  const mapPos = (pct) => {
-    if (pct === "0%") return `-${pad}px`;
-    if (pct === "50%") return `calc(50% - 0px)`;
-    if (pct === "100%") return `calc(100% + ${pad}px)`;
-    return pct;
-  };
-  const handleStyle = (x, y, cursor) => ({
-    position: "absolute",
-    left: `calc(${mapPos(x)} - ${HANDLE_SIZE / 2}px)`,
-    top: `calc(${mapPos(y)} - ${HANDLE_SIZE / 2}px)`,
-    width: HANDLE_SIZE,
-    height: HANDLE_SIZE,
-    backgroundColor: ACCENT,
-    border: "1.5px solid #fff",
-    cursor: `${cursor}-resize`,
-    zIndex: 3,
-  });
-
-  return (
-    <>
-      <div style={{ position: "absolute", inset: `-${pad}px`, border: `1.5px dashed ${ACCENT}`, pointerEvents: "none" }} />
-      {[
-        ["0%", "0%", "nwse"], ["50%", "0%", "ns"], ["100%", "0%", "nesw"],
-        ["0%", "50%", "ew"], ["100%", "50%", "ew"],
-        ["0%", "100%", "nesw"], ["50%", "100%", "ns"], ["100%", "100%", "nwse"],
-      ].map(([x, y, cursor], i) => (
-        <div key={i} style={handleStyle(x, y, cursor)} onPointerDown={(e) => onDragStart(e, "resize")} />
-      ))}
-      <div style={{ position: "absolute", left: "50%", top: `-${pad}px`, width: 1.5, height: ROT_HANDLE_DIST, backgroundColor: ACCENT, opacity: 0.5, transform: "translate(-50%, -100%)", pointerEvents: "none" }} />
-      <div
-        style={{ position: "absolute", left: "50%", top: `-${pad + ROT_HANDLE_DIST}px`, width: ROT_HANDLE_RADIUS * 2, height: ROT_HANDLE_RADIUS * 2, borderRadius: "50%", backgroundColor: ACCENT, border: "1.5px solid #fff", transform: "translate(-50%, -50%)", cursor: "grab" }}
-        onPointerDown={(e) => onDragStart(e, "rotate")}
-      />
-    </>
   );
 }
 
