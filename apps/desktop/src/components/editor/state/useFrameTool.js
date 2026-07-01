@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES } from "../frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
 import { renderFrame, collectLogoNeeds } from "../render/frameRender";
+import { buildTransformedCanvas, getSourceDimensions } from "../render/canvasHelpers";
 
 // EXIF lives in nested image_metadata / raw_metadata (same shape the Inspector
 // reads), NOT flat fields. Prefer RAW metadata when it carries the capture.
@@ -46,7 +47,7 @@ function buildBaseCanvas(transformedPreview, crop) {
   return c;
 }
 
-export function useFrameTool({ active, item, transformedPreview, normalizedCrop, saveBasePath, pushToast, onSaveComplete }) {
+export function useFrameTool({ active, item, transformedPreview, sourceImage, rotationDeg = 0, flipX = false, flipY = false, normalizedCrop, saveBasePath, pushToast, onSaveComplete }) {
   // Start from the browse item, then upgrade to full detail (complete EXIF).
   const [exif, setExif] = useState(() => exifFromItem(item));
   useEffect(() => { setExif(exifFromItem(item)); }, [item]);
@@ -145,12 +146,24 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop,
     return () => { alive = false; };
   }, [active, transformedPreview, logos, cropKey, exifKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Full-resolution base for EXPORT: rebuild the transformed + cropped photo from
+  // the original `sourceImage` (the live preview uses the 2200px-capped one), so
+  // the framed output keeps the photo's native resolution. Falls back to the
+  // preview if the full-res source isn't available.
+  function buildExportBase() {
+    if (!sourceImage) return buildBaseCanvas(transformedPreview, normalizedCrop);
+    const { width: sw, height: sh } = getSourceDimensions(sourceImage);
+    const fullTransformed = buildTransformedCanvas(sourceImage, sw, sh, rotationDeg, flipX, flipY);
+    return buildBaseCanvas(fullTransformed, normalizedCrop);
+  }
+
   async function exportFramed() {
     if (!transformedPreview || !logos || !template || exporting) return;
     setExporting(true);
     try {
-      await ensureLogos(template, transformedPreview.height || 1200);
-      const out = compose();
+      const base = buildExportBase();
+      await ensureLogos(template, base.height || 1200, logoColor);
+      const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor });
       const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
       const defaultPath = (saveBasePath || "photo.jpg").replace(/(\.[^.]+)$/, "") + "_framed.jpg";
       const savePath = await window.mediaWorkspace?.pickSavePath?.({

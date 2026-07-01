@@ -1102,6 +1102,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     active: tool === "frame",
     item,
     transformedPreview,
+    // Full-res source (+ its transforms) so export isn't capped at the 2200px preview.
+    sourceImage,
+    rotationDeg: discreteRotationDeg,
+    flipX,
+    flipY,
     normalizedCrop: getNormalizedCrop(),
     saveBasePath,
     pushToast,
