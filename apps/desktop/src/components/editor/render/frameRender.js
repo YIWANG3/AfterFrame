@@ -195,7 +195,7 @@ function sampleLuminance(ctx, cx, cy, w, h) {
 // renderFrame so the same "template → layers" conversion can feed both the
 // baked export and (later) the editable layer stack. Takes `ctx` because
 // overlay (on-photo) text picks its color from the luminance already drawn.
-function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay }) {
+export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay }) {
   const g = geom;
   const adj = adjust;
   const { wref, outW, outH } = geom;
@@ -302,11 +302,19 @@ function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, 
     // photo — solving "dark text vanishes on a dark photo" and vice versa.
     let fillColor = el.style?.color || "#141414";
     let shadow = false, shadowColor = "#000000";
-    if (isOverlay) {
+    if (isOverlay && ctx) {
+      // On-photo text: pick black/white by the luminance behind it (needs the
+      // photo already drawn — i.e. a real ctx).
       const lum = sampleLuminance(ctx, a.x * outW, a.y * outH, outW * 0.34, fontPx * 1.6);
       const dark = lum < 0.55;
       fillColor = dark ? "#ffffff" : "#141414";
       shadowColor = dark ? "#000000" : "#ffffff";
+      shadow = true;
+    } else if (isOverlay) {
+      // No ctx (generating layers for the editor / hit-testing, before any
+      // render): can't sample — assume a light mark on the photo.
+      fillColor = "#ffffff";
+      shadowColor = "#000000";
       shadow = true;
     }
 
