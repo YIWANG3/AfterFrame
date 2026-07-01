@@ -65,3 +65,4 @@ marketing/
 
 # playwright run outputs
 test-results/
+apps/desktop/e2e/fixtures/big-frame-*.jpg

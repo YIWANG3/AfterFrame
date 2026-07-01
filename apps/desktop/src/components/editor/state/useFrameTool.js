@@ -157,21 +157,29 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     return buildBaseCanvas(fullTransformed, normalizedCrop);
   }
 
+  // Render the framed image at full resolution and write it to `savePath`.
+  // Returns the output dimensions. Shared by the picker flow and the e2e
+  // backdoor (which skips the native save dialog).
+  async function exportTo(savePath) {
+    const base = buildExportBase();
+    await ensureLogos(template, base.height || 1200, logoColor);
+    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor });
+    const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
+    await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), saveBasePath);
+    return { width: out.width, height: out.height };
+  }
+
   async function exportFramed() {
     if (!transformedPreview || !logos || !template || exporting) return;
     setExporting(true);
     try {
-      const base = buildExportBase();
-      await ensureLogos(template, base.height || 1200, logoColor);
-      const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor });
-      const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
       const defaultPath = (saveBasePath || "photo.jpg").replace(/(\.[^.]+)$/, "") + "_framed.jpg";
       const savePath = await window.mediaWorkspace?.pickSavePath?.({
         defaultPath,
         filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }, { name: "PNG", extensions: ["png"] }],
       });
       if (!savePath) return;
-      await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), saveBasePath);
+      await exportTo(savePath);
       pushToast?.({ title: "已导出加框图片", message: savePath.split("/").pop(), ttl: 4000 });
       await onSaveComplete?.(savePath);
     } catch (e) {
@@ -189,5 +197,6 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     logoColor, setLogoColor,
     logosReady: !!logos,
     exportFramed,
+    exportTo, // e2e: export to a given path, skipping the native dialog
   };
 }

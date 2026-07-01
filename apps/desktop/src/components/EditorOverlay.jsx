@@ -1112,6 +1112,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     pushToast,
     onSaveComplete,
   });
+  // Fresh handle to the frame tool for the e2e backdoor (frameTool is a new
+  // object each render; the backdoor effect's deps don't track it).
+  const frameToolRef = useRef(null);
+  frameToolRef.current = frameTool;
 
   // Test backdoor — let E2E specs trigger save to a known path without
   // driving the native save-as dialog. Registered while the editor is open.
@@ -1139,19 +1143,42 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       getLayerCount: () => layers.length,
       getTool: () => tool,
       setTool: (t) => setTool(t),
+      // Characterization backdoor for the refactor safety-net (Phase 0). Reads
+      // via refs so it stays fresh regardless of this effect's deps.
+      getState: () => {
+        const s = editorStateRef.current;
+        return {
+          tool,
+          aspectKey: s.aspectKey,
+          quarterTurns: s.quarterTurns,
+          freeAngle: s.freeAngle,
+          flipX: s.flipX,
+          flipY: s.flipY,
+          hasCrop: !!s.cropRect,
+          layers: layers.map((l) => ({ id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale })),
+          selectedIds: [...selectedIds],
+          historyIndex: historyIndexRef.current,
+          historyLength: historyRef.current.length,
+        };
+      },
+      setAspect: (key) => commitAspect(key),
+      deleteLayer: (id) => handleDeleteLayer(id),
+      moveLayer: (id, dir) => handleMoveLayer(id, dir),
+      selectLayers: (ids) => setSelectedIds(new Set(ids)),
+      undo: () => handleUndo(),
+      redo: () => handleRedo(),
+      exportFrame: (savePath) => frameToolRef.current?.exportTo?.(savePath),
     };
     return () => {
       if (window.__afterframeTest) {
-        delete window.__afterframeTest.saveAs;
-        delete window.__afterframeTest.getPreviewReady;
-        delete window.__afterframeTest.getSaving;
-        delete window.__afterframeTest.addTextLayer;
-        delete window.__afterframeTest.getLayerCount;
-        delete window.__afterframeTest.getTool;
-        delete window.__afterframeTest.setTool;
+        for (const k of [
+          "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
+          "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
+          "selectLayers", "undo", "redo", "exportFrame",
+        ]) delete window.__afterframeTest[k];
       }
     };
-  }, [open, saving, layers, tool]);
+  }, [open, saving, layers, tool, selectedIds]);
 
   const executeSaveRef = useRef(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -75,6 +75,16 @@ There is already a **Playwright + Electron e2e suite** (`apps/desktop/e2e/`, `np
 
 ## E2E coverage assessment (is the refactor covered?)
 
+> **Phase 0 status: DONE.** The safety net now exists. Backdoor extended with
+> `getState`, `setAspect`, `deleteLayer`, `moveLayer`, `selectLayers`, `undo`,
+> `redo`, `exportFrame` (+ `useFrameTool.exportTo` to skip the save dialog).
+> Golden specs added — `18-editor-transform` (baseline dims, rotate dims+undo/redo,
+> flip, 1:1 crop), `19-editor-layers` (add/reorder/delete/select), `20-frame`
+> (full-res export on a >2200px fixture). **13 golden tests, all green + stable
+> under `npm run e2e`** (75 pass / 8 Xcode-skipped; the lone `02-navigation`
+> flake is pre-existing and unrelated). Each refactor phase must keep these green.
+
+
 **Infra:** `@playwright/test` launches the built Electron app; specs drive the editor through `window.__afterframeTest` (a backdoor merged in `App.jsx` + `EditorOverlay.jsx`). Today it exposes: `openEditor(path)`, `closeEditor()`, `setTool(t)`, `getTool()`, `addTextLayer(text)`, `getLayerCount()`, `saveAs(path)`, `getPreviewReady()`, `getSaving()`.
 
 **Verdict: partial. The two lowest-risk phases are well covered; the highest-risk interaction/state paths are not.**
