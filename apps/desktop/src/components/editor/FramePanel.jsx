@@ -1,27 +1,14 @@
 // Frame tool panel — template picker + export. Body only; the panel chrome
 // (header) is provided by EditorOverlay, like the other tool panels.
 
-import { Download, LoaderCircle, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { Download, LoaderCircle, RotateCcw } from "lucide-react";
 import { SliderRow } from "../../ui";
 import { ASPECT_PRESETS } from "./cropMath";
-
-const NUDGE_STEP = 0.01; // fraction of photo width per arrow click
 
 function elementLabel(el) {
   if (el.type === "logo") return "Logo";
   if (el.type === "exif") return "参数";
   return el.content || "文字";
-}
-
-function NudgeBtn({ icon: Icon, onClick, disabled = false, title }) {
-  return (
-    <button
-      type="button" onClick={onClick} disabled={disabled} title={title}
-      className="flex h-6 w-6 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text disabled:opacity-30 disabled:hover:bg-transparent"
-    >
-      <Icon className="h-3.5 w-3.5" />
-    </button>
-  );
 }
 
 // Same ratio set as the Crop tool, so a framed export can be padded to a common
@@ -43,22 +30,8 @@ const LOGO_COLORS = [
 export default function FramePanel({ frameTool }) {
   const { templates, templateId, setTemplateId, thumbs, cellAspect, logosReady, exporting, rendering, exportFramed,
     textScale, setTextScale, marginScale, setMarginScale, logoColor, setLogoColor,
-    frameAspectKey, setFrameAspectKey, template, elementOverrides, setElementOverrides } = frameTool;
-
-  function nudge(ei, ddx, ddy) {
-    setElementOverrides((prev) => {
-      const cur = prev[ei] || { dx: 0, dy: 0 };
-      return { ...prev, [ei]: { dx: (cur.dx || 0) + ddx, dy: (cur.dy || 0) + ddy } };
-    });
-  }
-  function resetElement(ei) {
-    setElementOverrides((prev) => {
-      if (!prev[ei]) return prev;
-      const next = { ...prev };
-      delete next[ei];
-      return next;
-    });
-  }
+    frameAspectKey, setFrameAspectKey, template, elementOverrides,
+    selectedElement, setSelectedElement, resetElement } = frameTool;
   const elements = template?.elements || [];
   return (
     <div className="flex max-h-[calc(100vh-10rem)] flex-col">
@@ -137,20 +110,30 @@ export default function FramePanel({ frameTool }) {
         </div>
         {elements.length > 0 && (
           <div className="mb-3.5">
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">元素微调</div>
-            <div className="flex flex-col gap-1.5">
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">元素</div>
+            <div className="mb-2 text-[10.5px] text-muted2/80">在画布上拖动元素调整位置</div>
+            <div className="flex flex-col gap-0.5">
               {elements.map((el, ei) => {
                 const moved = !!elementOverrides[ei];
+                const active = ei === selectedElement;
                 return (
-                  <div key={ei} className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={elementLabel(el)}>{elementLabel(el)}</span>
-                    <div className="flex items-center gap-0.5">
-                      <NudgeBtn icon={ArrowLeft} onClick={() => nudge(ei, -NUDGE_STEP, 0)} />
-                      <NudgeBtn icon={ArrowUp} onClick={() => nudge(ei, 0, -NUDGE_STEP)} />
-                      <NudgeBtn icon={ArrowDown} onClick={() => nudge(ei, 0, NUDGE_STEP)} />
-                      <NudgeBtn icon={ArrowRight} onClick={() => nudge(ei, NUDGE_STEP, 0)} />
-                      <NudgeBtn icon={RotateCcw} onClick={() => resetElement(ei)} disabled={!moved} title="复位" />
-                    </div>
+                  <div
+                    key={ei}
+                    onClick={() => setSelectedElement(active ? null : ei)}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 transition ${
+                      active ? "bg-[rgb(var(--accent-color)/0.14)]" : "hover:bg-hover"
+                    }`}
+                  >
+                    <span className={`min-w-0 flex-1 truncate text-[11px] ${active ? "text-text" : "text-muted"}`} title={elementLabel(el)}>{elementLabel(el)}</span>
+                    {moved && (
+                      <button
+                        type="button" title="复位"
+                        onClick={(e) => { e.stopPropagation(); resetElement(ei); }}
+                        className="flex h-5 w-5 items-center justify-center rounded text-muted2 hover:bg-hover hover:text-text"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 );
               })}

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES } from "../frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
-import { renderFrame, collectLogoNeeds } from "../render/frameRender";
+import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { buildTransformedCanvas, getSourceDimensions } from "../render/canvasHelpers";
 import { getAspectRatio } from "../cropMath";
 
@@ -73,12 +73,15 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
   const [marginScale, setMarginScale] = useState(1); // "留白" knob
   const [logoColor, setLogoColor] = useState(null); // logo tint override; null = 原色 (auto)
   const [frameAspectKey, setFrameAspectKey] = useState("free"); // pad output to a target ratio; "free" = frame's natural size
-  const [elementOverrides, setElementOverrides] = useState({}); // element index -> { dx, dy } (position nudge)
+  const [elementOverrides, setElementOverrides] = useState({}); // element index -> { pos:{x,y} } (dragged position)
+  const [frameLayers, setFrameLayers] = useState([]); // editable element layout (final-canvas fractions) for the drag overlay
+  const [selectedElement, setSelectedElement] = useState(null); // ei of the selected element, or null
+  const frameMapRef = useRef(null); // final<->content mapping for inverse-mapping drags
   const logoCacheRef = useRef(new Map());
 
   const template = useMemo(() => FRAME_TEMPLATES.find((t) => t.id === templateId), [templateId]);
-  // Per-element nudges are template-specific (indices differ) — clear on switch.
-  useEffect(() => { setElementOverrides({}); }, [templateId]);
+  // Per-element overrides are template-specific (indices differ) — clear on switch.
+  useEffect(() => { setElementOverrides({}); setSelectedElement(null); }, [templateId]);
   const cropKey = normalizedCrop ? JSON.stringify(normalizedCrop) : "full";
   const exifKey = JSON.stringify(exif);
 
@@ -104,10 +107,35 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
 
   const adjust = { text: textScale, margin: marginScale };
 
+  // Render the framed canvas AND compute the editable element layout off the
+  // SAME base, so the drag overlay lines up with the baked pixels. Layer
+  // positions/boxes are mapped into the FINAL (aspect-padded) canvas fractions;
+  // `map` carries the params to invert a drag back to content-space for storage.
   function compose() {
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
     const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
-    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect, overrides: elementOverrides });
+    const canvas = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect, overrides: elementOverrides });
+
+    const g = geometry(base, template, adjust);
+    const contentLayers = buildFrameLayers(null, {
+      template, exif, profile: {}, geom: g, adjust, factor: g.wref / g.outW,
+      registry: logos.registry, logoImages: logoCacheRef.current,
+      logoColor, isOverlay: template.family === "overlay", overrides: elementOverrides,
+    });
+    // Aspect padding grows the canvas around the content, centered.
+    let finalW = g.outW, finalH = g.outH;
+    if (frameAspect) {
+      if (g.outW / g.outH < frameAspect) finalW = Math.round(g.outH * frameAspect);
+      else finalH = Math.round(g.outW / frameAspect);
+    }
+    const offX = (finalW - g.outW) / 2, offY = (finalH - g.outH) / 2;
+    const layers = contentLayers.map((l) => ({
+      ei: l.ei, type: l.type, rotation: l.rotation || 0,
+      x: (l.x * g.outW + offX) / finalW,
+      y: (l.y * g.outH + offY) / finalH,
+      box: l.box ? { w: (l.box.w * g.outW) / finalW, h: (l.box.h * g.outH) / finalH } : { w: 0.1, h: 0.05 },
+    }));
+    return { canvas, layers, map: { outW: g.outW, outH: g.outH, finalW, finalH, offX, offY } };
   }
 
   // Live preview: re-render when active / photo / crop / template / logos / knobs change.
@@ -118,11 +146,24 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     (async () => {
       await ensureLogos(template, transformedPreview.height || 1200, logoColor);
       if (!alive) return;
-      setFramedCanvas(compose());
+      const r = compose();
+      setFramedCanvas(r.canvas);
+      setFrameLayers(r.layers);
+      frameMapRef.current = r.map;
       setRendering(false);
     })();
     return () => { alive = false; };
   }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor, frameAspectKey, elementOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Move an element to an absolute position (final-canvas fractions, from a drag
+  // on the overlay) — inverse-map to content space and store as a pos override.
+  function moveElement(ei, xFinal, yFinal) {
+    const m = frameMapRef.current;
+    if (!m) return;
+    const x = (xFinal * m.finalW - m.offX) / m.outW;
+    const y = (yFinal * m.finalH - m.offY) / m.outH;
+    setElementOverrides((prev) => ({ ...prev, [ei]: { ...(prev[ei] || {}), pos: { x, y } } }));
+  }
 
   // Small framed previews of every template, so the panel shows what each looks
   // like (logo included) instead of a bare name list.
@@ -204,6 +245,11 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
     logoColor, setLogoColor,
     frameAspectKey, setFrameAspectKey,
     template, elementOverrides, setElementOverrides,
+    frameLayers, selectedElement, setSelectedElement, moveElement,
+    resetElement: (ei) => setElementOverrides((prev) => {
+      if (!prev[ei]) return prev;
+      const next = { ...prev }; delete next[ei]; return next;
+    }),
     logosReady: !!logos,
     exportFramed,
     exportTo, // e2e: export to a given path, skipping the native dialog

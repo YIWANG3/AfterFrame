@@ -6,16 +6,36 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import FrameEditOverlay from "./FrameEditOverlay";
 
 const MAX_ZOOM = 8;
 const MIN_ZOOM = 0.25;
 
-export default function FrameStage({ canvas, rendering, rightInset = 0 }) {
+export default function FrameStage({ canvas, rendering, rightInset = 0, layers, selectedElement, onSelectElement, onMoveElement }) {
   const hostRef = useRef(null);
+  const outerRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [canvasRect, setCanvasRect] = useState(null); // on-screen box of the canvas, relative to the stage — for the edit overlay
+
+  // Keep the edit overlay glued to the displayed canvas across fit / zoom / pan
+  // / resize by measuring the canvas rect relative to the stage container.
+  useEffect(() => {
+    function measure() {
+      const outer = outerRef.current;
+      const cv = hostRef.current?.firstChild;
+      if (!outer || !cv?.getBoundingClientRect) { setCanvasRect(null); return; }
+      const o = outer.getBoundingClientRect();
+      const c = cv.getBoundingClientRect();
+      setCanvasRect({ x: c.left - o.left, y: c.top - o.top, width: c.width, height: c.height });
+    }
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (ro && outerRef.current) ro.observe(outerRef.current);
+    return () => ro?.disconnect();
+  }, [canvas, zoom, pan]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -60,6 +80,7 @@ export default function FrameStage({ canvas, rendering, rightInset = 0 }) {
 
   return (
     <div
+      ref={outerRef}
       className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden bg-app p-6"
       style={{ paddingRight: rightInset || undefined }}
       onWheel={onWheel}
@@ -77,6 +98,15 @@ export default function FrameStage({ canvas, rendering, rightInset = 0 }) {
           cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
         }}
       />
+      {canvas && onMoveElement && (
+        <FrameEditOverlay
+          rect={canvasRect}
+          layers={layers}
+          selectedElement={selectedElement}
+          onSelect={onSelectElement}
+          onMove={onMoveElement}
+        />
+      )}
       {!canvas && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <LoaderCircle className="h-6 w-6 animate-spin text-muted2" />
