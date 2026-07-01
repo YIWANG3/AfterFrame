@@ -49,7 +49,13 @@ test.describe("Sidebar navigation", () => {
     const rated = window.getByRole("button", { name: /Rated/i }).first();
     await expect(rated).toBeVisible();
     await rated.click();
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(4, { timeout: 5_000 });
+    // Wait for the filtered gallery to actually re-query and paint before
+    // counting — under full-suite contention the re-query can take several
+    // seconds, and a bare toHaveCount raced an empty (0-item) intermediate
+    // state. Anchor on "at least one item visible" first, then assert exactly
+    // the four rated assets.
+    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 10_000 });
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(4, { timeout: 10_000 });
 
     // restore
     await window.getByRole("button", { name: /All Assets/i }).first().click();
