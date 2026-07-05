@@ -72,6 +72,7 @@ export function useCropTool({
     event.preventDefault();
     event.stopPropagation();
     if (!cropRect) return;
+    cancelWheelCommit(); // don't let a pending wheel commit fire mid-drag (F8)
     pointerStateRef.current = {
       mode: "crop-resize",
       handle,
@@ -86,6 +87,7 @@ export function useCropTool({
     event.preventDefault();
     event.stopPropagation();
     if (!cropRect) return;
+    cancelWheelCommit(); // F8
     const point = pointFromClient(event.clientX, event.clientY);
     const center = { x: cropRect.x + cropRect.width / 2, y: cropRect.y + cropRect.height / 2 };
     pointerStateRef.current = {
@@ -101,6 +103,7 @@ export function useCropTool({
   function beginImagePan(event) {
     event.preventDefault();
     if (!imageRect || !cropRect) return;
+    cancelWheelCommit(); // F8
     const point = pointFromClient(event.clientX, event.clientY);
     pointerStateRef.current = {
       mode: "image-pan",
@@ -199,23 +202,21 @@ export function useCropTool({
     }
   }
 
-  useViewportWheel({
+  const { flushCommit: flushWheelCommit, cancelCommit: cancelWheelCommit } = useViewportWheel({
     viewportRef,
     open,
     transformedPreview,
     placement,
     editorStateRef,
-    recordState: record,
+    applyState: apply,
+    commitState: commitCurrent,
   });
 
   // Re-clamp image placement whenever the geometry changes so the crop never
-  // drifts off the image. Skipped while a canvas margin (border) is active — the
-  // border wraps the whole photo (crop is ignored), and the stale crop rect
-  // would otherwise force the image to zoom in to "cover" it → overflow.
+  // drifts off the image. Crop geometry is pad-free (canvas margins live in the
+  // composed output view), so this holds regardless of any active border.
   useEffect(() => {
-    const pad = editorStateRef.current.canvas?.pad;
-    const hasPad = pad && (pad.top || pad.right || pad.bottom || pad.left);
-    if (hasPad || !transformedPreview || !placement || !editorStateRef.current.cropRect) return;
+    if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
     const clamped = clampImagePlacement(editorStateRef.current, transformedPreview, placement);
     if (!stateEquals(clamped, editorStateRef.current)) {
       apply(clamped);
@@ -247,5 +248,6 @@ export function useCropTool({
     beginCropResize, beginRotate, beginImagePan,
     handlePointerMove, handlePointerEnd,
     beginAngleDrag, updateAngle, endAngleDrag,
+    flushWheelCommit, cancelWheelCommit,
   };
 }

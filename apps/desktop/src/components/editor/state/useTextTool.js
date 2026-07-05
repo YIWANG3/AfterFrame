@@ -1,6 +1,7 @@
 // Text tool — selection + clipboard + layer CRUD actions. Owns which layers are
-// selected and the copy/paste clipboard; the layer STACK itself lives in
-// useLayerHistory. Extracted from EditorOverlay (Phase 3b).
+// selected and the copy/paste clipboard; the layer STACK + undo/redo live in
+// the unified useEditorHistory (commit is its commitLayers). Layer CRUD here
+// commits a single history entry. Extracted from EditorOverlay (Phase 3b).
 //
 // The heavier "Apply text" bake (composite onto the source + reset the editor)
 // stays in EditorOverlay — like the crop Apply, it's a cross-cutting operation,
@@ -10,10 +11,9 @@ import { useRef, useState } from "react";
 import { createDefaultLayer } from "../textState";
 import { isTextLayer, moveLayerBy, removeLayerById } from "../layerStack";
 
-export function useTextTool({ layers, layerHistory }) {
+export function useTextTool({ layers, layersRef, commit }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const clipboardRef = useRef(null);
-  const commit = layerHistory.commit;
 
   function moveLayer(id, direction) {
     commit(moveLayerBy(layers, id, direction));
@@ -56,9 +56,9 @@ export function useTextTool({ layers, layerHistory }) {
       const { id, ...rest } = l;
       return createDefaultLayer({ ...rest, x: l.x + 0.02, y: l.y + 0.02 });
     });
-    // Read the live layer stack from history (not the possibly-stale `layers`
-    // closure) so rapid paste after another mutation doesn't clobber it.
-    const currentLayers = layerHistory.historyRef.current[layerHistory.indexRef.current] || [];
+    // Read the live layer stack (not the possibly-stale `layers` closure) so
+    // rapid paste after another mutation doesn't clobber it.
+    const currentLayers = layersRef.current || [];
     commit([...currentLayers, ...pasted]);
     setSelectedIds(new Set(pasted.map((p) => p.id)));
   }

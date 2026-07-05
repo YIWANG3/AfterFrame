@@ -16,12 +16,40 @@ export function useViewportWheel({
   transformedPreview,
   placement,
   editorStateRef,
-  recordState,
+  applyState,
+  commitState,
 }) {
   // Hold the latest preview+placement in a ref so the wheel handler closes
   // over fresh values without us having to re-attach on every render.
   const ctxRef = useRef(null);
   ctxRef.current = { transformedPreview, placement };
+  const commitTimerRef = useRef(null);
+
+  function scheduleCommit() {
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = setTimeout(() => {
+      commitTimerRef.current = null;
+      commitState?.();
+    }, 160);
+  }
+
+  // Run any pending debounced commit NOW — undo/redo call this first so the
+  // pending wheel edit becomes a real history entry before the index moves,
+  // instead of being swallowed or over-rewinding (review F8).
+  function flushCommit() {
+    if (!commitTimerRef.current) return;
+    clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = null;
+    commitState?.();
+  }
+
+  // Drop a pending commit without recording it — drag starts call this so the
+  // debounce timer can't fire mid-drag and insert an intermediate history entry.
+  function cancelCommit() {
+    if (!commitTimerRef.current) return;
+    clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = null;
+  }
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -83,7 +111,8 @@ export function useViewportWheel({
           tp,
           pl,
         );
-        recordState(next);
+        applyState(next);
+        scheduleCommit();
       } else {
         // Horizontal trackpad scroll = pan image inside crop.
         const dx = -event.deltaX;
@@ -97,11 +126,20 @@ export function useViewportWheel({
           tp,
           pl,
         );
-        recordState(next);
+        applyState(next);
+        scheduleCommit();
       }
     }
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (commitTimerRef.current) {
+        clearTimeout(commitTimerRef.current);
+        commitTimerRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  return { flushCommit, cancelCommit };
 }

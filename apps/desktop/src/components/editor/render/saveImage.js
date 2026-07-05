@@ -5,25 +5,24 @@
 import {
   getSourceDimensions,
   buildTransformedCanvas,
-  buildDepthMaskCanvas,
+  buildDepthAlphaMask,
+  angledLinearGradient,
+  drawScrim,
   canvasToBlob,
   inferMimeType,
   releaseCanvasImage,
-  hexToRgba,
 } from "./canvasHelpers";
+import { hasPad, getOutputDimensions } from "../imageMath";
 
 // Canvas fillStyle for the border background — solid color or a linear gradient
 // across the WxH output (same angle convention as the live preview / text).
 function bgFillStyle(ctx, bg, W, H) {
   if (bg?.mode === "gradient" && bg.gradient) {
     const g = bg.gradient;
-    const rad = ((g.angle ?? 180) * Math.PI) / 180;
-    const dx = Math.sin(rad), dy = -Math.cos(rad);
-    const half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
-    const grad = ctx.createLinearGradient(W / 2 - dx * half, H / 2 - dy * half, W / 2 + dx * half, H / 2 + dy * half);
-    grad.addColorStop(0, hexToRgba(g.from || "#fff", g.fromOpacity ?? 1));
-    grad.addColorStop(1, hexToRgba(g.to || "#000", g.toOpacity ?? 1));
-    return grad;
+    return angledLinearGradient(ctx, {
+      angle: g.angle ?? 180, from: g.from, to: g.to,
+      fromOpacity: g.fromOpacity ?? 1, toOpacity: g.toOpacity ?? 1,
+    }, W, H);
   }
   return bg?.color || "#ffffff";
 }
@@ -50,6 +49,7 @@ export async function saveEditedImage(ctx) {
     normalizedCrop,
     canvasPad,
     canvasBg,
+    canvasScrim,
     layers,
     depthFieldCanvas,
     depthFeather,
@@ -58,12 +58,12 @@ export async function saveEditedImage(ctx) {
     isLayerRenderable,
   } = ctx;
 
-  const hasPad = canvasPad && (canvasPad.top || canvasPad.right || canvasPad.bottom || canvasPad.left);
+  const padActive = hasPad(canvasPad);
 
   // Native sharp fast-path: full source resolution, no canvas overhead. Only
-  // valid when there are zero overlay layers AND no canvas margin (sharp can't
-  // do the padded-canvas composite).
-  if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePath && layers.length === 0 && !hasPad) {
+  // valid when there are zero overlay layers AND no canvas margin/scrim (sharp
+  // can't do the padded-canvas composite).
+  if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePath && layers.length === 0 && !padActive && !canvasScrim) {
     try {
       await window.mediaWorkspace.processAndSave({
         sourcePath: nativeSaveSourcePath,
@@ -100,22 +100,37 @@ export async function saveEditedImage(ctx) {
   const fullH = transformedFull.height;
   const isSticker = (layer) => layer?.type === "sticker";
 
-  // Two output shapes:
-  //  • hasPad → output = photo + margins (bg-filled); layers are already
-  //    fractions of that output (matches the live editor's outputRect).
-  //  • else   → output = the crop rect; layers are full-photo fractions
-  //    remapped into the crop (the pre-unified behavior, byte-identical).
-  const outputCanvas = document.createElement("canvas");
-  let compW, compH, mapLayer, outCtx;
+  // The photo region cut out of `transformedFull` — the crop when one is
+  // active, else the whole photo. Rounded exactly like the preview basis
+  // (getOutputDimensions/getContentDims) so both pipelines share pixels.
+  const contentSrc = normalizedCrop
+    ? {
+        x: Math.round(normalizedCrop.x * fullW),
+        y: Math.round(normalizedCrop.y * fullH),
+        width: Math.max(1, Math.round(normalizedCrop.width * fullW)),
+        height: Math.max(1, Math.round(normalizedCrop.height * fullH)),
+      }
+    : { x: 0, y: 0, width: fullW, height: fullH };
 
-  if (hasPad) {
-    const short = Math.min(fullW, fullH);
-    const padL = Math.round(canvasPad.left * short);
-    const padR = Math.round(canvasPad.right * short);
-    const padT = Math.round(canvasPad.top * short);
-    const padB = Math.round(canvasPad.bottom * short);
-    compW = fullW + padL + padR;
-    compH = fullH + padT + padB;
+  // Two output shapes:
+  //  • pad active → output = cropped photo + margins (bg-filled)
+  //  • else       → output = the crop rect
+  // Layers are STORED in full-photo coords; a single mapLayer (below) projects
+  // them into whichever output shape this is — no per-shape branching.
+  const outputCanvas = document.createElement("canvas");
+  let compW, compH, outCtx, contentRect;
+
+  if (padActive) {
+    const short = Math.min(contentSrc.width, contentSrc.height);
+    const dims = getOutputDimensions({ width: fullW, height: fullH }, canvasPad, normalizedCrop);
+    compW = dims.width;
+    compH = dims.height;
+    contentRect = {
+      x: canvasPad.left * short,
+      y: canvasPad.top * short,
+      width: contentSrc.width,
+      height: contentSrc.height,
+    };
     outputCanvas.width = compW;
     outputCanvas.height = compH;
     outCtx = outputCanvas.getContext("2d");
@@ -123,34 +138,75 @@ export async function saveEditedImage(ctx) {
     outCtx.imageSmoothingQuality = "high";
     outCtx.fillStyle = bgFillStyle(outCtx, canvasBg, compW, compH);
     outCtx.fillRect(0, 0, compW, compH);
-    outCtx.drawImage(transformedFull, padL, padT);
-    mapLayer = (layer) => layer; // x/y/scale already output-relative
+    outCtx.drawImage(
+      transformedFull,
+      contentSrc.x, contentSrc.y, contentSrc.width, contentSrc.height,
+      contentRect.x, contentRect.y, contentRect.width, contentRect.height,
+    );
   } else {
-    const exportRect = normalizedCrop
-      ? {
-          x: Math.round(normalizedCrop.x * fullW),
-          y: Math.round(normalizedCrop.y * fullH),
-          width: Math.max(1, Math.round(normalizedCrop.width * fullW)),
-          height: Math.max(1, Math.round(normalizedCrop.height * fullH)),
-        }
-      : { x: 0, y: 0, width: fullW, height: fullH };
-    compW = exportRect.width;
-    compH = exportRect.height;
+    compW = contentSrc.width;
+    compH = contentSrc.height;
+    contentRect = { x: 0, y: 0, width: compW, height: compH };
     outputCanvas.width = compW;
     outputCanvas.height = compH;
     outCtx = outputCanvas.getContext("2d");
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.drawImage(transformedFull, exportRect.x, exportRect.y, compW, compH, 0, 0, compW, compH);
-    mapLayer = (layer) => {
-      const absX = layer.x * fullW - exportRect.x;
-      const absY = layer.y * fullH - exportRect.y;
-      const scaleAdjust = isSticker(layer)
-        ? { scale: (layer.scale ?? 0.4) * (fullW / exportRect.width) }
-        : null;
-      return { ...layer, x: absX / exportRect.width, y: absY / exportRect.height, ...(scaleAdjust || {}) };
-    };
+    outCtx.drawImage(transformedFull, contentSrc.x, contentSrc.y, compW, compH, 0, 0, compW, compH);
   }
+
+  // Project a full-photo-coord layer into the output canvas: the photo content
+  // is drawn at native scale inside contentRect, so a photo pixel (X,Y) lands at
+  // contentRect + (photo pixel − crop origin). Sizes are photo-width-relative,
+  // rescaled to the output's 1920-ref (k = fullW / compW) so the saved layer
+  // keeps the size shown relative to the photo. One mapping for both shapes.
+  const mapLayer = (layer) => {
+    const X = layer.x * fullW;
+    const Y = layer.y * fullH;
+    const k = fullW / compW;
+    const resize = isSticker(layer)
+      ? { scale: (layer.scale ?? 0.4) * k }
+      : {
+          fontSize: (layer.fontSize ?? 0) * k,
+          shadowBlur: (layer.shadowBlur ?? 0) * k,
+          shadowX: (layer.shadowX ?? 0) * k,
+          shadowY: (layer.shadowY ?? 0) * k,
+          strokeWidth: (layer.strokeWidth ?? 0) * k,
+        };
+    return {
+      ...layer,
+      x: (contentRect.x + X - contentSrc.x) / compW,
+      y: (contentRect.y + Y - contentSrc.y) / compH,
+      ...resize,
+    };
+  };
+
+  // Overlay presets darken the photo edge so on-photo text stays legible.
+  drawScrim(outCtx, canvasScrim, contentRect);
+
+  // Depth mask on the OUTPUT canvas: the field maps onto the photo content
+  // sub-rect; everything outside the photo (the margins) stays fully visible.
+  const buildOutputDepthMask = (zPosition) => {
+    const alpha = buildDepthAlphaMask(depthFieldCanvas, zPosition, depthFeather);
+    const mask = document.createElement("canvas");
+    mask.width = compW;
+    mask.height = compH;
+    const mCtx = mask.getContext("2d");
+    mCtx.fillStyle = "#ffffff";
+    mCtx.fillRect(0, 0, compW, compH);
+    mCtx.clearRect(contentRect.x, contentRect.y, contentRect.width, contentRect.height);
+    mCtx.imageSmoothingEnabled = true;
+    mCtx.imageSmoothingQuality = "high";
+    const kx = alpha.width / fullW;
+    const ky = alpha.height / fullH;
+    mCtx.drawImage(
+      alpha,
+      contentSrc.x * kx, contentSrc.y * ky, contentSrc.width * kx, contentSrc.height * ky,
+      contentRect.x, contentRect.y, contentRect.width, contentRect.height,
+    );
+    releaseCanvasImage(alpha);
+    return mask;
+  };
 
   // Composite layers in stack order. Each renderable layer is drawn to a temp
   // canvas, optionally masked by the depth field, then blitted to the output.
@@ -166,7 +222,7 @@ export async function saveEditedImage(ctx) {
     tmp.width = compW;
     tmp.height = compH;
     drawLayersToCtx(tmp.getContext("2d"), compW, compH, [mappedLayer]);
-    const mask = buildDepthMaskCanvas(depthFieldCanvas, compW, compH, layer.zPosition, depthFeather);
+    const mask = buildOutputDepthMask(layer.zPosition);
     const t = tmp.getContext("2d");
     t.globalCompositeOperation = "destination-in";
     t.drawImage(mask, 0, 0);

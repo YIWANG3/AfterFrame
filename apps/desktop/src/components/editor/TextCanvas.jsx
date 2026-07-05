@@ -3,6 +3,7 @@ import { getBgPadding } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
+import { buildDepthAlphaMask } from "./render/canvasHelpers";
 
 // Half-width / half-height of a layer as fractions of the image rect — for
 // element-to-element alignment snapping. Text is measured; stickers use scale.
@@ -71,10 +72,19 @@ export default function TextCanvas({
   imageRect,
   onSelectionChange,
   onLayersChange,
+  onLayersCommit = null,
   tool,
   depthFieldCanvas,
   depthFieldVersion,
   depthFeather = 0.08,
+  backgroundPanRect = null,
+  onBackgroundPointerDown = null,
+  onBackgroundDoubleClick = null,
+  // Composed border view: maps the photo's depth field onto the content
+  // sub-rect of the output ({sx,sy,sw,sh} = crop region of the field,
+  // {dx,dy,dw,dh} = content rect as output fractions). Null = output IS the
+  // photo (pad=0), mask stretches edge-to-edge as before.
+  depthMaskGeom = null,
 }) {
   const dragRef = useRef(null);
   const containerRef = useRef(null);
@@ -91,6 +101,17 @@ export default function TextCanvas({
       setEditingId(null);
     }
   }, [onSelectionChange]);
+
+  const handleBackgroundPanPointerDown = useCallback((e) => {
+    if (!onBackgroundPointerDown) return;
+    // Blur active contentEditable first so onBlur fires and saves the text
+    if (document.activeElement?.contentEditable === "true") {
+      document.activeElement.blur();
+    }
+    onSelectionChange(new Set());
+    setEditingId(null);
+    onBackgroundPointerDown(e);
+  }, [onSelectionChange, onBackgroundPointerDown]);
 
   const startDrag = useCallback((e, layerId, type) => {
     if (editingId === layerId) return; // don't drag while editing
@@ -187,11 +208,14 @@ export default function TextCanvas({
       setGuides({ x: null, y: null });
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      // Land the whole drag as a SINGLE history entry (onMove only applied live).
+      // A no-op click dedups away in the history layer.
+      onLayersCommit?.();
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-  }, [layers, selectedIds, imageRect, onSelectionChange, onLayersChange, editingId]);
+  }, [layers, selectedIds, imageRect, onSelectionChange, onLayersChange, onLayersCommit, editingId]);
 
   const handleDoubleClick = useCallback((layerId) => {
     setEditingId(layerId);
@@ -210,39 +234,56 @@ export default function TextCanvas({
       onLayersChange(layers.map((l) =>
         l.id === layerId ? { ...l, text: newText } : l
       ));
+      onLayersCommit?.(); // text edit is one undoable step
     }
-  }, [layers, onLayersChange]);
+  }, [layers, onLayersChange, onLayersCommit]);
 
-  // Cache mask data URLs by zPosition; invalidates when depth field or feather changes.
-  const maskCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather]);
+  // Depth mask caching is two-level so the margin slider (geometry changes) stays
+  // cheap and memory stays bounded (review F10):
+  //  • alphaCache — the expensive full-field pixel loop, keyed by zPosition only
+  //    (geometry-independent). Reused across geometry ticks. Uses the shared
+  //    buildDepthAlphaMask so the preview mask matches the save path exactly.
+  //  • urlCache   — the composed data URL, keyed by zPosition + geometry. geomKey
+  //    is in its deps, so a geometry change starts a fresh map and old full-size
+  //    base64 URLs are dropped instead of accumulating forever.
+  const geomKey = depthMaskGeom
+    ? [depthMaskGeom.sx, depthMaskGeom.sy, depthMaskGeom.sw, depthMaskGeom.sh, depthMaskGeom.dx, depthMaskGeom.dy, depthMaskGeom.dw, depthMaskGeom.dh].map((v) => v.toFixed(4)).join(",")
+    : "id";
+  const alphaCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather]);
+  const urlCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather, geomKey]);
   const getMaskUrl = useCallback((zPosition) => {
     if (!depthFieldCanvas || zPosition == null || zPosition >= 1) return null;
-    const key = zPosition.toFixed(3);
-    if (maskCache.has(key)) return maskCache.get(key);
-    const dW = depthFieldCanvas.width;
-    const dH = depthFieldCanvas.height;
-    const data = depthFieldCanvas.getContext("2d").getImageData(0, 0, dW, dH).data;
-    const lo = Math.max(0, zPosition - depthFeather / 2);
-    const hi = Math.min(1, zPosition + depthFeather / 2);
-    const out = document.createElement("canvas");
-    out.width = dW; out.height = dH;
-    const oCtx = out.getContext("2d");
-    const id = oCtx.createImageData(dW, dH);
-    for (let i = 0; i < dW * dH; i++) {
-      const d = data[i * 4] / 255;
-      let a;
-      if (d <= lo) a = 1;
-      else if (d >= hi) a = 0;
-      else a = 1 - (d - lo) / (hi - lo);
-      const p = i * 4;
-      id.data[p] = 255; id.data[p + 1] = 255; id.data[p + 2] = 255;
-      id.data[p + 3] = Math.round(a * 255);
+    const uKey = `${zPosition.toFixed(3)}|${geomKey}`;
+    if (urlCache.has(uKey)) return urlCache.get(uKey);
+
+    const aKey = zPosition.toFixed(3);
+    let alpha = alphaCache.get(aKey);
+    if (!alpha) {
+      alpha = buildDepthAlphaMask(depthFieldCanvas, zPosition, depthFeather);
+      alphaCache.set(aKey, alpha);
     }
-    oCtx.putImageData(id, 0, 0);
+
+    let out = alpha;
+    if (depthMaskGeom) {
+      // Composed output: the field's crop region lands on the content rect;
+      // the margins around it stay fully visible (white). Cheap compose only.
+      const dW = depthFieldCanvas.width;
+      const dH = depthFieldCanvas.height;
+      const { sx, sy, sw, sh, dx, dy, dw, dh } = depthMaskGeom;
+      const OW = Math.max(1, Math.round((sw * dW) / Math.max(dw, 1e-6)));
+      const OH = Math.max(1, Math.round((sh * dH) / Math.max(dh, 1e-6)));
+      out = document.createElement("canvas");
+      out.width = OW; out.height = OH;
+      const oCtx = out.getContext("2d");
+      oCtx.fillStyle = "#ffffff";
+      oCtx.fillRect(0, 0, OW, OH);
+      oCtx.clearRect(dx * OW, dy * OH, dw * OW, dh * OH);
+      oCtx.drawImage(alpha, sx * dW, sy * dH, sw * dW, sh * dH, dx * OW, dy * OH, dw * OW, dh * OH);
+    }
     const url = out.toDataURL();
-    maskCache.set(key, url);
+    urlCache.set(uKey, url);
     return url;
-  }, [depthFieldCanvas, depthFieldVersion, depthFeather, maskCache]);
+  }, [depthFieldCanvas, depthFieldVersion, depthFeather, alphaCache, urlCache, geomKey, depthMaskGeom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (tool !== "text" || !imageRect) return null;
 
@@ -255,6 +296,22 @@ export default function TextCanvas({
       style={{ zIndex: 15 }}
       onPointerDown={handleBgPointerDown}
     >
+      {backgroundPanRect && onBackgroundPointerDown ? (
+        <div
+          data-editor-photo-pan-hotspot="true"
+          className="absolute"
+          style={{
+            left: `${backgroundPanRect.x}px`,
+            top: `${backgroundPanRect.y}px`,
+            width: `${backgroundPanRect.width}px`,
+            height: `${backgroundPanRect.height}px`,
+            cursor: "grab",
+            zIndex: 0,
+          }}
+          onPointerDown={handleBackgroundPanPointerDown}
+          onDoubleClick={onBackgroundDoubleClick || undefined}
+        />
+      ) : null}
       {layers.map((layer) => {
         // Image-relative coords inside the per-layer mask wrapper
         const px = layer.x * imageRect.width;

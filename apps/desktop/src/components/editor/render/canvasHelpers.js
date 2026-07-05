@@ -13,6 +13,57 @@ export function hexToRgba(hex, alpha = 1) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// Canvas fillStyle for an angled linear gradient across a WxH box — one home
+// for the angle→vector math (0deg = up, CSS convention) shared by text fills,
+// the border background and the save path.
+export function angledLinearGradient(ctx, { angle = 180, from, to, fromOpacity = 1, toOpacity = 1 }, W, H) {
+  const rad = (angle * Math.PI) / 180;
+  const dx = Math.sin(rad), dy = -Math.cos(rad);
+  const half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
+  const grad = ctx.createLinearGradient(W / 2 - dx * half, H / 2 - dy * half, W / 2 + dx * half, H / 2 + dy * half);
+  grad.addColorStop(0, hexToRgba(from || "#ffffff", fromOpacity));
+  grad.addColorStop(1, hexToRgba(to || "#000000", toOpacity));
+  return grad;
+}
+
+// Canvas background (the border area) → a CSS value. Solid color or a linear
+// gradient (same angle convention as text gradients: 0deg = up). Shared by the
+// live preview and the border-controls swatch so they can't diverge.
+export function bgToCss(bg) {
+  if (bg?.mode === "gradient" && bg.gradient) {
+    const g = bg.gradient;
+    return `linear-gradient(${g.angle ?? 180}deg, ${hexToRgba(g.from || "#fff", g.fromOpacity ?? 1)}, ${hexToRgba(g.to || "#000", g.toOpacity ?? 1)})`;
+  }
+  return bg?.color || "#ffffff";
+}
+
+// Optional edge scrim over the photo — keeps on-photo (overlay preset) text
+// legible regardless of how bright the photo is at the edge. `rect` is the
+// photo's rect on the target canvas; heights are fractions of it. Shared by
+// the frame engine, the unified save path and preset generation.
+export function drawScrim(ctx, scrim, rect) {
+  if (!scrim) return;
+  const sh = (scrim.height ?? 0.3) * rect.height;
+  const top = scrim.edge === "top";
+  const y0 = top ? rect.y : rect.y + rect.height - sh;
+  const grad = ctx.createLinearGradient(0, y0, 0, y0 + sh);
+  // gradient runs dark→transparent away from the edge it hugs
+  grad.addColorStop(0, top ? (scrim.to ?? "rgba(0,0,0,0.5)") : (scrim.from ?? "rgba(0,0,0,0)"));
+  grad.addColorStop(1, top ? (scrim.from ?? "rgba(0,0,0,0)") : (scrim.to ?? "rgba(0,0,0,0.5)"));
+  ctx.fillStyle = grad;
+  ctx.fillRect(rect.x, y0, rect.width, sh);
+}
+
+// Scrim → CSS for the live preview (must match drawScrim's canvas output).
+export function scrimToCss(scrim) {
+  const top = scrim?.edge === "top";
+  const from = scrim?.from ?? "rgba(0,0,0,0)";
+  const to = scrim?.to ?? "rgba(0,0,0,0.5)";
+  return top
+    ? `linear-gradient(180deg, ${to}, ${from})`
+    : `linear-gradient(180deg, ${from}, ${to})`;
+}
+
 export function getSourceDimensions(source) {
   return {
     width: Number(source?.naturalWidth || source?.width || 0),
@@ -45,15 +96,14 @@ export function buildPreviewSource(image) {
   return canvas;
 }
 
-// Build an alpha-only mask canvas at the requested output size.
+// Field-resolution alpha mask off the depth field.
 // White (alpha 255) where the depth field is < zPosition (text shows through);
-// black where depth is > zPosition (text is hidden behind nearer pixels).
+// transparent where depth is > zPosition (text is hidden behind nearer pixels).
 // `depthCanvas` is the 518×392 grayscale depth field (R=G=B=depth, 0=far, 255=near).
-export function buildDepthMaskCanvas(depthCanvas, outW, outH, zPosition, feather) {
+export function buildDepthAlphaMask(depthCanvas, zPosition, feather) {
   const dW = depthCanvas.width;
   const dH = depthCanvas.height;
-  const dCtx = depthCanvas.getContext("2d");
-  const data = dCtx.getImageData(0, 0, dW, dH).data;
+  const data = depthCanvas.getContext("2d").getImageData(0, 0, dW, dH).data;
   const z = Math.max(0, Math.min(1, zPosition));
   const f = Math.max(0, Math.min(0.5, feather));
   // Clamp the feather window to [0,1] so the ramp doesn't extend past the
@@ -79,6 +129,15 @@ export function buildDepthMaskCanvas(depthCanvas, outW, outH, zPosition, feather
     out.data[p + 3] = Math.round(alpha * 255);
   }
   sCtx.putImageData(out, 0, 0);
+  return small;
+}
+
+// Full-output depth mask: the photo's depth field is stretched over the given
+// canvas size. Valid when the output IS the photo (pad=0, no crop) — padded /
+// cropped outputs must map the field onto the photo sub-rect instead (see
+// saveImage's composed mask).
+export function buildDepthMaskCanvas(depthCanvas, outW, outH, zPosition, feather) {
+  const small = buildDepthAlphaMask(depthCanvas, zPosition, feather);
   const big = document.createElement("canvas");
   big.width = outW;
   big.height = outH;

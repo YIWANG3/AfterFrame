@@ -1,36 +1,43 @@
 // Border/frame controls, shown inside the Text tool (no separate frame tool).
 //  1. Frame presets — a compact strip (scroll horizontally; the chevron expands
 //     to a full grid). Click one to drop its text + logo layers + margins.
-//  2. Manual border — a uniform "margin" slider (synced) with an optional
-//     per-edge breakout, plus a background color. Margins are fractions of the
-//     photo's short edge. Slider drags are live; onPadCommit records one history
-//     entry on release.
+//  2. Manual border — four compact scrub-inputs (top/bottom/left/right; drag on
+//     the box or click to type) with a Sketch-style link toggle: linked (default)
+//     moves all four together; unlinked lets each edge move on its own. Plus a
+//     background color. Margins are fractions of the photo's short edge. Scrub
+//     drags are live; onPadCommit records one history entry on release/blur.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown } from "lucide-react";
-import { SliderRow } from "../../../ui";
+import { ChevronDown, Link2, Link2Off, PanelTop, PanelBottom, PanelLeft, PanelRight } from "lucide-react";
+import { NumberDragInput } from "../../../ui";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
 import { COLOR_SWATCHES } from "../textState";
+import { bgToCss } from "../render/canvasHelpers";
 
 const EDGE_KEYS = ["top", "bottom", "left", "right"];
+const EDGE_ICON = { top: PanelTop, bottom: PanelBottom, left: PanelLeft, right: PanelRight };
 const toPct = (v) => Math.round((v || 0) * 100);
 const DEFAULT_GRAD = { from: "#ffffff", to: "#000000", fromOpacity: 1, toOpacity: 1, angle: 180 };
 
-export default function BorderControls({ templates = [], thumbs, cellAspect, onApplyPreset, pad, onPad, onPadCommit, bg, onBg }) {
+export default function BorderControls({ templates = [], thumbs, cellAspect, onApplyPreset, onClearPreset, pad, onPad, onPadCommit, bg, onBg }) {
   const { t } = useTranslation("editor");
-  const [perEdge, setPerEdge] = useState(false);
+  const [linked, setLinked] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const swatchRef = useRef(null);
   const p = pad || { top: 0, right: 0, bottom: 0, left: 0 };
-  const uniform = Math.max(p.top || 0, p.right || 0, p.bottom || 0, p.left || 0);
+  // An asymmetric pad (e.g. a bottom-bar preset) auto-unlinks the edges —
+  // otherwise the first linked edit would flatten the preset's layout to a
+  // uniform border.
+  const edgesEqual = (p.top || 0) === (p.right || 0) && (p.top || 0) === (p.bottom || 0) && (p.top || 0) === (p.left || 0);
+  useEffect(() => { if (!edgesEqual) setLinked(false); }, [edgesEqual]);
   const bgMode = bg?.mode === "gradient" ? "gradient" : "solid";
   const bgColor = bg?.color || "#ffffff";
   const grad = bg?.gradient || DEFAULT_GRAD;
-  const swatchBg = bgMode === "gradient"
-    ? `linear-gradient(${grad.angle ?? 180}deg, ${grad.from}, ${grad.to})`
-    : bgColor;
+  // Same renderer as the live canvas background, so the swatch preview (incl.
+  // gradient opacity) can't diverge from what the border actually shows.
+  const swatchBg = bgToCss(bg || { color: bgColor });
 
   const Thumb = (tpl) => {
     const thumb = thumbs?.get?.(tpl.id);
@@ -53,14 +60,23 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
       <div>
         <div className="mb-1.5 flex items-center justify-between text-[10px] text-muted2">
           <span>{t("border.presets")}</span>
-          <button
-            type="button"
-            title={expanded ? "收起" : "展开"}
-            onClick={() => setExpanded((v) => !v)}
-            className="flex h-5 w-5 items-center justify-center rounded hover:bg-hover hover:text-text"
-          >
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onClearPreset?.()}
+              className="rounded px-1.5 py-0.5 text-[10px] text-muted2 hover:bg-hover hover:text-text"
+            >
+              {t("border.clear")}
+            </button>
+            <button
+              type="button"
+              title={expanded ? t("border.collapse") : t("border.expand")}
+              onClick={() => setExpanded((v) => !v)}
+              className="flex h-5 w-5 items-center justify-center rounded hover:bg-hover hover:text-text"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            </button>
+          </div>
         </div>
         {expanded ? (
           <div className="grid grid-cols-3 gap-1.5">
@@ -81,29 +97,34 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           <span>{t("border.margin")}</span>
           <button
             type="button"
-            onClick={() => setPerEdge((v) => !v)}
-            className={`rounded px-1.5 py-0.5 text-[10px] transition ${perEdge ? "bg-[rgb(var(--accent-color)/0.16)] text-[rgb(var(--accent-color))]" : "text-muted2 hover:bg-hover hover:text-text"}`}
+            title={linked ? t("border.linked") : t("border.unlinked")}
+            aria-pressed={linked}
+            onClick={() => setLinked((v) => !v)}
+            className={`flex h-5 w-5 items-center justify-center rounded transition ${linked ? "bg-[rgb(var(--accent-color)/0.16)] text-[rgb(var(--accent-color))]" : "text-muted2 hover:bg-hover hover:text-text"}`}
           >
-            {t("border.edges")}
+            {linked ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
           </button>
         </div>
-        {perEdge ? (
-          EDGE_KEYS.map((edge) => (
-            <SliderRow
-              key={edge} compact label={t(`border.${edge}`)} min={0} max={40} suffix="%" resetValue={0}
-              value={toPct(p[edge])}
-              onChange={(v) => onPad({ [edge]: v / 100 })}
-              onCommit={onPadCommit}
-            />
-          ))
-        ) : (
-          <SliderRow
-            compact min={0} max={40} suffix="%" resetValue={0}
-            value={toPct(uniform)}
-            onChange={(v) => { const f = v / 100; onPad({ top: f, right: f, bottom: f, left: f }); }}
-            onCommit={onPadCommit}
-          />
-        )}
+        <div className="flex items-center justify-between gap-1">
+          {EDGE_KEYS.map((edge) => {
+            const Icon = EDGE_ICON[edge];
+            return (
+              <div key={edge} className="flex items-center gap-1" title={t(`border.${edge}`)}>
+                <Icon className="h-3 w-3 shrink-0 text-muted2" />
+                <NumberDragInput
+                  className="w-9"
+                  min={0} max={100}
+                  value={toPct(p[edge])}
+                  onChange={(v) => {
+                    const f = v / 100;
+                    onPad(linked ? { top: f, right: f, bottom: f, left: f } : { [edge]: f });
+                  }}
+                  onCommit={onPadCommit}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

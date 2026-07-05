@@ -40,6 +40,7 @@ export default function TextPanel({
   layers = [],
   selectedIds = new Set(),
   onLayersChange,
+  onLayersCoalesced,
   onSelectionChange,
   onApply,
   onReset,
@@ -67,6 +68,7 @@ export default function TextPanel({
   frameThumbs,
   frameCellAspect,
   onApplyPreset,
+  onClearPreset,
   canvasPad,
   onCanvasPad,
   onCanvasPadCommit,
@@ -86,9 +88,15 @@ export default function TextPanel({
     ? current
     : (currentIsSticker ? null : (layers.filter(isTextLayer).slice(-1)[0] || null));
 
+  // Style edits (sliders, scrubbers, toggles, typing) apply live and coalesce
+  // into ONE undo step per gesture — a run of same-target/same-field edits is
+  // debounced together, keyed by this signature. Discrete structural ops
+  // (add/delete/reorder/align) use onLayersChange directly for an immediate step.
   const update = useCallback((id, patch) => {
-    onLayersChange(layers.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  }, [layers, onLayersChange]);
+    const next = layers.map((l) => (l.id === id ? { ...l, ...patch } : l));
+    if (onLayersCoalesced) onLayersCoalesced(next, `${id}|${Object.keys(patch).sort().join(",")}`);
+    else onLayersChange(next);
+  }, [layers, onLayersChange, onLayersCoalesced]);
 
   const [vPadLinked, setVPadLinked] = useState(true);
   const [hPadLinked, setHPadLinked] = useState(true);
@@ -184,6 +192,7 @@ export default function TextPanel({
               thumbs={frameThumbs}
               cellAspect={frameCellAspect}
               onApplyPreset={onApplyPreset}
+              onClearPreset={onClearPreset}
               pad={canvasPad}
               onPad={onCanvasPad}
               onPadCommit={onCanvasPadCommit}
@@ -1333,4 +1342,3 @@ function StickerPickerModal({ onPick, onClose }) {
     </div>
   );
 }
-

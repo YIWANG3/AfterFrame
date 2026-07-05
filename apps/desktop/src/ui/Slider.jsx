@@ -3,8 +3,9 @@ import cx from "./cx";
 
 // Drag-to-scrub number input (click to type). Promoted from TextPanel where
 // it lived as a private NumInput; StickerPanel had a static value box copy.
-export function NumberDragInput({ value, min, max, onChange, className = "w-11" }) {
+export function NumberDragInput({ value, min, max, onChange, onCommit, className = "w-11" }) {
   const ref = useRef(null);
+  const focusValueRef = useRef(null);
   const DRAG_THRESHOLD = 3;
 
   const handleMouseDown = (e) => {
@@ -28,6 +29,9 @@ export function NumberDragInput({ value, min, max, onChange, className = "w-11" 
       if (!dragging) {
         // Was a click, not a drag — focus the input for typing
         ref.current?.focus();
+      } else {
+        // Opt-in: commit-on-release, e.g. one history entry after a scrub.
+        onCommit?.();
       }
     };
     document.addEventListener("mousemove", onMove);
@@ -39,7 +43,10 @@ export function NumberDragInput({ value, min, max, onChange, className = "w-11" 
       ref={ref}
       type="number" min={min} max={max} value={value}
       onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
-      onFocus={(e) => e.target.select()}
+      onFocus={(e) => { focusValueRef.current = value; e.target.select(); }}
+      // Commit only when the value actually changed while focused — an idle
+      // click-then-click-away must not burn an undo step.
+      onBlur={() => { if (focusValueRef.current !== value) onCommit?.(); focusValueRef.current = null; }}
       onMouseDown={handleMouseDown}
       style={{ cursor: "ew-resize" }}
       className={cx(
@@ -52,15 +59,13 @@ export function NumberDragInput({ value, min, max, onChange, className = "w-11" 
 
 // Label + range + scrubable value. The single SliderRow — TextPanel and
 // StickerPanel previously each had their own.
-export function SliderRow({ label, min, max, value, onChange, suffix, compact, className, resetValue, onCommit }) {
+export function SliderRow({ label, min, max, value, onChange, suffix, compact, className, resetValue }) {
   return (
     <div className={cx("flex items-center gap-2", compact ? "" : "mt-2", className)}>
       {label && <label className="min-w-[48px] text-[10px] text-muted2">{label}</label>}
       <input
         type="range" min={min} max={max} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        // Opt-in: commit-on-release (e.g. to push one history entry after a drag).
-        onPointerUp={onCommit}
         // Opt-in: double-click the track to snap back to a default value.
         onDoubleClick={resetValue != null ? () => onChange(resetValue) : undefined}
         className="slider flex-1"

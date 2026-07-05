@@ -8,6 +8,7 @@
 // sticker scale as a fraction of the *output* canvas width; we convert.
 
 import { drawLayersOnCanvas } from "./drawLayers";
+import { drawScrim } from "./canvasHelpers";
 import { FRAME_FONTS } from "../frameTemplates";
 import { brandIdForMake, pickVariant } from "./frameLogos";
 import {
@@ -195,7 +196,7 @@ function sampleLuminance(ctx, cx, cy, w, h) {
 // renderFrame so the same "template → layers" conversion can feed both the
 // baked export and (later) the editable layer stack. Takes `ctx` because
 // overlay (on-photo) text picks its color from the luminance already drawn.
-export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay, overrides }) {
+export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay }) {
   const g = geom;
   const adj = adjust;
   const { wref, outW, outH } = geom;
@@ -241,15 +242,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     const el = template.elements[ei];
     let anchorDef = solo && el.soloAnchor ? { ...el.anchor, ...el.soloAnchor } : el.anchor;
     if (groupDy.has(ei)) anchorDef = { ...anchorDef, dy: (anchorDef.dy || 0) + groupDy.get(ei) };
-    // Per-element user override: nudge position (dx/dy add to the anchor).
-    const ov = overrides?.[ei];
-    if (ov && (ov.dx || ov.dy)) {
-      anchorDef = { ...anchorDef, dx: (anchorDef.dx || 0) + (ov.dx || 0), dy: (anchorDef.dy || 0) + (ov.dy || 0) };
-    }
     const a = resolveAnchor(anchorDef, g, adj);
-    // Absolute-position override (from dragging the element on the canvas —
-    // "脱锚"): place its center directly at pos, ignoring anchor alignment.
-    if (ov?.pos) { a.x = ov.pos.x; a.y = ov.pos.y; a.align = "center"; }
 
     if (el.type === "logo") {
       if (!brand) continue;
@@ -264,12 +257,12 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       // brand's mark at a consistent visual weight. drawLayers wants the sticker
       // scale as a WIDTH fraction of the output, so convert via the real aspect.
       const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : (variant.aspect || 1);
-      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text * (ov?.scale ?? 1);
+      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text;
       const scale = heightFrac * aspect * factor;
       // In a narrow side strip a wide wordmark won't fit horizontally — rotate it
       // to read vertically. Square-ish marks (symbols/roundels) stay upright.
       const inStrip = anchorDef.region === "left" || anchorDef.region === "right";
-      const rotation = ov?.rotation != null ? ov.rotation : ((inStrip && aspect > 1.6) ? 90 : (el.style?.rotation ?? 0));
+      const rotation = (inStrip && aspect > 1.6) ? 90 : (el.style?.rotation ?? 0);
       // Stickers are CENTER-anchored. Shift by half the logo width so its edge
       // (not its center) sits flush at the margin — matching the text's edge.
       let lx = a.x;
@@ -302,7 +295,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     const weight = el.style?.weight ?? 400;
     const italic = !!el.style?.italic;
     const tracking = el.style?.tracking ?? 0;
-    const sizeFrac = (el.style?.size || 0.02) * adj.text * (ov?.scale ?? 1);
+    const sizeFrac = (el.style?.size || 0.02) * adj.text;
     const fontPx = sizeFrac * wref; // rendered px
     const tw = measureTextWidth(text, { fontPx, weight, italic, family, tracking });
     let x = a.x;
@@ -359,7 +352,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       shadowBlur: sizeFrac * 1920 * factor * 0.4,
       shadowX: 0,
       shadowY: 0,
-      rotation: ov?.rotation != null ? ov.rotation : (el.style?.rotation ?? 0),
+      rotation: el.style?.rotation ?? 0,
     });
   }
   return layers;
@@ -376,7 +369,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
  * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
  * @returns {HTMLCanvasElement}
  */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null, overrides = null }) {
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
   const { wref, padPx, outW, outH } = g;
@@ -398,50 +391,16 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
   ctx.fillRect(0, 0, outW, outH);
   ctx.drawImage(photo, padPx.left, padPx.top, wref, g.href);
 
-  // Optional bottom scrim — keeps on-photo (overlay) text legible regardless of
+  // Optional edge scrim — keeps on-photo (overlay) text legible regardless of
   // how bright the photo is at the edge.
-  const scrim = template.canvas?.scrim;
-  if (scrim) {
-    const sh = (scrim.height ?? 0.3) * g.href;
-    const top = scrim.edge === "top";
-    const y0 = top ? padPx.top : padPx.top + g.href - sh;
-    const grad = ctx.createLinearGradient(0, y0, 0, y0 + sh);
-    // gradient runs dark→transparent away from the edge it hugs
-    grad.addColorStop(0, top ? (scrim.to ?? "rgba(0,0,0,0.5)") : (scrim.from ?? "rgba(0,0,0,0)"));
-    grad.addColorStop(1, top ? (scrim.from ?? "rgba(0,0,0,0)") : (scrim.to ?? "rgba(0,0,0,0.5)"));
-    ctx.fillStyle = grad;
-    ctx.fillRect(padPx.left, y0, wref, sh);
-  }
+  drawScrim(ctx, template.canvas?.scrim, { x: padPx.left, y: padPx.top, width: wref, height: g.href });
 
   const layers = buildFrameLayers(ctx, {
     template, exif, profile, geom: g, adjust: adj, factor,
-    registry, logoImages, logoColor, isOverlay, overrides,
+    registry, logoImages, logoColor, isOverlay,
   });
 
   drawLayersOnCanvas(ctx, outW, outH, layers, logoImages);
 
-  // Optional: pad the finished frame out to a target aspect ratio (e.g. 3:4,
-  // 16:9) so the export matches a common ratio. The whole framed unit is
-  // centered on a larger background-colored canvas — nothing inside is
-  // distorted or cropped, we only add margin in the frame's own background.
-  if (frameAspect && frameAspect > 0) {
-    const cur = outW / outH;
-    let finalW = outW;
-    let finalH = outH;
-    if (cur < frameAspect) finalW = Math.round(outH * frameAspect); // too tall → widen
-    else finalH = Math.round(outW / frameAspect); // too wide → heighten
-    if (finalW > outW || finalH > outH) {
-      const padded = document.createElement("canvas");
-      padded.width = finalW;
-      padded.height = finalH;
-      const pctx = padded.getContext("2d");
-      pctx.imageSmoothingEnabled = true;
-      pctx.imageSmoothingQuality = "high";
-      pctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
-      pctx.fillRect(0, 0, finalW, finalH);
-      pctx.drawImage(canvas, Math.round((finalW - outW) / 2), Math.round((finalH - outH) / 2));
-      return padded;
-    }
-  }
   return canvas;
 }

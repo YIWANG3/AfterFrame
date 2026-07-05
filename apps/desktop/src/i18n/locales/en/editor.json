@@ -23,8 +23,7 @@
       "transform": "Transform",
       "text": "Text",
       "sticker": "Sticker",
-      "repaint": "AI Repaint",
-      "frame": "Frame"
+      "repaint": "AI Repaint"
     }
   },
   "text": {
@@ -180,10 +179,13 @@
   "border": {
     "title": "Border",
     "margin": "Margin",
-    "edges": "Edges",
+    "linked": "Edges linked — drag any to move all",
+    "unlinked": "Edges independent",
     "background": "Background",
     "presets": "Presets",
-    "applyHint": "Pick a preset → added as editable layers",
+    "clear": "Clear",
+    "collapse": "Collapse",
+    "expand": "Expand",
     "top": "Top",
     "bottom": "Bottom",
     "left": "Left",

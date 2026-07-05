@@ -141,9 +141,14 @@
 - FramePanel 的预设网格 → 「套用生成图层」;`留白/比例/logo色` → 画布/图层属性。
 - **与旧 frame 工具并行**,达到视觉 parity 前不删旧路径。`20-frame` e2e 迁到新路径。
 
-### Phase 5 — 退役烘焙路径 + 打磨
-- 删 `FrameStage` 烘焙展示;`renderFrame` 变纯导出渲染器(或并入 save)。
-- 打磨:留白区**吸附/对齐辅助线**、旋转元素命中、per-brand logo 变体切换。
+### Phase 5 — 退役烘焙路径 + 打磨(已落地,2026-07)
+- 已删 `FrameStage`/`FramePanel` 烘焙展示与 `useFrameTool` 的 compose/exportTo/
+  overrides 管线;`renderFrame` 仅用于预设缩略图。导出全部走 `saveImage`。
+- **几何决策更新**:crop 与 pad **组合**(不再互斥)——裁剪几何住在无 pad 空间
+  (裁剪工具视图不显示边框),文字工具渲染**组合视图**:输出 = 裁剪内容 + 边距,
+  基于裁剪内容短边;save 同基准(`getOutputDimensions(preview, pad, crop)`)。
+  scrim 纳入 `canvas.scrim`,预览/导出共用 `drawScrim`/`scrimToCss`。
+- 已做打磨:留白区吸附/对齐辅助线;深度遮罩对齐照片内容子矩形(预览+导出)。
 
 ### Phase 6(= 原计划 P4)— 工程文件 / 用户资产 / 自定义模板
 - **工程文件**(单 JSON,图片强依赖路径,不内嵌):保存/打开 `{source, transform,

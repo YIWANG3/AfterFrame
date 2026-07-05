@@ -8,9 +8,7 @@ import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
 import StickerPanel from "./editor/StickerPanel";
 import { useFrameTool } from "./editor/state/useFrameTool";
-import { getBgPadding } from "./editor/textState";
 import {
-  hexToRgba,
   getSourceDimensions,
   releaseCanvasImage,
   buildPreviewSource,
@@ -18,6 +16,8 @@ import {
   buildTransformedCanvas,
   inferMimeType,
   canvasToBlob,
+  bgToCss,
+  scrimToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
@@ -35,7 +35,6 @@ import { useCropTool } from "./editor/state/useCropTool";
 import { useTextTool } from "./editor/state/useTextTool";
 import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
-import { useLayerHistory } from "./editor/state/useLayerHistory";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
 import {
   PANEL_WIDTH,
@@ -45,7 +44,16 @@ import {
   getBasePlacement,
   getMinZoomForCrop,
   getImageRect,
+  getNormalizedCrop,
+  getOutputView,
   clampImagePlacement,
+  hasPad,
+  layersToDisplay,
+  layersFromDisplay,
+  bakeLayersIntoCrop,
+  IDENTITY_VIEW_TRANSFORM,
+  fitViewTransformToStage,
+  transformOutputView,
 } from "./editor/imageMath";
 import {
   isTextLayer,
@@ -53,18 +61,14 @@ import {
   getTextLayers,
 } from "./editor/layerStack";
 
-// Canvas background (the border area) → a CSS value. Solid color or a linear
-// gradient (same angle convention as text gradients: 0deg = up).
-function bgToCss(bg) {
-  if (bg?.mode === "gradient" && bg.gradient) {
-    const g = bg.gradient;
-    return `linear-gradient(${g.angle ?? 180}deg, ${hexToRgba(g.from || "#fff", g.fromOpacity ?? 1)}, ${hexToRgba(g.to || "#000", g.toOpacity ?? 1)})`;
-  }
-  return bg?.color || "#ffffff";
-}
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function padEquals(a, b) {
+  const pa = { top: 0, right: 0, bottom: 0, left: 0, ...(a || {}) };
+  const pb = { top: 0, right: 0, bottom: 0, left: 0, ...(b || {}) };
+  return pa.top === pb.top && pa.right === pb.right && pa.bottom === pb.bottom && pa.left === pb.left;
 }
 
 function createInitialSnapshot(viewportSize, transformedPreview) {
@@ -237,27 +241,31 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const depthOverlayCanvasRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
   const quickSavePathRef = useRef(null);
-  // Transform state machine + undo/redo (destructured with original names so the
-  // many call sites are unchanged).
+  // Unified undo/redo: ONE timeline over both the transform state AND the layer
+  // stack, so Cmd+Z and every panel Undo button reverse the same last action.
   const {
     editorState, editorStateRef,
+    layers, layersRef,
     history, historyIndex, historyRef, historyIndexRef, baseSnapshotRef,
-    syncHistory, apply: applyState, record: recordState, commitCurrent, undo: handleUndo, redo: handleRedo,
+    syncHistory, apply: applyState, applyLayers, record: recordState, commitCurrent,
+    commitLayers, commitLayersCoalesced, flushLayerCommit,
+    undo: rawHandleUndo, redo: rawHandleRedo,
   } = useEditorHistory();
   const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
+  const [viewTransform, setViewTransform] = useState(IDENTITY_VIEW_TRANSFORM);
+  const viewTransformRef = useRef(IDENTITY_VIEW_TRANSFORM);
+  viewTransformRef.current = viewTransform;
   const [tool, setTool] = useState("crop");
   const [message, setMessage] = useState("");
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
-  const layerHistory = useLayerHistory();
-  const { layers, setLayers, historyRef: layerHistoryRef, indexRef: layerHistoryIndexRef } = layerHistory;
-  // Text tool — selection + clipboard + layer CRUD (destructured with the
-  // original names so call sites are unchanged).
+  // Text tool — selection + clipboard + layer CRUD (commits into the shared
+  // history via commitLayers).
   const {
     selectedIds, setSelectedIds,
     moveLayer: handleMoveLayer, deleteLayer: handleDeleteLayer,
     addTextLayer, selectLayers, copySelection, pasteClipboard, deleteSelection,
-  } = useTextTool({ layers, layerHistory });
+  } = useTextTool({ layers, layersRef, commit: commitLayers });
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
   // RAW originals (.cr3/.3fr/…) can't be decoded by the renderer or sharp, so
@@ -315,8 +323,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     flipY,
     cropRect,
     imageZoom,
-    imageOffsetX,
-    imageOffsetY,
   } = editorState;
   const discreteRotationDeg = quarterTurns * 90;
   const rotationDeg = discreteRotationDeg + freeAngle;
@@ -329,20 +335,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         ? { title: t("overlay.tools.text"), badge: null }
         : tool === "sticker"
           ? { title: t("overlay.tools.sticker"), badge: null }
-          : tool === "frame"
-            ? { title: t("overlay.tools.frame"), badge: null }
-            : { title: "", badge: null };
+          : { title: "", badge: null };
 
-  const commitLayers = layerHistory.commit;
-  const layerUndo = layerHistory.undo;
-  const layerRedo = layerHistory.redo;
+  // Soft reset (panel "Reset"): clear layers as an undoable step.
   function layerReset() {
-    layerHistory.reset();
+    commitLayers([]);
     setSelectedIds(new Set());
     clearSceneDepth();
   }
+  // Hard reset (new image / after Apply): clear layers live; the history itself
+  // is wiped by the surrounding syncHistory([], -1) + re-seeded by the initial
+  // snapshot effect.
   function layerResetHard() {
-    layerHistory.resetHard();
+    applyLayers([]);
     setSelectedIds(new Set());
     clearSceneDepth();
   }
@@ -354,8 +359,101 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     drawLayersOnCanvas(ctx, canvasWidth, canvasHeight, layersToRender, stickerImageCache);
   }
 
+  function currentLayerHead() {
+    return layersRef.current || [];
+  }
+
+  function getFitTransformForState(state) {
+    if (!transformedPreview || !viewportSize || !placement) return IDENTITY_VIEW_TRANSFORM;
+    // pad=0: the output IS the photo and the crop-space placement already centers
+    // it, so the screen view transform is neutral. (Anchoring to imageRect here
+    // would fold imageZoom into the fit and shrink the photo — see review F6.)
+    if (!hasPad(state.canvas?.pad)) return IDENTITY_VIEW_TRANSFORM;
+    const nextImageRect = getImageRect(state, transformedPreview, placement);
+    const nextCrop = getNormalizedCrop(state, nextImageRect);
+    const nextOutputView = getOutputView(state, transformedPreview, nextCrop, nextImageRect);
+    return fitViewTransformToStage(nextOutputView?.rect, viewportSize, placement);
+  }
+
+  function resetViewToFit(state = editorStateRef.current) {
+    setViewTransform(getFitTransformForState(state));
+  }
+
+  function applyCanvasPad(nextPad, { record = false } = {}) {
+    const s = editorStateRef.current;
+    const oldPad = s.canvas?.pad || BASE_STATE.canvas.pad;
+    if (padEquals(oldPad, nextPad)) return;
+    const nextState = { ...s, canvas: { ...s.canvas, pad: nextPad } };
+    // Layers are stored in full-photo coords, so a margin change doesn't move
+    // them — the display derivation reflows automatically. Just fit + record.
+    resetViewToFit(nextState);
+    if (record) recordState(nextState);
+    else applyState(nextState);
+  }
+
+  function handleUndo() {
+    flushWheelCommit?.(); // land a pending wheel edit as its own step first (F8)
+    const oldPad = editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad;
+    rawHandleUndo();
+    // viewTransform isn't in the transform history; refit when the undo crossed a
+    // border change so the framed view stays centered (review F5).
+    if (!padEquals(oldPad, editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad)) resetViewToFit();
+  }
+
+  function handleRedo() {
+    flushWheelCommit?.(); // F8
+    const oldPad = editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad;
+    rawHandleRedo();
+    if (!padEquals(oldPad, editorStateRef.current.canvas?.pad || BASE_STATE.canvas.pad)) resetViewToFit();
+  }
+
+  // How much of the framed output must remain inside the stage when panning the
+  // view — keeps a border drag from flinging the canvas off-screen (review F5).
+  const PAN_MIN_VISIBLE = 80;
+  function beginOutputViewPan(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget;
+    const startPoint = pointFromClient(event.clientX, event.clientY);
+    const startTransform = viewTransformRef.current || IDENTITY_VIEW_TRANSFORM;
+    const rect = outputRect; // untransformed output rect (viewTransform applied on top)
+    target?.setPointerCapture?.(event.pointerId);
+
+    const clampPan = (x, y) => {
+      if (!rect || !viewportSize?.width) return { x, y };
+      const w = rect.width * startTransform.scale;
+      const h = rect.height * startTransform.scale;
+      const left = rect.x * startTransform.scale;
+      const top = rect.y * startTransform.scale;
+      return {
+        x: clamp(x, PAN_MIN_VISIBLE - left - w, viewportSize.width - PAN_MIN_VISIBLE - left),
+        y: clamp(y, PAN_MIN_VISIBLE - top - h, viewportSize.height - PAN_MIN_VISIBLE - top),
+      };
+    };
+
+    const onMove = (moveEvent) => {
+      const point = pointFromClient(moveEvent.clientX, moveEvent.clientY);
+      const dx = point.x - startPoint.x;
+      const dy = point.y - startPoint.y;
+      const next = clampPan(startTransform.x + dx, startTransform.y + dy);
+      setViewTransform({ ...startTransform, x: next.x, y: next.y });
+    };
+
+    const onUp = (upEvent) => {
+      if (target?.hasPointerCapture?.(upEvent.pointerId)) target.releasePointerCapture(upEvent.pointerId);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointercancel", onUp, { once: true });
+  }
+
 
   function handleTextApply() {
+    flushLayerCommit();
     const renderable = layers.filter((l) => isTextLayer(l) || isStickerLayer(l));
     if (!sourceImage || renderable.length === 0) return;
     const { width: sw, height: sh } = getSourceDimensions(sourceImage);
@@ -403,6 +501,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     quickSavePathRef.current = null;
     syncHistory([], -1);
     applyState(BASE_STATE);
+    setViewTransform(IDENTITY_VIEW_TRANSFORM);
     layerResetHard();
     setMessage("Text applied");
   }
@@ -419,8 +518,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
     nativeSaveSourcePathRef.current = sourcePath;
+    flushLayerCommit(); // drop any pending layer scrub before wiping history
     syncHistory([], -1);
     applyState(BASE_STATE);
+    setViewTransform(IDENTITY_VIEW_TRANSFORM); // review F7: don't carry a stale fit across photos
     layerResetHard();
 
     // Auto-load cached depth if it exists for this source image. Same image
@@ -447,8 +548,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     return buildTransformedCanvas(previewSource, previewSource.width, previewSource.height, discreteRotationDeg, flipX, flipY);
   }, [previewSource, discreteRotationDeg, flipX, flipY]);
 
-  // Viewport geometry (ref, measured size, placement, image rect, coord mapping).
-  const { viewportRef, viewportSize, placement, imageRect, outputRect, pointFromClient } =
+  // Viewport geometry (ref, measured size, placement, image rect, normalized
+  // crop, composed output view, coord mapping).
+  const { viewportRef, viewportSize, placement, imageRect, normalizedCrop, outputView, outputRect, pointFromClient } =
     useEditorViewport({ open, transformedPreview, editorState });
 
   // Once the preview + viewport are ready, seed the initial centered-crop
@@ -460,6 +562,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     recordState(initial);
   }, [placement, transformedPreview, viewportSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Layers are STORED in full-photo coords; the panels edit in the current
+  // display basis. Derive display layers on render, and fold edits back to
+  // storage in the change callbacks — a pure, drift-free boundary that replaces
+  // the old imperative basis remapping.
+  const displayLayers = useMemo(
+    () => layersToDisplay(layers, transformedPreview, normalizedCrop, editorState.canvas?.pad),
+    [layers, transformedPreview, normalizedCrop, editorState.canvas],
+  );
+  const toStorage = (dl) => layersFromDisplay(dl, transformedPreview, normalizedCrop, editorState.canvas?.pad);
+  const applyLayersDisplay = (dl) => applyLayers(toStorage(dl));
+  const commitLayersDisplay = (dl) => commitLayers(toStorage(dl));
+  const commitLayersCoalescedDisplay = (dl, sig) => commitLayersCoalesced(toStorage(dl), sig);
+
   const cropCenter = cropRect
     ? {
         x: cropRect.x + cropRect.width / 2,
@@ -469,17 +584,31 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
   // Crop / transform tool — pointer interactions + commit ops. Owns
   // activeInteraction (cursor) and the in-flight pointer/angle drag state.
+  // Text mode keeps the normal wheel zoom/pan active even with a border, so the
+  // composed view can still be inspected comfortably.
   const {
     activeInteraction,
     commitAspect, commitTransform,
     beginCropResize, beginRotate, beginImagePan,
     handlePointerMove, handlePointerEnd,
     beginAngleDrag, updateAngle, endAngleDrag,
+    flushWheelCommit,
   } = useCropTool({
     open, previewSource, transformedPreview, viewportSize, placement, imageRect,
     viewportRef, editorState, editorStateRef, pointFromClient,
     apply: applyState, record: recordState, commitCurrent,
   });
+
+  // The text tool with an active border renders the COMPOSED view (cropped
+  // content + margins) via a clipping window; every other view is the plain
+  // crop-space photo. The canvas element remounts when the mode flips, so the
+  // draw effect keys on it too.
+  const padActive = hasPad(editorState.canvas?.pad);
+  const screenOutputView = tool === "text" ? transformOutputView(outputView, viewTransform) : outputView;
+  const screenOutputRect = screenOutputView?.rect ?? null;
+  const screenImageRect = tool === "text" ? (screenOutputView?.photoRect || imageRect) : imageRect;
+  const composedView = tool === "text" && padActive && screenOutputView ? screenOutputView : null;
+  const canvasScrim = editorState.canvas?.scrim;
 
   useEffect(() => {
     const canvas = imageCanvasRef.current;
@@ -489,7 +618,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(transformedPreview, 0, 0);
-  }, [transformedPreview, imageRect]);
+  }, [transformedPreview, !!composedView]);
 
   // Paint the depth field into a display canvas with the SAME intrinsic dimensions
   // as the source canvas. This way the two canvases share identical
@@ -504,23 +633,25 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(depthCanvas, 0, 0, canvas.width, canvas.height);
-  }, [depthMapVisible, depthFieldVersion, transformedPreview]);
+  }, [depthMapVisible, depthFieldVersion, transformedPreview, !!composedView]);
 
+
+  // Layers are stored in full-photo coords and converted to the current display
+  // basis at render (displayLayers, below) — pad/crop changes need no imperative
+  // layer remap, and undo/redo can't drift them.
+
+  // Refit the framed view when the stage or photo orientation changes under a
+  // fixed viewTransform (window resize, quarter-turn) — review F5. At pad=0
+  // getFitTransformForState is identity, so this is a no-op there.
+  useEffect(() => {
+    resetViewToFit(editorStateRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewportSize.width, viewportSize.height, discreteRotationDeg]);
 
   function handleReset() {
     if (!baseSnapshotRef.current) return;
     recordState(baseSnapshotRef.current);
     setMessage("");
-  }
-
-  function getNormalizedCrop() {
-    if (!cropRect || !imageRect) return null;
-    return {
-      x: clamp((cropRect.x - imageRect.x) / imageRect.width, 0, 1),
-      y: clamp((cropRect.y - imageRect.y) / imageRect.height, 0, 1),
-      width: clamp(cropRect.width / imageRect.width, 0, 1),
-      height: clamp(cropRect.height / imageRect.height, 0, 1),
-    };
   }
 
   // Save / export pipeline. buildSaveArgs assembles the full saveEditedImage
@@ -536,9 +667,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     freeAngle,
     flipX,
     flipY,
-    normalizedCrop: getNormalizedCrop(),
+    normalizedCrop,
     canvasPad: editorState.canvas?.pad,
     canvasBg: editorState.canvas?.bg,
+    canvasScrim: editorState.canvas?.scrim,
     layers,
     depthFieldCanvas: depthFieldCanvasRef.current,
     depthFeather,
@@ -557,41 +689,54 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     onSaveStart: () => setMessage(""),
   });
 
-  // Frame tool (5th tool) — its own module so EditorOverlay stays the
-  // orchestrator. Frames the cropped/transformed photo; renders its own preview
-  // surface (FrameStage) since the frame expands the canvas.
+  // Frame presets — their own module so EditorOverlay stays the orchestrator.
+  // Presets are generated on the cropped/transformed photo and applied as
+  // editable layers + canvas margins (unified canvas model).
   const frameTool = useFrameTool({
     active: tool === "text",
     item,
     transformedPreview,
-    // Full-res source (+ its transforms) so export isn't capped at the 2200px preview.
-    sourceImage,
-    rotationDeg: discreteRotationDeg,
-    flipX,
-    flipY,
-    normalizedCrop: getNormalizedCrop(),
-    saveBasePath,
-    pushToast,
-    onSaveComplete,
+    normalizedCrop,
   });
   // Fresh handle to the frame tool for the e2e backdoor (frameTool is a new
   // object each render; the backdoor effect's deps don't track it).
   const frameToolRef = useRef(null);
   frameToolRef.current = frameTool;
 
-  // Unified model (Phase 3): apply a frame preset as editable LAYERS + canvas
-  // margins, instead of the baked FrameStage path. Drops text layers into the
-  // stack and switches to the Text tool so they're immediately editable.
+  // Apply a frame preset (`res` from generatePresetLayers) or clear it (res=null)
+  // as ONE atomic history entry: set canvas margins/bg/scrim AND replace the
+  // preset's layers (keeping the user's own, re-expressed into the new basis)
+  // together, so a single undo reverses the whole preset. Crop and zoom/offset
+  // stay untouched — the composed output view wraps the CROPPED photo. Sets
+  // layerBasisRef so the basis-sync effect treats the fresh head as current.
+  function setCanvasPreset(res) {
+    const s = editorStateRef.current;
+    const nextPad = res ? res.pad : { top: 0, right: 0, bottom: 0, left: 0 };
+    const nextState = res
+      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: res.scrim ?? null } }
+      : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null } };
+    // Layers are full-photo coords, basis-independent — the user's own layers
+    // stay put; the preset's generated layers already arrive in full-photo coords.
+    // Re-applying a preset REPLACES the previous preset's layers (don't stack).
+    const cur = currentLayerHead().filter((l) => !l.fromPreset);
+    if (res?.stickerImages) {
+      for (const [src, img] of res.stickerImages) stickerImageCache.set(src, img);
+    }
+    // Apply state + layers live, then commit a single combined (atomic) entry.
+    applyState(nextState);
+    applyLayers(res ? [...cur, ...res.layers] : cur);
+    commitCurrent();
+    resetViewToFit(nextState);
+    setTool("text");
+  }
+
   async function applyFramePreset(tpl) {
     const res = await frameToolRef.current?.generatePresetLayers?.(tpl);
-    if (!res) return;
-    const s = editorStateRef.current;
-    // Set the margins + reset image zoom/offset so the framed result fits fresh.
-    recordState({ ...s, canvas: { pad: res.pad, bg: res.bg }, imageZoom: 1, imageOffsetX: 0, imageOffsetY: 0 });
-    // Re-applying a preset REPLACES the previous preset's layers (don't stack).
-    const cur = (layerHistoryRef.current[layerHistoryIndexRef.current] || []).filter((l) => !l.fromPreset);
-    commitLayers([...cur, ...res.layers]);
-    setTool("text");
+    if (res) setCanvasPreset(res);
+  }
+
+  function clearFramePreset() {
+    setCanvasPreset(null);
   }
 
   // Test backdoor — let E2E specs trigger save to a known path without
@@ -623,21 +768,32 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           freeAngle: s.freeAngle,
           flipX: s.flipX,
           flipY: s.flipY,
+          imageZoom: s.imageZoom,
+          imageOffsetX: s.imageOffsetX,
+          imageOffsetY: s.imageOffsetY,
           hasCrop: !!s.cropRect,
+          cropRect: s.cropRect,
+          // `layers` is the STORED (full-photo) basis; `displayLayers` is the
+          // derived current-basis position shown on screen.
           layers: layers.map((l) => ({ id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale })),
+          displayLayers: displayLayers.map((l) => ({ id: l.id, x: l.x, y: l.y })),
           selectedIds: [...selectedIds],
           historyIndex: historyIndexRef.current,
           historyLength: historyRef.current.length,
           canvasPad: s.canvas?.pad,
           imageRect,
-          outputRect,
+          outputRect: screenOutputRect,
+          outputContentRect: screenOutputView?.contentRect || null,
+          viewTransform,
+          placement,
+          stageBounds: getStageBounds(viewportSize),
         };
       },
       setAspect: (key) => commitAspect(key),
       setPad: (pad) => {
-        const s = editorStateRef.current;
-        recordState({ ...s, canvas: { ...s.canvas, pad: { top: 0, right: 0, bottom: 0, left: 0, ...pad } } });
+        applyCanvasPad({ top: 0, right: 0, bottom: 0, left: 0, ...pad }, { record: true });
       },
+      clearFramePreset: () => clearFramePreset(),
       applyFramePreset: (templateId) => {
         const tpl = frameToolRef.current?.templates?.find((x) => x.id === templateId);
         return tpl ? applyFramePreset(tpl) : undefined;
@@ -647,28 +803,31 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       selectLayers: (ids) => selectLayers(ids),
       undo: () => handleUndo(),
       redo: () => handleRedo(),
-      exportFrame: (savePath) => frameToolRef.current?.exportTo?.(savePath),
-      setFrameAspect: (key) => frameToolRef.current?.setFrameAspectKey?.(key),
     };
     return () => {
       if (window.__afterframeTest) {
         for (const k of [
           "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
           "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
-          "selectLayers", "undo", "redo", "exportFrame", "setFrameAspect", "setPad",
-          "applyFramePreset",
+          "selectLayers", "undo", "redo", "setPad", "applyFramePreset", "clearFramePreset",
         ]) delete window.__afterframeTest[k];
       }
     };
-  }, [open, saving, layers, tool, selectedIds]);
+  }, [open, saving, layers, displayLayers, tool, selectedIds, editorState, imageRect, screenOutputRect, screenOutputView, viewTransform, placement, viewportSize]);
 
   const previewReadyRef = useRef(false);
   previewReadyRef.current = !!previewSource;
 
   function handleApply() {
+    flushLayerCommit();
     if (!sourceImage || !cropRect || !imageRect) return;
-    const normalized = getNormalizedCrop();
+    const normalized = normalizedCrop;
     if (!normalized) return;
+
+    // Re-base layers to the baked photo BEFORE the source swaps: the cropped
+    // content becomes the new full photo, so full-photo coords are re-expressed
+    // relative to the crop sub-rect (review F4). Storage has no pad → pad {}.
+    const bakedLayers = bakeLayersIntoCrop(currentLayerHead(), transformedPreview, normalized, {});
 
     // Promote the applied crop into the working source so subsequent saves use the edited base.
     const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
@@ -708,6 +867,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     quickSavePathRef.current = null; // reset quick-save path on new apply
     syncHistory([], -1);
     applyState(BASE_STATE);
+    setViewTransform(IDENTITY_VIEW_TRANSFORM); // review F4: drop the old fit
+    applyLayers(bakedLayers); // history was just wiped; initial-snapshot effect will record it
     setMessage("Applied");
   }
 
@@ -814,7 +975,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
       <div
         ref={viewportRef}
-      className="relative min-h-0 flex-1 overflow-hidden bg-app"
+        data-editor-viewport="true"
+        className="relative min-h-0 flex-1 overflow-hidden bg-app"
         style={{ cursor: spacePressed ? "grab" : activeInteraction === "rotate" ? "crosshair" : activeInteraction === "image-pan" ? "grabbing" : "default" }}
         onPointerDown={spacePressed ? beginImagePan : undefined}
         onPointerMove={handlePointerMove}
@@ -826,54 +988,111 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
         {imageRect ? (
           <>
-            {/* Canvas background — fills the expanded output (the margin area
-                around the photo). Sized to outputRect; at pad=0 it's fully
-                behind the photo (invisible). */}
-            {outputRect && editorState.canvas?.pad && (editorState.canvas.pad.top || editorState.canvas.pad.right || editorState.canvas.pad.bottom || editorState.canvas.pad.left) ? (
+            {composedView ? (
+              <>
+                {/* Composed border view (text tool): bg-filled output canvas +
+                    a clipping window showing the CROPPED photo inset by the
+                    margins — mirrors exactly what saveImage renders. */}
+                <div
+                  className="absolute"
+                  style={{
+                    left: `${composedView.rect.x}px`, top: `${composedView.rect.y}px`,
+                    width: `${composedView.rect.width}px`, height: `${composedView.rect.height}px`,
+                    background: bgToCss(editorState.canvas?.bg),
+                  }}
+                />
+                <div
+                  className="absolute overflow-hidden"
+                  style={{
+                    left: `${composedView.contentRect.x}px`, top: `${composedView.contentRect.y}px`,
+                    width: `${composedView.contentRect.width}px`, height: `${composedView.contentRect.height}px`,
+                  }}
+                >
+                  <div
+                    className="absolute inset-0"
+                    style={freeAngle ? { transform: `rotate(${freeAngle}deg)` } : undefined}
+                  >
+                    <canvas
+                      ref={imageCanvasRef}
+                      className="absolute block select-none"
+                      style={{
+                        left: `${composedView.photoRect.x - composedView.contentRect.x}px`,
+                        top: `${composedView.photoRect.y - composedView.contentRect.y}px`,
+                        width: `${composedView.photoRect.width}px`,
+                        height: `${composedView.photoRect.height}px`,
+                      }}
+                    />
+                    {depthMapVisible && depthFieldImageRef.current && (
+                      <canvas
+                        ref={depthOverlayCanvasRef}
+                        className="pointer-events-none absolute block select-none"
+                        style={{
+                          left: `${composedView.photoRect.x - composedView.contentRect.x}px`,
+                          top: `${composedView.photoRect.y - composedView.contentRect.y}px`,
+                          width: `${composedView.photoRect.width}px`,
+                          height: `${composedView.photoRect.height}px`,
+                          opacity: 0.7,
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Rotating image layer — only the image rotates */
               <div
-                className="absolute"
+                className="absolute inset-0"
+                style={cropCenter ? { transform: `rotate(${freeAngle}deg)`, transformOrigin: `${cropCenter.x}px ${cropCenter.y}px` } : undefined}
+              >
+                <canvas
+                  ref={imageCanvasRef}
+                  className="absolute block select-none"
+                  style={{
+                    left: `${screenImageRect.x}px`,
+                    top: `${screenImageRect.y}px`,
+                    width: `${screenImageRect.width}px`,
+                    height: `${screenImageRect.height}px`,
+                    cursor: spacePressed ? "grab" : activeInteraction === "image-pan" ? "grabbing" : "grab",
+                  }}
+                  onPointerDown={beginImagePan}
+                />
+
+                {/* Show depth map (debug overlay) — a canvas mirror of the source canvas.
+                    Same intrinsic dimensions, same CSS rect, same parent transform → the two
+                    share an identical compositor box and stay pixel-aligned at any zoom. */}
+                {depthMapVisible && depthFieldImageRef.current && (
+                  <canvas
+                    ref={depthOverlayCanvasRef}
+                    className="pointer-events-none absolute block select-none"
+                    style={{
+                      left: `${screenImageRect.x}px`,
+                      top: `${screenImageRect.y}px`,
+                      width: `${screenImageRect.width}px`,
+                      height: `${screenImageRect.height}px`,
+                      opacity: 0.7,
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Edge scrim (overlay presets) — darkens the photo edge so on-photo
+                text stays legible; drawn over the photo content window, matching
+                drawScrim on the save path. */}
+            {tool === "text" && canvasScrim && screenOutputView ? (
+              <div
+                className="pointer-events-none absolute"
                 style={{
-                  left: `${outputRect.x}px`, top: `${outputRect.y}px`,
-                  width: `${outputRect.width}px`, height: `${outputRect.height}px`,
-                  background: bgToCss(editorState.canvas.bg),
+                  left: `${screenOutputView.contentRect.x}px`,
+                  top: canvasScrim.edge === "top"
+                    ? `${screenOutputView.contentRect.y}px`
+                    : `${screenOutputView.contentRect.y + screenOutputView.contentRect.height * (1 - (canvasScrim.height ?? 0.3))}px`,
+                  width: `${screenOutputView.contentRect.width}px`,
+                  height: `${screenOutputView.contentRect.height * (canvasScrim.height ?? 0.3)}px`,
+                  background: scrimToCss(canvasScrim),
                 }}
               />
             ) : null}
-            {/* Rotating image layer — only the image rotates */}
-            <div
-              className="absolute inset-0"
-              style={cropCenter ? { transform: `rotate(${freeAngle}deg)`, transformOrigin: `${cropCenter.x}px ${cropCenter.y}px` } : undefined}
-            >
-              <canvas
-                ref={imageCanvasRef}
-                className="absolute block select-none"
-                style={{
-                  left: `${imageRect.x}px`,
-                  top: `${imageRect.y}px`,
-                  width: `${imageRect.width}px`,
-                  height: `${imageRect.height}px`,
-                  cursor: spacePressed ? "grab" : activeInteraction === "image-pan" ? "grabbing" : "grab",
-                }}
-                onPointerDown={beginImagePan}
-              />
-
-              {/* Show depth map (debug overlay) — a canvas mirror of the source canvas.
-                  Same intrinsic dimensions, same CSS rect, same parent transform → the two
-                  share an identical compositor box and stay pixel-aligned at any zoom. */}
-              {depthMapVisible && depthFieldImageRef.current && (
-                <canvas
-                  ref={depthOverlayCanvasRef}
-                  className="pointer-events-none absolute block select-none"
-                  style={{
-                    left: `${imageRect.x}px`,
-                    top: `${imageRect.y}px`,
-                    width: `${imageRect.width}px`,
-                    height: `${imageRect.height}px`,
-                    opacity: 0.7,
-                  }}
-                />
-              )}
-            </div>
 
             {/* Layer stack — text groups + depth layers, in user-defined order.
                 Wrappers use zIndex: auto so DOM order = paint order; later siblings paint on top.
@@ -882,18 +1101,27 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             {tool === "text" && (
               <div className="absolute inset-0 isolate">
                 <TextCanvas
-                  layers={layers}
+                  layers={displayLayers}
                   selectedIds={selectedIds}
-                  imageRect={outputRect || imageRect}
+                  imageRect={screenOutputRect || screenImageRect}
+                  depthMaskGeom={composedView ? {
+                    sx: normalizedCrop?.x ?? 0, sy: normalizedCrop?.y ?? 0,
+                    sw: normalizedCrop?.width ?? 1, sh: normalizedCrop?.height ?? 1,
+                    dx: (composedView.contentRect.x - composedView.rect.x) / composedView.rect.width,
+                    dy: (composedView.contentRect.y - composedView.rect.y) / composedView.rect.height,
+                    dw: composedView.contentRect.width / composedView.rect.width,
+                    dh: composedView.contentRect.height / composedView.rect.height,
+                  } : null}
                   onSelectionChange={setSelectedIds}
-                  onLayersChange={(updated) => {
-                    const byId = new Map(updated.map((l) => [l.id, l]));
-                    commitLayers(layers.map((l) => byId.get(l.id) || l));
-                  }}
+                  onLayersChange={applyLayersDisplay}
+                  onLayersCommit={commitCurrent}
                   tool={tool}
                   depthFieldCanvas={depthFieldCanvasRef.current}
                   depthFieldVersion={depthFieldVersion}
                   depthFeather={depthFeather}
+                  backgroundPanRect={screenOutputView?.contentRect || screenImageRect}
+                  onBackgroundPointerDown={beginOutputViewPan}
+                  onBackgroundDoubleClick={() => resetViewToFit()}
                 />
               </div>
             )}
@@ -954,16 +1182,17 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               />
             ) : tool === "text" ? (
               <TextPanel
-                layers={layers}
+                layers={displayLayers}
                 selectedIds={selectedIds}
-                onLayersChange={commitLayers}
+                onLayersChange={commitLayersDisplay}
+                onLayersCoalesced={commitLayersCoalescedDisplay}
                 onSelectionChange={setSelectedIds}
                 onApply={handleTextApply}
                 onReset={layerReset}
-                onUndo={layerUndo}
-                onRedo={layerRedo}
-                canUndo={layerHistoryIndexRef.current > 0}
-                canRedo={layerHistoryIndexRef.current < layerHistoryRef.current.length - 1}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                canUndo={historyIndex > 0}
+                canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
                 onMoveLayer={handleMoveLayer}
                 onDeleteLayer={handleDeleteLayer}
                 hasSceneDepth={!!depthSourcePath}
@@ -982,12 +1211,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 frameThumbs={frameTool.thumbs}
                 frameCellAspect={frameTool.cellAspect}
                 onApplyPreset={applyFramePreset}
+                onClearPreset={clearFramePreset}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
                 onCanvasPad={(patch) => {
                   // Live (no history) while dragging the slider — keeps it smooth.
                   const s = editorStateRef.current;
-                  applyState({ ...s, canvas: { ...s.canvas, pad: { ...s.canvas.pad, ...patch } } });
+                  applyCanvasPad({ ...s.canvas.pad, ...patch });
                 }}
                 onCanvasPadCommit={() => recordState(editorStateRef.current)}
                 onCanvasBg={(nextBg) => {

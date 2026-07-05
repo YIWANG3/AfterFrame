@@ -12,11 +12,13 @@ export const BASE_STATE = {
   imageZoom: 1,
   imageOffsetX: 0,
   imageOffsetY: 0,
-  // Canvas expansion: the photo becomes a sub-rect of an output canvas padded by
-  // `pad` (fractions of the photo short edge) and filled with `bg`. All zero /
-  // null by default → output === photo, i.e. today's behavior exactly. Consumed
-  // by the unified canvas/layer model (docs/unified-canvas-plan.md).
-  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null },
+  // Canvas expansion: the (cropped) photo becomes a sub-rect of an output
+  // canvas padded by `pad` (fractions of the content short edge), filled with
+  // `bg`, with an optional `scrim` gradient over the photo (overlay presets).
+  // All zero / null by default → output === photo, i.e. today's behavior
+  // exactly. Consumed by the unified canvas/layer model
+  // (docs/unified-canvas-plan.md).
+  canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null },
 };
 
 export function rectEquals(a, b) {
@@ -29,17 +31,35 @@ function padEquals(a, b) {
   return a.top === b.top && a.right === b.right && a.bottom === b.bottom && a.left === b.left;
 }
 
+// Field-wise (no JSON.stringify: stateEquals runs in per-frame drag paths).
+function gradientEquals(a, b) {
+  if (!a || !b) return a === b;
+  return a.from === b.from && a.to === b.to && a.fromOpacity === b.fromOpacity &&
+    a.toOpacity === b.toOpacity && a.angle === b.angle;
+}
+
+function bgEquals(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  return a.mode === b.mode && a.color === b.color && gradientEquals(a.gradient ?? null, b.gradient ?? null);
+}
+
+function scrimEquals(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  return a.edge === b.edge && a.height === b.height && a.from === b.from && a.to === b.to;
+}
+
 export function canvasEquals(a, b) {
   if (!a || !b) return a === b;
-  return JSON.stringify(a.bg ?? null) === JSON.stringify(b.bg ?? null) && padEquals(a.pad, b.pad);
+  return bgEquals(a.bg ?? null, b.bg ?? null) && padEquals(a.pad, b.pad) &&
+    scrimEquals(a.scrim ?? null, b.scrim ?? null);
 }
 
 function cloneCanvas(canvas) {
-  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null };
+  if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null };
   const bg = canvas.bg
     ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: { ...canvas.bg.gradient } } : {}) }
     : null;
-  return { pad: { ...canvas.pad }, bg };
+  return { pad: { ...canvas.pad }, bg, scrim: canvas.scrim ? { ...canvas.scrim } : null };
 }
 
 export function cloneState(state) {
