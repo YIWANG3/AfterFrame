@@ -1,14 +1,20 @@
-// Frame tool state for the editor. Keeps all the frame logic OUT of
-// EditorOverlay (the tool-module pattern): loads logos, holds the selected
-// template, renders the framed preview off the current edited photo, and
-// exports. EditorOverlay just mounts this + <FramePanel> + <FrameStage>.
+// Frame-preset state for the editor's Text tool (the unified canvas model —
+// docs/unified-canvas-plan.md). Loads the logo registry, keeps per-template
+// preview thumbs, and turns a template into editable LAYERS + canvas margins
+// via generatePresetLayers. The old baked-frame pipeline (FrameStage /
+// FramePanel) is gone; rendering and export go through TextCanvas + saveImage.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES } from "../frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
-import { renderFrame, collectLogoNeeds } from "../render/frameRender";
-import { buildTransformedCanvas, getSourceDimensions } from "../render/canvasHelpers";
-import { getAspectRatio } from "../cropMath";
+import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
+import { layersFromDisplay } from "../imageMath";
+import { drawScrim } from "../render/canvasHelpers";
+import { createDefaultLayer, createStickerLayer } from "../textState";
+
+// Presets always generate at neutral knob settings (the old FramePanel's
+// text/margin/logo-color knobs retired with the baked pipeline).
+const ADJUST = { text: 1, margin: 1 };
 
 // EXIF lives in nested image_metadata / raw_metadata (same shape the Inspector
 // reads), NOT flat fields. Prefer RAW metadata when it carries the capture.
@@ -32,7 +38,9 @@ export function exifFromItem(src) {
 }
 
 // Crop (fractions) + rotate/flip are already baked into `transformedPreview`;
-// this slices out the cropped region as the base photo the frame wraps.
+// this slices out the cropped region as the base photo the frame wraps — the
+// SAME content basis the composed preview (getOutputView) and the save path
+// use, so preset pad/layer fractions line up with both.
 function buildBaseCanvas(transformedPreview, crop) {
   const fullW = transformedPreview.width || transformedPreview.naturalWidth;
   const fullH = transformedPreview.height || transformedPreview.naturalHeight;
@@ -48,84 +56,75 @@ function buildBaseCanvas(transformedPreview, crop) {
   return c;
 }
 
-export function useFrameTool({ active, item, transformedPreview, sourceImage, rotationDeg = 0, flipX = false, flipY = false, normalizedCrop, saveBasePath, pushToast, onSaveComplete }) {
-  // Start from the browse item, then upgrade to full detail (complete EXIF).
+export function useFrameTool({ active, item, transformedPreview, normalizedCrop }) {
+  // Start from the browse item, then upgrade to full detail (complete EXIF) —
+  // once per asset, not per tool activation.
   const [exif, setExif] = useState(() => exifFromItem(item));
   useEffect(() => { setExif(exifFromItem(item)); }, [item]);
   useEffect(() => {
-    if (!active || !item?.asset_id) return;
+    if (!item?.asset_id) return;
     let alive = true;
     (async () => {
       const detail = await window.mediaWorkspace?.getAssetDetailById?.(item.asset_id);
       if (alive && detail) setExif(exifFromItem(detail));
     })();
     return () => { alive = false; };
-  }, [active, item?.asset_id]);
+  }, [item?.asset_id]);
 
   const [logos, setLogos] = useState(null); // { registry, svgs }
-  const [templateId, setTemplateId] = useState(FRAME_TEMPLATES[0].id);
-  const [framedCanvas, setFramedCanvas] = useState(null);
   const [thumbs, setThumbs] = useState(new Map()); // templateId -> dataURL
   const [cellAspect, setCellAspect] = useState(0.8); // uniform thumb cell w/h, adapts to the photo
-  const [rendering, setRendering] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [textScale, setTextScale] = useState(1); // "文字大小" knob
-  const [marginScale, setMarginScale] = useState(1); // "留白" knob
-  const [logoColor, setLogoColor] = useState(null); // logo tint override; null = 原色 (auto)
-  const [frameAspectKey, setFrameAspectKey] = useState("free"); // pad output to a target ratio; "free" = frame's natural size
+  const logosPromiseRef = useRef(null);
   const logoCacheRef = useRef(new Map());
+  const thumbsKeyRef = useRef(null);
 
-  const template = useMemo(() => FRAME_TEMPLATES.find((t) => t.id === templateId), [templateId]);
-  const cropKey = normalizedCrop ? JSON.stringify(normalizedCrop) : "full";
+  // Quantize the crop so sub-pixel zoom/pan jitter (ULP drift on every wheel
+  // tick) doesn't invalidate the thumbnail cache and trigger a full-res rebuild
+  // (review F9). Only a meaningful crop change (~1e-4) rotates the key.
+  const cropKey = normalizedCrop
+    ? [normalizedCrop.x, normalizedCrop.y, normalizedCrop.width, normalizedCrop.height]
+        .map((v) => v.toFixed(4)).join(",")
+    : "full";
   const exifKey = JSON.stringify(exif);
 
-  // Load logos once, on first activation.
-  useEffect(() => {
-    if (!active || logos) return;
-    let alive = true;
-    (async () => {
-      const res = await window.mediaWorkspace?.getFrameLogos?.();
-      if (alive && res) setLogos({ registry: buildLogoRegistry(res.manifest), svgs: res.svgs || {} });
-    })();
-    return () => { alive = false; };
-  }, [active, logos]);
+  // Load the logo registry once; generatePresetLayers awaits this same promise
+  // so a preset clicked before the IPC resolves still gets its logo layers.
+  function loadLogos() {
+    if (!logosPromiseRef.current) {
+      logosPromiseRef.current = (async () => {
+        const res = await window.mediaWorkspace?.getFrameLogos?.();
+        const next = res
+          ? { registry: buildLogoRegistry(res.manifest), svgs: res.svgs || {} }
+          : { registry: { byId: new Map() }, svgs: {} };
+        setLogos(next);
+        return next;
+      })();
+    }
+    return logosPromiseRef.current;
+  }
+  useEffect(() => { if (active) loadLogos(); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ensureLogos(tpl, geomH, override) {
-    if (!logos) return;
-    for (const n of collectLogoNeeds(tpl, exif, logos.registry, { outH: geomH }, override)) {
+  async function ensureLogos(lg, tpl, geomH, override) {
+    for (const n of collectLogoNeeds(tpl, exif, lg.registry, { outH: geomH }, override)) {
       if (logoCacheRef.current.has(n.key)) continue;
-      const svg = logos.svgs[n.file];
+      const svg = lg.svgs[n.file];
       if (svg) logoCacheRef.current.set(n.key, await prepareLogo(svg, { color: n.color, colorLocked: n.colorLocked, heightPx: n.heightPx }));
     }
   }
 
-  const adjust = { text: textScale, margin: marginScale };
-
-  function compose() {
-    const base = buildBaseCanvas(transformedPreview, normalizedCrop);
-    const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
-    return renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect });
-  }
-
-  // Live preview: re-render when active / photo / crop / template / logos / knobs change.
-  useEffect(() => {
-    if (!active || !transformedPreview || !logos || !template) return;
-    let alive = true;
-    setRendering(true);
-    (async () => {
-      await ensureLogos(template, transformedPreview.height || 1200, logoColor);
-      if (!alive) return;
-      setFramedCanvas(compose());
-      setRendering(false);
-    })();
-    return () => { alive = false; };
-  }, [active, transformedPreview, logos, templateId, cropKey, exifKey, textScale, marginScale, logoColor, frameAspectKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Small framed previews of every template, so the panel shows what each looks
-  // like (logo included) instead of a bare name list.
+  // like (logo included) instead of a bare name list. Cached by content — a
+  // tool re-entry with the same photo/crop/EXIF reuses the existing map.
   useEffect(() => {
     if (!active || !transformedPreview || !logos) return;
+    const key = `${cropKey}|${exifKey}`;
+    const prev = thumbsKeyRef.current;
+    if (prev && prev.tp === transformedPreview && prev.key === key && prev.logos === logos) return;
     let alive = true;
+    // Debounce: during a wheel pan/zoom the crop changes every tick; without
+    // this the full-res buildBaseCanvas + per-template renderFrame + JPEG encode
+    // ran on each one. Coalesce to the last settled crop (review F9).
+    const timer = setTimeout(() => {
     (async () => {
       const base = buildBaseCanvas(transformedPreview, normalizedCrop);
       const tw = 260;
@@ -136,7 +135,7 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
       const next = new Map();
       let repAspect = small.width / small.height;
       for (const tpl of FRAME_TEMPLATES) {
-        await ensureLogos(tpl, small.height);
+        await ensureLogos(logos, tpl, small.height);
         if (!alive) return;
         const framed = renderFrame({ photo: small, exif, profile: {}, template: tpl, registry: logos.registry, logoImages: logoCacheRef.current });
         // Size uniform cells to the first (dominant "bar") template's actual
@@ -144,64 +143,118 @@ export function useFrameTool({ active, item, transformedPreview, sourceImage, ro
         if (tpl.id === FRAME_TEMPLATES[0].id) repAspect = framed.width / framed.height;
         next.set(tpl.id, framed.toDataURL("image/jpeg", 0.82));
       }
-      if (alive) { setThumbs(next); setCellAspect(repAspect); }
+      if (alive) {
+        thumbsKeyRef.current = { tp: transformedPreview, key, logos };
+        setThumbs(next);
+        setCellAspect(repAspect);
+      }
     })();
-    return () => { alive = false; };
+    }, 200);
+    return () => { alive = false; clearTimeout(timer); };
   }, [active, transformedPreview, logos, cropKey, exifKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Full-resolution base for EXPORT: rebuild the transformed + cropped photo from
-  // the original `sourceImage` (the live preview uses the 2200px-capped one), so
-  // the framed output keeps the photo's native resolution. Falls back to the
-  // preview if the full-res source isn't available.
-  function buildExportBase() {
-    if (!sourceImage) return buildBaseCanvas(transformedPreview, normalizedCrop);
-    const { width: sw, height: sh } = getSourceDimensions(sourceImage);
-    const fullTransformed = buildTransformedCanvas(sourceImage, sw, sh, rotationDeg, flipX, flipY);
-    return buildBaseCanvas(fullTransformed, normalizedCrop);
-  }
+  // A frame preset becomes editable LAYERS + canvas margins/background/scrim.
+  // Everything is computed on the CROPPED base, matching the composed output
+  // basis (content + margins) that TextCanvas positions against and saveImage
+  // renders.
+  async function generatePresetLayers(tpl) {
+    if (!transformedPreview) return null;
+    const lg = await loadLogos(); // waits out the registry IPC — no dropped logos
+    const base = buildBaseCanvas(transformedPreview, normalizedCrop);
+    await ensureLogos(lg, tpl, base.height || 1200);
+    const g = geometry(base, tpl, ADJUST);
+    const isOverlay = tpl.family === "overlay";
 
-  // Render the framed image at full resolution and write it to `savePath`.
-  // Returns the output dimensions. Shared by the picker flow and the e2e
-  // backdoor (which skips the native save dialog).
-  async function exportTo(savePath) {
-    const base = buildExportBase();
-    await ensureLogos(template, base.height || 1200, logoColor);
-    const frameAspect = getAspectRatio(frameAspectKey, base.width / base.height);
-    const out = renderFrame({ photo: base, exif, profile: {}, template, registry: logos.registry, logoImages: logoCacheRef.current, adjust, logoColor, frameAspect });
-    const blob = await new Promise((res) => out.toBlob(res, "image/jpeg", 0.92));
-    await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), saveBasePath);
-    return { width: out.width, height: out.height };
-  }
-
-  async function exportFramed() {
-    if (!transformedPreview || !logos || !template || exporting) return;
-    setExporting(true);
-    try {
-      const defaultPath = (saveBasePath || "photo.jpg").replace(/(\.[^.]+)$/, "") + "_framed.jpg";
-      const savePath = await window.mediaWorkspace?.pickSavePath?.({
-        defaultPath,
-        filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }, { name: "PNG", extensions: ["png"] }],
-      });
-      if (!savePath) return;
-      await exportTo(savePath);
-      pushToast?.({ title: "已导出加框图片", message: savePath.split("/").pop(), ttl: 4000 });
-      await onSaveComplete?.(savePath);
-    } catch (e) {
-      pushToast?.({ title: "导出失败", message: e?.message || String(e), tone: "error", ttl: 5000 });
-    } finally {
-      setExporting(false);
+    // Overlay presets pick text color by the luminance behind it — draw the
+    // composed background (bg + photo + scrim) once so buildFrameLayers can
+    // sample it, restoring the baked pipeline's adaptive contrast.
+    let sampleCtx = null;
+    if (isOverlay) {
+      const sample = document.createElement("canvas");
+      sample.width = g.outW;
+      sample.height = g.outH;
+      sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+      sampleCtx.fillStyle = tpl.canvas?.bg?.color || "#ffffff";
+      sampleCtx.fillRect(0, 0, g.outW, g.outH);
+      sampleCtx.drawImage(base, g.padPx.left, g.padPx.top);
+      drawScrim(sampleCtx, tpl.canvas?.scrim, { x: g.padPx.left, y: g.padPx.top, width: g.wref, height: g.href });
     }
+
+    const built = buildFrameLayers(sampleCtx, {
+      template: tpl, exif, profile: {}, geom: g, adjust: ADJUST, factor: g.wref / g.outW,
+      registry: lg.registry, logoImages: logoCacheRef.current,
+      logoColor: null, isOverlay,
+    });
+    // Convert width-based template pad → short-edge basis so the same pixel
+    // margin lands whatever the editor uses.
+    const tp = tpl.canvas?.pad || {};
+    const short = Math.min(base.width, base.height);
+    const k = base.width / short;
+    const pad = {
+      top: (tp.top || 0) * k, right: (tp.right || 0) * k,
+      bottom: (tp.bottom || 0) * k, left: (tp.left || 0) * k,
+    };
+    const bg = { color: tpl.canvas?.bg?.color || "#ffffff" };
+    const scrim = tpl.canvas?.scrim ? { ...tpl.canvas.scrim } : null;
+    // Convert generated elements to real editable layers. TextCanvas centers
+    // layers at x/y (ignores align), so anchor everything at the element's
+    // VISUAL center (box.cx/cy). Logos become sticker layers whose stickerPath
+    // is the tinted logo's data URL (prepareLogo returns an Image already backed
+    // by a data URL) so they load in TextCanvas + the save path.
+    const stickerImages = new Map();
+    const layers = built.map((l) => {
+      const { ei, box, ...rest } = l;
+      const cx = box?.cx ?? l.x;
+      const cy = box?.cy ?? l.y;
+      if (l.type === "text") {
+        return { ...createDefaultLayer({}), ...rest, x: cx, y: cy, align: "center", fromPreset: true };
+      }
+      if (l.type === "sticker") {
+        const img = logoCacheRef.current.get(l.stickerPath);
+        if (!img?.src) return null;
+        stickerImages.set(img.src, img);
+        return createStickerLayer(
+          { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
+          { x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100, fromPreset: true },
+        );
+      }
+      return null;
+    }).filter(Boolean);
+
+    // Layers are STORED in full-photo coords. The elements above were computed on
+    // the cropped base:
+    //  • pad=0 → they're in CONTENT (crop) fractions; map content → full photo.
+    //  • pad>0 → they're in composed-output fractions; layersFromDisplay converts
+    //    those → full photo (and is an identity no-op for pad=0).
+    const padZero = !(pad.top || pad.right || pad.bottom || pad.left);
+    const c = normalizedCrop;
+    if (padZero && c && (c.x || c.y || c.width !== 1 || c.height !== 1)) {
+      for (const l of layers) {
+        l.x = c.x + l.x * c.width;
+        l.y = c.y + l.y * c.height;
+        // Width-fraction / 1920-ref props: content basis → full-photo basis.
+        if (l.type === "sticker") l.scale = (l.scale ?? 0.4) * c.width;
+        else {
+          l.fontSize = (l.fontSize ?? 0) * c.width;
+          l.shadowBlur = (l.shadowBlur ?? 0) * c.width;
+          l.shadowX = (l.shadowX ?? 0) * c.width;
+          l.shadowY = (l.shadowY ?? 0) * c.width;
+          l.strokeWidth = (l.strokeWidth ?? 0) * c.width;
+        }
+      }
+    }
+    return {
+      pad, bg, scrim, stickerImages,
+      layers: layersFromDisplay(layers, transformedPreview, normalizedCrop, pad),
+    };
   }
+
+  const templates = useMemo(() => FRAME_TEMPLATES, []);
 
   return {
-    templates: FRAME_TEMPLATES,
-    templateId, setTemplateId,
-    framedCanvas, thumbs, cellAspect, rendering, exporting,
-    textScale, setTextScale, marginScale, setMarginScale,
-    logoColor, setLogoColor,
-    frameAspectKey, setFrameAspectKey,
+    templates,
+    thumbs, cellAspect,
+    generatePresetLayers,
     logosReady: !!logos,
-    exportFramed,
-    exportTo, // e2e: export to a given path, skipping the native dialog
   };
 }

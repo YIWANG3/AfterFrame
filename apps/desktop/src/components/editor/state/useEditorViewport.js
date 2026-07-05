@@ -8,7 +8,7 @@
 // (photo + rotation/flip, owned by EditorOverlay) and `editorState`.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getBasePlacement, getImageRect } from "../imageMath";
+import { getBasePlacement, getImageRect, getNormalizedCrop, getOutputView } from "../imageMath";
 
 export function useEditorViewport({ open, transformedPreview, editorState }) {
   const viewportRef = useRef(null);
@@ -26,15 +26,34 @@ export function useEditorViewport({ open, transformedPreview, editorState }) {
     return () => observer.disconnect();
   }, [open]);
 
+  // Crop-space placement — deliberately pad-free so its identity is stable
+  // across border edits and pointer-drag applies (canvas margins never reflow
+  // the crop workspace).
   const placement = useMemo(
     () => getBasePlacement(viewportSize, transformedPreview),
     [viewportSize, transformedPreview],
   );
 
+  // Photo rect in crop space (crop overlay / image pan-zoom basis).
   const imageRect = useMemo(
     () => getImageRect(editorState, transformedPreview, placement),
     [editorState, transformedPreview, placement],
   );
+
+  // Crop as photo fractions, derived from the pad-free geometry above.
+  const normalizedCrop = useMemo(
+    () => getNormalizedCrop(editorState, imageRect),
+    [editorState, imageRect],
+  );
+
+  // Composed output view (cropped content + margins) — the basis for LAYER
+  // positioning and the text tool's border rendering. rect === imageRect while
+  // pad=0.
+  const outputView = useMemo(
+    () => getOutputView(editorState, transformedPreview, normalizedCrop, imageRect),
+    [editorState, transformedPreview, normalizedCrop, imageRect],
+  );
+  const outputRect = outputView?.rect ?? null;
 
   function pointFromClient(clientX, clientY) {
     const viewport = viewportRef.current;
@@ -46,5 +65,5 @@ export function useEditorViewport({ open, transformedPreview, editorState }) {
     };
   }
 
-  return { viewportRef, viewportSize, placement, imageRect, pointFromClient };
+  return { viewportRef, viewportSize, placement, imageRect, normalizedCrop, outputView, outputRect, pointFromClient };
 }

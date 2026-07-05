@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { localFileUrl } from "../../../utils/format";
+import { stickerSrc } from "../../../utils/format";
 
 // Pre-decoded sticker images, keyed by absolute PNG path. The export pipeline
 // (drawLayersOnCanvas) needs the HTMLImageElement to be `.complete` before it
@@ -14,7 +14,7 @@ export function useStickerImageCache(layers) {
       if (layer.type === "sticker" && layer.stickerPath && !cache.has(layer.stickerPath)) {
         const img = new Image();
         img.crossOrigin = "anonymous";
-        img.src = localFileUrl(layer.stickerPath);
+        img.src = stickerSrc(layer.stickerPath);
         cache.set(layer.stickerPath, img);
       }
     }

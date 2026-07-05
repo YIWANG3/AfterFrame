@@ -59,3 +59,76 @@ test.describe("Golden: text layers", () => {
     expect((await state(window)).selectedIds).toContain(id);
   });
 });
+
+// Unified history: transform edits AND layer edits share ONE undo/redo timeline,
+// so the global undo (Cmd+Z / backdoor.undo) reverses whichever was last — not a
+// separate layer-only stack. Also guards that a frame preset is a single atomic
+// undo step (canvas margins + its layers committed together).
+const historyLen = (window) => window.evaluate(() => window.__afterframeTest.getState().historyLength);
+const padBottom = (window) => window.evaluate(() => window.__afterframeTest.getState().canvasPad?.bottom || 0);
+
+test.describe("Unified undo/redo (transform + layers, one timeline)", () => {
+  let app, window, userDataDir;
+
+  test.beforeAll(async () => {
+    const fixturePath = await ensureFixture();
+    ({ app, window, userDataDir } = await launchApp({ testName: "unified-undo" }));
+    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
+    await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
+      .toBe(true);
+    await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  });
+  test.afterAll(async () => { await closeApp(app, userDataDir); });
+
+  test("global undo reverses a text-layer add; redo re-applies (same stack)", async () => {
+    const len0 = await historyLen(window);
+    await window.evaluate(() => window.__afterframeTest.addTextLayer("Undo me"));
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(1);
+    await expect.poll(() => historyLen(window), { timeout: 5000 }).toBe(len0 + 1);
+
+    // The GLOBAL undo (what Cmd+Z drives) must remove the layer — proving layers
+    // ride the same timeline as transform edits, not a separate stack.
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(0);
+
+    await window.evaluate(() => window.__afterframeTest.redo());
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(1);
+  });
+
+  test("applying a frame preset is a single atomic undo (margins + layers)", async () => {
+    await window.evaluate(() => window.__afterframeTest.setPad({})); // ensure no border
+    const len0 = await historyLen(window);
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+    await expect.poll(() => padBottom(window), { timeout: 5000 }).toBeGreaterThan(0.05);
+    // ONE entry, not two — pad + layers committed together.
+    await expect.poll(() => historyLen(window), { timeout: 5000 }).toBe(len0 + 1);
+
+    // A single undo reverses the whole preset (margin gone).
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(() => padBottom(window), { timeout: 5000 }).toBe(0);
+  });
+
+  test("rapid panel edits collapse into a single undo step (coalesced)", async () => {
+    await window.evaluate(() => window.__afterframeTest.setPad({}));
+    // Ensure a text layer exists + is the inspector target (fontSize field).
+    await window.evaluate(() => window.__afterframeTest.addTextLayer("scrub"));
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBeGreaterThan(0);
+
+    // The fontSize field is the only number input with max=2000.
+    const input = window.locator('input[type="number"][max="2000"]').first();
+    await expect(input).toBeVisible({ timeout: 5000 });
+    const len0 = await historyLen(window);
+
+    // Type several digits quickly → several onChange ticks within the debounce
+    // window = one gesture.
+    await input.focus();
+    await input.press("Control+a");
+    await input.pressSequentially("120", { delay: 60 });
+
+    // After the debounce settles, the whole run is exactly ONE history entry.
+    await expect.poll(() => historyLen(window), { timeout: 5000 }).toBe(len0 + 1);
+  });
+});

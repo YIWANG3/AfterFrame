@@ -45,6 +45,39 @@ class PreviewService:
     def relative_output_path(self, path: Path) -> str:
         return str(path.relative_to(self.catalog.root))
 
+    def _atomic(self, output_path: Path, render) -> Path:
+        """Render into a temp file in the same directory, then atomically replace
+        the final path. Concurrent renders of the same asset — the editor's
+        quick-register (resident process) and the watched-import batch (a
+        separate detached job process) can overlap — otherwise both wrote the
+        final JPEG IN PLACE and corrupted/truncated each other. With temp+replace
+        each writes its own temp and the last os.replace wins, so the preview file
+        is never observed half-written or interleaved.
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.stem}.", suffix=".tmp.jpg")
+        os.close(fd)
+        tmp = Path(tmp_name)
+        try:
+            render(tmp)
+            os.replace(tmp, output_path)  # atomic within the same filesystem
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        return output_path
+
+    def _preview_on_disk(self, asset_id: str, kind: str) -> bool:
+        """A previously-'ready' preview is only usable if its file is still on
+        disk and non-empty. Guards against a preview left missing or truncated so
+        the batch re-renders it instead of trusting a stale DB status — with
+        atomic writes this lets broken previews self-heal on the next pass."""
+        directory = self.catalog.previews_dir if kind == "preview" else self.catalog.previews_hd_dir
+        path = directory / asset_id[:2] / f"{asset_id}.jpg"
+        try:
+            return path.exists() and path.stat().st_size > 0
+        except OSError:
+            return False
+
     def generate_for_row(self, row, kind: str, force: bool = False) -> PreviewResult:
         if kind not in KIND_SIZES:
             raise ValueError(f"unsupported preview kind: {kind}")
@@ -66,9 +99,12 @@ class PreviewService:
         if video.is_video(source_path):
             # Videos: a poster frame via the AVFoundation helper (sips can't do
             # video); fall back to QuickLook if the tool is unavailable.
-            if video.poster(source_path, output_path, max_edge=KIND_SIZES[kind]):
-                rendered = output_path
-            else:
+            def _poster(tmp: Path) -> None:
+                if not video.poster(source_path, tmp, max_edge=KIND_SIZES[kind]):
+                    raise RuntimeError("video poster unavailable")
+            try:
+                rendered = self._atomic(output_path, _poster)
+            except Exception:
                 rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
         elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
             # RAW has no displayable original (the renderer can't decode .cr3/.arw),
@@ -113,7 +149,7 @@ class PreviewService:
         # Split rows into skip vs work
         to_render = []
         for row in rows:
-            if row["existing_relative_path"] and row["existing_status"] == "ready" and not force:
+            if row["existing_relative_path"] and row["existing_status"] == "ready" and not force and self._preview_on_disk(row["asset_id"], kind):
                 skipped += 1
                 processed += 1
                 report_progress(
@@ -185,17 +221,14 @@ class PreviewService:
         return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
 
     def _render_with_sips(self, source_path: Path, output_path: Path, size: int) -> Path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["sips", "-s", "format", "jpeg", "-Z", str(size), "--out", str(output_path), str(source_path)],
+        return self._atomic(output_path, lambda tmp: subprocess.run(
+            ["sips", "-s", "format", "jpeg", "-Z", str(size), "--out", str(tmp), str(source_path)],
             check=True,
             capture_output=True,
             text=True,
-        )
-        return output_path
+        ))
 
     def _render_with_quicklook(self, source_path: Path, output_path: Path, size: int) -> Path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="media-workspace-ql-") as temp_dir:
             subprocess.run(
                 ["qlmanage", "-t", "-s", str(size), "-o", temp_dir, str(source_path)],
@@ -206,26 +239,23 @@ class PreviewService:
             generated = Path(temp_dir) / f"{source_path.name}.png"
             if not generated.exists():
                 raise FileNotFoundError(f"Quick Look did not render {source_path}")
-            subprocess.run(
-                ["sips", "-s", "format", "jpeg", "--out", str(output_path), str(generated)],
+            return self._atomic(output_path, lambda tmp: subprocess.run(
+                ["sips", "-s", "format", "jpeg", "--out", str(tmp), str(generated)],
                 check=True,
                 capture_output=True,
                 text=True,
-            )
-        return output_path
+            ))
 
     def _render_raw_fullres(self, source_path: Path, output_path: Path) -> Path:
         # Full native-resolution JPEG straight from the RAW (Image I/O decodes
         # CR2/CR3/ARW/NEF/DNG). No --resampleHeightWidthMax, so the long edge is
         # the sensor's native size — the displayable stand-in for the RAW.
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["sips", "-s", "format", "jpeg", "--out", str(output_path), str(source_path)],
+        return self._atomic(output_path, lambda tmp: subprocess.run(
+            ["sips", "-s", "format", "jpeg", "--out", str(tmp), str(source_path)],
             check=True,
             capture_output=True,
             text=True,
-        )
-        return output_path
+        ))
 
 
 def report_progress(progress_callback, **payload) -> None:

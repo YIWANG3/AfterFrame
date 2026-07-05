@@ -3,8 +3,9 @@ import cx from "./cx";
 
 // Drag-to-scrub number input (click to type). Promoted from TextPanel where
 // it lived as a private NumInput; StickerPanel had a static value box copy.
-export function NumberDragInput({ value, min, max, onChange, className = "w-11" }) {
+export function NumberDragInput({ value, min, max, onChange, onCommit, className = "w-11" }) {
   const ref = useRef(null);
+  const focusValueRef = useRef(null);
   const DRAG_THRESHOLD = 3;
 
   const handleMouseDown = (e) => {
@@ -28,6 +29,9 @@ export function NumberDragInput({ value, min, max, onChange, className = "w-11" 
       if (!dragging) {
         // Was a click, not a drag — focus the input for typing
         ref.current?.focus();
+      } else {
+        // Opt-in: commit-on-release, e.g. one history entry after a scrub.
+        onCommit?.();
       }
     };
     document.addEventListener("mousemove", onMove);
@@ -39,7 +43,10 @@ export function NumberDragInput({ value, min, max, onChange, className = "w-11" 
       ref={ref}
       type="number" min={min} max={max} value={value}
       onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
-      onFocus={(e) => e.target.select()}
+      onFocus={(e) => { focusValueRef.current = value; e.target.select(); }}
+      // Commit only when the value actually changed while focused — an idle
+      // click-then-click-away must not burn an undo step.
+      onBlur={() => { if (focusValueRef.current !== value) onCommit?.(); focusValueRef.current = null; }}
       onMouseDown={handleMouseDown}
       style={{ cursor: "ew-resize" }}
       className={cx(

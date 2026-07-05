@@ -23,8 +23,7 @@
       "transform": "Transform",
       "text": "Text",
       "sticker": "Sticker",
-      "repaint": "AI Repaint",
-      "frame": "Frame"
+      "repaint": "AI Repaint"
     }
   },
   "text": {
@@ -176,5 +175,20 @@
     "topBottom": "Top / Bottom",
     "close": "Close (Esc)",
     "hint": "Scroll to zoom · Drag to pan · Esc to close"
+  },
+  "border": {
+    "title": "Border",
+    "margin": "Margin",
+    "linked": "Edges linked — drag any to move all",
+    "unlinked": "Edges independent",
+    "background": "Background",
+    "presets": "Presets",
+    "clear": "Clear",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right"
   }
 }

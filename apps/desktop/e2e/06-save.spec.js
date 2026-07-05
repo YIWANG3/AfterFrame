@@ -70,6 +70,49 @@ test.describe("Save pipeline", () => {
     expect(stat.size).toBeGreaterThan(1000); // non-trivial output
   });
 
+  // Every saved edit must be linked back to the original as a version in the
+  // same resource set (stack), AND the original must reference the new image —
+  // both directions. Guards the editor save → quick-register → catalog chain.
+  test("saved edit joins the original's version stack (original ↔ new reference)", async () => {
+    await window.evaluate(() => window.__afterframeTest.closeEditor?.());
+
+    // The original (first cataloged asset) + its resource set, before editing.
+    const originId = await window.locator("[data-gallery-item='true']").first().getAttribute("data-asset-id");
+    expect(originId).toBeTruthy();
+    const originBefore = await window.evaluate((id) => window.mediaWorkspace.getAssetDetailById(id), originId);
+    expect(originBefore?.resource_set_id).toBeTruthy();
+
+    await openEditorOnFirstAsset(window);
+    await window.waitForFunction(() => typeof window.__afterframeTest?.saveAs === "function", null, { timeout: 10_000 });
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
+      .toBe(true);
+    const out = path.join(tmpDir, "linked-edit.jpg");
+    await saveTo(window, out);
+    expect(fs.existsSync(out)).toBe(true);
+    const outReal = fs.realpathSync(out);
+
+    // The new file was registered into the catalog (quick-register ran).
+    let newDetail;
+    await expect
+      .poll(async () => {
+        newDetail = await window.evaluate(
+          (paths) => window.mediaWorkspace.getAssetDetail(paths[0]).then((d) => d || window.mediaWorkspace.getAssetDetail(paths[1])),
+          [outReal, out],
+        );
+        return newDetail?.asset_id || null;
+      }, { timeout: 10_000 })
+      .toBeTruthy();
+
+    // NEW → ORIGINAL: same resource set + lists the original as a sibling.
+    expect(newDetail.resource_set_id).toBe(originBefore.resource_set_id);
+    expect((newDetail.version_siblings || []).map((s) => s.asset_id)).toContain(originId);
+
+    // ORIGINAL → NEW: the original's version stack now includes the new image.
+    const originAfter = await window.evaluate((id) => window.mediaWorkspace.getAssetDetailById(id), originId);
+    expect((originAfter.version_siblings || []).map((s) => s.asset_id)).toContain(newDetail.asset_id);
+  });
+
   test("rotate save: 90° turn writes swapped dimensions", async () => {
     // Fresh editor session so the text layer from the previous test doesn't
     // force the canvas path — rotate/crop alone stays on the native one.

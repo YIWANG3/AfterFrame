@@ -2,7 +2,7 @@
 // buttons, the image-scale slider, and the reset/undo/redo/apply footer.
 // Presentational — the parent (EditorOverlay) owns all state and passes the
 // commit handlers + current values. Extracted from EditorOverlay (Phase 4) so
-// the crop tool matches the <TextPanel>/<FramePanel>/... shape.
+// the crop tool matches the <TextPanel>/... shape.
 
 import {
   RotateCcw, RotateCw, FlipHorizontal2, FlipVertical2, Undo2, Redo2, Check,

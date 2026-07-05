@@ -1,6 +1,28 @@
 import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
 import { getBgPadding } from "./textState";
-import { localFileUrl } from "../../utils/format";
+import { stickerSrc } from "../../utils/format";
+import SelectionHandles from "./components/SelectionHandles";
+import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
+import { buildDepthAlphaMask } from "./render/canvasHelpers";
+
+// Half-width / half-height of a layer as fractions of the image rect — for
+// element-to-element alignment snapping. Text is measured; stickers use scale.
+let _measureCtx = null;
+function layerHalfFrac(layer, imageRect) {
+  if (!imageRect?.width) return { hw: 0, hh: 0 };
+  const s = imageRect.width / 1920; // same display scale TextCanvas renders at
+  if (layer.type === "sticker") {
+    const aspect = layer.naturalHeight && layer.naturalWidth ? layer.naturalHeight / layer.naturalWidth : 1;
+    const wPx = (layer.scale || 0.4) * imageRect.width;
+    return { hw: (wPx / 2) / imageRect.width, hh: (wPx * aspect / 2) / imageRect.height };
+  }
+  if (!_measureCtx) _measureCtx = document.createElement("canvas").getContext("2d");
+  const fontPx = (layer.fontSize || 0) * s;
+  const weight = layer.fontWeight ?? (layer.bold ? 700 : 400);
+  _measureCtx.font = `${layer.italic ? "italic" : "normal"} ${weight} ${fontPx}px "${layer.fontFamily}", sans-serif`;
+  const wPx = _measureCtx.measureText(layer.text || " ").width;
+  return { hw: (wPx / 2) / imageRect.width, hh: (fontPx * 1.2 / 2) / imageRect.height };
+}
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
    re-render so React never touches the DOM text. Initial content is set via
@@ -42,9 +64,6 @@ const EditableDiv = memo(function EditableDiv({ initialText, style, onDone, onCa
   );
 }, () => true);
 
-const HANDLE_SIZE = 7;
-const ROT_HANDLE_DIST = 28;
-const ROT_HANDLE_RADIUS = 5;
 const ACCENT = "rgb(210, 160, 90)";
 
 export default function TextCanvas({
@@ -53,15 +72,24 @@ export default function TextCanvas({
   imageRect,
   onSelectionChange,
   onLayersChange,
+  onLayersCommit = null,
   tool,
   depthFieldCanvas,
   depthFieldVersion,
   depthFeather = 0.08,
+  backgroundPanRect = null,
+  onBackgroundPointerDown = null,
+  onBackgroundDoubleClick = null,
+  // Composed border view: maps the photo's depth field onto the content
+  // sub-rect of the output ({sx,sy,sw,sh} = crop region of the field,
+  // {dx,dy,dw,dh} = content rect as output fractions). Null = output IS the
+  // photo (pad=0), mask stretches edge-to-edge as before.
+  depthMaskGeom = null,
 }) {
   const dragRef = useRef(null);
   const containerRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
-  const [snapLines, setSnapLines] = useState({ h: false, v: false });
+  const [guides, setGuides] = useState({ x: null, y: null }); // alignment guide-line fractions, or null
 
   const handleBgPointerDown = useCallback((e) => {
     if (e.target === e.currentTarget) {
@@ -73,6 +101,17 @@ export default function TextCanvas({
       setEditingId(null);
     }
   }, [onSelectionChange]);
+
+  const handleBackgroundPanPointerDown = useCallback((e) => {
+    if (!onBackgroundPointerDown) return;
+    // Blur active contentEditable first so onBlur fires and saves the text
+    if (document.activeElement?.contentEditable === "true") {
+      document.activeElement.blur();
+    }
+    onSelectionChange(new Set());
+    setEditingId(null);
+    onBackgroundPointerDown(e);
+  }, [onSelectionChange, onBackgroundPointerDown]);
 
   const startDrag = useCallback((e, layerId, type) => {
     if (editingId === layerId) return; // don't drag while editing
@@ -88,6 +127,18 @@ export default function TextCanvas({
     const startX = e.clientX;
     const startY = e.clientY;
 
+    // Alignment targets: the OTHER layers' left/center/right (+ canvas 0/0.5/1),
+    // computed once at drag start (they don't move during the drag).
+    const half = layerHalfFrac(layer, imageRect);
+    const targetsX = [0, 0.5, 1];
+    const targetsY = [0, 0.5, 1];
+    for (const l of layers) {
+      if (l.id === layerId) continue;
+      const h = layerHalfFrac(l, imageRect);
+      targetsX.push(l.x - h.hw, l.x, l.x + h.hw);
+      targetsY.push(l.y - h.hh, l.y, l.y + h.hh);
+    }
+
     dragRef.current = {
       type,
       layerId,
@@ -99,6 +150,7 @@ export default function TextCanvas({
       origRotation: layer.rotation,
       origFontSize: layer.fontSize,
       origScale: layer.scale,
+      half, targetsX, targetsY,
     };
 
     const onMove = (me) => {
@@ -110,12 +162,13 @@ export default function TextCanvas({
       if (drag.type === "move") {
         let nx = drag.origX + dx / imageRect.width;
         let ny = drag.origY + dy / imageRect.height;
-        const SNAP_THRESHOLD = 8 / imageRect.width; // ~8px snap zone
-        const snH = Math.abs(nx - 0.5) < SNAP_THRESHOLD;
-        const snV = Math.abs(ny - 0.5) < SNAP_THRESHOLD;
-        if (snH) nx = 0.5;
-        if (snV) ny = 0.5;
-        setSnapLines({ h: snH, v: snV });
+        // Element-to-element (and canvas) alignment snapping: the dragged layer's
+        // left/center/right edges snap to other layers' edges/centers.
+        const sx = snapAxis(nx, drag.half.hw, drag.targetsX, 6 / imageRect.width);
+        const sy = snapAxis(ny, drag.half.hh, drag.targetsY, 6 / imageRect.height);
+        if (sx) nx = sx.center;
+        if (sy) ny = sy.center;
+        setGuides({ x: sx ? sx.line : null, y: sy ? sy.line : null });
         onLayersChange(layers.map((l) =>
           l.id === drag.layerId ? { ...l, x: nx, y: ny } : l
         ));
@@ -124,10 +177,7 @@ export default function TextCanvas({
         const cy = imageRect.y + layer.y * imageRect.height;
         const startAngle = Math.atan2(drag.startY - cy, drag.startX - cx);
         const curAngle = Math.atan2(me.clientY - cy, me.clientX - cx);
-        let deg = drag.origRotation + ((curAngle - startAngle) * 180) / Math.PI;
-        for (const snap of [0, 90, 180, 270, -90, -180, -270]) {
-          if (Math.abs(deg - snap) < 3) { deg = snap; break; }
-        }
+        const deg = snapAngle(drag.origRotation + ((curAngle - startAngle) * 180) / Math.PI);
         onLayersChange(layers.map((l) =>
           l.id === drag.layerId ? { ...l, rotation: deg } : l
         ));
@@ -137,9 +187,7 @@ export default function TextCanvas({
         // toward center shrinks it.
         const cx = imageRect.x + layer.x * imageRect.width;
         const cy = imageRect.y + layer.y * imageRect.height;
-        const startDist = Math.hypot(drag.startX - cx, drag.startY - cy);
-        const curDist = Math.hypot(me.clientX - cx, me.clientY - cy);
-        const ratio = startDist > 0 ? curDist / startDist : 1;
+        const ratio = resizeRatio({ x: cx, y: cy }, { x: drag.startX, y: drag.startY }, { x: me.clientX, y: me.clientY });
 
         if (drag.layerType === "sticker") {
           const newScale = Math.max(0.02, Math.min(2.0, drag.origScale * ratio));
@@ -157,14 +205,17 @@ export default function TextCanvas({
 
     const onUp = () => {
       dragRef.current = null;
-      setSnapLines({ h: false, v: false });
+      setGuides({ x: null, y: null });
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      // Land the whole drag as a SINGLE history entry (onMove only applied live).
+      // A no-op click dedups away in the history layer.
+      onLayersCommit?.();
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-  }, [layers, selectedIds, imageRect, onSelectionChange, onLayersChange, editingId]);
+  }, [layers, selectedIds, imageRect, onSelectionChange, onLayersChange, onLayersCommit, editingId]);
 
   const handleDoubleClick = useCallback((layerId) => {
     setEditingId(layerId);
@@ -183,39 +234,56 @@ export default function TextCanvas({
       onLayersChange(layers.map((l) =>
         l.id === layerId ? { ...l, text: newText } : l
       ));
+      onLayersCommit?.(); // text edit is one undoable step
     }
-  }, [layers, onLayersChange]);
+  }, [layers, onLayersChange, onLayersCommit]);
 
-  // Cache mask data URLs by zPosition; invalidates when depth field or feather changes.
-  const maskCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather]);
+  // Depth mask caching is two-level so the margin slider (geometry changes) stays
+  // cheap and memory stays bounded (review F10):
+  //  • alphaCache — the expensive full-field pixel loop, keyed by zPosition only
+  //    (geometry-independent). Reused across geometry ticks. Uses the shared
+  //    buildDepthAlphaMask so the preview mask matches the save path exactly.
+  //  • urlCache   — the composed data URL, keyed by zPosition + geometry. geomKey
+  //    is in its deps, so a geometry change starts a fresh map and old full-size
+  //    base64 URLs are dropped instead of accumulating forever.
+  const geomKey = depthMaskGeom
+    ? [depthMaskGeom.sx, depthMaskGeom.sy, depthMaskGeom.sw, depthMaskGeom.sh, depthMaskGeom.dx, depthMaskGeom.dy, depthMaskGeom.dw, depthMaskGeom.dh].map((v) => v.toFixed(4)).join(",")
+    : "id";
+  const alphaCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather]);
+  const urlCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather, geomKey]);
   const getMaskUrl = useCallback((zPosition) => {
     if (!depthFieldCanvas || zPosition == null || zPosition >= 1) return null;
-    const key = zPosition.toFixed(3);
-    if (maskCache.has(key)) return maskCache.get(key);
-    const dW = depthFieldCanvas.width;
-    const dH = depthFieldCanvas.height;
-    const data = depthFieldCanvas.getContext("2d").getImageData(0, 0, dW, dH).data;
-    const lo = Math.max(0, zPosition - depthFeather / 2);
-    const hi = Math.min(1, zPosition + depthFeather / 2);
-    const out = document.createElement("canvas");
-    out.width = dW; out.height = dH;
-    const oCtx = out.getContext("2d");
-    const id = oCtx.createImageData(dW, dH);
-    for (let i = 0; i < dW * dH; i++) {
-      const d = data[i * 4] / 255;
-      let a;
-      if (d <= lo) a = 1;
-      else if (d >= hi) a = 0;
-      else a = 1 - (d - lo) / (hi - lo);
-      const p = i * 4;
-      id.data[p] = 255; id.data[p + 1] = 255; id.data[p + 2] = 255;
-      id.data[p + 3] = Math.round(a * 255);
+    const uKey = `${zPosition.toFixed(3)}|${geomKey}`;
+    if (urlCache.has(uKey)) return urlCache.get(uKey);
+
+    const aKey = zPosition.toFixed(3);
+    let alpha = alphaCache.get(aKey);
+    if (!alpha) {
+      alpha = buildDepthAlphaMask(depthFieldCanvas, zPosition, depthFeather);
+      alphaCache.set(aKey, alpha);
     }
-    oCtx.putImageData(id, 0, 0);
+
+    let out = alpha;
+    if (depthMaskGeom) {
+      // Composed output: the field's crop region lands on the content rect;
+      // the margins around it stay fully visible (white). Cheap compose only.
+      const dW = depthFieldCanvas.width;
+      const dH = depthFieldCanvas.height;
+      const { sx, sy, sw, sh, dx, dy, dw, dh } = depthMaskGeom;
+      const OW = Math.max(1, Math.round((sw * dW) / Math.max(dw, 1e-6)));
+      const OH = Math.max(1, Math.round((sh * dH) / Math.max(dh, 1e-6)));
+      out = document.createElement("canvas");
+      out.width = OW; out.height = OH;
+      const oCtx = out.getContext("2d");
+      oCtx.fillStyle = "#ffffff";
+      oCtx.fillRect(0, 0, OW, OH);
+      oCtx.clearRect(dx * OW, dy * OH, dw * OW, dh * OH);
+      oCtx.drawImage(alpha, sx * dW, sy * dH, sw * dW, sh * dH, dx * OW, dy * OH, dw * OW, dh * OH);
+    }
     const url = out.toDataURL();
-    maskCache.set(key, url);
+    urlCache.set(uKey, url);
     return url;
-  }, [depthFieldCanvas, depthFieldVersion, depthFeather, maskCache]);
+  }, [depthFieldCanvas, depthFieldVersion, depthFeather, alphaCache, urlCache, geomKey, depthMaskGeom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (tool !== "text" || !imageRect) return null;
 
@@ -228,6 +296,22 @@ export default function TextCanvas({
       style={{ zIndex: 15 }}
       onPointerDown={handleBgPointerDown}
     >
+      {backgroundPanRect && onBackgroundPointerDown ? (
+        <div
+          data-editor-photo-pan-hotspot="true"
+          className="absolute"
+          style={{
+            left: `${backgroundPanRect.x}px`,
+            top: `${backgroundPanRect.y}px`,
+            width: `${backgroundPanRect.width}px`,
+            height: `${backgroundPanRect.height}px`,
+            cursor: "grab",
+            zIndex: 0,
+          }}
+          onPointerDown={handleBackgroundPanPointerDown}
+          onDoubleClick={onBackgroundDoubleClick || undefined}
+        />
+      ) : null}
       {layers.map((layer) => {
         // Image-relative coords inside the per-layer mask wrapper
         const px = layer.x * imageRect.width;
@@ -301,12 +385,12 @@ export default function TextCanvas({
           </div>
         );
       })}
-      {/* Snap guide lines */}
-      {snapLines.h && (
-        <div style={{ position: "absolute", left: imageRect.x + imageRect.width * 0.5, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.6, pointerEvents: "none" }} />
+      {/* Alignment guide lines — at the snapped fraction (element edge/center or canvas). */}
+      {guides.x != null && (
+        <div style={{ position: "absolute", left: imageRect.x + imageRect.width * guides.x, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
-      {snapLines.v && (
-        <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * 0.5, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.6, pointerEvents: "none" }} />
+      {guides.y != null && (
+        <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * guides.y, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
     </div>
   );
@@ -493,7 +577,7 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
       )}
 
       {isSelected && !isEditing && (
-        <SelectionOverlay onDragStart={onDragStart} />
+        <SelectionHandles onResizeStart={(e) => onDragStart(e, "resize")} onRotateStart={(e) => onDragStart(e, "rotate")} />
       )}
     </div>
   );
@@ -560,7 +644,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
             </filter>
           </defs>
           <image
-            href={localFileUrl(layer.stickerPath)}
+            href={stickerSrc(layer.stickerPath)}
             x="0" y="0"
             width={Math.max(1, layer.naturalWidth || widthPx)}
             height={Math.max(1, layer.naturalHeight || heightPx)}
@@ -570,55 +654,15 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
         </svg>
       ) : (
         <img
-          src={localFileUrl(layer.stickerPath)}
+          src={stickerSrc(layer.stickerPath)}
           alt=""
           draggable={false}
           className="block h-full w-full select-none"
           style={{ objectFit: "contain", pointerEvents: "none" }}
         />
       )}
-      {isSelected && <SelectionOverlay onDragStart={onDragStart} />}
+      {isSelected && <SelectionHandles onResizeStart={(e) => onDragStart(e, "resize")} onRotateStart={(e) => onDragStart(e, "rotate")} />}
     </div>
-  );
-}
-
-function SelectionOverlay({ onDragStart }) {
-  const pad = 8;
-  // Map percentage positions to account for the pad offset so handles sit on the dashed border
-  const mapPos = (pct) => {
-    if (pct === "0%") return `-${pad}px`;
-    if (pct === "50%") return `calc(50% - 0px)`;
-    if (pct === "100%") return `calc(100% + ${pad}px)`;
-    return pct;
-  };
-  const handleStyle = (x, y, cursor) => ({
-    position: "absolute",
-    left: `calc(${mapPos(x)} - ${HANDLE_SIZE / 2}px)`,
-    top: `calc(${mapPos(y)} - ${HANDLE_SIZE / 2}px)`,
-    width: HANDLE_SIZE,
-    height: HANDLE_SIZE,
-    backgroundColor: ACCENT,
-    border: "1.5px solid #fff",
-    cursor: `${cursor}-resize`,
-    zIndex: 3,
-  });
-
-  return (
-    <>
-      <div style={{ position: "absolute", inset: `-${pad}px`, border: `1.5px dashed ${ACCENT}`, pointerEvents: "none" }} />
-      {[
-        ["0%", "0%", "nwse"], ["50%", "0%", "ns"], ["100%", "0%", "nesw"],
-        ["0%", "50%", "ew"], ["100%", "50%", "ew"],
-        ["0%", "100%", "nesw"], ["50%", "100%", "ns"], ["100%", "100%", "nwse"],
-      ].map(([x, y, cursor], i) => (
-        <div key={i} style={handleStyle(x, y, cursor)} onPointerDown={(e) => onDragStart(e, "resize")} />
-      ))}
-      <div style={{ position: "absolute", left: "50%", top: `-${pad}px`, width: 1.5, height: ROT_HANDLE_DIST, backgroundColor: ACCENT, opacity: 0.5, transform: "translate(-50%, -100%)", pointerEvents: "none" }} />
-      <div
-        style={{ position: "absolute", left: "50%", top: `-${pad + ROT_HANDLE_DIST}px`, width: ROT_HANDLE_RADIUS * 2, height: ROT_HANDLE_RADIUS * 2, borderRadius: "50%", backgroundColor: ACCENT, border: "1.5px solid #fff", transform: "translate(-50%, -50%)", cursor: "grab" }}
-        onPointerDown={(e) => onDragStart(e, "rotate")}
-      />
-    </>
   );
 }
 

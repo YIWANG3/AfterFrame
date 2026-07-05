@@ -50,6 +50,16 @@ test.describe("Golden: crop + transform", () => {
     expect(m.height).toBe(srcH);
   });
 
+  // Unified-canvas Phase 1 guard: the layer coordinate basis (outputRect) must
+  // be byte-identical to the photo rect (imageRect) while canvas.pad is zero —
+  // otherwise the imageRect→outputRect swap silently shifts every layer.
+  test("outputRect === imageRect at pad=0 (layer basis identity)", async () => {
+    const s = await state(window);
+    expect(s.imageRect).toBeTruthy();
+    expect(s.outputRect).toEqual(s.imageRect);
+    expect(s.canvasPad).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
   test("rotate 90° L → dims swap + quarterTurns state; undo/redo reverts", async () => {
     await window.getByRole("button", { name: /90° L/ }).click();
     await window.waitForTimeout(400);
@@ -101,4 +111,9 @@ test.describe("Golden: crop + transform", () => {
     expect(Math.abs(m.width - m.height)).toBeLessThanOrEqual(2);
     expect(m.width).toBeLessThan(srcW); // actually cropped, not full frame
   });
+
+  // NOTE: a pad>0 geometry/pixel guard lands with the save-honors-pad step
+  // (Phase 2b) — asserting saved output dimensions + a layer's pixel position in
+  // the padded canvas, which is far more robust than reading getState rects
+  // (null under headless viewport-measurement timing).
 });

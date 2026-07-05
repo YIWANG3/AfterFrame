@@ -1,8 +1,9 @@
-// Golden / characterization tests — the frame (watermark) tool export. Part of
-// the EditorOverlay refactor safety net (Phase 0). Guards the two things most
-// likely to regress: (1) export at ORIGINAL resolution (not the 2200px preview
-// cap), (2) the frame expands the canvas (adds a band). Uses a >2200px fixture
-// so the full-res vs preview distinction is observable.
+// Frame presets through the UNIFIED canvas path — a preset becomes canvas
+// margins + editable layers, and the normal save pipeline renders them. Guards
+// the two things most likely to regress: (1) the save runs at ORIGINAL
+// resolution (not the 2200px preview cap), (2) the preset margin expands the
+// canvas and is filled with the template background. Uses a >2200px fixture so
+// the full-res vs preview distinction is observable.
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
@@ -12,7 +13,7 @@ const sharp = require("sharp");
 const { launchApp, closeApp } = require("./helpers/app");
 
 const SRC_W = 3000, SRC_H = 2000; // deliberately > PREVIEW_MAX_EDGE (2200)
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-golden-frame-"));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-unified-frame-"));
 // Must live in e2e/fixtures/ — that dir is on the app's media:// allowlist, so
 // the editor can load it (an arbitrary tmp path is blocked).
 const BIG_FIXTURE = path.join(__dirname, "fixtures", "big-frame-3000.jpg");
@@ -31,21 +32,19 @@ async function makeBigFixture() {
   return p;
 }
 
-test.describe("Golden: frame export", () => {
+test.describe("Frame preset save (unified canvas)", () => {
   let app, window, userDataDir, fixturePath;
 
   test.beforeAll(async () => {
     fixturePath = await makeBigFixture();
-    ({ app, window, userDataDir } = await launchApp({ testName: "golden-frame" }));
+    ({ app, window, userDataDir } = await launchApp({ testName: "unified-frame" }));
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    await window.evaluate(() => window.__afterframeTest.setTool("frame"));
-    // let the frame tool mount + build its base
     await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady()), { timeout: 10_000 })
+      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
       .toBe(true);
-    await window.waitForTimeout(600);
+    await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);
@@ -53,40 +52,33 @@ test.describe("Golden: frame export", () => {
     try { fs.rmSync(BIG_FIXTURE, { force: true }); } catch { /* ignore */ }
   });
 
-  test("export keeps ORIGINAL resolution (not the 2200px preview cap)", async () => {
+  test("applying a preset + saving keeps ORIGINAL resolution and adds the margin band", async () => {
+    // bar-id: bottom-only margin, white background.
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getState().canvasPad?.bottom), { timeout: 5_000 })
+      .toBeGreaterThan(0.05);
+
     const outPath = path.join(tmp, "framed.jpg");
-    const dims = await window.evaluate((p) => window.__afterframeTest.exportFrame(p), outPath);
+    await window.evaluate(async (p) => { await window.__afterframeTest.saveAs(p); }, outPath);
 
     expect(fs.existsSync(outPath)).toBe(true);
     const m = await sharp(outPath).metadata();
     expect(m.format).toBe("jpeg");
-    // width == source width (default bar preset adds no horizontal padding) →
-    // proves the export ran on the full-res source, not the 2200px preview.
+    // width == source width (bar preset adds no horizontal padding) → proves
+    // the save ran on the full-res source, not the 2200px preview.
     expect(m.width).toBe(SRC_W);
     expect(m.width).toBeGreaterThan(2200);
-    // the frame adds a bottom band → taller than the source.
+    // the preset adds a bottom band → taller than the source.
     expect(m.height).toBeGreaterThan(SRC_H);
-    // backdoor return matches the file
-    expect(dims.width).toBe(m.width);
-    expect(dims.height).toBe(m.height);
-  });
 
-  test("aspect option pads the export to the chosen ratio (1:1), still full-res", async () => {
-    await window.evaluate(() => window.__afterframeTest.setFrameAspect("1:1"));
-    await window.waitForTimeout(500); // let the ref pick up the new aspect
-
-    const outPath = path.join(tmp, "framed-1x1.jpg");
-    const dims = await window.evaluate((p) => window.__afterframeTest.exportFrame(p), outPath);
-    const m = await sharp(outPath).metadata();
-
-    // square within rounding tolerance
-    expect(Math.abs(m.width / m.height - 1)).toBeLessThan(0.01);
-    // landscape source → padding is added to HEIGHT, so width stays the full-res
-    // source width (proves it didn't fall back to the 2200px preview).
-    expect(m.width).toBe(SRC_W);
-    expect(dims.width).toBe(m.width);
-    expect(dims.height).toBe(m.height);
-
-    await window.evaluate(() => window.__afterframeTest.setFrameAspect("free")); // restore
+    // The band is filled with the template's white background.
+    const { data, info } = await sharp(outPath).raw().toBuffer({ resolveWithObject: true });
+    const midX = Math.floor(info.width / 2);
+    const rowY = info.height - 10; // well inside the bottom band
+    const idx = (rowY * info.width + midX) * info.channels;
+    expect(data[idx]).toBeGreaterThan(230);
+    expect(data[idx + 1]).toBeGreaterThan(230);
+    expect(data[idx + 2]).toBeGreaterThan(230);
   });
 });

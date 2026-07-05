@@ -7,6 +7,13 @@ export function localFileUrl(filePath) {
   return `media://${encoded}`;
 }
 
+// Source URL for a sticker layer's `stickerPath`: a data: URL (e.g. a tinted
+// frame logo instantiated as a sticker layer) is used as-is; otherwise it's a
+// file path served over media://.
+export function stickerSrc(path) {
+  return typeof path === "string" && path.startsWith("data:") ? path : localFileUrl(path);
+}
+
 // Video must be served over HTTP — Chromium's <video> media loader rejects the
 // custom media:// scheme. The localhost media server (main process) streams with
 // Range support. Port is fetched once and memoized.

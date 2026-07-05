@@ -4,6 +4,7 @@
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
+const fs = require("node:fs");
 const { launchApp, closeApp } = require("./helpers/app");
 
 test.describe("Catalog browse", () => {
@@ -70,6 +71,30 @@ test.describe("Catalog browse", () => {
     for (let i = 0; i < count; i += 1) {
       await expect(cards.nth(i)).toHaveAttribute("data-selected", "true");
     }
+  });
+
+  // A corrupt/empty thumbnail file self-heals: the gallery calls
+  // regeneratePreviews on <img> error, which force-regenerates the preview.
+  test("a corrupt thumbnail is regenerated on demand", async () => {
+    const firstCard = window.locator("[data-gallery-item='true']").first();
+    const imagePath = await firstCard.getAttribute("data-image-path");
+    expect(imagePath).toBeTruthy();
+
+    const detail = await window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), imagePath);
+    const previewFile = detail?.preview_path || detail?.image_preview_path;
+    expect(previewFile).toBeTruthy();
+    expect(fs.existsSync(previewFile)).toBe(true);
+
+    // Simulate the concurrent-write corruption: truncate the preview to empty.
+    fs.writeFileSync(previewFile, "");
+    expect(fs.statSync(previewFile).size).toBe(0);
+
+    // The on-demand repair (what the gallery fires on a preview load error)
+    // rebuilds the thumbnail in place.
+    await window.evaluate((p) => window.mediaWorkspace.regeneratePreviews([p]), imagePath);
+    await expect
+      .poll(() => { try { return fs.statSync(previewFile).size; } catch { return 0; } }, { timeout: 10_000 })
+      .toBeGreaterThan(0);
   });
 
   // Keep this last: it mutates the (temp-copied) catalog.

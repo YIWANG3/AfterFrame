@@ -3,7 +3,7 @@
 // handler (which also resets the depth-map overlay for non-text tools).
 // Extracted from EditorOverlay (Phase 4).
 
-import { Crop, Type, Cannabis, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Crop, Type, Cannabis, Sparkles } from "lucide-react";
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -34,7 +34,6 @@ export default function ToolRail({ tool, onSelect, t }) {
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
       <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => onSelect("sticker")} />
       <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => onSelect("ai")} />
-      <ToolTab active={tool === "frame"} icon={ImageIcon} label={t("overlay.tools.frame")} onClick={() => onSelect("frame")} />
     </div>
   );
 }

@@ -7,14 +7,17 @@ export default function PreviewImage({
   className,
   fit = "cover",
   placeholderLabel = "No preview",
+  onLoadError,
 }) {
   const [container, setContainer] = useState(null);
   const [shouldLoad, setShouldLoad] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     setLoaded(false);
     setShouldLoad(false);
+    setErrored(false); // new src (e.g. a cache-busted retry) → give it a fresh chance
   }, [src]);
 
   useEffect(() => {
@@ -42,7 +45,7 @@ export default function PreviewImage({
       {!src ? (
         <div className="absolute inset-0 flex items-center justify-center text-[11px] text-muted">{placeholderLabel}</div>
       ) : null}
-      {src && shouldLoad ? (
+      {src && shouldLoad && !errored ? (
         <img
           src={src}
           alt={alt}
@@ -55,7 +58,11 @@ export default function PreviewImage({
             className || "",
           ].join(" ")}
           onLoad={() => setLoaded(true)}
+          onError={() => { setErrored(true); onLoadError?.(); }}
         />
+      ) : null}
+      {errored ? (
+        <div className="absolute inset-0 flex items-center justify-center text-[11px] text-muted">{placeholderLabel}</div>
       ) : null}
     </div>
   );

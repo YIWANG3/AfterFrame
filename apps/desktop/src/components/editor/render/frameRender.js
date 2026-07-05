@@ -8,6 +8,7 @@
 // sticker scale as a fraction of the *output* canvas width; we convert.
 
 import { drawLayersOnCanvas } from "./drawLayers";
+import { drawScrim } from "./canvasHelpers";
 import { FRAME_FONTS } from "../frameTemplates";
 import { brandIdForMake, pickVariant } from "./frameLogos";
 import {
@@ -157,7 +158,7 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
   return needs;
 }
 
-function geometry(photo, template, adjust) {
+export function geometry(photo, template, adjust) {
   const wref = photo.width || photo.naturalWidth;
   const href = photo.height || photo.naturalHeight;
   const pad = template.canvas?.pad || {};
@@ -190,51 +191,15 @@ function sampleLuminance(ctx, cx, cy, w, h) {
   return n ? sum / n / 255 : 0.3;
 }
 
-/**
- * Render the framed photo.
- * @param {object} args
- * @param {HTMLImageElement|HTMLCanvasElement} args.photo
- * @param {object} args.exif
- * @param {object} [args.profile]  { author, ... }
- * @param {object} args.template
- * @param {object} args.registry   buildLogoRegistry() output
- * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
- * @returns {HTMLCanvasElement}
- */
-export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor, frameAspect = null }) {
-  const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
-  const g = geometry(photo, template, adj);
-  const { wref, padPx, outW, outH } = g;
-  const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
-  const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
-
-  const canvas = document.createElement("canvas");
-  canvas.width = outW;
-  canvas.height = outH;
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  // Background + photo.
-  ctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
-  ctx.fillRect(0, 0, outW, outH);
-  ctx.drawImage(photo, padPx.left, padPx.top, wref, g.href);
-
-  // Optional bottom scrim — keeps on-photo (overlay) text legible regardless of
-  // how bright the photo is at the edge.
-  const scrim = template.canvas?.scrim;
-  if (scrim) {
-    const sh = (scrim.height ?? 0.3) * g.href;
-    const top = scrim.edge === "top";
-    const y0 = top ? padPx.top : padPx.top + g.href - sh;
-    const grad = ctx.createLinearGradient(0, y0, 0, y0 + sh);
-    // gradient runs dark→transparent away from the edge it hugs
-    grad.addColorStop(0, top ? (scrim.to ?? "rgba(0,0,0,0.5)") : (scrim.from ?? "rgba(0,0,0,0)"));
-    grad.addColorStop(1, top ? (scrim.from ?? "rgba(0,0,0,0)") : (scrim.to ?? "rgba(0,0,0,0.5)"));
-    ctx.fillStyle = grad;
-    ctx.fillRect(padPx.left, y0, wref, sh);
-  }
-
+// Turn a template's declarative elements into concrete drawable layers
+// (text + sticker/logo) at anchor-resolved positions. Extracted from
+// renderFrame so the same "template → layers" conversion can feed both the
+// baked export and (later) the editable layer stack. Takes `ctx` because
+// overlay (on-photo) text picks its color from the luminance already drawn.
+export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, factor, registry, logoImages, logoColor, isOverlay }) {
+  const g = geom;
+  const adj = adjust;
+  const { wref, outW, outH } = geom;
   // Resolve which brand applies, for logo lookup.
   const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
   const brand = brandId ? registry.byId.get(brandId) : null;
@@ -304,8 +269,12 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       if (a.align === "left") lx = a.x + scale / 2;
       else if (a.align === "right") lx = a.x - scale / 2;
       layers.push({
-        type: "sticker", stickerPath: key,
+        type: "sticker", stickerPath: key, ei,
         x: lx, y: a.y, scale,
+        // Bounding box for editor hit-testing: size (output fractions) + the
+        // element's VISUAL center (cx/cy). Stickers are center-anchored, so
+        // cx === the draw x.
+        box: { w: scale, h: aspect ? (scale / aspect) * (outW / outH) : scale, cx: lx, cy: a.y },
         rotation, opacity: el.style?.opacity ?? 100,
         outlineWidth: 0, outlineColor: "#fff",
         // On a photo, give the mark a soft shadow so a light logo survives a
@@ -338,17 +307,33 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
     // photo — solving "dark text vanishes on a dark photo" and vice versa.
     let fillColor = el.style?.color || "#141414";
     let shadow = false, shadowColor = "#000000";
-    if (isOverlay) {
+    if (isOverlay && ctx) {
+      // On-photo text: pick black/white by the luminance behind it (needs the
+      // photo already drawn — i.e. a real ctx).
       const lum = sampleLuminance(ctx, a.x * outW, a.y * outH, outW * 0.34, fontPx * 1.6);
       const dark = lum < 0.55;
       fillColor = dark ? "#ffffff" : "#141414";
       shadowColor = dark ? "#000000" : "#ffffff";
       shadow = true;
+    } else if (isOverlay) {
+      // No ctx (generating layers for the editor / hit-testing, before any
+      // render): can't sample — assume a light mark on the photo.
+      fillColor = "#ffffff";
+      shadowColor = "#000000";
+      shadow = true;
     }
 
     layers.push({
-      type: "text", text,
+      type: "text", text, ei,
       x, y: a.y, align: a.align,
+      // Bounding box for editor hit-testing: size (output fractions) + the text's
+      // VISUAL center (cx/cy). drawLayers positions by align, so the center sits
+      // ±half-width off the anchor a.x depending on alignment.
+      box: {
+        w: tw / outW, h: (fontPx * 1.2) / outH,
+        cx: a.x + (a.align === "left" ? (tw / 2) / outW : a.align === "right" ? -(tw / 2) / outW : 0),
+        cy: a.y,
+      },
       fontFamily: family,
       fontSize: sizeFrac * 1920 * factor,
       fontWeight: weight,
@@ -370,31 +355,52 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
       rotation: el.style?.rotation ?? 0,
     });
   }
+  return layers;
+}
+
+/**
+ * Render the framed photo.
+ * @param {object} args
+ * @param {HTMLImageElement|HTMLCanvasElement} args.photo
+ * @param {object} args.exif
+ * @param {object} [args.profile]  { author, ... }
+ * @param {object} args.template
+ * @param {object} args.registry   buildLogoRegistry() output
+ * @param {Map<string, HTMLImageElement>} [args.logoImages] key -> tinted image
+ * @returns {HTMLCanvasElement}
+ */
+export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
+  const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
+  const g = geometry(photo, template, adj);
+  const { wref, padPx, outW, outH } = g;
+  const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
+  const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  // Only overlay templates read pixels back (sampleLuminance for adaptive text
+  // contrast); flag those so getImageData is fast + silent. Non-overlay stays
+  // GPU-backed for fast drawing.
+  const ctx = canvas.getContext("2d", isOverlay ? { willReadFrequently: true } : undefined);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // Background + photo.
+  ctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
+  ctx.fillRect(0, 0, outW, outH);
+  ctx.drawImage(photo, padPx.left, padPx.top, wref, g.href);
+
+  // Optional edge scrim — keeps on-photo (overlay) text legible regardless of
+  // how bright the photo is at the edge.
+  drawScrim(ctx, template.canvas?.scrim, { x: padPx.left, y: padPx.top, width: wref, height: g.href });
+
+  const layers = buildFrameLayers(ctx, {
+    template, exif, profile, geom: g, adjust: adj, factor,
+    registry, logoImages, logoColor, isOverlay,
+  });
 
   drawLayersOnCanvas(ctx, outW, outH, layers, logoImages);
 
-  // Optional: pad the finished frame out to a target aspect ratio (e.g. 3:4,
-  // 16:9) so the export matches a common ratio. The whole framed unit is
-  // centered on a larger background-colored canvas — nothing inside is
-  // distorted or cropped, we only add margin in the frame's own background.
-  if (frameAspect && frameAspect > 0) {
-    const cur = outW / outH;
-    let finalW = outW;
-    let finalH = outH;
-    if (cur < frameAspect) finalW = Math.round(outH * frameAspect); // too tall → widen
-    else finalH = Math.round(outW / frameAspect); // too wide → heighten
-    if (finalW > outW || finalH > outH) {
-      const padded = document.createElement("canvas");
-      padded.width = finalW;
-      padded.height = finalH;
-      const pctx = padded.getContext("2d");
-      pctx.imageSmoothingEnabled = true;
-      pctx.imageSmoothingQuality = "high";
-      pctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
-      pctx.fillRect(0, 0, finalW, finalH);
-      pctx.drawImage(canvas, Math.round((finalW - outW) / 2), Math.round((finalH - outH) / 2));
-      return padded;
-    }
-  }
   return canvas;
 }

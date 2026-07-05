@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
+import BorderControls from "./components/BorderControls";
 import { isTextLayer, isStickerLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
@@ -39,6 +40,7 @@ export default function TextPanel({
   layers = [],
   selectedIds = new Set(),
   onLayersChange,
+  onLayersCoalesced,
   onSelectionChange,
   onApply,
   onReset,
@@ -61,6 +63,17 @@ export default function TextPanel({
   depthModel = null,
   onPickDepthModel,
   onResetDepthModel,
+  // Border / frame — presets + canvas margins (no separate frame tool).
+  framePresets = [],
+  frameThumbs,
+  frameCellAspect,
+  onApplyPreset,
+  onClearPreset,
+  canvasPad,
+  onCanvasPad,
+  onCanvasPadCommit,
+  canvasBg,
+  onCanvasBg,
 }) {
   const { t } = useTranslation("editor");
   const selected = layers.filter((l) => selectedIds.has(l.id));
@@ -75,9 +88,15 @@ export default function TextPanel({
     ? current
     : (currentIsSticker ? null : (layers.filter(isTextLayer).slice(-1)[0] || null));
 
+  // Style edits (sliders, scrubbers, toggles, typing) apply live and coalesce
+  // into ONE undo step per gesture — a run of same-target/same-field edits is
+  // debounced together, keyed by this signature. Discrete structural ops
+  // (add/delete/reorder/align) use onLayersChange directly for an immediate step.
   const update = useCallback((id, patch) => {
-    onLayersChange(layers.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  }, [layers, onLayersChange]);
+    const next = layers.map((l) => (l.id === id ? { ...l, ...patch } : l));
+    if (onLayersCoalesced) onLayersCoalesced(next, `${id}|${Object.keys(patch).sort().join(",")}`);
+    else onLayersChange(next);
+  }, [layers, onLayersChange, onLayersCoalesced]);
 
   const [vPadLinked, setVPadLinked] = useState(true);
   const [hPadLinked, setHPadLinked] = useState(true);
@@ -163,6 +182,25 @@ export default function TextPanel({
             ))}
           </div>
         </Section>
+
+        {/* Border / frame — presets that drop text+logo layers + margins, plus
+            manual canvas margins & background. Replaces the standalone frame tool. */}
+        {onCanvasPad ? (
+          <Section label={t("border.title")}>
+            <BorderControls
+              templates={framePresets}
+              thumbs={frameThumbs}
+              cellAspect={frameCellAspect}
+              onApplyPreset={onApplyPreset}
+              onClearPreset={onClearPreset}
+              pad={canvasPad}
+              onPad={onCanvasPad}
+              onPadCommit={onCanvasPadCommit}
+              bg={canvasBg}
+              onBg={onCanvasBg}
+            />
+          </Section>
+        ) : null}
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
             cached and shared by every text layer's z position slider. */}
@@ -1250,7 +1288,7 @@ function StickerPickerModal({ onPick, onClose }) {
   // doesn't block the canvas/toolbar, and stays open while the user adds
   // multiple stickers in a row (click sticker → layer added → picker stays).
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-chrome/97 backdrop-blur-sm">
+    <div className="absolute inset-0 z-30 flex flex-col bg-chrome">
       <div className="px-3 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("text.pickSticker")}</div>
@@ -1304,4 +1342,3 @@ function StickerPickerModal({ onPick, onClose }) {
     </div>
   );
 }
-

@@ -23,8 +23,7 @@
       "transform": "变换",
       "text": "文字",
       "sticker": "贴纸",
-      "repaint": "AI 重绘",
-      "frame": "边框"
+      "repaint": "AI 重绘"
     }
   },
   "text": {
@@ -176,5 +175,20 @@
     "topBottom": "上 / 下",
     "close": "关闭 (Esc)",
     "hint": "滚动缩放 · 拖动平移 · Esc 关闭"
+  },
+  "border": {
+    "title": "边框",
+    "margin": "边距",
+    "linked": "四边联动，拖任意一边全部变",
+    "unlinked": "四边单独调整",
+    "background": "底色",
+    "presets": "预设",
+    "clear": "清除",
+    "collapse": "收起",
+    "expand": "展开",
+    "top": "上",
+    "bottom": "下",
+    "left": "左",
+    "right": "右"
   }
 }
