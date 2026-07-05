@@ -1435,7 +1435,10 @@ app.whenReady().then(() => {
   if (!isPackaged) addBaselineMediaDir(rootDir); // dev fixtures / demo assets
 
   protocol.handle("media", async (request) => {
-    const raw = request.url.slice("media://".length);
+    // Strip any ?query — the renderer appends a cache-bust token (?r=…) to force
+    // an <img> reload after a preview file is regenerated in place; it's not part
+    // of the file path.
+    const raw = request.url.slice("media://".length).split("?")[0];
     const filePath = raw.split("/").map((seg) => decodeURIComponent(seg)).join(path.sep);
     const resolved = path.resolve(filePath);
     if (!isAllowedMediaPath(resolved)) {

@@ -300,6 +300,8 @@ const CardContent = memo(function CardContent({
   containerRef,
   captionHeight = CAPTION_HEIGHT,
   compact = false,
+  bustToken,
+  onPreviewError,
   showVersionBadge = false, // deprecated — kept for compat
 }) {
   const { t } = useTranslation("nav");
@@ -393,11 +395,12 @@ const CardContent = memo(function CardContent({
       >
         {item.preview_path || item.image_path ? (
           <PreviewImage
-            src={localFileUrl(item.preview_path || item.image_path)}
+            src={localFileUrl(item.preview_path || item.image_path) + (bustToken ? `?r=${bustToken}` : "")}
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
             className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
+            onLoadError={item.exists_on_disk === false ? undefined : () => onPreviewError?.(item)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">{t("gallery.noPreview")}</div>
@@ -496,6 +499,40 @@ export default function Gallery({
   const stableOnOpen = useCallback((id) => cardHandlersRef.current.onOpen?.(id), []);
   const stableOnPrepareDrag = useCallback((id) => cardHandlersRef.current.onPrepareDragSelection?.(id), []);
   const stableOnContextMenu = useCallback((event, item) => cardHandlersRef.current.openContextMenu?.(event, item), []);
+
+  // On-demand thumbnail repair: when a preview <img> fails to load (missing or
+  // corrupt preview file), regenerate it for just that asset and cache-bust the
+  // src so the fixed file reloads — no re-import/restart needed. Once per asset
+  // per session (a still-broken retry won't loop).
+  const [previewBust, setPreviewBust] = useState({}); // asset_id -> cache-bust token
+  const previewRegenRef = useRef({ attempted: new Set(), pending: new Map(), timer: null });
+  const flushPreviewRegen = useCallback(async () => {
+    const st = previewRegenRef.current;
+    st.timer = null;
+    if (!st.pending.size) return;
+    const batch = new Map(st.pending); // asset_id -> source path
+    st.pending.clear();
+    try {
+      await window.mediaWorkspace?.regeneratePreviews?.([...batch.values()]);
+    } catch { /* leave the placeholder; nothing worse than before */ }
+    setPreviewBust((cur) => {
+      const next = { ...cur };
+      const token = Date.now();
+      for (const id of batch.keys()) next[id] = token;
+      return next;
+    });
+  }, []);
+  const stableOnPreviewError = useCallback((item) => {
+    const st = previewRegenRef.current;
+    const id = item?.asset_id;
+    const src = item?.image_path || item?.preview_path;
+    if (!id || !src || st.attempted.has(id)) return;
+    st.attempted.add(id);
+    st.pending.set(id, src);
+    if (st.timer) clearTimeout(st.timer);
+    st.timer = setTimeout(flushPreviewRegen, 400); // batch a page's failures
+  }, [flushPreviewRegen]);
+
   const [containerWidth, setContainerWidth] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -847,6 +884,8 @@ export default function Gallery({
                 containerRef={containerRef}
                 captionHeight={entry.captionHeight ?? CAPTION_HEIGHT}
                 compact={isTileMode}
+                bustToken={previewBust[item.asset_id]}
+                onPreviewError={stableOnPreviewError}
               />
             </div>
           );

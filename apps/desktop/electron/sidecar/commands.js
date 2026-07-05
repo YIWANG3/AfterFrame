@@ -75,6 +75,14 @@ function createSidecarCommands(callJson) {
       return callJson(argv);
     },
 
+    // Force-regenerate 512px thumbnails for specific source files. --force so a
+    // stale "ready" entry pointing at a missing/corrupt file is re-rendered.
+    regeneratePreviews(paths, kind = "preview") {
+      const argv = ["generate-previews", "--kind", String(kind), "--force"];
+      for (const p of paths) argv.push("--path", String(p));
+      return callJson(argv);
+    },
+
     registerRoots(rootType, paths) {
       const argv = ["register-roots", "--root-type", String(rootType)];
       for (const p of paths) argv.push("--path", String(p));

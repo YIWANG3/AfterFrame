@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -39,6 +40,65 @@ class PreviewServiceTest(unittest.TestCase):
             rendered = service._render_with_quicklook(source, output, 512)
             self.assertTrue(rendered.exists())
             self.assertEqual(rendered, output)
+
+    # Concurrent renders of the same asset (editor quick-register + watched-import
+    # batch, separate processes) must not corrupt the preview: each writes a temp
+    # then atomically replaces the final path.
+    @patch("media_workspace.preview_service.subprocess.run")
+    def test_sips_render_writes_temp_then_atomically_replaces(self, run_mock) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            service = PreviewService(catalog)
+            source = Path(temp_dir) / "src.jpg"
+            source.write_bytes(b"jpg")
+            output = service.output_path("img_abcdef123456", "preview")
+            seen = {}
+
+            def side_effect(cmd, check, capture_output, text):
+                out = Path(cmd[cmd.index("--out") + 1])
+                seen["out"] = out
+                out.write_bytes(b"jpgdata")
+                return None
+
+            run_mock.side_effect = side_effect
+            rendered = service._render_with_sips(source, output, 512)
+
+            # sips wrote to a TEMP path in the same directory, not the final file.
+            self.assertNotEqual(seen["out"], output)
+            self.assertEqual(seen["out"].parent, output.parent)
+            self.assertEqual(rendered, output)
+            self.assertEqual(output.read_bytes(), b"jpgdata")
+            # No leftover temp files after the atomic replace.
+            self.assertEqual([p.name for p in output.parent.iterdir()], [output.name])
+
+    @patch("media_workspace.preview_service.subprocess.run")
+    def test_failed_render_leaves_no_temp_and_no_output(self, run_mock) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            service = PreviewService(catalog)
+            source = Path(temp_dir) / "src.jpg"
+            source.write_bytes(b"jpg")
+            output = service.output_path("img_abcdef123456", "preview")
+            run_mock.side_effect = subprocess.CalledProcessError(1, "sips")
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                service._render_with_sips(source, output, 512)
+            # A failed render must not create the final file nor leak a temp.
+            self.assertFalse(output.exists())
+            self.assertEqual(list(output.parent.iterdir()), [])
+
+    # Self-heal: a "ready" preview whose file went missing/empty must be treated
+    # as needing a re-render (not trusted from the stale DB status).
+    def test_preview_on_disk_flags_missing_or_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            service = PreviewService(catalog)
+            self.assertFalse(service._preview_on_disk("img_x0", "preview"))  # missing
+            out = service.output_path("img_x0", "preview")
+            out.write_bytes(b"")
+            self.assertFalse(service._preview_on_disk("img_x0", "preview"))  # empty
+            out.write_bytes(b"data")
+            self.assertTrue(service._preview_on_disk("img_x0", "preview"))
 
 
 if __name__ == "__main__":

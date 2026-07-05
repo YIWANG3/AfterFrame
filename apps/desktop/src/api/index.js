@@ -48,6 +48,7 @@ const api = {
   getAssetDetail: (...args) => invoke("getAssetDetail", ...args),
   getAssetDetailById: (...args) => invoke("getAssetDetailById", ...args),
   ensureHdPreviews: (...args) => invoke("ensureHdPreviews", ...args),
+  regeneratePreviews: (...args) => invoke("regeneratePreviews", ...args),
   detectEditors: (...args) => invoke("detectEditors", ...args),
   openInEditor: (...args) => invoke("openInEditor", ...args),
   getWatchedDirs: (...args) => invoke("getWatchedDirs", ...args),
