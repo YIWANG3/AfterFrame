@@ -165,8 +165,13 @@
 
 - **`pad=0` 恒等**:Phase 1 后,无留白时输出矩形 === 照片矩形,图层输出分数 ===
   照片分数,几何/渲染/save 与今天逐像素相同。文字/贴纸/裁剪工具无感。
-- **两条 undo 栈不动**:`canvas`(pad/bg)归入 transform 态(`editorState`,Cmd+Z),
-  图层仍走 `useLayerHistory` —— 与现有分栈一致,不合并。
+- ~~**两条 undo 栈不动**~~ **【已过时,2026-07 更新】** 计划里原打算保留分栈,
+  实际落地时**合并成了单一时间线**:`useEditorHistory` 每条历史存组合快照
+  `{state, layers}`,`Cmd+Z` 与两个面板(裁剪/文字)撤销按钮走同一个 undo/redo;
+  预设套用/清除为单条原子撤销,拖拽/面板滑块按手势合并成一步。`useLayerHistory`
+  已退役。**坐标也随之改为基准无关**:图层存全图坐标、显示/保存时派生,而不是原计划
+  「图层 x/y = 输出画布分数」的即存即用——本文若干处「输出画布分数」的措辞按此理解。
+  详见 [docs/review/2026-07-02-viewtransform-refactor.md](review/2026-07-02-viewtransform-refactor.md)。
 - **旧 frame 工具并行到 parity**:Phase 4 前 `renderFrame` 烘焙路径原样保留,
   `20-frame` 持续通过;新路径达标后再切、再退役。
 - **全分辨率导出保留**:save 仍在 `sourceImage` 上按 `output` 尺寸渲染。
