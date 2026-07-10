@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#0e0e0d" />
+    <title>AfterFrame — 使用指南</title>
+    <link rel="icon" href="assets/logo.png" />
+    <link rel="stylesheet" href="workspace-guide.css" />
+    <link rel="stylesheet" href="workspace-guide-zh.css" />
+    <link rel="stylesheet" href="brand.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">跳至正文</a>
+    <header>
+      <a class="brand" href="workspace-zh.html"
+        ><img
+          src="assets/logo.png"
+          alt=""
+          width="30"
+          height="30"
+        />AfterFrame</a
+      >
+      <nav>
+        <a href="#start">开始</a><a href="#library">图库</a
+        ><a href="#edit">编辑</a><a href="#ai">AI</a><a href="#mcp">MCP</a>
+      </nav>
+      <a class="language" href="guide.html">English</a
+      ><a
+        class="download"
+        href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+        >下载 <span>↓</span></a
+      >
+    </header>
+    <div class="layout">
+      <aside>
+        <p>使用指南</p>
+        <a href="#start">01 / 开始使用</a><a href="#library">02 / 建立图库</a
+        ><a href="#edit">03 / 编辑</a><a href="#ai">04 / 使用自己的 AI</a
+        ><a href="#mcp">05 / 连接 Agent</a>
+      </aside>
+      <main id="main">
+        <section class="intro">
+          <p class="eyebrow">AfterFrame / 使用指南</p>
+          <h1>从已有的<br />文件夹开始。</h1>
+          <p>导入一组拍摄，挑选照片，完成编辑。原片始终留在原来的地方。</p>
+          <div class="meta">
+            <span>macOS</span><span>Apple Silicon</span><span>本地优先</span>
+          </div>
+        </section>
+        <section id="start">
+          <p class="eyebrow">01 / 开始使用</p>
+          <h2>安装后，选一个文件夹。</h2>
+          <p>
+            从 GitHub Releases 下载最新
+            DMG，移至“应用程序”后打开。第一次使用时创建目录；它只索引照片，不会接管你的文件。
+          </p>
+          <a
+            class="button"
+            href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+            >下载最新版本 <span>↓</span></a
+          >
+          <div class="note">
+            <b>macOS 提示</b
+            ><span
+              >若 macOS 阻止未公证的构建，请按住 Control
+              点按应用并选择“打开”，或在隐私与安全性中允许打开。</span
+            >
+          </div>
+        </section>
+        <section id="library">
+          <p class="eyebrow">02 / 建立图库</p>
+          <h2>导入你已经拥有的照片。</h2>
+          <p>
+            使用“导入”选择包含照片或视频的文件夹。预览和元数据会在后台生成，你可以马上开始浏览。
+          </p>
+          <ol>
+            <li>创建或打开一个目录。</li>
+            <li>选择一个拍摄文件夹。</li>
+            <li>在活动 Dock 中等待预览和元数据完成。</li>
+            <li>排序、评分、打标、建立收藏。</li>
+          </ol>
+          <figure>
+            <img
+              src="assets/filter-cn.png"
+              alt="AfterFrame 中文版照片筛选与元数据面板"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+        </section>
+        <section id="edit">
+          <p class="eyebrow">03 / 编辑</p>
+          <h2>在挑选照片的地方，完成编辑。</h2>
+          <p>
+            裁切、添加文字、制作拼贴、添加贴纸或相机相框。原片不会被改动，按需要的尺寸导出即可。
+          </p>
+          <ul>
+            <li><b>裁切：</b>预设比例、旋转和翻转。</li>
+            <li><b>文字：</b>系统字体、渐变、阴影与深度感知位置。</li>
+            <li><b>相框：</b>EXIF 感知的相机样式与品牌标识。</li>
+          </ul>
+          <figure>
+            <img
+              src="assets/text-cn.png"
+              alt="AfterFrame 中文版深度感知文字编辑器"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+          <figure>
+            <img
+              src="assets/collage-cn.png"
+              alt="AfterFrame 中文版拼图编辑器"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+        </section>
+        <section id="ai">
+          <p class="eyebrow">04 / 使用自己的 AI</p>
+          <h2>使用你信任的服务商。</h2>
+          <p>
+            在“设置”中使用自己的 API Key 配置 AI 重绘和 AI
+            自动标注。请求会直接从你的设备发往所选择的服务商。
+          </p>
+          <div class="rows">
+            <div><b>AI 重绘</b><span>用提示词或内置风格转换图片。</span></div>
+            <div>
+              <b>AI 自动标注</b
+              ><span>生成标题、标签、识别文字和位置猜测。</span>
+            </div>
+            <div>
+              <b>兼容服务商</b
+              ><span>Gemini、GPT Image、Anthropic、即梦及兼容端点。</span>
+            </div>
+          </div>
+          <figure>
+            <img
+              src="assets/ai-repaint.png"
+              alt="AfterFrame AI 重绘前后对比"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+        </section>
+        <section id="mcp">
+          <p class="eyebrow">05 / 连接 Agent</p>
+          <h2>让 Agent 和你的图库一起工作。</h2>
+          <p>
+            应用运行期间，AfterFrame 会启动本地 MCP 服务。将它添加到兼容 MCP
+            的客户端后，即可搜索、打标、裁切、导出，或在应用中展示照片。
+          </p>
+          <figure>
+            <img
+              src="assets/mcp-cn.png"
+              alt="AfterFrame 中文版 MCP 集成"
+              width="2996"
+              height="1776"
+              loading="lazy"
+            />
+          </figure>
+          <p class="muted">Claude Code</p>
+          <pre><code>claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp</code></pre>
+          <p class="muted">Codex CLI</p>
+          <pre><code>codex mcp add afterframe --url http://127.0.0.1:41706/mcp</code></pre>
+          <p class="muted">
+            服务只监听 127.0.0.1；Agent 任务会显示在活动 Dock 中，也可随时取消。
+          </p>
+        </section>
+        <section class="end">
+          <img src="assets/logo.png" alt="" width="48" height="48" />
+          <h2>选个文件夹。<br />从这里开始。</h2>
+          <a
+            class="button"
+            href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+            >下载 AfterFrame <span>↓</span></a
+          >
+        </section>
+      </main>
+    </div>
+    <footer>
+      <span>© 2026 AfterFrame</span><a href="workspace-zh.html">主页</a
+      ><a href="guide.html">English</a
+      ><a href="https://github.com/YIWANG3/AfterFrame">GitHub</a>
+    </footer>
+  </body>
+</html>

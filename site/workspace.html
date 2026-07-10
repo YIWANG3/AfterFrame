@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="theme-color" content="#0e0e0d" />
+    <title>AfterFrame — Local-first photo management</title>
+    <link rel="icon" href="assets/logo.png" />
+    <link rel="stylesheet" href="workspace.css" />
+    <link rel="stylesheet" href="brand.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header>
+      <a class="brand" href="#top"
+        ><img
+          src="assets/logo.png"
+          alt=""
+          width="30"
+          height="30"
+        />AfterFrame</a
+      >
+      <nav aria-label="Site navigation">
+        <a href="guide.html">Usage Guide</a
+        ><a href="https://github.com/YIWANG3/AfterFrame">GitHub</a>
+      </nav>
+      <a class="language" href="workspace-zh.html">中文</a>
+      <a
+        class="download"
+        href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+        >Download <span>↓</span></a
+      >
+    </header>
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">Local-first photo management</p>
+          <h1>All your photos,<br />in one place.</h1>
+          <p>
+            Bring photos from different folders and drives into one catalog to
+            browse, filter, rate, tag, and collect. The originals stay where
+            they are.
+          </p>
+          <div class="actions">
+            <a
+              class="primary"
+              href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+              >Download for macOS <span>↓</span></a
+            ><a class="secondary" href="guide.html"
+              >Read the guide <span>→</span></a
+            >
+          </div>
+          <dl>
+            <div>
+              <dt>10,000+</dt>
+              <dd>images, still fluid</dd>
+            </div>
+            <div>
+              <dt>Local</dt>
+              <dd>files stay where they are</dd>
+            </div>
+            <div>
+              <dt>Search</dt>
+              <dd>tags and metadata</dd>
+            </div>
+          </dl>
+        </div>
+        <figure class="screen hero-screen">
+          <img
+            src="assets/main-en.png"
+            alt="AfterFrame photo catalog in English"
+            width="1600"
+            height="1000"
+          />
+        </figure>
+      </section>
+      <section class="strip">
+        <p>
+          Catalogs · Search and filters · Ratings and tags · Smart collections ·
+          Local MCP
+        </p>
+      </section>
+      <section class="feature" id="library">
+        <div class="feature-heading">
+          <p class="eyebrow">01 / Library</p>
+          <h2>Filter, rate,<br />find the keeper.</h2>
+          <p>
+            Combine camera, lens, tag, format, exposure, date, and rating
+            filters while keeping full metadata beside the image.
+          </p>
+          <a class="arrow" href="guide.html#library"
+            >Manage a library <span>→</span></a
+          >
+        </div>
+        <figure class="screen">
+          <img
+            src="assets/filter-en.png"
+            alt="AfterFrame photo filters and metadata in English"
+            width="1600"
+            height="1000"
+          />
+        </figure>
+      </section>
+      <section class="feature reverse" id="tools">
+        <figure class="screen">
+          <img
+            src="assets/text-en.png"
+            alt="AfterFrame depth-aware text editor in English"
+            width="1600"
+            height="1000"
+            loading="lazy"
+          />
+        </figure>
+        <div class="feature-heading">
+          <p class="eyebrow">02 / Type and frames</p>
+          <h2>Put type behind<br />the subject.</h2>
+          <p>
+            Add type, borders, and camera frames, then use an on-device depth
+            model to place text behind the subject.
+          </p>
+          <a class="arrow" href="guide.html#edit"
+            >Explore editing tools <span>→</span></a
+          >
+        </div>
+      </section>
+      <section class="feature" id="collage">
+        <div class="feature-heading">
+          <p class="eyebrow">03 / Collage</p>
+          <h2>Arrange a shoot<br />into one image.</h2>
+          <p>
+            Choose a layout, pan and zoom each cell, adjust gaps, padding,
+            corners, and background, then export at high resolution.
+          </p>
+        </div>
+        <figure class="screen">
+          <img
+            src="assets/collage-en.png"
+            alt="AfterFrame collage editor in English"
+            width="1600"
+            height="1000"
+            loading="lazy"
+          />
+        </figure>
+      </section>
+      <section class="feature reverse" id="ai">
+        <figure class="screen">
+          <img
+            src="assets/ai-repaint.png"
+            alt="Before and after comparison in AfterFrame AI Repaint"
+            width="1600"
+            height="1000"
+            loading="lazy"
+          />
+        </figure>
+        <div class="feature-heading">
+          <p class="eyebrow">04 / AI Repaint</p>
+          <h2>Keep the original.<br />Try another version.</h2>
+          <p>
+            Use your own AI provider and API key to repaint a photo, then
+            compare the original and result in the same view.
+          </p>
+          <a class="arrow" href="guide.html#ai"
+            >Configure an AI provider <span>→</span></a
+          >
+        </div>
+      </section>
+      <section class="feature" id="agent">
+        <div class="feature-heading">
+          <p class="eyebrow">05 / MCP</p>
+          <h2>Ask for the photos<br />you mean.</h2>
+          <p>
+            With the local MCP server, an agent can search, tag, crop, export,
+            and show selections in the app.
+          </p>
+          <div class="command">
+            claude mcp add --transport http afterframe
+            http://127.0.0.1:41706/mcp
+          </div>
+          <a class="arrow" href="guide.html#mcp"
+            >Connect an agent <span>→</span></a
+          >
+        </div>
+        <figure class="screen">
+          <img
+            src="assets/mcp-en.png"
+            alt="AfterFrame MCP integration in English"
+            width="2998"
+            height="1774"
+            loading="lazy"
+          />
+        </figure>
+      </section>
+      <section class="closing">
+        <img src="assets/logo.png" alt="" width="48" height="48" />
+        <p class="eyebrow">AfterFrame for macOS</p>
+        <h2>Start organizing<br />one shoot.</h2>
+        <a
+          class="primary"
+          href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+          >Download AfterFrame <span>↓</span></a
+        >
+      </section>
+    </main>
+    <footer>
+      <span>© 2026 AfterFrame</span><a href="workspace-zh.html">中文</a
+      ><a href="guide.html">Usage Guide</a
+      ><a href="https://github.com/YIWANG3/AfterFrame">GitHub</a>
+    </footer>
+  </body>
+</html>

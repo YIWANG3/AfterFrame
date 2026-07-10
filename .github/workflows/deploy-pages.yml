@@ -1,0 +1,39 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/assets/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Assemble static site
+        run: |
+          mkdir _site
+          cp site/index.html site/styles.css site/vintage.html site/vintage.css site/vintage-gold.css site/dark.html site/dark.css site/guide.html site/guide.css site/zh.html site/guide-zh.html site/zh.css site/workspace.html site/workspace-zh.html site/workspace.css site/workspace-zh.css site/workspace-guide.css site/workspace-guide-zh.css site/brand.css _site/
+          cp -R docs/assets _site/assets
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

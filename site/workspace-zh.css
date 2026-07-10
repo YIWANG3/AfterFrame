@@ -1,0 +1,36 @@
+@import url("https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap");
+
+html[lang="zh-CN"] body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+html[lang="zh-CN"] .brand {
+  font-family: "Nanum Myeongjo", serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+html[lang="zh-CN"] h1,
+html[lang="zh-CN"] h2 {
+  letter-spacing: -0.06em;
+  line-height: 1.12;
+  word-break: keep-all;
+}
+html[lang="zh-CN"] .hero h1 {
+  font-size: clamp(51px, 5vw, 78px);
+}
+html[lang="zh-CN"] .feature h2 {
+  font-size: clamp(42px, 4vw, 62px);
+}
+
+@media (max-width: 780px) {
+  html[lang="zh-CN"] .brand {
+    font-size: 18px;
+  }
+  html[lang="zh-CN"] .hero h1 {
+    font-size: clamp(48px, 12.5vw, 66px);
+  }
+  html[lang="zh-CN"] .feature h2 {
+    font-size: clamp(41px, 10.6vw, 56px);
+    word-break: normal;
+  }
+}

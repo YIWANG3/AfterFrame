@@ -10,6 +10,8 @@ A local-first photo workspace for browsing, editing, and managing large photogra
 
 AfterFrame is built for photographers who work with thousands of exported images and want a fast, visual tool to browse, organize, crop, add text overlays, and experiment with AI-powered style transfer — all without leaving one app.
 
+[Project site](https://yiwang3.github.io/AfterFrame/) · [Download](../../releases)
+
 ## Download
 
 Download the latest `.dmg` from [Releases](../../releases).

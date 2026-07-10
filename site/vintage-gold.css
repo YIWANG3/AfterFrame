@@ -1,0 +1,5 @@
+/* Matches the desktop app's accent: rgb(210, 160, 90). */
+:root {
+  --yellow: #d2a05a;
+  --red: #8c3f2c;
+}

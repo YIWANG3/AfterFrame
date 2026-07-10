@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#0e0e0d" />
+    <title>AfterFrame — Usage guide</title>
+    <link rel="icon" href="assets/logo.png" />
+    <link rel="stylesheet" href="workspace-guide.css" />
+    <link rel="stylesheet" href="brand.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header>
+      <a class="brand" href="workspace.html"
+        ><img
+          src="assets/logo.png"
+          alt=""
+          width="30"
+          height="30"
+        />AfterFrame</a
+      >
+      <nav>
+        <a href="#start">Start</a><a href="#library">Library</a
+        ><a href="#edit">Edit</a><a href="#ai">AI</a><a href="#mcp">MCP</a>
+      </nav>
+      <a class="language" href="guide-zh.html">中文</a
+      ><a
+        class="download"
+        href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+        >Download <span>↓</span></a
+      >
+    </header>
+    <div class="layout">
+      <aside>
+        <p>Usage guide</p>
+        <a href="#start">01 / Get started</a
+        ><a href="#library">02 / Build a library</a><a href="#edit">03 / Edit</a
+        ><a href="#ai">04 / Bring your own AI</a
+        ><a href="#mcp">05 / Connect an agent</a>
+      </aside>
+      <main id="main">
+        <section class="intro">
+          <p class="eyebrow">AfterFrame / Usage guide</p>
+          <h1>Start with the<br />folders you have.</h1>
+          <p>
+            Import a shoot, make a selection, and finish the image without
+            moving the originals somewhere else.
+          </p>
+          <div class="meta">
+            <span>macOS</span><span>Apple Silicon</span><span>Local-first</span>
+          </div>
+        </section>
+        <section id="start">
+          <p class="eyebrow">01 / Get started</p>
+          <h2>Install, then choose a folder.</h2>
+          <p>
+            Download the latest DMG from GitHub Releases and move AfterFrame to
+            Applications. When you first open it, create a catalog. It indexes
+            your photos; it does not take ownership of them.
+          </p>
+          <a
+            class="button"
+            href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+            >Download latest release <span>↓</span></a
+          >
+          <div class="note">
+            <b>macOS note</b
+            ><span
+              >If macOS blocks an unnotarized build, control-click the app and
+              choose Open, or allow it in Privacy &amp; Security.</span
+            >
+          </div>
+        </section>
+        <section id="library">
+          <p class="eyebrow">02 / Build a library</p>
+          <h2>Import what you already have.</h2>
+          <p>
+            Point Import at a folder of photographs or video. Previews and
+            metadata are built in the background, so you can start browsing
+            straight away.
+          </p>
+          <ol>
+            <li>Create or open a catalog.</li>
+            <li>Choose a folder containing a shoot.</li>
+            <li>Let the activity dock finish previews and metadata.</li>
+            <li>Sort, rate, tag, and collect.</li>
+          </ol>
+          <figure>
+            <img
+              src="assets/filter-en.png"
+              alt="AfterFrame photo filters and metadata in English"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+        </section>
+        <section id="edit">
+          <p class="eyebrow">03 / Edit</p>
+          <h2>Finish the image where you picked it.</h2>
+          <p>
+            Crop, add type, make a collage, add stickers, or use a camera frame.
+            The original is left untouched; export at the size you need.
+          </p>
+          <ul>
+            <li><b>Crop:</b> presets, rotation, and flip.</li>
+            <li>
+              <b>Text:</b> system fonts, gradients, shadows, and depth-aware
+              placement.
+            </li>
+            <li><b>Frame:</b> EXIF-aware camera styles and brand marks.</li>
+          </ul>
+          <figure>
+            <img
+              src="assets/text-en.png"
+              alt="AfterFrame depth-aware text editor in English"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+          <figure>
+            <img
+              src="assets/collage-en.png"
+              alt="AfterFrame collage editor in English"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+        </section>
+        <section id="ai">
+          <p class="eyebrow">04 / Bring your own AI</p>
+          <h2>Use a provider you trust.</h2>
+          <p>
+            Configure AI Repaint and AI Annotation in Settings with your own API
+            key. Requests go directly from your machine to the provider you
+            choose.
+          </p>
+          <div class="rows">
+            <div>
+              <b>AI Repaint</b
+              ><span>Transform an image using a prompt or built-in style.</span>
+            </div>
+            <div>
+              <b>AI Annotation</b
+              ><span
+                >Create captions, tags, detected text, and location
+                guesses.</span
+              >
+            </div>
+            <div>
+              <b>Compatible providers</b
+              ><span
+                >Gemini, GPT Image, Anthropic, Jimeng, and compatible
+                endpoints.</span
+              >
+            </div>
+          </div>
+          <figure>
+            <img
+              src="assets/ai-repaint.png"
+              alt="Before and after comparison in AfterFrame AI Repaint"
+              width="1600"
+              height="1000"
+              loading="lazy"
+            />
+          </figure>
+        </section>
+        <section id="mcp">
+          <p class="eyebrow">05 / Connect an agent</p>
+          <h2>Give an agent access to the library.</h2>
+          <p>
+            While the app is open, AfterFrame runs a local MCP server. Add it to
+            an MCP-compatible client to search, tag, crop, export, or show
+            photos in the app.
+          </p>
+          <figure>
+            <img
+              src="assets/mcp-en.png"
+              alt="AfterFrame MCP integration in English"
+              width="2998"
+              height="1774"
+              loading="lazy"
+            />
+          </figure>
+          <p class="muted">Claude Code</p>
+          <pre><code>claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp</code></pre>
+          <p class="muted">Codex CLI</p>
+          <pre><code>codex mcp add afterframe --url http://127.0.0.1:41706/mcp</code></pre>
+          <p class="muted">
+            The service only listens on 127.0.0.1. Agent jobs stay visible and
+            cancellable in the activity dock.
+          </p>
+        </section>
+        <section class="end">
+          <img src="assets/logo.png" alt="" width="48" height="48" />
+          <h2>Open a folder.<br />Start there.</h2>
+          <a
+            class="button"
+            href="https://github.com/YIWANG3/AfterFrame/releases/latest"
+            >Download AfterFrame <span>↓</span></a
+          >
+        </section>
+      </main>
+    </div>
+    <footer>
+      <span>© 2026 AfterFrame</span><a href="workspace.html">Homepage</a
+      ><a href="guide-zh.html">中文</a
+      ><a href="https://github.com/YIWANG3/AfterFrame">GitHub</a>
+    </footer>
+  </body>
+</html>

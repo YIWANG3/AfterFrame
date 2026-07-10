@@ -1,0 +1,42 @@
+html[lang="zh-CN"] body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+html[lang="zh-CN"] h1,
+html[lang="zh-CN"] h2 {
+  letter-spacing: -0.06em;
+  line-height: 1.12;
+  word-break: keep-all;
+}
+html[lang="zh-CN"] .intro h1 {
+  font-size: clamp(48px, 5vw, 76px);
+}
+html[lang="zh-CN"] main h2 {
+  font-size: clamp(38px, 3.7vw, 58px);
+}
+html[lang="zh-CN"] pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.end h2 {
+  font-size: 0;
+  line-height: 1;
+}
+.end h2::after {
+  content: "把照片理清楚。";
+  font-size: clamp(38px, 3.7vw, 58px);
+  line-height: 1.12;
+}
+@media (max-width: 800px) {
+  html[lang="zh-CN"] .intro h1 {
+    font-size: clamp(44px, 11.8vw, 62px);
+  }
+  html[lang="zh-CN"] main h2 {
+    font-size: clamp(36px, 9.8vw, 50px);
+    word-break: normal;
+    line-break: strict;
+  }
+  .end h2::after {
+    font-size: clamp(36px, 9.8vw, 50px);
+  }
+}

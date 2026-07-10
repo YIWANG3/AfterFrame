@@ -1,0 +1,14 @@
+@import url("https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap");
+
+.brand {
+  font-family: "Nanum Myeongjo", serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+
+@media (max-width: 800px) {
+  .brand {
+    font-size: 18px;
+  }
+}

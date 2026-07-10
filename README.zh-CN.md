@@ -10,6 +10,8 @@
 
 AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化浏览、整理、裁剪、文字叠加和 AI 风格迁移功能 — 全部在一个应用内完成。
 
+[项目主页](https://yiwang3.github.io/AfterFrame/) · [下载](../../releases)
+
 ## 下载
 
 从 [Releases](../../releases) 下载最新 `.dmg`。
