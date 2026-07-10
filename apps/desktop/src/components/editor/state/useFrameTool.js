@@ -5,16 +5,43 @@
 // FramePanel) is gone; rendering and export go through TextCanvas + saveImage.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FRAME_TEMPLATES } from "../frameTemplates";
+import { FRAME_TEMPLATES, FRAME_FONTS } from "../frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { layersFromDisplay } from "../imageMath";
 import { drawScrim } from "../render/canvasHelpers";
-import { createDefaultLayer, createStickerLayer } from "../textState";
+import { createDefaultLayer, createStickerLayer, measureTextWidthDOM } from "../textState";
 
 // Presets always generate at neutral knob settings (the old FramePanel's
 // text/margin/logo-color knobs retired with the baked pipeline).
 const ADJUST = { text: 1, margin: 1 };
+
+// Canvas measureText silently substitutes a system fallback until the bundled
+// @font-face (Outfit, font-display: swap) has actually loaded. buildFrameLayers
+// measures each text line to place its VISUAL CENTER (box.cx), and the editor
+// centers left/right-anchored preset text at that center — so a wrong-width
+// measure shifts a line by an amount PROPORTIONAL to its width, i.e. a wider
+// line (the EXIF row) drifts further right than a narrower one (the model row),
+// breaking their shared left edge. The baked preview pins the left edge instead,
+// so it stays correct — which is why the mismatch only shows in the editor.
+// Force the frame fonts to load before measuring (frame-lab awaits
+// document.fonts.ready for the same reason). Memoized: fonts load once.
+let _frameFontsReady = null;
+function ensureFrameFontsLoaded() {
+  if (_frameFontsReady) return _frameFontsReady;
+  const fonts = typeof document !== "undefined" ? document.fonts : null;
+  if (!fonts?.load) return (_frameFontsReady = Promise.resolve());
+  const jobs = [];
+  for (const family of new Set(Object.values(FRAME_FONTS))) {
+    for (const weight of [300, 400, 500, 600, 700]) {
+      try { jobs.push(fonts.load(`${weight} 16px "${family}"`)); } catch { /* unknown family — skip */ }
+    }
+  }
+  // allSettled: a single weight/family that fails to load must not skip the
+  // document.fonts.ready wait for the ones that do.
+  _frameFontsReady = Promise.allSettled(jobs).then(() => fonts.ready).catch(() => {});
+  return _frameFontsReady;
+}
 
 // EXIF lives in nested image_metadata / raw_metadata (same shape the Inspector
 // reads), NOT flat fields. Prefer RAW metadata when it carries the capture.
@@ -126,6 +153,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     // ran on each one. Coalesce to the last settled crop (review F9).
     const timer = setTimeout(() => {
     (async () => {
+      await ensureFrameFontsLoaded(); // measure against Outfit, not a fallback
+      if (!alive) return;
       const base = buildBaseCanvas(transformedPreview, normalizedCrop);
       const tw = 260;
       const small = document.createElement("canvas");
@@ -160,6 +189,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   async function generatePresetLayers(tpl) {
     if (!transformedPreview) return null;
     const lg = await loadLogos(); // waits out the registry IPC — no dropped logos
+    await ensureFrameFontsLoaded(); // box.cx is measured below — needs Outfit, not a fallback
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
     await ensureLogos(lg, tpl, base.height || 1200);
     const g = geometry(base, tpl, ADJUST);
@@ -207,7 +237,27 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       const cx = box?.cx ?? l.x;
       const cy = box?.cy ?? l.y;
       if (l.type === "text") {
-        return { ...createDefaultLayer({}), ...rest, x: cx, y: cy, align: "center", fromPreset: true };
+        // box.cx was derived from a canvas measureText width. In the editor the
+        // text is a DOM element, and canvas vs DOM widths can differ (a web font
+        // that canvas measures as a fallback, tracking the DOM ignores, …) —
+        // which shifts a left/right-anchored line by an amount proportional to
+        // its width, breaking the shared edge (the wider EXIF row drifts more
+        // than the model row). Re-derive the visual center from a DOM measure,
+        // which is by construction identical to how the line is rendered. The
+        // true edge anchor is recovered as `cx − dir·box.w/2` (both terms share
+        // the same measurement, so its error cancels); center-anchored text is
+        // width-independent and left as-is.
+        const dir = l.align === "left" ? 1 : l.align === "right" ? -1 : 0;
+        let x = cx;
+        if (dir !== 0 && box) {
+          const anchorX = cx - dir * (box.w / 2);
+          const fontPxRender = ((l.fontSize || 0) * g.outW) / 1920; // px basis box.w was measured at
+          const domWFrac = measureTextWidthDOM(l.text, {
+            fontPx: fontPxRender, weight: l.fontWeight, italic: l.italic, family: l.fontFamily,
+          }) / g.outW;
+          x = anchorX + dir * (domWFrac / 2);
+        }
+        return { ...createDefaultLayer({}), ...rest, x, y: cy, align: "center", fromPreset: true };
       }
       if (l.type === "sticker") {
         const img = logoCacheRef.current.get(l.stickerPath);

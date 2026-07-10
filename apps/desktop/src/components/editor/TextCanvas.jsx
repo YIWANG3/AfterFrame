@@ -1,13 +1,14 @@
 import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
-import { getBgPadding } from "./textState";
+import { getBgPadding, measureTextWidthDOM } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
 import { buildDepthAlphaMask } from "./render/canvasHelpers";
 
 // Half-width / half-height of a layer as fractions of the image rect — for
-// element-to-element alignment snapping. Text is measured; stickers use scale.
-let _measureCtx = null;
+// element-to-element alignment snapping. Text is measured via the DOM (see
+// measureTextWidthDOM) so the snap edges match what's actually drawn even before
+// the web font loads; stickers use scale.
 function layerHalfFrac(layer, imageRect) {
   if (!imageRect?.width) return { hw: 0, hh: 0 };
   const s = imageRect.width / 1920; // same display scale TextCanvas renders at
@@ -16,11 +17,9 @@ function layerHalfFrac(layer, imageRect) {
     const wPx = (layer.scale || 0.4) * imageRect.width;
     return { hw: (wPx / 2) / imageRect.width, hh: (wPx * aspect / 2) / imageRect.height };
   }
-  if (!_measureCtx) _measureCtx = document.createElement("canvas").getContext("2d");
   const fontPx = (layer.fontSize || 0) * s;
   const weight = layer.fontWeight ?? (layer.bold ? 700 : 400);
-  _measureCtx.font = `${layer.italic ? "italic" : "normal"} ${weight} ${fontPx}px "${layer.fontFamily}", sans-serif`;
-  const wPx = _measureCtx.measureText(layer.text || " ").width;
+  const wPx = measureTextWidthDOM(layer.text || " ", { fontPx, weight, italic: layer.italic, family: layer.fontFamily });
   return { hw: (wPx / 2) / imageRect.width, hh: (fontPx * 1.2 / 2) / imageRect.height };
 }
 

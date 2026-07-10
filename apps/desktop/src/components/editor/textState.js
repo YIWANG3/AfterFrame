@@ -1,5 +1,29 @@
 let nextId = 1;
 
+// Measure a text run's width the SAME WAY the editor renders it — via a hidden
+// DOM element — instead of canvas `measureText`. Canvas measureText silently
+// falls back to a system font until a web font (@font-face, font-display:swap)
+// has loaded, and that fallback can be markedly wider/narrower than the real
+// font; a hidden DOM node uses the exact same layout engine + font-load state as
+// the on-canvas <div> text, so measurement can never diverge from what's drawn.
+// This keeps alignment snapping and preset placement correct regardless of when
+// the font finishes loading. Mirror TextLayerEl's text styles (whiteSpace:nowrap,
+// lineHeight:1.2) so the measured box matches the rendered one.
+let _measureEl = null;
+export function measureTextWidthDOM(text, { fontPx, weight = 400, italic = false, family = "sans-serif" } = {}) {
+  if (typeof document === "undefined" || !document.body) return 0;
+  if (!_measureEl) {
+    _measureEl = document.createElement("div");
+    _measureEl.setAttribute("aria-hidden", "true");
+    _measureEl.style.cssText =
+      "position:absolute;left:-99999px;top:-99999px;visibility:hidden;pointer-events:none;white-space:nowrap;line-height:1.2;margin:0;padding:0;";
+    document.body.appendChild(_measureEl);
+  }
+  _measureEl.style.font = `${italic ? "italic " : ""}${weight} ${fontPx}px "${family}", sans-serif`;
+  _measureEl.textContent = text || " ";
+  return _measureEl.getBoundingClientRect().width;
+}
+
 export const FONT_OPTIONS = [
   { family: "Plus Jakarta Sans", label: "Plus Jakarta Sans" },
   { family: "Inter", label: "Inter" },
