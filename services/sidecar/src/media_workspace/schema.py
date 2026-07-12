@@ -255,6 +255,8 @@ SCHEMA_STATEMENTS = [
         status TEXT NOT NULL,
         face_count INTEGER NOT NULL DEFAULT 0,
         error_text TEXT,
+        file_size INTEGER,
+        file_mtime REAL,
         indexed_at TEXT,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (asset_id, model_id, model_version),

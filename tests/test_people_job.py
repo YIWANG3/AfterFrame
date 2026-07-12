@@ -66,6 +66,40 @@ class PeopleIndexJobTest(unittest.TestCase):
             self.assertEqual(second_result["analyzed"], 0)
             self.assertEqual(second_result["skipped"], 1)
             self.assertEqual(get_job(connection, second["job_id"])["status"], "succeeded")
+            # The unchanged file was skipped by the stat gate — the worker never
+            # received a second request.
+            worker_log = root / "worker-requests.log"
+            self.assertEqual(len(worker_log.read_text().splitlines()), 1)
+
+            # A changed mtime defeats the stat gate; the worker's pixel-hash
+            # tier answers "skipped" and the stored stat is refreshed…
+            os.utime(source, (source.stat().st_atime, source.stat().st_mtime + 5))
+            third = create_job(connection, "people_index")
+            third_result = run_people_index_job(
+                connection,
+                third["job_id"],
+                model_id="arcface-r100",
+                model_version="test-v1",
+                model_path=model,
+                manifest_hash="manifest-hash",
+                worker_path=worker,
+            )
+            self.assertEqual(third_result["skipped"], 1)
+            self.assertEqual(len(worker_log.read_text().splitlines()), 2)
+
+            # …so the next run is back to skipping without a worker round trip.
+            fourth = create_job(connection, "people_index")
+            fourth_result = run_people_index_job(
+                connection,
+                fourth["job_id"],
+                model_id="arcface-r100",
+                model_version="test-v1",
+                model_path=model,
+                manifest_hash="manifest-hash",
+                worker_path=worker,
+            )
+            self.assertEqual(fourth_result["skipped"], 1)
+            self.assertEqual(len(worker_log.read_text().splitlines()), 2)
 
     def test_paused_job_resumes_from_the_last_committed_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -128,11 +162,15 @@ class PeopleIndexJobTest(unittest.TestCase):
         embedding = [1.0 / math.sqrt(512)] * 512
         code = f'''#!{sys.executable}
 import json
+import pathlib
 import sys
 
 embedding = {json.dumps(embedding)}
+log = pathlib.Path({json.dumps(str(root / "worker-requests.log"))})
 for line in sys.stdin:
     request = json.loads(line)
+    with log.open("a") as fh:
+        fh.write(request["id"] + "\\n")
     if request.get("known_input_hash") == "input-hash-a":
         response = {{"id": request["id"], "ok": True, "skipped": True, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": [], "error": None}}
     else:

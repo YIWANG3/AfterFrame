@@ -259,6 +259,36 @@ def run_people_index_job(
             _check_pause(connection, job_id)
             candidate = candidates[position]
             known_hash = candidate.get("input_hash") if candidate.get("index_status") == "indexed" else None
+            # Cheap pre-decode gate: an already-indexed file with unchanged
+            # size+mtime skips without a worker round trip (no decode, no pixel
+            # hash). Any stat difference falls through to the worker's
+            # pixel-level check, which still catches content edits that a
+            # restored mtime would hide.
+            file_stat = None
+            try:
+                file_stat = os.stat(candidate["canonical_path"])
+            except OSError:
+                pass
+            if (
+                known_hash
+                and file_stat is not None
+                and candidate.get("file_size") == file_stat.st_size
+                and candidate.get("file_mtime") is not None
+                and abs(float(candidate["file_mtime"]) - file_stat.st_mtime) < 1e-6
+            ):
+                stats["skipped"] = int(stats["skipped"]) + 1
+                active_cursor = {"offset": position + 1, "total": len(candidates)}
+                stats["processed"] = position + 1
+                update_job(
+                    connection,
+                    job_id,
+                    payload=payload,
+                    result={**stats, "current_phase": {"status": "running"}},
+                    progress=_fraction(position + 1, len(candidates)),
+                    resume_cursor=active_cursor,
+                    error_text=None,
+                )
+                continue
             request = {
                 "id": str(candidate["asset_id"]),
                 "asset_path": str(candidate["canonical_path"]),
@@ -276,6 +306,19 @@ def run_people_index_job(
             if response.get("ok"):
                 if response.get("skipped"):
                     stats["skipped"] = int(stats["skipped"]) + 1
+                    # The pixel hash matched but the stat gate missed (or had no
+                    # record): refresh the stored stat so the next scan skips
+                    # this file without decoding it.
+                    if file_stat is not None:
+                        connection.execute(
+                            """
+                            UPDATE people_asset_index
+                            SET file_size = ?, file_mtime = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE asset_id = ? AND model_id = ? AND model_version = ?
+                            """,
+                            (file_stat.st_size, file_stat.st_mtime,
+                             str(candidate["asset_id"]), model_id, model_version),
+                        )
                 else:
                     input_hash = response.get("input_hash")
                     if not isinstance(input_hash, str) or not input_hash:
@@ -290,6 +333,8 @@ def run_people_index_job(
                         model_version=model_version,
                         input_hash=input_hash,
                         faces=faces,
+                        file_size=file_stat.st_size if file_stat is not None else None,
+                        file_mtime=file_stat.st_mtime if file_stat is not None else None,
                         commit=False,
                     )
                     stats["analyzed"] = int(stats["analyzed"]) + 1

@@ -72,6 +72,10 @@ def init_db(connection: sqlite3.Connection) -> None:
     _ensure_column(connection, "jobs", "pause_requested", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(connection, "jobs", "resume_cursor_json", "TEXT NOT NULL DEFAULT '{}'")
     _ensure_column(connection, "jobs", "attempt_count", "INTEGER NOT NULL DEFAULT 0")
+    # File stat captured at people-analysis time — the cheap pre-decode gate
+    # for incremental scans (unchanged size+mtime → skip without decoding).
+    _ensure_column(connection, "people_asset_index", "file_size", "INTEGER")
+    _ensure_column(connection, "people_asset_index", "file_mtime", "REAL")
     # Searchable facet columns + indexes (idempotent; VIRTUAL generated columns).
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(

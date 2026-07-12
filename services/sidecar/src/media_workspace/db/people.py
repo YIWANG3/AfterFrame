@@ -64,7 +64,7 @@ def get_people_asset_index(
     row = connection.execute(
         """
         SELECT asset_id, model_id, model_version, input_hash, status, face_count,
-               error_text, indexed_at, updated_at
+               error_text, file_size, file_mtime, indexed_at, updated_at
         FROM people_asset_index
         WHERE asset_id = ? AND model_id = ? AND model_version = ?
         """,
@@ -83,23 +83,27 @@ def upsert_people_asset_index(
     status: str,
     face_count: int = 0,
     error_text: str | None = None,
+    file_size: int | None = None,
+    file_mtime: float | None = None,
     commit: bool = True,
 ) -> dict[str, object]:
     connection.execute(
         """
         INSERT INTO people_asset_index (
             asset_id, model_id, model_version, input_hash, status, face_count,
-            error_text, indexed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            error_text, file_size, file_mtime, indexed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(asset_id, model_id, model_version) DO UPDATE SET
             input_hash = excluded.input_hash,
             status = excluded.status,
             face_count = excluded.face_count,
             error_text = excluded.error_text,
+            file_size = excluded.file_size,
+            file_mtime = excluded.file_mtime,
             indexed_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         """,
-        (asset_id, model_id, model_version, input_hash, status, face_count, error_text),
+        (asset_id, model_id, model_version, input_hash, status, face_count, error_text, file_size, file_mtime),
     )
     if commit:
         connection.commit()
@@ -119,6 +123,8 @@ def replace_asset_faces(
     model_version: str,
     input_hash: str,
     faces: Iterable[dict[str, Any]],
+    file_size: int | None = None,
+    file_mtime: float | None = None,
     commit: bool = True,
 ) -> list[dict[str, object]]:
     """Atomically replace one asset's automatic face records for a model.
@@ -189,6 +195,8 @@ def replace_asset_faces(
             status="indexed",
             face_count=len(inserted),
             error_text=None,
+            file_size=file_size,
+            file_mtime=file_mtime,
             commit=False,
         )
         if nested:
@@ -267,7 +275,8 @@ def list_people_index_candidates(
     rows = connection.execute(
         f"""
         SELECT assets.asset_id, assets.canonical_path,
-               people_asset_index.input_hash, people_asset_index.status AS index_status
+               people_asset_index.input_hash, people_asset_index.status AS index_status,
+               people_asset_index.file_size, people_asset_index.file_mtime
         FROM assets
         LEFT JOIN people_asset_index
           ON people_asset_index.asset_id = assets.asset_id

@@ -333,13 +333,40 @@ private let arcFaceReference = [
     Point(x: 70.7299, y: 92.2041),
 ]
 
+// Longest-edge cap for the analysis buffer. Detection and a 112×112 aligned
+// crop don't benefit from more resolution, while a 10000px image costs ~400MB
+// of RGBA and seconds of decode. Images at or below the cap keep the original
+// full-resolution path so their stored people_input_hash stays valid across
+// this optimization; larger images re-analyze once.
+private let maxAnalysisPixelSize = 4096
+
 private func canonicalImage(at path: String) throws -> CGImage {
     let url = URL(fileURLWithPath: path)
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
         throw WorkerError.unreadableImage(path)
     }
     let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+    let pixelWidth = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+    let pixelHeight = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+
+    if max(pixelWidth, pixelHeight) > maxAnalysisPixelSize {
+        // Scaled decode via ImageIO (libjpeg ratio decoding where available):
+        // never materializes the full-resolution bitmap, and WithTransform
+        // applies the EXIF orientation for us.
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxAnalysisPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let scaled = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw WorkerError.unreadableImage(path)
+        }
+        return scaled
+    }
+
+    guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        throw WorkerError.unreadableImage(path)
+    }
     let orientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
     let oriented = CIImage(cgImage: image).oriented(forExifOrientation: Int32(orientation))
     let context = CIContext(options: [.cacheIntermediates: false])
