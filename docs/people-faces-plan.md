@@ -1,5 +1,8 @@
 # People / Face Auto-Grouping — Research & Plan
 
+> 此文档记录早期调研。产品实现设计已迁移至
+> [people-recognition-design.md](people-recognition-design.md)：默认采用 ArcFace R100、独立原生 Worker、持久化后台任务与模型专属索引。
+
 Goal: portrait auto-categorization — detect faces, group them into "people"
 (like Apple Photos' People album), browse/filter by person. A core feature for
 portrait photographers.
