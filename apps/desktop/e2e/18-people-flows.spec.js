@@ -62,6 +62,10 @@ test("naming the candidate suggests the existing person, then names it", async (
 });
 
 test("view photos filters the gallery to that person", async () => {
+  // Regression: a search left behind in the asset gallery used to survive the
+  // jump and intersect with the person filter, producing an empty result.
+  await ctx.window.getByRole("navigation").getByRole("button", { name: "All Assets" }).click();
+  await ctx.window.getByPlaceholder("Search").fill("definitely-no-such-photo");
   await openPeoplePage();
 
   await ctx.window.getByRole("button", { name: "Open Lin Xi in the library" }).click();
@@ -72,8 +76,18 @@ test("view photos filters the gallery to that person", async () => {
   await expect(ctx.window.getByText("Lin Xi").first()).toBeVisible();
   await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(5, { timeout: 10_000 });
 
-  // Clearing the person filter restores the full gallery.
+  // Clearing the chip restores the full gallery.
   await ctx.window.getByRole("button", { name: /Clear 1/ }).click();
+  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(8, { timeout: 10_000 });
+
+  // The sidebar reset is a separate route. Its slower summary refresh must
+  // not later overwrite the gallery with the stale person query.
+  await openPeoplePage();
+  // The people wall intentionally preserves its prior selection when revisited,
+  // so Lin Xi's inspector is already open here.
+  await ctx.window.getByRole("button", { name: "View photos" }).click();
+  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(5, { timeout: 10_000 });
+  await ctx.window.getByRole("navigation").getByRole("button", { name: "All Assets" }).click();
   await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(8, { timeout: 10_000 });
 });
 
@@ -102,4 +116,38 @@ test("batch-removing faces from a group updates the count", async () => {
   // Count drops from 4 to 2 in the panel and on the wall tile.
   await expect(ctx.window.getByText("Removed 2 faces")).toBeVisible({ timeout: 10_000 });
   await expect(ctx.window.locator("aside").getByText("2 faces", { exact: true })).toBeVisible({ timeout: 10_000 });
+});
+
+test("a chosen cover falls back when its face is removed", async () => {
+  const faceTiles = ctx.window.locator("aside .grid button");
+  const nonCover = faceTiles.filter({ hasNot: ctx.window.getByTitle("Current cover photo") }).first();
+  const chosenFaceId = await nonCover.getAttribute("data-face-id");
+  const chosen = ctx.window.locator(`[data-face-id="${chosenFaceId}"]`);
+  await nonCover.click({ button: "right" });
+  await ctx.window.getByRole("button", { name: "Set as cover photo" }).click();
+  await expect(ctx.window.getByText("Person cover updated", { exact: true })).toBeVisible();
+  await expect(chosen.getByTitle("Current cover photo")).toBeVisible();
+
+  await chosen.click();
+  await ctx.window.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(ctx.window.getByText("Removed 1 face", { exact: true })).toBeVisible();
+  await expect(faceTiles).toHaveCount(1);
+  await expect(faceTiles.first().getByTitle("Current cover photo")).toBeVisible();
+});
+
+test("command-click selection can delete multiple person groups from the context menu", async () => {
+  await openPeoplePage();
+
+  const linXi = ctx.window.getByRole("button", { name: "Open Lin Xi in the library" });
+  const chenMo = ctx.window.getByRole("button", { name: "Open Chen Mo in the library" });
+  await linXi.click();
+  await chenMo.click({ modifiers: ["Meta"] });
+  await expect(ctx.window.getByText("2 groups selected", { exact: true })).toBeVisible();
+
+  await linXi.click({ button: "right" });
+  await ctx.window.getByRole("button", { name: "Delete 2 selected groups" }).click();
+  await ctx.window.getByRole("button", { name: "Delete 2 groups" }).click();
+
+  await expect(ctx.window.getByRole("button", { name: "Lin Xi", exact: true })).toHaveCount(0);
+  await expect(ctx.window.getByRole("button", { name: "Chen Mo", exact: true })).toHaveCount(0);
 });

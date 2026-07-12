@@ -23,7 +23,9 @@ from media_workspace.db import (
     replace_asset_faces,
     set_catalog_path,
     set_person_group_name,
+    set_person_group_cover,
     set_person_group_state,
+    set_person_groups_state,
     upsert_face_model,
 )
 
@@ -324,6 +326,27 @@ class CandidateClusteringTest(unittest.TestCase):
         self.assertEqual(list_person_groups(self.connection), [])
         self.assertEqual(len(list_person_groups(self.connection, state="ignored")), 1)
 
+    def test_multiple_groups_can_be_ignored_atomically(self) -> None:
+        person_a = self._unit({0: 1.0})
+        person_b = self._unit({1: 1.0})
+        self._insert_asset("asset-a1", [person_a])
+        self._insert_asset("asset-a2", [person_a])
+        self._insert_asset("asset-b1", [person_b])
+        self._insert_asset("asset-b2", [person_b])
+        rebuild_candidate_groups(self.connection, model_id="arcface-r100", model_version="1.0.0")
+        groups = list_person_groups(self.connection)
+        self.assertEqual(len(groups), 2)
+        ids = [str(group["group_id"]) for group in groups]
+
+        with self.assertRaises(ValueError):
+            set_person_groups_state(self.connection, group_ids=[ids[0], "missing-group"], state="ignored")
+        self.assertEqual(len(list_person_groups(self.connection)), 2, "partial batch update escaped")
+
+        result = set_person_groups_state(self.connection, group_ids=ids, state="ignored")
+        self.assertEqual(result["updated"], 2)
+        self.assertEqual(list_person_groups(self.connection), [])
+        self.assertEqual(len(list_person_groups(self.connection, state="ignored")), 2)
+
     def test_face_corrections_reject_and_reassign_with_audit(self) -> None:
         person_a = self._unit({0: 1.0})
         person_b = self._unit({1: 1.0})
@@ -432,6 +455,24 @@ class CandidateClusteringTest(unittest.TestCase):
         self.assertIsNotNone(after["cover_face_id"], "cover must fall back to a surviving member")
         self.assertNotEqual(after["cover_face_id"], group["cover_face_id"])
         self.assertEqual(after["face_count"], 1)
+
+    def test_user_cover_falls_back_when_that_face_is_removed(self) -> None:
+        vector = self._unit({0: 1.0})
+        self._insert_asset("asset-a", [vector])
+        self._insert_asset("asset-b", [vector])
+        self._insert_asset("asset-c", [vector])
+        rebuild_candidate_groups(self.connection, model_id="arcface-r100", model_version="1.0.0")
+        (group,) = list_person_groups(self.connection)
+        detail = get_person_group_detail(self.connection, group_id=group["group_id"])
+        chosen = next(face["face_id"] for face in detail["faces"] if face["face_id"] != group["cover_face_id"])
+
+        updated = set_person_group_cover(self.connection, group_id=group["group_id"], face_id=chosen)
+        self.assertEqual(updated["cover_face_id"], chosen)
+
+        remove_face_from_group(self.connection, face_id=chosen)
+        after = get_person_group_detail(self.connection, group_id=group["group_id"])
+        self.assertIsNotNone(after["cover_face_id"])
+        self.assertNotEqual(after["cover_face_id"], chosen)
 
     def test_similar_groups_rank_by_centroid_similarity_not_size(self) -> None:
         # Person A (axis 0) is bigger, person B (axis 1) is closer to the

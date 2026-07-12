@@ -58,6 +58,10 @@
     "removed": "已移出，此脸不会再被自动归回原组",
     "reassigned": "已更正到「{{name}}」",
     "correctionFailed": "更正失败",
+    "setCover": "设为封面图",
+    "coverCurrent": "当前封面图",
+    "coverUpdated": "已更新人物封面",
+    "coverFailed": "设置封面图失败",
     "pickerPlaceholder": "搜索人物…",
     "pickerEmpty": "没有已命名的人物"
   },

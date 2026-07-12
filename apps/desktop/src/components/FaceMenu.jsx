@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-// Context menu for face-correction actions. `items`: [{key, icon, label, onClick}].
+// Context menu for people/face actions.
 export default function FaceMenu({ position, items, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -15,14 +15,17 @@ export default function FaceMenu({ position, items, onClose }) {
   const top = Math.min(position.y, window.innerHeight - items.length * 30 - 16);
   return createPortal(
     <div ref={ref} className="fixed z-[12000] w-[220px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top }}>
-      {items.map(({ key, icon: Icon, label, onClick }) => (
+      {items.map(({ key, icon: Icon, label, onClick, danger = false }) => (
         <button
           key={key}
           type="button"
           onClick={() => { onClose(); onClick(); }}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] text-text transition hover:bg-hover"
+          className={[
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] transition",
+            danger ? "text-red-400 hover:bg-red-500/10" : "text-text hover:bg-hover",
+          ].join(" ")}
         >
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted2" />
+          <Icon className={`h-3.5 w-3.5 shrink-0 ${danger ? "text-red-400" : "text-muted2"}`} />
           <span className="min-w-0 flex-1 truncate">{label}</span>
         </button>
       ))}

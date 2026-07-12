@@ -95,6 +95,12 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     setSelectedId((current) => (current === groupId ? null : current));
   }, []);
 
+  const removeMany = useCallback((groupIds) => {
+    const removed = new Set(groupIds);
+    setGroups((current) => current.filter((group) => !removed.has(group.group_id)));
+    setSelectedId((current) => (removed.has(current) ? null : current));
+  }, []);
+
   async function run(action, failTitle) {
     try {
       return await action();
@@ -114,6 +120,22 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     remove(sourceGroupId);
     if (target?.group_id) patch(target.group_id, { face_count: target.face_count, name: target.name, state: target.state });
   }, t("people.mergeFailed")), [patch, remove, t]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Delete" is intentionally a persistent ignore, not a destructive erase.
+  // The sidecar keeps the group's memberships as a user decision, so future
+  // clustering passes skip these faces instead of recreating the same group.
+  const deleteGroup = useCallback((groupId) => run(async () => {
+    await api.setPeopleGroupState({ groupId, state: "ignored" });
+    remove(groupId);
+    pushToast?.({ title: t("people.deleted"), ttl: 3500 });
+  }, t("people.deleteFailed")), [pushToast, remove, t]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const deleteGroups = useCallback((groupIds) => run(async () => {
+    const ids = [...new Set(groupIds)].filter(Boolean);
+    await api.setPeopleGroupsState({ groupIds: ids, state: "ignored" });
+    removeMany(ids);
+    pushToast?.({ title: t("people.deletedCount", { count: ids.length }), ttl: 3500 });
+  }, t("people.deleteFailed")), [pushToast, removeMany, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startScan = useCallback(() => run(async () => {
     const status = await api.startPeopleIndex();
@@ -135,6 +157,8 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     select: setSelectedId,
     rename,
     merge,
+    deleteGroup,
+    deleteGroups,
     scan,
     startScan,
   };

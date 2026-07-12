@@ -45,7 +45,9 @@ from .db import (
     remove_faces_from_group,
     merge_person_groups,
     set_person_group_name,
+    set_person_group_cover,
     set_person_group_state,
+    set_person_groups_state,
     set_catalog_path,
     summary,
     upsert_catalog_root,
@@ -423,9 +425,17 @@ def build_parser() -> argparse.ArgumentParser:
     rename_people_group_parser.add_argument("--group-id", required=True)
     rename_people_group_parser.add_argument("--name", required=True)
 
+    set_people_group_cover_parser = subparsers.add_parser("set-people-group-cover", parents=[common])
+    set_people_group_cover_parser.add_argument("--group-id", required=True)
+    set_people_group_cover_parser.add_argument("--face-id", required=True)
+
     set_people_group_state_parser = subparsers.add_parser("set-people-group-state", parents=[common])
     set_people_group_state_parser.add_argument("--group-id", required=True)
     set_people_group_state_parser.add_argument("--state", required=True, choices=["candidate", "confirmed", "ignored"])
+
+    set_people_groups_state_parser = subparsers.add_parser("set-people-groups-state", parents=[common])
+    set_people_groups_state_parser.add_argument("--group-id", action="append", required=True)
+    set_people_groups_state_parser.add_argument("--state", required=True, choices=["candidate", "confirmed", "ignored"])
 
     remove_face_parser = subparsers.add_parser("remove-face-from-person", parents=[common])
     remove_face_parser.add_argument("--face-id", action="append", required=True)
@@ -1060,8 +1070,22 @@ def _cmd_rename_people_group(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_set_people_group_cover(args, connection, catalog, parser):
+    print(json.dumps(set_person_group_cover(
+        connection, group_id=args.group_id, face_id=args.face_id,
+    ), indent=2))
+    return 0
+
+
 def _cmd_set_people_group_state(args, connection, catalog, parser):
     print(json.dumps(set_person_group_state(connection, group_id=args.group_id, state=args.state), indent=2))
+    return 0
+
+
+def _cmd_set_people_groups_state(args, connection, catalog, parser):
+    print(json.dumps(set_person_groups_state(
+        connection, group_ids=list(args.group_id), state=args.state,
+    ), indent=2))
     return 0
 
 
@@ -1714,7 +1738,9 @@ COMMAND_HANDLERS = {
     "similar-people-groups": _cmd_similar_people_groups,
     "people-group-detail": _cmd_people_group_detail,
     "rename-people-group": _cmd_rename_people_group,
+    "set-people-group-cover": _cmd_set_people_group_cover,
     "set-people-group-state": _cmd_set_people_group_state,
+    "set-people-groups-state": _cmd_set_people_groups_state,
     "merge-people-groups": _cmd_merge_people_groups,
     "remove-face-from-person": _cmd_remove_face_from_person,
     "assign-face-to-person": _cmd_assign_face_to_person,

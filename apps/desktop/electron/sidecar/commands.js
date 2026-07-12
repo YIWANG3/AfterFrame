@@ -59,8 +59,18 @@ function createSidecarCommands(callJson) {
       return callJson(["rename-people-group", "--group-id", String(groupId), "--name", String(name)]);
     },
 
+    setPeopleGroupCover({ groupId, faceId } = {}) {
+      return callJson(["set-people-group-cover", "--group-id", String(groupId), "--face-id", String(faceId)]);
+    },
+
     setPeopleGroupState({ groupId, state } = {}) {
       return callJson(["set-people-group-state", "--group-id", String(groupId), "--state", String(state)]);
+    },
+
+    setPeopleGroupsState({ groupIds, state } = {}) {
+      const argv = ["set-people-groups-state", "--state", String(state)];
+      for (const groupId of groupIds || []) argv.push("--group-id", String(groupId));
+      return callJson(argv);
     },
 
     removeFaceFromPerson({ faceId, faceIds } = {}) {

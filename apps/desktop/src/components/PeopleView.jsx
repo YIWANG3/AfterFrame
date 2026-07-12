@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LoaderCircle, RefreshCw, ScanFace, Search, Settings2, UsersRound } from "lucide-react";
+import { Check, LoaderCircle, RefreshCw, ScanFace, Search, Settings2, Trash2, UsersRound } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
+import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
+import { confirm } from "./confirm";
 
 // Unnamed groups this small sort behind the frequent faces — the two-face
 // fragments are reachable by scrolling, but the people worth naming lead.
@@ -12,7 +14,7 @@ const MIN_PROMINENT_FACES = 3;
 // of mounting thousands of face crops at once.
 const PAGE_SIZE = 80;
 
-function PersonTile({ group, selected, onSelect, onOpen, onAddName }) {
+function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMenu }) {
   const { t } = useTranslation("nav");
   const named = !!group.name?.trim();
   const source = group.cover_preview_path || group.cover_image_path;
@@ -21,8 +23,9 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName }) {
     <div className="group/tile relative flex flex-col items-center">
       <button
         type="button"
-        onClick={() => onSelect(group)}
+        onClick={(event) => onSelect(group, event)}
         onDoubleClick={() => onOpen(group)}
+        onContextMenu={(event) => onContextMenu(group, event)}
         title={t("people.openGroup", { name: group.name || t("people.unnamed") })}
         className={[
           "relative block overflow-hidden rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
@@ -38,6 +41,11 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName }) {
             selected ? "border-accent/60" : "border-border/50 group-hover/tile:border-accent/45",
           ].join(" ")}
         />
+        {selected && (
+          <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-app shadow-sm">
+            <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+          </span>
+        )}
       </button>
       {named ? (
         <button
@@ -67,10 +75,13 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName }) {
 
 export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   const { t } = useTranslation("nav");
-  const { groups, loading, failed, load, selectedId, select, rename, merge, scan, startScan } = people;
+  const { groups, loading, failed, load, selectedId, select, rename, merge, deleteGroups, scan, startScan } = people;
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [naming, setNaming] = useState(null); // { group, anchorRect }
+  const [groupMenu, setGroupMenu] = useState(null); // { group, x, y }
+  const [selectedIds, setSelectedIds] = useState(() => new Set(selectedId ? [selectedId] : []));
+  const selectionAnchorRef = useRef(selectedId || null);
   const scrollRef = useRef(null);
   const sentinelRef = useRef(null);
   const gridRef = useRef(null);
@@ -105,6 +116,63 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   const scanning = !!scan?.active;
   const scanPercent = Math.round((Number(scan?.progress) || 0) * 100);
 
+  useEffect(() => {
+    const available = new Set(groups.map((group) => group.group_id));
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((groupId) => available.has(groupId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [groups]);
+
+  function handleSelect(group, event) {
+    const groupId = group.group_id;
+    let next;
+    if (event.shiftKey && selectionAnchorRef.current) {
+      const anchorIndex = ordered.findIndex((item) => item.group_id === selectionAnchorRef.current);
+      const targetIndex = ordered.findIndex((item) => item.group_id === groupId);
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const [start, end] = anchorIndex <= targetIndex
+          ? [anchorIndex, targetIndex]
+          : [targetIndex, anchorIndex];
+        next = new Set(ordered.slice(start, end + 1).map((item) => item.group_id));
+      }
+    } else if (event.metaKey || event.ctrlKey) {
+      next = new Set(selectedIds);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      selectionAnchorRef.current = groupId;
+    } else {
+      next = new Set([groupId]);
+      selectionAnchorRef.current = groupId;
+    }
+    next ||= new Set([groupId]);
+    setSelectedIds(next);
+    select(next.has(groupId) ? groupId : ([...next].at(-1) || null));
+  }
+
+  async function confirmDelete(groupIds) {
+    const ids = [...new Set(groupIds)].filter(Boolean);
+    if (!ids.length) return;
+    const group = groups.find((item) => item.group_id === ids[0]);
+    const multiple = ids.length > 1;
+    const approved = await confirm({
+      title: multiple
+        ? t("people.deleteManyConfirmTitle", { count: ids.length })
+        : t("people.deleteConfirmTitle", { name: group?.name || t("people.unnamed") }),
+      message: multiple ? t("people.deleteManyConfirmMessage", { count: ids.length }) : t("people.deleteConfirmMessage"),
+      detail: multiple ? t("people.deleteManyConfirmDetail", { count: ids.length }) : t("people.deleteConfirmDetail"),
+      confirmLabel: multiple ? t("people.deleteManyConfirmAction", { count: ids.length }) : t("people.deleteConfirmAction"),
+      cancelLabel: t("people.deleteCancel"),
+      danger: true,
+    });
+    if (!approved) return;
+    try {
+      await deleteGroups(ids);
+      const removed = new Set(ids);
+      setSelectedIds((current) => new Set([...current].filter((groupId) => !removed.has(groupId))));
+    } catch { /* usePeopleGroups already surfaced the error */ }
+  }
+
   // Keyboard selection over the wall, same feel as the sticker grid: arrows
   // move the ring, Enter opens the person's photos, Escape drops selection.
   useEffect(() => {
@@ -119,8 +187,16 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
         return;
       }
       if (event.key === "Escape") {
-        if (index >= 0) select(null);
+        setSelectedIds(new Set());
+        select(null);
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        const ids = ordered.map((group) => group.group_id);
+        setSelectedIds(new Set(ids));
+        if (selectedId == null && ids.length) select(ids[0]);
         return;
       }
       if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(event.key)) return;
@@ -141,6 +217,8 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
       }
       event.preventDefault();
       select(visible[next].group_id);
+      setSelectedIds(new Set([visible[next].group_id]));
+      selectionAnchorRef.current = visible[next].group_id;
       // Keep DOM focus on the selected tile — otherwise the previously
       // clicked tile keeps its :focus-visible ring and two tiles look active.
       tiles[next]?.querySelector("button")?.focus({ preventScroll: true });
@@ -148,7 +226,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible, selectedId, naming, select, onOpenGroup]);
+  }, [visible, ordered, selectedId, naming, select, onOpenGroup]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -157,6 +235,11 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
           <UsersRound className="h-4 w-4" />
           <h1 className="text-[12px] font-normal text-text">{t("people.title")}</h1>
           <span className="text-muted3">· {groups.length}</span>
+          {selectedIds.size > 1 && (
+            <span className="ml-1 rounded-full bg-accent/12 px-2 py-0.5 text-[10px] text-accent">
+              {t("people.selectedGroups", { count: selectedIds.size })}
+            </span>
+          )}
           {scanning && (
             <span className="ml-2 flex items-center gap-1.5 truncate text-[11px] text-muted">
               <LoaderCircle className="h-3 w-3 animate-spin" />
@@ -209,10 +292,23 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
                 <PersonTile
                   key={group.group_id}
                   group={group}
-                  selected={group.group_id === selectedId}
-                  onSelect={(target) => select(target.group_id === selectedId ? null : target.group_id)}
+                  selected={selectedIds.has(group.group_id)}
+                  onSelect={handleSelect}
                   onOpen={onOpenGroup}
                   onAddName={(target, anchorRect) => setNaming({ group: target, anchorRect })}
+                  onContextMenu={(target, event) => {
+                    event.preventDefault();
+                    let groupIds;
+                    if (selectedIds.has(target.group_id)) {
+                      groupIds = [...selectedIds];
+                    } else {
+                      groupIds = [target.group_id];
+                      setSelectedIds(new Set(groupIds));
+                      selectionAnchorRef.current = target.group_id;
+                    }
+                    select(target.group_id);
+                    setGroupMenu({ groupIds, x: event.clientX, y: event.clientY });
+                  }}
                 />
               ))}
             </div>
@@ -269,6 +365,22 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
           onClose={() => setNaming(null)}
           onRename={(name) => rename(naming.group.group_id, name)}
           onMerge={(target) => merge(naming.group.group_id, target.group_id)}
+        />
+      )}
+
+      {groupMenu && (
+        <FaceMenu
+          position={groupMenu}
+          onClose={() => setGroupMenu(null)}
+          items={[{
+            key: "delete-group",
+            icon: Trash2,
+            label: groupMenu.groupIds.length > 1
+              ? t("people.deleteSelectedGroups", { count: groupMenu.groupIds.length })
+              : t("people.deleteGroup"),
+            danger: true,
+            onClick: () => void confirmDelete(groupMenu.groupIds),
+          }]}
         />
       )}
     </div>

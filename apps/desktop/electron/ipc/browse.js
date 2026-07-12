@@ -81,10 +81,22 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.renamePeopleGroup(options || {});
   });
 
+  ipcMain.handle("workspace:set-people-group-cover", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.setPeopleGroupCover(options || {});
+  });
+
   ipcMain.handle("workspace:set-people-group-state", async (_event, options) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
     return await commands.setPeopleGroupState(options || {});
+  });
+
+  ipcMain.handle("workspace:set-people-groups-state", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.setPeopleGroupsState(options || {});
   });
 
   ipcMain.handle("workspace:merge-people-groups", async (_event, options) => {

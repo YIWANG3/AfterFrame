@@ -56,6 +56,10 @@ export default function useWorkspace({ pushToast } = {}) {
   // Unified job polling lives in useJobs; domain reactions flow through this
   // bridge ref (reassigned every render → the timer never sees stale closures).
   const jobsBridgeRef = useRef({});
+  // Reuse this existing stable ref for debounced browse context too. Adding a
+  // new Hook here during Vite Fast Refresh can leave React's development Hook
+  // queue out of sync and crash the renderer until a full reload.
+  jobsBridgeRef.browseContext = { status, activeCollectionId, query, filters, sort };
   jobsBridgeRef.current = {
     refreshAll: (opts) => refreshAll(opts),
     startIncrementalImport: (opts) => startIncrementalImport(opts),
@@ -135,7 +139,15 @@ export default function useWorkspace({ pushToast } = {}) {
     clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       if (Date.now() < suppressAutoReloadUntilRef.current) return;
-      void loadBrowser({ search: query.trim() || undefined, force: true });
+      const context = jobsBridgeRef.browseContext;
+      void loadBrowser({
+        nextStatus: context.status,
+        collectionId: context.activeCollectionId,
+        search: context.query.trim() || null,
+        facetFilters: context.filters,
+        sortKey: context.sort,
+        force: true,
+      });
     }, 250);
     return () => clearTimeout(searchTimerRef.current);
   }, [query]);
@@ -462,10 +474,13 @@ export default function useWorkspace({ pushToast } = {}) {
   // Status filters and collections are mutually exclusive views. This owns
   // that invariant — callers must not have to remember to clear the
   // collection themselves (pagination/reloads would silently mix datasets).
-  function setStatusFilter(next) {
+  function setStatusFilter(next, { facetFilters = filters } = {}) {
     setActiveCollectionId(null);
     setStatus(next);
-    void refreshAll({ nextStatus: next, collectionId: null });
+    // Carry the caller's exact next filters through the async summary refresh.
+    // Otherwise refreshAll can resume later with this render's stale person
+    // filter and overwrite a newer unfiltered gallery response.
+    void refreshAll({ nextStatus: next, collectionId: null, facetFilters });
   }
 
   function clearCollection(options = {}) {
@@ -482,19 +497,42 @@ export default function useWorkspace({ pushToast } = {}) {
   // intended context across separate status/collection/filter updates.
   function filterByPerson(groupId) {
     if (!groupId) return;
-    const nextFilters = { ...filters, person_group: groupId };
+    // Opening a person is a new browse destination, not an intersection with
+    // a stale text query/date/tag/rating filter from the previous gallery.
+    // Keeping any of those made a valid person group appear mysteriously empty.
+    const nextFilters = { person_group: groupId };
     setActiveCollectionId(null);
     setStatus("all");
+    setQuery("");
     setFilters(nextFilters);
     void loadBrowser({
       nextStatus: "all",
       collectionId: null,
+      // `undefined` would trigger loadBrowser's default (the stale query from
+      // this render); null explicitly disables search for this request.
+      search: null,
       facetFilters: nextFilters,
       force: true,
     });
   }
 
-  async function refreshAll({ nextStatus = status, collectionId = activeCollectionId, force = false, preserveView = false } = {}) {
+  // Filter controls need an immediate browse as well as a state update. The
+  // effect remains as a safety net for programmatic callers, but relying on it
+  // alone can leave the rendered chips ahead of the gallery during rapid view
+  // transitions (most visibly when clearing a person filter).
+  function applyFilters(nextFilters) {
+    const next = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
+    setFilters(next);
+    void loadBrowser({ force: true, facetFilters: next });
+  }
+
+  async function refreshAll({
+    nextStatus = status,
+    collectionId = activeCollectionId,
+    force = false,
+    preserveView = false,
+    facetFilters = filters,
+  } = {}) {
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
       api.getInfo(),
       api.getSummary(),
@@ -509,7 +547,10 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportTask(nextImportTask);
     setPreviewTask(nextPreviewTask);
     setEnrichmentTask(nextEnrichmentTask);
-    await Promise.all([loadCollections(), loadBrowser({ nextStatus, collectionId, force, preserveView })]);
+    await Promise.all([
+      loadCollections(),
+      loadBrowser({ nextStatus, collectionId, force, preserveView, facetFilters }),
+    ]);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
     void api.getFacetValues().then(setFacetValues).catch(() => {});
@@ -786,6 +827,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setQuery,
     filters,
     setFilters,
+    applyFilters,
     facetValues,
     browserLoading,
     browserReady,

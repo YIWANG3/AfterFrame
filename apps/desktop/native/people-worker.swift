@@ -340,6 +340,13 @@ private let arcFaceReference = [
 // this optimization; larger images re-analyze once.
 private let maxAnalysisPixelSize = 4096
 
+// Vision is deliberately recall-oriented and can return face-shaped signs,
+// windows, or illustrations. Reject weak/tiny observations before ArcFace is
+// asked to embed them; embedding a non-face makes two similar textures look
+// like a real person to the clustering stage.
+private let minimumFaceConfidence: Float = 0.65
+private let minimumFacePixelSize = 48.0
+
 private func canonicalImage(at path: String) throws -> CGImage {
     let url = URL(fileURLWithPath: path)
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
@@ -514,6 +521,57 @@ private func faceQuality(_ box: CGRect, width: Int, height: Int) -> String {
     return smallestDimension < 56 ? "low" : "standard"
 }
 
+private func plausibleFace(
+    _ observation: VNFaceObservation,
+    points: [Point],
+    width: Int,
+    height: Int
+) -> Bool {
+    guard observation.confidence >= minimumFaceConfidence, points.count == 5 else { return false }
+
+    let boxWidth = Double(observation.boundingBox.width) * Double(width)
+    let boxHeight = Double(observation.boundingBox.height) * Double(height)
+    guard min(boxWidth, boxHeight) >= minimumFacePixelSize else { return false }
+
+    // Normalize roll so the remaining checks describe facial topology rather
+    // than image orientation. The five points are eyes, nose, mouth corners.
+    let eyeA = points[0]
+    let eyeB = points[1]
+    let eyeLeft = eyeA.x <= eyeB.x ? eyeA : eyeB
+    let eyeRight = eyeA.x <= eyeB.x ? eyeB : eyeA
+    let eyeDX = eyeRight.x - eyeLeft.x
+    let eyeDY = eyeRight.y - eyeLeft.y
+    let eyeDistance = hypot(eyeDX, eyeDY)
+    guard eyeDistance >= max(8.0, boxWidth * 0.16), eyeDistance <= boxWidth * 0.82 else { return false }
+
+    let eyeMid = Point(x: (eyeLeft.x + eyeRight.x) / 2, y: (eyeLeft.y + eyeRight.y) / 2)
+    let angle = -atan2(eyeDY, eyeDX)
+    let cosine = cos(angle)
+    let sine = sin(angle)
+    func unrolled(_ point: Point) -> Point {
+        let dx = point.x - eyeMid.x
+        let dy = point.y - eyeMid.y
+        return Point(
+            x: eyeMid.x + dx * cosine - dy * sine,
+            y: eyeMid.y + dx * sine + dy * cosine
+        )
+    }
+
+    let nose = unrolled(points[2])
+    let mouthA = unrolled(points[3])
+    let mouthB = unrolled(points[4])
+    let mouthMid = Point(x: (mouthA.x + mouthB.x) / 2, y: (mouthA.y + mouthB.y) / 2)
+    let eyeToMouth = mouthMid.y - eyeMid.y
+    let mouthWidth = hypot(mouthB.x - mouthA.x, mouthB.y - mouthA.y)
+
+    guard eyeToMouth >= boxHeight * 0.16, eyeToMouth <= boxHeight * 0.88 else { return false }
+    guard nose.y >= eyeMid.y + boxHeight * 0.035, nose.y <= mouthMid.y + boxHeight * 0.10 else { return false }
+    guard abs(nose.x - eyeMid.x) <= eyeDistance * 0.62 else { return false }
+    guard abs(mouthMid.x - eyeMid.x) <= eyeDistance * 0.72 else { return false }
+    guard mouthWidth >= eyeDistance * 0.28, mouthWidth <= eyeDistance * 1.65 else { return false }
+    return true
+}
+
 private func analyze(request: Request, model: ArcFaceModel) -> Response {
     do {
         let image = try canonicalImage(at: request.assetPath)
@@ -532,6 +590,7 @@ private func analyze(request: Request, model: ArcFaceModel) -> Response {
         let observations = try detectFaces(in: image)
         let faces: [Face] = try observations.compactMap { observation in
             guard let points = sourceLandmarks(for: observation, width: buffer.width, height: buffer.height),
+                  plausibleFace(observation, points: points, width: buffer.width, height: buffer.height),
                   let transform = SimilarityTransform(source: points, target: arcFaceReference) else {
                 return nil
             }

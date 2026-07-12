@@ -58,6 +58,10 @@
     "removed": "Removed — it won’t be matched back automatically",
     "reassigned": "Moved to “{{name}}”",
     "correctionFailed": "Couldn’t apply the correction",
+    "setCover": "Set as cover photo",
+    "coverCurrent": "Current cover photo",
+    "coverUpdated": "Person cover updated",
+    "coverFailed": "Couldn’t set cover photo",
     "pickerPlaceholder": "Search people…",
     "pickerEmpty": "No named people yet"
   },

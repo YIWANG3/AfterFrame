@@ -61,9 +61,10 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
 
   const clearPeopleGroupFilter = () => {
-    if (!workspace.filters?.person_group) return;
+    if (!workspace.filters?.person_group) return workspace.filters || {};
     const { person_group, ...remaining } = workspace.filters;
     workspace.setFilters(remaining);
+    return remaining;
   };
 
   // The person chip lives in the filter bar; when the filter goes away by any
@@ -706,13 +707,13 @@ export default function App() {
           setStatus={(next) => {
             setViewMode("assets");
             setPeopleGroup(null);
-            clearPeopleGroupFilter();
+            const nextFilters = clearPeopleGroupFilter();
             const baseHistory = history.slice(0, historyIndex + 1);
             const nextHistory = baseHistory[baseHistory.length - 1] === next ? baseHistory : [...baseHistory, next];
             const nextIndex = nextHistory.length - 1;
             setHistory(nextHistory);
             setHistoryIndex(nextIndex);
-            workspace.setStatusFilter(next);
+            workspace.setStatusFilter(next, { facetFilters: nextFilters });
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
@@ -829,7 +830,7 @@ export default function App() {
                 <FilterBar
                   facetValues={workspace.facetValues}
                   filters={workspace.filters}
-                  onChange={workspace.setFilters}
+                  onChange={workspace.applyFilters}
                   personGroup={peopleGroup}
                   onPersonGroup={setPeopleGroup}
                 />

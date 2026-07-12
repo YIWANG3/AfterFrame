@@ -609,7 +609,19 @@ def _person_group_row(connection: sqlite3.Connection, group_id: str) -> dict[str
     row = connection.execute(
         """
         SELECT pg.group_id, pg.name, pg.state, pg.model_id, pg.model_version,
-               pg.cover_face_id, pg.created_at, pg.updated_at,
+               COALESCE(
+                   pg.cover_face_id,
+                   (
+                       SELECT pgf2.face_id
+                       FROM person_group_faces AS pgf2
+                       JOIN asset_faces AS af2 ON af2.face_id = pgf2.face_id
+                       WHERE pgf2.group_id = pg.group_id
+                         AND pgf2.membership_state != 'rejected'
+                       ORDER BY af2.detection_confidence DESC, pgf2.face_id ASC
+                       LIMIT 1
+                   )
+               ) AS cover_face_id,
+               pg.created_at, pg.updated_at,
                COUNT(pgf.face_id) AS face_count
         FROM person_groups AS pg
         LEFT JOIN person_group_faces AS pgf
@@ -762,6 +774,34 @@ def set_person_group_name(
     return _person_group_row(connection, group_id)
 
 
+def set_person_group_cover(
+    connection: sqlite3.Connection,
+    *,
+    group_id: str,
+    face_id: str,
+    commit: bool = True,
+) -> dict[str, object]:
+    """Choose one active member as the group's cover face."""
+    _person_group_row(connection, group_id)
+    member = connection.execute(
+        """
+        SELECT 1
+        FROM person_group_faces
+        WHERE group_id = ? AND face_id = ? AND membership_state != 'rejected'
+        """,
+        (group_id, face_id),
+    ).fetchone()
+    if member is None:
+        raise ValueError(f"face {face_id!r} is not an active member of person group {group_id!r}")
+    connection.execute(
+        "UPDATE person_groups SET cover_face_id = ?, updated_at = CURRENT_TIMESTAMP WHERE group_id = ?",
+        (face_id, group_id),
+    )
+    if commit:
+        connection.commit()
+    return _person_group_row(connection, group_id)
+
+
 def set_person_group_state(
     connection: sqlite3.Connection,
     *,
@@ -779,6 +819,55 @@ def set_person_group_state(
     if commit:
         connection.commit()
     return _person_group_row(connection, group_id)
+
+
+def set_person_groups_state(
+    connection: sqlite3.Connection,
+    *,
+    group_ids: list[str],
+    state: str,
+    commit: bool = True,
+) -> dict[str, object]:
+    """Atomically apply one state to multiple person groups."""
+    if state not in {"candidate", "confirmed", "ignored"}:
+        raise ValueError(f"unsupported person group state: {state!r}")
+    ids = list(dict.fromkeys(str(group_id) for group_id in group_ids if str(group_id)))
+    if not ids:
+        raise ValueError("group_ids must not be empty")
+    placeholders = ", ".join("?" for _ in ids)
+    existing = connection.execute(
+        f"SELECT group_id FROM person_groups WHERE group_id IN ({placeholders})",
+        ids,
+    ).fetchall()
+    found = {str(row["group_id"]) for row in existing}
+    missing = [group_id for group_id in ids if group_id not in found]
+    if missing:
+        raise ValueError(f"unknown person groups: {', '.join(missing)}")
+
+    nested = connection.in_transaction
+    savepoint = "people_set_groups_state"
+    if nested:
+        connection.execute(f"SAVEPOINT {savepoint}")
+    else:
+        connection.execute("BEGIN")
+    try:
+        connection.execute(
+            f"UPDATE person_groups SET state = ?, updated_at = CURRENT_TIMESTAMP "
+            f"WHERE group_id IN ({placeholders})",
+            [state, *ids],
+        )
+        if nested:
+            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+        elif commit:
+            connection.commit()
+    except Exception:
+        if nested:
+            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            connection.rollback()
+        raise
+    return {"group_ids": ids, "state": state, "updated": len(ids)}
 
 
 def _cleanup_group_after_departure(connection: sqlite3.Connection, group_id: str, face_id: str) -> None:

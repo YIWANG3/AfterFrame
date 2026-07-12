@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderPlus, Images, LoaderCircle, Pencil, ScanFace, UserRoundPen, UserRoundX, UsersRound, X } from "lucide-react";
+import { FolderPlus, ImageUp, Images, LoaderCircle, Pencil, ScanFace, Trash2, UserRoundPen, UserRoundX, UsersRound, X } from "lucide-react";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
 import PersonPickerPopover from "./PersonPickerPopover";
+import { confirm } from "./confirm";
 
 // Right-hand detail panel for the people wall: who is selected, how much of
 // the library they cover, and a sample of the faces the group was built from.
 export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pushToast }) {
   const { t } = useTranslation("inspector");
-  const { selectedGroup, groups, rename, merge, load } = people;
+  const { t: navT } = useTranslation("nav");
+  const { selectedGroup, groups, rename, merge, deleteGroup, load } = people;
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMoreFaces, setLoadingMoreFaces] = useState(false);
   const [naming, setNaming] = useState(null); // anchorRect
   const [albumBusy, setAlbumBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [selectedFaces, setSelectedFaces] = useState(() => new Set());
   const [faceMenu, setFaceMenu] = useState(null); // { faceIds, x, y, anchorRect }
   const [picking, setPicking] = useState(null); // { faceIds, anchorRect }
@@ -50,6 +53,34 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
       () => api.removeFaceFromPerson({ faceIds }),
       t("peoplePanel.removedCount", { count: faceIds.length }),
     );
+  }
+
+  async function setCoverFace(faceId) {
+    try {
+      await api.setPeopleGroupCover({ groupId, faceId });
+      setDetail((current) => (current ? { ...current, cover_face_id: faceId } : current));
+      pushToast?.({ title: t("people.coverUpdated"), ttl: 3500 });
+      await load();
+    } catch (error) {
+      pushToast?.({ title: t("people.coverFailed"), message: error?.message || String(error), ttl: 6000, tone: "error" });
+    }
+  }
+
+  async function confirmDeleteGroup() {
+    const approved = await confirm({
+      title: navT("people.deleteConfirmTitle", { name: selectedGroup.name || navT("people.unnamed") }),
+      message: navT("people.deleteConfirmMessage"),
+      detail: navT("people.deleteConfirmDetail"),
+      confirmLabel: navT("people.deleteConfirmAction"),
+      cancelLabel: navT("people.deleteCancel"),
+      danger: true,
+    });
+    if (!approved) return;
+    setDeleteBusy(true);
+    try {
+      await deleteGroup(selectedGroup.group_id);
+    } catch { /* usePeopleGroups already surfaced the error */ }
+    finally { setDeleteBusy(false); }
   }
 
   // The detail endpoint pages faces by confidence; append the next page so
@@ -159,6 +190,15 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
               <FolderPlus className="h-3.5 w-3.5" />
               {t("peoplePanel.createAlbum")}
             </button>
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={() => void confirmDeleteGroup()}
+              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-red-500/25 px-3 text-[12px] text-red-400 transition hover:border-red-500/40 hover:bg-red-500/10 disabled:cursor-wait disabled:opacity-55"
+            >
+              {deleteBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {navT("people.deleteGroup")}
+            </button>
           </div>
         </div>
 
@@ -183,6 +223,7 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
                 return (
                   <button
                     key={face.face_id}
+                    data-face-id={face.face_id}
                     type="button"
                     onClick={() => toggleFace(face.face_id)}
                     onContextMenu={(e) => {
@@ -190,7 +231,13 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
                       const faceIds = selected && selectedFaces.size > 0
                         ? [...selectedFaces]
                         : [face.face_id];
-                      setFaceMenu({ faceIds, x: e.clientX, y: e.clientY, anchorRect: e.currentTarget.getBoundingClientRect() });
+                      setFaceMenu({
+                        faceIds,
+                        anchorFaceId: face.face_id,
+                        x: e.clientX,
+                        y: e.clientY,
+                        anchorRect: e.currentTarget.getBoundingClientRect(),
+                      });
                     }}
                     className={[
                       "relative overflow-hidden rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
@@ -205,6 +252,11 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
                     />
                     {selected && (
                       <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[9px] font-bold text-app">✓</span>
+                    )}
+                    {detail?.cover_face_id === face.face_id && (
+                      <span className="absolute left-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-app shadow-sm" title={t("people.coverCurrent")}>
+                        <ImageUp className="h-2.5 w-2.5 stroke-[2.2]" />
+                      </span>
                     )}
                   </button>
                 );
@@ -266,6 +318,14 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
           position={faceMenu}
           onClose={() => setFaceMenu(null)}
           items={[
+            {
+              key: "set-cover",
+              icon: ImageUp,
+              label: detail?.cover_face_id === faceMenu.anchorFaceId
+                ? t("people.coverCurrent")
+                : t("people.setCover"),
+              onClick: () => void setCoverFace(faceMenu.anchorFaceId),
+            },
             {
               key: "reassign",
               icon: UserRoundPen,
