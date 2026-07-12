@@ -32,5 +32,6 @@ build() {
 }
 
 build video-tool video-tool.swift
+build people-worker people-worker.swift
 
 echo "build-native: done"

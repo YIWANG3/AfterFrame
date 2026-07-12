@@ -66,6 +66,7 @@ const browseIpc = require("./ipc/browse");
 const assetsIpc = require("./ipc/assets");
 const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
+const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const editorsIpc = require("./ipc/editors");
 const watcherModule = require("./watcher");
@@ -170,6 +171,7 @@ let currentLocale = getLocale();
 
 // Serialize all read-modify-write operations to prevent race conditions
 let _settingsWriteQueue = Promise.resolve();
+const _catalogSettingsWriteQueues = new Map();
 
 async function writeAppSettings(settings) {
   const settingsPath = getAppSettingsPath();
@@ -193,6 +195,48 @@ function updateAppSettings(mutateFn) {
   _settingsWriteQueue = run.catch((err) => {
     console.error("[settings] write failed:", err?.message || err);
   });
+  return run;
+}
+
+function getCatalogSettingsPath(catalogPath = currentCatalogPath) {
+  return catalogPath ? path.join(catalogPath, "settings.json") : null;
+}
+
+function readCatalogSettings(catalogPath = currentCatalogPath) {
+  const settingsPath = getCatalogSettingsPath(catalogPath);
+  if (!settingsPath) return {};
+  try {
+    return JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Serialize writes per catalog. Capture the catalog path at call time so a
+ * switch while the write is queued can never redirect settings to another
+ * library.
+ */
+function updateCatalogSettings(mutateFn, catalogPath = currentCatalogPath) {
+  const targetCatalog = catalogPath ? path.resolve(catalogPath) : null;
+  if (!targetCatalog) return Promise.reject(new Error("Open a catalog before changing catalog settings."));
+  const previous = _catalogSettingsWriteQueues.get(targetCatalog) || Promise.resolve();
+  const run = previous.then(async () => {
+    const settingsPath = getCatalogSettingsPath(targetCatalog);
+    const settings = readCatalogSettings(targetCatalog);
+    const next = { version: 1, ...settings, ...mutateFn(settings) };
+    await fs.promises.mkdir(targetCatalog, { recursive: true });
+    await fs.promises.writeFile(settingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
+    return next;
+  });
+  const settled = run.catch((err) => {
+    console.error("[catalog-settings] write failed:", err?.message || err);
+  }).finally(() => {
+    if (_catalogSettingsWriteQueues.get(targetCatalog) === settled) {
+      _catalogSettingsWriteQueues.delete(targetCatalog);
+    }
+  });
+  _catalogSettingsWriteQueues.set(targetCatalog, settled);
   return run;
 }
 
@@ -551,6 +595,8 @@ function formatJobStatus(job) {
   if (!job) {
     return {
       running: false,
+      active: false,
+      paused: false,
       startedAt: null,
       finishedAt: null,
       exitCode: null,
@@ -577,6 +623,8 @@ function formatJobStatus(job) {
   const status = String(job.status || "");
   return {
     running: status === "queued" || status === "running",
+    active: status === "queued" || status === "running" || status === "paused",
+    paused: status === "paused",
     startedAt: job.created_at || null,
     finishedAt: status === "succeeded" || status === "failed" ? job.updated_at || null : null,
     exitCode: status === "failed" ? 1 : status === "succeeded" ? 0 : null,
@@ -603,8 +651,8 @@ async function latestJobStatus(jobType) {
   return formatJobStatus(await sidecarCommands.latestJob(jobType));
 }
 
-async function createJob(jobType, payload) {
-  return await sidecarCommands.createJob(jobType, payload);
+async function createJob(jobType, payload, options) {
+  return await sidecarCommands.createJob(jobType, payload, options);
 }
 
 // ---- media:// allowlist ----------------------------------------------------
@@ -1106,11 +1154,13 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   console.log("[ipc:switch-catalog] nextCatalogPath:", nextCatalogPath, "scratchCatalogPath:", scratchCatalogPath);
   if (!nextCatalogPath && !scratchCatalogPath) {
     currentCatalogPath = null;
+    watcherApi?.rebuild?.();
     console.log("[ipc:switch-catalog] cleared currentCatalogPath (packaged mode, no path)");
     stopResidentSidecar();
     return true;
   }
   currentCatalogPath = normalizeCatalogPath(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath;
+  watcherApi?.rebuild?.();
   console.log("[ipc:switch-catalog] currentCatalogPath set to:", currentCatalogPath);
   stopResidentSidecar(); // next sidecar call restarts it bound to the new catalog
   // Per-catalog caches must not leak across libraries: media allowlist roots,
@@ -1119,6 +1169,7 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   currentSelection = { assets: [], updatedAt: null };
   mcpServerApi?.clearPreviewCache?.();
   await prepareCatalogPath();
+  void peopleApi?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch
   if (currentCatalogPath) {
     updateAppSettings((s) => ({ ...s, lastCatalogPath: currentCatalogPath }));
@@ -1131,9 +1182,12 @@ editorsIpc.register({ ipcMain });
 const watcherApi = watcherModule.register({
   ipcMain,
   getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
-  readAppSettings,
-  updateAppSettings,
+  getCatalogPath: () => currentCatalogPath,
+  readCatalogSettings,
+  updateCatalogSettings,
 });
+
+let peopleApi = null;
 
 jobsIpc.register({
   ipcMain,
@@ -1141,6 +1195,7 @@ jobsIpc.register({
   formatJobStatus, latestJobStatus,
   startImportTask, startEnrichmentTask, startPreviewTask,
   commands: sidecarCommands,
+  resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
 });
 
 aiIpc.register({
@@ -1160,6 +1215,16 @@ const annotationApi = annotationIpc.register({
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
   createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
+});
+
+peopleApi = peopleIpc.register({
+  app, ipcMain, dialog,
+  isPackaged,
+  resourcesPath: process.resourcesPath,
+  readAppSettings, updateAppSettings,
+  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
+  commands: sidecarCommands,
 });
 
 browseIpc.register({
@@ -1461,7 +1526,12 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(resolved).toString());
   });
 
-  prepareCatalogPath();
+  prepareCatalogPath().finally(() => {
+    // A paused task remains paused; only queued durable people tasks are
+    // resumed after an app restart. The runner uses its cursor and model path
+    // stored in the task payload, so it cannot silently switch model spaces.
+    void peopleApi?.recoverQueuedPeopleJobs?.();
+  });
   Menu.setApplicationMenu(buildAppMenu());
   createWindow();
   try { watcherApi.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }

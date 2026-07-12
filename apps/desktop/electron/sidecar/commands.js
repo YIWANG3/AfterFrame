@@ -36,6 +36,55 @@ function createSidecarCommands(callJson) {
       return callJson(["asset-detail", "--image-path", String(imagePath)]);
     },
 
+    listPeopleGroups({ state } = {}) {
+      const argv = ["list-people-groups"];
+      if (state) argv.push("--state", String(state));
+      return callJson(argv).then((rows) => rows || []);
+    },
+
+    similarPeopleGroups({ groupId, limit } = {}) {
+      const argv = ["similar-people-groups", "--group-id", String(groupId)];
+      if (limit) argv.push("--limit", String(limit));
+      return callJson(argv).then((rows) => rows || []);
+    },
+
+    peopleGroupDetail({ groupId, faceLimit, faceOffset } = {}) {
+      const argv = ["people-group-detail", "--group-id", String(groupId)];
+      if (faceLimit) argv.push("--face-limit", String(faceLimit));
+      if (faceOffset) argv.push("--face-offset", String(faceOffset));
+      return callJson(argv);
+    },
+
+    renamePeopleGroup({ groupId, name } = {}) {
+      return callJson(["rename-people-group", "--group-id", String(groupId), "--name", String(name)]);
+    },
+
+    setPeopleGroupState({ groupId, state } = {}) {
+      return callJson(["set-people-group-state", "--group-id", String(groupId), "--state", String(state)]);
+    },
+
+    removeFaceFromPerson({ faceId, faceIds } = {}) {
+      const ids = faceIds || (faceId ? [faceId] : []);
+      const argv = ["remove-face-from-person"];
+      for (const id of ids) argv.push("--face-id", String(id));
+      return callJson(argv);
+    },
+
+    assignFaceToPerson({ faceId, faceIds, groupId } = {}) {
+      const ids = faceIds || (faceId ? [faceId] : []);
+      const argv = ["assign-face-to-person", "--group-id", String(groupId)];
+      for (const id of ids) argv.push("--face-id", String(id));
+      return callJson(argv);
+    },
+
+    mergePeopleGroups({ sourceGroupId, targetGroupId } = {}) {
+      return callJson([
+        "merge-people-groups",
+        "--source-group-id", String(sourceGroupId),
+        "--target-group-id", String(targetGroupId),
+      ]);
+    },
+
     // ── Missing-original handling ────────────────────────────────────────
     verifyAssets({ scope = "all" } = {}) {
       return callJson(["verify-assets", "--scope", String(scope)]);
@@ -182,8 +231,10 @@ function createSidecarCommands(callJson) {
     },
 
     // ── Jobs ─────────────────────────────────────────────────────────────
-    createJob(jobType, payload) {
-      return callJson(["create-job", "--job-type", String(jobType), "--payload-json", JSON.stringify(payload || {})]);
+    createJob(jobType, payload, { priority } = {}) {
+      const argv = ["create-job", "--job-type", String(jobType), "--payload-json", JSON.stringify(payload || {})];
+      if (Number.isFinite(priority)) argv.push("--priority", String(priority));
+      return callJson(argv);
     },
 
     getJob(jobId) {
@@ -202,6 +253,14 @@ function createSidecarCommands(callJson) {
 
     cancelJob(jobId) {
       return callJson(["cancel-job", "--job-id", String(jobId)]);
+    },
+
+    pauseJob(jobId) {
+      return callJson(["pause-job", "--job-id", String(jobId)]);
+    },
+
+    resumeJob(jobId) {
+      return callJson(["resume-job", "--job-id", String(jobId)]);
     },
   };
 }

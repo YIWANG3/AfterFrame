@@ -5,11 +5,11 @@
 
 import { useTranslation } from "react-i18next";
 import { JOB_META, jobLine } from "./ActivityCenter";
-import { Activity } from "lucide-react";
+import { Activity, Pause, Play } from "lucide-react";
 
 // `inline` skips the fixed positioning so the dock can live inside a shared
 // bottom-corner container (alongside the ToastStack) without overlapping it.
-export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) {
+export default function JobDock({ jobs, queuedNote, onCancel, onPause, onResume, inline = false }) {
   const { t } = useTranslation("nav");
   const list = jobs || [];
   if (!list.length) return null;
@@ -23,6 +23,8 @@ export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) 
         const Icon = meta.icon;
         const cancelling = !!job.cancel_requested;
         const isImport = job.jobType === "import";
+        const pausable = job.jobType === "people_index" && !cancelling;
+        const paused = job.status === "paused";
         return (
           <div
             key={job.jobId}
@@ -37,6 +39,16 @@ export default function JobDock({ jobs, queuedNote, onCancel, inline = false }) 
               <span className="shrink-0 text-[10px] tabular-nums text-muted2">
                 {Math.round((job.progress || 0) * 100)}%
               </span>
+              {pausable && (
+                <button
+                  type="button"
+                  onClick={() => (paused ? onResume?.(job.jobId) : onPause?.(job.jobId))}
+                  className="shrink-0 rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                  title={paused ? t("activity.resume") : t("activity.pause")}
+                >
+                  {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={cancelling}

@@ -10,10 +10,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, Brain } from "lucide-react";
+import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, Brain, X } from "lucide-react";
+import { Button, Modal } from "../../ui";
 import {
   Group, FieldRow, Toggle, TextInput, NumberInput, Select,
-  Chip, SecondaryButton, PrimaryButton, Callout,
+  Chip, SecondaryButton, Callout, ActiveRadio, IconActionButton,
 } from "./SettingsPrimitives";
 
 const PROVIDER_TYPES = [
@@ -189,48 +190,41 @@ export default function AnnotationSettings() {
     <div>
       <Group
         title={t("annotation.providersTitle")}
-        badge={t("annotation.providersBadge")}
         subtitle={t("annotation.providersSubtitle")}
       >
-        {editing ? (
-          <ProviderEditor
-            initial={editing.provider}
-            mode={editing.mode}
-            onCancel={cancelEdit}
-            onSave={saveProvider}
-          />
+        {settings.providers.length === 0 ? (
+          <div className="px-1 py-6 text-center text-[11px] text-muted2">
+            {t("annotation.noProviders")}
+          </div>
         ) : (
-          <>
-            {settings.providers.length === 0 ? (
-              <div className="px-1 py-6 text-center text-[11px] text-muted2">
-                {t("annotation.noProviders")}
-              </div>
-            ) : (
-              <div className="py-3">
-                {settings.providers.map((p) => (
-                  <ProviderRow
-                    key={p.id}
-                    provider={p}
-                    active={settings.activeProviderId === p.id}
-                    onActivate={() => setActive(p)}
-                    onEdit={() => startEdit(p)}
-                    onDelete={() => deleteProvider(p)}
-                  />
-                ))}
-              </div>
-            )}
-            <div className="py-3">
-              <button
-                type="button"
-                onClick={startAdd}
-                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-app py-2 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
-              >
-                <Plus className="h-3 w-3" /> {t("annotation.addNewProvider")}
-              </button>
-            </div>
-          </>
+          <div className="py-3">
+            {settings.providers.map((p) => (
+              <ProviderRow
+                key={p.id}
+                provider={p}
+                active={settings.activeProviderId === p.id}
+                onActivate={() => setActive(p)}
+                onEdit={() => startEdit(p)}
+                onDelete={() => deleteProvider(p)}
+              />
+            ))}
+          </div>
         )}
+        <div className="py-3">
+          <SecondaryButton onClick={startAdd}>
+            <span className="inline-flex items-center gap-1"><Plus className="h-3 w-3" /> {t("annotation.addNewProvider")}</span>
+          </SecondaryButton>
+        </div>
       </Group>
+
+      {editing && (
+        <ProviderEditor
+          initial={editing.provider}
+          mode={editing.mode}
+          onCancel={cancelEdit}
+          onSave={saveProvider}
+        />
+      )}
 
       <Group
         title={t("annotation.behaviorTitle")}
@@ -319,21 +313,15 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
   return (
     <div
       className={[
-        "mb-2 flex items-center gap-3 rounded-md border px-3 py-2.5 transition-colors last:mb-0",
-        active ? "border-accent bg-accent/5" : "border-border bg-app hover:bg-hover/40",
+        "mb-1.5 flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors last:mb-0",
+        active ? "border-accent/40 bg-accent/5" : "border-border/50 bg-panel2 hover:bg-hover/40",
       ].join(" ")}
     >
-      <button
-        type="button"
+      <ActiveRadio
+        active={active}
         onClick={onActivate}
         title={active ? t("annotation.active") : t("annotation.setActive")}
-        className={[
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-          active ? "border-accent" : "border-muted2 hover:border-text",
-        ].join(" ")}
-      >
-        {active && <span className="h-2 w-2 rounded-full bg-accent" />}
-      </button>
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-[12px] font-medium text-text">
@@ -341,7 +329,7 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
           </span>
           {active && (
             <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-accent">
-              {t("annotation.active")}
+              {t("providers.active")}
             </span>
           )}
         </div>
@@ -352,22 +340,19 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <button
-          type="button"
+        <IconActionButton
           onClick={onEdit}
           title={t("annotation.edit")}
-          className="flex h-7 w-7 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text"
         >
           <Pencil className="h-3 w-3" />
-        </button>
-        <button
-          type="button"
+        </IconActionButton>
+        <IconActionButton
           onClick={onDelete}
           title={t("annotation.delete")}
-          className="flex h-7 w-7 items-center justify-center rounded text-muted2 transition-colors hover:bg-error/15 hover:text-error"
+          danger
         >
           <Trash2 className="h-3 w-3" />
-        </button>
+        </IconActionButton>
       </div>
     </div>
   );
@@ -491,10 +476,20 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
   const providerLabel = PROVIDER_TYPE_LABEL[draft.type] || draft.type;
 
   return (
-    <div className="py-3">
-      <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted2">
-        {mode === "add" ? t("annotation.newProvider") : t("annotation.editProvider")}
-      </div>
+    <Modal onClose={onCancel} z="overlayTop" className="max-w-[560px]">
+      <div className="max-h-[80vh] overflow-y-auto px-4 py-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">
+            {mode === "add" ? t("annotation.newProvider") : t("annotation.editProvider")}
+          </div>
+          <button
+            type="button"
+            className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
+            onClick={onCancel}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
       <FieldRow label={t("annotation.displayName")} hint={t("annotation.displayNameHint")}>
         <TextInput
@@ -612,12 +607,14 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
         </Callout>
       </div>
 
-      <div className="mt-4 flex justify-end gap-2 border-t border-border pt-3">
-        <SecondaryButton onClick={onCancel}>{t("annotation.cancel")}</SecondaryButton>
-        <PrimaryButton onClick={handleSubmit}>
-          {mode === "add" ? t("annotation.addProvider") : t("annotation.saveChanges")}
-        </PrimaryButton>
       </div>
-    </div>
+
+      <div className="flex items-center gap-2 border-t border-border/60 px-4 py-3">
+        <Button variant="primary" onClick={handleSubmit}>
+          {mode === "add" ? t("annotation.addProvider") : t("annotation.saveChanges")}
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>{t("annotation.cancel")}</Button>
+      </div>
+    </Modal>
   );
 }

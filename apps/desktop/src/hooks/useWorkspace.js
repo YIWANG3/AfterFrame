@@ -70,7 +70,18 @@ export default function useWorkspace({ pushToast } = {}) {
       else if (type === "enrichment") setEnrichmentTask(task);
     },
   };
-  const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, resetJobs } = useJobs(jobsBridgeRef);
+  const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
+
+  // Settings starts people indexing outside the import/annotation hooks. Wake
+  // the shared job poller so the Activity Center and dock appear immediately.
+  useEffect(() => {
+    const onPeopleIndexStarted = (event) => {
+      const job = event.detail;
+      pokeJobs(job?.jobId ? { jobId: job.jobId, jobType: "people_index" } : undefined);
+    };
+    window.addEventListener("people-index:started", onPeopleIndexStarted);
+    return () => window.removeEventListener("people-index:started", onPeopleIndexStarted);
+  }, [pokeJobs]);
 
   // theme is a *preference*: "dark" | "light" | "system". "system" follows the
   // OS color scheme live; explicit values pin it. The applied value lands on
@@ -138,8 +149,14 @@ export default function useWorkspace({ pushToast } = {}) {
 
   // Reload when structured facet filters change
   useEffect(() => {
-    if (!browserReady) return;
-    if (Date.now() < suppressAutoReloadUntilRef.current) return;
+    if (!browserReady) {
+      console.warn("[filters-effect] skipped: browser not ready", JSON.stringify(filters));
+      return;
+    }
+    if (Date.now() < suppressAutoReloadUntilRef.current) {
+      console.warn("[filters-effect] skipped: auto-reload suppressed", JSON.stringify(filters));
+      return;
+    }
     void loadBrowser({ force: true, facetFilters: filters });
   }, [filters]);
 
@@ -183,6 +200,10 @@ export default function useWorkspace({ pushToast } = {}) {
       // already paged through, so their scroll position and selection survive
       // instead of being reset to page 1.
       const pageLimit = preserveView ? Math.max(PAGE_SIZE, browserOffset) : PAGE_SIZE;
+      const activeFilters = facetFilters && Object.keys(facetFilters).length ? facetFilters : undefined;
+      if (activeFilters?.person_group) {
+        console.log("[browse] person filter request", JSON.stringify({ status: nextStatus, collectionId, filters: activeFilters }));
+      }
       let payload;
       if (collectionId) {
         payload = await api.browseCollection(collectionId, {
@@ -196,8 +217,12 @@ export default function useWorkspace({ pushToast } = {}) {
           offset: nextOffset,
           search: search || undefined,
           sort: sortKey || undefined,
-          filters: facetFilters && Object.keys(facetFilters).length ? facetFilters : undefined,
+          filters: activeFilters,
         });
+      }
+      if (activeFilters?.person_group) {
+        console.log("[browse] person filter result", payload?.length, "items; request", requestId,
+          browserRequestIdRef.current === requestId ? "(current)" : "(SUPERSEDED — discarded)");
       }
       if (browserRequestIdRef.current !== requestId) return;
       seedAnnotations(payload);
@@ -218,6 +243,11 @@ export default function useWorkspace({ pushToast } = {}) {
         }
       }
       setBrowserReady(true);
+    } catch (error) {
+      // A silent failure here leaves the gallery showing stale items while
+      // every chip/sort control claims a different view — always say so.
+      console.error("[browse] FAILED", error?.message || error);
+      pushToast?.({ title: "Browse failed", message: error?.message || String(error), ttl: 6000, tone: "error" });
     } finally {
       if (append) {
         setBrowserLoadingMore(false);
@@ -447,6 +477,23 @@ export default function useWorkspace({ pushToast } = {}) {
     }
   }
 
+  // Enter the gallery for one person as a single, explicit browse operation.
+  // Updating React state alone leaves the reload effect to reconstruct the
+  // intended context across separate status/collection/filter updates.
+  function filterByPerson(groupId) {
+    if (!groupId) return;
+    const nextFilters = { ...filters, person_group: groupId };
+    setActiveCollectionId(null);
+    setStatus("all");
+    setFilters(nextFilters);
+    void loadBrowser({
+      nextStatus: "all",
+      collectionId: null,
+      facetFilters: nextFilters,
+      force: true,
+    });
+  }
+
   async function refreshAll({ nextStatus = status, collectionId = activeCollectionId, force = false, preserveView = false } = {}) {
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
       api.getInfo(),
@@ -597,6 +644,9 @@ export default function useWorkspace({ pushToast } = {}) {
     setStatus("all");
     setSort("imported-desc"); // matches the app-default sort (was name-asc — inconsistent)
     setQuery("");
+    // Facet filters reference catalog-local entities (person groups, tags) —
+    // carrying them across catalogs yields empty or nonsense views.
+    setFilters({});
     setItems([]);
     setDetail(null);
     setBrowserReady(false);
@@ -725,6 +775,7 @@ export default function useWorkspace({ pushToast } = {}) {
     items,
     filteredItems,
     detail,
+    reloadDetail: () => loadDetail(selectedAssetId),
     selectedAssetId,
     setSelectedAssetId,
     status,
@@ -757,11 +808,14 @@ export default function useWorkspace({ pushToast } = {}) {
     jobs: activeJobs,
     lastFinishedJob,
     cancelJob,
+    pauseJob,
+    resumeJob,
     pokeJobs,
     collections,
     activeCollectionId,
     selectCollection,
     clearCollection,
+    filterByPerson,
     setStatusFilter,
     createCollection,
     renameCollection,

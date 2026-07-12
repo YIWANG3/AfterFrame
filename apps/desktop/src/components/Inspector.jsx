@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Star, Copy, Layers, AlertTriangle, Link2 } from "lucide-react";
+import { ChevronRight, Star, Copy, Layers, AlertTriangle, Link2, ScanFace, UserRoundX, UserRoundPen, Images } from "lucide-react";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
+import FaceCrop from "./FaceCrop";
+import FaceMenu from "./FaceMenu";
+import NamePersonPopover from "./NamePersonPopover";
+import PersonPickerPopover from "./PersonPickerPopover";
 
 function StarRating({ value = 0, onChange }) {
   const [hover, setHover] = useState(0);
@@ -87,15 +91,42 @@ function ThumbnailStrip({ items, icon: Icon, onSelect }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, pushToast }) {
+export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [localRating, setLocalRating] = useState(null);
   const [relinking, setRelinking] = useState(false);
+  const [hoveredFaceId, setHoveredFaceId] = useState(null);
+  const [namingFace, setNamingFace] = useState(null); // { face, anchorRect, namedGroups }
+  const [faceMenu, setFaceMenu] = useState(null); // { face, x, y }
+  const [pickingFace, setPickingFace] = useState(null); // { face, anchorRect }
   const currentAssetId = detail?.asset_id || detail?.image_path || null;
 
   useEffect(() => {
     setLocalRating(null);
+    setHoveredFaceId(null);
+    setNamingFace(null);
+    setFaceMenu(null);
+    setPickingFace(null);
   }, [currentAssetId]);
+
+  async function openFaceNaming(face, anchorRect) {
+    let namedGroups = [];
+    try {
+      const groups = await window.mediaWorkspace?.listPeopleGroups?.() || [];
+      namedGroups = groups.filter((group) => group.name?.trim());
+    } catch { /* suggestions are optional; naming still works */ }
+    setNamingFace({ face, anchorRect, namedGroups });
+  }
+
+  async function applyPeopleChange(action, failTitle) {
+    try {
+      await action();
+      onPeopleChanged?.();
+    } catch (err) {
+      pushToast?.({ title: failTitle, message: err?.message || String(err), ttl: 6000, tone: "error" });
+      throw err;
+    }
+  }
 
   async function handleRelink() {
     if (!detail?.asset_id || relinking) return;
@@ -176,7 +207,27 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         <div className="relative mb-4 flex h-[200px] items-center justify-center overflow-hidden">
           {previewPath ? (
-            <img src={localFileUrl(previewPath)} alt={detail.stem} className="max-h-full max-w-full object-contain" draggable={false} />
+            <div className="relative max-h-full max-w-full">
+              <img src={localFileUrl(previewPath)} alt={detail.stem} className="max-h-[200px] max-w-full object-contain" draggable={false} />
+              {/* The img box hugs the rendered image (auto size + max constraints),
+                  so normalized face boxes map straight to percentages. */}
+              {(detail.people?.faces || []).map((face) => {
+                const box = face.bounding_box;
+                if (!Array.isArray(box) || box.length !== 4 || face.face_id !== hoveredFaceId) return null;
+                return (
+                  <div
+                    key={face.face_id}
+                    className="pointer-events-none absolute rounded-[3px] border-[1.5px] border-accent shadow-[0_0_0_1px_rgba(0,0,0,0.55)]"
+                    style={{
+                      left: `${box[0] * 100}%`,
+                      top: `${box[1] * 100}%`,
+                      width: `${box[2] * 100}%`,
+                      height: `${box[3] * 100}%`,
+                    }}
+                  />
+                );
+              })}
+            </div>
           ) : (
             <div className="flex items-center justify-center text-[12px] text-muted">{t("noPreview")}</div>
           )}
@@ -221,6 +272,53 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
               <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.otherVersions")}</div>
               <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} />
             </div>
+          ) : null}
+
+          {detail.people?.has_face ? (
+            <Section title={t("sections.people")}>
+              <div className="space-y-1 py-1" onMouseLeave={() => setHoveredFaceId(null)}>
+                {detail.people.faces.map((face) => {
+                  const named = !!face.name?.trim();
+                  const grouped = !!face.group_id;
+                  return (
+                    <button
+                      key={face.face_id}
+                      type="button"
+                      disabled={!grouped}
+                      onMouseEnter={() => setHoveredFaceId(face.face_id)}
+                      onClick={(e) => {
+                        if (!grouped) return;
+                        if (named) onOpenPersonGroup?.({ group_id: face.group_id, name: face.name });
+                        else void openFaceNaming(face, e.currentTarget.getBoundingClientRect());
+                      }}
+                      onContextMenu={(e) => {
+                        if (!grouped) return;
+                        e.preventDefault();
+                        setFaceMenu({ face, x: e.clientX, y: e.clientY, anchorRect: e.currentTarget.getBoundingClientRect() });
+                      }}
+                      title={named ? t("people.openPerson", { name: face.name }) : (grouped ? t("people.addName") : undefined)}
+                      className={[
+                        "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] transition",
+                        grouped ? "hover:bg-hover" : "opacity-55",
+                      ].join(" ")}
+                    >
+                      <FaceCrop
+                        src={previewPath ? localFileUrl(previewPath) : null}
+                        bbox={face.bounding_box}
+                        size={26}
+                        className="shrink-0 rounded-full border border-border/50"
+                      />
+                      <span className={`min-w-0 flex-1 truncate ${named ? "text-text" : "text-muted"}`}>
+                        {named ? face.name : (grouped ? t("people.addName") : t("people.unrecognized"))}
+                      </span>
+                      {face.quality === "low" && (
+                        <span className="shrink-0 text-[10px] text-muted2">{t("people.lowQuality")}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
           ) : null}
 
           <Section title={t("sections.properties")}>
@@ -334,6 +432,67 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
 
         </div>
       </div>
+
+      {faceMenu && (
+        <FaceMenu
+          position={faceMenu}
+          onClose={() => setFaceMenu(null)}
+          items={[
+            ...(faceMenu.face.name?.trim() ? [{
+              key: "view",
+              icon: Images,
+              label: t("people.openPerson", { name: faceMenu.face.name }),
+              onClick: () => onOpenPersonGroup?.({ group_id: faceMenu.face.group_id, name: faceMenu.face.name }),
+            }] : []),
+            {
+              key: "reassign",
+              icon: UserRoundPen,
+              label: t("people.reassign"),
+              onClick: () => setPickingFace({ face: faceMenu.face, anchorRect: faceMenu.anchorRect }),
+            },
+            {
+              key: "remove",
+              icon: UserRoundX,
+              label: faceMenu.face.name?.trim()
+                ? t("people.removeFrom", { name: faceMenu.face.name })
+                : t("people.removeFromGroup"),
+              onClick: () => void applyPeopleChange(async () => {
+                await window.mediaWorkspace?.removeFaceFromPerson?.({ faceId: faceMenu.face.face_id });
+                pushToast?.({ title: t("people.removed"), ttl: 3500 });
+              }, t("people.correctionFailed")).catch(() => {}),
+            },
+          ]}
+        />
+      )}
+
+      {pickingFace && (
+        <PersonPickerPopover
+          anchorRect={pickingFace.anchorRect}
+          excludeGroupId={pickingFace.face.group_id}
+          onClose={() => setPickingFace(null)}
+          onPick={(target) => void applyPeopleChange(async () => {
+            await window.mediaWorkspace?.assignFaceToPerson?.({ faceId: pickingFace.face.face_id, groupId: target.group_id });
+            pushToast?.({ title: t("people.reassigned", { name: target.name }), ttl: 3500 });
+          }, t("people.correctionFailed")).catch(() => {})}
+        />
+      )}
+
+      {namingFace && (
+        <NamePersonPopover
+          anchorRect={namingFace.anchorRect}
+          group={{ group_id: namingFace.face.group_id, name: namingFace.face.name }}
+          namedGroups={namingFace.namedGroups}
+          onClose={() => setNamingFace(null)}
+          onRename={(name) => applyPeopleChange(
+            () => window.mediaWorkspace?.renamePeopleGroup?.({ groupId: namingFace.face.group_id, name }),
+            t("people.renameFailed"),
+          )}
+          onMerge={(target) => applyPeopleChange(
+            () => window.mediaWorkspace?.mergePeopleGroups?.({ sourceGroupId: namingFace.face.group_id, targetGroupId: target.group_id }),
+            t("people.mergeFailed"),
+          )}
+        />
+      )}
     </aside>
   );
 }

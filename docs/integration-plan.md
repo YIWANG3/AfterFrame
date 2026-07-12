@@ -33,9 +33,10 @@ cloud-sync / phone folder) — is deferred and tracked separately at the bottom.
 
 ## Shared groundwork
 
-- New Settings **"Integrations"** tab (SettingsOverlay TABS) hosting both lists.
-- `settings.integrations = { externalEditors: [], watchedDirs: [] }`
-  (reuse `readAppSettings` / `updateAppSettings`).
+- Settings **"Integrations"** hosts globally detected editors. Catalog-specific
+  watched directories live under **"Library"**.
+- `.afcatalog/settings.json` owns
+  `integrations = { watchedDirs: [] }` through the catalog settings helpers.
 
 ---
 
@@ -72,12 +73,13 @@ cloud-sync / phone folder) — is deferred and tracked separately at the bottom.
 **Watched ≠ import source.** This is a small, explicit, opt-in set of "live"
 folders (default empty) — NOT every directory the user has ever imported from.
 Typical use: 1–2 folders (an editor's export target, a download/incoming folder).
-Global (app settings), not per-catalog — files import into whichever catalog is
-currently open.
+Per-catalog (`<name>.afcatalog/settings.json`) — a watched export folder belongs
+to the catalog that configured it. Switching catalogs stops the old watcher,
+discards queued events from it, and starts only the new catalog's watcher.
 
 **How the list is populated**
-- **Settings → Integrations**: manual add/remove (the editors list from Feature A
-  moves to this tab too). Persisted in `settings.integrations.watchedDirs`.
+- **Settings → Library**: manual add/remove, visibly labeled “Current Catalog”.
+  Persisted in the catalog's `settings.integrations.watchedDirs`.
 - **Contextual prompt**: when the user imports by selecting a **folder** (folder
   picker or drag-dropped folder), after import show a bottom-right toast
   *"Add ‹folder› to watched directories?"* with a one-click **Add** action.
@@ -111,11 +113,11 @@ currently open.
   mtime-newer files in catch-up, to avoid full re-scans of large dirs.
 
 **Lifecycle**
-- Start watchers + run catch-up from settings after the window is ready.
+- Start the current Catalog's watcher after the window is ready; rebuild it on
+  every Catalog switch. The renderer runs catch-up for the opened Catalog.
 - Add/remove dir → update settings + `watcher.add/unwatch` (+ catch-up the new
   dir), no full restart.
-- No catalog open (welcome state) → renderer's `requireCatalog` guard handles it
-  (toast instead of importing).
+- No catalog open (welcome state) → no watcher and no watched-directory list.
 
 **Edge cases**
 - Editor re-saves same file → awaitWriteFinish + catalog dedup.

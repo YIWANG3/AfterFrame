@@ -12,6 +12,8 @@ dependencies = [
     "Pillow>=10.0",
     # HEIC/HEIF decoding (iPhone photos) for annotation.
     "pillow-heif>=0.16",
+    # Batched cosine clustering for local face embeddings.
+    "numpy>=1.26,<3",
 ]
 
 [tool.setuptools]
@@ -19,4 +21,3 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { Group, Callout, SecondaryButton } from "./SettingsPrimitives";
+import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "./SettingsPrimitives";
 import { PROVIDER_TYPES, getProviderType, ProviderModal } from "../ai/providers";
 
 export default function RepaintSettings() {
@@ -107,21 +107,24 @@ export default function RepaintSettings() {
               <div
                 key={inst.id}
                 className={[
-                  "flex items-center gap-2.5 rounded-lg border px-3 py-2",
+                  "flex items-center gap-3 rounded-lg border px-3 py-2.5",
                   active ? "border-accent/40 bg-accent/5" : "border-border/50 bg-panel2",
                 ].join(" ")}
               >
-                <button
-                  type="button"
+                <ActiveRadio
+                  active={active}
                   onClick={() => persist({ activeProvider: inst.id })}
                   title={active ? t("repaint.activeProvider") : t("repaint.makeActive")}
-                  className={[
-                    "h-3.5 w-3.5 shrink-0 rounded-full border transition-colors",
-                    active ? "border-accent bg-accent" : "border-border hover:border-accent/60",
-                  ].join(" ")}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-medium text-text">{inst.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[12px] font-medium text-text">{inst.name}</span>
+                    {active && (
+                      <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-accent">
+                        {t("providers.active")}
+                      </span>
+                    )}
+                  </div>
                   <div className="truncate text-[10px] text-muted2">{tmpl?.label || inst.type}</div>
                 </div>
                 <select
@@ -133,30 +136,26 @@ export default function RepaintSettings() {
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
                 </select>
-                <button
-                  type="button"
+                <IconActionButton
                   onClick={() => refreshModels(inst)}
                   title={t("repaint.refreshModels")}
-                  className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                  disabled={refreshing[inst.id]}
                 >
                   <RefreshCw className={`h-3 w-3 ${refreshing[inst.id] ? "animate-spin" : ""}`} />
-                </button>
-                <button
-                  type="button"
+                </IconActionButton>
+                <IconActionButton
                   onClick={() => setModal({ mode: "edit", instance: inst })}
                   title={t("repaint.editProvider")}
-                  className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 >
                   <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
+                </IconActionButton>
+                <IconActionButton
                   onClick={() => handleDelete(inst.id)}
                   title={t("repaint.removeProvider")}
-                  className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-red-400"
+                  danger
                 >
                   <Trash2 className="h-3 w-3" />
-                </button>
+                </IconActionButton>
               </div>
             );
           })}

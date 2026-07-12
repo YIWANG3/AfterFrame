@@ -13,7 +13,8 @@
     "location": "Location",
     "duplicates": "Duplicates",
     "sourceImages": "Source Images",
-    "otherVersions": "Other Versions"
+    "otherVersions": "Other Versions",
+    "people": "People"
   },
   "rows": {
     "rating": "Rating",
@@ -44,9 +45,48 @@
     "relinking": "Relinking…",
     "mismatchConfirm": "The selected file doesn't match the original photo. Relink anyway?"
   },
+  "people": {
+    "unrecognized": "No person match yet",
+    "addName": "Add name",
+    "openPerson": "See {{name}}’s photos",
+    "lowQuality": "Low quality",
+    "renameFailed": "Couldn’t name person",
+    "mergeFailed": "Couldn’t merge people",
+    "reassign": "Move to another person…",
+    "removeFrom": "Remove from “{{name}}”",
+    "removeFromGroup": "Remove from this group",
+    "removed": "Removed — it won’t be matched back automatically",
+    "reassigned": "Moved to “{{name}}”",
+    "correctionFailed": "Couldn’t apply the correction",
+    "pickerPlaceholder": "Search people…",
+    "pickerEmpty": "No named people yet"
+  },
   "toast": {
     "relinked": "Relinked",
     "relinkedMsg": "Original file reconnected.",
     "relinkFailed": "Relink failed"
+  },
+  "peoplePanel": {
+    "empty": "Select a person to see their details here.",
+    "rename": "Rename",
+    "faces_one": "{{count}} face",
+    "faces_other": "{{count}} faces",
+    "photos_one": "{{count}} photo",
+    "photos_other": "{{count}} photos",
+    "viewPhotos": "View photos",
+    "sampleFaces": "Faces in this group",
+    "createAlbum": "Create album",
+    "albumCreated": "Created album “{{name}}” with {{count}} photos",
+    "albumFailed": "Couldn’t create the album",
+    "selectedCount_one": "{{count}} face selected",
+    "selectedCount_other": "{{count}} faces selected",
+    "correctionHint": "Click faces to multi-select; right-click or use the bar below to remove or move them.",
+    "reassignShort": "Move to…",
+    "removeShort": "Remove",
+    "clearSelection": "Clear selection",
+    "removedCount_one": "Removed {{count}} face",
+    "removedCount_other": "Removed {{count}} faces",
+    "showMoreFaces_one": "Show more ({{count}} more face)",
+    "showMoreFaces_other": "Show more ({{count}} more faces)"
   }
 }

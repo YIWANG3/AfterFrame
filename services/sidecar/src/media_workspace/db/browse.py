@@ -54,7 +54,8 @@ _BROWSE_SELECT_COLUMNS = """\
             anno.location_json AS anno_location_json,
             anno.detected_text AS anno_detected_text,
             anno.created_at AS anno_created_at,
-            anno.updated_at AS anno_updated_at"""
+            anno.updated_at AS anno_updated_at,
+            EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id) AS has_face"""
 
 _BROWSE_SHARED_JOINS = """\
         LEFT JOIN assets AS raw_assets
@@ -105,7 +106,8 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
 
     Recognized keys: camera, lens (exact), iso_min/iso_max, aperture_min/max,
     focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
-    rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags).
+    rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags),
+    people ('with_faces'|'without_faces'), person_group (group ID).
     Unknown/empty keys are ignored.
     """
     if not filters:
@@ -147,6 +149,22 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
         # File-format filter (jpg / png / mp4 / cr2 / 3fr / …); stored extension
         # keeps a leading dot, so trim it both sides for a clean compare.
         add("LOWER(TRIM(assets.extension, '.')) = ?", str(filters["extension"]).lower().lstrip("."))
+    if filters.get("people") == "with_faces":
+        add("EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
+    elif filters.get("people") == "without_faces":
+        add("NOT EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
+    if filters.get("person_group"):
+        add(
+            """EXISTS (
+                SELECT 1
+                FROM asset_faces AS face
+                JOIN person_group_faces AS membership ON membership.face_id = face.face_id
+                WHERE face.asset_id = assets.asset_id
+                  AND membership.group_id = ?
+                  AND membership.membership_state != 'rejected'
+            )""",
+            filters["person_group"],
+        )
 
     if not clauses:
         return "", []

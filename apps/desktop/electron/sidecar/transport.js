@@ -222,6 +222,12 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   const videoToolPath = isPackaged
     ? path.join(resourcesPath, "native", "bin", "video-tool")
     : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool");
+  // People indexing is run by the sidecar so it can checkpoint jobs and write
+  // catalog rows atomically. Electron resolves the packaged/dev path once and
+  // passes it through the same environment boundary as video-tool.
+  const peopleWorkerPath = isPackaged
+    ? path.join(resourcesPath, "native", "bin", "people-worker")
+    : path.join(rootDir, "apps", "desktop", "native", "bin", "people-worker");
 
   function sidecarCommand(command) {
     if (!getCatalogPath()) {
@@ -233,13 +239,13 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       return {
         cmd: sidecarBin,
         args: ["--catalog", getCatalogPath(), ...command],
-        env: { ...process.env, VIDEO_TOOL_PATH: videoToolPath },
+        env: { ...process.env, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
       };
     }
     return {
       cmd: "python3",
       args: ["-m", "media_workspace", "--catalog", getCatalogPath(), ...command],
-      env: { ...process.env, PYTHONPATH: sidecarSrc, VIDEO_TOOL_PATH: videoToolPath },
+      env: { ...process.env, PYTHONPATH: sidecarSrc, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
     };
   }
 

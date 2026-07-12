@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import i18n, { SUPPORTED_LOCALES } from "../../i18n";
 import api from "../../api";
+import { FieldRow, Group } from "./SettingsPrimitives";
 
 // General app settings: interface language + color theme.
 export default function GeneralSettings({ theme = "dark", setTheme }) {
@@ -17,15 +18,8 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
 
   return (
     <div>
-      <div className="mb-5 border-b border-border pb-4">
-        <div className="text-[18px] font-semibold text-text">{t("general.title")}</div>
-      </div>
-
-      <div className="flex items-center justify-between border-b border-border/50 py-3">
-        <div>
-          <div className="text-[12px] text-text">{t("general.language")}</div>
-          <div className="mt-0.5 text-[10px] text-muted2">{t("general.languageHint")}</div>
-        </div>
+      <Group>
+      <FieldRow label={t("general.language")} hint={t("general.languageHint")}>
         <select
           value={current}
           onChange={(e) => changeLanguage(e.target.value)}
@@ -35,13 +29,9 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
             <option key={l} value={l}>{tc(`language.${l}`)}</option>
           ))}
         </select>
-      </div>
+      </FieldRow>
 
-      <div className="flex items-center justify-between border-b border-border/50 py-3">
-        <div>
-          <div className="text-[12px] text-text">{t("general.theme")}</div>
-          <div className="mt-0.5 text-[10px] text-muted2">{t("general.themeHint")}</div>
-        </div>
+      <FieldRow label={t("general.theme")} hint={t("general.themeHint")}>
         <select
           value={theme}
           onChange={(e) => setTheme?.(e.target.value)}
@@ -51,7 +41,8 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
           <option value="light">{t("general.themeLight")}</option>
           <option value="system">{t("general.themeSystem")}</option>
         </select>
-      </div>
+      </FieldRow>
+      </Group>
     </div>
   );
 }

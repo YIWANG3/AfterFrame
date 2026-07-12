@@ -40,6 +40,71 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.assetDetail({ assetId });
   });
 
+  ipcMain.handle("workspace:list-people-groups", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return [];
+    try {
+      return await commands.listPeopleGroups(options || {});
+    } catch (err) {
+      console.warn("[workspace:list-people-groups] sidecar error:", err.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle("workspace:similar-people-groups", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return [];
+    try {
+      return await commands.similarPeopleGroups(options || {});
+    } catch (err) {
+      console.warn("[workspace:similar-people-groups] sidecar error:", err.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle("workspace:people-group-detail", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return null;
+    try {
+      return await commands.peopleGroupDetail(options || {});
+    } catch (err) {
+      console.warn("[workspace:people-group-detail] sidecar error:", err.message);
+      return null;
+    }
+  });
+
+  // People corrections write membership audit rows in the sidecar; errors are
+  // surfaced to the renderer so the user sees why a rename/merge didn't land.
+  ipcMain.handle("workspace:rename-people-group", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.renamePeopleGroup(options || {});
+  });
+
+  ipcMain.handle("workspace:set-people-group-state", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.setPeopleGroupState(options || {});
+  });
+
+  ipcMain.handle("workspace:merge-people-groups", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.mergePeopleGroups(options || {});
+  });
+
+  ipcMain.handle("workspace:remove-face-from-person", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.removeFaceFromPerson(options || {});
+  });
+
+  ipcMain.handle("workspace:assign-face-to-person", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    return await commands.assignFaceToPerson(options || {});
+  });
+
   // On-demand HD previews for specific source paths (collage cells). Skips files
   // that already have an HD preview, so it's cheap to call on every open.
   ipcMain.handle("workspace:ensure-hd-previews", async (_event, paths) => {

@@ -15,9 +15,11 @@ design/
 *.sqlite3-shm
 *.sqlite3-wal
 *.sqlite3-journal
-# …except the committed E2E fixture catalog DB, so a fresh clone / CI can run
-# the catalog-backed specs without re-seeding (regen via seed-catalog.js).
+# …except the committed E2E fixture catalog DBs, so a fresh clone / CI can run
+# the catalog-backed specs without re-seeding (regen via seed-catalog.js /
+# seed-people-catalog.js; the people one needs a local face model + worker).
 !apps/desktop/e2e/fixtures/test-catalog.afcatalog/catalog.sqlite3
+!apps/desktop/e2e/fixtures/people-catalog.afcatalog/catalog.sqlite3
 tmp/
 log
 
@@ -33,8 +35,9 @@ apps/desktop/skills-lock.json
 # catalogs
 *.afcatalog/
 *.mwcatalog/
-# ...except the seeded E2E test catalog
+# ...except the seeded E2E test catalogs
 !apps/desktop/e2e/fixtures/test-catalog.afcatalog/
+!apps/desktop/e2e/fixtures/people-catalog.afcatalog/
 
 # large resources
 RESOURCES/
@@ -53,6 +56,9 @@ services/sidecar/entry.py
 # analysis
 analysis/
 
+# local model research, test images, and Python environments
+research/
+
 # playwright
 apps/desktop/e2e/.artifacts/
 apps/desktop/playwright-report/
@@ -67,3 +73,6 @@ marketing/
 # playwright run outputs
 test-results/
 apps/desktop/e2e/fixtures/big-frame-*.jpg
+
+# python packaging artefacts
+*.egg-info/

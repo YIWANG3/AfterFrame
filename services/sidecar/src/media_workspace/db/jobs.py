@@ -37,6 +37,10 @@ def _decode_job_row(row: sqlite3.Row | None) -> dict[str, object] | None:
         "payload": json.loads(row["payload_json"] or "{}"),
         "result": json.loads(row["result_json"] or "{}"),
         "progress": float(row["progress"] or 0),
+        "priority": int(row["priority"] or 50) if "priority" in keys else 50,
+        "pause_requested": bool(row["pause_requested"]) if "pause_requested" in keys else False,
+        "resume_cursor": json.loads(row["resume_cursor_json"] or "{}") if "resume_cursor_json" in keys else {},
+        "attempt_count": int(row["attempt_count"] or 0) if "attempt_count" in keys else 0,
         "error": row["error_text"],
         "cancel_requested": bool(row["cancel_requested"]) if "cancel_requested" in keys else False,
         "created_at": row["created_at"],
@@ -52,15 +56,17 @@ def create_job(
     status: str = "queued",
     progress: float = 0.0,
     result: dict[str, object] | None = None,
+    priority: int = 50,
+    resume_cursor: dict[str, object] | None = None,
     commit: bool = True,
 ) -> dict[str, object]:
     job_id = _job_id(job_type)
     connection.execute(
         """
-        INSERT INTO jobs (job_id, job_type, status, payload_json, result_json, progress)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (job_id, job_type, status, payload_json, result_json, progress, priority, resume_cursor_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (job_id, job_type, status, _json(payload or {}), _json(result or {}), progress),
+        (job_id, job_type, status, _json(payload or {}), _json(result or {}), progress, priority, _json(resume_cursor or {})),
     )
     if commit:
         connection.commit()
@@ -75,6 +81,10 @@ def update_job(
     payload: dict[str, object] | None = None,
     result: dict[str, object] | None = None,
     progress: float | None = None,
+    priority: int | None = None,
+    pause_requested: bool | None = None,
+    resume_cursor: dict[str, object] | None = None,
+    increment_attempt: bool = False,
     error_text: object = _UNSET,
     commit: bool = True,
 ) -> dict[str, object]:
@@ -92,6 +102,17 @@ def update_job(
     if progress is not None:
         assignments.append("progress = ?")
         params.append(progress)
+    if priority is not None:
+        assignments.append("priority = ?")
+        params.append(priority)
+    if pause_requested is not None:
+        assignments.append("pause_requested = ?")
+        params.append(1 if pause_requested else 0)
+    if resume_cursor is not None:
+        assignments.append("resume_cursor_json = ?")
+        params.append(_json(resume_cursor))
+    if increment_attempt:
+        assignments.append("attempt_count = attempt_count + 1")
     if error_text is not _UNSET:
         # None is a meaningful value here: success paths pass error_text=None
         # to CLEAR a stale error from a previous failed run of the same job id.
@@ -110,7 +131,8 @@ def update_job(
 def get_job(connection: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
     row = connection.execute(
         """
-        SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
+        SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+               resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
         FROM jobs
         WHERE job_id = ?
         """,
@@ -123,7 +145,8 @@ def get_latest_job(connection: sqlite3.Connection, job_type: str | None = None) 
     if job_type:
         row = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             WHERE job_type = ?
             ORDER BY created_at DESC, job_id DESC
@@ -134,7 +157,8 @@ def get_latest_job(connection: sqlite3.Connection, job_type: str | None = None) 
     else:
         row = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             ORDER BY created_at DESC, job_id DESC
             LIMIT 1
@@ -147,7 +171,8 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
     if job_type:
         rows = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             WHERE job_type = ?
             ORDER BY created_at DESC, job_id DESC
@@ -158,7 +183,8 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
     else:
         rows = connection.execute(
             """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
+            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
             FROM jobs
             ORDER BY created_at DESC, job_id DESC
             LIMIT ?
@@ -176,6 +202,20 @@ def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
     that died (app quit, crash, kill). Mark it failed so it doesn't haunt the
     activity center forever.
     """
+    # Only people_index jobs have a durable per-asset cursor today. Recover
+    # stalled runs with that cursor instead of marking them irretrievably failed;
+    # the dispatcher will launch them again when the app reconnects.
+    connection.execute(
+        """
+        UPDATE jobs
+        SET status = 'queued', error_text = NULL, cancel_requested = 0, pause_requested = 0,
+            attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE job_type = 'people_index'
+          AND status = 'running'
+          AND resume_cursor_json != '{}'
+          AND updated_at < datetime('now', '-10 minutes')
+        """
+    )
     connection.execute(
         """
         UPDATE jobs
@@ -188,10 +228,11 @@ def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
     connection.commit()
     rows = connection.execute(
         """
-        SELECT job_id, job_type, status, payload_json, result_json, progress, error_text, cancel_requested, created_at, updated_at
-        FROM jobs
-        WHERE status IN ('queued', 'running')
-        ORDER BY created_at ASC
+            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
+            FROM jobs
+        WHERE status IN ('queued', 'running', 'paused')
+        ORDER BY priority DESC, created_at ASC
         """
     ).fetchall()
     return [_decode_job_row(row) for row in rows if row is not None]
@@ -201,7 +242,7 @@ def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool
     """Flag a job for cooperative cancellation. The runner notices the flag at
     its next progress checkpoint and exits with status='cancelled'."""
     connection.execute(
-        "UPDATE jobs SET cancel_requested = 1, updated_at = CURRENT_TIMESTAMP WHERE job_id = ? AND status IN ('queued', 'running')",
+        "UPDATE jobs SET cancel_requested = 1, updated_at = CURRENT_TIMESTAMP WHERE job_id = ? AND status IN ('queued', 'running', 'paused')",
         (job_id,),
     )
     if commit:
@@ -212,3 +253,40 @@ def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool
 def is_cancel_requested(connection: sqlite3.Connection, job_id: str) -> bool:
     row = connection.execute("SELECT cancel_requested FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
     return bool(row and row["cancel_requested"])
+
+
+def request_job_pause(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:
+    """Request a safe checkpoint pause. A queued job pauses immediately; a
+    running job transitions after its current asset transaction completes."""
+    connection.execute(
+        """
+        UPDATE jobs
+        SET pause_requested = 1,
+            status = CASE WHEN status = 'queued' THEN 'paused' ELSE status END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE job_id = ? AND status IN ('queued', 'running', 'paused')
+        """,
+        (job_id,),
+    )
+    if commit:
+        connection.commit()
+    return get_job(connection, job_id)
+
+
+def request_job_resume(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:
+    connection.execute(
+        """
+        UPDATE jobs
+        SET pause_requested = 0, cancel_requested = 0, status = 'queued', updated_at = CURRENT_TIMESTAMP
+        WHERE job_id = ? AND status = 'paused'
+        """,
+        (job_id,),
+    )
+    if commit:
+        connection.commit()
+    return get_job(connection, job_id)
+
+
+def is_pause_requested(connection: sqlite3.Connection, job_id: str) -> bool:
+    row = connection.execute("SELECT pause_requested FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+    return bool(row and row["pause_requested"])

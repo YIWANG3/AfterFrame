@@ -11,6 +11,7 @@ function register({
   startEnrichmentTask,
   startPreviewTask,
   commands,
+  resumePeopleIndexJob,
 }) {
   function emptyStatus() {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
@@ -62,6 +63,26 @@ function register({
     if (!currentCatalogPath || !catalogHasDb()) return null;
     if (!jobId) return null;
     return await commands.cancelJob(jobId);
+  });
+
+  // People indexing is intentionally cooperative: it checkpoints only after a
+  // complete asset so pausing never commits a partial face set. The generic
+  // handlers keep the Activity Center future-proof for other resumable jobs.
+  ipcMain.handle("workspace:pause-job", async (_event, jobId) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb() || !jobId) return null;
+    return await commands.pauseJob(jobId);
+  });
+
+  ipcMain.handle("workspace:resume-job", async (_event, jobId) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb() || !jobId) return null;
+    const job = await commands.getJob(jobId);
+    if (job?.job_type === "people_index" && resumePeopleIndexJob) {
+      const resumed = await resumePeopleIndexJob(jobId);
+      if (resumed != null) return resumed;
+    }
+    return await commands.resumeJob(jobId);
   });
 }
 

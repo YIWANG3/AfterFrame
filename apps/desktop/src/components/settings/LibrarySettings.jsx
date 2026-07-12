@@ -11,29 +11,38 @@ function catalogName(p) {
   return base.replace(/\.(afcatalog|mwcatalog)$/i, "");
 }
 
-function OpenFolderButton({ kind, label }) {
+function baseName(p) {
+  return String(p).split("/").filter(Boolean).pop() || String(p);
+}
+
+function FinderButton({ onClick, label }) {
   return (
-    <button
-      type="button"
-      onClick={() => void window.mediaWorkspace?.openCacheDir?.(kind)}
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted transition-colors hover:bg-hover hover:text-text focus:outline-none"
-    >
-      <FolderOpen className="h-3.5 w-3.5" />
-      {label}
-    </button>
+    <SecondaryButton onClick={onClick}>
+      <span className="inline-flex items-center gap-1.5">
+        <FolderOpen className="h-3.5 w-3.5" />
+        {label}
+      </span>
+    </SecondaryButton>
   );
+}
+
+function OpenFolderButton({ kind, label }) {
+  return <FinderButton onClick={() => void window.mediaWorkspace?.openCacheDir?.(kind)} label={label} />;
 }
 
 export default function LibrarySettings({ info, summary, onSwitchCatalog, onClose }) {
   const { t } = useTranslation("settings");
   const [generateHd, setGenerateHd] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [watched, setWatched] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const stored = (await window.mediaWorkspace?.getPreviewSettings?.()) || {};
       if (!cancelled) setGenerateHd(stored.generateHd === true);
+      const dirs = await api.getWatchedDirs?.();
+      if (!cancelled) setWatched(Array.isArray(dirs) ? dirs : []);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -74,20 +83,28 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
     [switchTo],
   );
 
+  const addWatchedDir = useCallback(async () => {
+    const picked = await api.pickDirectories?.("image");
+    if (!picked?.length) return;
+    let next = watched;
+    for (const p of picked) next = await api.addWatchedDir(p);
+    setWatched(Array.isArray(next) ? next : []);
+  }, [watched]);
+
+  const removeWatchedDir = useCallback(async (dir) => {
+    const next = await api.removeWatchedDir(dir);
+    setWatched(Array.isArray(next) ? next : []);
+  }, []);
+
   return (
     <div>
-      <Group title={t("library.currentCatalog")}>
+      <Group title={t("library.currentCatalog")} scope={t("scope.catalog")}>
         <FieldRow
           label={isScratch ? t("library.catalogScratch") : catalogName(catalogPath)}
           hint={isScratch ? t("library.catalogScratchHint") : catalogPath}
         >
           {!isScratch && (
-            <SecondaryButton onClick={() => api.revealPath?.(catalogPath)}>
-              <span className="inline-flex items-center gap-1.5">
-                <FolderOpen className="h-3.5 w-3.5" />
-                {t("library.revealInFinder")}
-              </span>
-            </SecondaryButton>
+            <FinderButton onClick={() => api.revealPath?.(catalogPath)} label={t("library.revealInFinder")} />
           )}
         </FieldRow>
         <FieldRow label={t("library.catalogContents")}>
@@ -109,6 +126,25 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
             </span>
           </SecondaryButton>
         </FieldRow>
+      </Group>
+      <Group title={t("library.watchedTitle")} subtitle={t("library.watchedSubtitle")} scope={t("scope.catalog")}>
+        {watched.length === 0 ? (
+          <div className="py-3 text-[11px] text-muted2">{t("library.noWatched")}</div>
+        ) : (
+          watched.map((dir) => (
+            <FieldRow key={dir} label={baseName(dir)} hint={dir}>
+              <SecondaryButton onClick={() => removeWatchedDir(dir)}>{t("library.remove")}</SecondaryButton>
+            </FieldRow>
+          ))
+        )}
+        <div className="py-3">
+          <SecondaryButton onClick={addWatchedDir}>
+            <span className="inline-flex items-center gap-1.5">
+              <FolderPlus className="h-3.5 w-3.5" />
+              {t("library.addFolder")}
+            </span>
+          </SecondaryButton>
+        </div>
       </Group>
       <Group title={t("library.previewsTitle")}>
         <FieldRow label={t("library.generateHd")} hint={t("library.generateHdHint")}>

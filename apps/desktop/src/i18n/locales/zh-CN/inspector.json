@@ -13,7 +13,8 @@
     "location": "位置",
     "duplicates": "重复项",
     "sourceImages": "源图像",
-    "otherVersions": "其他版本"
+    "otherVersions": "其他版本",
+    "people": "人物"
   },
   "rows": {
     "rating": "评分",
@@ -44,9 +45,43 @@
     "relinking": "正在连接…",
     "mismatchConfirm": "所选文件与原图不一致。仍要重新连接吗?"
   },
+  "people": {
+    "unrecognized": "未匹配到人物",
+    "addName": "添加名字",
+    "openPerson": "查看 {{name}} 的照片",
+    "lowQuality": "低质量",
+    "renameFailed": "命名失败",
+    "mergeFailed": "合并失败",
+    "reassign": "更正为其他人物…",
+    "removeFrom": "从「{{name}}」中移除",
+    "removeFromGroup": "移出此分组",
+    "removed": "已移出，此脸不会再被自动归回原组",
+    "reassigned": "已更正到「{{name}}」",
+    "correctionFailed": "更正失败",
+    "pickerPlaceholder": "搜索人物…",
+    "pickerEmpty": "没有已命名的人物"
+  },
   "toast": {
     "relinked": "已重新连接",
     "relinkedMsg": "原文件已重新连接。",
     "relinkFailed": "重新连接失败"
+  },
+  "peoplePanel": {
+    "empty": "选择一个人物，在这里查看详情。",
+    "rename": "重命名",
+    "viewPhotos": "查看照片",
+    "sampleFaces": "组内人脸",
+    "faces_other": "{{count}} 张脸",
+    "photos_other": "{{count}} 张照片",
+    "createAlbum": "创建相册",
+    "albumCreated": "已创建相册「{{name}}」，包含 {{count}} 张照片",
+    "albumFailed": "创建相册失败",
+    "selectedCount_other": "已选 {{count}} 张脸",
+    "correctionHint": "点击多选人脸，右键或用底部按钮移出/更正。",
+    "reassignShort": "更正为…",
+    "removeShort": "移出",
+    "clearSelection": "取消选择",
+    "removedCount_other": "已移出 {{count}} 张脸",
+    "showMoreFaces_other": "加载更多（还有 {{count}} 张脸）"
   }
 }
