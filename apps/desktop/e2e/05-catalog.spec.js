@@ -39,6 +39,34 @@ test.describe("Catalog browse", () => {
     await expect(window.getByText(/B0016108\.jpg/i).first()).toBeVisible();
   });
 
+  test("gallery card layout stays stable at default and larger window sizes", async () => {
+    const sampleCardWidths = () => window.evaluate(async () => {
+      const card = document.querySelector("[data-gallery-item='true']");
+      const widths = [];
+      for (let index = 0; index < 20; index += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        widths.push(card?.getBoundingClientRect().width ?? 0);
+      }
+      return widths;
+    });
+    const uniqueWidths = (widths) => new Set(widths.map((width) => width.toFixed(2)));
+
+    const defaultWidths = await sampleCardWidths();
+    expect([...uniqueWidths(defaultWidths)]).toHaveLength(1);
+
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000);
+    });
+    await window.waitForTimeout(250);
+    const largerWidths = await sampleCardWidths();
+    expect([...uniqueWidths(largerWidths)]).toHaveLength(1);
+
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(1440, 920);
+    });
+    await window.waitForTimeout(250);
+  });
+
   test("single-click selects a card; selection ring appears on inner box", async () => {
     const firstCard = window.locator("[data-gallery-item='true']").first();
     await firstCard.click();

@@ -871,7 +871,8 @@ export default function Gallery({
           anchorId: selectedAssetId || selectedAssetIds?.[0] || null,
         });
       }}
-      className={`h-full select-none overflow-auto bg-app ${isTileMode ? "px-0 py-0" : "px-2 py-2"}`}
+      className={`h-full select-none overflow-x-hidden overflow-y-auto bg-app ${isTileMode ? "px-0 py-0" : "px-2 py-2"}`}
+      style={{ scrollbarGutter: "stable" }}
     >
       <div className="relative" style={{ height: `${totalHeight}px` }}>
         {visibleItems.map((entry) => {
