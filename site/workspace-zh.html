@@ -80,7 +80,7 @@
         </figure>
       </section>
       <section class="strip">
-        <p>目录管理 · 搜索与筛选 · 评分与标签 · 智能收藏 · 本地 MCP</p>
+        <p>目录管理 · 搜索与筛选 · 评分与标签 · 人物识别 · 智能收藏 · 本地 MCP</p>
       </section>
       <section class="feature" id="library">
         <div class="feature-heading">
@@ -169,8 +169,10 @@
             通过本地 MCP，让 Agent 搜索、打标、裁切、导出并在应用中展示选择。
           </p>
           <div class="command">
-            claude mcp add --transport http afterframe
-            http://127.0.0.1:41706/mcp
+            <span>Claude Code</span>
+            <code>claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp</code>
+            <span>Codex CLI</span>
+            <code>codex mcp add afterframe --url http://127.0.0.1:41706/mcp</code>
           </div>
           <a class="arrow" href="guide-zh.html#mcp"
             >连接 Agent <span>→</span></a
@@ -186,10 +188,31 @@
           />
         </figure>
       </section>
+      <section class="feature reverse" id="people">
+        <figure class="screen">
+          <img
+            src="assets/face-cn.png"
+            alt="AfterFrame 中文版本地人物识别"
+            width="3024"
+            height="1964"
+            loading="lazy"
+          />
+          <figcaption class="screen-note">
+            演示人物图像由 AI 生成，不对应真实人物。
+          </figcaption>
+        </figure>
+        <div class="feature-heading">
+          <p class="eyebrow">06 / 人物</p>
+          <h2>同一个人的照片，<br />一次找齐。</h2>
+          <p>
+            在设备本地识别并聚合同一人物，无需上传照片。集中审核、命名、纠正人物组，并直接筛选相关照片。
+          </p>
+        </div>
+      </section>
       <section class="closing">
         <img src="assets/logo.png" alt="" width="48" height="48" />
         <p class="eyebrow">AfterFrame for macOS</p>
-        <h2>从这一组照片，<br />开始整理。</h2>
+        <h2>开始整理<br />你的相册。</h2>
         <a
           class="primary"
           href="https://github.com/YIWANG3/AfterFrame/releases/latest"

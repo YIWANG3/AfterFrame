@@ -124,6 +124,9 @@ h2 {
 h1 {
   font-size: clamp(52px, 5.6vw, 94px);
 }
+.hero h1 {
+  line-height: 1;
+}
 h2 {
   font-size: clamp(42px, 4.4vw, 70px);
 }
@@ -178,6 +181,12 @@ dd {
   width: 100%;
   height: auto;
 }
+.screen-note {
+  padding: 10px 13px;
+  border-top: 1px solid var(--line);
+  color: #85847e;
+  font: 400 10px/1.5 var(--mono);
+}
 .hero-screen {
   transform: translateY(8px);
 }
@@ -227,11 +236,25 @@ dd {
   max-width: 470px;
   margin-top: 25px;
   padding: 14px;
+  display: grid;
+  gap: 7px;
   background: #10100f;
   border: 1px solid var(--line);
   color: #c9c7c0;
   overflow: auto;
   font: 400 10px/1.6 var(--mono);
+}
+.command span {
+  margin-top: 5px;
+  color: var(--gold);
+  font-weight: 500;
+}
+.command span:first-child {
+  margin-top: 0;
+}
+.command code {
+  color: #c9c7c0;
+  overflow-wrap: anywhere;
 }
 .closing {
   padding: clamp(110px, 15vw, 210px) 22px;

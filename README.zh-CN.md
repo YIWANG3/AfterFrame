@@ -26,6 +26,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
   - [素材库管理](#素材库管理)
   - [浏览与整理](#浏览与整理)
   - [搜索与筛选](#搜索与筛选)
+  - [人物](#人物)
   - [编辑](#编辑)
   - [视频](#视频)
   - [AI 重绘（BYOK）](#ai-重绘byok)
@@ -66,6 +67,16 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 全文搜索：跨 文件名、相机/镜头、以及 AI 标注（描述、识别文字/OCR、标签）—— 按照片"内容"找图
 - Facet 筛选条：相机、镜头、ISO / 光圈 / 焦距 区间、拍摄日期范围、星级评分 —— 实时组合
 - 标签筛选：在检查面板点任意标签,或从可搜索的标签列表中选（服务端搜索,支持数千标签）
+
+### 人物
+- 在设备本地检测人脸并通过 ArcFace 聚类，照片和人脸特征都只保存在当前 Catalog 中
+- 审核并命名人物候选，可设置封面、合并人物，或移出分错的人脸
+- 多选后可批量删除错误人物组；被删除的组在后续重扫时不会再次出现
+- 从人物页直接查看全部相关照片，也可以在图库中按人物筛选
+
+![人物识别](docs/assets/face-cn.png)
+
+*演示人物图像由 AI 生成，不对应真实人物。*
 
 ### 编辑
 - **裁剪**：预设比例、旋转、翻转
@@ -134,8 +145,11 @@ AfterFrame 内嵌了 [MCP](https://modelcontextprotocol.io) 服务器——任�
 **接入方法**（需 AfterFrame 处于运行状态）：
 
 ```bash
-# Claude Code —— 一次性配置，任意目录可用
+# Claude Code
 claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
+
+# Codex CLI
+codex mcp add afterframe --url http://127.0.0.1:41706/mcp
 ```
 
 在本仓库内开发？无需任何操作——自带的 `.mcp.json` 会让 Claude Code 自动连接。其他 MCP 客户端（Claude Desktop 等）：添加远程 HTTP 服务器，URL 相同。

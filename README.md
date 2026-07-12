@@ -26,6 +26,7 @@ Download the latest `.dmg` from [Releases](../../releases).
   - [Library Management](#library-management)
   - [Browse & Organize](#browse--organize)
   - [Search & Filter](#search--filter)
+  - [People](#people)
   - [Edit](#edit)
   - [Video](#video)
   - [AI Repaint (BYOK)](#ai-repaint-byok)
@@ -66,6 +67,16 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
 - Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, and star rating — combined live
 - Tag filtering: click any tag in the inspector, or pick from a searchable tag list (server-side search, scales to thousands of tags)
+
+### People
+- On-device face detection and ArcFace grouping — photos and face embeddings stay inside the local catalog
+- Review and name suggested groups, choose a cover, merge matches, or move incorrectly grouped faces
+- Select and delete multiple incorrect groups at once; deleted groups stay excluded from later rescans
+- Filter the gallery by person or open every matching photo directly from the People view
+
+![People recognition](docs/assets/face-en.png)
+
+*Demo portraits are AI-generated and do not depict real people.*
 
 ### Edit
 - **Crop** with preset aspect ratios, rotation, and flip
@@ -134,8 +145,11 @@ AfterFrame embeds an [MCP](https://modelcontextprotocol.io) server, so any AI ag
 **Connect an agent** (AfterFrame must be running):
 
 ```bash
-# Claude Code — one-time setup, works from any directory
+# Claude Code
 claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp
+
+# Codex CLI
+codex mcp add afterframe --url http://127.0.0.1:41706/mcp
 ```
 
 Working inside this repo? Nothing to do — the bundled `.mcp.json` connects Claude Code automatically. Other MCP clients (Claude Desktop etc.): add a remote HTTP server with the same URL.

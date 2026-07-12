@@ -209,6 +209,12 @@ figure img {
   width: 100%;
   height: auto;
 }
+figure figcaption {
+  padding: 10px 13px;
+  border-top: 1px solid var(--line);
+  color: #85847e;
+  font: 400 10px/1.5 var(--mono);
+}
 .rows {
   max-width: 850px;
   margin-top: 43px;

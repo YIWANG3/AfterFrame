@@ -23,7 +23,8 @@
       >
       <nav>
         <a href="#start">开始</a><a href="#library">图库</a
-        ><a href="#edit">编辑</a><a href="#ai">AI</a><a href="#mcp">MCP</a>
+        ><a href="#people">人物</a><a href="#edit">编辑</a
+        ><a href="#ai">AI</a><a href="#mcp">MCP</a>
       </nav>
       <a class="language" href="guide.html">English</a
       ><a
@@ -36,8 +37,9 @@
       <aside>
         <p>使用指南</p>
         <a href="#start">01 / 开始使用</a><a href="#library">02 / 建立图库</a
-        ><a href="#edit">03 / 编辑</a><a href="#ai">04 / 使用自己的 AI</a
-        ><a href="#mcp">05 / 连接 Agent</a>
+        ><a href="#people">03 / 查找人物</a><a href="#edit">04 / 编辑</a
+        ><a href="#ai">05 / 使用自己的 AI</a
+        ><a href="#mcp">06 / 连接 Agent</a>
       </aside>
       <main id="main">
         <section class="intro">
@@ -90,8 +92,31 @@
             />
           </figure>
         </section>
+        <section id="people">
+          <p class="eyebrow">03 / 查找人物</p>
+          <h2>在这台 Mac 上聚合人脸。</h2>
+          <p>
+            在设置中安装或选择 ArcFace 模型，然后从人物页扫描当前 Catalog。人脸检测、特征与人物组全部保留在本地。
+          </p>
+          <ol>
+            <li>打开“设置 → 人物”，配置本地模型。</li>
+            <li>进入人物页，选择“扫描人脸”。</li>
+            <li>命名人物组、设置封面，并移出分错的人脸。</li>
+            <li>删除一个或多个错误人物组；后续重扫仍会保持排除。</li>
+          </ol>
+          <figure>
+            <img
+              src="assets/face-cn.png"
+              alt="AfterFrame 中文版本地人物识别"
+              width="3024"
+              height="1964"
+              loading="lazy"
+            />
+            <figcaption>演示人物图像由 AI 生成，不对应真实人物。</figcaption>
+          </figure>
+        </section>
         <section id="edit">
-          <p class="eyebrow">03 / 编辑</p>
+          <p class="eyebrow">04 / 编辑</p>
           <h2>在挑选照片的地方，完成编辑。</h2>
           <p>
             裁切、添加文字、制作拼贴、添加贴纸或相机相框。原片不会被改动，按需要的尺寸导出即可。
@@ -121,7 +146,7 @@
           </figure>
         </section>
         <section id="ai">
-          <p class="eyebrow">04 / 使用自己的 AI</p>
+          <p class="eyebrow">05 / 使用自己的 AI</p>
           <h2>使用你信任的服务商。</h2>
           <p>
             在“设置”中使用自己的 API Key 配置 AI 重绘和 AI
@@ -149,7 +174,7 @@
           </figure>
         </section>
         <section id="mcp">
-          <p class="eyebrow">05 / 连接 Agent</p>
+          <p class="eyebrow">06 / 连接 Agent</p>
           <h2>让 Agent 和你的图库一起工作。</h2>
           <p>
             应用运行期间，AfterFrame 会启动本地 MCP 服务。将它添加到兼容 MCP

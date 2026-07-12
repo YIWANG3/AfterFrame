@@ -82,8 +82,8 @@
       </section>
       <section class="strip">
         <p>
-          Catalogs · Search and filters · Ratings and tags · Smart collections ·
-          Local MCP
+          Catalogs · Search and filters · Ratings and tags · People · Smart
+          collections · Local MCP
         </p>
       </section>
       <section class="feature" id="library">
@@ -179,8 +179,10 @@
             and show selections in the app.
           </p>
           <div class="command">
-            claude mcp add --transport http afterframe
-            http://127.0.0.1:41706/mcp
+            <span>Claude Code</span>
+            <code>claude mcp add --transport http afterframe http://127.0.0.1:41706/mcp</code>
+            <span>Codex CLI</span>
+            <code>codex mcp add afterframe --url http://127.0.0.1:41706/mcp</code>
           </div>
           <a class="arrow" href="guide.html#mcp"
             >Connect an agent <span>→</span></a
@@ -196,10 +198,32 @@
           />
         </figure>
       </section>
+      <section class="feature reverse" id="people">
+        <figure class="screen">
+          <img
+            src="assets/face-en.png"
+            alt="AfterFrame on-device people recognition in English"
+            width="3024"
+            height="1964"
+            loading="lazy"
+          />
+          <figcaption class="screen-note">
+            Demo portraits are AI-generated and do not depict real people.
+          </figcaption>
+        </figure>
+        <div class="feature-heading">
+          <p class="eyebrow">06 / People</p>
+          <h2>Find every photo<br />of the same person.</h2>
+          <p>
+            On-device face recognition groups matching photos without uploading
+            them. Review, name, correct, and filter each person from one view.
+          </p>
+        </div>
+      </section>
       <section class="closing">
         <img src="assets/logo.png" alt="" width="48" height="48" />
         <p class="eyebrow">AfterFrame for macOS</p>
-        <h2>Start organizing<br />one shoot.</h2>
+        <h2>Start organizing<br />your albums.</h2>
         <a
           class="primary"
           href="https://github.com/YIWANG3/AfterFrame/releases/latest"
