@@ -9,6 +9,10 @@ const { _electron: electron } = require("@playwright/test");
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
 const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.afcatalog");
+// People-recognition fixture: AI-generated fictional people with real faces,
+// embeddings and person groups pre-baked (seed-people-catalog.js), so the
+// specs exercise people flows without any Core ML model at runtime.
+const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-catalog.afcatalog");
 
 /**
  * Launch the packaged-style Electron app pointing at a temp userData dir.
@@ -16,6 +20,8 @@ const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.a
  * @param {string} [opts.testName] - used to prefix the temp dir for debugging
  * @param {boolean} [opts.withCatalog=true] - load the seeded e2e catalog
  *   (10 gradient images). Set false for tests that want a blank-state app.
+ * @param {"default"|"people"} [opts.catalogFixture="default"] - which seeded
+ *   catalog to copy in; "people" loads people-catalog.afcatalog.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
 // Each launch gets its own MCP port: the dev app holds the default 41706, and
@@ -23,7 +29,7 @@ const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.a
 // which would make MCP-dependent specs flake in confusing ways.
 let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default" } = {}) {
   // Fresh userData so each run starts from a clean slate
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
   const mcpPort = nextMcpPort++;
@@ -43,8 +49,9 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
   // contaminate the version-controlled fixture between runs.
   let workCatalog = null;
   if (withCatalog && !noCatalog) {
-    workCatalog = path.join(userDataDir, "test-catalog.afcatalog");
-    fs.cpSync(SEEDED_CATALOG, workCatalog, { recursive: true });
+    const seeded = catalogFixture === "people" ? SEEDED_PEOPLE_CATALOG : SEEDED_CATALOG;
+    workCatalog = path.join(userDataDir, path.basename(seeded));
+    fs.cpSync(seeded, workCatalog, { recursive: true });
     env.MEDIA_WORKSPACE_CATALOG = workCatalog;
   }
 
