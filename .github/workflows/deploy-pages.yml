@@ -32,7 +32,7 @@ jobs:
       - name: Assemble static site
         run: |
           mkdir _site
-          cp site/index.html site/guide.html site/guide-zh.html site/privacy.html site/privacy-zh.html site/workspace-zh.html site/workspace.css site/workspace-zh.css site/workspace-guide.css site/workspace-guide-zh.css site/brand.css _site/
+          cp site/index.html site/guide.html site/guide-zh.html site/privacy.html site/privacy-zh.html site/workspace-zh.html site/workspace.css site/workspace-zh.css site/workspace-guide.css site/workspace-guide-zh.css site/brand.css site/footer.css _site/
           cp -R docs/assets _site/assets
       - uses: actions/upload-pages-artifact@v3
         with:

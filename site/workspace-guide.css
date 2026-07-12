@@ -264,20 +264,6 @@ pre {
 .end h2 {
   margin: 25px 0 31px;
 }
-footer {
-  padding: 23px 4vw;
-  border-top: 1px solid var(--line);
-  display: flex;
-  gap: 23px;
-  color: #96958e;
-  font: 400 10px var(--mono);
-}
-footer a:last-child {
-  margin-left: auto;
-}
-footer a:hover {
-  color: var(--gold);
-}
 @media (max-width: 800px) {
   header {
     height: 62px;
@@ -314,14 +300,6 @@ footer a:hover {
   }
   figure {
     margin-top: 34px;
-  }
-  footer {
-    padding: 20px;
-    flex-wrap: wrap;
-    gap: 15px;
-  }
-  footer a:last-child {
-    margin-left: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
