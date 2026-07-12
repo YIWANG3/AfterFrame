@@ -122,6 +122,7 @@ def run_people_index_job(
     worker_path: Path | None = None,
     asset_ids: list[str] | None = None,
     limit: int | None = None,
+    cluster_every: int = 300,
 ) -> dict[str, object]:
     """Run one resumable batch through the precompiled native people worker.
 
@@ -243,6 +244,7 @@ def run_people_index_job(
 
     worker: subprocess.Popen[str] | None = None
     active_cursor = {"offset": offset, "total": len(candidates)}
+    analyzed_since_cluster = 0
     try:
         worker = subprocess.Popen(
             [str(resolved_worker), "--model", str(model_path), "--serve"],
@@ -339,7 +341,22 @@ def run_people_index_job(
                     )
                     stats["analyzed"] = int(stats["analyzed"]) + 1
                     stats["faces"] = int(stats["faces"]) + len(faces)
+                    analyzed_since_cluster += 1
                 connection.commit()
+                # Long scans should surface people progressively, not only at
+                # the end: re-cluster periodically so candidates appear on the
+                # wall while the scan is still running.
+                if cluster_every > 0 and analyzed_since_cluster >= cluster_every:
+                    interim = rebuild_candidate_groups(
+                        connection,
+                        model_id=model_id,
+                        model_version=model_version,
+                        checkpoint=lambda: (_check_cancel(connection, job_id), _check_pause(connection, job_id)),
+                        commit=False,
+                    )
+                    connection.commit()
+                    stats["groups"] = interim["groups"]
+                    analyzed_since_cluster = 0
             else:
                 upsert_people_asset_index(
                     connection,

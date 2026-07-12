@@ -157,6 +157,57 @@ class PeopleIndexJobTest(unittest.TestCase):
             self.assertEqual(resumed["groups"], 1)
             self.assertEqual(get_job(connection, job["job_id"])["status"], "succeeded")
 
+    def test_candidates_appear_mid_scan_with_periodic_clustering(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            worker = self._write_fake_worker(root)
+            model = root / "ArcFaceR100.mlpackage"
+            model.write_bytes(b"model-placeholder")
+
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            for index in (1, 2):
+                source = root / f"portrait-{index}.jpg"
+                source.write_bytes(f"photo-{index}".encode())
+                connection.execute(
+                    """
+                    INSERT INTO assets (
+                        asset_id, asset_type, canonical_path, stem, normalized_stem,
+                        stem_key, extension, fingerprint, file_size, modified_time
+                    ) VALUES (?, 'image', ?, ?, ?, ?, '.jpg', 'fingerprint', 1, '2026-07-10T00:00:00Z')
+                    """,
+                    (f"asset-{index}", str(source), f"portrait-{index}", f"portrait-{index}", f"portrait-{index}"),
+                )
+            connection.commit()
+
+            # With cluster_every=1 the runner re-clusters after every analyzed
+            # asset, so candidates surface mid-scan instead of only at the end:
+            # two interim passes plus the final one.
+            import media_workspace.job_runner as job_runner_module
+            real_rebuild = job_runner_module.rebuild_candidate_groups
+            calls: list[int] = []
+
+            def counting_rebuild(*args, **kwargs):
+                calls.append(1)
+                return real_rebuild(*args, **kwargs)
+
+            job = create_job(connection, "people_index")
+            with patch.object(job_runner_module, "rebuild_candidate_groups", side_effect=counting_rebuild):
+                result = run_people_index_job(
+                    connection,
+                    job["job_id"],
+                    model_id="arcface-r100",
+                    model_version="test-v1",
+                    model_path=model,
+                    manifest_hash="manifest-hash",
+                    worker_path=worker,
+                    cluster_every=1,
+                )
+            self.assertEqual(len(calls), 3, "expected 2 interim clustering passes + 1 final")
+            self.assertEqual(result["groups"], 1)
+
     def _write_fake_worker(self, root: Path) -> Path:
         worker = root / "fake-people-worker.py"
         embedding = [1.0 / math.sqrt(512)] * 512

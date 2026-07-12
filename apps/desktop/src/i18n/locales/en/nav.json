@@ -87,7 +87,9 @@
     "scanFailed": "Couldn’t start the scan",
     "searchPlaceholder": "Search people…",
     "searchEmpty": "No matching people",
-    "openSettings": "People settings"
+    "openSettings": "People settings",
+    "scanningEmptyTitle": "Analyzing your library",
+    "scanningEmptyHint": "People appear here progressively as they are found — no need to wait for the scan to finish."
   },
   "filter": {
     "camera": "Camera",

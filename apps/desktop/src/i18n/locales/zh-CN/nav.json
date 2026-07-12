@@ -85,7 +85,9 @@
     "scanFailed": "无法开始扫描",
     "searchPlaceholder": "搜索人物…",
     "searchEmpty": "没有匹配的人物",
-    "openSettings": "人物设置"
+    "openSettings": "人物设置",
+    "scanningEmptyTitle": "正在分析图库",
+    "scanningEmptyHint": "识别出的人物会逐步出现在这里，无需等待分析结束。"
   },
   "filter": {
     "camera": "相机",

@@ -53,12 +53,17 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
   useEffect(() => {
     if (!enabled) return undefined;
     let cancelled = false;
+    let ticks = 0;
     async function poll() {
       try {
         const status = await api.getPeopleIndexStatus();
         if (cancelled || !status) return;
         const active = !!status.active;
         setScan({ active, progress: Number(status.progress) || 0, result: status.result || null });
+        // The job re-clusters periodically mid-scan; refresh the wall every
+        // few ticks so newly found people appear while it runs.
+        ticks += 1;
+        if (active && ticks % 5 === 0) void load();
         if (scanWasActive.current && !active) {
           // A silent failure looks identical to "scan changed nothing" — say why.
           if (status.status === "failed") {

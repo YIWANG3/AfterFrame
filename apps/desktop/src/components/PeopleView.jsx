@@ -230,9 +230,11 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
             <div className="mb-4 rounded-2xl border border-border/55 bg-chrome p-4 text-muted2">
               <UsersRound className="h-8 w-8 stroke-[1.25]" />
             </div>
-            <h2 className="text-[14px] font-medium text-text">{failed ? t("people.failedTitle") : t("people.emptyTitle")}</h2>
+            <h2 className="text-[14px] font-medium text-text">
+              {failed ? t("people.failedTitle") : scanning ? t("people.scanningEmptyTitle") : t("people.emptyTitle")}
+            </h2>
             <p className="mt-2 max-w-sm text-[12px] leading-5 text-muted2">
-              {failed ? t("people.failedHint") : t("people.emptyHint")}
+              {failed ? t("people.failedHint") : scanning ? t("people.scanningEmptyHint") : t("people.emptyHint")}
             </p>
             {!failed && (
               <div className="mt-4 flex items-center gap-2">
