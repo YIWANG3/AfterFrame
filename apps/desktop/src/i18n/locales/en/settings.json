@@ -1,10 +1,14 @@
 {
   "title": "Settings",
   "close": "Close (Esc)",
+  "scope": {
+    "catalog": "Current Catalog"
+  },
   "tabs": {
     "general": "General",
     "ai": "AI Annotation",
     "repaint": "AI Repaint",
+    "people": "People",
     "library": "Library",
     "about": "About",
     "integrations": "Integrations"
@@ -22,7 +26,6 @@
   "annotation": {
     "loading": "Loading settings…",
     "providersTitle": "Auto-annotation providers",
-    "providersBadge": "New",
     "providersSubtitle": "Save multiple provider configurations; switch between them with a click. The active one is used when you annotate assets.",
     "noProviders": "No providers yet. Add one to enable annotation.",
     "addNewProvider": "Add new provider",
@@ -47,8 +50,8 @@
     "setActive": "Set as active",
     "edit": "Edit",
     "delete": "Delete",
-    "newProvider": "New provider",
-    "editProvider": "Edit provider",
+    "newProvider": "New Provider",
+    "editProvider": "Edit Provider",
     "displayName": "Display name",
     "displayNameHint": "Short label shown in the provider list.",
     "type": "Type",
@@ -94,6 +97,11 @@
     "switchCatalogHint": "Open an existing .afcatalog, or create a new one. The current view reloads.",
     "openCatalog": "Open…",
     "newCatalog": "New…",
+    "watchedTitle": "Watched directories",
+    "watchedSubtitle": "Belongs only to the current Catalog. Watching switches with the Catalog, and new files in these folders are imported automatically.",
+    "noWatched": "No watched directories in this Catalog.",
+    "addFolder": "Add Folder…",
+    "remove": "Remove",
     "cacheStorage": "Cache & storage",
     "cacheSubtitle": "All caches live under ~/Library/Application Support/AfterFrame.",
     "previewThumbnails": "Preview thumbnails",
@@ -120,9 +128,7 @@
     "updatesNotAuto": "not automatic",
     "updatesMid": " — when a new version ships, download the .dmg from ",
     "githubReleases": "GitHub Releases",
-    "updatesPost": " and drag it over the old Applications/AfterFrame.app. Catalogs and settings persist across updates.",
-    "builtWithPre": "Built with ",
-    "builtWithPost": ". Sticker extraction uses Apple VisionKit; depth-aware text uses Depth Anything V2."
+    "updatesPost": " and drag it over the old Applications/AfterFrame.app. Catalogs and settings persist across updates."
   },
   "repaint": {
     "providers": "Providers",
@@ -135,7 +141,39 @@
     "removeProvider": "Remove provider",
     "addProvider": "Add provider"
   },
+  "people": {
+    "loading": "Loading people recognition…",
+    "modelTitle": "Face model",
+    "modelSubtitle": "Runs only on this Mac. Face embeddings and person groups stay in the current catalog.",
+    "active": "Active",
+    "ready": "Ready",
+    "noModel": "No compatible face model is installed yet.",
+    "activeModelHint": "Active local model · {{size}}",
+    "installModel": "Install a local model",
+    "installModelHint": "Choose an .afpersonmodel bundle or a compatible Core ML .mlpackage. It is validated first, then copied into AfterFrame storage.",
+    "chooseModel": "Choose model…",
+    "validating": "Validating…",
+    "downloadModel": "Download ArcFace R100 · {{size}}",
+    "downloading": "Downloading & validating…",
+    "automaticDownload": "Automatically download updates",
+    "automaticDownloadHint": "Available after a signed official release manifest is configured.",
+    "installedModels": "Installed models",
+    "modelMeta": "v{{version}} · {{size}} · {{dimensions}} dimensions",
+    "modelMissing": "Model file missing",
+    "unverified": "Custom model — review its license before distribution.",
+    "useModel": "Use",
+    "removeModel": "Remove model",
+    "indexTitle": "Index your library",
+    "indexSubtitle": "Runs as a low-priority background task. You can keep browsing and pause or resume it from Background Activity.",
+    "analyzeLibrary": "Analyze all photos",
+    "analyzeLibraryHint": "Only images with a detected, usable face are added to the people index. Re-runs skip unchanged photos.",
+    "startIndex": "Start analysis",
+    "indexing": "Analyzing faces in the background…",
+    "paused": "Analysis paused",
+    "privacy": "Your photos never leave this Mac. The worker detects faces and computes embeddings locally; names are not sent to any service."
+  },
   "providers": {
+    "active": "Active",
     "newProvider": "New Provider",
     "editProvider": "Edit Provider",
     "type": "Type",
@@ -155,11 +193,6 @@
     "title": "Integrations",
     "editorsTitle": "External editors",
     "editorsSubtitle": "Auto-detected photo editors available in the gallery right-click → Open With.",
-    "noEditors": "No supported editors detected.",
-    "watchedTitle": "Watched directories",
-    "watchedSubtitle": "New files added to these folders are imported automatically. Point your editor's export folder here.",
-    "noWatched": "No watched directories yet.",
-    "addFolder": "Add Folder…",
-    "remove": "Remove"
+    "noEditors": "No supported editors detected."
   }
 }

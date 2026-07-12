@@ -34,18 +34,20 @@ export default function AboutSettings() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-4 border-b border-border pb-5">
-        <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-2xl" />
-        <div>
-          <div className="text-[18px] font-semibold text-text">AfterFrame</div>
-          <div className="text-[12px] text-muted2">{t("about.tagline")}</div>
-          {version && (
-            <div className="mt-1.5 text-[11px] tabular-nums text-muted">
-              {version} · arm64
-            </div>
-          )}
+      <Group>
+        <div className="flex items-center gap-4 py-4">
+          <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-2xl" />
+          <div>
+            <div className="text-[18px] font-semibold text-text">AfterFrame</div>
+            <div className="text-[12px] text-muted2">{t("about.tagline")}</div>
+            {version && (
+              <div className="mt-1.5 text-[11px] tabular-nums text-muted">
+                {version} · arm64
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </Group>
 
       <Group>
         {LINKS.map((link) => {
@@ -69,15 +71,13 @@ export default function AboutSettings() {
         })}
       </Group>
 
-      <div className="mt-5 border-t border-border pt-4 text-[11px] leading-relaxed text-muted2">
-        {t("about.updatesPre")}<strong className="text-muted">{t("about.updatesNotAuto")}</strong>{t("about.updatesMid")}
-        <button onClick={() => openExternal(RELEASES_URL)} className="text-accent hover:underline">{t("about.githubReleases")}</button>
-        {t("about.updatesPost")}
-        <br /><br />
-        {t("about.builtWithPre")}
-        <button onClick={() => openExternal("https://claude.com/claude-code")} className="text-accent hover:underline">Claude Code</button>
-        {t("about.builtWithPost")}
-      </div>
+      <Group>
+        <div className="py-3 text-[11px] leading-relaxed text-muted2">
+          {t("about.updatesPre")}<strong className="text-muted">{t("about.updatesNotAuto")}</strong>{t("about.updatesMid")}
+          <button onClick={() => openExternal(RELEASES_URL)} className="text-accent hover:underline">{t("about.githubReleases")}</button>
+          {t("about.updatesPost")}
+        </div>
+      </Group>
     </div>
   );
 }

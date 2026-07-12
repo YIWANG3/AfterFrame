@@ -40,6 +40,7 @@
     }
   },
   "sidebar": {
+    "people": "People",
     "stickers": "Stickers",
     "folders": "Folders",
     "newFolder": "New folder",
@@ -56,11 +57,44 @@
     "assetsCount_other": "{{count}} assets",
     "updated": "updated {{time}}"
   },
+  "people": {
+    "title": "People",
+    "refresh": "Refresh",
+    "loading": "Loading people…",
+    "unnamed": "Unnamed person",
+    "addName": "Add name",
+    "rename": "Rename",
+    "faces_one": "{{count}} face",
+    "faces_other": "{{count}} faces",
+    "openGroup": "Open {{name}} in the library",
+    "namePlaceholder": "Type a name…",
+    "nameAction": "Name",
+    "mergeAction": "Merge into {{name}}",
+    "mergePrompt": "Merge into “{{name}}”?",
+    "mergeHint": "All faces in this group become that person.",
+    "mergeConfirm": "Merge",
+    "mergeBack": "Back",
+    "renameFailed": "Couldn’t name person",
+    "mergeFailed": "Couldn’t merge people",
+    "emptyTitle": "No people yet",
+    "emptyHint": "Download a face model in Settings, then analyze the library. People appear here after the background task finishes.",
+    "failedTitle": "Couldn’t load people",
+    "failedHint": "Try refreshing. Your indexed faces remain safely stored in this catalog.",
+    "scan": "Scan faces",
+    "scanning": "Analyzing {{percent}}%",
+    "scanningShort": "Analyzing",
+    "scanHint": "Detect and group faces across the library",
+    "scanFailed": "Couldn’t start the scan",
+    "searchPlaceholder": "Search people…",
+    "searchEmpty": "No matching people",
+    "openSettings": "People settings"
+  },
   "filter": {
     "camera": "Camera",
     "lens": "Lens",
     "tag": "Tag",
     "format": "Format",
+    "people": "Has faces",
     "iso": "ISO",
     "aperture": "Aperture",
     "focal": "Focal",
@@ -71,7 +105,9 @@
     "any": "Any {{label}}",
     "searchPlaceholder": "Search {{label}}…",
     "clear": "Clear {{count}}",
-    "ratingAtLeast": "Rating ≥ {{n}}"
+    "ratingAtLeast": "Rating ≥ {{n}}",
+    "person": "Person",
+    "noNamedPeople": "No named people yet — name them on the People page first."
   },
   "activity": {
     "title": "Background Activity",
@@ -79,6 +115,9 @@
     "none": "No background jobs running",
     "cancel": "Cancel",
     "cancelling": "Cancelling…",
+    "pause": "Pause",
+    "resume": "Resume",
+    "paused": "Paused",
     "queued": "Queued",
     "working": "Working…",
     "workingProgress": "{{label}} · {{processed}}/{{total}}",
@@ -89,7 +128,8 @@
       "preview": "Previews",
       "enrichment": "Enrichment",
       "annotation": "AI Annotation",
-      "ai_repaint": "AI Repaint"
+      "ai_repaint": "AI Repaint",
+      "people_index": "People Recognition"
     }
   },
   "lightbox": {
@@ -107,6 +147,7 @@
     "noAssets": "No assets in this view",
     "missing": "Missing",
     "missingTip": "Original file moved or deleted",
+    "hasPerson": "Contains a detected face",
     "menu": {
       "edit": "Edit…",
       "compare": "Compare",

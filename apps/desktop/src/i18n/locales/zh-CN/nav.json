@@ -40,6 +40,7 @@
     }
   },
   "sidebar": {
+    "people": "人物",
     "stickers": "贴纸",
     "folders": "文件夹",
     "newFolder": "新建文件夹",
@@ -55,11 +56,43 @@
     "assetsCount_other": "{{count}} 个素材",
     "updated": "更新于 {{time}}"
   },
+  "people": {
+    "title": "人物",
+    "refresh": "刷新",
+    "loading": "正在载入人物…",
+    "unnamed": "未命名人物",
+    "addName": "添加名字",
+    "rename": "重命名",
+    "faces_other": "{{count}} 张脸",
+    "openGroup": "在图库中打开 {{name}}",
+    "namePlaceholder": "输入名字…",
+    "nameAction": "命名",
+    "mergeAction": "合并到 {{name}}",
+    "mergePrompt": "合并到「{{name}}」？",
+    "mergeHint": "这组的全部人脸会归入该人物。",
+    "mergeConfirm": "合并",
+    "mergeBack": "返回",
+    "renameFailed": "命名失败",
+    "mergeFailed": "合并失败",
+    "emptyTitle": "还没有识别出人物",
+    "emptyHint": "请先在设置中下载人脸模型，再分析图库。后台任务结束后，人物会在这里出现。",
+    "failedTitle": "无法读取人物",
+    "failedHint": "请尝试刷新。已索引的人脸数据仍安全保存在当前图库文件夹中。",
+    "scan": "扫描人脸",
+    "scanning": "分析中 {{percent}}%",
+    "scanningShort": "分析中",
+    "scanHint": "检测并归类图库中的人脸",
+    "scanFailed": "无法开始扫描",
+    "searchPlaceholder": "搜索人物…",
+    "searchEmpty": "没有匹配的人物",
+    "openSettings": "人物设置"
+  },
   "filter": {
     "camera": "相机",
     "lens": "镜头",
     "tag": "标签",
     "format": "格式",
+    "people": "含人脸",
     "iso": "ISO",
     "aperture": "光圈",
     "focal": "焦距",
@@ -70,7 +103,9 @@
     "any": "任意{{label}}",
     "searchPlaceholder": "搜索{{label}}…",
     "clear": "清除 {{count}}",
-    "ratingAtLeast": "评分 ≥ {{n}}"
+    "ratingAtLeast": "评分 ≥ {{n}}",
+    "person": "人物",
+    "noNamedPeople": "还没有已命名的人物，先在人物页给他们起名。"
   },
   "activity": {
     "title": "后台活动",
@@ -78,6 +113,9 @@
     "none": "没有正在运行的后台任务",
     "cancel": "取消",
     "cancelling": "正在取消…",
+    "pause": "暂停",
+    "resume": "继续",
+    "paused": "已暂停",
     "queued": "排队中",
     "working": "处理中…",
     "workingProgress": "{{label}} · {{processed}}/{{total}}",
@@ -88,7 +126,8 @@
       "preview": "预览",
       "enrichment": "元数据补全",
       "annotation": "AI 标注",
-      "ai_repaint": "AI 重绘"
+      "ai_repaint": "AI 重绘",
+      "people_index": "人物识别"
     }
   },
   "lightbox": {
@@ -106,6 +145,7 @@
     "noAssets": "此视图中没有素材",
     "missing": "缺失",
     "missingTip": "原文件已移动或删除",
+    "hasPerson": "包含已检测到的人脸",
     "menu": {
       "edit": "编辑…",
       "compare": "对比",

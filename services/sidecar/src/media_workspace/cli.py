@@ -38,6 +38,14 @@ from .db import (
     list_catalog_roots,
     list_image_assets,
     list_pending,
+    assign_faces_to_group,
+    get_person_group_detail,
+    list_person_groups,
+    list_similar_person_groups,
+    remove_faces_from_group,
+    merge_person_groups,
+    set_person_group_name,
+    set_person_group_state,
     set_catalog_path,
     summary,
     upsert_catalog_root,
@@ -52,12 +60,14 @@ from .db import (
     browse_collection,
     set_asset_rating,
     set_app_setting,
+    request_job_pause,
+    request_job_resume,
     upsert_image_asset,
     upsert_registry,
 )
 from .evaluation import evaluate_ground_truth
 from .ground_truth import export_ground_truth
-from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_preview_job
+from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_people_index_job, run_preview_job
 from .preview_service import PreviewService
 from .metadata import extract_image_candidate
 from .models import MatchDecision
@@ -372,23 +382,61 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
+    create_job_parser.add_argument("--priority", type=int, default=50)
 
     get_job_parser = subparsers.add_parser("get-job", parents=[common])
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
 
+    pause_job_parser = subparsers.add_parser("pause-job", parents=[common])
+    pause_job_parser.add_argument("--job-id", required=True)
+
+    resume_job_parser = subparsers.add_parser("resume-job", parents=[common])
+    resume_job_parser.add_argument("--job-id", required=True)
+
     subparsers.add_parser("list-active-jobs", parents=[common])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
+
+    list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
+    list_people_groups_parser.add_argument("--state", choices=["candidate", "confirmed", "ignored"])
+
+    similar_people_groups_parser = subparsers.add_parser("similar-people-groups", parents=[common])
+    similar_people_groups_parser.add_argument("--group-id", required=True)
+    similar_people_groups_parser.add_argument("--limit", type=int, default=10)
+
+    people_group_detail_parser = subparsers.add_parser("people-group-detail", parents=[common])
+    people_group_detail_parser.add_argument("--group-id", required=True)
+    people_group_detail_parser.add_argument("--face-limit", type=int, default=40)
+    people_group_detail_parser.add_argument("--face-offset", type=int, default=0)
+
+    rename_people_group_parser = subparsers.add_parser("rename-people-group", parents=[common])
+    rename_people_group_parser.add_argument("--group-id", required=True)
+    rename_people_group_parser.add_argument("--name", required=True)
+
+    set_people_group_state_parser = subparsers.add_parser("set-people-group-state", parents=[common])
+    set_people_group_state_parser.add_argument("--group-id", required=True)
+    set_people_group_state_parser.add_argument("--state", required=True, choices=["candidate", "confirmed", "ignored"])
+
+    remove_face_parser = subparsers.add_parser("remove-face-from-person", parents=[common])
+    remove_face_parser.add_argument("--face-id", action="append", required=True)
+
+    assign_face_parser = subparsers.add_parser("assign-face-to-person", parents=[common])
+    assign_face_parser.add_argument("--face-id", action="append", required=True)
+    assign_face_parser.add_argument("--group-id", required=True)
+
+    merge_people_groups_parser = subparsers.add_parser("merge-people-groups", parents=[common])
+    merge_people_groups_parser.add_argument("--source-group-id", required=True)
+    merge_people_groups_parser.add_argument("--target-group-id", required=True)
 
     run_import_job_parser = subparsers.add_parser("run-import-job", parents=[common])
     run_import_job_parser.add_argument("--job-id", required=True)
@@ -416,6 +464,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_preview_job_parser.add_argument("--asset-type", choices=["raw", "image"])
     run_preview_job_parser.add_argument("--limit", type=int)
     run_preview_job_parser.add_argument("--force", action="store_true")
+
+    run_people_index_parser = subparsers.add_parser("run-people-index-job", parents=[common])
+    run_people_index_parser.add_argument("--job-id", required=True)
+    run_people_index_parser.add_argument("--model-id", required=True)
+    run_people_index_parser.add_argument("--model-version", required=True)
+    run_people_index_parser.add_argument("--model-path", type=Path, required=True)
+    run_people_index_parser.add_argument("--manifest-hash", required=True)
+    run_people_index_parser.add_argument("--worker-path", type=Path)
+    run_people_index_parser.add_argument("--asset-id", action="append")
+    run_people_index_parser.add_argument("--limit", type=int)
 
     get_provider_token = subparsers.add_parser("get-provider-token", parents=[common])
     get_provider_token.add_argument("--provider", required=True)
@@ -941,7 +999,7 @@ def _cmd_analyze_metadata(args, connection, catalog, parser):
 
 def _cmd_create_job(args, connection, catalog, parser):
     payload = json.loads(args.payload_json or "{}")
-    print(json.dumps(create_job(connection, args.job_type, payload=payload), indent=2))
+    print(json.dumps(create_job(connection, args.job_type, payload=payload, priority=args.priority), indent=2))
     return 0
 
 
@@ -960,9 +1018,85 @@ def _cmd_list_jobs(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_list_people_groups(args, connection, catalog, parser):
+    payload = []
+    for group in list_person_groups(connection, state=args.state):
+        preview_relative_path = group.pop("cover_preview_relative_path", None)
+        group["cover_preview_path"] = (
+            str((catalog.root / preview_relative_path).resolve())
+            if preview_relative_path else None
+        )
+        payload.append(group)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_similar_people_groups(args, connection, catalog, parser):
+    payload = []
+    for group in list_similar_person_groups(connection, group_id=args.group_id, limit=args.limit):
+        preview_relative_path = group.pop("cover_preview_relative_path", None)
+        group["cover_preview_path"] = (
+            str((catalog.root / preview_relative_path).resolve())
+            if preview_relative_path else None
+        )
+        payload.append(group)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_people_group_detail(args, connection, catalog, parser):
+    detail = get_person_group_detail(
+        connection, group_id=args.group_id, face_limit=args.face_limit, face_offset=args.face_offset,
+    )
+    for face in detail["faces"]:
+        relative = face.pop("preview_relative_path", None)
+        face["preview_path"] = str((catalog.root / relative).resolve()) if relative else None
+    print(json.dumps(detail, indent=2))
+    return 0
+
+
+def _cmd_rename_people_group(args, connection, catalog, parser):
+    print(json.dumps(set_person_group_name(connection, group_id=args.group_id, name=args.name), indent=2))
+    return 0
+
+
+def _cmd_set_people_group_state(args, connection, catalog, parser):
+    print(json.dumps(set_person_group_state(connection, group_id=args.group_id, state=args.state), indent=2))
+    return 0
+
+
+def _cmd_remove_face_from_person(args, connection, catalog, parser):
+    print(json.dumps(remove_faces_from_group(connection, face_ids=list(args.face_id)), indent=2))
+    return 0
+
+
+def _cmd_assign_face_to_person(args, connection, catalog, parser):
+    print(json.dumps(assign_faces_to_group(connection, face_ids=list(args.face_id), group_id=args.group_id), indent=2))
+    return 0
+
+
+def _cmd_merge_people_groups(args, connection, catalog, parser):
+    print(json.dumps(merge_person_groups(
+        connection,
+        source_group_id=args.source_group_id,
+        target_group_id=args.target_group_id,
+    ), indent=2))
+    return 0
+
+
 def _cmd_cancel_job(args, connection, catalog, parser):
     from .db import request_job_cancel
     print(json.dumps(request_job_cancel(connection, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_pause_job(args, connection, catalog, parser):
+    print(json.dumps(request_job_pause(connection, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_resume_job(args, connection, catalog, parser):
+    print(json.dumps(request_job_resume(connection, args.job_id), indent=2))
     return 0
 
 
@@ -1002,6 +1136,22 @@ def _cmd_run_preview_job(args, connection, catalog, parser):
         asset_type=args.asset_type,
         limit=args.limit,
         force=args.force,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_run_people_index_job(args, connection, catalog, parser):
+    payload = run_people_index_job(
+        connection,
+        args.job_id,
+        model_id=args.model_id,
+        model_version=args.model_version,
+        model_path=args.model_path,
+        manifest_hash=args.manifest_hash,
+        worker_path=args.worker_path,
+        asset_ids=args.asset_id,
+        limit=args.limit,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -1123,6 +1273,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
                 "set_raw_asset_id": row["set_raw_asset_id"],
                 "primary_stem": row["primary_stem"],
                 "set_item_count": row["set_item_count"],
+                "has_face": bool(row["has_face"]),
                 "annotation": _annotation_from_row(row),
             }
         )
@@ -1180,6 +1331,8 @@ def _cmd_asset_detail(args, connection, catalog, parser):
             for d in duplicates
         ],
     }
+    from .db import get_asset_people
+    payload["people"] = get_asset_people(connection, asset_id=row["asset_id"])
 
     # Add version siblings from resource set
     asset_id = row["asset_id"]
@@ -1557,11 +1710,22 @@ COMMAND_HANDLERS = {
     "get-job": _cmd_get_job,
     "latest-job": _cmd_latest_job,
     "list-jobs": _cmd_list_jobs,
+    "list-people-groups": _cmd_list_people_groups,
+    "similar-people-groups": _cmd_similar_people_groups,
+    "people-group-detail": _cmd_people_group_detail,
+    "rename-people-group": _cmd_rename_people_group,
+    "set-people-group-state": _cmd_set_people_group_state,
+    "merge-people-groups": _cmd_merge_people_groups,
+    "remove-face-from-person": _cmd_remove_face_from_person,
+    "assign-face-to-person": _cmd_assign_face_to_person,
     "cancel-job": _cmd_cancel_job,
+    "pause-job": _cmd_pause_job,
+    "resume-job": _cmd_resume_job,
     "list-active-jobs": _cmd_list_active_jobs,
     "run-import-job": _cmd_run_import_job,
     "run-enrichment-job": _cmd_run_enrichment_job,
     "run-preview-job": _cmd_run_preview_job,
+    "run-people-index-job": _cmd_run_people_index_job,
     "evaluate-ground-truth": _cmd_evaluate_ground_truth,
     "export-ground-truth": _cmd_export_ground_truth,
     "resolve-image": _cmd_resolve_image,

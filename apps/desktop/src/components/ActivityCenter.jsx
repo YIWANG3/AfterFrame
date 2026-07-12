@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import {
-  Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch,
+  Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Pause, Play,
   CheckCircle2, XCircle, CircleSlash,
 } from "lucide-react";
 
@@ -17,12 +17,14 @@ export const JOB_META = {
   enrichment: { label: "Enrichment", icon: FileSearch },
   annotation: { label: "AI Annotation", icon: Sparkles },
   ai_repaint: { label: "AI Repaint", icon: Wand2 },
+  people_index: { label: "People Recognition", icon: ScanFace },
 };
 
 export function jobLine(job, t) {
   const phase = job.result?.current_phase?.result || {};
   const processed = Number(phase.processed || 0);
   const total = Number(phase.total || 0);
+  if (job.status === "paused") return t("activity.paused");
   if (total > 0) return t("activity.workingProgress", { label: job.phaseLabel || t("activity.working"), processed, total });
   return job.phaseLabel || (job.status === "queued" ? t("activity.queued") : t("activity.working"));
 }
@@ -43,7 +45,7 @@ function FinishedRow({ job }) {
   );
 }
 
-export default function ActivityCenter({ jobs, lastFinishedJob, onCancel }) {
+export default function ActivityCenter({ jobs, lastFinishedJob, onCancel, onPause, onResume }) {
   const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
@@ -113,6 +115,8 @@ export default function ActivityCenter({ jobs, lastFinishedJob, onCancel }) {
                 const meta = JOB_META[job.jobType] || { label: job.jobType, icon: Activity };
                 const Icon = meta.icon;
                 const cancelling = !!job.cancel_requested;
+                const pausable = job.jobType === "people_index" && !cancelling;
+                const paused = job.status === "paused";
                 return (
                   <div key={job.jobId} className="px-2.5 py-2">
                     <div className="flex items-center gap-2">
@@ -121,6 +125,16 @@ export default function ActivityCenter({ jobs, lastFinishedJob, onCancel }) {
                       <span className="shrink-0 text-[10px] tabular-nums text-muted2">
                         {Math.round((job.progress || 0) * 100)}%
                       </span>
+                      {pausable && (
+                        <button
+                          type="button"
+                          title={paused ? t("activity.resume") : t("activity.pause")}
+                          onClick={() => (paused ? onResume?.(job.jobId) : onPause?.(job.jobId))}
+                          className="shrink-0 rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                        >
+                          {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                        </button>
+                      )}
                       <button
                         type="button"
                         title={cancelling ? t("activity.cancelling") : t("activity.cancel")}

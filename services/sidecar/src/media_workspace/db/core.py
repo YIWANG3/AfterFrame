@@ -18,7 +18,7 @@ _UNSET = object()
 from ..schema import SCHEMA_STATEMENTS
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,6 +65,13 @@ def init_db(connection: sqlite3.Connection) -> None:
     # Cooperative cancellation: runners poll this flag between batches and
     # finish gracefully with status='cancelled'.
     _ensure_column(connection, "jobs", "cancel_requested", "INTEGER NOT NULL DEFAULT 0")
+    # People jobs are the first resumable/priority-aware jobs. These columns are
+    # intentionally available to every job so the unified JobDock can present a
+    # single state machine as other long-running jobs adopt it.
+    _ensure_column(connection, "jobs", "priority", "INTEGER NOT NULL DEFAULT 50")
+    _ensure_column(connection, "jobs", "pause_requested", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(connection, "jobs", "resume_cursor_json", "TEXT NOT NULL DEFAULT '{}'")
+    _ensure_column(connection, "jobs", "attempt_count", "INTEGER NOT NULL DEFAULT 0")
     # Searchable facet columns + indexes (idempotent; VIRTUAL generated columns).
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(

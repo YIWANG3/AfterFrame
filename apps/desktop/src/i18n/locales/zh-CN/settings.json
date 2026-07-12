@@ -1,10 +1,14 @@
 {
   "title": "设置",
   "close": "关闭 (Esc)",
+  "scope": {
+    "catalog": "当前 Catalog"
+  },
   "tabs": {
     "general": "通用",
     "ai": "AI 标注",
     "repaint": "AI 重绘",
+    "people": "人物",
     "library": "图库",
     "about": "关于",
     "integrations": "集成"
@@ -22,7 +26,6 @@
   "annotation": {
     "loading": "正在加载设置…",
     "providersTitle": "自动标注服务商",
-    "providersBadge": "新",
     "providersSubtitle": "保存多个服务商配置,点击即可切换。标注资产时使用当前选中的那个。",
     "noProviders": "尚无服务商。添加一个以启用标注。",
     "addNewProvider": "添加新服务商",
@@ -89,11 +92,16 @@
     "catalogScratchHint": "未保存的工作图库。新建或打开一个图库即可持久化到磁盘。",
     "catalogContents": "内容",
     "catalogStats": "{{assets}} 个资产 · {{photos}} 张照片 · {{videos}} 个视频",
-    "revealInFinder": "在 Finder 中显示",
+    "revealInFinder": "在访达中显示",
     "switchCatalog": "切换图库",
     "switchCatalogHint": "打开已有的 .afcatalog,或新建一个。当前视图会重新加载。",
     "openCatalog": "打开…",
     "newCatalog": "新建…",
+    "watchedTitle": "监控目录",
+    "watchedSubtitle": "仅属于当前 Catalog。落入这些文件夹的新文件会被自动导入；切换 Catalog 后，监听也会随之切换。",
+    "noWatched": "当前 Catalog 尚无监控目录。",
+    "addFolder": "添加文件夹…",
+    "remove": "移除",
     "cacheStorage": "缓存与存储",
     "cacheSubtitle": "所有缓存位于 ~/Library/Application Support/AfterFrame。",
     "previewThumbnails": "预览缩略图",
@@ -120,9 +128,7 @@
     "updatesNotAuto": "不是自动的",
     "updatesMid": "，新版本发布时,从 ",
     "githubReleases": "GitHub Releases",
-    "updatesPost": " 下载 .dmg,拖到旧的 Applications/AfterFrame.app 上覆盖即可。图库和设置会在更新后保留。",
-    "builtWithPre": "使用 ",
-    "builtWithPost": " 构建。贴纸提取使用 Apple VisionKit;深度感知文字使用 Depth Anything V2。"
+    "updatesPost": " 下载 .dmg,拖到旧的 Applications/AfterFrame.app 上覆盖即可。图库和设置会在更新后保留。"
   },
   "repaint": {
     "providers": "服务商",
@@ -135,7 +141,39 @@
     "removeProvider": "移除服务商",
     "addProvider": "添加服务商"
   },
+  "people": {
+    "loading": "正在加载人物识别…",
+    "modelTitle": "人脸模型",
+    "modelSubtitle": "仅在这台 Mac 本地运行。人脸向量和人物分组只保存在当前图库内。",
+    "active": "当前使用",
+    "ready": "已就绪",
+    "noModel": "尚未安装可用的人脸模型。",
+    "activeModelHint": "当前本地模型 · {{size}}",
+    "installModel": "安装本地模型",
+    "installModelHint": "选择 .afpersonmodel 模型包，或兼容的 Core ML .mlpackage。系统会先验证，再复制到 AfterFrame 存储中。",
+    "chooseModel": "选择模型…",
+    "validating": "正在验证…",
+    "downloadModel": "下载 ArcFace R100 · {{size}}",
+    "downloading": "正在下载并验证…",
+    "automaticDownload": "自动下载更新",
+    "automaticDownloadHint": "配置了签名的官方发布清单后才可使用。",
+    "installedModels": "已安装模型",
+    "modelMeta": "v{{version}} · {{size}} · {{dimensions}} 维",
+    "modelMissing": "模型文件缺失",
+    "unverified": "自定义模型 — 分发前请确认其许可证。",
+    "useModel": "使用",
+    "removeModel": "移除模型",
+    "indexTitle": "索引图库",
+    "indexSubtitle": "作为低优先级后台任务运行。可继续浏览图库，并在“后台活动”中暂停或恢复。",
+    "analyzeLibrary": "分析全部照片",
+    "analyzeLibraryHint": "只有检测到可用人脸的图片会进入人物索引。再次运行会跳过没有变化的照片。",
+    "startIndex": "开始分析",
+    "indexing": "正在后台分析人脸…",
+    "paused": "分析已暂停",
+    "privacy": "你的照片不会离开这台 Mac。Worker 在本机完成人脸检测和向量计算；不会向任何服务发送人物姓名。"
+  },
   "providers": {
+    "active": "当前",
     "newProvider": "新建服务商",
     "editProvider": "编辑服务商",
     "type": "类型",
@@ -155,11 +193,6 @@
     "title": "集成",
     "editorsTitle": "外部编辑器",
     "editorsSubtitle": "自动探测到的图片编辑器,可在画廊右键 →「打开方式」中使用。",
-    "noEditors": "未探测到支持的编辑器。",
-    "watchedTitle": "监控目录",
-    "watchedSubtitle": "落入这些文件夹的新文件会被自动导入。把编辑器的导出目录指到这里即可。",
-    "noWatched": "尚无监控目录。",
-    "addFolder": "添加文件夹…",
-    "remove": "移除"
+    "noEditors": "未探测到支持的编辑器。"
   }
 }

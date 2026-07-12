@@ -111,6 +111,10 @@ SCHEMA_STATEMENTS = [
         payload_json TEXT NOT NULL DEFAULT '{}',
         result_json TEXT NOT NULL DEFAULT '{}',
         progress REAL NOT NULL DEFAULT 0,
+        priority INTEGER NOT NULL DEFAULT 50,
+        pause_requested INTEGER NOT NULL DEFAULT 0,
+        resume_cursor_json TEXT NOT NULL DEFAULT '{}',
+        attempt_count INTEGER NOT NULL DEFAULT 0,
         error_text TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -231,6 +235,81 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag)",
     "CREATE INDEX IF NOT EXISTS idx_asset_tags_asset ON asset_tags(asset_id)",
+    """
+    CREATE TABLE IF NOT EXISTS face_models (
+        model_id TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        manifest_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ready',
+        installed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (model_id, model_version)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS people_asset_index (
+        asset_id TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        input_hash TEXT,
+        status TEXT NOT NULL,
+        face_count INTEGER NOT NULL DEFAULT 0,
+        error_text TEXT,
+        indexed_at TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (asset_id, model_id, model_version),
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE,
+        FOREIGN KEY(model_id, model_version) REFERENCES face_models(model_id, model_version) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS asset_faces (
+        face_id TEXT PRIMARY KEY,
+        asset_id TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        bbox_json TEXT NOT NULL,
+        landmarks_json TEXT NOT NULL,
+        quality TEXT NOT NULL,
+        detection_confidence REAL NOT NULL,
+        embedding_blob BLOB NOT NULL,
+        thumbnail_key TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE,
+        FOREIGN KEY(model_id, model_version) REFERENCES face_models(model_id, model_version) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS person_groups (
+        group_id TEXT PRIMARY KEY,
+        model_id TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        name TEXT,
+        state TEXT NOT NULL DEFAULT 'candidate' CHECK (state IN ('candidate', 'confirmed', 'ignored')),
+        cover_face_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(model_id, model_version) REFERENCES face_models(model_id, model_version) ON DELETE CASCADE,
+        FOREIGN KEY(cover_face_id) REFERENCES asset_faces(face_id) ON DELETE SET NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS person_group_faces (
+        group_id TEXT NOT NULL,
+        face_id TEXT NOT NULL UNIQUE,
+        membership_state TEXT NOT NULL DEFAULT 'automatic' CHECK (membership_state IN ('automatic', 'confirmed', 'rejected')),
+        source TEXT NOT NULL DEFAULT 'automatic' CHECK (source IN ('automatic', 'user_confirmed', 'user_split', 'user_merged')),
+        reviewed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (group_id, face_id),
+        FOREIGN KEY(group_id) REFERENCES person_groups(group_id) ON DELETE CASCADE,
+        FOREIGN KEY(face_id) REFERENCES asset_faces(face_id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_people_asset_index_model_status ON people_asset_index(model_id, model_version, status)",
+    "CREATE INDEX IF NOT EXISTS idx_asset_faces_asset_model ON asset_faces(asset_id, model_id, model_version)",
+    "CREATE INDEX IF NOT EXISTS idx_person_groups_model_state ON person_groups(model_id, model_version, state)",
+    "CREATE INDEX IF NOT EXISTS idx_person_group_faces_face ON person_group_faces(face_id)",
     # Tombstones for files removed from the catalog while left on disk. A watched
     # directory would otherwise auto-re-import them on the next catch-up scan. We
     # record one only when the file still exists on disk at delete time (a

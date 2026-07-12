@@ -6,7 +6,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from media_workspace.catalog import ensure_catalog
-from media_workspace.db import create_job, get_job, get_latest_job, init_db, connect, list_jobs, set_catalog_path
+from media_workspace.db import (
+    connect,
+    create_job,
+    get_job,
+    get_latest_job,
+    init_db,
+    list_active_jobs,
+    list_jobs,
+    request_job_pause,
+    request_job_resume,
+    set_catalog_path,
+)
 from media_workspace.job_runner import run_enrichment_job, run_import_job
 from media_workspace.scanner import scan_raw_directory
 
@@ -28,6 +39,27 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(get_job(connection, created["job_id"])["job_id"], created["job_id"])
             self.assertEqual(get_latest_job(connection, "import")["job_id"], created["job_id"])
             self.assertEqual(len(list_jobs(connection, job_type="import", limit=5)), 1)
+
+    def test_priority_pause_and_resume_are_persisted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+
+            maintenance = create_job(connection, "people_index", priority=10, resume_cursor={"offset": 12})
+            interactive = create_job(connection, "people_index", priority=100)
+            active = list_active_jobs(connection)
+            self.assertEqual([job["job_id"] for job in active], [interactive["job_id"], maintenance["job_id"]])
+
+            paused = request_job_pause(connection, maintenance["job_id"])
+            self.assertEqual(paused["status"], "paused")
+            self.assertTrue(paused["pause_requested"])
+
+            resumed = request_job_resume(connection, maintenance["job_id"])
+            self.assertEqual(resumed["status"], "queued")
+            self.assertFalse(resumed["pause_requested"])
+            self.assertEqual(resumed["resume_cursor"], {"offset": 12})
 
     def test_run_import_job_persists_phase_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

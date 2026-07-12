@@ -32,6 +32,7 @@ export default function useJobs(bridgeRef) {
       else if (meta.jobType === "enrichment") final = await api.getEnrichmentStatus();
       else if (meta.jobType === "annotation") final = await api.getAnnotationJobStatus();
       else if (meta.jobType === "ai_repaint") final = await api.getAiRepaintStatus();
+      else if (meta.jobType === "people_index") final = await api.getPeopleIndexStatus();
     } catch { /* sidecar hiccup — still emit the finish event below */ }
     const cancelled = final?.status === "cancelled";
 
@@ -134,6 +135,20 @@ export default function useJobs(bridgeRef) {
     return res;
   }
 
+  async function pauseJob(jobId) {
+    if (!jobId) return null;
+    const res = await api.pauseJob(jobId);
+    pokeJobs();
+    return res;
+  }
+
+  async function resumeJob(jobId) {
+    if (!jobId) return null;
+    const res = await api.resumeJob(jobId);
+    pokeJobs();
+    return res;
+  }
+
   // Catalog switches must not carry job state across libraries.
   function resetJobs() {
     knownActiveRef.current.clear();
@@ -152,5 +167,5 @@ export default function useJobs(bridgeRef) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { activeJobs, lastFinishedJob, pokeJobs, cancelJob, resetJobs };
+  return { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs };
 }

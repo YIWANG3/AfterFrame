@@ -20,6 +20,9 @@ import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import FilterBar from "./components/FilterBar";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
+import PeopleView from "./components/PeopleView";
+import PeopleInspector from "./components/PeopleInspector";
+import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
 import { ConfirmHost, confirm } from "./components/confirm";
@@ -31,6 +34,8 @@ export default function App() {
   // can report their result.
   const { toasts, pushToast, dismissToast } = useToasts();
   const { t } = useTranslation("app");
+  const { t: tNav } = useTranslation("nav");
+  const { t: tInspector } = useTranslation("inspector");
   const workspace = useWorkspace({ pushToast });
   // Fresh-closure handle for the test backdoor, whose effect must NOT depend on
   // `workspace` (a new object each render) — re-running would clobber the
@@ -51,8 +56,61 @@ export default function App() {
   const [layoutItems, setLayoutItems] = useState([]);
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
-  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers"
+  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people"
+  const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  const clearPeopleGroupFilter = () => {
+    if (!workspace.filters?.person_group) return;
+    const { person_group, ...remaining } = workspace.filters;
+    workspace.setFilters(remaining);
+  };
+
+  // The person chip lives in the filter bar; when the filter goes away by any
+  // route (chip ×, clear-all), the remembered group must not linger.
+  useEffect(() => {
+    if (!workspace.filters?.person_group) setPeopleGroup(null);
+  }, [workspace.filters?.person_group]);
+
+  const peopleGroups = usePeopleGroups({
+    pushToast,
+    enabled: viewMode === "people",
+    catalogKey: workspace.info?.catalogPath || null,
+  });
+
+  const openPersonGroup = (group) => {
+    if (!group?.group_id) return;
+    setViewMode("assets");
+    setPeopleGroup(group);
+    workspace.filterByPerson(group.group_id);
+    setShowFilters(true);
+  };
+
+  async function createAlbumFromPerson(group) {
+    const name = group.name?.trim() || tNav("filter.person");
+    try {
+      const rows = await api.browseImages({
+        status: "all",
+        limit: 100000,
+        filters: { person_group: group.group_id },
+      });
+      const assetIds = [...new Set((rows || []).map((row) => row.asset_id).filter(Boolean))];
+      if (!assetIds.length) throw new Error(tNav("people.searchEmpty"));
+      const collection = await workspace.createCollection(name);
+      await workspace.addToCollection(collection.collection_id, assetIds);
+      pushToast?.({
+        title: tInspector("peoplePanel.albumCreated", { name, count: assetIds.length }),
+        ttl: 5000,
+      });
+    } catch (error) {
+      pushToast?.({
+        title: tInspector("peoplePanel.albumFailed"),
+        message: error?.message || String(error),
+        ttl: 6000,
+        tone: "error",
+      });
+    }
+  }
 
   // Test backdoor — exposed to Playwright via window.__afterframeTest.
   // Lets E2E specs open the editor with an arbitrary file path without
@@ -157,7 +215,7 @@ export default function App() {
   };
 
   const selectAllAssets = () => {
-    if (editorItem || viewMode === "stickers") return false;
+    if (editorItem || viewMode !== "assets") return false;
     if (!orderedIds.length) return false;
     setSelectedIds(new Set(orderedIds));
     return true;
@@ -229,7 +287,7 @@ export default function App() {
       }
       selectAllAssets();
     } else if (action === "edit:delete") {
-      if (editable || editorItem || viewMode === "stickers") return;
+      if (editable || editorItem || viewMode !== "assets") return;
       void deleteAssets(targetAssetIds());
     } else if (action === "edit:copy-path") {
       void copyAssetField(targetAssetIds(), "path");
@@ -521,14 +579,14 @@ export default function App() {
         if (selectAllAssets()) event.preventDefault();
         return;
       }
-      if (editorItem) return;
+      if (editorItem || viewMode === "people") return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (shouldIgnoreKey(event)) return;
 
       // Delete / Backspace removes the selected assets (with confirmation).
       // Skipped in stickers view, which has its own deletion path.
       if (event.key === "Delete" || event.key === "Backspace") {
-        if (viewMode === "stickers") return;
+        if (viewMode !== "assets") return;
         const ids = targetAssetIds();
         if (!ids.length) return;
         event.preventDefault();
@@ -647,6 +705,8 @@ export default function App() {
           status={workspace.status}
           setStatus={(next) => {
             setViewMode("assets");
+            setPeopleGroup(null);
+            clearPeopleGroupFilter();
             const baseHistory = history.slice(0, historyIndex + 1);
             const nextHistory = baseHistory[baseHistory.length - 1] === next ? baseHistory : [...baseHistory, next];
             const nextIndex = nextHistory.length - 1;
@@ -656,7 +716,12 @@ export default function App() {
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
-          onSelectCollection={(id) => { setViewMode("assets"); workspace.selectCollection(id); }}
+          onSelectCollection={(id) => {
+            setViewMode("assets");
+            setPeopleGroup(null);
+            clearPeopleGroupFilter();
+            workspace.selectCollection(id);
+          }}
           onClearCollection={workspace.clearCollection}
           onCreateCollection={workspace.createCollection}
           onRenameCollection={workspace.renameCollection}
@@ -664,10 +729,17 @@ export default function App() {
           onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
           onAddToCollection={workspace.addToCollection}
           stickerMode={viewMode === "stickers"}
+          peopleMode={viewMode === "people"}
           onOpenStickerBrowser={() => {
             setViewMode("stickers");
+            setPeopleGroup(null);
             workspace.clearCollection?.({ reload: false });
             stickerView.refresh();
+          }}
+          onOpenPeople={() => {
+            setViewMode("people");
+            setPeopleGroup(null);
+            workspace.clearCollection?.({ reload: false });
           }}
           onOpenSettings={() => setSettingsOpen(true)}
         /> : <div className="bg-chrome" />}
@@ -698,12 +770,18 @@ export default function App() {
                 />
               </div>
             </>
+          ) : viewMode === "people" ? (
+            <PeopleView
+              people={peopleGroups}
+              onOpenGroup={openPersonGroup}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
           ) : (
             <>
               <Toolbar
                 title={workspace.activeCollectionId
                   ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
-                  : filterTitle(workspace.status)}
+                  : (peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : filterTitle(workspace.status))}
                 query={workspace.query}
                 setQuery={workspace.setQuery}
                 sort={workspace.sort}
@@ -744,12 +822,16 @@ export default function App() {
                 activityJobs={workspace.jobs}
                 lastFinishedJob={workspace.lastFinishedJob}
                 onCancelJob={workspace.cancelJob}
+                onPauseJob={workspace.pauseJob}
+                onResumeJob={workspace.resumeJob}
               />
               {showFilters && (
                 <FilterBar
                   facetValues={workspace.facetValues}
                   filters={workspace.filters}
                   onChange={workspace.setFilters}
+                  personGroup={peopleGroup}
+                  onPersonGroup={setPeopleGroup}
                 />
               )}
               <div className="min-h-0 flex-1 overflow-hidden">
@@ -806,12 +888,21 @@ export default function App() {
               sticker={stickerView.selected}
               onStar={stickerView.handleStar}
             />
+          ) : viewMode === "people" ? (
+            <PeopleInspector
+              people={peopleGroups}
+              onOpenGroup={openPersonGroup}
+              onCreateAlbum={createAlbumFromPerson}
+              pushToast={pushToast}
+            />
           ) : (
             <Inspector
               detail={workspace.detail}
               onRatingChange={applyRating}
               onSelectAsset={selectSingle}
               onRelinked={() => workspace.refreshAll({ force: true })}
+              onOpenPersonGroup={openPersonGroup}
+              onPeopleChanged={() => workspace.reloadDetail?.()}
               pushToast={pushToast}
               onTagFilter={(tag) => {
                 if (!tag) return;
@@ -844,7 +935,7 @@ export default function App() {
       {/* Single bottom-right surface: running-job cards stacked above
           transient toasts — no overlap between the two. */}
       <div className="fixed bottom-4 right-4 z-[20000] flex flex-col items-end gap-2">
-        <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} />
+        <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} onPause={workspace.pauseJob} onResume={workspace.resumeJob} />
         <ToastStack inline toasts={toasts} onDismiss={dismissToast} />
       </div>
       <Lightbox

@@ -156,6 +156,8 @@ export default function Toolbar({
   activityJobs,
   lastFinishedJob,
   onCancelJob,
+  onPauseJob,
+  onResumeJob,
 }) {
   const { t } = useTranslation("nav");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -272,7 +274,7 @@ export default function Toolbar({
         )}
       </div>
 
-      <ActivityCenter jobs={activityJobs} lastFinishedJob={lastFinishedJob} onCancel={onCancelJob} />
+      <ActivityCenter jobs={activityJobs} lastFinishedJob={lastFinishedJob} onCancel={onCancelJob} onPause={onPauseJob} onResume={onResumeJob} />
 
       <IconButton onClick={() => void refreshAll()} title={t("toolbar.refresh")}>
         <RotateCw className="h-3.5 w-3.5 stroke-[1.8]" />

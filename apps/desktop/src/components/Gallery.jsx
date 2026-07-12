@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -420,6 +420,14 @@ const CardContent = memo(function CardContent({
           >
             <Unlink className="h-2.5 w-2.5" />
             {t("gallery.missing")}
+          </div>
+        ) : null}
+        {item.has_face ? (
+          <div
+            className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white/90 shadow-sm"
+            title={t("gallery.hasPerson")}
+          >
+            <ScanFace className="h-3 w-3" />
           </div>
         ) : null}
         {item.asset_type === "video" ? (
