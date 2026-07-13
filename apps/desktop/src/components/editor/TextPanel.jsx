@@ -114,6 +114,7 @@ export default function TextPanel({
   };
 
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [presetsExpanded, setPresetsExpanded] = useState(false);
   const handleAddSticker = (sticker) => {
     const nl = createStickerLayer({
       stickerPath: sticker.path,
@@ -147,15 +148,25 @@ export default function TextPanel({
     <>
       <div className="relative h-[calc(100vh-10rem)]">
       <div className="h-full overflow-y-auto">
-        {/* Presets */}
-        <Section label={t("text.presets")}>
-          <div className="grid grid-cols-4 gap-1.5">
-            {PRESETS.map((p) => (
+        {/* Presets — compact horizontal strip like the frame presets; the
+            chevron expands to the full grid. */}
+        <Section label={t("text.presets")} action={
+          <button
+            type="button"
+            title={presetsExpanded ? t("border.collapse") : t("border.expand")}
+            onClick={() => setPresetsExpanded((v) => !v)}
+            className="flex h-5 w-5 items-center justify-center rounded text-muted2 hover:bg-hover hover:text-text"
+          >
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${presetsExpanded ? "rotate-180" : ""}`} />
+          </button>
+        }>
+          {(() => {
+            const chip = (p) => (
               <button
                 key={p.name}
                 type="button"
                 className={[
-                  "flex flex-col items-center gap-1 rounded-md border px-1 py-2 transition-colors",
+                  "flex w-full flex-col items-center gap-1 rounded-md border px-1 py-2 transition-colors",
                   current?.preset === p.name
                     ? "border-[rgb(var(--accent-color))] bg-[rgb(var(--accent-color)/0.08)]"
                     : "border-border/60 bg-app hover:border-border hover:bg-hover",
@@ -179,8 +190,18 @@ export default function TextPanel({
                   current?.preset === p.name ? "text-[rgb(var(--accent-color))]" : "text-muted2",
                 ].join(" ")}>{p.name}</span>
               </button>
-            ))}
-          </div>
+            );
+            return presetsExpanded ? (
+              <div className="grid grid-cols-4 gap-1.5">{PRESETS.map(chip)}</div>
+            ) : (
+              // Compact strip: scroll horizontally; scrollbar hidden (drag/wheel to scroll).
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {PRESETS.map((p) => (
+                  <div key={p.name} className="w-[23%] shrink-0">{chip(p)}</div>
+                ))}
+              </div>
+            );
+          })()}
         </Section>
 
         {/* Border / frame — presets that drop text+logo layers + margins, plus
