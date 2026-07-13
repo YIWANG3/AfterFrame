@@ -454,7 +454,15 @@ export default function App() {
     };
   }, []);
 
+  // Native drag-out sessions carry real file paths, so a drag that started in
+  // our own gallery looks exactly like an external file drag. The in-app drag
+  // markers distinguish them — never offer/import our own drag as new files.
+  function isSelfDrag() {
+    return window.__mediaWorkspaceDraggingAssetIds != null
+      || window.__mediaWorkspaceDraggingAssetId != null;
+  }
   function handleGalleryDragOver(event) {
+    if (isSelfDrag()) return;
     if (event.dataTransfer?.types?.includes?.("Files")) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
@@ -468,6 +476,7 @@ export default function App() {
   }
   function handleGalleryDrop(event) {
     setDropActive(false);
+    if (isSelfDrag()) { event.preventDefault(); return; }
     if (!event.dataTransfer?.files?.length) return;
     event.preventDefault();
     const paths = [];

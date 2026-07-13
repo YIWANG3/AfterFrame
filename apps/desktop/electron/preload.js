@@ -128,6 +128,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   setAssetRating: (assetIds, rating) => ipcRenderer.invoke("workspace:set-asset-rating", assetIds, rating),
   browseCollection: (collectionId, options) => ipcRenderer.invoke("workspace:browse-collection", collectionId, options),
   listSystemFonts: () => ipcRenderer.invoke("workspace:list-system-fonts"),
+  startNativeDrag: (payload) => ipcRenderer.invoke("workspace:native-drag", payload),
   computeDepth: (options) => ipcRenderer.invoke("workspace:compute-depth", options),
   getDepthModel: () => ipcRenderer.invoke("workspace:get-depth-model"),
   pickDepthModel: () => ipcRenderer.invoke("workspace:pick-depth-model"),

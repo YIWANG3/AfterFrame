@@ -71,6 +71,7 @@ const api = {
   saveImage: (...args) => invoke("saveImage", ...args),
   processAndSave: (...args) => invoke("processAndSave", ...args),
   listSystemFonts: (...args) => invoke("listSystemFonts", ...args),
+  startNativeDrag: (...args) => invoke("startNativeDrag", ...args),
 
   // ── collections ──
   listCollections: (...args) => invoke("listCollections", ...args),

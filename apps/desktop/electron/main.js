@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -1393,6 +1393,38 @@ collectionsIpc.register({
   ipcMain,
   commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+});
+
+// Native OS drag-out: the renderer preventDefault()s the HTML5 dragstart and
+// asks us to start a real OS drag session carrying file paths. The OS then
+// handles every drop target for free — Finder copies the files, browsers /
+// chat apps treat them as uploads. On macOS startDrag blocks until the drag
+// ends, so resolving this invoke doubles as the "drag finished" signal the
+// renderer uses to clear its in-app drag markers.
+ipcMain.handle("workspace:native-drag", (event, payload) => {
+  const files = (Array.isArray(payload?.files) ? payload.files : [])
+    .filter((p) => typeof p === "string" && p && fs.existsSync(p));
+  if (!files.length) return { ok: false, reason: "no-files" };
+
+  // macOS requires a drag icon. Prefer the item's preview (RAW originals
+  // don't decode via nativeImage); fall back through the files themselves.
+  let icon = nativeImage.createEmpty();
+  const iconCandidates = [payload?.iconPath, ...files].filter(Boolean);
+  for (const candidate of iconCandidates) {
+    icon = nativeImage.createFromPath(candidate);
+    if (!icon.isEmpty()) break;
+  }
+  if (!icon.isEmpty()) {
+    icon = icon.resize({ width: 96 });
+  } else {
+    // 1x1 transparent px — startDrag rejects an empty image on macOS.
+    icon = nativeImage.createFromDataURL(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    );
+  }
+
+  event.sender.startDrag({ files, icon });
+  return { ok: true, count: files.length };
 });
 
 ipcMain.handle("workspace:list-system-fonts", async () => {

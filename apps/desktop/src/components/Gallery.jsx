@@ -342,6 +342,27 @@ const CardContent = memo(function CardContent({
         const firstAssetId = payload.assetIds?.[0] ?? item.asset_id;
         window.__mediaWorkspaceDraggingAssetId = firstAssetId;
         window.__mediaWorkspaceDraggingAssetIds = payload.assetIds || [firstAssetId];
+
+        // Native OS drag-out: replace the HTML5 drag with a real OS drag
+        // session carrying file paths — dropping on Finder copies the files,
+        // dropping on a browser/chat uploads them. In-app drop targets
+        // (sidebar collections) keep working: they fall back to the globals
+        // above when the custom dataTransfer type is absent. startDrag
+        // resolves when the drag session ends, which is our cleanup signal
+        // (HTML5 dragend never fires once dragstart is preventDefault()ed).
+        if (window.mediaWorkspace?.startNativeDrag) {
+          event.preventDefault();
+          Promise.resolve(window.mediaWorkspace.startNativeDrag({
+            files: payload.imagePaths || [item.image_path],
+            iconPath: item.preview_path || item.image_path,
+          })).catch(() => {}).finally(() => {
+            window.__mediaWorkspaceDraggingAssetId = null;
+            window.__mediaWorkspaceDraggingAssetIds = null;
+          });
+          return;
+        }
+
+        // Browser/dev fallback — in-app HTML5 drag only.
         event.dataTransfer.effectAllowed = "copy";
         event.dataTransfer.setData("application/x-media-workspace-asset", JSON.stringify({
           assetId: firstAssetId,
