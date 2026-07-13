@@ -238,8 +238,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       const cy = box?.cy ?? l.y;
       if (l.type === "text") {
         // box.cx was derived from a canvas measureText width. In the editor the
-        // text is a DOM element, and canvas vs DOM widths can differ (a web font
-        // that canvas measures as a fallback, tracking the DOM ignores, …) —
+        // text is a DOM element, and canvas vs DOM widths can differ (e.g. a web
+        // font that canvas measures as a fallback) —
         // which shifts a left/right-anchored line by an amount proportional to
         // its width, breaking the shared edge (the wider EXIF row drifts more
         // than the model row). Re-derive the visual center from a DOM measure,
@@ -253,7 +253,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
           const anchorX = cx - dir * (box.w / 2);
           const fontPxRender = ((l.fontSize || 0) * g.outW) / 1920; // px basis box.w was measured at
           const domWFrac = measureTextWidthDOM(l.text, {
-            fontPx: fontPxRender, weight: l.fontWeight, italic: l.italic, family: l.fontFamily,
+            fontPx: fontPxRender, weight: l.fontWeight, italic: l.italic, family: l.fontFamily, tracking: l.tracking,
           }) / g.outW;
           x = anchorX + dir * (domWFrac / 2);
         }

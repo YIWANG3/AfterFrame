@@ -92,7 +92,14 @@
       "default": "默认",
       "custom": "自定义",
       "bundled": "内置"
-    }
+    },
+    "underline": "下划线",
+    "strikethrough": "删除线",
+    "caseUpper": "全部大写",
+    "caseLower": "全部小写",
+    "caseTitle": "首字母大写",
+    "letterSpacing": "字间距",
+    "lineHeight": "行高"
   },
   "sticker": {
     "title": "贴纸",

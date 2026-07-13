@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./i18n";
 import "./index.css";
+import "./fonts";
 
 // vibepin annotation overlay (dev only) — Alt+A to mark up the live UI, the
 // daemon on :7331 collects feedback and Claude Code picks it up. Stripped in

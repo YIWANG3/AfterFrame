@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, memo, useEffect, useMemo } from "react";
-import { getBgPadding, measureTextWidthDOM } from "./textState";
+import { getBgPadding, measureTextWidthDOM, getDisplayText } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
@@ -19,8 +19,11 @@ function layerHalfFrac(layer, imageRect) {
   }
   const fontPx = (layer.fontSize || 0) * s;
   const weight = layer.fontWeight ?? (layer.bold ? 700 : 400);
-  const wPx = measureTextWidthDOM(layer.text || " ", { fontPx, weight, italic: layer.italic, family: layer.fontFamily });
-  return { hw: (wPx / 2) / imageRect.width, hh: (fontPx * 1.2 / 2) / imageRect.height };
+  const displayText = getDisplayText(layer) || " ";
+  const wPx = measureTextWidthDOM(displayText, { fontPx, weight, italic: layer.italic, family: layer.fontFamily, tracking: layer.tracking });
+  const lineCount = displayText.split("\n").length;
+  const lineH = fontPx * (layer.lineHeight ?? 1.2);
+  return { hw: (wPx / 2) / imageRect.width, hh: (lineH * lineCount / 2) / imageRect.height };
 }
 
 /* Fully uncontrolled contentEditable — React.memo(() => true) prevents any
@@ -45,12 +48,15 @@ const EditableDiv = memo(function EditableDiv({ initialText, style, onDone, onCa
   return (
     <div
       ref={ref}
-      contentEditable
+      // plaintext-only: Enter inserts a line break as plain text (no rich
+      // markup on paste either). innerText preserves those breaks as \n;
+      // textContent would drop them.
+      contentEditable="plaintext-only"
       suppressContentEditableWarning
       style={style}
-      onBlur={(e) => onDone(e.currentTarget.textContent || "")}
+      onBlur={(e) => onDone((e.currentTarget.innerText || "").replace(/\n$/, ""))}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
           e.preventDefault();
           e.currentTarget.blur();
         }
@@ -93,7 +99,7 @@ export default function TextCanvas({
   const handleBgPointerDown = useCallback((e) => {
     if (e.target === e.currentTarget) {
       // Blur active contentEditable first so onBlur fires and saves the text
-      if (document.activeElement?.contentEditable === "true") {
+      if (document.activeElement?.isContentEditable) {
         document.activeElement.blur();
       }
       onSelectionChange(new Set());
@@ -104,7 +110,7 @@ export default function TextCanvas({
   const handleBackgroundPanPointerDown = useCallback((e) => {
     if (!onBackgroundPointerDown) return;
     // Blur active contentEditable first so onBlur fires and saves the text
-    if (document.activeElement?.contentEditable === "true") {
+    if (document.activeElement?.isContentEditable) {
       document.activeElement.blur();
     }
     onSelectionChange(new Set());
@@ -427,6 +433,9 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
   const strokeWidth = layer.strokeEnabled && layer.strokeWidth > 0
     ? layer.strokeWidth * scale : 0;
 
+  const decorations = [layer.underline && "underline", layer.strikethrough && "line-through"].filter(Boolean);
+  const hasDecoration = decorations.length > 0;
+
   const textStyle = {
     fontFamily: `"${layer.fontFamily}", sans-serif`,
     fontSize: `${fontSize}px`,
@@ -439,17 +448,20 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
     textShadow: !useDropShadow && shadowParts ? shadowParts : "none",
     filter: useDropShadow ? `drop-shadow(${shadowParts})` : undefined,
     opacity: layer.opacity / 100,
-    whiteSpace: "nowrap",
-    lineHeight: 1.2,
-    textDecorationLine: layer.underline ? "underline" : "none",
+    // pre: no wrapping, but \n renders as a line break (multi-line layers).
+    whiteSpace: "pre",
+    lineHeight: layer.lineHeight ?? 1.2,
+    letterSpacing: `${(layer.tracking ?? 0) * fontSize}px`,
+    textAlign: layer.align,
+    textDecorationLine: hasDecoration ? decorations.join(" ") : "none",
     // Always set an explicit color: in gradient mode `color` becomes "transparent",
     // which would also make text-decoration invisible if it inherits from color.
-    textDecorationColor: layer.underline
+    textDecorationColor: hasDecoration
       ? (layer.fillMode === "gradient"
           ? (layer.gradientFrom || "#ffffff")
           : layer.fillColor)
       : undefined,
-    textDecorationThickness: layer.underline ? `${Math.max(2, fontSize * 0.04)}px` : undefined,
+    textDecorationThickness: hasDecoration ? `${Math.max(2, fontSize * 0.04)}px` : undefined,
     textUnderlineOffset: layer.underline ? `${Math.max(2, fontSize * 0.06)}px` : undefined,
     paintOrder: strokeWidth > 0 ? "stroke fill" : undefined,
     WebkitTextStrokeWidth: strokeWidth > 0 ? `${strokeWidth * 2}px` : undefined,
@@ -532,7 +544,7 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
         />
       ) : (
         <div style={{ ...textStyle, pointerEvents: "none", position: "relative", zIndex: 1 }}>
-          {layer.text || "\u00A0"}
+          {getDisplayText(layer) || "\u00A0"}
         </div>
       )}
 
@@ -558,20 +570,33 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
               <stop offset="1" stopColor={layer.strokeGradTo || "#000000"} stopOpacity={(layer.strokeGradToOpacity ?? 100) / 100} />
             </linearGradient>
           </defs>
-          <text
-            x="50%" y="50%"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontFamily={`"${layer.fontFamily}", sans-serif`}
-            fontSize={fontSize}
-            fontWeight={fontWeight}
-            fontStyle={fontStyle}
-            stroke={`url(#stroke-grad-${layer.id})`}
-            strokeWidth={layer.strokeWidth * scale * 2}
-            strokeLinejoin="round"
-            fill="transparent"
-            paintOrder="stroke"
-          >{layer.text || ""}</text>
+          {(() => {
+            // Mirror the HTML block's line layout: one <text> per line, anchored
+            // the same way textAlign lays lines out inside the block.
+            const lines = (getDisplayText(layer) || "").split("\n");
+            const lineH = fontSize * (layer.lineHeight ?? 1.2);
+            const anchorX = layer.align === "left" ? "0%" : layer.align === "right" ? "100%" : "50%";
+            const anchor = layer.align === "left" ? "start" : layer.align === "right" ? "end" : "middle";
+            return lines.map((line, i) => (
+              <text
+                key={i}
+                x={anchorX} y="50%"
+                dy={(i - (lines.length - 1) / 2) * lineH}
+                textAnchor={anchor}
+                dominantBaseline="central"
+                fontFamily={`"${layer.fontFamily}", sans-serif`}
+                fontSize={fontSize}
+                fontWeight={fontWeight}
+                fontStyle={fontStyle}
+                letterSpacing={`${(layer.tracking ?? 0) * fontSize}px`}
+                stroke={`url(#stroke-grad-${layer.id})`}
+                strokeWidth={layer.strokeWidth * scale * 2}
+                strokeLinejoin="round"
+                fill="transparent"
+                paintOrder="stroke"
+              >{line}</text>
+            ));
+          })()}
         </svg>
       )}
 

@@ -3,7 +3,7 @@
 // Used by both the inline-apply path and the export-to-disk path.
 
 import { hexToRgba } from "./canvasHelpers";
-import { getBgPadding } from "../textState";
+import { getBgPadding, applyTextCase } from "../textState";
 
 /**
  * Draw a list of text + sticker layers onto a canvas context.
@@ -105,9 +105,14 @@ function drawTextLayer(ctx, scale, px, py, layer) {
   const letterSpacing = (layer.tracking ?? 0) * fontSize;
   if ("letterSpacing" in ctx) ctx.letterSpacing = `${letterSpacing}px`;
 
-  const metrics = ctx.measureText(layer.text || " ");
-  const tw = metrics.width;
-  const th = fontSize * 1.2;
+  // Multi-line: the layer's box is its widest line × (lineHeight × line count),
+  // mirroring the DOM preview (white-space: pre, textAlign per line).
+  const displayText = applyTextCase(layer.text, layer.textCase) || " ";
+  const lines = displayText.split("\n");
+  const lineH = fontSize * (layer.lineHeight ?? 1.2);
+  const lineWidths = lines.map((ln) => (ln ? ctx.measureText(ln).width : 0));
+  const tw = Math.max(...lineWidths);
+  const th = lineH * lines.length;
   let alignOffsetX = 0;
   if (layer.align === "left") alignOffsetX = tw / 2;
   else if (layer.align === "right") alignOffsetX = -tw / 2;
@@ -144,12 +149,14 @@ function drawTextLayer(ctx, scale, px, py, layer) {
   // (matches CSS text-shadow + paint-order). Otherwise the canvas-level shadow
   // would only fall under the stroke ring (a hollow shape).
   const strokeLW = (layer.strokeEnabled && layer.strokeWidth > 0) ? layer.strokeWidth * scale * 2 : 0;
-  const ascent = fontSize * 0.85;
-  const descent = fontSize * 0.35;
   const padX = Math.ceil(strokeLW + 4);
-  const padY = Math.ceil(strokeLW + 4);
+  // Each line's glyphs can extend ~0.6em above/below the line's vertical
+  // center (ascent 0.85 / descent 0.35 around the middle baseline), which can
+  // overflow the line box when lineHeight < 1.2 — pad by glyph extent, not
+  // line box. For one line at lineHeight 1.2 this matches the old constant.
+  const padY = Math.ceil(strokeLW + 4 + fontSize * 0.6);
   const offW = Math.ceil(tw + padX * 2);
-  const offH = Math.ceil(ascent + descent + padY * 2);
+  const offH = Math.ceil((lines.length - 1) * lineH + padY * 2);
 
   const off = document.createElement("canvas");
   off.width = offW;
@@ -166,6 +173,7 @@ function drawTextLayer(ctx, scale, px, py, layer) {
   else if (layer.align === "right") offX = offW - padX;
   else offX = offW / 2;
   const offY = offH / 2;
+  const lineY = (i) => offY + (i - (lines.length - 1) / 2) * lineH;
 
   if (strokeLW > 0) {
     if (layer.strokeMode === "gradient") {
@@ -184,7 +192,7 @@ function drawTextLayer(ctx, scale, px, py, layer) {
     }
     offCtx.lineWidth = strokeLW;
     offCtx.lineJoin = "round";
-    offCtx.strokeText(layer.text || " ", offX, offY);
+    lines.forEach((ln, i) => { if (ln) offCtx.strokeText(ln, offX, lineY(i)); });
   }
 
   if (layer.fillMode === "gradient") {
@@ -201,7 +209,24 @@ function drawTextLayer(ctx, scale, px, py, layer) {
   } else {
     offCtx.fillStyle = hexToRgba(layer.fillColor, (layer.fillOpacity ?? 100) / 100);
   }
-  offCtx.fillText(layer.text || " ", offX, offY);
+  lines.forEach((ln, i) => { if (ln) offCtx.fillText(ln, offX, lineY(i)); });
+
+  // Underline / strikethrough — canvas has no text-decoration, so draw the
+  // rules by hand with the same fillStyle (solid or gradient) as the glyphs.
+  // Offsets mirror the CSS the preview uses: middle baseline sits ~0.25em
+  // below the line's vertical center; underline hangs 0.06em below the
+  // baseline, line-through crosses ~0.3em above it.
+  if (layer.underline || layer.strikethrough) {
+    const thick = Math.max(2, fontSize * 0.04);
+    lines.forEach((ln, i) => {
+      const w = lineWidths[i];
+      if (!w) return;
+      const yi = lineY(i);
+      const xs = layer.align === "left" ? offX : layer.align === "right" ? offX - w : offX - w / 2;
+      if (layer.underline) offCtx.fillRect(xs, yi + fontSize * 0.25 + Math.max(2, fontSize * 0.06), w, thick);
+      if (layer.strikethrough) offCtx.fillRect(xs, yi - fontSize * 0.05 - thick / 2, w, thick);
+    });
+  }
 
   // Paint onto the main canvas with shadow enabled.
   ctx.globalAlpha = layer.opacity / 100;

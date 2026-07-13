@@ -352,20 +352,35 @@ export default function TextPanel({
 
             {/* Font */}
             <Section label={t("text.font")}>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <div className="min-w-0 flex-1">
                   <FontSelect value={current.fontFamily} onChange={(f) => update(current.id, { fontFamily: f })} />
                 </div>
-                <NumInput value={current.fontSize} min={8} max={2000} onChange={(v) => update(current.id, { fontSize: v })} className="w-12 h-6" />
+                <div className="flex w-24 flex-none">
+                  <WeightSelect value={current.fontWeight ?? (current.bold ? 700 : 400)} onChange={(w) => update(current.id, { fontWeight: w, bold: w >= 600 })} />
+                </div>
               </div>
-            </Section>
-
-            {/* Style */}
-            <Section label={t("text.style")}>
-              <div className="flex items-center gap-1.5">
-                <WeightSelect value={current.fontWeight ?? (current.bold ? 700 : 400)} onChange={(w) => update(current.id, { fontWeight: w, bold: w >= 600 })} />
-                <ToggleBtn active={current.italic} onClick={() => update(current.id, { italic: !current.italic })}><span className="text-[11px] italic">I</span></ToggleBtn>
-                <ToggleBtn active={current.underline} onClick={() => update(current.id, { underline: !current.underline })}><span className="text-[11px] underline">U</span></ToggleBtn>
+              {/* Decoration + case toggles — one segmented row; case cells
+                  toggle off when the active one is clicked again. */}
+              <SegGroup
+                className="mt-1.5"
+                options={[
+                  { key: "italic", label: <span className="italic">I</span>, active: current.italic, onClick: () => update(current.id, { italic: !current.italic }) },
+                  { key: "underline", label: <span className="underline">U</span>, title: t("text.underline"), active: current.underline, onClick: () => update(current.id, { underline: !current.underline }) },
+                  { key: "strike", label: <span className="line-through">S</span>, title: t("text.strikethrough"), active: current.strikethrough, onClick: () => update(current.id, { strikethrough: !current.strikethrough }) },
+                  ...[["upper", "AA", t("text.caseUpper")], ["lower", "aa", t("text.caseLower")], ["title", "Aa", t("text.caseTitle")]].map(([mode, label, title]) => ({
+                    key: mode, label, title,
+                    active: (current.textCase ?? "none") === mode,
+                    onClick: () => update(current.id, { textCase: (current.textCase ?? "none") === mode ? "none" : mode }),
+                  })),
+                ]}
+              />
+              {/* Numeric fields, Sketch-style: drag horizontally to scrub,
+                  click to type. Label sits under the value. */}
+              <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                <FieldCell label={t("text.size")} value={current.fontSize} min={8} max={2000} onChange={(v) => update(current.id, { fontSize: v })} />
+                <FieldCell label={t("text.letterSpacing")} value={Math.round((current.tracking ?? 0) * 100)} min={-10} max={200} onChange={(v) => update(current.id, { tracking: v / 100 })} />
+                <FieldCell label={t("text.lineHeight")} value={Math.round((current.lineHeight ?? 1.2) * 100)} min={80} max={250} onChange={(v) => update(current.id, { lineHeight: v / 100 })} />
               </div>
             </Section>
 
@@ -616,18 +631,39 @@ function IconBtn({ icon: Icon, onClick, title, disabled }) {
   );
 }
 
-function ToggleBtn({ active, onClick, children }) {
+// Scrub-to-adjust numeric field with its label underneath (Sketch-style
+// Size / Spacing / Line cells).
+function FieldCell({ label, value, min, max, onChange }) {
   return (
-    <button
-      type="button"
-      className={[
-        "flex h-6 min-w-[32px] items-center justify-center rounded-md border px-2 text-[11px] font-semibold transition-colors",
-        active
-          ? "border-[rgb(var(--accent-color)/0.3)] bg-[rgb(var(--accent-color)/0.08)] text-[rgb(var(--accent-color))]"
-          : "border-border/60 text-muted hover:border-border hover:bg-hover hover:text-text",
-      ].join(" ")}
-      onClick={onClick}
-    >{children}</button>
+    <div>
+      <NumInput value={value} min={min} max={max} onChange={onChange} className="h-6 w-full" />
+      <div className="mt-0.5 truncate text-center text-[9px] text-muted2">{label}</div>
+    </div>
+  );
+}
+
+// Segmented control — one bordered container, equal-width cells with inner
+// dividers. Keeps rows of related toggles reading as a single unit instead of
+// scattered pills.
+function SegGroup({ options, className }) {
+  return (
+    <div className={["flex h-6 overflow-hidden rounded-md border border-border/60", className || ""].join(" ")}>
+      {options.map((o, i) => (
+        <button
+          key={o.key}
+          type="button"
+          title={o.title}
+          className={[
+            "flex h-full min-w-[30px] flex-1 items-center justify-center px-2 text-[11px] font-semibold transition-colors",
+            i > 0 ? "border-l border-border/60" : "",
+            o.active
+              ? "bg-[rgb(var(--accent-color)/0.12)] text-[rgb(var(--accent-color))]"
+              : "text-muted hover:bg-hover hover:text-text",
+          ].join(" ")}
+          onClick={o.onClick}
+        >{o.label}</button>
+      ))}
+    </div>
   );
 }
 
@@ -779,31 +815,33 @@ function FontSelect({ value, onChange }) {
   const [systemFonts, setSystemFonts] = useState([]);
   const [filter, setFilter] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
-  const loadedRef = useRef(false);
   const listRef = useRef(null);
   const selectedRef = useRef(null);
   const inputRef = useRef(null);
+  const openValueRef = useRef(value);
 
-  useEffect(() => {
-    if (loadedRef.current) return;
-    loadedRef.current = true;
-    (async () => {
-      try {
-        // Prefer Chromium's queryLocalFonts (works in packaged Electron)
-        if (window.queryLocalFonts) {
-          const fontData = await window.queryLocalFonts();
-          const families = [...new Set(fontData.map((f) => f.family))].sort();
-          setSystemFonts(families);
-          return;
-        }
-      } catch {}
-      // Fallback to IPC
-      try {
-        const fonts = await window.mediaWorkspace?.listSystemFonts?.();
-        if (Array.isArray(fonts)) setSystemFonts(fonts);
-      } catch {}
-    })();
-  }, []);
+  const loadFonts = async () => {
+    try {
+      // Prefer Chromium's queryLocalFonts (works in packaged Electron)
+      if (window.queryLocalFonts) {
+        const fontData = await window.queryLocalFonts();
+        const families = [...new Set(fontData.map((f) => f.family))].sort();
+        setSystemFonts(families);
+        return;
+      }
+    } catch {}
+    // Fallback to IPC
+    try {
+      const fonts = await window.mediaWorkspace?.listSystemFonts?.();
+      if (Array.isArray(fonts)) setSystemFonts(fonts);
+    } catch {}
+  };
+
+  // Load on mount so arrow-cycling works before the dropdown is ever opened,
+  // and re-query every time the dropdown opens so fonts installed while the
+  // app is running show up without a restart.
+  useEffect(() => { loadFonts(); }, []);
+  useEffect(() => { if (open) loadFonts(); }, [open]);
 
   const allFonts = [
     ...FONT_OPTIONS.map((f) => f.family),
@@ -833,15 +871,17 @@ function FontSelect({ value, onChange }) {
   useEffect(() => { setHighlightIdx(-1); }, [filter]);
 
   const handleKeyDown = (e) => {
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      // Arrow keys apply the highlighted font immediately so the canvas
+      // previews it live while browsing the list.
       e.preventDefault();
-      setHighlightIdx((prev) => {
-        const next = Math.min(prev + 1, filtered.length - 1);
-        return next;
-      });
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightIdx((prev) => Math.max(prev - 1, 0));
+      if (!filtered.length) return;
+      const base = highlightIdx >= 0 ? highlightIdx : Math.max(filtered.indexOf(value), 0);
+      const next = e.key === "ArrowDown"
+        ? Math.min(base + 1, filtered.length - 1)
+        : Math.max(base - 1, 0);
+      setHighlightIdx(next);
+      if (filtered[next] !== value) onChange(filtered[next]);
     } else if (e.key === "Enter" && highlightIdx >= 0 && highlightIdx < filtered.length) {
       e.preventDefault();
       onChange(filtered[highlightIdx]);
@@ -849,10 +889,26 @@ function FontSelect({ value, onChange }) {
       setFilter("");
       setHighlightIdx(-1);
     } else if (e.key === "Escape") {
+      // Revert any live-previewed font back to what was set when the
+      // dropdown opened.
+      if (openValueRef.current && openValueRef.current !== value) onChange(openValueRef.current);
       setOpen(false);
       setFilter("");
       setHighlightIdx(-1);
     }
+  };
+
+  // Arrow keys on the CLOSED button cycle fonts directly — no need to open
+  // the dropdown at all.
+  const handleButtonKeyDown = (e) => {
+    if (open || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+    e.preventDefault();
+    if (!allFonts.length) return;
+    const cur = allFonts.indexOf(value);
+    const next = e.key === "ArrowDown"
+      ? Math.min((cur < 0 ? -1 : cur) + 1, allFonts.length - 1)
+      : Math.max((cur < 0 ? 1 : cur) - 1, 0);
+    if (allFonts[next] !== value) onChange(allFonts[next]);
   };
 
   // Scroll highlighted item into view (only within the list — never bubble
@@ -872,8 +928,12 @@ function FontSelect({ value, onChange }) {
     <div className="relative">
       <button
         type="button"
-        className="flex h-6 w-full items-center gap-2 rounded border border-border/60 bg-app px-2 transition-colors hover:border-border"
-        onClick={() => setOpen(!open)}
+        className="flex h-6 w-full items-center gap-2 rounded border border-border/60 bg-app px-2 transition-colors hover:border-border focus:border-[rgb(var(--accent-color))] outline-none"
+        onClick={() => {
+          if (!open) openValueRef.current = value;
+          setOpen(!open);
+        }}
+        onKeyDown={handleButtonKeyDown}
       >
         <span className="flex-1 truncate text-left text-[11px] text-text" style={{ fontFamily: value }}>{value}</span>
         <span className="text-[11px] text-muted" style={{ fontFamily: value }}>Aa</span>
@@ -1156,13 +1216,28 @@ function FooterBtn({ icon: Icon, label, onClick, disabled }) {
 
 function PresetPreview({ preset }) {
   const s = preset.style;
+  const gradient = s.fillMode === "gradient";
   const style = {
     fontSize: "16px",
-    fontWeight: s.bold ? 700 : 400,
-    fontFamily: s.fontFamily || "Plus Jakarta Sans",
+    fontWeight: s.fontWeight ?? (s.bold ? 700 : 400),
+    fontStyle: s.italic ? "italic" : "normal",
+    fontFamily: `"${s.fontFamily || "Plus Jakarta Sans"}", sans-serif`,
+    // Tracking capped so wide presets (Dune 55%) still fit the tiny chip while
+    // reading as "spaced"; case renders via the same JS-equivalent transform.
+    letterSpacing: `${Math.min(s.tracking ?? 0, 0.25) * 16}px`,
+    textTransform: s.textCase === "upper" ? "uppercase" : s.textCase === "lower" ? "lowercase" : undefined,
     color: s.fillColor === "transparent" ? "transparent" : (s.fillColor || "#fff"),
+    ...(gradient
+      ? {
+          backgroundImage: `linear-gradient(${s.gradientAngle ?? 90}deg, ${s.gradientFrom}, ${s.gradientTo})`,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          color: "transparent",
+        }
+      : {}),
     WebkitTextStroke: s.strokeEnabled ? `${s.strokeWidth || 1}px ${s.strokeColor || "#fff"}` : undefined,
-    textShadow: s.shadow ? `${s.shadowX || 0}px ${s.shadowY || 0}px ${s.shadowBlur || 0}px ${s.shadowColor || "#000"}` : undefined,
+    textShadow: !gradient && s.shadow ? `${s.shadowX || 0}px ${s.shadowY || 0}px ${s.shadowBlur || 0}px ${s.shadowColor || "#000"}` : undefined,
+    filter: gradient && s.shadow ? `drop-shadow(${s.shadowX || 0}px ${s.shadowY || 0}px ${s.shadowBlur || 0}px ${s.shadowColor || "#000"})` : undefined,
     opacity: s.opacity != null ? s.opacity / 100 : 1,
   };
   const bg = s.bgMode === "solid" ? { background: s.bgColor || "#000", padding: "2px 6px", borderRadius: "3px" } : {};

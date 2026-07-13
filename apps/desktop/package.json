@@ -31,7 +31,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "licenses/**/*"
     ],
     "extraResources": [
       {
@@ -122,6 +123,11 @@
     "wait-on": "^8.0.3"
   },
   "dependencies": {
+    "@fontsource/caveat": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/playfair-display": "^5.2.8",
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "@fontsource/space-mono": "^5.2.9",
     "chokidar": "^5.0.0",
     "i18next": "^26.3.1",
     "justified-layout": "^4.1.0",

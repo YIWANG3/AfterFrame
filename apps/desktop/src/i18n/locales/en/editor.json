@@ -92,7 +92,14 @@
       "default": "Default",
       "custom": "Custom",
       "bundled": "Bundled"
-    }
+    },
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "caseUpper": "UPPERCASE",
+    "caseLower": "lowercase",
+    "caseTitle": "Title Case",
+    "letterSpacing": "Spacing",
+    "lineHeight": "Line height"
   },
   "sticker": {
     "title": "Sticker",
