@@ -142,6 +142,14 @@ function createSidecarCommands(callJson) {
       return callJson(argv);
     },
 
+    // Re-read source metadata and force-regenerate previews for existing assets.
+    // The sidecar also refreshes an HD tier when that asset already has one.
+    refreshAssets(paths) {
+      const argv = ["refresh-assets"];
+      for (const p of paths) argv.push("--path", String(p));
+      return callJson(argv);
+    },
+
     registerRoots(rootType, paths) {
       const argv = ["register-roots", "--root-type", String(rootType)];
       for (const p of paths) argv.push("--path", String(p));

@@ -279,7 +279,6 @@ export default function ColorPickerPopover({
     if (next.s > 0.01) hueRef.current = next.h;
     setHsv({ h: hueRef.current, s: next.s, v: next.v });
     setHexDraft(effectiveColor.replace("#", "").toUpperCase());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveColor]);
 
   // Position near anchor — try left of, then right of, then above, then below.
@@ -600,4 +599,3 @@ function hexToRgba(hex, alpha) {
   const b = parseInt(h.substring(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
-

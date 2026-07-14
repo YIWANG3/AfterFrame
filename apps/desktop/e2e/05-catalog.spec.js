@@ -3,15 +3,17 @@
 // Verifies that the sidecar + IPC + Gallery rendering chain works end-to-end.
 
 const { test, expect } = require("@playwright/test");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const fs = require("node:fs");
+const { execFileSync } = require("node:child_process");
 const { launchApp, closeApp } = require("./helpers/app");
 
 test.describe("Catalog browse", () => {
-  let app, window, userDataDir;
+  let app, window, userDataDir, catalogDir;
 
   test.beforeAll(async () => {
-    ({ app, window, userDataDir } = await launchApp({ testName: "catalog" }));
+    ({ app, window, userDataDir, catalogDir } = await launchApp({ testName: "catalog" }));
     // Wait for the initial gallery query to settle
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
   });
@@ -89,6 +91,24 @@ test.describe("Catalog browse", () => {
     expect(fullPath).toContain(name);
   });
 
+  test("context menu refreshes one asset or the current multi-selection from disk", async () => {
+    const cards = window.locator("[data-gallery-item='true']");
+    const first = cards.nth(0);
+    const second = cards.nth(1);
+
+    await first.click();
+    await first.click({ button: "right" });
+    await expect(window.getByText("Refresh from Disk", { exact: true })).toBeVisible();
+    await window.keyboard.press("Escape");
+
+    await second.click({ modifiers: ["Meta"] });
+    await second.click({ button: "right" });
+    await window.getByText("Refresh 2 from Disk", { exact: true }).click();
+    await expect(window.getByText("2 assets refreshed", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(first).toHaveAttribute("data-selected", "true");
+    await expect(second).toHaveAttribute("data-selected", "true");
+  });
+
   test("Cmd+A selects every card in the gallery", async () => {
     // Click a card first so focus is in the gallery (not a text field).
     await window.locator("[data-gallery-item='true']").first().click();
@@ -101,28 +121,66 @@ test.describe("Catalog browse", () => {
     }
   });
 
-  // A corrupt/empty thumbnail file self-heals: the gallery calls
-  // regeneratePreviews on <img> error, which force-regenerates the preview.
-  test("a corrupt thumbnail is regenerated on demand", async () => {
-    const firstCard = window.locator("[data-gallery-item='true']").first();
-    const imagePath = await firstCard.getAttribute("data-image-path");
-    expect(imagePath).toBeTruthy();
-
+  test("a missing or corrupt thumbnail regenerates on image load error", async () => {
+    const card = window.locator("[data-gallery-item='true'][data-image-path$='/003-yellow.jpg']");
+    const imagePath = await card.getAttribute("data-image-path");
     const detail = await window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), imagePath);
     const previewFile = detail?.preview_path || detail?.image_preview_path;
-    expect(previewFile).toBeTruthy();
-    expect(fs.existsSync(previewFile)).toBe(true);
-
-    // Simulate the concurrent-write corruption: truncate the preview to empty.
     fs.writeFileSync(previewFile, "");
-    expect(fs.statSync(previewFile).size).toBe(0);
 
-    // The on-demand repair (what the gallery fires on a preview load error)
-    // rebuilds the thumbnail in place.
-    await window.evaluate((p) => window.mediaWorkspace.regeneratePreviews([p]), imagePath);
-    await expect
-      .poll(() => { try { return fs.statSync(previewFile).size; } catch { return 0; } }, { timeout: 10_000 })
-      .toBeGreaterThan(0);
+    await card.locator("img").evaluate((img) => {
+      img.dispatchEvent(new Event("error", { bubbles: true }));
+    });
+    await expect.poll(() => {
+      try { return fs.statSync(previewFile).size; } catch { return 0; }
+    }, { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(14);
+  });
+
+  // A valid-but-wrong preview (the decoder filled an early Lightroom export
+  // with gray) does not emit <img onError>. Live source stat drift and missing
+  // metadata must therefore self-heal as soon as the page is browsed.
+  test("stale source state self-heals valid previews and missing metadata", async () => {
+    const cards = window.locator("[data-gallery-item='true']");
+    const firstPath = await cards.nth(0).getAttribute("data-image-path");
+    const secondPath = await cards.nth(1).getAttribute("data-image-path");
+    const [firstDetail, secondDetail] = await Promise.all([
+      window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), firstPath),
+      window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), secondPath),
+    ]);
+    const firstPreview = firstDetail?.preview_path || firstDetail?.image_preview_path;
+    const secondPreview = secondDetail?.preview_path || secondDetail?.image_preview_path;
+    expect(fs.existsSync(firstPreview)).toBe(true);
+    expect(fs.existsSync(secondPreview)).toBe(true);
+
+    // Keep the preview a valid JPEG but make it visibly/content-wise stale.
+    fs.copyFileSync(secondPreview, firstPreview);
+    const staleHash = crypto.createHash("sha256").update(fs.readFileSync(firstPreview)).digest("hex");
+
+    // First asset: catalog stat no longer matches disk. Second asset: the
+    // preview is good, but its dimensions/file-size metadata was never stored.
+    execFileSync("sqlite3", [path.join(catalogDir, "catalog.sqlite3"), `
+      UPDATE assets
+      SET file_size = 0
+      WHERE asset_id = '${firstDetail.asset_id}';
+      UPDATE assets
+      SET metadata_json = json_set(metadata_json, '$.width', NULL, '$.height', NULL, '$.file_size', 0)
+      WHERE asset_id = '${secondDetail.asset_id}';
+    `]);
+
+    // Simulate reopening/browsing this page. The response exposes both stale
+    // signals and Gallery batches them through refresh-assets automatically.
+    await window.evaluate(() => window.__afterframeTest.refresh());
+    await expect.poll(() => {
+      const hash = crypto.createHash("sha256").update(fs.readFileSync(firstPreview)).digest("hex");
+      return hash;
+    }, { timeout: 10_000 }).not.toBe(staleHash);
+    await expect.poll(async () => {
+      const rows = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 50 }));
+      const second = rows.find((row) => row.asset_id === secondDetail.asset_id);
+      return second?.image_metadata?.width || null;
+    }, { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(14);
   });
 
   // Keep this last: it mutates the (temp-copied) catalog.

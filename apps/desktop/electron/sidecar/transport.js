@@ -159,7 +159,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
         // failures (process died, stopped) retry once via one-shot spawn.
         if (/timed out after/.test(err.message)) throw err;
         if (getCatalogPath() !== issuedCatalogPath) {
-          throw new Error(`catalog switched while command was in flight: ${command[0]}`);
+          throw new Error(`catalog switched while command was in flight: ${command[0]}`, { cause: err });
         }
         console.warn("[sidecar:resident] falling back to one-shot:", err.message);
       }

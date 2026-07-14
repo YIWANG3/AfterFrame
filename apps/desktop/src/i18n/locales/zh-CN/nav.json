@@ -175,6 +175,8 @@
       "annotateSkip": "标注{{suffix}}(跳过已标注)",
       "reannotate": "重新标注{{suffix}}",
       "reveal": "在访达中显示",
+      "refreshFromDisk_one": "从磁盘刷新",
+      "refreshFromDisk_other": "从磁盘刷新 {{count}} 项",
       "copyPath": "复制文件路径",
       "copyName": "复制名称",
       "openWith": "打开方式"

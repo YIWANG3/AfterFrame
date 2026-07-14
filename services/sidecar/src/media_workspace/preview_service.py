@@ -12,6 +12,7 @@ from . import video
 from .catalog import CatalogPaths
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
+from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
 
@@ -45,7 +46,7 @@ class PreviewService:
     def relative_output_path(self, path: Path) -> str:
         return str(path.relative_to(self.catalog.root))
 
-    def _atomic(self, output_path: Path, render) -> Path:
+    def _atomic(self, output_path: Path, render, validate=None) -> Path:
         """Render into a temp file in the same directory, then atomically replace
         the final path. Concurrent renders of the same asset — the editor's
         quick-register (resident process) and the watched-import batch (a
@@ -60,6 +61,8 @@ class PreviewService:
         tmp = Path(tmp_name)
         try:
             render(tmp)
+            if validate is not None:
+                validate()
             os.replace(tmp, output_path)  # atomic within the same filesystem
         except BaseException:
             tmp.unlink(missing_ok=True)
@@ -96,6 +99,9 @@ class PreviewService:
                 status="ready",
             )
 
+        source_marker = validate_source_ready(source_path)
+        validate = lambda: validate_source_unchanged(source_path, source_marker)
+
         if video.is_video(source_path):
             # Videos: a poster frame via the AVFoundation helper (sips can't do
             # video); fall back to QuickLook if the tool is unavailable.
@@ -103,20 +109,28 @@ class PreviewService:
                 if not video.poster(source_path, tmp, max_edge=KIND_SIZES[kind]):
                     raise RuntimeError("video poster unavailable")
             try:
-                rendered = self._atomic(output_path, _poster)
+                rendered = self._atomic(output_path, _poster, validate=validate)
+            except SourceNotReadyError:
+                raise
             except Exception:
-                rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
+                rendered = self._render_with_quicklook(
+                    source_path, output_path, KIND_SIZES[kind], validate=validate
+                )
         elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
             # RAW has no displayable original (the renderer can't decode .cr3/.arw),
             # so its preview IS the ceiling. The HD tier is rendered at full native
             # resolution via sips (Image I/O demosaic) so the lightbox can show real
             # detail / focus; the thumbnail tier stays a small QuickLook render.
             if kind == "preview-hd":
-                rendered = self._render_raw_fullres(source_path, output_path)
+                rendered = self._render_raw_fullres(source_path, output_path, validate=validate)
             else:
-                rendered = self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind])
+                rendered = self._render_with_quicklook(
+                    source_path, output_path, KIND_SIZES[kind], validate=validate
+                )
         else:
-            rendered = self._render_with_sips(source_path, output_path, KIND_SIZES[kind])
+            rendered = self._render_with_sips(
+                source_path, output_path, KIND_SIZES[kind], validate=validate
+            )
 
         return PreviewResult(
             asset_id=row["asset_id"],
@@ -136,20 +150,24 @@ class PreviewService:
         force: bool = False,
         progress_callback=None,
         paths: list[Path] | None = None,
+        force_paths: list[Path] | None = None,
     ) -> dict[str, int]:
         rows = list_assets_for_preview(connection, asset_type=asset_type, kind=kind, limit=limit, paths=paths)
+        forced = {str(path.resolve()) for path in (force_paths or [])}
         generated = 0
         skipped = 0
         failed = 0
+        deferred = 0
         processed = 0
         total = len(rows)
         batch_size = 50
-        report_progress(progress_callback, phase="generate_previews", processed=0, total=total, generated=0, skipped=0, failed=0)
+        report_progress(progress_callback, phase="generate_previews", processed=0, total=total, generated=0, skipped=0, failed=0, deferred=0)
 
         # Split rows into skip vs work
         to_render = []
         for row in rows:
-            if row["existing_relative_path"] and row["existing_status"] == "ready" and not force and self._preview_on_disk(row["asset_id"], kind):
+            row_force = force or str(Path(row["canonical_path"]).resolve()) in forced
+            if row["existing_relative_path"] and row["existing_status"] == "ready" and not row_force and self._preview_on_disk(row["asset_id"], kind):
                 skipped += 1
                 processed += 1
                 report_progress(
@@ -160,9 +178,10 @@ class PreviewService:
                     generated=generated,
                     skipped=skipped,
                     failed=failed,
+                    deferred=deferred,
                 )
             else:
-                to_render.append(row)
+                to_render.append((row, row_force))
 
         # Parallel render. All futures are submitted upfront, so if the
         # progress callback raises (cooperative job cancellation) we cancel the
@@ -170,8 +189,8 @@ class PreviewService:
         # handler would block until every queued render finished anyway.
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
             futures = {
-                pool.submit(self.generate_for_row, row, kind=kind, force=force): row
-                for row in to_render
+                pool.submit(self.generate_for_row, row, kind=kind, force=row_force): row
+                for row, row_force in to_render
             }
             try:
                 for future in as_completed(futures):
@@ -189,6 +208,10 @@ class PreviewService:
                             commit=False,
                         )
                         generated += 1
+                    except SourceNotReadyError:
+                        # Keep an existing good preview/DB entry. A later watcher
+                        # change event retries after the editor finishes writing.
+                        deferred += 1
                     except Exception:
                         upsert_preview_entry(
                             connection,
@@ -212,23 +235,24 @@ class PreviewService:
                         generated=generated,
                         skipped=skipped,
                         failed=failed,
+                        deferred=deferred,
                     )
             except BaseException:
                 pool.shutdown(wait=False, cancel_futures=True)
                 connection.commit()  # keep previews finished before the cancel
                 raise
         connection.commit()
-        return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
+        return {"generated": generated, "skipped": skipped, "failed": failed, "deferred": deferred, "total": total}
 
-    def _render_with_sips(self, source_path: Path, output_path: Path, size: int) -> Path:
+    def _render_with_sips(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         return self._atomic(output_path, lambda tmp: subprocess.run(
             ["sips", "-s", "format", "jpeg", "-Z", str(size), "--out", str(tmp), str(source_path)],
             check=True,
             capture_output=True,
             text=True,
-        ))
+        ), validate=validate)
 
-    def _render_with_quicklook(self, source_path: Path, output_path: Path, size: int) -> Path:
+    def _render_with_quicklook(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         with tempfile.TemporaryDirectory(prefix="media-workspace-ql-") as temp_dir:
             subprocess.run(
                 ["qlmanage", "-t", "-s", str(size), "-o", temp_dir, str(source_path)],
@@ -244,9 +268,9 @@ class PreviewService:
                 check=True,
                 capture_output=True,
                 text=True,
-            ))
+            ), validate=validate)
 
-    def _render_raw_fullres(self, source_path: Path, output_path: Path) -> Path:
+    def _render_raw_fullres(self, source_path: Path, output_path: Path, validate=None) -> Path:
         # Full native-resolution JPEG straight from the RAW (Image I/O decodes
         # CR2/CR3/ARW/NEF/DNG). No --resampleHeightWidthMax, so the long edge is
         # the sensor's native size — the displayable stand-in for the RAW.
@@ -255,7 +279,7 @@ class PreviewService:
             check=True,
             capture_output=True,
             text=True,
-        ))
+        ), validate=validate)
 
 
 def report_progress(progress_callback, **payload) -> None:

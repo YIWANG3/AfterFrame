@@ -11,4 +11,5 @@ from .people import upsert_face_model, get_people_asset_index, upsert_people_ass
 from .collections import _collection_id, list_collections, create_collection, update_collection, delete_collection, add_collection_items, remove_collection_items
 from .maintenance import cleanup_orphan_image_assets, delete_image_asset_from_catalog, summary, verify_assets, relink_asset
 from .jobs import _UNSET  # sentinel shared with update_job callers
-from .core import _file_id, RESOLVER_VERSION, SCHEMA_VERSION
+from .core import _file_id, RESOLVER_VERSION
+from ..schema import SCHEMA_VERSION

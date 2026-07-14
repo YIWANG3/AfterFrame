@@ -73,7 +73,6 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaD
     const stickers = Array.isArray(lib.stickers) ? lib.stickers : [];
     let dirty = false;
     for (const s of stickers) {
-      const expected = thumbPathFor(s.id);
       const has = s.thumbPath && fs.existsSync(s.thumbPath);
       if (has) continue;
       if (!s.path || !fs.existsSync(s.path)) continue; // orphan entry — skip

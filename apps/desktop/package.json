@@ -11,7 +11,12 @@
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "vite",
     "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "lint": "eslint src electron vite.config.js playwright.config.js",
     "build": "vite build",
+    "test:electron": "node --test electron/settingsStore.test.js",
+    "test:renderer": "vitest run src",
+    "test:unit": "npm run test:electron && npm run test:renderer",
+    "check": "npm run lint && npm run test:unit && npm run build",
     "build:native": "bash scripts/build-native.sh",
     "pack": "npm run build:native && npm run build && electron-builder --dir",
     "dist": "npm run build:native && npm run build:sidecar && npm run build && electron-builder",
@@ -32,6 +37,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "!electron/**/*.test.js",
       "licenses/**/*"
     ],
     "extraResources": [
@@ -109,6 +115,7 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
@@ -116,10 +123,14 @@
     "cross-env": "^10.0.0",
     "electron": "^35.1.5",
     "electron-builder": "^26.0.12",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "vibepin": "^0.2.1",
     "vite": "^7.0.0",
+    "vitest": "^4.1.10",
     "wait-on": "^8.0.3"
   },
   "dependencies": {

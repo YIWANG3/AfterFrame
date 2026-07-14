@@ -4,21 +4,8 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 """
 from __future__ import annotations
 
-import json
-import os
 import sqlite3
-from hashlib import sha1
-from pathlib import Path
 from uuid import uuid4
-
-from ..models import ImageCandidate, MatchDecision, RawMetadata
-
-# Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
-_UNSET = object()
-from ..schema import SCHEMA_STATEMENTS
-
-RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
-SCHEMA_VERSION = 5
 
 def _collection_id() -> str:
     return f"col_{uuid4().hex[:16]}"

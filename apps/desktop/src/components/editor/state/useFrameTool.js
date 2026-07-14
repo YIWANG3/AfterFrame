@@ -129,7 +129,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     }
     return logosPromiseRef.current;
   }
-  useEffect(() => { if (active) loadLogos(); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (active) loadLogos(); }, [active]);
 
   async function ensureLogos(lg, tpl, geomH, override) {
     for (const n of collectLogoNeeds(tpl, exif, lg.registry, { outH: geomH }, override)) {

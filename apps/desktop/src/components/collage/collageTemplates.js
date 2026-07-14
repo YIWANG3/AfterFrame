@@ -3,7 +3,6 @@
  * Gap is applied by the renderer, not baked into the template.
  */
 
-/* eslint-disable */
 const TEMPLATES = {
   2: [
     { id: "2-lr", name: "Left / Right", cells: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:1}] },
@@ -86,7 +85,6 @@ const TEMPLATES = {
     { id: "12-t4-m4-b4", name: "4+4+4", cells: [{x:0,y:0,w:.25,h:1/3},{x:.25,y:0,w:.25,h:1/3},{x:.5,y:0,w:.25,h:1/3},{x:.75,y:0,w:.25,h:1/3},{x:0,y:1/3,w:.25,h:1/3},{x:.25,y:1/3,w:.25,h:1/3},{x:.5,y:1/3,w:.25,h:1/3},{x:.75,y:1/3,w:.25,h:1/3},{x:0,y:2/3,w:.25,h:1/3},{x:.25,y:2/3,w:.25,h:1/3},{x:.5,y:2/3,w:.25,h:1/3},{x:.75,y:2/3,w:.25,h:1/3}] },
   ],
 };
-/* eslint-enable */
 
 /**
  * Find the best matching template group for a given image count.

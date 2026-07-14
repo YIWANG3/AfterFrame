@@ -95,7 +95,6 @@ function createMcpServer(deps) {
   const {
     getCatalogState,
     commands,
-    callSidecarJsonAsync,
     callSidecarAsync,
     startImportTask,
     formatJobStatus,
@@ -114,7 +113,7 @@ function createMcpServer(deps) {
   async function resolvePreviewPaths(assetId) {
     const cached = previewPathCache.get(assetId);
     if (cached && (cached.preview || cached.previewHd)) return cached;
-    let detail = null;
+    let detail;
     try {
       detail = await commands.assetDetail({ assetId });
     } catch (error) {

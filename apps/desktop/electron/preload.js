@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getAssetDetailById: (assetId) => ipcRenderer.invoke("workspace:detail-by-id", assetId),
   ensureHdPreviews: (paths) => ipcRenderer.invoke("workspace:ensure-hd-previews", paths),
   regeneratePreviews: (paths) => ipcRenderer.invoke("workspace:regenerate-previews", paths),
+  refreshAssets: (paths) => ipcRenderer.invoke("workspace:refresh-assets", paths),
   detectEditors: () => ipcRenderer.invoke("app:detect-editors"),
   openInEditor: (paths, appPath) => ipcRenderer.invoke("app:open-in-editor", paths, appPath),
   getWatchedDirs: () => ipcRenderer.invoke("app:get-watched-dirs"),

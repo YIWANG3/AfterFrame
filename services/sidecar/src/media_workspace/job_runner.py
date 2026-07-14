@@ -15,6 +15,7 @@ from .db import (
     is_cancel_requested,
     is_pause_requested,
     list_image_assets_missing_resource_set,
+    list_assets_for_preview,
     list_people_index_candidates,
     rebuild_candidate_groups,
     replace_asset_faces,
@@ -527,6 +528,7 @@ def run_import_job(
 ) -> dict[str, object]:
     thresholds = Thresholds()
     phase_results: list[dict[str, object]] = []
+    changed_paths: list[Path] = []
     phases = _build_import_phases(mode, bool(raw_dirs), bool(image_dirs), generate_hd)
     if not phases:
         result = {"phase_results": [], "current_phase": None}
@@ -660,6 +662,7 @@ def run_import_job(
                 progress_callback=resolve_progress,
                 respect_tombstones=respect_tombstones,
             )
+            changed_paths = [Path(path) for path in resolve_result.get("changed_paths", [])]
             # Create resource sets for any exports that don't have one yet
             for row in list_image_assets_missing_resource_set(connection):
                 attach_asset_to_resource_set(
@@ -710,11 +713,13 @@ def run_import_job(
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="image",
                     progress_callback=preview_progress, paths=image_dirs,
+                    force_paths=changed_paths,
                 ),
                 # Video poster frames share the standard preview tier (no HD).
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="video",
                     progress_callback=preview_progress, paths=image_dirs,
+                    force_paths=changed_paths,
                 ),
                 # RAW: 512 thumbnail + a full-resolution HD preview. RAW has no
                 # displayable original, so the HD (full-res) tier is generated
@@ -722,17 +727,45 @@ def run_import_job(
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="raw",
                     progress_callback=preview_progress, paths=image_dirs,
+                    force_paths=changed_paths,
                 ),
                 preview_service.generate_batch(
                     connection, kind="preview-hd", asset_type="raw",
                     progress_callback=preview_progress, paths=image_dirs,
+                    force_paths=changed_paths,
                 ),
             ]
+            # HD generation is an opt-in setting, but an asset that already has
+            # an HD preview must not keep the old Lightroom export forever. Only
+            # refresh existing HD entries here; do not create new ones when the
+            # setting is disabled.
+            if changed_paths and not generate_hd:
+                existing_hd_paths = [
+                    Path(row["canonical_path"])
+                    for row in list_assets_for_preview(
+                        connection,
+                        asset_type="image",
+                        kind="preview-hd",
+                        paths=changed_paths,
+                    )
+                    if row["existing_relative_path"] and row["existing_status"] == "ready"
+                ]
+                if existing_hd_paths:
+                    batch_results.append(
+                        preview_service.generate_batch(
+                            connection,
+                            kind="preview-hd",
+                            asset_type="image",
+                            progress_callback=preview_progress,
+                            paths=existing_hd_paths,
+                            force_paths=existing_hd_paths,
+                        )
+                    )
             # Merge all batches (image + video + raw ×2) so the phase result
             # reflects everything generated, not just the image tier.
             preview_result = {
                 key: sum(int((r or {}).get(key, 0)) for r in batch_results)
-                for key in ("generated", "skipped", "failed", "total")
+                for key in ("generated", "skipped", "failed", "deferred", "total")
             }
             phase_results.append(_phase_result(preview_phase, preview_result))
             phase_cursor += 1
@@ -778,6 +811,7 @@ def run_import_job(
                 asset_type="image",
                 progress_callback=preview_hd_progress,
                 paths=image_dirs,
+                force_paths=changed_paths,
             )
             phase_results.append(_phase_result(preview_hd_phase, preview_hd_result))
         result = {"phase_results": phase_results, "current_phase": None}

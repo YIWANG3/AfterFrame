@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from media_workspace.catalog import ensure_catalog
-from media_workspace.preview_service import PreviewService
+from media_workspace.preview_service import PreviewService, SourceNotReadyError
 
 
 class PreviewServiceTest(unittest.TestCase):
@@ -99,6 +99,56 @@ class PreviewServiceTest(unittest.TestCase):
             self.assertFalse(service._preview_on_disk("img_x0", "preview"))  # empty
             out.write_bytes(b"data")
             self.assertTrue(service._preview_on_disk("img_x0", "preview"))
+
+    @patch("media_workspace.preview_service.subprocess.run")
+    def test_incomplete_jpeg_never_replaces_existing_preview(self, run_mock) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            service = PreviewService(catalog)
+            source = Path(temp_dir) / "lightroom-export.jpg"
+            source.write_bytes(b"\xff\xd8partial-jpeg-without-eoi")
+            output = service.output_path("img_abcdef123456", "preview")
+            output.write_bytes(b"last-known-good")
+            row = {
+                "asset_id": "img_abcdef123456",
+                "canonical_path": str(source),
+                "width": 100,
+                "height": 100,
+            }
+
+            with self.assertRaises(SourceNotReadyError):
+                service.generate_for_row(row, "preview", force=True)
+
+            run_mock.assert_not_called()
+            self.assertEqual(output.read_bytes(), b"last-known-good")
+
+    @patch("media_workspace.preview_service.subprocess.run")
+    def test_source_change_during_render_discards_temp_preview(self, run_mock) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            service = PreviewService(catalog)
+            source = Path(temp_dir) / "lightroom-export.jpg"
+            source.write_bytes(b"\xff\xd8first-complete\xff\xd9")
+            output = service.output_path("img_abcdef123456", "preview")
+            output.write_bytes(b"last-known-good")
+            row = {
+                "asset_id": "img_abcdef123456",
+                "canonical_path": str(source),
+                "width": 100,
+                "height": 100,
+            }
+
+            def side_effect(cmd, check, capture_output, text):
+                Path(cmd[cmd.index("--out") + 1]).write_bytes(b"new-preview")
+                source.write_bytes(b"\xff\xd8second-complete-and-larger\xff\xd9")
+                return None
+
+            run_mock.side_effect = side_effect
+            with self.assertRaises(SourceNotReadyError):
+                service.generate_for_row(row, "preview", force=True)
+
+            self.assertEqual(output.read_bytes(), b"last-known-good")
+            self.assertEqual([p.name for p in output.parent.iterdir()], [output.name])
 
 
 if __name__ == "__main__":

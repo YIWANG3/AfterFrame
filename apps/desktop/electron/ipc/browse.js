@@ -148,6 +148,19 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
+  ipcMain.handle("workspace:refresh-assets", async (_event, paths) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog first.");
+    const list = [...new Set((paths || []).map(String).filter(Boolean))];
+    if (!list.length) return { requested: 0, refreshed: 0, deferred: 0, failed: 0 };
+    try {
+      return await commands.refreshAssets(list);
+    } catch (err) {
+      console.warn("[workspace:refresh-assets] sidecar error:", err.message);
+      throw err;
+    }
+  });
+
   ipcMain.handle("workspace:pending", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];

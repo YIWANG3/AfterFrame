@@ -5,20 +5,14 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from hashlib import sha1
 from pathlib import Path
-from uuid import uuid4
 
-from ..models import ImageCandidate, MatchDecision, RawMetadata
-
-# Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
-_UNSET = object()
-from ..schema import SCHEMA_STATEMENTS
+from ..schema import SCHEMA_STATEMENTS, SCHEMA_VERSION
+from .migrations import SchemaMigrationError, ensure_column, migrate
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
-SCHEMA_VERSION = 7
 
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +49,43 @@ _FACET_INDEXES = [
 
 
 def init_db(connection: sqlite3.Connection) -> None:
+    if connection.in_transaction:
+        raise SchemaMigrationError("init_db requires a connection with no active transaction")
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        is_new = "catalog_info" not in tables
+        if is_new and tables:
+            raise SchemaMigrationError("catalog has tables but no catalog_info version record")
+
+        if is_new:
+            _apply_latest_schema(connection)
+            connection.execute(
+                "INSERT INTO catalog_info (catalog_id, catalog_path, schema_version) VALUES (1, '', ?)",
+                (SCHEMA_VERSION,),
+            )
+        else:
+            row = connection.execute(
+                "SELECT schema_version FROM catalog_info WHERE catalog_id = 1"
+            ).fetchone()
+            if row is None:
+                raise SchemaMigrationError("catalog_info is missing its catalog row")
+            migrate(connection, int(row["schema_version"]), SCHEMA_VERSION)
+            _apply_latest_schema(connection)
+
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
+def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         connection.execute(statement)
     _ensure_column(connection, "assets", "app_rating", "INTEGER")
@@ -62,21 +93,13 @@ def init_db(connection: sqlite3.Connection) -> None:
     _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")
     _ensure_column(connection, "raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'")
     _ensure_column(connection, "jobs", "result_json", "TEXT NOT NULL DEFAULT '{}'")
-    # Cooperative cancellation: runners poll this flag between batches and
-    # finish gracefully with status='cancelled'.
     _ensure_column(connection, "jobs", "cancel_requested", "INTEGER NOT NULL DEFAULT 0")
-    # People jobs are the first resumable/priority-aware jobs. These columns are
-    # intentionally available to every job so the unified JobDock can present a
-    # single state machine as other long-running jobs adopt it.
     _ensure_column(connection, "jobs", "priority", "INTEGER NOT NULL DEFAULT 50")
     _ensure_column(connection, "jobs", "pause_requested", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(connection, "jobs", "resume_cursor_json", "TEXT NOT NULL DEFAULT '{}'")
     _ensure_column(connection, "jobs", "attempt_count", "INTEGER NOT NULL DEFAULT 0")
-    # File stat captured at people-analysis time — the cheap pre-decode gate
-    # for incremental scans (unchanged size+mtime → skip without decoding).
     _ensure_column(connection, "people_asset_index", "file_size", "INTEGER")
     _ensure_column(connection, "people_asset_index", "file_mtime", "REAL")
-    # Searchable facet columns + indexes (idempotent; VIRTUAL generated columns).
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(
             connection,
@@ -86,29 +109,10 @@ def init_db(connection: sqlite3.Connection) -> None:
         )
     for index_sql in _FACET_INDEXES:
         connection.execute(index_sql)
-    connection.execute(
-        """
-        INSERT INTO catalog_info (catalog_id, catalog_path, schema_version)
-        VALUES (1, '', ?)
-        ON CONFLICT(catalog_id) DO UPDATE SET
-            schema_version = excluded.schema_version,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (SCHEMA_VERSION,),
-    )
-    connection.commit()
 
 
 def _ensure_column(connection: sqlite3.Connection, table_name: str, column_name: str, column_spec: str) -> None:
-    # table_xinfo (not table_info) lists VIRTUAL generated columns too, so this
-    # stays idempotent for generated facet columns across repeated init_db runs.
-    columns = {
-        row["name"]
-        for row in connection.execute(f"PRAGMA table_xinfo({table_name})").fetchall()
-    }
-    if column_name in columns:
-        return
-    connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_spec}")
+    ensure_column(connection, table_name, column_name, column_spec)
 
 
 def set_catalog_path(connection: sqlite3.Connection, catalog_path: Path) -> None:

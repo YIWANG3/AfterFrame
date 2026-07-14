@@ -1,0 +1,58 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/sidecar/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install Python sidecar
+        run: python -m pip install -e services/sidecar
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop
+      - name: Run repository checks
+        run: npm run check
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --prefix apps/desktop
+
+  electron-e2e:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/sidecar/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install Python sidecar
+        run: python -m pip install -e services/sidecar
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop
+      - name: Build native tools
+        run: npm run build:native --prefix apps/desktop
+      - name: Build renderer
+        run: npm run build --prefix apps/desktop
+      - name: Run Electron E2E
+        run: npm run e2e:only --prefix apps/desktop

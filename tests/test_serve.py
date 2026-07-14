@@ -57,6 +57,7 @@ class ServeProtocolTest(unittest.TestCase):
             finally:
                 proc.stdin.close()
                 self.assertEqual(proc.wait(timeout=10), 0)
+                proc.stdout.close()
 
 
 if __name__ == "__main__":

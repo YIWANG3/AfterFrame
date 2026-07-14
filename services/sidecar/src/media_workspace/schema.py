@@ -1,3 +1,8 @@
+# Catalog schema version. This is the only authoritative version declaration;
+# migration code and the public db package both import it from here.
+SCHEMA_VERSION = 7
+
+
 SCHEMA_STATEMENTS = [
     """
     CREATE TABLE IF NOT EXISTS catalog_info (

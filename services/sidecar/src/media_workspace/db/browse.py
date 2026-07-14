@@ -4,21 +4,7 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 """
 from __future__ import annotations
 
-import json
-import os
 import sqlite3
-from hashlib import sha1
-from pathlib import Path
-from uuid import uuid4
-
-from ..models import ImageCandidate, MatchDecision, RawMetadata
-
-# Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
-_UNSET = object()
-from ..schema import SCHEMA_STATEMENTS
-
-RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
-SCHEMA_VERSION = 5
 
 # Shared between list_image_assets and browse_collection — the two SELECTs
 # went out of sync by hand twice before (annotation columns). Single source.
@@ -31,6 +17,8 @@ _BROWSE_SELECT_COLUMNS = """\
             assets.app_rating,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
+            assets.file_size AS catalog_file_size,
+            assets.modified_time,
             registry.match_status,
             registry.score,
             registry.raw_asset_id,

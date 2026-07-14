@@ -167,7 +167,7 @@ The full interface in 简体中文 (switch live in Settings → General):
 ### Requirements
 - macOS (Apple Silicon)
 - Python 3.10+ (for the sidecar service, development only)
-- Node.js 18+ (development only)
+- Node.js 20.19+ or 22.13+ (development only)
 
 ### Development
 

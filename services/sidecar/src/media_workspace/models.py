@@ -93,3 +93,7 @@ class MatchDecision:
     # True when this export was already in the catalog before this import pass —
     # used to report "already imported" counts (re-importing the same folder).
     preexisting: bool = False
+    # Same canonical path, but the bytes/mtime changed since the previous pass.
+    # Preview generation uses this to bypass a stale ready cache after an editor
+    # (notably Lightroom) exports with overwrite enabled.
+    content_changed: bool = False

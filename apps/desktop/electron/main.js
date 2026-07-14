@@ -42,7 +42,7 @@ const mediaHttpServer = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size, "Accept-Ranges": "bytes" });
       fs.createReadStream(filePath).pipe(res);
     }
-  } catch (err) {
+  } catch {
     try { res.writeHead(500).end(); } catch { /* ignore */ }
   }
 });
@@ -73,6 +73,7 @@ const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
+const { createSettingsStore } = require("./settingsStore");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -126,6 +127,20 @@ const reviewCatalogPath = isPackaged
   ? null
   : path.join(rootDir, "data", "review-2026.afcatalog");
 
+function getAppSettingsPath() {
+  return path.join(app.getPath("userData"), "afterframe", "settings.json");
+}
+
+const settingsStore = createSettingsStore({ getAppSettingsPath });
+
+function readAppSettings() {
+  return settingsStore.readAppSettings();
+}
+
+function updateAppSettings(mutateFn) {
+  return settingsStore.updateAppSettings(mutateFn);
+}
+
 function resolveCatalogPath() {
   // Simulate packaged first-run (no default catalog) in dev / e2e, where a
   // scratch catalog would otherwise always be present. Lets you exercise the
@@ -146,19 +161,6 @@ function resolveCatalogPath() {
 
 let currentCatalogPath = resolveCatalogPath();
 
-function getAppSettingsPath() {
-  return path.join(app.getPath("userData"), "afterframe", "settings.json");
-}
-
-function readAppSettings() {
-  const settingsPath = getAppSettingsPath();
-  try {
-    return JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-  } catch (error) {
-    return {};
-  }
-}
-
 // Locale: the main process owns it (persisted in settings.json) so the menu and
 // the renderer never disagree. The renderer reads it synchronously at startup
 // via the preload bridge (app:get-locale).
@@ -169,75 +171,12 @@ function getLocale() {
 }
 let currentLocale = getLocale();
 
-// Serialize all read-modify-write operations to prevent race conditions
-let _settingsWriteQueue = Promise.resolve();
-const _catalogSettingsWriteQueues = new Map();
-
-async function writeAppSettings(settings) {
-  const settingsPath = getAppSettingsPath();
-  await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
-  await fs.promises.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-}
-
-/**
- * Atomically read-modify-write app settings.
- * All callers that modify settings MUST use this to avoid race conditions.
- */
-function updateAppSettings(mutateFn) {
-  const run = _settingsWriteQueue.then(async () => {
-    const settings = readAppSettings();
-    const next = mutateFn(settings);
-    await writeAppSettings(next);
-    return next;
-  });
-  // Callers get the real result/rejection, but the queue itself reseeds from a
-  // settled promise — one failed write must not poison every later write.
-  _settingsWriteQueue = run.catch((err) => {
-    console.error("[settings] write failed:", err?.message || err);
-  });
-  return run;
-}
-
-function getCatalogSettingsPath(catalogPath = currentCatalogPath) {
-  return catalogPath ? path.join(catalogPath, "settings.json") : null;
-}
-
 function readCatalogSettings(catalogPath = currentCatalogPath) {
-  const settingsPath = getCatalogSettingsPath(catalogPath);
-  if (!settingsPath) return {};
-  try {
-    return JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-  } catch {
-    return {};
-  }
+  return settingsStore.readCatalogSettings(catalogPath);
 }
 
-/**
- * Serialize writes per catalog. Capture the catalog path at call time so a
- * switch while the write is queued can never redirect settings to another
- * library.
- */
 function updateCatalogSettings(mutateFn, catalogPath = currentCatalogPath) {
-  const targetCatalog = catalogPath ? path.resolve(catalogPath) : null;
-  if (!targetCatalog) return Promise.reject(new Error("Open a catalog before changing catalog settings."));
-  const previous = _catalogSettingsWriteQueues.get(targetCatalog) || Promise.resolve();
-  const run = previous.then(async () => {
-    const settingsPath = getCatalogSettingsPath(targetCatalog);
-    const settings = readCatalogSettings(targetCatalog);
-    const next = { version: 1, ...settings, ...mutateFn(settings) };
-    await fs.promises.mkdir(targetCatalog, { recursive: true });
-    await fs.promises.writeFile(settingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
-    return next;
-  });
-  const settled = run.catch((err) => {
-    console.error("[catalog-settings] write failed:", err?.message || err);
-  }).finally(() => {
-    if (_catalogSettingsWriteQueues.get(targetCatalog) === settled) {
-      _catalogSettingsWriteQueues.delete(targetCatalog);
-    }
-  });
-  _catalogSettingsWriteQueues.set(targetCatalog, settled);
-  return run;
+  return settingsStore.updateCatalogSettings(catalogPath, mutateFn);
 }
 
 function encryptToken(plaintext) {
@@ -349,23 +288,6 @@ function workspaceInfo() {
     reviewCatalogPath,
     sidecarSrc,
   };
-}
-
-function restartDesktop(nextCatalogPath) {
-  const env = { ...process.env };
-  if (nextCatalogPath) {
-    env.MEDIA_WORKSPACE_CATALOG = nextCatalogPath;
-  } else {
-    delete env.MEDIA_WORKSPACE_CATALOG;
-  }
-  const child = spawn(process.execPath, process.argv.slice(1), {
-    cwd: process.cwd(),
-    detached: true,
-    stdio: "ignore",
-    env,
-  });
-  child.unref();
-  app.quit();
 }
 
 function normalizeCatalogPath(targetPath) {
@@ -1172,7 +1094,7 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
   void peopleApi?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch
   if (currentCatalogPath) {
-    updateAppSettings((s) => ({ ...s, lastCatalogPath: currentCatalogPath }));
+    await updateAppSettings((s) => ({ ...s, lastCatalogPath: currentCatalogPath }));
   }
   return true;
 });
@@ -1248,10 +1170,10 @@ ipcMain.on("app:get-locale", (event) => {
 ipcMain.on("app:get-media-port", (event) => {
   event.returnValue = mediaHttpPort;
 });
-ipcMain.handle("app:set-locale", (_event, lng) => {
+ipcMain.handle("app:set-locale", async (_event, lng) => {
   if (!SUPPORTED_LOCALES.includes(lng)) return currentLocale;
+  await updateAppSettings((s) => ({ ...s, locale: lng }));
   currentLocale = lng;
-  void updateAppSettings((s) => ({ ...s, locale: lng }));
   Menu.setApplicationMenu(buildAppMenu());
   return currentLocale;
 });
@@ -1277,9 +1199,12 @@ ipcMain.handle("app:open-cache-dir", (_event, kind) => {
 
 // Preview settings (e.g. HD generation toggle). Stored under settings.previews.
 ipcMain.handle("app:get-preview-settings", () => readAppSettings()?.previews ?? {});
-ipcMain.handle("app:save-preview-settings", (_event, next) => {
-  void updateAppSettings((s) => ({ ...s, previews: { ...(s?.previews || {}), ...(next || {}) } }));
-  return readAppSettings()?.previews ?? {};
+ipcMain.handle("app:save-preview-settings", async (_event, next) => {
+  const persisted = await updateAppSettings((s) => ({
+    ...s,
+    previews: { ...(s?.previews || {}), ...(next || {}) },
+  }));
+  return persisted.previews ?? {};
 });
 
 // On-demand H.264 playback proxy for videos Chromium can't decode (e.g. 10-bit

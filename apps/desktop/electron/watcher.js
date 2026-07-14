@@ -1,5 +1,5 @@
-// Watched directories — auto-import new files dropped into user-designated
-// folders (e.g. an editor's export target). chokidar gives us macOS FSEvents
+// Watched directories — auto-import new files and re-index overwritten files in
+// user-designated folders (e.g. an editor's export target). chokidar gives us macOS FSEvents
 // (via Node's recursive fs.watch) while the app runs; the renderer handles
 // catch-up (files added while closed) by re-importing each watched dir on mount.
 //
@@ -48,7 +48,7 @@ function flush(eventGeneration, catalogPath) {
   send(batch, catalogPath);
 }
 
-function onAdd(filePath, eventGeneration, catalogPath) {
+function onMediaChange(filePath, eventGeneration, catalogPath) {
   if (eventGeneration !== generation || !sameCatalog(catalog.path(), catalogPath)) return;
   if (!MEDIA_RE.test(filePath)) return;
   if (path.basename(filePath).startsWith(".")) return; // skip dotfiles / temp
@@ -79,9 +79,13 @@ function rebuild() {
   watcher = chokidar.watch(dirs, {
     ignoreInitial: true, // catch-up (renderer) handles existing files
     depth: 10,
-    awaitWriteFinish: { stabilityThreshold: 1500, pollInterval: 300 },
+    // Editor exports can pause between chunks. This delay reduces speculative
+    // imports; the sidecar additionally validates JPEG completeness and source
+    // stability, so a longer pause still cannot publish a partial preview.
+    awaitWriteFinish: { stabilityThreshold: 3000, pollInterval: 300 },
   });
-  watcher.on("add", (filePath) => onAdd(filePath, eventGeneration, catalogPath));
+  watcher.on("add", (filePath) => onMediaChange(filePath, eventGeneration, catalogPath));
+  watcher.on("change", (filePath) => onMediaChange(filePath, eventGeneration, catalogPath));
   watcher.on("error", (err) => console.warn("[watcher] error:", err?.message || err));
 }
 

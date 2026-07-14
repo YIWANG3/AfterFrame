@@ -33,11 +33,32 @@ from .metadata import (
     stem_key as compute_stem_key,
 )
 from .models import ImageCandidate, MatchDecision
+from .source_readiness import SourceNotReadyError, validate_source_ready
 from .video import VIDEO_EXTENSIONS, is_video, probe as probe_video
 
 RESOLVE_BATCH_COMMIT_SIZE = 200
 RECALL_LIMIT = 200
 IMAGE_EXTENSIONS = {".avif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
+
+
+def _previous_asset_signature(connection, path: Path) -> tuple[str, int, str] | None:
+    row = connection.execute(
+        """
+        SELECT assets.fingerprint, assets.file_size, assets.modified_time
+        FROM asset_files
+        JOIN assets ON assets.asset_id = asset_files.asset_id
+        WHERE asset_files.path = ?
+        LIMIT 1
+        """,
+        (str(path.resolve()),),
+    ).fetchone()
+    if row is None:
+        return None
+    return str(row["fingerprint"]), int(row["file_size"]), str(row["modified_time"])
+
+
+def _content_changed(previous: tuple[str, int, str] | None, fingerprint: str, file_size: int, modified_time: str) -> bool:
+    return previous is not None and previous != (str(fingerprint), int(file_size), str(modified_time))
 
 
 def _parse_time(value: str | None) -> datetime | None:
@@ -209,7 +230,11 @@ def resolve_image(
     commit: bool = True,
 ) -> MatchDecision:
     thresholds = thresholds or Thresholds()
+    previous_signature = _previous_asset_signature(connection, image_path)
     export = extract_image_candidate(image_path)
+    content_changed = _content_changed(
+        previous_signature, export.fingerprint, export.file_size, export.modified_time
+    )
     if persist_root:
         upsert_catalog_root(connection, "image", export.path.parent, commit=commit)
     image_asset_id = upsert_image_asset(connection, export, commit=False)
@@ -228,6 +253,7 @@ def resolve_image(
             feature_vector=json.loads(existing["feature_vector_json"]),
             ranked_candidates=json.loads(existing["candidate_json"]),
             preexisting=preexisting,
+            content_changed=content_changed,
         )
 
     if existing and not refresh and existing["match_status"] == "auto_bound":
@@ -242,6 +268,7 @@ def resolve_image(
             feature_vector=json.loads(existing["feature_vector_json"]),
             ranked_candidates=json.loads(existing["candidate_json"]),
             preexisting=preexisting,
+            content_changed=content_changed,
         )
 
     ranked: list[dict[str, object]] = []
@@ -285,6 +312,7 @@ def resolve_image(
         feature_vector=feature_vector,
         ranked_candidates=ranked[:5],
         preexisting=preexisting,
+        content_changed=content_changed,
     )
     upsert_registry(connection, decision, commit=False)
     if commit:
@@ -327,6 +355,8 @@ def resolve_image_batch(
     refresh: bool = False,
     progress_callback=None,
     respect_tombstones: bool = False,
+    validate_sources: bool = False,
+    persist_roots: bool = True,
 ) -> dict[str, object]:
     thresholds = thresholds or Thresholds()
     counts: dict[str, int] = {
@@ -338,6 +368,8 @@ def resolve_image_batch(
     processed = 0
     already_in_catalog = 0
     skipped_deleted = 0
+    deferred_files = 0
+    changed_paths: list[str] = []
     # Auto imports (watched dirs / catch-up) respect tombstones. A manual import
     # is an explicit "bring this back" — clear any tombstone for the files it
     # touches so a later delete behaves predictably.
@@ -346,9 +378,10 @@ def resolve_image_batch(
     report_progress(progress_callback, phase="resolve_images", processed=0, total=total, status_counts=counts)
 
     for image_dir in image_dirs:
-        upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
+        if persist_roots:
+            upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
         for path in iter_image_files([image_dir.resolve()]):
-            if respect_tombstones:
+            if respect_tombstones or validate_sources:
                 if _is_tombstoned(connection, tombstones, path):
                     processed += 1
                     skipped_deleted += 1
@@ -357,6 +390,17 @@ def resolve_image_batch(
             elif str(path) in tombstones:
                 tombstones.pop(str(path), None)
                 connection.execute("DELETE FROM deleted_files WHERE path = ?", (str(path),))
+            if respect_tombstones or validate_sources:
+                try:
+                    validate_source_ready(path)
+                except SourceNotReadyError:
+                    # Do not index a first-time partial auto-export: without a
+                    # preview, the gallery would otherwise render the partial
+                    # original. A later watcher change retries once writing resumes.
+                    processed += 1
+                    deferred_files += 1
+                    report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
+                    continue
             if is_video(path):
                 decision = index_video_file(connection, path.resolve(), commit=False)
             elif is_raw(path):
@@ -374,6 +418,8 @@ def resolve_image_batch(
             counts[decision.status] += 1
             if decision.preexisting:
                 already_in_catalog += 1
+            if decision.content_changed:
+                changed_paths.append(str(path.resolve()))
             processed += 1
             if processed % RESOLVE_BATCH_COMMIT_SIZE == 0:
                 connection.commit()
@@ -386,8 +432,10 @@ def resolve_image_batch(
         "total": total,
         "status_counts": {key: value for key, value in counts.items() if value > 0},
         "already_in_catalog": already_in_catalog,
-        "newly_added": processed - already_in_catalog - skipped_deleted,
+        "newly_added": processed - already_in_catalog - skipped_deleted - deferred_files,
         "skipped_deleted": skipped_deleted,
+        "deferred_files": deferred_files,
+        "changed_paths": list(dict.fromkeys(changed_paths)),
     }
 
 
@@ -425,6 +473,7 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     (rendered by macOS) is the stand-in everywhere; see the preview pipeline.
     Mirrors index_video_file: rides the registry-based browse as 'unmatched'."""
     resolved = path.resolve()
+    previous_signature = _previous_asset_signature(connection, resolved)
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
     ).fetchone()
@@ -449,6 +498,9 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
         raw_asset_id=None,
         feature_vector={},
         preexisting=preexisting,
+        content_changed=_content_changed(
+            previous_signature, metadata.fingerprint, metadata.file_size, metadata.modified_time
+        ),
     )
     upsert_registry(connection, decision, commit=commit)
     return decision
@@ -457,6 +509,7 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
 def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecision:
     """Index a video as asset_type='video' — probe metadata, no RAW matching."""
     resolved = path.resolve()
+    previous_signature = _previous_asset_signature(connection, resolved)
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
     ).fetchone()
@@ -490,6 +543,9 @@ def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecisi
         raw_asset_id=None,
         feature_vector={},
         preexisting=preexisting,
+        content_changed=_content_changed(
+            previous_signature, fingerprint, stat.st_size, iso_mtime(resolved, stat)
+        ),
     )
     upsert_registry(connection, decision, commit=commit)
     return decision

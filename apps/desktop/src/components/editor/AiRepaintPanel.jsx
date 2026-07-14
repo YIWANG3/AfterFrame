@@ -801,7 +801,6 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
           onToggle={() => toggleSection("styles")}
           className={isUpscaleModel ? "opacity-40 pointer-events-none" : undefined}
           trailing={
-            /* eslint-disable-next-line jsx-a11y/click-events-have-key-events */
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"

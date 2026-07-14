@@ -37,6 +37,7 @@ from .db import (
     list_jobs,
     list_catalog_roots,
     list_image_assets,
+    list_assets_for_preview,
     list_pending,
     assign_faces_to_group,
     get_person_group_detail,
@@ -71,7 +72,7 @@ from .evaluation import evaluate_ground_truth
 from .ground_truth import export_ground_truth
 from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_people_index_job, run_preview_job
 from .preview_service import PreviewService
-from .metadata import extract_image_candidate
+from .metadata import extract_image_candidate, iso_mtime
 from .models import MatchDecision
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
@@ -262,6 +263,9 @@ def build_parser() -> argparse.ArgumentParser:
     previews.add_argument("--force", action="store_true")
     previews.add_argument("--path", action="append", dest="paths",
                           help="Limit to specific source file(s)/dir(s); repeatable. Used for on-demand HD generation.")
+
+    refresh_assets = subparsers.add_parser("refresh-assets", parents=[common])
+    refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
 
     browse = subparsers.add_parser("browse-images", parents=[common])
     browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], required=True)
@@ -1244,6 +1248,57 @@ def _cmd_generate_previews(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_refresh_assets(args, connection, catalog, parser):
+    paths = list(dict.fromkeys(path.resolve() for path in args.paths))
+    resolve_result = resolve_image_batch(
+        connection,
+        paths,
+        refresh=True,
+        validate_sources=True,
+        persist_roots=False,
+    )
+    service = PreviewService(catalog)
+    preview_result = service.generate_batch(
+        connection,
+        kind="preview",
+        force=True,
+        paths=paths,
+    )
+
+    # Respect the HD preference indirectly: refresh HD only where an entry
+    # already exists. A manual disk refresh must not create HD previews for a
+    # library that has HD generation disabled.
+    hd_paths = [
+        Path(row["canonical_path"])
+        for row in list_assets_for_preview(connection, kind="preview-hd", paths=paths)
+        if row["existing_relative_path"] and row["existing_status"] == "ready"
+    ]
+    preview_hd_result = (
+        service.generate_batch(
+            connection,
+            kind="preview-hd",
+            force=True,
+            paths=hd_paths,
+        )
+        if hd_paths
+        else {"generated": 0, "skipped": 0, "failed": 0, "deferred": 0, "total": 0}
+    )
+    payload = {
+        "requested": len(paths),
+        "refreshed": int(resolve_result.get("processed", 0)) - int(resolve_result.get("deferred_files", 0)),
+        "deferred": max(
+            int(resolve_result.get("deferred_files", 0)),
+            int(preview_result.get("deferred", 0)),
+            int(preview_hd_result.get("deferred", 0)),
+        ),
+        "failed": int(preview_result.get("failed", 0)) + int(preview_hd_result.get("failed", 0)),
+        "preview": preview_result,
+        "preview_hd": preview_hd_result,
+    }
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def _cmd_facet_values(args, connection, catalog, parser):
     from .db import get_facet_values
     print(json.dumps(get_facet_values(connection), ensure_ascii=False))
@@ -1254,6 +1309,29 @@ def _cmd_search_facet(args, connection, catalog, parser):
     from .db import search_facet_values
     print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit), ensure_ascii=False))
     return 0
+
+
+def _live_source_state(row) -> tuple[bool, bool]:
+    """Return live presence + whether disk contents differ from the catalog.
+
+    Browse already stats each visible source for the missing-file badge. Reuse
+    that same stat to expose legacy/stale imports: a completed editor overwrite
+    can leave a perfectly decodable but partial preview, so <img onError> alone
+    cannot discover it.
+    """
+    image_path = row["image_path"]
+    if not image_path:
+        return True, False
+    path = Path(image_path)
+    try:
+        stat = path.stat()
+    except OSError:
+        return False, False
+    source_changed = (
+        int(stat.st_size) != int(row["catalog_file_size"] or 0)
+        or iso_mtime(path, stat) != str(row["modified_time"] or "")
+    )
+    return True, source_changed
 
 
 def _cmd_browse_images(args, connection, catalog, parser):
@@ -1271,7 +1349,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
         preview_hd_path = None
         if row["preview_hd_relative_path"]:
             preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
-        present = os.path.exists(row["image_path"]) if row["image_path"] else True
+        present, source_changed = _live_source_state(row)
         payload.append(
             {
                 "asset_id": row["asset_id"],
@@ -1281,7 +1359,9 @@ def _cmd_browse_images(args, connection, catalog, parser):
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
                 "exists_on_disk": present,
+                "source_changed": source_changed,
                 "imported_at": row["imported_at"],
+                "modified_time": row["modified_time"],
                 "match_status": row["match_status"],
                 "score": row["score"],
                 "raw_asset_id": row["raw_asset_id"],
@@ -1679,6 +1759,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
         preview_hd_path = None
         if row["preview_hd_relative_path"]:
             preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
+        present, source_changed = _live_source_state(row)
         payload.append(
             {
                 "asset_id": row["asset_id"],
@@ -1687,7 +1768,10 @@ def _cmd_browse_collection(args, connection, catalog, parser):
                 "image_path": row["image_path"],
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
+                "exists_on_disk": present,
+                "source_changed": source_changed,
                 "imported_at": row["imported_at"],
+                "modified_time": row["modified_time"],
                 "match_status": row["match_status"],
                 "score": row["score"],
                 "raw_asset_id": row["raw_asset_id"],
@@ -1758,6 +1842,7 @@ COMMAND_HANDLERS = {
     "resolve-export-batch": _cmd_resolve_image_batch,
     "watch-images": _cmd_watch_images,
     "generate-previews": _cmd_generate_previews,
+    "refresh-assets": _cmd_refresh_assets,
     "facet-values": _cmd_facet_values,
     "search-facet": _cmd_search_facet,
     "browse-images": _cmd_browse_images,

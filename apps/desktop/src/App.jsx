@@ -210,7 +210,7 @@ export default function App() {
 
   // Assets the Edit menu acts on: the multi-selection, else the primary one.
   const targetAssetIds = () => {
-    if (selectedIds.size) return [...selectedIds];
+    if (selectedIds.length) return selectedIds;
     if (workspace.selectedAssetId) return [workspace.selectedAssetId];
     return [];
   };
@@ -218,7 +218,7 @@ export default function App() {
   const selectAllAssets = () => {
     if (editorItem || viewMode !== "assets") return false;
     if (!orderedIds.length) return false;
-    setSelectedIds(new Set(orderedIds));
+    setSelectedIds(orderedIds);
     return true;
   };
 
@@ -271,6 +271,44 @@ export default function App() {
       title: t(field === "name" ? "copiedName" : "copiedPath", { count: texts.length }),
       ttl: 2000,
     });
+  };
+
+  const refreshAssetsFromDisk = async (ids, { silent = false } = {}) => {
+    const paths = [...new Set((ids || []).map((id) => itemById.get(id)?.image_path).filter(Boolean))];
+    if (!paths.length) return null;
+    if (!silent) pushToast?.({ title: t("refreshingAssets", { count: paths.length }), ttl: 2500 });
+    try {
+      const result = await api.refreshAssets(paths);
+      await workspace.refreshAll({ force: true, preserveView: true });
+      const deferred = Number(result?.deferred || 0);
+      const failed = Number(result?.failed || 0);
+      const completed = Math.max(0, paths.length - deferred);
+      if (!silent) {
+        pushToast?.({
+          title: completed
+            ? t("refreshAssetsComplete", { count: completed })
+            : t("refreshAssetsPostponed"),
+          message: deferred
+            ? t("refreshAssetsDeferred", { count: deferred })
+            : failed
+              ? t("refreshAssetsSomeFailed", { count: failed })
+              : t("refreshAssetsCompleteMsg"),
+          tone: failed ? "error" : undefined,
+          ttl: 5000,
+        });
+      }
+      return result;
+    } catch (error) {
+      if (!silent) {
+        pushToast?.({
+          title: t("refreshAssetsFailed"),
+          message: error?.message || String(error),
+          tone: "error",
+          ttl: 6000,
+        });
+      }
+      return null;
+    }
   };
 
   // Fresh-closure handle so the menu subscription below can stay a one-time
@@ -357,7 +395,7 @@ export default function App() {
     return api.onExternalImport((paths) => externalImportRef.current?.(paths));
   }, []);
 
-  // Watched directories: live FSEvents imports (main → renderer) reuse the same
+  // Watched directories: live FSEvents adds/overwrites (main → renderer) reuse the same
   // import path as drag-drop / Finder-open (via externalImportRef). Marked
   // auto so they honor delete-tombstones (won't resurrect removed-on-disk files).
   useEffect(() => {
@@ -872,6 +910,7 @@ export default function App() {
                   onDeleteFromDisk={deleteFromDisk}
                   onCopyPath={(ids) => copyAssetField(ids, "path")}
                   onCopyName={(ids) => copyAssetField(ids, "name")}
+                  onRefreshFromDisk={refreshAssetsFromDisk}
                   onEdit={openEditor}
                   onOpenWith={handleOpenWith}
                   editors={externalEditors}

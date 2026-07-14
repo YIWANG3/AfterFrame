@@ -1,0 +1,14 @@
+{
+  "name": "afterframe-repository",
+  "private": true,
+  "scripts": {
+    "check": "npm run lint && npm test && npm run build",
+    "lint": "npm --prefix apps/desktop run lint",
+    "build": "npm --prefix apps/desktop run build",
+    "test": "npm run test:python && npm run test:electron && npm run test:renderer",
+    "test:python": "PYTHONPATH=services/sidecar/src python3 -m unittest discover -s tests",
+    "test:electron": "npm --prefix apps/desktop run test:electron",
+    "test:renderer": "npm --prefix apps/desktop run test:renderer",
+    "test:e2e": "npm --prefix apps/desktop run e2e"
+  }
+}

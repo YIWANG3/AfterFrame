@@ -41,6 +41,20 @@ By default, the app opens the last used catalog. To force a specific catalog:
 MEDIA_WORKSPACE_CATALOG=../../data/default.afcatalog npm start
 ```
 
+### Quality checks
+
+Run the standard repository gate from the repository root:
+
+```bash
+npm run check      # lint + Python/Node/Renderer unit tests + production build
+npm test           # all fast unit tests
+npm run test:e2e   # full Electron Playwright suite (macOS)
+```
+
+The root commands set the sidecar `PYTHONPATH` automatically. ESLint's checked-in
+bulk-suppression file records existing warnings by file and rule, so new lint or
+React Hooks violations still fail locally and in CI.
+
 ### Sidecar (Python backend)
 
 The desktop app calls the sidecar CLI automatically. For manual testing:
@@ -104,6 +118,19 @@ Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`
 Global settings (not per-catalog):
 - `~/Library/Application Support/afterframe/settings.json` — theme, sidebar width, last catalog path, AI provider config
 - `~/Library/Application Support/afterframe/ai-styles.json` — AI repaint style prompts
+
+## Catalog schema changes
+
+`services/sidecar/src/media_workspace/schema.py` is the only source of the
+catalog schema version. When changing persistent structure:
+
+1. Increment `SCHEMA_VERSION`.
+2. Add the next ordered migration to `db/migrations.py`.
+3. Add an old-catalog upgrade case to `tests/test_schema_migrations.py`.
+
+All migrations run in one transaction. Do not update `catalog_info.schema_version`
+from feature/domain modules or rely only on `CREATE TABLE IF NOT EXISTS` for an
+existing table change.
 
 ## Notes
 

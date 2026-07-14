@@ -108,6 +108,10 @@ export default function Lightbox({
     [currentItem],
   );
   const imagePath = sources[sourceIndex] || null;
+  const imageRevision = currentItem?.modified_time || currentItem?.image_metadata?.modified_time;
+  const imageUrl = imagePath
+    ? localFileUrl(imagePath) + (imageRevision ? `?r=${encodeURIComponent(imageRevision)}` : "")
+    : null;
   // Video: play the original directly (Chromium decodes h264/HEVC on macOS),
   // bypassing the image zoom/pan machinery. Falls back to the poster <img>
   // below when the original is missing.
@@ -489,8 +493,8 @@ export default function Lightbox({
           </>
         ) : imagePath ? (
           <img
-            key={localFileUrl(imagePath)}
-            src={localFileUrl(imagePath)}
+            key={imageUrl}
+            src={imageUrl}
             alt={currentItem.stem || ""}
             onLoad={handleImageLoad}
             onError={handleImageError}

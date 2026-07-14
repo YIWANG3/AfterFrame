@@ -1,0 +1,135 @@
+{
+  "src/App.jsx": {
+    "no-unused-vars": {
+      "count": 3
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 3
+    }
+  },
+  "src/components/AnnotationsSection.jsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 4
+    }
+  },
+  "src/components/CollageOverlay.jsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/DesignSystemPanel.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/EditorOverlay.jsx": {
+    "no-unused-vars": {
+      "count": 8
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 7
+    }
+  },
+  "src/components/Gallery.jsx": {
+    "no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/Inspector.jsx": {
+    "no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/components/Lightbox.jsx": {
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/StickerView.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/Toolbar.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/collage/CollageCanvas.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 6
+    }
+  },
+  "src/components/collage/CollagePanel.jsx": {
+    "no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/components/collage/ColorPickerPopover.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/editor/AiRepaintPanel.jsx": {
+    "no-unused-vars": {
+      "count": 5
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/editor/StickerPanel.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/editor/TextCanvas.jsx": {
+    "no-unused-vars": {
+      "count": 2
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/editor/TextPanel.jsx": {
+    "no-unused-vars": {
+      "count": 9
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "src/components/editor/state/useFrameTool.js": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/editor/state/useTextTool.js": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/settings/AnnotationSettings.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/settings/RepaintSettings.jsx": {
+    "no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/hooks/useJobs.js": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "src/hooks/useWorkspace.js": {
+    "react-hooks/exhaustive-deps": {
+      "count": 5
+    }
+  }
+}

@@ -184,6 +184,8 @@
       "annotateSkip": "Annotate{{suffix}} (skip done)",
       "reannotate": "Re-annotate{{suffix}}",
       "reveal": "Reveal in Finder",
+      "refreshFromDisk_one": "Refresh from Disk",
+      "refreshFromDisk_other": "Refresh {{count}} from Disk",
       "copyPath": "Copy File Path",
       "copyName": "Copy Name",
       "openWith": "Open With"

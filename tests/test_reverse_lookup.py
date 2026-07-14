@@ -24,6 +24,63 @@ from media_workspace.scanner import scan_raw_directory
 
 
 class ReverseLookupTest(unittest.TestCase):
+    def test_auto_import_defers_incomplete_first_time_jpeg(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            export = root / "still-writing.jpg"
+            export.write_bytes(b"\xff\xd8partial-without-eoi")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+
+            result = resolve_image_batch(
+                connection, [export], refresh=True, respect_tombstones=True
+            )
+
+            self.assertEqual(result["deferred_files"], 1)
+            self.assertEqual(result["newly_added"], 0)
+            self.assertIsNone(get_registry(connection, export))
+
+    def test_explicit_refresh_defers_incomplete_jpeg_before_metadata_update(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            export = root / "still-writing.jpg"
+            export.write_bytes(b"\xff\xd8partial-without-eoi")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+
+            result = resolve_image_batch(
+                connection, [export], refresh=True, validate_sources=True
+            )
+
+            self.assertEqual(result["deferred_files"], 1)
+            self.assertEqual(result["newly_added"], 0)
+            self.assertIsNone(get_registry(connection, export))
+
+    def test_overwrite_reports_changed_path_and_preserves_asset_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            export = root / "export.jpg"
+            export.write_bytes(b"\xff\xd8first-export\xff\xd9")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+
+            first = resolve_image_batch(connection, [export], refresh=True)
+            first_asset_id = get_registry(connection, export)["image_asset_id"]
+            self.assertEqual(first["changed_paths"], [])
+
+            export.write_bytes(b"\xff\xd8replacement-export-with-new-bytes\xff\xd9")
+            second = resolve_image_batch(connection, [export], refresh=True)
+            second_asset_id = get_registry(connection, export)["image_asset_id"]
+
+            self.assertEqual(second["changed_paths"], [str(export.resolve())])
+            self.assertEqual(second_asset_id, first_asset_id)
+
     def test_plain_files_resolve_by_stem_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

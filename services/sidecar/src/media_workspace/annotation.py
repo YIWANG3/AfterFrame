@@ -54,7 +54,7 @@ JPEG_QUALITY = 85
 HTTP_TIMEOUT = 60
 DEFAULT_MAX_TAGS = 10
 DEFAULT_MAX_CAPTION_CHARS = 200
-SCHEMA_VERSION = 1
+ANNOTATION_SCHEMA_VERSION = 1
 
 # How many existing tags to inject into the prompt as "prefer these"
 TAG_REUSE_HINT_LIMIT = 200
@@ -400,7 +400,7 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
             asset_id,
             result.provider,
             result.model,
-            SCHEMA_VERSION,
+            ANNOTATION_SCHEMA_VERSION,
             result.caption,
             json.dumps(merged_tags, ensure_ascii=False),
             json.dumps(result.location, ensure_ascii=False) if result.location else None,
@@ -601,7 +601,7 @@ def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, so
                  location_json, detected_text, raw_response, created_at, updated_at)
             VALUES (?, 'user', 'manual', ?, '', ?, NULL, NULL, NULL, ?, ?)
             """,
-            (asset_id, SCHEMA_VERSION, json.dumps([tag], ensure_ascii=False), now, now),
+            (asset_id, ANNOTATION_SCHEMA_VERSION, json.dumps([tag], ensure_ascii=False), now, now),
         )
     if commit:
         connection.commit()

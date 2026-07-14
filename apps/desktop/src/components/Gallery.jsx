@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -170,7 +170,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
@@ -254,6 +254,11 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
         </MenuItem>
       )}
       <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.image_path); onClose(); }} />
+      <MenuItem
+        icon={RefreshCw}
+        label={t("gallery.menu.refreshFromDisk", { count: assetIds?.length || 1 })}
+        onClick={() => { void onRefreshFromDisk?.(assetIds || [item.asset_id]); onClose(); }}
+      />
       <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
@@ -416,7 +421,7 @@ const CardContent = memo(function CardContent({
       >
         {item.preview_path || item.image_path ? (
           <PreviewImage
-            src={localFileUrl(item.preview_path || item.image_path) + (bustToken ? `?r=${bustToken}` : "")}
+            src={localFileUrl(item.preview_path || item.image_path) + (bustToken || item.modified_time ? `?r=${encodeURIComponent(bustToken || item.modified_time)}` : "")}
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
@@ -505,6 +510,7 @@ export default function Gallery({
   onDeleteFromDisk,
   onCopyPath,
   onCopyName,
+  onRefreshFromDisk,
   onEdit,
   onOpenWith,
   editors,
@@ -529,38 +535,83 @@ export default function Gallery({
   const stableOnPrepareDrag = useCallback((id) => cardHandlersRef.current.onPrepareDragSelection?.(id), []);
   const stableOnContextMenu = useCallback((event, item) => cardHandlersRef.current.openContextMenu?.(event, item), []);
 
-  // On-demand thumbnail repair: when a preview <img> fails to load (missing or
-  // corrupt preview file), regenerate it for just that asset and cache-bust the
-  // src so the fixed file reloads — no re-import/restart needed. Once per asset
-  // per session (a still-broken retry won't loop).
+  // On-demand repair: when a preview <img> fails, re-read the source metadata
+  // and regenerate its preview, then cache-bust the src. This uses the same
+  // full refresh path as the context menu so an early 0-byte import also heals
+  // its missing dimensions. Two attempts per asset tolerate one transient
+  // startup/protocol error while still preventing an endless repair loop.
   const [previewBust, setPreviewBust] = useState({}); // asset_id -> cache-bust token
-  const previewRegenRef = useRef({ attempted: new Set(), pending: new Map(), timer: null });
+  const previewRegenRef = useRef({ attempts: new Map(), pending: new Map(), timer: null });
+  // Vite Fast Refresh preserves useRef values. Migrate the pre-refactor shape
+  // (`attempted: Set`) in place so a Gallery HMR does not require restarting
+  // Electron and cannot crash on `attempts.get(...)`.
+  if (!(previewRegenRef.current?.attempts instanceof Map)) {
+    const previous = previewRegenRef.current || {};
+    const attempts = new Map(
+      previous.attempted instanceof Set
+        ? [...previous.attempted].map((assetId) => [assetId, 1])
+        : [],
+    );
+    previewRegenRef.current = {
+      attempts,
+      pending: previous.pending instanceof Map ? previous.pending : new Map(),
+      timer: previous.timer || null,
+    };
+  }
   const flushPreviewRegen = useCallback(async () => {
     const st = previewRegenRef.current;
     st.timer = null;
     if (!st.pending.size) return;
     const batch = new Map(st.pending); // asset_id -> source path
     st.pending.clear();
-    try {
-      await window.mediaWorkspace?.regeneratePreviews?.([...batch.values()]);
-    } catch { /* leave the placeholder; nothing worse than before */ }
+    const repaired = await onRefreshFromDisk?.([...batch.keys()], { silent: true });
+    if (!repaired) return;
     setPreviewBust((cur) => {
       const next = { ...cur };
       const token = Date.now();
       for (const id of batch.keys()) next[id] = token;
       return next;
     });
-  }, []);
-  const stableOnPreviewError = useCallback((item) => {
+  }, [onRefreshFromDisk]);
+  const queueAssetRepair = useCallback((item) => {
     const st = previewRegenRef.current;
     const id = item?.asset_id;
     const src = item?.image_path || item?.preview_path;
-    if (!id || !src || st.attempted.has(id)) return;
-    st.attempted.add(id);
+    const attempts = st.attempts.get(id) || 0;
+    if (!id || !src || attempts >= 2) return;
+    st.attempts.set(id, attempts + 1);
     st.pending.set(id, src);
     if (st.timer) clearTimeout(st.timer);
     st.timer = setTimeout(flushPreviewRegen, 400); // batch a page's failures
   }, [flushPreviewRegen]);
+  const stableOnPreviewError = queueAssetRepair;
+
+  // A partial Lightroom overwrite can still produce a valid JPEG preview, so
+  // the browser never emits an image error. The browse response compares the
+  // live source stat with the catalog; missing metadata is another legacy
+  // signal. Repair either case as soon as the card enters the loaded page.
+  useEffect(() => {
+    for (const item of items) {
+      const metadata = item?.image_metadata || {};
+      const missingImageMetadata = item?.asset_type === "image" && (
+        Number(metadata.width || 0) <= 0
+        || Number(metadata.height || 0) <= 0
+        || Number(metadata.file_size || metadata.size_bytes || 0) <= 0
+      );
+      if (item?.source_changed || missingImageMetadata) queueAssetRepair(item);
+    }
+  }, [items, queueAssetRepair]);
+
+  const refreshFromDisk = useCallback(async (assetIds) => {
+    const result = await onRefreshFromDisk?.(assetIds);
+    if (!result) return;
+    const token = Date.now();
+    setPreviewBust((current) => {
+      const next = { ...current };
+      for (const assetId of assetIds || []) next[assetId] = token;
+      return next;
+    });
+  }, [onRefreshFromDisk]);
 
   const [containerWidth, setContainerWidth] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
@@ -946,6 +997,7 @@ export default function Gallery({
           onDeleteFromDisk={() => onDeleteFromDisk?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyPath={() => onCopyPath?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
+          onRefreshFromDisk={refreshFromDisk}
           onReveal={(path) => window.mediaWorkspace?.revealPath?.(path)}
           editors={editors}
           onOpenWith={(appPath) => onOpenWith?.(contextMenu.assetIds || [contextMenu.item.asset_id], appPath)}

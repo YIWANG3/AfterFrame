@@ -26,14 +26,14 @@ const KNOWN_EDITORS = [
 // Photoshop/Lightroom inside a per-app subfolder
 // (/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app).
 function collectApps(dir, out) {
-  let entries = [];
+  let entries;
   try { entries = fs.readdirSync(dir); } catch { return; }
   for (const entry of entries) {
     const full = path.join(dir, entry);
     if (entry.toLowerCase().endsWith(".app")) {
       out.push({ name: entry.slice(0, -4), appPath: full });
     } else {
-      let sub = [];
+      let sub;
       try { sub = fs.readdirSync(full); } catch { continue; }
       for (const s of sub) {
         if (s.toLowerCase().endsWith(".app")) {

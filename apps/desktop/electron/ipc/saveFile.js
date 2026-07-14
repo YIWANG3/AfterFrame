@@ -4,7 +4,6 @@
 
 const path = require("path");
 const fs = require("fs");
-const os = require("os");
 const sharp = require("sharp");
 
 function register({
@@ -78,68 +77,65 @@ function register({
 
     const discreteAngle = ((quarterTurns * 90) % 360 + 360) % 360;
 
-    try {
-      // Single pipeline merges EXIF + user transforms into one .rotate() call.
-      let pipeline = sharp(sourcePath, { limitInputPixels: false, sequentialRead: true });
+    // Single pipeline merges EXIF + user transforms into one .rotate() call.
+    let pipeline = sharp(sourcePath, { limitInputPixels: false, sequentialRead: true });
 
-      const combinedDiscreteAngle = (exif.angle + discreteAngle) % 360;
-      // XOR: EXIF flop and user flipX are both horizontal mirrors.
-      const effectiveFlipX = exif.flop !== flipX;
+    const combinedDiscreteAngle = (exif.angle + discreteAngle) % 360;
+    // XOR: EXIF flop and user flipX are both horizontal mirrors.
+    const effectiveFlipX = exif.flop !== flipX;
 
-      const totalAngle = combinedDiscreteAngle + freeAngle;
-      if (totalAngle !== 0) {
-        if (freeAngle === 0) {
-          pipeline = pipeline.rotate(combinedDiscreteAngle);
-        } else {
-          pipeline = pipeline.rotate(totalAngle, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
-        }
+    const totalAngle = combinedDiscreteAngle + freeAngle;
+    if (totalAngle !== 0) {
+      if (freeAngle === 0) {
+        pipeline = pipeline.rotate(combinedDiscreteAngle);
       } else {
-        // 0° but still need to suppress EXIF auto-orient
-        pipeline = pipeline.rotate(0);
+        pipeline = pipeline.rotate(totalAngle, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
       }
-
-      if (effectiveFlipX) pipeline = pipeline.flop();
-      if (flipY) pipeline = pipeline.flip();
-
-      // Track post-orient + post-discrete-rotation dimensions
-      let w = srcW;
-      let h = srcH;
-      if (discreteAngle === 90 || discreteAngle === 270) [w, h] = [h, w];
-
-      // Free-angle dimension expansion
-      if (freeAngle !== 0) {
-        const rad = (freeAngle * Math.PI) / 180;
-        const c = Math.abs(Math.cos(rad));
-        const s = Math.abs(Math.sin(rad));
-        const newW = w * c + h * s;
-        const newH = w * s + h * c;
-        w = newW;
-        h = newH;
-      }
-
-      // Normalized crop → pixel rect
-      if (crop) {
-        const left = Math.max(0, Math.round(crop.x * w));
-        const top = Math.max(0, Math.round(crop.y * h));
-        const cw = Math.min(Math.round(w) - left, Math.max(1, Math.round(crop.width * w)));
-        const ch = Math.min(Math.round(h) - top, Math.max(1, Math.round(crop.height * h)));
-        pipeline = pipeline.extract({ left, top, width: cw, height: ch });
-      }
-
-      pipeline = pipeline.keepMetadata();
-
-      const ext = path.extname(savePath).toLowerCase();
-      if (ext === ".png") pipeline = pipeline.png();
-      else if (ext === ".webp") pipeline = pipeline.webp({ quality });
-      else pipeline = pipeline.jpeg({ quality });
-
-      await fs.promises.mkdir(path.dirname(savePath), { recursive: true });
-      const result = await pipeline.toFile(savePath);
-
-      console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${savePath}`);
-      return { path: savePath, width: result.width, height: result.height };
-    } finally {
+    } else {
+      // 0° but still need to suppress EXIF auto-orient
+      pipeline = pipeline.rotate(0);
     }
+
+    if (effectiveFlipX) pipeline = pipeline.flop();
+    if (flipY) pipeline = pipeline.flip();
+
+    // Track post-orient + post-discrete-rotation dimensions
+    let w = srcW;
+    let h = srcH;
+    if (discreteAngle === 90 || discreteAngle === 270) [w, h] = [h, w];
+
+    // Free-angle dimension expansion
+    if (freeAngle !== 0) {
+      const rad = (freeAngle * Math.PI) / 180;
+      const c = Math.abs(Math.cos(rad));
+      const s = Math.abs(Math.sin(rad));
+      const newW = w * c + h * s;
+      const newH = w * s + h * c;
+      w = newW;
+      h = newH;
+    }
+
+    // Normalized crop → pixel rect
+    if (crop) {
+      const left = Math.max(0, Math.round(crop.x * w));
+      const top = Math.max(0, Math.round(crop.y * h));
+      const cw = Math.min(Math.round(w) - left, Math.max(1, Math.round(crop.width * w)));
+      const ch = Math.min(Math.round(h) - top, Math.max(1, Math.round(crop.height * h)));
+      pipeline = pipeline.extract({ left, top, width: cw, height: ch });
+    }
+
+    pipeline = pipeline.keepMetadata();
+
+    const ext = path.extname(savePath).toLowerCase();
+    if (ext === ".png") pipeline = pipeline.png();
+    else if (ext === ".webp") pipeline = pipeline.webp({ quality });
+    else pipeline = pipeline.jpeg({ quality });
+
+    await fs.promises.mkdir(path.dirname(savePath), { recursive: true });
+    const result = await pipeline.toFile(savePath);
+
+    console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${savePath}`);
+    return { path: savePath, width: result.width, height: result.height };
   });
 }
 
