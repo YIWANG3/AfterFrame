@@ -2,11 +2,13 @@ import { ChevronLeft, ChevronRight, Minus, Pencil, Plus, SwatchBook, X } from "l
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
+import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
 import VideoPlayer from "./VideoPlayer";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
 const WHEEL_ZOOM_SENSITIVITY = 0.014;
+const DETAIL_SETTLE_DELAY_MS = 180;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -69,15 +71,24 @@ export default function Lightbox({
   const { t } = useTranslation("nav");
   const viewportRef = useRef(null);
   const imageRef = useRef(null);
+  const detailImageRef = useRef(null);
+  const sliderRef = useRef(null);
+  const scaleLabelRef = useRef(null);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const activePointerIdRef = useRef(null);
   const viewRef = useRef(null);
   const fitScaleRef = useRef(1);
   const paintFrameRef = useRef(0);
-  const loadStartRef = useRef(0);
+  const detailReadyRef = useRef(false);
+  const detailVisibleRef = useRef(false);
+  const detailSettleTimerRef = useRef(null);
+  const canUseDetailRef = useRef(false);
+  const logicalSizeRef = useRef(null);
+  const activeAssetIdRef = useRef(null);
+  const detailUrlRef = useRef(null);
+  const isZoomedRef = useRef(false);
   const [naturalSize, setNaturalSize] = useState(null);
-  const [fitScale, setFitScale] = useState(1);
-  const [displayScale, setDisplayScale] = useState(1);
+  const [isZoomed, setIsZoomed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [loadState, setLoadState] = useState("loading");
   const [showLoadingText, setShowLoadingText] = useState(false);
@@ -88,23 +99,8 @@ export default function Lightbox({
 
   const clampedIndex = Math.max(0, Math.min(currentIndex, Math.max((items?.length || 1) - 1, 0)));
   const currentItem = items?.[clampedIndex] || null;
-  const sources = useMemo(
-    () => {
-      if (!currentItem) return [];
-      // When the original is known-missing, don't even attempt to load it (that
-      // would flash a broken image) — fall back to the HD preview for viewing.
-      // RAW originals (.cr3/.arw/…) can't be decoded by the renderer either, so
-      // skip the original and lead with the full-res HD preview generated on import.
-      const isRawOriginal = currentItem.asset_type === "raw";
-      const original = (currentItem.exists_on_disk === false || isRawOriginal) ? null : currentItem.image_path;
-      return [
-        original,
-        currentItem.preview_hd_path,
-        currentItem.image_preview_path,
-        currentItem.preview_path,
-        currentItem.raw_preview_path,
-      ].filter(Boolean);
-    },
+  const { baseSources: sources, detailPath } = useMemo(
+    () => buildLightboxSources(currentItem),
     [currentItem],
   );
   const imagePath = sources[sourceIndex] || null;
@@ -112,6 +108,13 @@ export default function Lightbox({
   const imageUrl = imagePath
     ? localFileUrl(imagePath) + (imageRevision ? `?r=${encodeURIComponent(imageRevision)}` : "")
     : null;
+  const detailUrl = detailPath
+    ? localFileUrl(detailPath) + (imageRevision ? `?r=${encodeURIComponent(imageRevision)}` : "")
+    : null;
+  const canUseDetail = Boolean(detailPath && detailPath !== imagePath);
+  activeAssetIdRef.current = currentItem?.asset_id || null;
+  detailUrlRef.current = detailUrl;
+  canUseDetailRef.current = canUseDetail;
   // Video: play the original directly (Chromium decodes h264/HEVC on macOS),
   // bypassing the image zoom/pan machinery. Falls back to the poster <img>
   // below when the original is missing.
@@ -136,10 +139,20 @@ export default function Lightbox({
 
   const metaWidth = Number(currentItem?.image_metadata?.width || 0);
   const metaHeight = Number(currentItem?.image_metadata?.height || 0);
-  const scale = displayScale;
-  const isZoomed = scale > fitScale + 0.001;
   const canGoPrev = clampedIndex > 0;
   const canGoNext = clampedIndex < (items?.length || 0) - 1;
+
+  function syncZoomedState(nextScale) {
+    const nextIsZoomed = nextScale > fitScaleRef.current + 0.001;
+    if (nextIsZoomed === isZoomedRef.current) return;
+    isZoomedRef.current = nextIsZoomed;
+    setIsZoomed(nextIsZoomed);
+  }
+
+  function paintScaleControls(nextScale) {
+    if (sliderRef.current) sliderRef.current.value = String(Math.log(clamp(nextScale, MIN_SCALE, MAX_SCALE)));
+    if (scaleLabelRef.current) scaleLabelRef.current.textContent = formatPercent(nextScale);
+  }
 
   function schedulePaint() {
     if (paintFrameRef.current) return;
@@ -148,15 +161,65 @@ export default function Lightbox({
       const image = imageRef.current;
       const current = viewRef.current;
       if (!image || !current) return;
-      image.style.transform = `translate3d(${current.tx}px, ${current.ty}px, 0) scale(${current.scale})`;
-      setDisplayScale(current.scale);
+      const transform = `translate3d(${current.tx}px, ${current.ty}px, 0) scale(${current.scale})`;
+      image.style.transform = transform;
+      // The detail layer only follows single-shot transforms (resize, reveal).
+      // During continuous interaction it is hidden first, so the full-size
+      // bitmap never gets resampled per wheel/drag frame.
+      if (detailVisibleRef.current && detailImageRef.current) {
+        detailImageRef.current.style.transform = transform;
+      }
+      paintScaleControls(current.scale);
     });
   }
 
-  function applyView(nextView) {
+  function applyView(nextView, previewDuringMotion = false) {
     if (!nextView) return;
+    if (previewDuringMotion) beginDetailInteraction();
+    else preferDetail();
     viewRef.current = nextView;
+    syncZoomedState(nextView.scale);
     schedulePaint();
+    if (previewDuringMotion) settleDetailInteraction();
+  }
+
+  function hideDetail() {
+    detailVisibleRef.current = false;
+    if (detailImageRef.current) detailImageRef.current.style.visibility = "hidden";
+  }
+
+  function revealDetail() {
+    const detailImage = detailImageRef.current;
+    const current = viewRef.current;
+    if (!detailImage || !detailReadyRef.current || !current || !canUseDetailRef.current) return;
+    detailImage.style.transform = imageRef.current?.style.transform || "";
+    detailImage.style.visibility = "visible";
+    detailVisibleRef.current = true;
+  }
+
+  function beginDetailInteraction() {
+    if (detailSettleTimerRef.current) {
+      clearTimeout(detailSettleTimerRef.current);
+      detailSettleTimerRef.current = null;
+    }
+    if (detailVisibleRef.current) hideDetail();
+  }
+
+  function preferDetail() {
+    if (detailSettleTimerRef.current) {
+      clearTimeout(detailSettleTimerRef.current);
+      detailSettleTimerRef.current = null;
+    }
+    if (!detailVisibleRef.current) revealDetail();
+  }
+
+  function settleDetailInteraction() {
+    if (!canUseDetailRef.current) return;
+    if (detailSettleTimerRef.current) clearTimeout(detailSettleTimerRef.current);
+    detailSettleTimerRef.current = setTimeout(() => {
+      detailSettleTimerRef.current = null;
+      revealDetail();
+    }, DETAIL_SETTLE_DELAY_MS);
   }
 
   function computeFit(width, height) {
@@ -177,12 +240,10 @@ export default function Lightbox({
     if (!width || !height) return;
     const fit = computeFit(width, height);
     fitScaleRef.current = fit.scale;
-    setFitScale(fit.scale);
-    setDisplayScale(fit.scale);
     applyView(fit);
   }
 
-  function zoomFromCenter(nextScale) {
+  function zoomFromCenter(nextScale, previewDuringMotion = false) {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const current = viewRef.current;
@@ -196,7 +257,7 @@ export default function Lightbox({
       scale: clampedScale,
       tx: cx - ratio * (cx - current.tx),
       ty: cy - ratio * (cy - current.ty),
-    });
+    }, previewDuringMotion);
   }
 
   // Synchronously reset image display state — must be called in the same
@@ -204,14 +265,22 @@ export default function Lightbox({
   // render after the swap already has loadState="loading" (image hidden).
   function resetImageState() {
     setNaturalSize(null);
-    setFitScale(1);
-    setDisplayScale(1);
     fitScaleRef.current = 1;
     viewRef.current = null;
+    detailReadyRef.current = false;
+    detailVisibleRef.current = false;
+    if (detailSettleTimerRef.current) {
+      clearTimeout(detailSettleTimerRef.current);
+      detailSettleTimerRef.current = null;
+    }
+    logicalSizeRef.current = null;
+    isZoomedRef.current = false;
+    setIsZoomed(false);
     setLoadState("loading");
     setShowLoadingText(false);
     setSourceIndex(0);
-    loadStartRef.current = performance.now();
+    activePointerIdRef.current = null;
+    setDragging(false);
   }
 
   // Only show "Loading..." text after a delay to avoid flicker on fast loads
@@ -223,12 +292,24 @@ export default function Lightbox({
 
   // Reset image load state when current item changes
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      if (paintFrameRef.current) cancelAnimationFrame(paintFrameRef.current);
+      paintFrameRef.current = 0;
+      if (detailSettleTimerRef.current) {
+        clearTimeout(detailSettleTimerRef.current);
+        detailSettleTimerRef.current = null;
+      }
+      activePointerIdRef.current = null;
+      detailReadyRef.current = false;
+      detailVisibleRef.current = false;
+      return;
+    }
     resetImageState();
   }, [open, currentItem?.asset_id, currentItem?.image_path, currentItem?.image_preview_path, currentItem?.raw_preview_path]);
 
   useEffect(() => () => {
     if (paintFrameRef.current) cancelAnimationFrame(paintFrameRef.current);
+    if (detailSettleTimerRef.current) clearTimeout(detailSettleTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -241,11 +322,10 @@ export default function Lightbox({
       if (frame) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const nextFit = computeFit(naturalSize.width, naturalSize.height);
-        fitScaleRef.current = nextFit.scale;
-        setFitScale(nextFit.scale);
         const current = viewRef.current;
-        if (!current || current.scale <= fitScaleRef.current + 0.001 || current.scale < nextFit.scale) {
-          setDisplayScale(nextFit.scale);
+        const wasAtFit = !current || current.scale <= fitScaleRef.current + 0.001;
+        fitScaleRef.current = nextFit.scale;
+        if (wasAtFit || current.scale < nextFit.scale) {
           applyView(nextFit);
         }
       });
@@ -256,7 +336,7 @@ export default function Lightbox({
       observer.disconnect();
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [fitScale, naturalSize, open]);
+  }, [naturalSize, open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -278,7 +358,7 @@ export default function Lightbox({
         scale: nextScale,
         tx: mx - ratio * (mx - current.tx),
         ty: my - ratio * (my - current.ty),
-      });
+      }, true);
     }
 
     viewport.addEventListener("wheel", handleWheel, { passive: false });
@@ -291,8 +371,20 @@ export default function Lightbox({
     const width = event.currentTarget.naturalWidth;
     const height = event.currentTarget.naturalHeight;
     if (!width || !height) return;
-    setNaturalSize({ width, height });
-    applyInitialFit(width, height);
+    const logicalSize = resolveLightboxLogicalSize(width, height, metaWidth, metaHeight);
+    const { width: logicalWidth, height: logicalHeight } = logicalSize;
+    logicalSizeRef.current = logicalSize;
+    event.currentTarget.style.width = `${logicalWidth}px`;
+    event.currentTarget.style.height = `${logicalHeight}px`;
+    setNaturalSize(logicalSize);
+    applyInitialFit(logicalWidth, logicalHeight);
+    if (detailImageRef.current) {
+      detailImageRef.current.style.width = `${logicalWidth}px`;
+      detailImageRef.current.style.height = `${logicalHeight}px`;
+      if (detailReadyRef.current && !detailSettleTimerRef.current) {
+        revealDetail();
+      }
+    }
     setLoadState("ready");
     // Cached images fire onLoad synchronously during render before refs commit,
     // so the first computeFit may see a null viewport and fall back to scale=1
@@ -303,18 +395,24 @@ export default function Lightbox({
       if (!viewport) return;
       const rect = viewport.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
-      applyInitialFit(width, height);
+      applyInitialFit(logicalWidth, logicalHeight);
     });
   }
 
   function applyInitialFit(width, height) {
     const fit = computeFit(width, height);
+    const previous = viewRef.current;
+    // A reload of the same item (preview repair, source fallback) must not
+    // yank an already-zoomed view back to Fit — keep the user's view and only
+    // refresh the fit reference.
+    const wasAtFit = !previous || previous.scale <= fitScaleRef.current + 0.001;
     fitScaleRef.current = fit.scale;
-    setFitScale(fit.scale);
-    setDisplayScale(fit.scale);
-    viewRef.current = fit;
+    const next = wasAtFit ? fit : previous;
+    viewRef.current = next;
+    syncZoomedState(next.scale);
+    paintScaleControls(next.scale);
     if (imageRef.current) {
-      imageRef.current.style.transform = `translate3d(${fit.tx}px, ${fit.ty}px, 0) scale(${fit.scale})`;
+      imageRef.current.style.transform = `translate3d(${next.tx}px, ${next.ty}px, 0) scale(${next.scale})`;
       imageRef.current.style.visibility = "visible";
     }
   }
@@ -329,7 +427,7 @@ export default function Lightbox({
 
   function handlePointerDown(event) {
     const current = viewRef.current;
-    if (event.button !== 0 || !isZoomed || !current) return;
+    if (event.button !== 0 || !isZoomedRef.current || !current) return;
     event.preventDefault();
     setDragging(true);
     activePointerIdRef.current = event.pointerId;
@@ -365,7 +463,7 @@ export default function Lightbox({
   function handleDoubleClick(event) {
     const current = viewRef.current;
     if (!current) return;
-    if (isZoomed) {
+    if (current.scale > fitScaleRef.current + 0.001) {
       resetToFit();
       return;
     }
@@ -384,7 +482,41 @@ export default function Lightbox({
   }
 
   function handleSliderChange(event) {
-    zoomFromCenter(Math.exp(Number(event.target.value)));
+    zoomFromCenter(Math.exp(Number(event.target.value)), true);
+  }
+
+  async function handleDetailLoad(event) {
+    const image = event.currentTarget;
+    const assetId = currentItem.asset_id;
+    const loadedUrl = detailUrl;
+    try {
+      await image.decode();
+    } catch {
+      // Chromium rejects decode() for very large bitmaps (EncodingError seen
+      // with ~100MP JPEGs) even though the image renders fine through the
+      // normal raster path. onLoad already proved the data is good — reveal
+      // anyway and accept the one-time raster cost.
+    }
+    if (
+      activeAssetIdRef.current !== assetId
+      || detailUrlRef.current !== loadedUrl
+      || detailImageRef.current !== image
+    ) return;
+    detailReadyRef.current = true;
+    const logicalSize = logicalSizeRef.current;
+    if (logicalSize) {
+      image.style.width = `${logicalSize.width}px`;
+      image.style.height = `${logicalSize.height}px`;
+    }
+    // A pending settle timer means the user is interacting; its callback
+    // reveals once the view stops moving.
+    if (!detailSettleTimerRef.current) revealDetail();
+  }
+
+  function handleDetailError(event) {
+    detailReadyRef.current = false;
+    detailVisibleRef.current = false;
+    event.currentTarget.style.visibility = "hidden";
   }
 
   return (
@@ -460,6 +592,7 @@ export default function Lightbox({
 
       <div
         ref={viewportRef}
+        data-lightbox-viewport="true"
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={handleDoubleClick}
         onPointerDown={handlePointerDown}
@@ -494,6 +627,7 @@ export default function Lightbox({
         ) : imagePath ? (
           <img
             key={imageUrl}
+            data-lightbox-layer="preview"
             src={imageUrl}
             alt={currentItem.stem || ""}
             onLoad={handleImageLoad}
@@ -508,6 +642,30 @@ export default function Lightbox({
               willChange: "transform",
             }}
             ref={imageRef}
+          />
+        ) : null}
+
+        {!isVideo && canUseDetail ? (
+          <img
+            key={detailUrl}
+            data-lightbox-layer="detail"
+            src={detailUrl}
+            alt=""
+            aria-hidden="true"
+            onLoad={handleDetailLoad}
+            onError={handleDetailError}
+            draggable={false}
+            decoding="async"
+            className="pointer-events-none absolute left-0 top-0 max-w-none select-none"
+            style={{
+              width: naturalSize ? `${naturalSize.width}px` : undefined,
+              height: naturalSize ? `${naturalSize.height}px` : undefined,
+              transformOrigin: "0 0",
+              transform: "translate3d(0, 0, 0) scale(1)",
+              visibility: "hidden",
+              willChange: "transform",
+            }}
+            ref={detailImageRef}
           />
         ) : null}
 
@@ -529,7 +687,9 @@ export default function Lightbox({
           <button
             type="button"
             className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-            onClick={() => zoomFromCenter(scale / 1.35)}
+            onClick={() => {
+              zoomFromCenter((viewRef.current?.scale || 1) / 1.35);
+            }}
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
@@ -538,25 +698,29 @@ export default function Lightbox({
             min={Math.log(MIN_SCALE)}
             max={Math.log(MAX_SCALE)}
             step={0.01}
-            value={Math.log(Math.min(MAX_SCALE, Math.max(scale, MIN_SCALE)))}
+            defaultValue={Math.log(1)}
             onChange={handleSliderChange}
+            ref={sliderRef}
             className="lightbox-slider pointer-events-auto w-32"
             aria-label={t("lightbox.zoomLevel")}
           />
           <button
             type="button"
             className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-            onClick={() => zoomFromCenter(scale * 1.35)}
+            onClick={() => {
+              zoomFromCenter((viewRef.current?.scale || 1) * 1.35);
+            }}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
+            ref={scaleLabelRef}
             className="pointer-events-auto ml-1 w-12 shrink-0 rounded-md px-1 py-0.5 text-center text-[11px] tabular-nums text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
             onClick={() => resetToFit()}
             title={t("lightbox.resetToFit")}
           >
-            {formatPercent(scale)}
+            {formatPercent(viewRef.current?.scale || 1)}
           </button>
         </div>
       )}
