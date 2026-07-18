@@ -1,13 +1,15 @@
 import { useTranslation } from "react-i18next";
-import { FolderPlus, FolderOpen } from "lucide-react";
+import { FolderPlus, FolderOpen, Images, Loader2 } from "lucide-react";
 import logo from "../assets/logo.png";
 
 /* First-run / no-catalog state. In packaged mode there is no default catalog,
    so a fresh install has none open — browsing is silently empty and importing
    would fail against a null catalog. This fills the gallery pane (sidebar +
-   menu stay reachable) and makes the next step explicit: create a catalog or
-   open an existing one. App renders it when info.catalogPath is empty. */
-export default function WelcomeOverlay({ onCreate, onOpen }) {
+   menu stay reachable) and makes the next step explicit: create a catalog,
+   open an existing one, or browse the bundled sample library (created on
+   first click — see openSampleCatalog in main). App renders it when
+   info.catalogPath is empty. */
+export default function WelcomeOverlay({ onCreate, onOpen, onSample, sampleBusy = false }) {
   const { t } = useTranslation("app");
 
   return (
@@ -33,6 +35,15 @@ export default function WelcomeOverlay({ onCreate, onOpen }) {
           >
             <FolderOpen className="h-4 w-4" />
             {t("welcome.open")}
+          </button>
+          <button
+            type="button"
+            onClick={onSample}
+            disabled={sampleBusy}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-panel text-[13px] text-text transition-colors hover:bg-hover focus:outline-none disabled:cursor-default disabled:opacity-60"
+          >
+            {sampleBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />}
+            {sampleBusy ? t("welcome.sampleLoading") : t("welcome.sample")}
           </button>
         </div>
 

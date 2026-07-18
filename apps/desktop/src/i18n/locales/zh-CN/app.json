@@ -8,7 +8,18 @@
     "subtitle": "新建一个图库开始整理照片，或打开已有的图库。",
     "explainer": "图库是一个 .afcatalog 文件夹，用来索引你的照片；原始文件留在原处，不会被移动或上传。",
     "create": "新建图库",
-    "open": "打开已有…"
+    "open": "打开已有…",
+    "sample": "浏览示例图库",
+    "sampleLoading": "正在准备示例图库…"
+  },
+  "sample": {
+    "banner": "你正在浏览示例图库，可以自由评分、编辑和创建合集。",
+    "createOwn": "创建我的图库",
+    "reset": "重置示例图库",
+    "resetConfirmTitle": "重置示例图库？",
+    "resetConfirmMsg": "示例图库中的评分、编辑和合集都会被清除。",
+    "resetConfirm": "重置",
+    "failed": "示例图库操作失败"
   },
   "noCatalogTitle": "未打开图库",
   "noCatalogMsg": "导入前请先新建或打开一个图库。",

@@ -25,6 +25,8 @@ const api = {
   pickDirectories: (...args) => invoke("pickDirectories", ...args),
   pickCatalog: (...args) => invoke("pickCatalog", ...args),
   createCatalog: (...args) => invoke("createCatalog", ...args),
+  openSampleCatalog: (...args) => invoke("openSampleCatalog", ...args),
+  resetSampleCatalog: (...args) => invoke("resetSampleCatalog", ...args),
 
   // ── agent bridge (MCP) ──
   onExternalImport: (...args) => invoke("onExternalImport", ...args),

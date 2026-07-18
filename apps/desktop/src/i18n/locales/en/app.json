@@ -8,7 +8,18 @@
     "subtitle": "Create a catalog to start organizing your photos, or open one you already have.",
     "explainer": "A catalog is a single .afcatalog folder that indexes your photos. Your original files stay where they are; nothing is moved or uploaded.",
     "create": "New Catalog",
-    "open": "Open Existing…"
+    "open": "Open Existing…",
+    "sample": "Browse Sample Library",
+    "sampleLoading": "Preparing sample library…"
+  },
+  "sample": {
+    "banner": "You're browsing the sample library. Feel free to rate, edit, and create collections.",
+    "createOwn": "Create My Library",
+    "reset": "Reset Sample Library",
+    "resetConfirmTitle": "Reset sample library?",
+    "resetConfirmMsg": "Ratings, edits, and collections in the sample library will be cleared.",
+    "resetConfirm": "Reset",
+    "failed": "Sample library action failed"
   },
   "noCatalogTitle": "No catalog open",
   "noCatalogMsg": "Create or open a catalog before importing.",

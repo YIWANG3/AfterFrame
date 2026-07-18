@@ -287,6 +287,7 @@ function workspaceInfo() {
     scratchCatalogPath,
     reviewCatalogPath,
     sidecarSrc,
+    isSampleCatalog: !!currentCatalogPath && currentCatalogPath === getSampleCatalogPath(),
   };
 }
 
@@ -307,6 +308,52 @@ function createCatalogAt(targetPath) {
   }
   fs.mkdirSync(normalizedPath, { recursive: true });
   return normalizedPath;
+}
+
+// ── Sample catalog ──────────────────────────────────────────────────────────
+// Bundled demo library for first-run exploration. Created on the user's first
+// click (never silently on install, so demo photos are never mistaken for the
+// user's own data) and reopened directly afterwards. It lives under userData —
+// app-owned, apart from real catalogs — and the bundled photos are copied
+// INSIDE the catalog folder, so resetting is one folder delete and the media
+// allowlist covers them without extra roots.
+const samplePhotosSource = isPackaged
+  ? path.join(process.resourcesPath, "sample-photos")
+  : path.join(__dirname, "..", "sample-photos");
+
+function getSampleCatalogPath() {
+  return path.join(app.getPath("userData"), "afterframe", "sample.afcatalog");
+}
+
+function dirHasCatalogDb(dirPath) {
+  try {
+    return fs.readdirSync(dirPath).some((e) => e.endsWith(".sqlite3") || e === "catalog.db");
+  } catch {
+    return false;
+  }
+}
+
+async function openSampleCatalog({ reset = false } = {}) {
+  const samplePath = getSampleCatalogPath();
+  if (reset && fs.existsSync(samplePath)) {
+    stopResidentSidecar(); // release sqlite handles before deleting
+    fs.rmSync(samplePath, { recursive: true, force: true });
+  }
+  // No DB yet means the catalog was never populated (or was reset / deleted
+  // externally) — copy the bundled photos and import them. Both steps are
+  // idempotent, so an interrupted first open self-heals on the next one.
+  const fresh = !dirHasCatalogDb(samplePath);
+  const photosDir = path.join(samplePath, "photos");
+  if (fresh) {
+    fs.mkdirSync(samplePath, { recursive: true });
+    fs.cpSync(samplePhotosSource, photosDir, { recursive: true });
+  }
+  await switchCatalogTo(samplePath);
+  if (fresh) {
+    await registerRoots("image", [photosDir]);
+    await startImportTask({ mode: "processed_only", imageDirs: [photosDir] });
+  }
+  return { path: samplePath, fresh };
 }
 
 // Sidecar transport lives in ./sidecar/transport.js — resident process,
@@ -1072,7 +1119,7 @@ ipcMain.handle("workspace:create-catalog", async () => {
   return createCatalogAt(result.filePath);
 });
 
-ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
+async function switchCatalogTo(nextCatalogPath) {
   console.log("[ipc:switch-catalog] nextCatalogPath:", nextCatalogPath, "scratchCatalogPath:", scratchCatalogPath);
   if (!nextCatalogPath && !scratchCatalogPath) {
     currentCatalogPath = null;
@@ -1097,7 +1144,13 @@ ipcMain.handle("workspace:switch-catalog", async (_event, nextCatalogPath) => {
     await updateAppSettings((s) => ({ ...s, lastCatalogPath: currentCatalogPath }));
   }
   return true;
-});
+}
+
+ipcMain.handle("workspace:switch-catalog", (_event, nextCatalogPath) => switchCatalogTo(nextCatalogPath));
+
+ipcMain.handle("workspace:open-sample-catalog", () => openSampleCatalog());
+
+ipcMain.handle("workspace:reset-sample-catalog", () => openSampleCatalog({ reset: true }));
 
 editorsIpc.register({ ipcMain });
 

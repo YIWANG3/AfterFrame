@@ -58,6 +58,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "sample-photos",
+        "to": "sample-photos",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,

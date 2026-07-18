@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   registerRoots: (rootType, paths) => ipcRenderer.invoke("workspace:register-roots", rootType, paths),
   createCatalog: () => ipcRenderer.invoke("workspace:create-catalog"),
   pickCatalog: () => ipcRenderer.invoke("workspace:pick-catalog"),
+  openSampleCatalog: () => ipcRenderer.invoke("workspace:open-sample-catalog"),
+  resetSampleCatalog: () => ipcRenderer.invoke("workspace:reset-sample-catalog"),
   switchCatalog: (catalogPath) => ipcRenderer.invoke("workspace:switch-catalog", catalogPath),
   getImportStatus: () => ipcRenderer.invoke("workspace:import-status"),
   startImport: (options) => ipcRenderer.invoke("workspace:import-start", options),

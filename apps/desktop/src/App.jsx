@@ -16,6 +16,7 @@ import Lightbox from "./components/Lightbox";
 import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
 import WelcomeOverlay from "./components/WelcomeOverlay";
+import SampleCatalogBanner from "./components/SampleCatalogBanner";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import FilterBar from "./components/FilterBar";
@@ -52,6 +53,7 @@ export default function App() {
   const [editorItem, setEditorItem] = useState(null);
   const [externalEditors, setExternalEditors] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sampleBusy, setSampleBusy] = useState(false);
   const [proofMode, setProofMode] = useState(false);
   const [layoutItems, setLayoutItems] = useState([]);
   const [compareState, setCompareState] = useState(null);
@@ -455,6 +457,37 @@ export default function App() {
     if (selected) await workspace.switchCatalog(selected);
   }
 
+  // Sample catalog: main creates/populates it on first use (openSampleCatalog),
+  // then the normal switchCatalog path resets renderer state and picks up the
+  // running import job. Reset deletes and rebuilds the same catalog.
+  const isSampleCatalog = !!workspace.info?.isSampleCatalog;
+  async function runSampleCatalogAction(action) {
+    if (sampleBusy) return;
+    setSampleBusy(true);
+    try {
+      const res = await action();
+      if (res?.path) await workspace.switchCatalog(res.path);
+    } catch (err) {
+      pushToast({ title: t("sample.failed"), message: String(err?.message || err), tone: "error", ttl: 6000 });
+    } finally {
+      setSampleBusy(false);
+    }
+  }
+  function handleOpenSampleCatalog() {
+    return runSampleCatalogAction(() => api.openSampleCatalog());
+  }
+  async function handleResetSampleCatalog() {
+    const ok = await confirm({
+      title: t("sample.resetConfirmTitle"),
+      message: t("sample.resetConfirmMsg"),
+      confirmLabel: t("sample.resetConfirm"),
+      cancelLabel: t("cancel"),
+      danger: true,
+    });
+    if (!ok) return;
+    await runSampleCatalogAction(() => api.resetSampleCatalog());
+  }
+
   // External editors for the right-click "Open with" submenu (auto-detected once).
   useEffect(() => {
     Promise.resolve(api.detectEditors?.())
@@ -798,8 +831,20 @@ export default function App() {
           onDragLeave={viewMode === "assets" ? handleGalleryDragLeave : undefined}
           onDrop={viewMode === "assets" ? handleGalleryDrop : undefined}
         >
+          {!noCatalog && isSampleCatalog ? (
+            <SampleCatalogBanner
+              onCreateOwn={handleCreateCatalog}
+              onReset={handleResetSampleCatalog}
+              busy={sampleBusy}
+            />
+          ) : null}
           {noCatalog ? (
-            <WelcomeOverlay onCreate={handleCreateCatalog} onOpen={handleOpenCatalog} />
+            <WelcomeOverlay
+              onCreate={handleCreateCatalog}
+              onOpen={handleOpenCatalog}
+              onSample={handleOpenSampleCatalog}
+              sampleBusy={sampleBusy}
+            />
           ) : viewMode === "stickers" ? (
             <>
               <StickerToolbar
