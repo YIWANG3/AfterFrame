@@ -131,6 +131,17 @@ export default function App() {
     workspaceRef.current.applyFilters(rest);
   }, [mapExpanded]);
 
+  // Entering a collection drops it too: browse-collection ignores facet
+  // filters, so the chip would claim to filter while doing nothing — and the
+  // stale viewport would silently re-engage on leaving the collection.
+  useEffect(() => {
+    if (!workspace.activeCollectionId) return;
+    const current = workspaceRef.current.filters;
+    if (!current?.geo) return;
+    const { geo: _geo, ...rest } = current;
+    workspaceRef.current.applyFilters(rest);
+  }, [workspace.activeCollectionId]);
+
   const peopleGroups = usePeopleGroups({
     pushToast,
     enabled: viewMode === "people",
@@ -993,7 +1004,7 @@ export default function App() {
                   search={workspace.query}
                   filters={workspace.filters}
                   catalogKey={workspace.info?.catalogPath || null}
-                  refreshToken={Number(workspace.summary?.image_assets ?? 0)}
+                  refreshToken={workspace.catalogRevision}
                   onViewportChange={handleViewportChange}
                   onSelectAsset={selectSingle}
                 />

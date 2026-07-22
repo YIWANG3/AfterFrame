@@ -39,6 +39,11 @@ export default function useWorkspace({ pushToast } = {}) {
   const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [], auto: false });
   const [collections, setCollections] = useState([]);
   const [activeCollectionId, setActiveCollectionId] = useState(null);
+  // Monotonic catalog-content revision: bumped on every refreshAll and every
+  // catalog-changed event (imports, deletes, metadata refresh, agent writes).
+  // Consumers (the map point cache) use it as an invalidation token — asset
+  // COUNTS can stay identical across real changes, so counting is not enough.
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const browserRequestIdRef = useRef(0);
   // While an agent-driven reveal resets query/filters/status, the reload
   // effects below must not fire — the reveal does one imperative load itself.
@@ -276,6 +281,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const catalogChangedRef = useRef(null);
   catalogChangedRef.current = (payload) => {
     const scope = payload?.scope;
+    setCatalogRevision((revision) => revision + 1);
     // Surface agent writes as a toast (jobs excluded — JobDock already shows
     // those). App.jsx watches lastAgentChange.
     if (payload?.reason === "agent" && scope !== "jobs") {
@@ -551,6 +557,7 @@ export default function useWorkspace({ pushToast } = {}) {
       loadCollections(),
       loadBrowser({ nextStatus, collectionId, force, preserveView, facetFilters }),
     ]);
+    setCatalogRevision((revision) => revision + 1);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
     void api.getFacetValues().then(setFacetValues).catch(() => {});
@@ -855,6 +862,7 @@ export default function useWorkspace({ pushToast } = {}) {
     pokeJobs,
     collections,
     activeCollectionId,
+    catalogRevision,
     selectCollection,
     clearCollection,
     filterByPerson,

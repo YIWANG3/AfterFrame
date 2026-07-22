@@ -23,11 +23,12 @@ from media_workspace.db import (  # noqa: E402
     list_map_points,
     upsert_asset_location_from_metadata,
     upsert_image_asset,
+    upsert_raw_asset,
     upsert_registry,
 )
 from media_workspace.db.browse import _facet_clauses  # noqa: E402
 from media_workspace.db.migrations import migrate  # noqa: E402
-from media_workspace.models import ImageCandidate, MatchDecision  # noqa: E402
+from media_workspace.models import ImageCandidate, MatchDecision, RawMetadata  # noqa: E402
 from media_workspace.schema import SCHEMA_VERSION  # noqa: E402
 
 
@@ -78,7 +79,14 @@ class LocationTestCase(unittest.TestCase):
 
     # -- helpers ---------------------------------------------------------
 
-    def _import_image(self, lat: float | None, lon: float | None, *, rating: int | None = None) -> str:
+    def _import_image(
+        self,
+        lat: float | None,
+        lon: float | None,
+        *,
+        rating: int | None = None,
+        raw_asset_id: str | None = None,
+    ) -> str:
         asset_id = f"asset_{uuid4().hex[:8]}"
         path = f"/photos/{asset_id}.jpg"
         candidate = _image_candidate(asset_id, path, lat, lon)
@@ -88,9 +96,9 @@ class LocationTestCase(unittest.TestCase):
             MatchDecision(
                 image_asset_id=asset_id,
                 image_path=Path(path),
-                status="unmatched",
-                score=0.0,
-                raw_asset_id=None,
+                status="auto_bound" if raw_asset_id else "unmatched",
+                score=1.0 if raw_asset_id else 0.0,
+                raw_asset_id=raw_asset_id,
                 feature_vector={},
             ),
             commit=False,
@@ -100,6 +108,46 @@ class LocationTestCase(unittest.TestCase):
                 "UPDATE assets SET app_rating = ? WHERE asset_id = ?", (rating, asset_id)
             )
         self.connection.commit()
+        return asset_id
+
+    def _import_raw(self, lat: float | None, lon: float | None) -> str:
+        asset_id = f"raw_{uuid4().hex[:8]}"
+        upsert_raw_asset(
+            self.connection,
+            RawMetadata(
+                asset_id=asset_id,
+                path=Path(f"/photos/{asset_id}.cr3"),
+                stem=asset_id,
+                normalized_stem=asset_id,
+                stem_key=asset_id,
+                extension=".cr3",
+                fingerprint=f"fp-{asset_id}",
+                file_size=1234,
+                modified_time="2026-07-21T00:00:00",
+                capture_time="2026-07-20T12:00:00",
+                rating=None,
+                camera_make=None,
+                camera_model="R6m2",
+                lens_model=None,
+                software=None,
+                iso=None,
+                aperture=None,
+                shutter_speed=None,
+                focal_length=None,
+                flash=None,
+                white_balance=None,
+                color_space=None,
+                lens_specification=None,
+                gps_latitude=lat,
+                gps_longitude=lon,
+                width=6000,
+                height=4000,
+                metadata_level="full",
+                fingerprint_level="head-tail",
+                enrichment_status="done",
+            ),
+            commit=True,
+        )
         return asset_id
 
     def _locations(self) -> list[dict]:
@@ -271,6 +319,52 @@ class LocationTestCase(unittest.TestCase):
         self.assertEqual(row["source"], "exif")
         self.assertEqual(row["precision_level"], "exact")
         self.assertIsNone(row["preview_relative_path"])
+
+    # -- RAW fallback (effective location) -------------------------------
+
+    def test_raw_gps_falls_back_into_map_points_and_geo_filter(self):
+        # The common case: RAW keeps GPS, the exported JPEG had it stripped.
+        raw_id = self._import_raw(48.8566, 2.3522)
+        image_id = self._import_image(None, None, raw_asset_id=raw_id)
+
+        points = {row["asset_id"]: row for row in list_map_points(self.connection, status="all")}
+        self.assertIn(image_id, points)
+        self.assertAlmostEqual(points[image_id]["latitude"], 48.8566)
+        self.assertEqual(points[image_id]["source"], "exif")
+
+        europe = {"mode": "bounds", "west": -5.0, "south": 41.0, "east": 10.0, "north": 52.0}
+        self.assertIn(image_id, self._browse_geo_ids(europe))
+
+    def test_own_gps_wins_over_raw_gps(self):
+        raw_id = self._import_raw(35.6895, 139.6917)  # RAW says Tokyo
+        image_id = self._import_image(48.8566, 2.3522, raw_asset_id=raw_id)  # image says Paris
+
+        points = {row["asset_id"]: row for row in list_map_points(self.connection, status="all")}
+        self.assertAlmostEqual(points[image_id]["latitude"], 48.8566)
+
+        japan = {"mode": "bounds", "west": 128.0, "south": 30.0, "east": 146.0, "north": 46.0}
+        europe = {"mode": "bounds", "west": -5.0, "south": 41.0, "east": 10.0, "north": 52.0}
+        # Effective location is the image's own — the RAW's Tokyo must not match.
+        self.assertIn(image_id, self._browse_geo_ids(europe))
+        self.assertNotIn(image_id, self._browse_geo_ids(japan))
+
+    def test_map_points_collection_scope_ignores_search_and_facets(self):
+        # browse_collection accepts neither search nor facets, so the map in
+        # collection scope must ignore them too or it shows a narrower set.
+        paris = self._import_image(48.8566, 2.3522)
+        self.connection.execute(
+            "INSERT INTO collections (collection_id, name, kind) VALUES ('col1', 'Trip', 'manual')"
+        )
+        self.connection.execute(
+            "INSERT INTO collection_items (collection_id, asset_id) VALUES ('col1', ?)", (paris,)
+        )
+        self.connection.commit()
+        ids = self._map_asset_ids(
+            collection_id="col1",
+            search="no-such-photo",
+            filters={"camera": "OtherCam"},
+        )
+        self.assertEqual(ids, {paris})
 
     # -- migration -------------------------------------------------------
 

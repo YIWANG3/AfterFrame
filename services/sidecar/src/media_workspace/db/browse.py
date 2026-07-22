@@ -100,6 +100,10 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
     bounds mode filters by the map viewport via the R*Tree; when the viewport
     crosses the antimeridian (west > east) the longitude test is split into two
     ranges on the base table instead. place mode (Phase 2 UI) matches place_id.
+
+    Matches against the asset's EFFECTIVE location: its own row, or — only when
+    it has none — the paired RAW's (registry.raw_asset_id). Same fallback order
+    as list_map_points and the Inspector display.
     """
     if not isinstance(geo, dict):
         return None
@@ -125,44 +129,54 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
         place_id = geo.get("place_id")
         if not place_id:
             return None
-        return (
-            "EXISTS (SELECT 1 FROM asset_locations loc "
-            f"WHERE loc.asset_id = assets.asset_id AND loc.place_id = ?{extra_conditions})",
-            [place_id, *extra_params],
-        )
-
-    if geo.get("mode") != "bounds":
+        location_join = ""
+        location_conditions = "loc.place_id = ?" + extra_conditions
+        location_params: list[object] = [place_id, *extra_params]
+    elif geo.get("mode") == "bounds":
+        try:
+            west = float(geo["west"])
+            south = float(geo["south"])
+            east = float(geo["east"])
+            north = float(geo["north"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if west <= east:
+            location_join = (
+                "JOIN asset_location_rtree geo_idx ON geo_idx.location_id = loc.location_id"
+            )
+            location_conditions = (
+                "geo_idx.max_longitude >= ? AND geo_idx.min_longitude <= ? "
+                "AND geo_idx.max_latitude >= ? AND geo_idx.min_latitude <= ?"
+            ) + extra_conditions
+            location_params = [west, east, south, north, *extra_params]
+        else:
+            # Viewport crosses the antimeridian: split the longitude test in two.
+            location_join = ""
+            location_conditions = (
+                "loc.max_latitude >= ? AND loc.min_latitude <= ? "
+                "AND (loc.max_longitude >= ? OR loc.min_longitude <= ?)"
+            ) + extra_conditions
+            location_params = [south, north, west, east, *extra_params]
+    else:
         return None
-    try:
-        west = float(geo["west"])
-        south = float(geo["south"])
-        east = float(geo["east"])
-        north = float(geo["north"])
-    except (KeyError, TypeError, ValueError):
-        return None
 
-    if west <= east:
-        return (
-            """EXISTS (
-                SELECT 1
-                FROM asset_locations loc
-                JOIN asset_location_rtree geo_idx ON geo_idx.location_id = loc.location_id
-                WHERE loc.asset_id = assets.asset_id
-                  AND geo_idx.max_longitude >= ? AND geo_idx.min_longitude <= ?
-                  AND geo_idx.max_latitude >= ? AND geo_idx.min_latitude <= ?"""
-            + extra_conditions + ")",
-            [west, east, south, north, *extra_params],
-        )
-    # Viewport crosses the antimeridian: split the longitude test in two.
-    return (
-        """EXISTS (
+    clause = f"""(
+        EXISTS (
             SELECT 1 FROM asset_locations loc
-            WHERE loc.asset_id = assets.asset_id
-              AND loc.max_latitude >= ? AND loc.min_latitude <= ?
-              AND (loc.max_longitude >= ? OR loc.min_longitude <= ?)"""
-        + extra_conditions + ")",
-        [south, north, west, east, *extra_params],
-    )
+            {location_join}
+            WHERE loc.asset_id = assets.asset_id AND {location_conditions}
+        )
+        OR (
+            NOT EXISTS (SELECT 1 FROM asset_locations self_loc WHERE self_loc.asset_id = assets.asset_id)
+            AND EXISTS (
+                SELECT 1 FROM image_lookup_registry reg
+                JOIN asset_locations loc ON loc.asset_id = reg.raw_asset_id
+                {location_join}
+                WHERE reg.image_asset_id = assets.asset_id AND {location_conditions}
+            )
+        )
+    )"""
+    return clause, [*location_params, *location_params]
 
 
 def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:

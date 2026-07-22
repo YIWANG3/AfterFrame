@@ -24,8 +24,11 @@ export default function MapDrawer({
   const hasOpenedRef = useRef(false);
   if (expanded) hasOpenedRef.current = true;
 
+  // Fetch only while visible: a collapsed drawer must not pay for scope
+  // changes (typing in search fires one 100k-row query per key otherwise).
+  // The MapLibre instance itself stays mounted across collapses regardless.
   const { points } = useMapPoints({
-    enabled: hasOpenedRef.current,
+    enabled: expanded,
     status,
     collectionId,
     search,

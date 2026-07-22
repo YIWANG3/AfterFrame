@@ -81,4 +81,109 @@ EXIF GPS (metadata_json)
 
 ## Review Findings
 
-（评审 agent 从这里开始追加）
+### 2026-07-21 Codex Review
+
+- [x] **[P1] 配对 RAW 中的 GPS 不会进入地图或地理筛选**
+
+  `db/locations.py:list_map_points` 只把 `asset_locations` 连接到
+  `registry.image_asset_id`；`browse.py:_geo_filter_clause` 同样只检查 Gallery
+  image asset 自身的位置。RAW 的位置虽然会在 `upsert_raw_asset` 时写入，
+  但没有被这两条读取路径使用。因此常见的“RAW 保留 GPS、导出 JPEG 已剥离
+  GPS”照片不会出现在地图，viewport geo filter 也找不到；与此同时
+  `Inspector.jsx` 已经采用 `rawMeta.gps_* ?? imageMeta.gps_*`，两处位置语义不一致。
+
+  建议建立统一的 effective-location 查询（image location 不存在时回退
+  `registry.raw_asset_id` 的位置），并让 map points 与 geo facet 共用。需要新增
+  “RAW 有 GPS、配对 image 无 GPS”的回归测试。
+
+  > **已修复**：`list_map_points` 改为 FROM registry LEFT JOIN 双 asset_locations（image 优先，COALESCE 取 effective location）；`_geo_filter_clause` 重构为 `image 位置匹配 OR (image 无位置 AND raw 位置匹配)` 两段 EXISTS，与 Inspector 回退语义一致。新增测试 `test_raw_gps_falls_back_into_map_points_and_geo_filter`、`test_own_gps_wins_over_raw_gps`。
+
+- [x] **[P1] 地图点查询没有搜索防抖，且地图打开一次后折叠状态仍持续查询**
+
+  `MapDrawer.jsx` 用 `hasOpenedRef.current` 永久启用 `useMapPoints`；
+  `useMapPoints.js` 又直接把原始 `search` 放进 cache key/effect。用户每输入一个
+  字符都会发起一次最多 100,000 行的地图查询。React cleanup/request id 只能丢弃
+  旧响应，不能取消 sidecar 中已经开始的 SQL 与 JSON 序列化；地图折叠后该成本
+  仍会持续发生。
+
+  建议复用 Gallery 的 250ms committed/debounced search，并在折叠时暂停地图点
+  请求；重新展开时再用最新 cache key 拉取，MapLibre 实例本身仍可保留。
+
+  > **已修复**：`useMapPoints` 网络请求加 250ms debounce（缓存命中仍即时）；`MapDrawer` 的 `enabled` 从 `hasOpened` 改为 `expanded`——折叠时不再发起请求，重新展开按最新 cache key 拉取，MapLibre 实例保留不重建。
+
+- [x] **[P1] Collection 中地图和 Gallery 的数据范围不一致**
+
+  `list_map_points` 进入 collection scope 后仍无条件应用 search 和非 geo facet；
+  但 `browse_collection` 不接收 search、sort 或 facet filters。用户带着搜索、日期、
+  评分等条件进入 Collection 后，Gallery 展示完整 Collection，地图却只展示旧条件
+  匹配的子集，与“地图点按 Gallery scope 拉取”的架构约定不符。
+
+  Phase 1 可在 collection scope 下让 map points 同样忽略 search/facets；另一种方案
+  是为 `browse_collection` 补齐相同过滤能力。无论选择哪一种，两条查询必须共享同一
+  scope 语义，并增加 collection + existing filters 的测试。
+
+  > **已修复**：采用方案一，`list_map_points` 在 collection scope 下同样忽略 search/facets（与 browse_collection 对齐），`useMapPoints` cache key 同步只含实际生效的维度。新增测试 `test_map_points_collection_scope_ignores_search_and_facets`。
+
+- [x] **[P2] 进入 Collection 时旧 geo filter 没有清理**
+
+  `App.jsx` 只在收起地图时清除 `filters.geo`；`useMapViewportFilter` 在 Collection
+  中仅停止生成新 filter，不会移除已有 filter，而 `selectCollection` 也会保留它。
+  结果是 Location chip 继续显示但不生效，退出 Collection 后旧地图范围还会静默
+  恢复并再次过滤 Gallery。
+
+  建议在 `activeCollectionId` 变为非空时显式删除 `filters.geo`，或在 Collection
+  视图隔离/隐藏该 filter，并补充“先移动地图，再进入/退出 Collection”的 E2E。
+
+  > **已修复**：App.jsx 新增 effect，`activeCollectionId` 变为非空时显式移除 `filters.geo`（与收起地图清筛选同构），chip 不再空挂、退出 collection 不会静默恢复旧视窗。
+
+- [x] **[P2] 最大缩放级别的 cluster 无法继续展开**
+
+  `PhotoMap.jsx` 将地图 `maxZoom` 和 GeoJSON source 的 `clusterMaxZoom` 都设为 14；
+  点击 cluster 时，`getClusterExpansionZoom` 的结果又被 `Math.min(zoom, 14)` 截断。
+  因此 zoom 14 仍存在的 cluster 会成为无效按钮，重复点击不会改变地图或暴露照片。
+
+  至少应把 `clusterMaxZoom` 降到 13；对于相同 GPS 坐标的多张照片，还应定义
+  terminal zoom 行为，例如直接将该组作为 Gallery filter/selection，而不是继续缩放。
+
+  > **已修复**：`clusterMaxZoom` 降为 13（maxZoom 14 时全部解散为单点）。同坐标多照片在 z14 为重叠单点 marker，terminal 行为（点组即筛选）留待 Phase 3 手动定位一并设计。
+
+- [x] **[P2] `summary.image_assets` 不能作为地图缓存的完整失效版本**
+
+  当前 `refreshToken` 只取图片总数。metadata 重读后增加/删除 GPS、生成预览、修改
+  评分，或“删一张再加一张”都可能保持总数不变，`useMapPoints` 会继续命中旧缓存，
+  当前会话中的坐标、marker 封面和代表图排序不会更新。这个影响范围大于简报中仅列出的
+  “删一加一”。
+
+  建议提供单调递增的 catalog/map revision，在 import/delete、metadata refresh、
+  preview ready、rating/location 更新后推进，并以它作为地图缓存失效 token。
+
+  > **已修复**：`useWorkspace` 新增单调递增 `catalogRevision`，在每次 `refreshAll` 完成与每个 catalog-changed 事件（import/delete/metadata refresh/agent 写入/编辑器保存）时 +1，地图缓存以它为失效 token。评分变更不 bump（只影响封面排序，接受为残留）。
+
+- [x] **[P2] 异步 cluster 封面可能被旧结果覆盖**
+
+  `getClusterLeaves()` 完成时只检查 `markers.has(key)`。调用 `source.setData()` 后，
+  `cluster_id` 可能在新聚合索引中被复用；此时旧请求仍会通过检查，并把旧 leaves 的
+  预览写回当前 marker。快速切换搜索或 facet 时可能出现封面与当前 cluster 不一致，
+  且会保持到下一次 marker update。
+
+  建议为每次 source 数据更新或每个 marker leaves 请求增加 generation token，promise
+  完成时同时验证 generation、marker 实例和当前 cluster 数据后再更新 DOM。
+
+  > **已修复**：`setData()` 时递增 `pointsGeneration`，`getClusterLeaves` 回调同时校验 generation、marker 存活后才写 DOM，跨代的旧封面直接丢弃。
+
+### 本次复核记录
+
+- `PYTHONPATH=src python3 -m unittest tests.test_locations`：16/16 通过。
+- `npm run test:renderer -- --run src/components/map/antimeridian.test.js`：24/24 通过。
+- `git diff --check 751cc35..HEAD`：通过。
+- MapLibre 5.24.0 自带并默认启用 container `ResizeObserver`，展开动画不需要手写
+  `map.resize()` rAF 循环，简报中的该项说明成立。
+- R*Tree 的正常 upsert、metadata GPS 移除、单资产删除和 orphan cleanup 路径均在同一
+  事务中显式维护，未发现新的同步遗漏；上述 finding 主要集中在 effective location、
+  scope 一致性、缓存失效和前端异步边界。
+
+### 2026-07-21 修复记录（against Codex Review）
+
+- 7/7 findings 全部成立（无 REFUTED），已逐条修复并勾选，修复说明附于各条目下。
+- 验证：sidecar unittest 19/19（新增 3 例）；renderer vitest 24/24；lint / build 干净；
+  E2E 23-map 5/5，全量回归见下。

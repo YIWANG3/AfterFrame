@@ -124,6 +124,14 @@ def list_map_points(
     Applies status/collection, search, and the regular facets, but deliberately
     IGNORES filters.geo: the map must keep showing clusters outside the current
     viewport or the user can't navigate away from their own filter.
+
+    Effective location per asset: the image's own location, else the paired
+    RAW's (registry.raw_asset_id) — the common "RAW keeps GPS, exported JPEG
+    stripped it" case. Same fallback order the Inspector uses for display.
+
+    In collection scope, search and facets are ignored to match
+    browse_collection (which accepts neither) — the map must never show a
+    narrower set than the gallery it mirrors.
     """
     filters = dict(filters) if filters else None
     if filters:
@@ -131,10 +139,13 @@ def list_map_points(
 
     params: list[object] = []
     if collection_id is not None:
-        # Collection scope mirrors browse_collection (no status clause).
+        # Collection scope mirrors browse_collection: no status clause, and no
+        # search/facets either (browse_collection ignores both).
         scope_join = "JOIN collection_items ci ON ci.asset_id = assets.asset_id"
         scope_clause = "ci.collection_id = ?"
         params.append(collection_id)
+        search = None
+        filters = None
     else:
         scope_join = ""
         scope_clause = _status_clause(status)
@@ -149,19 +160,19 @@ def list_map_points(
         f"""
         SELECT
             assets.asset_id,
-            loc.latitude,
-            loc.longitude,
-            loc.source,
-            loc.accuracy_m,
-            loc.precision_level,
-            loc.place_id,
+            COALESCE(loc_img.latitude, loc_raw.latitude) AS latitude,
+            COALESCE(loc_img.longitude, loc_raw.longitude) AS longitude,
+            COALESCE(loc_img.source, loc_raw.source) AS source,
+            COALESCE(loc_img.accuracy_m, loc_raw.accuracy_m) AS accuracy_m,
+            COALESCE(loc_img.precision_level, loc_raw.precision_level) AS precision_level,
+            COALESCE(loc_img.place_id, loc_raw.place_id) AS place_id,
             assets.app_rating,
             assets.meta_capture_time AS capture_time,
             preview_entries.relative_path AS preview_relative_path
-        FROM asset_locations loc
-        JOIN assets ON assets.asset_id = loc.asset_id
-        JOIN image_lookup_registry AS registry
-            ON registry.image_asset_id = assets.asset_id
+        FROM image_lookup_registry AS registry
+        JOIN assets ON assets.asset_id = registry.image_asset_id
+        LEFT JOIN asset_locations loc_img ON loc_img.asset_id = assets.asset_id
+        LEFT JOIN asset_locations loc_raw ON loc_raw.asset_id = registry.raw_asset_id
         {scope_join}
         LEFT JOIN asset_ai_annotations AS anno
             ON anno.asset_id = assets.asset_id
@@ -170,9 +181,10 @@ def list_map_points(
            AND preview_entries.kind = 'preview'
            AND preview_entries.status = 'ready'
         WHERE {scope_clause}
+          AND (loc_img.location_id IS NOT NULL OR loc_raw.location_id IS NOT NULL)
           {search_clause}
           {facet_clause}
-        GROUP BY loc.location_id
+        GROUP BY assets.asset_id
         LIMIT ?
         """,
         params,

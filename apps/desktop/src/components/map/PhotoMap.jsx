@@ -111,7 +111,10 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
           data: pointsToGeoJSON(state.points),
           cluster: true,
           clusterRadius: 52,
-          clusterMaxZoom: 14,
+          // Must stay below the map's maxZoom (14): points uncluster at
+          // clusterMaxZoom+1, so equal values would leave clusters at max zoom
+          // that clicking can never expand (dead buttons).
+          clusterMaxZoom: 13,
         });
         // A GeoJSON source no layer references never loads its tiles, and
         // querySourceFeatures would stay empty forever. Photos render as DOM
@@ -329,10 +332,14 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
             label: `${props.point_count} photos`,
           });
           // Representative covers load async; input features are pre-sorted so
-          // the first three leaves are the stable representatives.
+          // the first three leaves are the stable representatives. cluster_ids
+          // are reused across setData() generations, so a stale resolve could
+          // otherwise paint the previous dataset's covers onto a new cluster.
+          const generation = state.pointsGeneration || 0;
           source.getClusterLeaves(props.cluster_id, 3, 0)
             .then((leaves) => {
               if (state.destroyed || !markers.has(key)) return;
+              if ((state.pointsGeneration || 0) !== generation) return;
               updateMarkerElement(element, {
                 count: props.point_count,
                 previews: [
@@ -442,11 +449,13 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
     };
   }, []);
 
-  // Point data changes → swap the GeoJSON source, keep the camera.
+  // Point data changes → swap the GeoJSON source, keep the camera. The
+  // generation bump invalidates in-flight getClusterLeaves resolutions.
   useEffect(() => {
     const map = mapRef.current;
     const source = map?.getSource?.("photo-locations");
     if (!source) return;
+    stateRef.current.pointsGeneration = (stateRef.current.pointsGeneration || 0) + 1;
     source.setData(pointsToGeoJSON(points));
   }, [points]);
 
