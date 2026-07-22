@@ -54,7 +54,9 @@ JPEG_QUALITY = 85
 HTTP_TIMEOUT = 60
 DEFAULT_MAX_TAGS = 10
 DEFAULT_MAX_CAPTION_CHARS = 200
-ANNOTATION_SCHEMA_VERSION = 1
+# v2: location gained structured admin1/locality (v1 had a fuzzy "region").
+# The offline geo resolver reads both shapes.
+ANNOTATION_SCHEMA_VERSION = 2
 
 # How many existing tags to inject into the prompt as "prefer these"
 TAG_REUSE_HINT_LIMIT = 200
@@ -66,7 +68,7 @@ TAG_REUSE_HINT_LIMIT = 200
 class AnnotationResult:
     caption: str
     tags: list[str]
-    location: Optional[dict[str, Any]]  # {"country", "region", "landmark", "confidence"}
+    location: Optional[dict[str, Any]]  # v2: {"country", "admin1", "locality", "landmark", "confidence"}
     detected_text: Optional[str]
     raw_response: str
     provider: str
@@ -148,7 +150,7 @@ def build_system_prompt(
 
 - "caption": one or two sentences describing the photo. Max {max_caption_chars} characters.
 - "tags": an array of up to {max_tags} short tags. {lang_clause} Lowercase. No leading hashes.
-- "location": an object {{"country": str|null, "region": str|null, "landmark": str|null, "confidence": 0..100}} guessing where the photo was taken. Use null fields when uncertain. Confidence is your overall confidence in the guess.
+- "location": an object {{"country": str|null, "admin1": str|null, "locality": str|null, "landmark": str|null, "confidence": 0..100}} guessing where the photo was taken. "country" is the English country name; "admin1" is the first-level division (state/province/canton, e.g. "California", "Île-de-France"); "locality" is the city/town (e.g. "San Francisco", "Grindelwald"); "landmark" is a single specific place or building if clearly identifiable (e.g. "Eiffel Tower") — one name only, no descriptions like "X skyline", no combined "A / B". Use null for any field you are not reasonably sure about. Confidence is your overall confidence in the guess.
 - "detected_text": any prominent text visible in the image (signs, labels, captions), or null.
 
 Respond with ONLY the JSON object, no commentary.{tag_pool}{extra}"""
@@ -418,9 +420,40 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
             "INSERT OR IGNORE INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, 'ai', ?)",
             (asset_id, tag, now),
         )
+
+    # Resolve the location guess to map coordinates (offline gazetteer) so the
+    # asset appears on the map right after annotation — no separate backfill
+    # needed for new annotations. Resolver problems must never break the
+    # annotation write itself.
+    try:
+        _sync_ai_location(connection, asset_id, result.location)
+    except Exception:  # noqa: BLE001 — best-effort by design
+        pass
     connection.commit()
 
     return get_annotation(connection, asset_id) or {}
+
+
+def _sync_ai_location(connection: sqlite3.Connection, asset_id: str, location: Optional[dict]) -> None:
+    """Keep asset_locations in step with this annotation's location guess.
+
+    Resolvable → upsert an ai row (never touching manual/exif). Unresolvable →
+    drop a stale ai row from a previous annotation run, if any."""
+    from .db.locations import delete_asset_location, upsert_ai_asset_location
+    from .geo_resolver import RESOLVER_VERSION, resolve_location
+
+    resolved = resolve_location(location)
+    if resolved is not None:
+        upsert_ai_asset_location(
+            connection, asset_id, resolved,
+            location=location, resolver_version=RESOLVER_VERSION,
+        )
+        return
+    existing = connection.execute(
+        "SELECT source FROM asset_locations WHERE asset_id = ?", (asset_id,)
+    ).fetchone()
+    if existing is not None and str(existing["source"]) == "ai":
+        delete_asset_location(connection, asset_id)
 
 
 # ── Batch annotation ─────────────────────────────────────────────────────────

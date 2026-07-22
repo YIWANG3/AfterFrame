@@ -94,6 +94,77 @@ def upsert_asset_location_from_metadata(
         connection.commit()
 
 
+def upsert_ai_asset_location(
+    connection: sqlite3.Connection,
+    asset_id: str,
+    resolved,  # geo_resolver.ResolvedLocation
+    *,
+    location: dict | None = None,
+    resolver_version: str,
+    commit: bool = False,
+) -> bool:
+    """Write an AI-resolved location. Never overwrites manual or exif rows —
+    priority manual > exif > ai lives here, not in the schema. Returns True
+    when a row was written."""
+    existing = connection.execute(
+        "SELECT location_id, source FROM asset_locations WHERE asset_id = ?",
+        (asset_id,),
+    ).fetchone()
+    if existing is not None and str(existing["source"]) in ("manual", "exif"):
+        return False
+
+    location = location or {}
+    values = (
+        resolved.latitude, resolved.longitude,
+        resolved.min_latitude, resolved.max_latitude,
+        resolved.min_longitude, resolved.max_longitude,
+        resolved.precision_level, resolved.confidence, resolved.place_id,
+        resolved.country_code,
+        location.get("admin1"), location.get("locality") or location.get("region"),
+        location.get("landmark"), resolver_version,
+    )
+    if existing is not None:
+        location_id = int(existing["location_id"])
+        connection.execute(
+            """
+            UPDATE asset_locations SET
+                latitude = ?, longitude = ?,
+                min_latitude = ?, max_latitude = ?, min_longitude = ?, max_longitude = ?,
+                source = 'ai', accuracy_m = NULL, precision_level = ?,
+                confidence = ?, place_id = ?, country_code = ?,
+                admin1 = ?, locality = ?, landmark = ?, resolver_version = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE location_id = ?
+            """,
+            (*values, location_id),
+        )
+    else:
+        cursor = connection.execute(
+            """
+            INSERT INTO asset_locations (
+                asset_id, latitude, longitude,
+                min_latitude, max_latitude, min_longitude, max_longitude,
+                source, accuracy_m, precision_level, confidence, place_id,
+                country_code, admin1, locality, landmark, resolver_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ai', NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (asset_id, *values),
+        )
+        location_id = int(cursor.lastrowid)
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO asset_location_rtree (
+            location_id, min_longitude, max_longitude, min_latitude, max_latitude
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (location_id, resolved.min_longitude, resolved.max_longitude,
+         resolved.min_latitude, resolved.max_latitude),
+    )
+    if commit:
+        connection.commit()
+    return True
+
+
 def delete_asset_location(connection: sqlite3.Connection, asset_id: str) -> None:
     """Remove an asset's location and its R*Tree entry (same transaction).
 
