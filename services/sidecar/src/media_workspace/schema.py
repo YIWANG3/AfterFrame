@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 SCHEMA_STATEMENTS = [
@@ -330,6 +330,49 @@ SCHEMA_STATEMENTS = [
         file_size INTEGER NOT NULL,
         mtime REAL NOT NULL,
         deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # Normalized photo locations for the map (one effective location per asset;
+    # priority manual > exif > ai lives in the app layer, not here). Exact GPS
+    # points store min/max == the point; AI city/admin locations (Phase 2) store
+    # their bounding box for intersection queries while latitude/longitude stay
+    # the marker centroid. The companion R*Tree below is maintained by the app
+    # layer in the same transaction as this table — no triggers.
+    """
+    CREATE TABLE IF NOT EXISTS asset_locations (
+        location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asset_id TEXT NOT NULL UNIQUE,
+        latitude REAL NOT NULL CHECK(latitude BETWEEN -90 AND 90),
+        longitude REAL NOT NULL CHECK(longitude BETWEEN -180 AND 180),
+        min_latitude REAL NOT NULL,
+        max_latitude REAL NOT NULL,
+        min_longitude REAL NOT NULL,
+        max_longitude REAL NOT NULL,
+        source TEXT NOT NULL CHECK(source IN ('manual', 'exif', 'ai')),
+        accuracy_m REAL,
+        precision_level TEXT CHECK(precision_level IN ('exact', 'locality', 'admin1', 'country')),
+        confidence REAL,
+        place_id TEXT,
+        country_code TEXT,
+        admin1 TEXT,
+        locality TEXT,
+        landmark TEXT,
+        resolver_version TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+    )
+    """,
+    # asset_id already has an implicit unique index; only place/source need one.
+    "CREATE INDEX IF NOT EXISTS idx_asset_locations_place ON asset_locations(place_id)",
+    "CREATE INDEX IF NOT EXISTS idx_asset_locations_source ON asset_locations(source)",
+    """
+    CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(
+        location_id,
+        min_longitude,
+        max_longitude,
+        min_latitude,
+        max_latitude
     )
     """,
 ]

@@ -37,6 +37,7 @@ from .db import (
     list_jobs,
     list_catalog_roots,
     list_image_assets,
+    list_map_points,
     list_assets_for_preview,
     list_pending,
     assign_faces_to_group,
@@ -276,6 +277,16 @@ def build_parser() -> argparse.ArgumentParser:
     # Structured facet filters (all optional, AND-combined). Passed as a single
     # JSON object to keep the surface small and forward-compatible.
     browse.add_argument("--filters", default=None, help="JSON object of facet filters")
+
+    # Lightweight location points for the map. Mirrors the gallery scope
+    # (status/collection/search/facets) but ignores filters.geo — the map needs
+    # points outside the current viewport to stay navigable.
+    map_points = subparsers.add_parser("browse-map-points", parents=[common])
+    map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], default="all")
+    map_points.add_argument("--collection-id", default=None)
+    map_points.add_argument("--search", default=None)
+    map_points.add_argument("--filters", default=None, help="JSON object of facet filters (geo key is ignored)")
+    map_points.add_argument("--limit", type=int, default=100000)
 
     subparsers.add_parser("facet-values", parents=[common])
 
@@ -1385,6 +1396,39 @@ def _cmd_browse_images(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_browse_map_points(args, connection, catalog, parser):
+    facet_filters = json.loads(args.filters) if args.filters else None
+    payload = []
+    for row in list_map_points(
+        connection,
+        status=args.status,
+        collection_id=args.collection_id,
+        search=args.search,
+        filters=facet_filters,
+        limit=args.limit,
+    ):
+        preview_path = None
+        if row["preview_relative_path"]:
+            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
+        payload.append(
+            {
+                "asset_id": row["asset_id"],
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "source": row["source"],
+                "accuracy_m": row["accuracy_m"],
+                "precision_level": row["precision_level"],
+                "place_id": row["place_id"],
+                "app_rating": row["app_rating"],
+                "capture_time": row["capture_time"],
+                "preview_path": preview_path,
+            }
+        )
+    # No indent: this payload can be tens of thousands of rows.
+    print(json.dumps(payload))
+    return 0
+
+
 def _cmd_asset_detail(args, connection, catalog, parser):
     if args.image_path:
         row = get_image_asset_detail_by_path(connection, str(args.image_path.resolve()))
@@ -1846,6 +1890,7 @@ COMMAND_HANDLERS = {
     "facet-values": _cmd_facet_values,
     "search-facet": _cmd_search_facet,
     "browse-images": _cmd_browse_images,
+    "browse-map-points": _cmd_browse_map_points,
     "asset-detail": _cmd_asset_detail,
     "list-pending": _cmd_list_pending,
     "confirm-match": _cmd_confirm_match,

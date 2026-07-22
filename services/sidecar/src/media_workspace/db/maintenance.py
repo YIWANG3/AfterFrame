@@ -9,6 +9,7 @@ import sqlite3
 from pathlib import Path
 
 from .assets import upsert_preview_entry
+from .locations import delete_asset_location
 from .resource_sets import _link_id, get_resource_set_for_asset
 
 
@@ -238,6 +239,8 @@ def cleanup_orphan_image_assets(connection: sqlite3.Connection, commit: bool = T
             (orphan_asset_id, orphan_asset_id),
         )
 
+        # The FK cascade would clear asset_locations but not its R*Tree row.
+        delete_asset_location(connection, orphan_asset_id)
         connection.execute("DELETE FROM assets WHERE asset_id = ?", (orphan_asset_id,))
         metrics["deleted"] += 1
 
@@ -372,6 +375,8 @@ def delete_image_asset_from_catalog(
     # not hold an export asset, but stale rows must not block deletion).
     connection.execute("DELETE FROM raw_metadata_cache WHERE raw_asset_id = ?", (asset_id,))
     connection.execute("DELETE FROM asset_files WHERE asset_id = ?", (asset_id,))
+    # The FK cascade would clear asset_locations but not its R*Tree row.
+    delete_asset_location(connection, asset_id)
     connection.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))
 
     if commit:

@@ -271,12 +271,93 @@ def _migrate_to_7(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_to_8(connection: sqlite3.Connection) -> None:
+    """Normalized asset locations + R*Tree for the map, backfilled from the
+    EXIF GPS already stored in assets.metadata_json. Idempotent: re-running
+    skips rows that already exist in either table."""
+    for statement in (
+        """
+        CREATE TABLE IF NOT EXISTS asset_locations (
+            location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset_id TEXT NOT NULL UNIQUE,
+            latitude REAL NOT NULL CHECK(latitude BETWEEN -90 AND 90),
+            longitude REAL NOT NULL CHECK(longitude BETWEEN -180 AND 180),
+            min_latitude REAL NOT NULL,
+            max_latitude REAL NOT NULL,
+            min_longitude REAL NOT NULL,
+            max_longitude REAL NOT NULL,
+            source TEXT NOT NULL CHECK(source IN ('manual', 'exif', 'ai')),
+            accuracy_m REAL,
+            precision_level TEXT CHECK(precision_level IN ('exact', 'locality', 'admin1', 'country')),
+            confidence REAL,
+            place_id TEXT,
+            country_code TEXT,
+            admin1 TEXT,
+            locality TEXT,
+            landmark TEXT,
+            resolver_version TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_asset_locations_place ON asset_locations(place_id)",
+        "CREATE INDEX IF NOT EXISTS idx_asset_locations_source ON asset_locations(source)",
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(
+            location_id,
+            min_longitude,
+            max_longitude,
+            min_latitude,
+            max_latitude
+        )
+        """,
+    ):
+        connection.execute(statement)
+
+    # Backfill: every asset whose metadata carries a plausible EXIF GPS fix.
+    # (0, 0) is the classic junk value cameras write for "no fix" — skip it.
+    connection.execute(
+        """
+        INSERT INTO asset_locations (
+            asset_id, latitude, longitude,
+            min_latitude, max_latitude, min_longitude, max_longitude,
+            source, precision_level
+        )
+        SELECT asset_id, lat, lon, lat, lat, lon, lon, 'exif', 'exact'
+        FROM (
+            SELECT asset_id,
+                   CAST(json_extract(metadata_json, '$.gps_latitude') AS REAL) AS lat,
+                   CAST(json_extract(metadata_json, '$.gps_longitude') AS REAL) AS lon
+            FROM assets
+            WHERE json_type(metadata_json, '$.gps_latitude') IN ('integer', 'real')
+              AND json_type(metadata_json, '$.gps_longitude') IN ('integer', 'real')
+        )
+        WHERE lat BETWEEN -90 AND 90
+          AND lon BETWEEN -180 AND 180
+          AND NOT (lat = 0 AND lon = 0)
+        ON CONFLICT(asset_id) DO NOTHING
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO asset_location_rtree (
+            location_id, min_longitude, max_longitude, min_latitude, max_latitude
+        )
+        SELECT location_id, min_longitude, max_longitude, min_latitude, max_latitude
+        FROM asset_locations
+        WHERE location_id NOT IN (SELECT location_id FROM asset_location_rtree)
+        """
+    )
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
     5: _migrate_to_5,
     6: _migrate_to_6,
     7: _migrate_to_7,
+    8: _migrate_to_8,
 }
 
 
