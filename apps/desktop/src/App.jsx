@@ -1068,7 +1068,9 @@ export default function App() {
         onClose={() => setEditorItem(null)}
         pushToast={pushToast}
         onSaveComplete={async (savePath) => {
-          await workspace.refreshAll?.();
+          // preserveView keeps the user's selection and scroll depth; without it
+          // the refresh only refetches page 1 and selection jumps to the first asset.
+          await workspace.refreshAll?.({ force: true, preserveView: true });
           if (savePath) {
             pushToast({
               title: t("saved"),
