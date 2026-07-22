@@ -125,9 +125,13 @@ def list_map_points(
     IGNORES filters.geo: the map must keep showing clusters outside the current
     viewport or the user can't navigate away from their own filter.
 
-    Effective location per asset: the image's own location, else the paired
-    RAW's (registry.raw_asset_id) — the common "RAW keeps GPS, exported JPEG
-    stripped it" case. Same fallback order the Inspector uses for display.
+    Effective location per asset: the paired RAW's (registry.raw_asset_id)
+    first, else the image's own — RAW is the authoritative capture metadata
+    (exports may strip or rewrite it), and the Inspector displays GPS in the
+    same rawMeta-first order. Whole-ROW selection: every column comes from the
+    one chosen location, never mixed across the two. (Phase 3 note: a future
+    'manual' source on the image row must win over RAW exif — revisit the
+    predicate then.)
 
     In collection scope, search and facets are ignored to match
     browse_collection (which accepts neither) — the map must never show a
@@ -160,12 +164,12 @@ def list_map_points(
         f"""
         SELECT
             assets.asset_id,
-            COALESCE(loc_img.latitude, loc_raw.latitude) AS latitude,
-            COALESCE(loc_img.longitude, loc_raw.longitude) AS longitude,
-            COALESCE(loc_img.source, loc_raw.source) AS source,
-            COALESCE(loc_img.accuracy_m, loc_raw.accuracy_m) AS accuracy_m,
-            COALESCE(loc_img.precision_level, loc_raw.precision_level) AS precision_level,
-            COALESCE(loc_img.place_id, loc_raw.place_id) AS place_id,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.latitude ELSE loc_img.latitude END AS latitude,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.longitude ELSE loc_img.longitude END AS longitude,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.source ELSE loc_img.source END AS source,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.accuracy_m ELSE loc_img.accuracy_m END AS accuracy_m,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.precision_level ELSE loc_img.precision_level END AS precision_level,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.place_id ELSE loc_img.place_id END AS place_id,
             assets.app_rating,
             assets.meta_capture_time AS capture_time,
             preview_entries.relative_path AS preview_relative_path

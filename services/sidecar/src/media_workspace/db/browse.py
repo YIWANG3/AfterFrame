@@ -101,9 +101,11 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
     crosses the antimeridian (west > east) the longitude test is split into two
     ranges on the base table instead. place mode (Phase 2 UI) matches place_id.
 
-    Matches against the asset's EFFECTIVE location: its own row, or — only when
-    it has none — the paired RAW's (registry.raw_asset_id). Same fallback order
-    as list_map_points and the Inspector display.
+    Matches against the asset's EFFECTIVE location: the paired RAW's
+    (registry.raw_asset_id) first, or — only when no paired RAW has one — the
+    image's own row. RAW is the authoritative capture metadata; same order as
+    list_map_points and the Inspector's rawMeta-first GPS display. (Phase 3
+    note: a future 'manual' source on the image row must win over RAW exif.)
     """
     if not isinstance(geo, dict):
         return None
@@ -162,17 +164,21 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
 
     clause = f"""(
         EXISTS (
-            SELECT 1 FROM asset_locations loc
+            SELECT 1 FROM image_lookup_registry reg
+            JOIN asset_locations loc ON loc.asset_id = reg.raw_asset_id
             {location_join}
-            WHERE loc.asset_id = assets.asset_id AND {location_conditions}
+            WHERE reg.image_asset_id = assets.asset_id AND {location_conditions}
         )
         OR (
-            NOT EXISTS (SELECT 1 FROM asset_locations self_loc WHERE self_loc.asset_id = assets.asset_id)
+            NOT EXISTS (
+                SELECT 1 FROM image_lookup_registry reg2
+                JOIN asset_locations raw_loc ON raw_loc.asset_id = reg2.raw_asset_id
+                WHERE reg2.image_asset_id = assets.asset_id
+            )
             AND EXISTS (
-                SELECT 1 FROM image_lookup_registry reg
-                JOIN asset_locations loc ON loc.asset_id = reg.raw_asset_id
+                SELECT 1 FROM asset_locations loc
                 {location_join}
-                WHERE reg.image_asset_id = assets.asset_id AND {location_conditions}
+                WHERE loc.asset_id = assets.asset_id AND {location_conditions}
             )
         )
     )"""

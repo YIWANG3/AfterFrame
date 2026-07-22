@@ -335,18 +335,30 @@ class LocationTestCase(unittest.TestCase):
         europe = {"mode": "bounds", "west": -5.0, "south": 41.0, "east": 10.0, "north": 52.0}
         self.assertIn(image_id, self._browse_geo_ids(europe))
 
-    def test_own_gps_wins_over_raw_gps(self):
+    def test_raw_gps_wins_over_image_gps(self):
+        # RAW is the authoritative capture metadata (Inspector shows GPS in the
+        # same rawMeta-first order) — the export's own value is the fallback.
         raw_id = self._import_raw(35.6895, 139.6917)  # RAW says Tokyo
-        image_id = self._import_image(48.8566, 2.3522, raw_asset_id=raw_id)  # image says Paris
+        image_id = self._import_image(48.8566, 2.3522, raw_asset_id=raw_id)  # export says Paris
 
         points = {row["asset_id"]: row for row in list_map_points(self.connection, status="all")}
-        self.assertAlmostEqual(points[image_id]["latitude"], 48.8566)
+        self.assertAlmostEqual(points[image_id]["latitude"], 35.6895)
+        # Whole-row selection: source comes from the same (RAW) row.
+        self.assertEqual(points[image_id]["source"], "exif")
 
         japan = {"mode": "bounds", "west": 128.0, "south": 30.0, "east": 146.0, "north": 46.0}
         europe = {"mode": "bounds", "west": -5.0, "south": 41.0, "east": 10.0, "north": 52.0}
-        # Effective location is the image's own — the RAW's Tokyo must not match.
+        self.assertIn(image_id, self._browse_geo_ids(japan))
+        self.assertNotIn(image_id, self._browse_geo_ids(europe))
+
+    def test_image_gps_used_when_raw_has_none(self):
+        raw_id = self._import_raw(None, None)
+        image_id = self._import_image(48.8566, 2.3522, raw_asset_id=raw_id)
+
+        points = {row["asset_id"]: row for row in list_map_points(self.connection, status="all")}
+        self.assertAlmostEqual(points[image_id]["latitude"], 48.8566)
+        europe = {"mode": "bounds", "west": -5.0, "south": 41.0, "east": 10.0, "north": 52.0}
         self.assertIn(image_id, self._browse_geo_ids(europe))
-        self.assertNotIn(image_id, self._browse_geo_ids(japan))
 
     def test_map_points_collection_scope_ignores_search_and_facets(self):
         # browse_collection accepts neither search nor facets, so the map in

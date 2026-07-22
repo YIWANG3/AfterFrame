@@ -187,3 +187,32 @@ EXIF GPS (metadata_json)
 - 7/7 findings 全部成立（无 REFUTED），已逐条修复并勾选，修复说明附于各条目下。
 - 验证：sidecar unittest 19/19（新增 3 例）；renderer vitest 24/24；lint / build 干净；
   E2E 23-map 5/5，全量回归见下。
+
+### 2026-07-22 第二轮 Review（用户转达）
+
+- [x] **[P1] `catalogRevision` 没覆盖 UI 内的直接写操作**
+
+  Collection 增删成员、删除资产、磁盘删除、评分修改直接改 React 本地状态，
+  不推进 revision 也不触发 catalog-changed，地图缓存不失效（marker 残留、
+  collection 地图不更新、封面排序陈旧）。
+
+  > **已修复**：`useWorkspace` 抽出 `bumpCatalogRevision()`，在
+  > `addToCollection` / `removeFromCollection` / `deleteCollection` /
+  > `deleteImageAssets` / `deleteImageAssetsFromDisk` / `setAssetRating`
+  > 成功后统一调用（评分现在也 bump，上一轮"评分不失效"的残留一并消除）。
+  > 主进程统一广播 catalog-change 是更彻底的方案，留作后续重构方向。
+
+- [x] **[P2] effective location 与 Inspector 优先级相反，且逐列 COALESCE 混合行**
+
+  Inspector 是 rawMeta 优先，sidecar 实现成了 image 优先；且逐列 COALESCE
+  可能拼出 image 坐标 + RAW accuracy/place_id 的混合记录。
+
+  > **已修复**：产品优先级定为 **RAW 优先**（RAW 是拍摄元数据权威源，与
+  > Inspector 既有展示语义一致）。`list_map_points` 改为整行选择（单一
+  > `CASE WHEN loc_raw.location_id IS NOT NULL` 谓词切换所有列，不再混合）；
+  > `_geo_filter_clause` 同步为 "配对 RAW 位置匹配 OR（RAW 均无位置 AND
+  > image 位置匹配）"。测试改为 `test_raw_gps_wins_over_image_gps`（含
+  > 整行 source 断言）并新增 `test_image_gps_used_when_raw_has_none`。
+  > 两处代码均注记 Phase 3 manual 来源需覆盖 RAW exif 的优先级前提。
+
+修复验证：sidecar unittest 20/20，renderer 24/24，lint/build 干净，E2E 见下。
