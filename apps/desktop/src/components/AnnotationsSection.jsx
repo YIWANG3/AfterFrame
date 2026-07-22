@@ -342,6 +342,18 @@ export default function AnnotationsSection({
               <span className="flex-1 text-text">{loc.country}<ConfidencePill value={loc.confidence} /></span>
             </div>
           )}
+          {loc.admin1 && (
+            <div className="mt-1 flex items-start gap-2 text-[11px]">
+              <span className="min-w-[50px] text-muted2">{t("loc.admin1")}</span>
+              <span className="flex-1 text-text">{loc.admin1}</span>
+            </div>
+          )}
+          {loc.locality && (
+            <div className="mt-1 flex items-start gap-2 text-[11px]">
+              <span className="min-w-[50px] text-muted2">{t("loc.locality")}</span>
+              <span className="flex-1 text-text">{loc.locality}</span>
+            </div>
+          )}
           {loc.region && (
             <div className="mt-1 flex items-start gap-2 text-[11px]">
               <span className="min-w-[50px] text-muted2">{t("loc.region")}</span>

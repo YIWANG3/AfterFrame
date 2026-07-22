@@ -27,7 +27,9 @@
   "loc": {
     "country": "国家",
     "region": "地区",
-    "landmark": "地标"
+    "landmark": "地标",
+    "admin1": "省/州",
+    "locality": "城市"
   },
   "toast": {
     "annotatedTitle": "已标注",

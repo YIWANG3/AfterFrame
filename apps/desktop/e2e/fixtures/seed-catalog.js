@@ -202,6 +202,31 @@ conn.close()
 print("GPS injected")
 `], { encoding: "utf-8", env: { ...process.env }, stdio: "inherit" });
 
+  // 7. Give one asset an AI annotation with a resolvable location (Sydney —
+  //    deliberately NOT Paris/Tokyo so the GPS-based map specs stay
+  //    independent), then run the offline gazetteer backfill so the fixture
+  //    carries a source='ai' location row (see e2e/23-map.spec.js).
+  console.log("Injecting AI location annotation for 004-green (Sydney)…");
+  execFileSync("python3", ["-c", `
+import json, sqlite3
+conn = sqlite3.connect(${JSON.stringify(path.join(CATALOG_DIR, "catalog.sqlite3"))})
+location = {"country": "Australia", "admin1": "New South Wales", "locality": "Sydney",
+            "landmark": None, "confidence": 88}
+conn.execute("""INSERT INTO asset_ai_annotations
+    (asset_id, provider, model, schema_version, caption, tags_json, location_json)
+    VALUES (?, 'test', 'test-model', 2, 'Harbour city at dusk', '["city"]', ?)""",
+    (${JSON.stringify(byStem["004-green"])}, json.dumps(location)))
+conn.commit()
+conn.close()
+`], { encoding: "utf-8", stdio: "inherit" });
+  const resolveStats = JSON.parse(runSidecar(["--catalog", CATALOG_DIR, "resolve-ai-locations"]));
+  console.log("resolve-ai-locations:", JSON.stringify(resolveStats));
+  if (!resolveStats.resolved || resolveStats.resolved < 1) {
+    throw new Error(
+      "AI location did not resolve — is services/sidecar/src/media_workspace/data/gazetteer.json.gz present?",
+    );
+  }
+
   console.log("\n✓ Seeded catalog:", CATALOG_DIR);
   console.log("✓ Images:", IMAGES_DIR);
 }

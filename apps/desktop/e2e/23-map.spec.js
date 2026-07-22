@@ -86,6 +86,25 @@ test.describe("Map drawer", () => {
       .toBeGreaterThan(2);
   });
 
+  test("AI-inferred location appears on the map and in the geo filter", async () => {
+    // 004-green carries an AI annotation resolved to Sydney (locality
+    // precision, source='ai') by the fixture's gazetteer backfill. Re-open the
+    // map first (previous test collapsed it).
+    await window.locator("[data-testid='map-toggle']").click();
+    const drawer = window.locator("[data-testid='map-drawer']");
+    await expect
+      .poll(async () => drawer.evaluate((el) => el.getBoundingClientRect().height), { timeout: 10_000 })
+      .toBeGreaterThan(200);
+
+    await window.evaluate(() => window.__afterframeMapTest.jumpTo([151.21, -33.87], 5));
+    await expect(window.locator("[data-testid='geo-filter-chip']")).toBeVisible({ timeout: 10_000 });
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1, { timeout: 10_000 });
+    await expect(window.locator("[data-gallery-item='true']").first()).toContainText("004-green");
+    // Clean up for the following tests: drop the geo filter by collapsing.
+    await window.locator("[data-testid='map-toggle']").click();
+    await expect(window.locator("[data-testid='geo-filter-chip']")).toHaveCount(0, { timeout: 10_000 });
+  });
+
   test("keyboard M re-opens the map", async () => {
     await window.locator("[data-testid='gallery-scroll']").click();
     await window.keyboard.press("m");

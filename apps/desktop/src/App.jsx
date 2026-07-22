@@ -142,6 +142,25 @@ export default function App() {
     workspaceRef.current.applyFilters(rest);
   }, [workspace.activeCollectionId]);
 
+  // One-shot per catalog: when the map first opens, resolve any pre-existing
+  // AI annotation locations into map points (offline gazetteer backfill).
+  // New annotations resolve inline at save time in the sidecar.
+  const geoBackfillRef = useRef(new Set());
+  const activeCatalogPath = workspace.info?.catalogPath || null;
+  useEffect(() => {
+    if (!mapExpanded || !activeCatalogPath) return;
+    if (geoBackfillRef.current.has(activeCatalogPath)) return;
+    geoBackfillRef.current.add(activeCatalogPath);
+    void (async () => {
+      try {
+        const stats = await api.resolveAiLocations();
+        if ((stats?.resolved || 0) + (stats?.cleared_stale || 0) > 0) {
+          workspaceRef.current.bumpCatalogRevision?.();
+        }
+      } catch { /* best-effort */ }
+    })();
+  }, [mapExpanded, activeCatalogPath]);
+
   const peopleGroups = usePeopleGroups({
     pushToast,
     enabled: viewMode === "people",

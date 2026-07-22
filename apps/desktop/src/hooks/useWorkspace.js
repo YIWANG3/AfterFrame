@@ -873,6 +873,7 @@ export default function useWorkspace({ pushToast } = {}) {
     collections,
     activeCollectionId,
     catalogRevision,
+    bumpCatalogRevision,
     selectCollection,
     clearCollection,
     filterByPerson,

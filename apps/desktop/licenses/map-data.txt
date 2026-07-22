@@ -18,3 +18,11 @@ Natural Earth
   labels, populated places) is derived from Natural Earth 1:10m / 1:50m
   cultural vectors. Natural Earth is in the public domain.
   https://www.naturalearthdata.com/about/terms-of-use/
+
+Wikidata
+  The offline gazetteer bundled with the sidecar
+  (services/sidecar/src/media_workspace/data/gazetteer.json.gz — place names,
+  aliases, coordinates and country assignments used to resolve AI-inferred
+  photo locations) is derived from Wikidata. Wikidata's data is released
+  under CC0 1.0 (public domain dedication).
+  https://www.wikidata.org/wiki/Wikidata:Licensing

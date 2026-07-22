@@ -19,6 +19,17 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
+  ipcMain.handle("workspace:resolve-ai-locations", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return null;
+    try {
+      return await commands.resolveAiLocations();
+    } catch (err) {
+      console.warn("[workspace:resolve-ai-locations] sidecar error:", err.message);
+      return null;
+    }
+  });
+
   ipcMain.handle("workspace:facet-values", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return null;

@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getPending: () => ipcRenderer.invoke("workspace:pending"),
   browseImages: (options) => ipcRenderer.invoke("workspace:browse", options),
   browseMapPoints: (options) => ipcRenderer.invoke("workspace:browse-map-points", options),
+  resolveAiLocations: () => ipcRenderer.invoke("workspace:resolve-ai-locations"),
   getFacetValues: () => ipcRenderer.invoke("workspace:facet-values"),
   searchFacet: (options) => ipcRenderer.invoke("workspace:search-facet", options),
   getAssetDetail: (imagePath) => ipcRenderer.invoke("workspace:detail", imagePath),

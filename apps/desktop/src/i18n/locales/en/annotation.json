@@ -27,7 +27,9 @@
   "loc": {
     "country": "Country",
     "region": "Region",
-    "landmark": "Landmark"
+    "landmark": "Landmark",
+    "admin1": "State/Province",
+    "locality": "City"
   },
   "toast": {
     "annotatedTitle": "Annotated",

@@ -34,6 +34,13 @@ function createSidecarCommands(callJson) {
       return callJson(argv).then((rows) => rows || []);
     },
 
+    // One-shot backfill: resolve existing AI annotations' location guesses
+    // into asset_locations (offline gazetteer). New annotations resolve at
+    // save time in the sidecar; this covers pre-existing ones.
+    resolveAiLocations() {
+      return callJson(["resolve-ai-locations"]);
+    },
+
     browseCollection(collectionId, { limit = 120, offset = 0 } = {}) {
       return callJson([
         "browse-collection",
