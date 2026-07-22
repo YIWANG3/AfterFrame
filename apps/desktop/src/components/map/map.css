@@ -164,6 +164,13 @@
   display: block;
   width: 44px;
   height: 44px;
+  /* ONE shadow for the whole stack. Per-image box-shadows compounded: a
+     3-photo cluster painted three 35% shadows on top of each other (~73%
+     effective) while singles got one — markers randomly looked much darker.
+     drop-shadow follows the composite shape incl. the rotated back photos.
+     Kept faint: the white photo border already separates markers from the
+     basemap; anything stronger reads as a dark ring on the light theme. */
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.14));
 }
 
 .photo-map-marker__photo {
@@ -175,7 +182,6 @@
   border-radius: 8px;
   border: 1.5px solid rgb(var(--chrome-bg));
   background: rgb(var(--border-color));
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
 }
 
 .photo-map-marker__photo--back {
