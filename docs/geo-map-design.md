@@ -1,6 +1,6 @@
 # AfterFrame 离线地图功能实施方案
 
-> **状态（2026-07-21）**：Phase 1（GPS-only MVP）已实现。Schema 8（`asset_locations` + R*Tree）、`browse-map-points`、MapDrawer/PhotoMap/视窗筛选、单测与 E2E（`apps/desktop/e2e/23-map.spec.js`）均已合入工作区。与本方案的偏差：地图数据不放 `public/maps/` 而是走 Vite 动态 `import()` 分包（生产环境 `file://` 下 `fetch` 拿不到静态资源）；日期变更线切割保留为运行时模块（`src/components/map/antimeridian.js`），`world-atlas` 作为 npm 依赖。产品调整（用户拍板）：收起地图会**自动清除**视窗筛选（与 §3.4 规则 5 相反）；不显示离线角标，左下角改为 世界/地区/城市 层级指示器；Toolbar 四个排版按钮收进一个下拉。Phase 2（AI 地名解析）与 Phase 3 未开始。
+> **状态（2026-07-21）**：Phase 1（GPS-only MVP）已实现。Schema 8（`asset_locations` + R*Tree）、`browse-map-points`、MapDrawer/PhotoMap/视窗筛选、单测与 E2E（`apps/desktop/e2e/23-map.spec.js`）均已合入工作区。与本方案的偏差：地图数据不放 `public/maps/` 而是走 Vite 动态 `import()` 分包（生产环境 `file://` 下 `fetch` 拿不到静态资源）；日期变更线切割保留为运行时模块（`src/components/map/antimeridian.js`），`world-atlas` 作为 npm 依赖。产品调整（用户拍板）：收起地图会**自动清除**视窗筛选（与 §3.4 规则 5 相反）；不显示离线角标，左下角改为 世界/地区/城市 层级指示器；Toolbar 四个排版按钮收进一个下拉。**Phase 2（AI locality）已实现（2026-07-22）**：Annotation schema v2（admin1/locality 结构化）；Wikidata 离线地名库（~17 万条：202 国家/地区 + 5,351 省州 + 85,345 城市街区 + 90,539 地标，含中英标签，gzip 5MB，构建脚本 research/gazetteer-lab/build_gazetteer.py）；离线解析器 media_workspace/geo_resolver.py（预处理/国家消歧含主权归属/知名度优先/降级链/置信度阈值 60）；标注保存时自动解析 + resolve-ai-locations 存量回填（首次开图自动触发）。真实 catalog 验证：置信度达标的 69/69 全部解析成功。Phase 3 未开始。
 
 ## 1. 目标与非目标
 
