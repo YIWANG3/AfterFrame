@@ -8,6 +8,17 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.browseImages(options);
   });
 
+  ipcMain.handle("workspace:browse-map-points", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return [];
+    try {
+      return await commands.browseMapPoints(options || {});
+    } catch (err) {
+      console.warn("[workspace:browse-map-points] sidecar error:", err.message);
+      return [];
+    }
+  });
+
   ipcMain.handle("workspace:facet-values", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return null;

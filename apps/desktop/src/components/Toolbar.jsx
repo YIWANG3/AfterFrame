@@ -2,8 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import {
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   Plus,
   RotateCw,
   Search,
@@ -20,6 +19,7 @@ import {
   Check,
   Tags,
   SlidersHorizontal,
+  Map as MapIcon,
 } from "lucide-react";
 
 // Labels resolved at render via t(`toolbar.*`); these consts carry i18n keys.
@@ -69,6 +69,68 @@ function IconButton({ children, className = "", ...props }) {
     >
       {children}
     </button>
+  );
+}
+
+// The four layout modes live in one compact dropdown (trigger shows the
+// current mode's icon) instead of four toolbar buttons.
+function DisplayModeDropdown({ displayMode, setDisplayMode }) {
+  const { t } = useTranslation("nav");
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    function handleKey(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", handleDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("pointerdown", handleDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const current = DISPLAY_MODES.find((mode) => mode.key === displayMode) || DISPLAY_MODES[0];
+  const CurrentIcon = current.icon;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        data-testid="display-mode-trigger"
+        className="flex h-8 cursor-pointer items-center gap-1 rounded-md px-1.5 text-muted transition-colors hover:bg-hover hover:text-text"
+        title={t("toolbar.displayMode")}
+        onClick={() => setOpen((c) => !c)}
+      >
+        <CurrentIcon className="h-3.5 w-3.5 stroke-[1.6]" />
+        <ChevronDown className="h-2.5 w-2.5 text-muted2" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-[101] mt-1.5 min-w-[150px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
+          {DISPLAY_MODES.map(({ key, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              data-testid={`display-mode-${key}`}
+              className={[
+                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-hover",
+                displayMode === key ? "text-text" : "text-muted",
+              ].join(" ")}
+              onClick={() => { setDisplayMode(key); setOpen(false); }}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1">{t(`toolbar.display.${key}`)}</span>
+              {displayMode === key && <Check className="h-3 w-3 text-accent" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -142,14 +204,12 @@ export default function Toolbar({
   onRunPreviews,
   onAnnotateMissing,
   onAnnotateAll,
-  onBack,
-  onForward,
-  canGoBack,
-  canGoForward,
   displayMode,
   setDisplayMode,
   thumbSize,
   setThumbSize,
+  mapExpanded,
+  onToggleMap,
   showFilters,
   onToggleFilters,
   filterCount = 0,
@@ -207,13 +267,6 @@ export default function Toolbar({
         ) : null}
       </div>
 
-      <IconButton disabled={!canGoBack} onClick={onBack}>
-        <ChevronLeft className="h-4 w-4 stroke-[1.8]" />
-      </IconButton>
-      <IconButton disabled={!canGoForward} onClick={onForward}>
-        <ChevronRight className="h-4 w-4 stroke-[1.8]" />
-      </IconButton>
-
       <div className="ml-2 mr-2 min-w-0 flex-1">
         <div className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{title}</div>
       </div>
@@ -234,16 +287,17 @@ export default function Toolbar({
       </div>
 
       <div className="toolbar-modes flex items-center gap-1">
-        {DISPLAY_MODES.map(({ key, icon: Icon }) => (
+        <DisplayModeDropdown displayMode={displayMode} setDisplayMode={setDisplayMode} />
+        {onToggleMap ? (
           <IconButton
-            key={key}
-            onClick={() => setDisplayMode(key)}
-            className={displayMode === key ? "bg-selected text-accent" : ""}
-            title={t(`toolbar.display.${key}`)}
+            onClick={onToggleMap}
+            className={mapExpanded ? "bg-selected text-accent" : ""}
+            title={mapExpanded ? t("toolbar.map.hide") : t("toolbar.map.show")}
+            data-testid="map-toggle"
           >
-            <Icon className="h-3.5 w-3.5 stroke-[1.6]" />
+            <MapIcon className="h-3.5 w-3.5 stroke-[1.6]" />
           </IconButton>
-        ))}
+        ) : null}
       </div>
 
       {/* Flexible: shrinks before anything gets clipped, but never below usable */}

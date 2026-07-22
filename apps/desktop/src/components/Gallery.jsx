@@ -943,6 +943,7 @@ export default function Gallery({
           anchorId: selectedAssetId || selectedAssetIds?.[0] || null,
         });
       }}
+      data-testid="gallery-scroll"
       className={`h-full select-none overflow-x-hidden overflow-y-auto bg-app ${isTileMode ? "px-0 py-0" : "px-2 py-2"}`}
       style={{ scrollbarGutter: "stable" }}
     >

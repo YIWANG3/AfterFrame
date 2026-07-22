@@ -162,6 +162,46 @@ async function main() {
   runSidecar(["--catalog", CATALOG_DIR, "add-asset-tag",
     "--asset-id", byStem["003-yellow"], "--tag", "seeded-tag"]);
 
+  // 5b. Deterministic gallery order: several specs click the FIRST tile under
+  //     the default imported-desc sort and expect an image (press-E editor,
+  //     lightbox zoom). The video imports last, and whether it lands in the
+  //     same wall-clock second as the images (stem tiebreak → image first) or
+  //     one second later (video first) was pure timing luck. Pin it behind them.
+  execFileSync("python3", ["-c", `
+import sqlite3
+conn = sqlite3.connect(${JSON.stringify(path.join(CATALOG_DIR, "catalog.sqlite3"))})
+conn.execute("UPDATE assets SET created_at = datetime(created_at, '-60 seconds') WHERE asset_type = 'video'")
+conn.commit()
+conn.close()
+`], { encoding: "utf-8", stdio: "inherit" });
+
+  // 6. Give two assets GPS coordinates (Paris / Tokyo) so the map drawer has
+  //    location points to cluster and the viewport filter has something to
+  //    narrow down (see e2e/23-map.spec.js). Injected at the catalog level —
+  //    generating real GPS EXIF would drag in another image-metadata dep.
+  console.log("Injecting GPS for 001-red (Paris) and 002-orange (Tokyo)…");
+  execFileSync("python3", ["-c", `
+import json, sys
+from pathlib import Path
+sys.path.insert(0, ${JSON.stringify(SIDECAR_SRC)})
+from media_workspace.db import connect, upsert_asset_location_from_metadata
+
+conn = connect(Path(${JSON.stringify(CATALOG_DIR)}) / "catalog.sqlite3")
+for asset_id, lat, lon in [
+    (${JSON.stringify(byStem["001-red"])}, 48.8566, 2.3522),
+    (${JSON.stringify(byStem["002-orange"])}, 35.6895, 139.6917),
+]:
+    row = conn.execute("SELECT metadata_json FROM assets WHERE asset_id = ?", (asset_id,)).fetchone()
+    meta = json.loads(row["metadata_json"] or "{}")
+    meta["gps_latitude"], meta["gps_longitude"] = lat, lon
+    conn.execute("UPDATE assets SET metadata_json = ? WHERE asset_id = ?",
+                 (json.dumps(meta, ensure_ascii=True, sort_keys=True), asset_id))
+    upsert_asset_location_from_metadata(conn, asset_id, meta)
+conn.commit()
+conn.close()
+print("GPS injected")
+`], { encoding: "utf-8", env: { ...process.env }, stdio: "inherit" });
+
   console.log("\n✓ Seeded catalog:", CATALOG_DIR);
   console.log("✓ Images:", IMAGES_DIR);
 }

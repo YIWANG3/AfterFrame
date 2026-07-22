@@ -35,7 +35,8 @@
     "imported": "导入时间",
     "captured": "拍摄时间",
     "modified": "修改时间",
-    "gps": "GPS"
+    "gps": "GPS",
+    "locationSource": "位置来源"
   },
   "missing": {
     "badge": "缺失",
@@ -87,5 +88,10 @@
     "clearSelection": "取消选择",
     "removedCount_other": "已移出 {{count}} 张脸",
     "showMoreFaces_other": "加载更多（还有 {{count}} 张脸）"
+  },
+  "locationSource": {
+    "exif": "GPS (EXIF)",
+    "ai": "AI 推测",
+    "manual": "手动指定"
   }
 }

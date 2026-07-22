@@ -45,6 +45,7 @@ const api = {
 
   // ── browse & assets ──
   browseImages: (...args) => invoke("browseImages", ...args),
+  browseMapPoints: (...args) => invoke("browseMapPoints", ...args),
   getFacetValues: (...args) => invoke("getFacetValues", ...args),
   searchFacet: (...args) => invoke("searchFacet", ...args),
   getAssetDetail: (...args) => invoke("getAssetDetail", ...args),

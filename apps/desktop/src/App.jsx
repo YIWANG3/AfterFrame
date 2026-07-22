@@ -20,6 +20,9 @@ import SampleCatalogBanner from "./components/SampleCatalogBanner";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import FilterBar from "./components/FilterBar";
+import MapDrawer from "./components/map/MapDrawer";
+import MapResizeHandle from "./components/map/MapResizeHandle";
+import useMapViewportFilter from "./components/map/useMapViewportFilter";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import PeopleView from "./components/PeopleView";
 import PeopleInspector from "./components/PeopleInspector";
@@ -29,6 +32,16 @@ import ToastStack, { useToasts } from "./components/Toast";
 import { ConfirmHost, confirm } from "./components/confirm";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
+
+const MAP_EXPANDED_KEY = "afterframe-map-expanded";
+const MAP_HEIGHT_KEY = "afterframe-map-height";
+const MAP_MIN_HEIGHT = 220;
+const GALLERY_MIN_HEIGHT = 200;
+const MAP_HANDLE_HEIGHT = 10;
+
+function defaultMapHeight() {
+  return Math.max(MAP_MIN_HEIGHT, Math.min(Math.round(window.innerHeight * 0.42), 420));
+}
 
 export default function App() {
   // Toasts must exist before useWorkspace so menu actions (e.g. Verify Files)
@@ -47,8 +60,6 @@ export default function App() {
   const [showInspector] = useState(true);
   const [displayMode, setDisplayMode] = useState("grid");
   const [thumbSize, setThumbSize] = useState(180);
-  const [history, setHistory] = useState(["all"]);
-  const [historyIndex, setHistoryIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editorItem, setEditorItem] = useState(null);
   const [externalEditors, setExternalEditors] = useState([]);
@@ -61,6 +72,32 @@ export default function App() {
   const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people"
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(() => localStorage.getItem(MAP_EXPANDED_KEY) === "true");
+  const [mapHeight, setMapHeight] = useState(() => {
+    const saved = Number(localStorage.getItem(MAP_HEIGHT_KEY));
+    return Number.isFinite(saved) && saved >= MAP_MIN_HEIGHT ? saved : defaultMapHeight();
+  });
+  const [mapResizing, setMapResizing] = useState(false);
+  const workspaceSplitRef = useRef(null);
+
+  useEffect(() => { localStorage.setItem(MAP_EXPANDED_KEY, String(mapExpanded)); }, [mapExpanded]);
+  useEffect(() => { localStorage.setItem(MAP_HEIGHT_KEY, String(mapHeight)); }, [mapHeight]);
+
+  // Gallery keeps at least GALLERY_MIN_HEIGHT: clamp the drawer against the
+  // live workspace height (measured at interaction time, not render time).
+  const clampMapHeight = (height) => {
+    const available = workspaceSplitRef.current?.clientHeight || window.innerHeight;
+    const max = Math.max(MAP_MIN_HEIGHT, available - GALLERY_MIN_HEIGHT - MAP_HANDLE_HEIGHT);
+    return Math.min(max, Math.max(MAP_MIN_HEIGHT, Math.round(height)));
+  };
+
+  const { handleViewportChange } = useMapViewportFilter({
+    // Collection browse ignores facet filters, so a viewport chip there would
+    // claim to filter while doing nothing — keep it status-view only.
+    enabled: mapExpanded && !workspace.activeCollectionId,
+    filters: workspace.filters,
+    applyFilters: workspace.applyFilters,
+  });
 
   const clearPeopleGroupFilter = () => {
     if (!workspace.filters?.person_group) return workspace.filters || {};
@@ -74,6 +111,25 @@ export default function App() {
   useEffect(() => {
     if (!workspace.filters?.person_group) setPeopleGroup(null);
   }, [workspace.filters?.person_group]);
+
+  // The map's viewport chip lives in the filter bar too — reveal the bar when
+  // the geo filter first engages, or the filter would be active but invisible.
+  // Boolean dep: the geo object itself changes on every map move.
+  const hasGeoFilter = !!workspace.filters?.geo;
+  useEffect(() => {
+    if (hasGeoFilter) setShowFilters(true);
+  }, [hasGeoFilter]);
+
+  // Collapsing the map also drops the viewport filter: with the map hidden the
+  // chip is the only trace of it, and a gallery silently pinned to an invisible
+  // viewport reads as "my photos disappeared".
+  useEffect(() => {
+    if (mapExpanded) return;
+    const current = workspaceRef.current.filters;
+    if (!current?.geo) return;
+    const { geo: _geo, ...rest } = current;
+    workspaceRef.current.applyFilters(rest);
+  }, [mapExpanded]);
 
   const peopleGroups = usePeopleGroups({
     pushToast,
@@ -738,6 +794,14 @@ export default function App() {
         return;
       }
 
+      // M toggles the map drawer (assets view only; text fields already
+      // returned above via shouldIgnoreKey).
+      if (event.key.toLowerCase() === "m" && viewMode === "assets" && !lightboxOpen) {
+        event.preventDefault();
+        setMapExpanded((current) => !current);
+        return;
+      }
+
       if (/^[0-5]$/.test(event.key) && (selectedAssetIds.length || workspace.selectedAssetId)) {
         event.preventDefault();
         applyRating(Number(event.key));
@@ -775,7 +839,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentItems, displayMode, editorItem, layoutItems, lightboxOpen, openEditor, proofMode, selectedIndex, workspace.selectedAssetId, selectedAssetIds]);
+  }, [currentItems, displayMode, editorItem, layoutItems, lightboxOpen, openEditor, proofMode, selectedIndex, workspace.selectedAssetId, selectedAssetIds, viewMode]);
 
   return (
     <div className="noise-overlay h-full overflow-hidden bg-app text-text">
@@ -788,11 +852,6 @@ export default function App() {
             setViewMode("assets");
             setPeopleGroup(null);
             const nextFilters = clearPeopleGroupFilter();
-            const baseHistory = history.slice(0, historyIndex + 1);
-            const nextHistory = baseHistory[baseHistory.length - 1] === next ? baseHistory : [...baseHistory, next];
-            const nextIndex = nextHistory.length - 1;
-            setHistory(nextHistory);
-            setHistoryIndex(nextIndex);
             workspace.setStatusFilter(next, { facetFilters: nextFilters });
           }}
           collections={workspace.collections}
@@ -887,28 +946,12 @@ export default function App() {
                 onRunPreviews={workspace.runPreviewGeneration}
                 onAnnotateMissing={() => runAnnotation(null, { scope: "all", onlyMissing: true })}
                 onAnnotateAll={() => runAnnotation(null, { scope: "all", onlyMissing: false })}
-                onBack={() => {
-                  if (historyIndex <= 0) return;
-                  const nextIndex = historyIndex - 1;
-                  const next = history[nextIndex];
-                  setHistoryIndex(nextIndex);
-                  workspace.setStatus(next);
-                  void workspace.refreshAll({ nextStatus: next, collectionId: null });
-                }}
-                onForward={() => {
-                  if (historyIndex >= history.length - 1) return;
-                  const nextIndex = historyIndex + 1;
-                  const next = history[nextIndex];
-                  setHistoryIndex(nextIndex);
-                  workspace.setStatus(next);
-                  void workspace.refreshAll({ nextStatus: next, collectionId: null });
-                }}
-                canGoBack={historyIndex > 0}
-                canGoForward={historyIndex < history.length - 1}
                 displayMode={displayMode}
                 setDisplayMode={setDisplayMode}
                 thumbSize={thumbSize}
                 setThumbSize={setThumbSize}
+                mapExpanded={mapExpanded}
+                onToggleMap={() => setMapExpanded((current) => !current)}
                 showFilters={showFilters}
                 onToggleFilters={() => setShowFilters((v) => !v)}
                 filterCount={Object.keys(workspace.filters || {}).length}
@@ -927,7 +970,47 @@ export default function App() {
                   onPersonGroup={setPeopleGroup}
                 />
               )}
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div
+                ref={workspaceSplitRef}
+                className="grid min-h-0 flex-1 overflow-hidden"
+                data-testid="workspace-split"
+                style={{
+                  // min() keeps the gallery visible even if the window shrinks
+                  // below the saved drawer height.
+                  gridTemplateRows: mapExpanded
+                    ? `min(${mapHeight}px, calc(100% - ${GALLERY_MIN_HEIGHT + MAP_HANDLE_HEIGHT}px)) ${MAP_HANDLE_HEIGHT}px minmax(0, 1fr)`
+                    : "0px 0px minmax(0, 1fr)",
+                  transition:
+                    mapResizing || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                      ? "none"
+                      : "grid-template-rows 400ms cubic-bezier(0.45, 0, 0.55, 1)",
+                }}
+              >
+                <MapDrawer
+                  expanded={mapExpanded}
+                  status={workspace.status}
+                  collectionId={workspace.activeCollectionId}
+                  search={workspace.query}
+                  filters={workspace.filters}
+                  catalogKey={workspace.info?.catalogPath || null}
+                  refreshToken={Number(workspace.summary?.image_assets ?? 0)}
+                  onViewportChange={handleViewportChange}
+                  onSelectAsset={selectSingle}
+                />
+                {mapExpanded ? (
+                  <MapResizeHandle
+                    mapHeight={mapHeight}
+                    onHeightChange={(height) => setMapHeight(clampMapHeight(height))}
+                    onResizingChange={setMapResizing}
+                    minHeight={MAP_MIN_HEIGHT}
+                    maxHeight={clampMapHeight(Number.POSITIVE_INFINITY)}
+                    defaultHeight={defaultMapHeight()}
+                    label={tNav("map.resize")}
+                  />
+                ) : (
+                  <div aria-hidden="true" />
+                )}
+                <div className="min-h-0 overflow-hidden">
                 <Gallery
                   items={currentItems}
                   selectedAssetId={workspace.selectedAssetId}
@@ -963,6 +1046,7 @@ export default function App() {
                   onCollage={handleCollage}
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
                 />
+                </div>
               </div>
               {dropActive && (
                 <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-app/85 backdrop-blur-sm">

@@ -37,7 +37,12 @@
       "generatePreviews": "生成预览",
       "annotateMissing": "标注未标注项",
       "reannotateAll": "全部重新标注"
-    }
+    },
+    "map": {
+      "show": "显示地图",
+      "hide": "隐藏地图"
+    },
+    "displayMode": "布局"
   },
   "sidebar": {
     "people": "人物",
@@ -122,7 +127,9 @@
     "clear": "清除 {{count}}",
     "ratingAtLeast": "评分 ≥ {{n}}",
     "person": "人物",
-    "noNamedPeople": "还没有已命名的人物，先在人物页给他们起名。"
+    "noNamedPeople": "还没有已命名的人物，先在人物页给他们起名。",
+    "mapArea": "当前地图范围",
+    "mapAreaRemove": "移除地图范围筛选"
   },
   "activity": {
     "title": "后台活动",
@@ -180,6 +187,15 @@
       "copyPath": "复制文件路径",
       "copyName": "复制名称",
       "openWith": "打开方式"
+    }
+  },
+  "map": {
+    "loading": "正在加载地图…",
+    "resize": "调整地图高度",
+    "level": {
+      "world": "世界",
+      "region": "地区",
+      "city": "城市"
     }
   }
 }

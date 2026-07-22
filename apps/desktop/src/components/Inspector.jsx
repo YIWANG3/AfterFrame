@@ -405,6 +405,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           {gps ? (
             <Section title={t("sections.location")}>
               <DetailRow label={t("rows.gps")}>{gps}</DetailRow>
+              <DetailRow label={t("rows.locationSource")}>{t("locationSource.exif")}</DetailRow>
             </Section>
           ) : null}
 

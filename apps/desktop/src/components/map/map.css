@@ -1,0 +1,203 @@
+/* Offline photo map — stage, labels, and cluster markers.
+   Rule #1 (validated in the research prototype): MapLibre owns the OUTER
+   marker element's transform. Never restyle or transition it — every visual
+   effect lives on .photo-map-marker__visual. */
+
+.photo-map-stage {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: rgb(var(--chrome-bg));
+}
+
+/* Double selector: MapLibre adds .maplibregl-map to this element and its own
+   stylesheet (loaded later) sets position: relative — outrank it or the
+   container collapses to height 0. */
+.photo-map-stage .photo-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* Zoom control: frosted pill matching the app chrome instead of MapLibre's
+   white default. Icons are MapLibre's background-image SVGs — recolored via
+   filter for dark theme. */
+/* Both floating widgets (zoom control, level switcher) sit 10px off the map
+   edges — MapLibre adds its own 10px margin on .maplibregl-ctrl, zero it so
+   the two match. */
+.photo-map-canvas .maplibregl-ctrl-bottom-right {
+  right: 10px;
+  bottom: 10px;
+}
+
+.photo-map-canvas .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+  margin: 0;
+}
+
+.photo-map-canvas .maplibregl-ctrl-group {
+  background: rgb(var(--chrome-bg) / 0.92);
+  backdrop-filter: blur(10px);
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.14);
+}
+
+.photo-map-canvas .maplibregl-ctrl-group button {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.photo-map-canvas .maplibregl-ctrl-group button:hover {
+  background: rgb(var(--text-color) / 0.08);
+}
+
+.photo-map-canvas .maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgb(var(--border-color) / 0.6);
+}
+
+.photo-map-canvas .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(0.62);
+}
+
+:root[data-theme="light"] .photo-map-canvas .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(0.35);
+}
+
+.photo-map-label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.photo-map-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: rgb(var(--text-color) / 0.62);
+  text-shadow: 0 0 4px rgb(var(--chrome-bg)), 0 0 2px rgb(var(--chrome-bg));
+  will-change: transform;
+}
+
+.photo-map-label--region {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgb(var(--text-color) / 0.4);
+}
+
+/* Current-detail switcher (bottom-left): World · Region · City, the active
+   level lit by the stage's data-marker-mode; clicking jumps to that level. */
+.photo-map-levels {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 999px;
+  background: rgb(var(--chrome-bg) / 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.14);
+}
+
+.photo-map-level {
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: rgb(var(--text-color) / 0.42);
+  cursor: pointer;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+
+.photo-map-level:hover {
+  color: rgb(var(--text-color) / 0.75);
+}
+
+.photo-map-stage[data-marker-mode="compact"] .photo-map-level--world,
+.photo-map-stage[data-marker-mode="stack"] .photo-map-level--region,
+.photo-map-stage[data-marker-mode="detail"] .photo-map-level--city {
+  background: rgb(var(--accent-color) / 0.16);
+  color: rgb(var(--accent-color));
+  font-weight: 600;
+}
+
+/* ── Markers ─────────────────────────────────────────────────────────── */
+
+.photo-map-marker {
+  /* Outer element: MapLibre writes transform here. Opacity only. */
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.photo-map-marker__visual {
+  display: block;
+  transform: scale(var(--marker-scale, 1));
+  transition: transform 220ms ease;
+}
+
+.photo-map-stage[data-marker-mode="compact"] .photo-map-marker__visual { --marker-scale: 0.72; }
+.photo-map-stage[data-marker-mode="stack"] .photo-map-marker__visual { --marker-scale: 0.86; }
+.photo-map-stage[data-marker-mode="detail"] .photo-map-marker__visual { --marker-scale: 1; }
+
+.photo-map-marker:hover .photo-map-marker__visual {
+  transform: scale(calc(var(--marker-scale, 1) * 1.08));
+}
+
+.photo-map-marker__stack {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+.photo-map-marker__photo {
+  position: absolute;
+  inset: 0;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1.5px solid rgb(var(--chrome-bg));
+  background: rgb(var(--border-color));
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+.photo-map-marker__photo--back {
+  transform: rotate(-7deg) translate(-3px, 1px);
+}
+
+.photo-map-marker__photo--middle {
+  transform: rotate(5deg) translate(3px, 0);
+}
+
+.photo-map-marker__count {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgb(var(--accent-color));
+  color: rgb(var(--chrome-bg));
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}

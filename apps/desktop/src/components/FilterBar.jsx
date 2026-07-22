@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Map as MapIcon } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
@@ -436,6 +436,22 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           );
         })}
       </div>
+
+      {/* Location chip — created by moving the map, removable here. Removing
+          it only drops filters.geo; the map drawer stays open. */}
+      {f.geo && (
+        <button
+          type="button"
+          data-testid="geo-filter-chip"
+          onClick={() => onChange(setOrDelete(f, "geo", undefined))}
+          className="flex h-6 items-center gap-1 rounded-md border border-accent/50 bg-accent/10 px-2 text-[11px] text-text transition-colors hover:border-accent"
+          title={t("filter.mapAreaRemove")}
+        >
+          <MapIcon className="h-3 w-3" />
+          {f.geo.mode === "place" && f.geo.place_id ? f.geo.place_id : t("filter.mapArea")}
+          <X className="h-2.5 w-2.5 text-muted" />
+        </button>
+      )}
 
       {activeCount > 0 && (
         <button

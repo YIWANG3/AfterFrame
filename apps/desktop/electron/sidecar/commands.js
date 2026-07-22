@@ -22,6 +22,18 @@ function createSidecarCommands(callJson) {
       return callJson(argv).then((rows) => rows || []);
     },
 
+    // Lightweight location points for the map. Mirrors the gallery scope
+    // (status/collection/search/facets); the sidecar ignores filters.geo so
+    // the map keeps showing clusters outside the current viewport.
+    browseMapPoints({ status = "all", collectionId, search, filters, limit = 100000 } = {}) {
+      const argv = ["browse-map-points", "--limit", String(limit)];
+      if (collectionId) argv.push("--collection-id", String(collectionId));
+      else argv.push("--status", String(status));
+      if (search) argv.push("--search", String(search));
+      if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      return callJson(argv).then((rows) => rows || []);
+    },
+
     browseCollection(collectionId, { limit = 120, offset = 0 } = {}) {
       return callJson([
         "browse-collection",
