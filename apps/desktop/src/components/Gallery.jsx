@@ -24,6 +24,11 @@ const TILE_ASPECT_RATIO = 3 / 4;
 const OVERSCAN_PX = 800;
 const VIEW_PADDING = 8;
 
+function clearAssetDragMarkers() {
+  window.__mediaWorkspaceDraggingAssetId = null;
+  window.__mediaWorkspaceDraggingAssetIds = null;
+}
+
 function buildGridLayout(items, containerWidth, thumbSize, gap, aspectRatio, captionHeight, horizontalPadding) {
   if (!containerWidth) return null;
   const availableWidth = Math.max(containerWidth - horizontalPadding * 2, thumbSize);
@@ -353,17 +358,17 @@ const CardContent = memo(function CardContent({
         // dropping on a browser/chat uploads them. In-app drop targets
         // (sidebar collections) keep working: they fall back to the globals
         // above when the custom dataTransfer type is absent. startDrag
-        // resolves when the drag session ends, which is our cleanup signal
-        // (HTML5 dragend never fires once dragstart is preventDefault()ed).
+        // only acknowledges that the native session was started; it is not a
+        // drag-finished signal (HTML5 dragend never fires once dragstart is
+        // preventDefault()ed). App owns cleanup via mouseup/blur/Escape/drop.
         if (window.mediaWorkspace?.startNativeDrag) {
           event.preventDefault();
           Promise.resolve(window.mediaWorkspace.startNativeDrag({
             files: payload.imagePaths || [item.image_path],
             iconPath: item.preview_path || item.image_path,
-          })).catch(() => {}).finally(() => {
-            window.__mediaWorkspaceDraggingAssetId = null;
-            window.__mediaWorkspaceDraggingAssetIds = null;
-          });
+          })).then((result) => {
+            if (result?.ok === false) clearAssetDragMarkers();
+          }).catch(clearAssetDragMarkers);
           return;
         }
 
@@ -386,8 +391,7 @@ const CardContent = memo(function CardContent({
         event.dataTransfer.setDragImage(preview.element, preview.offsetX, preview.offsetY);
       }}
       onDragEnd={() => {
-        window.__mediaWorkspaceDraggingAssetId = null;
-        window.__mediaWorkspaceDraggingAssetIds = null;
+        clearAssetDragMarkers();
         if (window.__mediaWorkspaceDragPreviewEl instanceof HTMLElement) {
           window.__mediaWorkspaceDragPreviewEl.remove();
           window.__mediaWorkspaceDragPreviewEl = null;

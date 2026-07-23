@@ -39,6 +39,16 @@ const MAP_MIN_HEIGHT = 220;
 const GALLERY_MIN_HEIGHT = 200;
 const MAP_HANDLE_HEIGHT = 10;
 
+function hasSelfDragMarkers() {
+  return window.__mediaWorkspaceDraggingAssetIds != null
+    || window.__mediaWorkspaceDraggingAssetId != null;
+}
+
+function clearSelfDragMarkers() {
+  window.__mediaWorkspaceDraggingAssetId = null;
+  window.__mediaWorkspaceDraggingAssetIds = null;
+}
+
 function defaultMapHeight() {
   return Math.max(MAP_MIN_HEIGHT, Math.min(Math.round(window.innerHeight * 0.42), 420));
 }
@@ -273,6 +283,29 @@ export default function App() {
 
   const [dropActive, setDropActive] = useState(false);
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
+
+  // webContents.startDrag only starts the OS drag; its IPC response is not a
+  // drag-finished signal. Keep the self-drag markers alive until an actual
+  // end/cancel signal so native file dragovers cannot look like Finder imports.
+  useEffect(() => {
+    function finishSelfDrag(event) {
+      if (event?.type === "keydown" && event.key !== "Escape") return;
+      if (!hasSelfDragMarkers()) return;
+      clearSelfDragMarkers();
+      setDropActive(false);
+    }
+
+    window.addEventListener("mousedown", finishSelfDrag, true);
+    window.addEventListener("mouseup", finishSelfDrag, true);
+    window.addEventListener("blur", finishSelfDrag);
+    window.addEventListener("keydown", finishSelfDrag);
+    return () => {
+      window.removeEventListener("mousedown", finishSelfDrag, true);
+      window.removeEventListener("mouseup", finishSelfDrag, true);
+      window.removeEventListener("blur", finishSelfDrag);
+      window.removeEventListener("keydown", finishSelfDrag);
+    };
+  }, []);
 
   // Agent ↔ UI bridges (reveal / agent-change toast / selection mirror) live
   // in one hook so the contract is explicit — see useAgentBridge.
@@ -615,11 +648,16 @@ export default function App() {
   // our own gallery looks exactly like an external file drag. The in-app drag
   // markers distinguish them — never offer/import our own drag as new files.
   function isSelfDrag() {
-    return window.__mediaWorkspaceDraggingAssetIds != null
-      || window.__mediaWorkspaceDraggingAssetId != null;
+    return hasSelfDragMarkers();
   }
   function handleGalleryDragOver(event) {
-    if (isSelfDrag()) return;
+    if (isSelfDrag()) {
+      // A native drag-out can re-enter the gallery after a previous dragover
+      // already activated the import affordance. Never leave that stale
+      // external-import state visible for a drag that began in this gallery.
+      setDropActive(false);
+      return;
+    }
     if (event.dataTransfer?.types?.includes?.("Files")) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
@@ -633,7 +671,11 @@ export default function App() {
   }
   function handleGalleryDrop(event) {
     setDropActive(false);
-    if (isSelfDrag()) { event.preventDefault(); return; }
+    if (isSelfDrag()) {
+      event.preventDefault();
+      clearSelfDragMarkers();
+      return;
+    }
     if (!event.dataTransfer?.files?.length) return;
     event.preventDefault();
     const paths = [];
@@ -916,6 +958,7 @@ export default function App() {
 
         <section
           className="relative flex min-w-0 min-h-0 flex-col overflow-hidden bg-app"
+          onDragStart={() => setDropActive(false)}
           onDragOver={viewMode === "assets" ? handleGalleryDragOver : undefined}
           onDragLeave={viewMode === "assets" ? handleGalleryDragLeave : undefined}
           onDrop={viewMode === "assets" ? handleGalleryDrop : undefined}
