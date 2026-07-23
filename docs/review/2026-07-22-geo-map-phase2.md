@@ -54,6 +54,14 @@
 4. 首次开图自动回填的时序（与 useMapPoints 缓存/revision 的配合）。
 5. gazetteer 数据文件入 git 的体积权衡（5MB gz）与再生成可复现性。
 
+## 用户反馈修正（2026-07-22 晚）
+
+用户实测发现粗精度点误导（"Pacific Coast Highway" → 加州州级中心点，marker 看起来像精确位置）。修正：
+
+- **精度下限**：地图与视窗筛选默认只含 `exact`/`locality`（`browse-map-points --min-precision`，`filters.geo.min_precision`）；admin1/country 级 AI 点不再上图（宁缺毋滥），Inspector 仍显示推测文本。真实 catalog：显示 64、隐藏 5（全为线状公路/泛区域这类本质无点位的输入）。
+- **解析改进**（真实数据驱动）：逗号后段作为包含地上下文回退（"Scripps Pier, La Jolla" → La Jolla，6 张从州级修正为城市级）；跨层取优改为候选顺序优先、同候选词才比知名度（修 "San Francisco, California" 被加州州级抢走）；类目补 airport 与 island（香港机场、港岛 → exact）。
+- 线状地标（公路/海岸线）本质不可点位化，API 亦无解；正确点位依赖 v2 重新标注给出 locality，或 Phase 3 手动指定。
+
 ---
 
 ## Review Findings

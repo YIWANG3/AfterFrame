@@ -132,13 +132,18 @@ def _candidate_names(raw: str) -> list[str]:
         if not part:
             continue
         add(part)
-        first_segment = part.split(",")[0]
-        add(first_segment)
+        segments = [s.strip() for s in part.split(",") if s.strip()]
+        add(segments[0])
         # strip trailing descriptive words, repeatedly ("downtown waterfront")
-        words = first_segment.split()
+        words = segments[0].split()
         while len(words) > 1 and words[-1].lower() in _DESCRIPTIVE_SUFFIXES:
             words = words[:-1]
             add(" ".join(words))
+        # Later comma segments are the containing context ("Scripps Pier,
+        # La Jolla") — when the specific place is unknown, the context still
+        # gives a correct locality-level point.
+        for segment in segments[1:]:
+            add(segment)
     return ordered
 
 
@@ -206,14 +211,21 @@ def resolve_location(location: dict[str, Any] | None) -> ResolvedLocation | None
             q for q in (country_entry["q"], country_entry.get("parent")) if q
         )
 
-    def match(tier: str, raw) -> dict | None:
+    def match_indexed(tier: str, raw) -> tuple[dict, int] | None:
+        """First candidate (in preprocessing order) that resolves, with its
+        index — earlier candidates are the more specific reading of the raw
+        string ("San Francisco" before the ", California" context)."""
         if not raw:
             return None
-        for candidate in _candidate_names(str(raw)):
+        for index, candidate in enumerate(_candidate_names(str(raw))):
             picked = _pick(gazetteer.lookup(tier, candidate), country_qids)
             if picked:
-                return picked
+                return picked, index
         return None
+
+    def match(tier: str, raw) -> dict | None:
+        found = match_indexed(tier, raw)
+        return found[0] if found else None
 
     # The landmark string also falls back into the locality tier: models label
     # neighborhoods/places as "landmark" ("Manhattan", "Big Sur") and those
@@ -232,20 +244,20 @@ def resolve_location(location: dict[str, Any] | None) -> ResolvedLocation | None
         return _resolved(picked, "admin1", gazetteer, confidence_value)
 
     # The v1 fuzzy "region" can name either a city or a state/province. Try
-    # BOTH tiers and take the more notable match — tier order alone let a tiny
-    # locality shadow the obvious admin1 ("California" the Maryland CDP vs
-    # California the state).
+    # BOTH tiers; the earlier CANDIDATE wins ("San Francisco, California" →
+    # the specific first segment beats the context segment), and only when the
+    # same candidate matches both tiers does notability decide — that's the
+    # "California" the-Maryland-CDP vs California-the-state case.
     region = location.get("region")
     if region:
-        locality_match = match("localities", region)
-        admin1_match = match("admin1", region)
-        best = max(
-            [(m, p) for m, p in ((locality_match, "locality"), (admin1_match, "admin1")) if m],
-            key=lambda pair: pair[0].get("links") or 0,
-            default=None,
-        )
-        if best:
-            return _resolved(best[0], best[1], gazetteer, confidence_value)
+        contenders = [
+            (found[1], -(found[0].get("links") or 0), found[0], precision)
+            for tier, precision in (("localities", "locality"), ("admin1", "admin1"))
+            if (found := match_indexed(tier, region))
+        ]
+        if contenders:
+            _, _, item, precision = min(contenders)
+            return _resolved(item, precision, gazetteer, confidence_value)
 
     if country_entry:
         return _resolved(country_entry, "country", gazetteer, confidence_value)

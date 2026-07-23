@@ -31,6 +31,10 @@ export default function useMapViewportFilter({ enabled, filters, applyFilters })
           south: viewport.south,
           east: viewport.east,
           north: viewport.north,
+          // Matches the map's display floor: admin1/country-level AI guesses
+          // aren't drawn as markers, so they must not sneak into the filtered
+          // gallery either ("why is this photo in view with no marker?").
+          min_precision: "locality",
         },
       });
     }, DEBOUNCE_MS);

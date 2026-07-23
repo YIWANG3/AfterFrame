@@ -181,6 +181,10 @@ def delete_asset_location(connection: sqlite3.Connection, asset_id: str) -> None
     connection.execute("DELETE FROM asset_locations WHERE asset_id = ?", (asset_id,))
 
 
+# Precision rank shared with browse._GEO_PRECISION_RANK.
+_PRECISION_RANK = {"exact": 3, "locality": 2, "admin1": 1, "country": 0}
+
+
 def list_map_points(
     connection: sqlite3.Connection,
     *,
@@ -188,6 +192,7 @@ def list_map_points(
     collection_id: str | None = None,
     search: str | None = None,
     filters: dict | None = None,
+    min_precision: str = "locality",
     limit: int = 100000,
 ) -> list[sqlite3.Row]:
     """Lightweight location points for the map, mirroring the gallery scope.
@@ -207,6 +212,11 @@ def list_map_points(
     In collection scope, search and facets are ignored to match
     browse_collection (which accepts neither) — the map must never show a
     narrower set than the gallery it mirrors.
+
+    min_precision (default 'locality') drops coarser points: an admin1- or
+    country-level AI guess rendered as a precise-looking marker at the state
+    centroid reads as "this photo was taken in the middle of California" —
+    better absent than wrong. GPS points are 'exact' and never affected.
     """
     filters = dict(filters) if filters else None
     if filters:
@@ -224,6 +234,13 @@ def list_map_points(
     else:
         scope_join = ""
         scope_clause = _status_clause(status)
+
+    # Parameter order must mirror the SQL text: scope → precision IN (…) →
+    # search → facets → limit.
+    rank = _PRECISION_RANK.get(min_precision, _PRECISION_RANK["locality"])
+    allowed_precision = sorted(name for name, r in _PRECISION_RANK.items() if r >= rank)
+    precision_placeholders = ", ".join("?" for _ in allowed_precision)
+    params.extend(allowed_precision)
 
     search_clause, search_params = _search_clause(search)
     params.extend(search_params)
@@ -257,6 +274,9 @@ def list_map_points(
            AND preview_entries.status = 'ready'
         WHERE {scope_clause}
           AND (loc_img.location_id IS NOT NULL OR loc_raw.location_id IS NOT NULL)
+          AND (CASE WHEN loc_raw.location_id IS NOT NULL
+                    THEN loc_raw.precision_level ELSE loc_img.precision_level END)
+              IN ({precision_placeholders})
           {search_clause}
           {facet_clause}
         GROUP BY assets.asset_id

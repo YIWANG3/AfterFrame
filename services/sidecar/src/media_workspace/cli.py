@@ -286,6 +286,9 @@ def build_parser() -> argparse.ArgumentParser:
     map_points.add_argument("--collection-id", default=None)
     map_points.add_argument("--search", default=None)
     map_points.add_argument("--filters", default=None, help="JSON object of facet filters (geo key is ignored)")
+    # Coarser AI guesses (admin1/country centroids) look like precise markers
+    # in the middle of a state — hidden from the map by default.
+    map_points.add_argument("--min-precision", choices=["exact", "locality", "admin1", "country"], default="locality")
     map_points.add_argument("--limit", type=int, default=100000)
 
     # Backfill: resolve every existing AI annotation's location guess against
@@ -1453,6 +1456,7 @@ def _cmd_browse_map_points(args, connection, catalog, parser):
         collection_id=args.collection_id,
         search=args.search,
         filters=facet_filters,
+        min_precision=args.min_precision,
         limit=args.limit,
     ):
         preview_path = None

@@ -47,6 +47,7 @@ FIXTURE = {
         {"q": "Q62", "en": "San Francisco", "zh": "旧金山", "lat": 37.775, "lon": -122.419,
          "country": "Q30", "links": 235},
         {"q": "Q859413", "en": "Big Sur", "lat": 36.107, "lon": -121.626, "country": "Q30", "links": 34},
+        {"q": "Q1026876", "en": "La Jolla", "lat": 32.8328, "lon": -117.2712, "country": "Q30", "links": 30},
         # Ambiguous name with NO dominant candidate: must not resolve without country.
         {"q": "Q100001", "en": "Springfield", "lat": 39.8, "lon": -89.6, "country": "Q30", "links": 12},
         {"q": "Q100002", "en": "Springfield", "lat": 44.05, "lon": -123.02, "country": "Q16", "links": 10},
@@ -125,6 +126,15 @@ class ResolverTestCase(unittest.TestCase):
             landmark="Empire State Building / Manhattan skyline", confidence=90,
         )
         self.assertEqual(resolved.place_id, "wd:Q9188")
+
+    def test_comma_context_falls_back_to_containing_locality(self):
+        # "Scripps Pier, La Jolla": the pier itself is unknown, but the comma
+        # context names the containing locality — resolve there, not admin1.
+        resolved = self.resolve(
+            country="United States", landmark="Scripps Pier, La Jolla", confidence=90,
+        )
+        self.assertEqual(resolved.place_id, "wd:Q1026876")
+        self.assertEqual(resolved.precision_level, "locality")
 
     def test_v1_region_field_resolves_as_locality(self):
         resolved = self.resolve(country="United States", region="San Francisco, California", confidence=90)
@@ -228,6 +238,23 @@ class AiLocationWriteTestCase(unittest.TestCase):
             f"SELECT assets.asset_id FROM assets WHERE 1=1 {clause}", params
         ).fetchall()
         self.assertIn(asset_id, {row["asset_id"] for row in rows})
+
+    def test_map_points_hide_sub_locality_precision_by_default(self):
+        # An admin1-level guess drawn as a marker at the state centroid reads
+        # as "taken in the middle of California" — hidden unless asked for.
+        coarse = self._import_image()
+        self._write_ai(coarse, country="United States", region="California", confidence=90)
+        fine = self._import_image()
+        self._write_ai(fine, country="United States", locality="San Francisco", confidence=90)
+
+        default_ids = {row["asset_id"] for row in list_map_points(self.connection, status="all")}
+        self.assertIn(fine, default_ids)
+        self.assertNotIn(coarse, default_ids)
+
+        opt_in_ids = {row["asset_id"] for row in list_map_points(
+            self.connection, status="all", min_precision="admin1",
+        )}
+        self.assertIn(coarse, opt_in_ids)
 
     def test_include_ai_false_excludes_ai_rows(self):
         asset_id = self._import_image()
