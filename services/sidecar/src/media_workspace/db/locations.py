@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from .browse import _facet_clauses, _search_clause, _status_clause
+from .browse import _GEO_PRECISION_RANK, _facet_clauses, _search_clause, _status_clause
 
 
 def _valid_coordinates(latitude: object, longitude: object) -> tuple[float, float] | None:
@@ -181,10 +181,6 @@ def delete_asset_location(connection: sqlite3.Connection, asset_id: str) -> None
     connection.execute("DELETE FROM asset_locations WHERE asset_id = ?", (asset_id,))
 
 
-# Precision rank shared with browse._GEO_PRECISION_RANK.
-_PRECISION_RANK = {"exact": 3, "locality": 2, "admin1": 1, "country": 0}
-
-
 def list_map_points(
     connection: sqlite3.Connection,
     *,
@@ -237,8 +233,8 @@ def list_map_points(
 
     # Parameter order must mirror the SQL text: scope → precision IN (…) →
     # search → facets → limit.
-    rank = _PRECISION_RANK.get(min_precision, _PRECISION_RANK["locality"])
-    allowed_precision = sorted(name for name, r in _PRECISION_RANK.items() if r >= rank)
+    rank = _GEO_PRECISION_RANK.get(min_precision, _GEO_PRECISION_RANK["locality"])
+    allowed_precision = sorted(name for name, r in _GEO_PRECISION_RANK.items() if r >= rank)
     precision_placeholders = ", ".join("?" for _ in allowed_precision)
     params.extend(allowed_precision)
 

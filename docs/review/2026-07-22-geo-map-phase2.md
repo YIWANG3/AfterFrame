@@ -62,6 +62,17 @@
 - **解析改进**（真实数据驱动）：逗号后段作为包含地上下文回退（"Scripps Pier, La Jolla" → La Jolla，6 张从州级修正为城市级）；跨层取优改为候选顺序优先、同候选词才比知名度（修 "San Francisco, California" 被加州州级抢走）；类目补 airport 与 island（香港机场、港岛 → exact）。
 - 线状地标（公路/海岸线）本质不可点位化，API 亦无解；正确点位依赖 v2 重新标注给出 locality，或 Phase 3 手动指定。
 
+## 打包验证与地名库修正（2026-07-25）
+
+PR 前跑通了打包链路（PyInstaller sidecar + gazetteer datas），冒烟直接抓到一个**严重 recall 盲区**：打包版解析 "Paris" 落到国家级——因为巴黎的 P31 是 "commune of France" 而非 city 直类，P31 直类分片静默漏掉了几乎所有法/德/意/西的城市（真实 catalog 全美国照片所以没暴露）。修正：
+
+- city/town 伞类改跑子类闭包（按 sitelinks 分段拉取——WDQS 会在 ~10MB 处截断大响应，municipality 全闭包连分段都超限，改为列举法 commune/德 Gemeinde/意 comune/西 municipio/瑞士/荷兰/日本市等国家直类）。localities 从 8.5 万增至 16.6 万，包体 gz 7.6MB。
+- 顺带修：荷兰问题——ISO "NL" 挂在"荷兰王国"(Q29999) 而阿姆斯特丹 P17 是构成国"荷兰"(Q55)，与港澳方向相反；country 条目新增 P150 构成实体，消歧接受 {自身, 主权归属, 构成国}。
+- 新增 `RealGazetteerSanityTestCase`：对真实数据文件验证 10 个世界主要城市（巴黎/柏林/罗马/马德里/东京/北京/首尔/苏黎世/阿姆斯特丹/伦敦）必须解析到 locality 级，数据文件缺失时跳过——此类盲区从此有回归防线。
+- 打包冒烟通过：冻结二进制 init-catalog → 注入标注 → resolve → map-points 全链正确（Paris → wd:Q90 locality）。
+
+代码清理：useMapPoints 移除未用的 loading；locations.py 复用 browse 的精度表。
+
 ---
 
 ## Review Findings

@@ -15,7 +15,6 @@ const FETCH_DEBOUNCE_MS = 250;
 
 export default function useMapPoints({ enabled, status, collectionId, search, filters, catalogKey, refreshToken }) {
   const [points, setPoints] = useState([]);
-  const [loading, setLoading] = useState(false);
   const requestIdRef = useRef(0);
   const cacheRef = useRef({ key: null, points: null });
 
@@ -42,7 +41,6 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
     const timer = setTimeout(() => {
       const requestId = requestIdRef.current + 1;
       requestIdRef.current = requestId;
-      setLoading(true);
       (async () => {
         try {
           const rows = await api.browseMapPoints({
@@ -57,8 +55,6 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
           setPoints(next);
         } catch {
           if (!cancelled && requestIdRef.current === requestId) setPoints([]);
-        } finally {
-          if (!cancelled && requestIdRef.current === requestId) setLoading(false);
         }
       })();
     }, FETCH_DEBOUNCE_MS);
@@ -71,5 +67,5 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, cacheKey]);
 
-  return { points, loading };
+  return { points };
 }

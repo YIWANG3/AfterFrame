@@ -158,6 +158,34 @@ class ResolverTestCase(unittest.TestCase):
         self.assertIsNone(self.resolve(country="Atlantis", locality="Nowhere", confidence=95))
 
 
+@unittest.skipUnless(geo_resolver.GAZETTEER_PATH.exists(), "bundled gazetteer not built")
+class RealGazetteerSanityTestCase(unittest.TestCase):
+    """World-major-city smoke against the REAL bundled gazetteer. Guards the
+    class-sharding recall trap: French cities are P31 'commune of France',
+    German ones Gemeinden — a direct-P31 build silently dropped Paris (caught
+    only by the packaged-sidecar smoke test)."""
+
+    @classmethod
+    def setUpClass(cls):
+        geo_resolver.set_gazetteer_for_tests(None)  # force the real file
+
+    def test_world_major_cities_resolve_at_locality_or_better(self):
+        cases = [
+            ("France", "Paris"), ("Germany", "Berlin"), ("Italy", "Rome"),
+            ("Spain", "Madrid"), ("Japan", "Tokyo"), ("China", "Beijing"),
+            ("United Kingdom", "London"), ("Netherlands", "Amsterdam"),
+            ("South Korea", "Seoul"), ("Switzerland", "Zurich"),
+        ]
+        failures = []
+        for country, city in cases:
+            resolved = geo_resolver.resolve_location(
+                {"country": country, "locality": city, "confidence": 90}
+            )
+            if resolved is None or resolved.precision_level not in ("exact", "locality"):
+                failures.append(f"{city}: {resolved.precision_level if resolved else 'UNRESOLVED'}")
+        self.assertEqual(failures, [])
+
+
 class AiLocationWriteTestCase(unittest.TestCase):
     def setUp(self):
         import tempfile

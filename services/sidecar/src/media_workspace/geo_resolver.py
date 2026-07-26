@@ -204,11 +204,14 @@ def resolve_location(location: dict[str, Any] | None) -> ResolvedLocation | None
 
     country_entry = gazetteer.resolve_country(location.get("country"))
     # Items inside a territory usually carry the SOVEREIGN's P17 (Hong Kong
-    # landmarks say China) — accept the territory and its parent.
+    # landmarks say China); items inside a kingdom carry the CONSTITUENT's
+    # (Amsterdam says Netherlands Q55, ISO 'NL' sits on the Kingdom Q29999).
+    # Accept the entry itself, its sovereign parent, and its constituents.
     country_qids: frozenset[str] | None = None
     if country_entry:
         country_qids = frozenset(
-            q for q in (country_entry["q"], country_entry.get("parent")) if q
+            q for q in (country_entry["q"], country_entry.get("parent"),
+                        *country_entry.get("parts", [])) if q
         )
 
     def match_indexed(tier: str, raw) -> tuple[dict, int] | None:
