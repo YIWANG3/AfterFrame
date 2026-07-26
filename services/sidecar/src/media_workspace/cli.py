@@ -296,6 +296,11 @@ def build_parser() -> argparse.ArgumentParser:
     # inline at save time; this covers the pre-existing ones.
     subparsers.add_parser("resolve-ai-locations", parents=[common])
 
+    # Effective location of one image asset (RAW-first, no precision floor) —
+    # powers the Inspector's "click a location → jump the map there".
+    asset_location_p = subparsers.add_parser("get-asset-location", parents=[common])
+    asset_location_p.add_argument("--asset-id", required=True)
+
     subparsers.add_parser("facet-values", parents=[common])
 
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
@@ -567,6 +572,7 @@ def build_parser() -> argparse.ArgumentParser:
     annotate_p.add_argument("--max-tags", type=int, default=10)
     annotate_p.add_argument("--max-caption-chars", type=int, default=200)
     annotate_p.add_argument("--custom-instructions")
+    annotate_p.add_argument("--hint", help="User location correction, injected into the prompt with priority over visual inference.")
 
     run_annotation_job_parser = subparsers.add_parser("run-annotation-job", parents=[common])
     run_annotation_job_parser.add_argument("--job-id", required=True)
@@ -587,6 +593,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--video-frame-interval", type=float, default=0.0,
                                            help="Seconds between sampled video frames (0 = first/middle/last).")
     run_annotation_job_parser.add_argument("--limit", type=int)
+    run_annotation_job_parser.add_argument("--max-workers", type=int, default=3,
+                                           help="Concurrent API requests (clamped to 1-16).")
 
     annotation_count_p = subparsers.add_parser("annotation-count", parents=[common])
     annotation_count_p.add_argument("--asset-type", choices=["raw", "image"], default="image")
@@ -596,6 +604,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
+
+    # User veto of a wrong AI location: nulls location_json + drops the point.
+    clear_loc_p = subparsers.add_parser("clear-ai-location", parents=[common])
+    clear_loc_p.add_argument("--asset-id", required=True)
 
     add_tag_p = subparsers.add_parser("add-asset-tag", parents=[common])
     add_tag_p.add_argument("--asset-id", required=True)
@@ -905,6 +917,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
             custom_instructions=args.custom_instructions,
             existing_tags=existing,
             is_video=is_video,
+            location_hint=args.hint,
         )
     finally:
         if tmp_dir:
@@ -935,6 +948,7 @@ def _cmd_run_annotation_job(args, connection, catalog, parser):
         custom_instructions=args.custom_instructions,
         video_frame_interval=args.video_frame_interval,
         limit=args.limit,
+        max_workers=max(1, min(16, args.max_workers)),
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
@@ -1401,6 +1415,20 @@ def _cmd_browse_images(args, connection, catalog, parser):
             }
         )
     print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_clear_ai_location(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    payload = _annotation.clear_ai_location(connection, args.asset_id)
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_get_asset_location(args, connection, catalog, parser):
+    from .db.locations import get_asset_location
+    row = get_asset_location(connection, args.asset_id)
+    print(json.dumps(dict(row) if row else None, ensure_ascii=False))
     return 0
 
 
@@ -1944,6 +1972,8 @@ COMMAND_HANDLERS = {
     "browse-images": _cmd_browse_images,
     "browse-map-points": _cmd_browse_map_points,
     "resolve-ai-locations": _cmd_resolve_ai_locations,
+    "get-asset-location": _cmd_get_asset_location,
+    "clear-ai-location": _cmd_clear_ai_location,
     "asset-detail": _cmd_asset_detail,
     "list-pending": _cmd_list_pending,
     "confirm-match": _cmd_confirm_match,

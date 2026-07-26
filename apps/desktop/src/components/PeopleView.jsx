@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, LoaderCircle, RefreshCw, ScanFace, Search, Settings2, Trash2, UsersRound } from "lucide-react";
+import { Check, Download, LoaderCircle, RefreshCw, ScanFace, Search, Settings2, Trash2, UsersRound } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
@@ -75,7 +75,10 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
 
 export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   const { t } = useTranslation("nav");
-  const { groups, loading, failed, load, selectedId, select, rename, merge, deleteGroups, scan, startScan } = people;
+  const {
+    groups, loading, failed, load, selectedId, select, rename, merge, deleteGroups, scan,
+    requestScan, modelMissing, modelDownloading, modelDownloadSizeBytes,
+  } = people;
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [naming, setNaming] = useState(null); // { group, anchorRect }
@@ -115,6 +118,20 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
 
   const scanning = !!scan?.active;
   const scanPercent = Math.round((Number(scan?.progress) || 0) * 100);
+  const modelSizeMb = Math.max(1, Math.round((modelDownloadSizeBytes || 0) / 1e6));
+
+  // One label/icon set shared by the header and empty-state scan buttons:
+  // no model installed → the same click downloads the official model first.
+  const scanLabel = modelDownloading
+    ? t("people.downloadingModel")
+    : scanning
+      ? t("people.scanningShort")
+      : modelMissing
+        ? t("people.downloadAndScan", { size: modelSizeMb })
+        : t("people.scan");
+  const scanBusy = scanning || modelDownloading;
+  const ScanIcon = modelDownloading ? LoaderCircle : modelMissing ? Download : ScanFace;
+  const scanIconClass = modelDownloading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5";
 
   useEffect(() => {
     const available = new Set(groups.map((group) => group.group_id));
@@ -250,13 +267,13 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            onClick={() => void startScan().catch(() => {})}
-            disabled={scanning}
-            title={t("people.scanHint")}
+            onClick={() => void requestScan()}
+            disabled={scanBusy}
+            title={modelMissing ? t("people.downloadAndScanHint") : t("people.scanHint")}
             className="flex h-7 items-center gap-1.5 rounded-md border border-border/60 px-2.5 text-[11px] text-muted transition hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-50"
           >
-            <ScanFace className="h-3.5 w-3.5" />
-            {scanning ? t("people.scanningShort") : t("people.scan")}
+            <ScanIcon className={scanIconClass} />
+            {scanLabel}
           </button>
           <button
             type="button"
@@ -327,21 +344,37 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
               <UsersRound className="h-8 w-8 stroke-[1.25]" />
             </div>
             <h2 className="text-[14px] font-medium text-text">
-              {failed ? t("people.failedTitle") : scanning ? t("people.scanningEmptyTitle") : t("people.emptyTitle")}
+              {failed
+                ? t("people.failedTitle")
+                : scanning
+                  ? t("people.scanningEmptyTitle")
+                  : modelDownloading
+                    ? t("people.downloadingModelTitle")
+                    : modelMissing
+                      ? t("people.modelMissingTitle")
+                      : t("people.emptyTitle")}
             </h2>
             <p className="mt-2 max-w-sm text-[12px] leading-5 text-muted2">
-              {failed ? t("people.failedHint") : scanning ? t("people.scanningEmptyHint") : t("people.emptyHint")}
+              {failed
+                ? t("people.failedHint")
+                : scanning
+                  ? t("people.scanningEmptyHint")
+                  : modelDownloading
+                    ? t("people.downloadingModelHint")
+                    : modelMissing
+                      ? t("people.modelMissingHint", { size: modelSizeMb })
+                      : t("people.emptyHint")}
             </p>
             {!failed && (
               <div className="mt-4 flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void startScan().catch(() => {})}
-                  disabled={scanning}
+                  onClick={() => void requestScan()}
+                  disabled={scanBusy}
                   className="flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-[12px] font-medium text-app transition hover:bg-accent/90 disabled:opacity-55"
                 >
-                  <ScanFace className="h-3.5 w-3.5" />
-                  {scanning ? t("people.scanningShort") : t("people.scan")}
+                  <ScanIcon className={scanIconClass} />
+                  {scanLabel}
                 </button>
                 <button
                   type="button"

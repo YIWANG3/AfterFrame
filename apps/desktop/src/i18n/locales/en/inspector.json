@@ -36,7 +36,8 @@
     "captured": "Captured",
     "modified": "Modified",
     "gps": "GPS",
-    "locationSource": "Source"
+    "locationSource": "Source",
+    "gpsJump": "View the capture location on the map"
   },
   "missing": {
     "badge": "Missing",

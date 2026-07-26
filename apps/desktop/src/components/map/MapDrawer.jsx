@@ -17,12 +17,13 @@ export default function MapDrawer({
   refreshToken,
   onViewportChange,
   onSelectAsset,
+  flyTo,
 }) {
   const { t } = useTranslation("nav");
   // Once opened, stay mounted: tearing down on collapse would re-parse the
   // base-map data on every toggle.
   const hasOpenedRef = useRef(false);
-  if (expanded) hasOpenedRef.current = true;
+  if (expanded || flyTo) hasOpenedRef.current = true;
 
   // Fetch only while visible: a collapsed drawer must not pay for scope
   // changes (typing in search fires one 100k-row query per key otherwise).
@@ -57,6 +58,7 @@ export default function MapDrawer({
           visible={expanded}
           onViewportChange={onViewportChange}
           onSelectAsset={onSelectAsset}
+          flyTo={flyTo}
           levelLabels={{
             world: t("map.level.world"),
             region: t("map.level.region"),

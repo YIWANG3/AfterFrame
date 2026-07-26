@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace, Map as MapIcon } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
@@ -402,6 +402,21 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
       >
         <ScanFace className="h-3 w-3" />
         {t("filter.people")}
+      </button>
+
+      {/* AI annotation presence — cycles off → with → without → off. */}
+      <button
+        type="button"
+        onClick={() => onChange(setOrDelete(f, "annotated",
+          f.annotated === "with" ? "without" : f.annotated === "without" ? undefined : "with"))}
+        title={t("filter.annotatedHint")}
+        className={[
+          "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
+          f.annotated ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
+        ].join(" ")}
+      >
+        <Sparkles className="h-3 w-3" />
+        {f.annotated === "without" ? t("filter.notAnnotated") : t("filter.annotated")}
       </button>
 
       <PersonFilterPopover

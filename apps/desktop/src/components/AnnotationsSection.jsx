@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, RotateCcw, ChevronRight, X, Plus } from "lucide-react";
+import { Sparkles, RotateCcw, ChevronRight, X, Plus, Wand2, MapPinOff, LoaderCircle } from "lucide-react";
 import {
   subscribe,
   getVersion,
@@ -33,8 +33,11 @@ function SectionLabel({ title, badge }) {
 
 function Section({ title, badge, action, collapsible = false, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
+  // border-t to match Inspector's Section: these render as siblings of the
+  // Inspector sections, so a border-b here doubles up with the next section's
+  // border-t (last: never fires across the component boundary).
   return (
-    <div className="mt-4 border-b border-border/40 pb-3 last:border-b-0">
+    <div className="mt-4 border-t border-border/40 pt-3">
       <div className="flex items-center justify-between">
         {collapsible ? (
           <button
@@ -149,12 +152,20 @@ export default function AnnotationsSection({
   assetId,
   imagePath,
   onTagClick,
+  onJumpToLocation,
+  onLocationChanged,
   pushToast,
 }) {
   const { t } = useTranslation("annotation");
   const { hp: hasProvider, ann: annotation, known } = useAnnotationState(assetId);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
+  // "Wrong location?" correction popover: a one-line hint re-runs the
+  // annotation with the hint outranking visual inference.
+  const [hintOpen, setHintOpen] = useState(false);
+  const [hintText, setHintText] = useState("");
+
+  useEffect(() => { setHintOpen(false); setHintText(""); }, [assetId]);
 
   // Kick off any missing data fetches. Provider probe runs once on mount;
   // annotation fetch runs whenever we land on an assetId we haven't cached.
@@ -171,8 +182,9 @@ export default function AnnotationsSection({
     }
   }, [assetId, known]);
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (options = {}) => {
     if (!assetId || !imagePath) return;
+    const hint = typeof options.hint === "string" && options.hint.trim() ? options.hint.trim() : null;
     setRunning(true);
     setError(null);
     try {
@@ -196,8 +208,10 @@ export default function AnnotationsSection({
         maxTags: settings.maxTags || 10,
         maxCaptionChars: settings.maxCaptionChars || 200,
         customInstructions: settings.customInstructions || null,
+        hint,
       });
       setCachedAnnotation(assetId, result || null);
+      onLocationChanged?.();
       pushToast?.({ title: t("toast.annotatedTitle"), message: t("toast.annotatedMsg"), ttl: 3500 });
     } catch (e) {
       const msg = e?.message || t("toast.failedMsg");
@@ -206,7 +220,7 @@ export default function AnnotationsSection({
     } finally {
       setRunning(false);
     }
-  }, [assetId, imagePath, pushToast]);
+  }, [assetId, imagePath, onLocationChanged, pushToast]);
 
   const addTag = useCallback(async (tag) => {
     if (!assetId || !tag) return;
@@ -228,6 +242,26 @@ export default function AnnotationsSection({
     }
   }, [assetId, pushToast]);
 
+  // User veto: null the annotation's location + drop the resolved map point.
+  const clearLocation = useCallback(async () => {
+    if (!assetId) return;
+    try {
+      const updated = await window.mediaWorkspace?.clearAiLocation?.(assetId);
+      setCachedAnnotation(assetId, updated || null);
+      onLocationChanged?.();
+      pushToast?.({ title: t("loc.cleared"), ttl: 3500 });
+    } catch (e) {
+      pushToast?.({ title: t("loc.clearFailed"), message: e?.message || t("toast.failedFallback"), ttl: 5000, tone: "error" });
+    }
+  }, [assetId, onLocationChanged, pushToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitHint = () => {
+    const value = hintText.trim();
+    setHintOpen(false);
+    setHintText("");
+    void run(value ? { hint: value } : {});
+  };
+
   // Still unknown (fetch in flight): render a quiet placeholder matching the
   // CTA's footprint. Showing the CTA here would flash "Annotate with AI" for
   // a beat on every already-annotated asset before the fetch resolves.
@@ -248,7 +282,7 @@ export default function AnnotationsSection({
       <Section title={t("section.ai")}>
         <button
           type="button"
-          onClick={run}
+          onClick={() => run()}
           disabled={!enabled}
           title={providerKnown && !hasProvider ? t("configureTip") : undefined}
           className={[
@@ -288,7 +322,7 @@ export default function AnnotationsSection({
         action={
           <button
             type="button"
-            onClick={run}
+            onClick={() => run()}
             disabled={running || !hasProvider}
             title={!hasProvider ? t("configureTip") : t("reanalyzeTip")}
             className="flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium text-muted2 transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
@@ -334,40 +368,114 @@ export default function AnnotationsSection({
         </div>
       </Section>
 
-      {hasLoc && (
-        <Section title={t("section.location")} badge={t("badge.guess")} collapsible>
-          {loc.country && (
-            <div className="flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">{t("loc.country")}</span>
-              <span className="flex-1 text-text">{loc.country}<ConfidencePill value={loc.confidence} /></span>
-            </div>
-          )}
-          {loc.admin1 && (
-            <div className="mt-1 flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">{t("loc.admin1")}</span>
-              <span className="flex-1 text-text">{loc.admin1}</span>
-            </div>
-          )}
-          {loc.locality && (
-            <div className="mt-1 flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">{t("loc.locality")}</span>
-              <span className="flex-1 text-text">{loc.locality}</span>
-            </div>
-          )}
-          {loc.region && (
-            <div className="mt-1 flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">{t("loc.region")}</span>
-              <span className="flex-1 text-text">{loc.region}</span>
-            </div>
-          )}
-          {loc.landmark && (
-            <div className="mt-1 flex items-start gap-2 text-[11px]">
-              <span className="min-w-[50px] text-muted2">{t("loc.landmark")}</span>
-              <span className="flex-1 text-text">{loc.landmark}</span>
-            </div>
-          )}
-        </Section>
-      )}
+      {hasLoc && (() => {
+        // Every row jumps to the same resolved point — the click affordance
+        // is the row value itself, mirroring the Inspector's GPS row.
+        const locValue = (content) => (onJumpToLocation ? (
+          <button
+            type="button"
+            onClick={() => onJumpToLocation(assetId)}
+            title={t("loc.jumpTip")}
+            className="flex-1 cursor-pointer text-left text-text transition-colors hover:text-accent"
+          >
+            {content}
+          </button>
+        ) : (
+          <span className="flex-1 text-text">{content}</span>
+        ));
+        return (
+          <Section
+            title={t("section.location")}
+            badge={t("badge.guess")}
+            collapsible
+            action={
+              <div className="relative flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setHintOpen((v) => !v)}
+                  disabled={running}
+                  title={t("loc.hintTip")}
+                  className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text disabled:opacity-40"
+                >
+                  {running ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void clearLocation()}
+                  disabled={running}
+                  title={t("loc.clearTip")}
+                  className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-red-400 disabled:opacity-40"
+                >
+                  <MapPinOff className="h-3 w-3" />
+                </button>
+                {hintOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-60 rounded-md border border-border/60 bg-chrome p-2 shadow-overlay">
+                    <div className="mb-1 text-[10px] leading-snug text-muted2">{t("loc.hintLabel")}</div>
+                    <input
+                      autoFocus
+                      value={hintText}
+                      onChange={(e) => setHintText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitHint();
+                        else if (e.key === "Escape") { setHintOpen(false); setHintText(""); }
+                      }}
+                      placeholder={t("loc.hintPlaceholder")}
+                      className="w-full rounded-md border border-accent/50 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2"
+                    />
+                    <div className="mt-1.5 flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => { setHintOpen(false); setHintText(""); }}
+                        className="rounded px-1.5 py-0.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
+                      >
+                        {t("loc.hintCancel")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={submitHint}
+                        className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent/25"
+                      >
+                        {t("loc.hintRun")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            }
+          >
+            {loc.country && (
+              <div className="flex items-start gap-2 text-[11px]">
+                <span className="min-w-[50px] text-muted2">{t("loc.country")}</span>
+                {locValue(<>{loc.country}<ConfidencePill value={loc.confidence} /></>)}
+              </div>
+            )}
+            {loc.admin1 && (
+              <div className="mt-1 flex items-start gap-2 text-[11px]">
+                <span className="min-w-[50px] text-muted2">{t("loc.admin1")}</span>
+                {locValue(loc.admin1)}
+              </div>
+            )}
+            {loc.locality && (
+              <div className="mt-1 flex items-start gap-2 text-[11px]">
+                <span className="min-w-[50px] text-muted2">{t("loc.locality")}</span>
+                {locValue(loc.locality)}
+              </div>
+            )}
+            {loc.region && (
+              <div className="mt-1 flex items-start gap-2 text-[11px]">
+                <span className="min-w-[50px] text-muted2">{t("loc.region")}</span>
+                {locValue(loc.region)}
+              </div>
+            )}
+            {loc.landmark && (
+              <div className="mt-1 flex items-start gap-2 text-[11px]">
+                <span className="min-w-[50px] text-muted2">{t("loc.landmark")}</span>
+                {locValue(loc.landmark)}
+              </div>
+            )}
+          </Section>
+        );
+      })()}
 
       {error && <div className="mt-2 text-[10px] text-error">{error}</div>}
     </>

@@ -181,6 +181,31 @@ def delete_asset_location(connection: sqlite3.Connection, asset_id: str) -> None
     connection.execute("DELETE FROM asset_locations WHERE asset_id = ?", (asset_id,))
 
 
+def get_asset_location(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
+    """Effective location for one image asset — RAW-first, the same rule as
+    list_map_points. No precision floor: the Inspector's jump-to-map wants
+    coarse (admin1/country) points too — they fly to a low zoom instead of
+    being hidden the way the map markers are."""
+    return connection.execute(
+        """
+        SELECT
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.latitude ELSE loc_img.latitude END AS latitude,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.longitude ELSE loc_img.longitude END AS longitude,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.source ELSE loc_img.source END AS source,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.precision_level ELSE loc_img.precision_level END AS precision_level,
+            CASE WHEN loc_raw.location_id IS NOT NULL THEN loc_raw.place_id ELSE loc_img.place_id END AS place_id
+        FROM assets
+        LEFT JOIN image_lookup_registry AS registry ON registry.image_asset_id = assets.asset_id
+        LEFT JOIN asset_locations loc_img ON loc_img.asset_id = assets.asset_id
+        LEFT JOIN asset_locations loc_raw ON loc_raw.asset_id = registry.raw_asset_id
+        WHERE assets.asset_id = ?
+          AND (loc_img.location_id IS NOT NULL OR loc_raw.location_id IS NOT NULL)
+        LIMIT 1
+        """,
+        (asset_id,),
+    ).fetchone()
+
+
 def list_map_points(
     connection: sqlite3.Connection,
     *,

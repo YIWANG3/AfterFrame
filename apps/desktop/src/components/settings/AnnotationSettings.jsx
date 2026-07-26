@@ -85,6 +85,7 @@ function defaultSettings() {
     maxTags: 10,
     maxCaptionChars: 200,
     videoFrameInterval: 0,
+    maxWorkers: 3,
     customInstructions: "",
   };
 }
@@ -277,6 +278,18 @@ export default function AnnotationSettings() {
             step={10}
             onChange={(v) => persist({ videoFrameInterval: v })}
             suffix={t("annotation.seconds")}
+          />
+        </FieldRow>
+
+        <FieldRow
+          label={t("annotation.maxWorkers")}
+          hint={t("annotation.maxWorkersHint")}
+        >
+          <NumberInput
+            value={settings.maxWorkers}
+            min={1}
+            max={16}
+            onChange={(v) => persist({ maxWorkers: v })}
           />
         </FieldRow>
 

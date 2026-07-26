@@ -311,6 +311,7 @@ def annotate(
     custom_instructions: Optional[str] = None,
     existing_tags: Optional[list[str]] = None,
     is_video: bool = False,
+    location_hint: Optional[str] = None,
 ) -> AnnotationResult:
     """Annotate one asset from one or more frames. Pure: no DB writes.
 
@@ -336,6 +337,15 @@ def annotate(
         if is_video and len(images) > 1
         else "Annotate this image as instructed."
     )
+    if location_hint and location_hint.strip():
+        # User correction flow ("wrong location? tell the AI"): the hint
+        # outranks visual inference for the location fields.
+        prompt_text += (
+            "\n\nUser correction: this photo was taken at/in: "
+            f"{location_hint.strip()}. "
+            "Trust this over visual inference when filling the location fields, "
+            "and reconsider the caption and tags accordingly."
+        )
 
     if provider == "anthropic":
         if not api_key:
@@ -603,6 +613,30 @@ def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[di
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def clear_ai_location(connection: sqlite3.Connection, asset_id: str) -> Optional[dict[str, Any]]:
+    """User veto of a wrong AI location guess.
+
+    Nulls the annotation's location_json AND drops the resolved AI point —
+    both must go, because resolve-ai-locations (the backfill that runs on
+    map open) would otherwise re-create the point from location_json.
+    Manual/EXIF locations are never touched. Re-annotating the asset can
+    produce a fresh guess afterwards.
+    """
+    from .db.locations import delete_asset_location
+
+    row = connection.execute(
+        "SELECT source FROM asset_locations WHERE asset_id = ?", (asset_id,)
+    ).fetchone()
+    if row is not None and str(row["source"]) == "ai":
+        delete_asset_location(connection, asset_id)
+    connection.execute(
+        "UPDATE asset_ai_annotations SET location_json = NULL, updated_at = CURRENT_TIMESTAMP WHERE asset_id = ?",
+        (asset_id,),
+    )
+    connection.commit()
+    return get_annotation(connection, asset_id)
 
 
 def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, source: str = "user", commit: bool = True) -> Optional[dict[str, Any]]:

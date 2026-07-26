@@ -95,7 +95,16 @@
     "deletedCount_other": "已删除 {{count}} 个人物组，重新扫描不会恢复",
     "deleteFailed": "删除人物组失败",
     "emptyTitle": "还没有识别出人物",
-    "emptyHint": "请先在设置中下载人脸模型，再分析图库。后台任务结束后，人物会在这里出现。",
+    "emptyHint": "点击「扫描人脸」分析图库。识别在后台运行，人物会逐步出现在这里。",
+    "modelMissingTitle": "需要人脸识别模型",
+    "modelMissingHint": "人脸分析完全在本机离线运行，首次使用需下载识别模型（约 {{size}} MB，仅此一次）。也可以在设置中导入自定义 Core ML 模型。",
+    "downloadAndScan": "下载模型并扫描（{{size}} MB）",
+    "downloadAndScanHint": "下载官方人脸模型，完成后自动开始扫描",
+    "downloadingModel": "正在下载模型…",
+    "downloadingModelTitle": "正在下载人脸识别模型",
+    "downloadingModelHint": "下载完成后会自动开始分析图库，无需等待。",
+    "modelReady": "模型已安装，开始扫描",
+    "modelDownloadFailed": "模型下载失败",
     "failedTitle": "无法读取人物",
     "failedHint": "请尝试刷新。已索引的人脸数据仍安全保存在当前图库文件夹中。",
     "scan": "扫描人脸",
@@ -115,6 +124,9 @@
     "tag": "标签",
     "format": "格式",
     "people": "含人脸",
+    "annotated": "有 AI 标注",
+    "notAnnotated": "无 AI 标注",
+    "annotatedHint": "按是否有 AI 标注筛选，点击在 有 / 无 / 关闭 之间切换",
     "iso": "ISO",
     "aperture": "光圈",
     "focal": "焦距",
@@ -196,6 +208,7 @@
       "world": "世界",
       "region": "地区",
       "city": "城市"
-    }
+    },
+    "noLocation": "这张照片没有可定位的坐标"
   }
 }

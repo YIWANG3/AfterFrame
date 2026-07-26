@@ -88,7 +88,28 @@ export default function App() {
     return Number.isFinite(saved) && saved >= MAP_MIN_HEIGHT ? saved : defaultMapHeight();
   });
   const [mapResizing, setMapResizing] = useState(false);
+  // Fly-to request for the map camera; a fresh object per click so repeated
+  // jumps to the same place still re-fire the PhotoMap effect.
+  const [mapFlyTo, setMapFlyTo] = useState(null);
   const workspaceSplitRef = useRef(null);
+
+  // Inspector "click a location" → expand the drawer and fly the camera there.
+  // Works for GPS and AI-resolved locations alike: both live in
+  // asset_locations, fetched RAW-first without the map's precision floor.
+  async function jumpToAssetLocation(assetId) {
+    if (!assetId) return;
+    let loc = null;
+    try { loc = await api.getAssetLocation(assetId); } catch { /* treated as no location */ }
+    const lat = Number(loc?.latitude);
+    const lon = Number(loc?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      pushToast?.({ title: tNav("map.noLocation"), ttl: 4000 });
+      return;
+    }
+    const zoom = { exact: 14, locality: 10, admin1: 6, country: 4 }[loc.precision_level] ?? 12;
+    setMapExpanded(true);
+    setMapFlyTo({ lat, lon, zoom });
+  }
 
   useEffect(() => { localStorage.setItem(MAP_EXPANDED_KEY, String(mapExpanded)); }, [mapExpanded]);
   useEffect(() => { localStorage.setItem(MAP_HEIGHT_KEY, String(mapHeight)); }, [mapHeight]);
@@ -1069,6 +1090,7 @@ export default function App() {
                   refreshToken={workspace.catalogRevision}
                   onViewportChange={handleViewportChange}
                   onSelectAsset={selectSingle}
+                  flyTo={mapFlyTo}
                 />
                 {mapExpanded ? (
                   <MapResizeHandle
@@ -1154,6 +1176,8 @@ export default function App() {
               onRelinked={() => workspace.refreshAll({ force: true })}
               onOpenPersonGroup={openPersonGroup}
               onPeopleChanged={() => workspace.reloadDetail?.()}
+              onJumpToLocation={jumpToAssetLocation}
+              onLocationChanged={() => workspace.bumpCatalogRevision()}
               pushToast={pushToast}
               onTagFilter={(tag) => {
                 if (!tag) return;

@@ -58,10 +58,13 @@ const LEVEL_ZOOMS = { world: 1.35, region: 4, city: 7 };
 // The interactive offline map. Owns one MapLibre instance for its lifetime —
 // MapDrawer keeps this component mounted after the first open, so re-opening
 // the drawer never re-parses the 22 MB base-map data.
-export default function PhotoMap({ points, onViewportChange, onSelectAsset, visible, levelLabels }) {
+export default function PhotoMap({ points, onViewportChange, onSelectAsset, visible, levelLabels, flyTo }) {
   const stageRef = useRef(null);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
+  // Latest external fly-to request; parked here when the map instance is
+  // still constructing (first open triggered by an Inspector location click).
+  const pendingFlyToRef = useRef(null);
   const markersRef = useRef(new Map());
   const stateRef = useRef({ points: [], destroyed: false, maplibre: null });
   const callbacksRef = useRef({});
@@ -95,6 +98,11 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
         },
       });
       mapRef.current = map;
+      if (pendingFlyToRef.current) {
+        const request = pendingFlyToRef.current;
+        pendingFlyToRef.current = null;
+        map.flyTo({ center: [request.lon, request.lat], zoom: request.zoom ?? 12, duration: 900 });
+      }
       map.addControl(
         new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
         "bottom-right",
@@ -448,6 +456,20 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
       mapRef.current = null;
     };
   }, []);
+
+  // External fly-to (Inspector location click). App sends a fresh object per
+  // click, so repeated jumps to the same place still animate. If the map is
+  // still constructing (first open triggered by the click itself), the
+  // request parks in pendingFlyToRef and applies right after creation.
+  useEffect(() => {
+    if (!flyTo || !Number.isFinite(flyTo.lat) || !Number.isFinite(flyTo.lon)) return;
+    const map = mapRef.current;
+    if (!map) {
+      pendingFlyToRef.current = flyTo;
+      return;
+    }
+    map.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: flyTo.zoom ?? 12, duration: 900 });
+  }, [flyTo]);
 
   // Point data changes → swap the GeoJSON source, keep the camera. The
   // generation bump invalidates in-flight getClusterLeaves resolutions.

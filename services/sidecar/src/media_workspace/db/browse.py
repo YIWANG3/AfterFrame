@@ -192,6 +192,7 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
     rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags),
     people ('with_faces'|'without_faces'), person_group (group ID),
+    annotated ('with'|'without' — AI annotation presence),
     geo (map viewport/place filter — see _geo_filter_clause).
     Unknown/empty keys are ignored.
     """
@@ -238,6 +239,10 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
         add("EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
     elif filters.get("people") == "without_faces":
         add("NOT EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
+    if filters.get("annotated") == "with":
+        add("EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
+    elif filters.get("annotated") == "without":
+        add("NOT EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
     if filters.get("person_group"):
         add(
             """EXISTS (

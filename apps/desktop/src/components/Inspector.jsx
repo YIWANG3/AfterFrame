@@ -91,7 +91,7 @@ function ThumbnailStrip({ items, icon: Icon, onSelect }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, pushToast }) {
+export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [localRating, setLocalRating] = useState(null);
   const [relinking, setRelinking] = useState(false);
@@ -344,6 +344,8 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             assetId={detail.asset_id}
             imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
             onTagClick={onTagFilter}
+            onJumpToLocation={onJumpToLocation}
+            onLocationChanged={onLocationChanged}
             pushToast={pushToast}
           />
 
@@ -404,7 +406,16 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
 
           {gps ? (
             <Section title={t("sections.location")}>
-              <DetailRow label={t("rows.gps")}>{gps}</DetailRow>
+              <DetailRow label={t("rows.gps")}>
+                <button
+                  type="button"
+                  onClick={() => onJumpToLocation?.(detail.asset_id)}
+                  title={t("rows.gpsJump")}
+                  className="cursor-pointer text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:decoration-accent/60"
+                >
+                  {gps}
+                </button>
+              </DetailRow>
               <DetailRow label={t("rows.locationSource")}>{t("locationSource.exif")}</DetailRow>
             </Section>
           ) : null}

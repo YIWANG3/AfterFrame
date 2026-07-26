@@ -36,7 +36,8 @@
     "captured": "拍摄时间",
     "modified": "修改时间",
     "gps": "GPS",
-    "locationSource": "位置来源"
+    "locationSource": "位置来源",
+    "gpsJump": "在地图上查看拍摄位置"
   },
   "missing": {
     "badge": "缺失",

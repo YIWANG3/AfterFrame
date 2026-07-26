@@ -41,6 +41,12 @@ function createSidecarCommands(callJson) {
       return callJson(["resolve-ai-locations"]);
     },
 
+    // Effective location of one image asset (RAW-first, no precision floor).
+    // Null when the asset has neither GPS nor a resolved AI location.
+    getAssetLocation(assetId) {
+      return callJson(["get-asset-location", "--asset-id", String(assetId)]);
+    },
+
     browseCollection(collectionId, { limit = 120, offset = 0 } = {}) {
       return callJson([
         "browse-collection",
