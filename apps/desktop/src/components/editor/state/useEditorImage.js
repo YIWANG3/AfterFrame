@@ -43,6 +43,10 @@ export function useEditorImage({ open, sourcePath, decodeErrorLabel = "Failed to
 
         try {
           image = new Image();
+          // CORS-mode load, like the sticker/depth caches: a no-cors media://
+          // image taints every canvas it's drawn into on Chromium ≥ Electron 43,
+          // which silently breaks the frame/pad compose save (toDataURL throws).
+          image.crossOrigin = "anonymous";
           image.decoding = "async";
           image.src = url;
           await image.decode();
