@@ -6,6 +6,7 @@ descriptive suffixes, compound strings, v1 "region" fields.
 """
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -39,6 +40,7 @@ FIXTURE = {
     "admin1": [
         {"q": "Q99", "en": "California", "zh": "加利福尼亚州", "lat": 37.0, "lon": -120.0,
          "country": "Q30", "links": 285},
+        {"q": "Q724", "en": "Maine", "lat": 45.5, "lon": -69.0, "country": "Q30", "links": 120},
     ],
     "localities": [
         # The disambiguation trap from the real catalog: two Grindelwalds.
@@ -51,12 +53,23 @@ FIXTURE = {
         # Ambiguous name with NO dominant candidate: must not resolve without country.
         {"q": "Q100001", "en": "Springfield", "lat": 39.8, "lon": -89.6, "country": "Q30", "links": 12},
         {"q": "Q100002", "en": "Springfield", "lat": 44.05, "lon": -123.02, "country": "Q16", "links": 10},
+        # The El Capitan trap (locality tier): an Arizona settlement shares the name.
+        {"q": "Q12630500", "en": "El Capitan", "lat": 33.2383, "lon": -110.783, "country": "Q30", "links": 16},
+        {"q": "Q2140121", "en": "Yosemite Valley", "lat": 37.7433, "lon": -119.576, "country": "Q30", "links": 24},
+        # Same-name localities in one country, different states (anchor test).
+        {"q": "Q77001", "en": "Portland", "lat": 45.52, "lon": -122.67, "country": "Q30", "links": 100},
+        {"q": "Q77002", "en": "Portland", "lat": 43.66, "lon": -70.25, "country": "Q30", "links": 40},
     ],
     "landmarks": [
         {"q": "Q243", "en": "Eiffel Tower", "zh": "埃菲尔铁塔", "lat": 48.8583, "lon": 2.2945,
          "country": "Q142", "links": 189},
         {"q": "Q9188", "en": "Empire State Building", "lat": 40.7483, "lon": -73.9856,
          "country": "Q30", "links": 123},
+        # Same-country homonyms of Yosemite's El Capitan (which itself is
+        # deliberately ABSENT here — the real gazetteer once missed it, and the
+        # resolver must degrade to the stated locality, not fly to Texas).
+        {"q": "Q5350921", "en": "El Capitan", "lat": 31.8772, "lon": -104.858, "country": "Q30", "links": 11},
+        {"q": "Q5350920", "en": "El Capitan", "lat": 43.941, "lon": -114.934, "country": "Q30", "links": 6},
     ],
 }
 
@@ -150,6 +163,54 @@ class ResolverTestCase(unittest.TestCase):
         resolved = self.resolve(country="Switzerland", confidence=90)
         self.assertEqual(resolved.precision_level, "country")
         self.assertEqual(resolved.place_id, "wd:Q39")
+
+    def test_anchor_rejects_far_homonym_falls_back_to_locality(self):
+        # The Yosemite bug: gazetteer only knows Texas/Idaho "El Capitan"s.
+        # With the annotation saying California / Yosemite Valley, the far
+        # obscure homonyms must lose to the stated locality.
+        resolved = self.resolve(
+            country="United States", admin1="California",
+            locality="Yosemite Valley", landmark="El Capitan", confidence=85,
+        )
+        self.assertEqual(resolved.place_id, "wd:Q2140121")
+        self.assertEqual(resolved.precision_level, "locality")
+
+    def test_anchor_prefers_near_landmark_when_present(self):
+        # Once the real El Capitan exists, the anchor picks it over the
+        # higher-or-lower-linked homonyms by proximity.
+        fixture = {**FIXTURE, "landmarks": FIXTURE["landmarks"] + [
+            {"q": "Q1124852", "en": "El Capitan", "lat": 37.734, "lon": -119.637,
+             "country": "Q30", "links": 40},
+        ]}
+        geo_resolver.set_gazetteer_for_tests(fixture)
+        resolved = self.resolve(
+            country="United States", admin1="California",
+            locality="Yosemite Valley", landmark="El Capitan", confidence=85,
+        )
+        self.assertEqual(resolved.place_id, "wd:Q1124852")
+        self.assertEqual(resolved.precision_level, "exact")
+
+    def test_landmark_conflicting_with_context_degrades_to_locality(self):
+        # The anchor is a hard guarantee: the annotation resolved Grindelwald,
+        # so even a world-famous landmark match outside that region loses —
+        # coarse-but-consistent beats precise-but-elsewhere.
+        resolved = self.resolve(locality="Grindelwald", landmark="Eiffel Tower", confidence=90)
+        self.assertEqual(resolved.place_id, "wd:Q68096")
+        self.assertEqual(resolved.precision_level, "locality")
+
+    def test_landmark_without_context_still_resolves(self):
+        # No locality/admin1 → no anchor → the plain country/dominance rules
+        # apply unchanged.
+        resolved = self.resolve(landmark="Eiffel Tower", confidence=90)
+        self.assertEqual(resolved.place_id, "wd:Q243")
+        self.assertEqual(resolved.precision_level, "exact")
+
+    def test_admin1_anchor_disambiguates_same_name_localities(self):
+        # Portland, Maine (links 40) must beat Portland, Oregon (links 100)
+        # when the annotation says Maine.
+        resolved = self.resolve(country="United States", admin1="Maine", locality="Portland", confidence=90)
+        self.assertEqual(resolved.place_id, "wd:Q77002")
+        self.assertEqual(resolved.precision_level, "locality")
 
     def test_low_confidence_never_resolves(self):
         self.assertIsNone(self.resolve(country="Switzerland", landmark="Eiffel Tower", confidence=40))
@@ -246,6 +307,45 @@ class AiLocationWriteTestCase(unittest.TestCase):
             self.connection, asset_id,
             {"gps_latitude": 48.8566, "gps_longitude": 2.3522}, commit=True,
         )
+        row = self.connection.execute(
+            "SELECT source, latitude FROM asset_locations WHERE asset_id = ?", (asset_id,)
+        ).fetchone()
+        self.assertEqual(row["source"], "exif")
+        self.assertAlmostEqual(row["latitude"], 48.8566)
+
+    def _insert_annotation(self, asset_id: str, location: dict) -> None:
+        self.connection.execute(
+            "INSERT INTO asset_ai_annotations (asset_id, provider, model, schema_version, caption, tags_json, location_json)"
+            " VALUES (?, 'anthropic', 'test-model', 2, 'caption', '[]', ?)",
+            (asset_id, json.dumps(location)),
+        )
+        self.connection.commit()
+
+    def test_clear_ai_location_vetoes_point_and_annotation(self):
+        from media_workspace.annotation import clear_ai_location
+
+        asset_id = self._import_image()
+        location = {"country": "Switzerland", "locality": "Grindelwald", "confidence": 90}
+        self._insert_annotation(asset_id, location)
+        self.assertTrue(self._write_ai(asset_id, **location))
+
+        payload = clear_ai_location(self.connection, asset_id)
+        self.assertIsNone(payload["location"])
+        self.assertIsNone(self.connection.execute(
+            "SELECT 1 FROM asset_locations WHERE asset_id = ?", (asset_id,)
+        ).fetchone())
+        # location_json must be nulled too, or the resolve-ai-locations
+        # backfill would resurrect the vetoed point on the next map open.
+        self.assertIsNone(self.connection.execute(
+            "SELECT location_json FROM asset_ai_annotations WHERE asset_id = ?", (asset_id,)
+        ).fetchone()["location_json"])
+
+    def test_clear_ai_location_never_touches_exif(self):
+        from media_workspace.annotation import clear_ai_location
+
+        asset_id = self._import_image(48.8566, 2.3522)  # EXIF GPS: Paris
+        self._insert_annotation(asset_id, {"country": "Switzerland", "locality": "Grindelwald", "confidence": 90})
+        clear_ai_location(self.connection, asset_id)
         row = self.connection.execute(
             "SELECT source, latitude FROM asset_locations WHERE asset_id = ?", (asset_id,)
         ).fetchone()

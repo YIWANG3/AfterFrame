@@ -11,6 +11,13 @@ research/gazetteer-lab/FINDINGS.md):
   descriptive suffixes ("X skyline" → "X")
 - disambiguate by the annotation's own country (the naked top search hit for
   "Grindelwald" is in Tasmania, "Montmartre" in Saskatchewan)
+- disambiguate further by the annotation's own locality/admin1 as a spatial
+  anchor: same-name candidates inside one country ("El Capitan" in Yosemite /
+  Texas / Idaho, all US) are told apart by proximity to the stated
+  locality/state. The anchor is a hard guarantee: once the annotation
+  resolves "California", the final point stays consistent with it — a
+  conflicting landmark match degrades to the locality/admin1 point rather
+  than jumping out of the stated region
 - among remaining candidates prefer Wikipedia sitelink count; with no country
   context an ambiguous name only resolves when the top candidate clearly
   dominates — otherwise the tier is skipped (never "just pick one")
@@ -21,13 +28,14 @@ from __future__ import annotations
 
 import gzip
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
 MIN_CONFIDENCE = 60
-RESOLVER_VERSION = "wikidata-gazetteer-1"
+RESOLVER_VERSION = "wikidata-gazetteer-2"
 GAZETTEER_PATH = Path(__file__).parent / "data" / "gazetteer.json.gz"
 
 # "Big Sur coastline" / "Manhattan skyline" / "Vancouver downtown waterfront":
@@ -41,6 +49,14 @@ _DESCRIPTIVE_SUFFIXES = (
 # candidate clearly dominates by notability.
 _DOMINANCE_RATIO = 2.0
 _DOMINANCE_FLOOR = 30
+
+# Spatial-anchor radii (degrees): a landmark should sit near the annotation's
+# stated locality; a locality near its stated admin1's centroid. Sized for the
+# real cases — El Capitan is 0.06° from Yosemite Valley; San Diego is ~5° from
+# California's centroid (radius 6 keeps big-state corners inside; a false
+# reject only degrades to the still-in-state locality/admin1 point).
+_LOCALITY_ANCHOR_RADIUS_DEG = 1.5
+_ADMIN1_ANCHOR_RADIUS_DEG = 6.0
 
 # Approximate bounding-half-sizes (degrees) per precision tier. Only used for
 # viewport intersection; markers always render at the centroid.
@@ -147,22 +163,48 @@ def _candidate_names(raw: str) -> list[str]:
     return ordered
 
 
-def _pick(matches: list[dict], country_qids: frozenset[str] | None) -> dict | None:
+def _within(item: dict, anchor: tuple[float, float, float]) -> bool:
+    lat, lon, radius = anchor
+    item_lat = float(item["lat"])
+    dlat = item_lat - lat
+    dlon = (float(item["lon"]) - lon) * math.cos(math.radians((item_lat + lat) / 2.0))
+    return math.hypot(dlat, dlon) <= radius
+
+
+def _dominant(matches: list[dict]) -> dict | None:
+    """Sorted-by-links input → the leader iff it clearly dominates."""
+    top = matches[0]
+    top_links = top.get("links") or 0
+    second_links = (matches[1].get("links") or 0) if len(matches) > 1 else 0
+    if top_links >= _DOMINANCE_FLOOR and top_links >= _DOMINANCE_RATIO * max(1, second_links):
+        return top
+    return None
+
+
+def _pick(
+    matches: list[dict],
+    country_qids: frozenset[str] | None,
+    anchor: tuple[float, float, float] | None = None,
+) -> dict | None:
     if country_qids:
         matches = [m for m in matches if m.get("country") is None or m.get("country") in country_qids]
     if not matches:
         return None
     matches = sorted(matches, key=lambda m: -(m.get("links") or 0))
+    if anchor:
+        # The anchor is a hard consistency guarantee: the annotation already
+        # resolved a locality/admin1, so a candidate outside that region is
+        # wrong by definition — Texas's "El Capitan" when the photo says
+        # Yosemite Valley. Reject the tier entirely and let the caller fall
+        # back to the (in-region) locality/admin1 point.
+        matches = [m for m in matches if _within(m, anchor)]
+        if not matches:
+            return None
     if len(matches) == 1 or country_qids:
         return matches[0]
     # No country context and multiple same-name candidates: only resolve when
     # the leader clearly dominates — the doc forbids picking arbitrarily.
-    top, second = matches[0], matches[1]
-    top_links = top.get("links") or 0
-    second_links = second.get("links") or 0
-    if top_links >= _DOMINANCE_FLOOR and top_links >= _DOMINANCE_RATIO * max(1, second_links):
-        return top
-    return None
+    return _dominant(matches)
 
 
 def _resolved(item: dict, precision: str, gazetteer: Gazetteer, confidence: float | None) -> ResolvedLocation:
@@ -214,37 +256,51 @@ def resolve_location(location: dict[str, Any] | None) -> ResolvedLocation | None
                         *country_entry.get("parts", [])) if q
         )
 
-    def match_indexed(tier: str, raw) -> tuple[dict, int] | None:
+    def match_indexed(tier: str, raw, anchor: tuple[float, float, float] | None = None) -> tuple[dict, int] | None:
         """First candidate (in preprocessing order) that resolves, with its
         index — earlier candidates are the more specific reading of the raw
         string ("San Francisco" before the ", California" context)."""
         if not raw:
             return None
         for index, candidate in enumerate(_candidate_names(str(raw))):
-            picked = _pick(gazetteer.lookup(tier, candidate), country_qids)
+            picked = _pick(gazetteer.lookup(tier, candidate), country_qids, anchor)
             if picked:
                 return picked, index
         return None
 
-    def match(tier: str, raw) -> dict | None:
-        found = match_indexed(tier, raw)
+    def match(tier: str, raw, anchor: tuple[float, float, float] | None = None) -> dict | None:
+        found = match_indexed(tier, raw, anchor)
         return found[0] if found else None
+
+    # Spatial anchors from the annotation's own admin1/locality: same-name
+    # candidates within one country ("El Capitan" in Yosemite / Texas / Idaho,
+    # all US) are told apart by proximity to the more specific fields. The
+    # locality itself anchors on admin1; landmarks anchor on the locality
+    # (falling back to admin1).
+    admin1_pick = match("admin1", location.get("admin1"))
+    admin1_anchor = (
+        (float(admin1_pick["lat"]), float(admin1_pick["lon"]), _ADMIN1_ANCHOR_RADIUS_DEG)
+        if admin1_pick else None
+    )
+    locality_pick = match("localities", location.get("locality"), admin1_anchor)
+    context_anchor = (
+        (float(locality_pick["lat"]), float(locality_pick["lon"]), _LOCALITY_ANCHOR_RADIUS_DEG)
+        if locality_pick else admin1_anchor
+    )
 
     # The landmark string also falls back into the locality tier: models label
     # neighborhoods/places as "landmark" ("Manhattan", "Big Sur") and those
     # live in the settlement classes, not the landmark classes.
     landmark = location.get("landmark")
     for tier, precision in (("landmarks", "exact"), ("localities", "locality")):
-        picked = match(tier, landmark)
+        picked = match(tier, landmark, context_anchor)
         if picked:
             return _resolved(picked, precision, gazetteer, confidence_value)
 
-    picked = match("localities", location.get("locality"))
-    if picked:
-        return _resolved(picked, "locality", gazetteer, confidence_value)
-    picked = match("admin1", location.get("admin1"))
-    if picked:
-        return _resolved(picked, "admin1", gazetteer, confidence_value)
+    if locality_pick:
+        return _resolved(locality_pick, "locality", gazetteer, confidence_value)
+    if admin1_pick:
+        return _resolved(admin1_pick, "admin1", gazetteer, confidence_value)
 
     # The v1 fuzzy "region" can name either a city or a state/province. Try
     # BOTH tiers; the earlier CANDIDATE wins ("San Francisco, California" →
@@ -256,7 +312,7 @@ def resolve_location(location: dict[str, Any] | None) -> ResolvedLocation | None
         contenders = [
             (found[1], -(found[0].get("links") or 0), found[0], precision)
             for tier, precision in (("localities", "locality"), ("admin1", "admin1"))
-            if (found := match_indexed(tier, region))
+            if (found := match_indexed(tier, region, admin1_anchor if tier == "localities" else None))
         ]
         if contenders:
             _, _, item, precision = min(contenders)
