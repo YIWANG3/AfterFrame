@@ -33,7 +33,9 @@ jobs:
         run: npm audit --omit=dev --prefix apps/desktop
 
   electron-e2e:
-    runs-on: macos-14
+    # macOS 15+: the Swift helpers use current AVFoundation APIs (the product
+    # is macOS-only and does not carry old-SDK compatibility branches).
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
