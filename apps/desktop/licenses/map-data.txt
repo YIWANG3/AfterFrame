@@ -1,0 +1,28 @@
+Offline map — third-party licenses
+==================================
+
+MapLibre GL JS (npm: maplibre-gl)
+  License: BSD 3-Clause
+  https://github.com/maplibre/maplibre-gl-js/blob/main/LICENSE.txt
+
+topojson-client
+  License: ISC
+  https://github.com/topojson/topojson-client/blob/master/LICENSE.md
+
+world-atlas (countries-10m.json)
+  License: ISC (code); map data derived from Natural Earth
+  https://github.com/topojson/world-atlas
+
+Natural Earth
+  The bundled base-map data (src/data/maps/: admin1 boundary lines, admin1
+  labels, populated places) is derived from Natural Earth 1:10m / 1:50m
+  cultural vectors. Natural Earth is in the public domain.
+  https://www.naturalearthdata.com/about/terms-of-use/
+
+Wikidata
+  The offline gazetteer bundled with the sidecar
+  (services/sidecar/src/media_workspace/data/gazetteer.json.gz — place names,
+  aliases, coordinates and country assignments used to resolve AI-inferred
+  photo locations) is derived from Wikidata. Wikidata's data is released
+  under CC0 1.0 (public domain dedication).
+  https://www.wikidata.org/wiki/Wikidata:Licensing

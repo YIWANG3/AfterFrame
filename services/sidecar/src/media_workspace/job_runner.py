@@ -991,6 +991,7 @@ def run_annotation_job(
     custom_instructions: str | None = None,
     video_frame_interval: float = 0.0,
     limit: int | None = None,
+    max_workers: int = 3,
 ) -> dict[str, object]:
     from . import annotation as _annotation
     from .db import list_assets_for_annotation
@@ -1042,6 +1043,7 @@ def run_annotation_job(
             custom_instructions=custom_instructions,
             video_frame_interval=video_frame_interval,
             progress_callback=annotation_progress,
+            max_workers=max_workers,
         )
         update_job(
             connection,

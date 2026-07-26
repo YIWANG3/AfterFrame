@@ -16,6 +16,7 @@ RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
 
 from .core import _json
 from .core import _file_id
+from .locations import upsert_asset_location_from_metadata
 from .resource_sets import get_resource_set_for_asset, link_assets
 
 
@@ -93,6 +94,7 @@ def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, comm
         """,
         (_file_id(metadata.asset_id, str(metadata.path)), metadata.asset_id, str(metadata.path)),
     )
+    upsert_asset_location_from_metadata(connection, metadata.asset_id, asset_metadata)
     connection.execute(
         """
         INSERT INTO raw_metadata_cache (
@@ -300,6 +302,7 @@ def upsert_image_asset(connection: sqlite3.Connection, export: ImageCandidate, c
         """,
         (_file_id(asset_id, str(export.path)), asset_id, str(export.path)),
     )
+    upsert_asset_location_from_metadata(connection, asset_id, asset_metadata)
     if commit:
         connection.commit()
     return asset_id

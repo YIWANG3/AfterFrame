@@ -57,6 +57,9 @@ function register({
     if (Number.isFinite(settings.videoFrameInterval) && settings.videoFrameInterval > 0) {
       args.push("--video-frame-interval", String(settings.videoFrameInterval));
     }
+    if (Number.isFinite(settings.maxWorkers) && settings.maxWorkers > 0) {
+      args.push("--max-workers", String(settings.maxWorkers));
+    }
     return args;
   }
 
@@ -119,6 +122,7 @@ function register({
     if (Number.isFinite(opts.maxTags)) args.push("--max-tags", String(opts.maxTags));
     if (Number.isFinite(opts.maxCaptionChars)) args.push("--max-caption-chars", String(opts.maxCaptionChars));
     if (opts.customInstructions) args.push("--custom-instructions", String(opts.customInstructions));
+    if (opts.hint) args.push("--hint", String(opts.hint));
 
     return await callSidecarJsonAsync(args);
   });
@@ -202,6 +206,15 @@ function register({
     if (!catalogHasDb()) throw new Error("Open a catalog first.");
     if (!assetId || !tag) return null;
     return await commands.removeAssetTag(assetId, tag);
+  });
+
+  // User veto of a wrong AI location guess — nulls the annotation's
+  // location and drops the resolved map point in one step.
+  ipcMain.handle("workspace:clear-ai-location", async (_event, assetId) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb) return null;
+    if (!assetId) return null;
+    return await callSidecarJsonAsync(["clear-ai-location", "--asset-id", String(assetId)]);
   });
 
   ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {

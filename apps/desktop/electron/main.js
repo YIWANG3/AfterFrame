@@ -1376,9 +1376,9 @@ collectionsIpc.register({
 // Native OS drag-out: the renderer preventDefault()s the HTML5 dragstart and
 // asks us to start a real OS drag session carrying file paths. The OS then
 // handles every drop target for free — Finder copies the files, browsers /
-// chat apps treat them as uploads. On macOS startDrag blocks until the drag
-// ends, so resolving this invoke doubles as the "drag finished" signal the
-// renderer uses to clear its in-app drag markers.
+// chat apps treat them as uploads. startDrag initiates the OS session but its
+// return is not a drag-finished signal; the renderer clears its source marker
+// from real input/window lifecycle events.
 ipcMain.handle("workspace:native-drag", (event, payload) => {
   const files = (Array.isArray(payload?.files) ? payload.files : [])
     .filter((p) => typeof p === "string" && p && fs.existsSync(p));

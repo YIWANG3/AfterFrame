@@ -162,6 +162,71 @@ async function main() {
   runSidecar(["--catalog", CATALOG_DIR, "add-asset-tag",
     "--asset-id", byStem["003-yellow"], "--tag", "seeded-tag"]);
 
+  // 5b. Deterministic gallery order: several specs click the FIRST tile under
+  //     the default imported-desc sort and expect an image (press-E editor,
+  //     lightbox zoom). The video imports last, and whether it lands in the
+  //     same wall-clock second as the images (stem tiebreak → image first) or
+  //     one second later (video first) was pure timing luck. Pin it behind them.
+  execFileSync("python3", ["-c", `
+import sqlite3
+conn = sqlite3.connect(${JSON.stringify(path.join(CATALOG_DIR, "catalog.sqlite3"))})
+conn.execute("UPDATE assets SET created_at = datetime(created_at, '-60 seconds') WHERE asset_type = 'video'")
+conn.commit()
+conn.close()
+`], { encoding: "utf-8", stdio: "inherit" });
+
+  // 6. Give two assets GPS coordinates (Paris / Tokyo) so the map drawer has
+  //    location points to cluster and the viewport filter has something to
+  //    narrow down (see e2e/23-map.spec.js). Injected at the catalog level —
+  //    generating real GPS EXIF would drag in another image-metadata dep.
+  console.log("Injecting GPS for 001-red (Paris) and 002-orange (Tokyo)…");
+  execFileSync("python3", ["-c", `
+import json, sys
+from pathlib import Path
+sys.path.insert(0, ${JSON.stringify(SIDECAR_SRC)})
+from media_workspace.db import connect, upsert_asset_location_from_metadata
+
+conn = connect(Path(${JSON.stringify(CATALOG_DIR)}) / "catalog.sqlite3")
+for asset_id, lat, lon in [
+    (${JSON.stringify(byStem["001-red"])}, 48.8566, 2.3522),
+    (${JSON.stringify(byStem["002-orange"])}, 35.6895, 139.6917),
+]:
+    row = conn.execute("SELECT metadata_json FROM assets WHERE asset_id = ?", (asset_id,)).fetchone()
+    meta = json.loads(row["metadata_json"] or "{}")
+    meta["gps_latitude"], meta["gps_longitude"] = lat, lon
+    conn.execute("UPDATE assets SET metadata_json = ? WHERE asset_id = ?",
+                 (json.dumps(meta, ensure_ascii=True, sort_keys=True), asset_id))
+    upsert_asset_location_from_metadata(conn, asset_id, meta)
+conn.commit()
+conn.close()
+print("GPS injected")
+`], { encoding: "utf-8", env: { ...process.env }, stdio: "inherit" });
+
+  // 7. Give one asset an AI annotation with a resolvable location (Sydney —
+  //    deliberately NOT Paris/Tokyo so the GPS-based map specs stay
+  //    independent), then run the offline gazetteer backfill so the fixture
+  //    carries a source='ai' location row (see e2e/23-map.spec.js).
+  console.log("Injecting AI location annotation for 004-green (Sydney)…");
+  execFileSync("python3", ["-c", `
+import json, sqlite3
+conn = sqlite3.connect(${JSON.stringify(path.join(CATALOG_DIR, "catalog.sqlite3"))})
+location = {"country": "Australia", "admin1": "New South Wales", "locality": "Sydney",
+            "landmark": None, "confidence": 88}
+conn.execute("""INSERT INTO asset_ai_annotations
+    (asset_id, provider, model, schema_version, caption, tags_json, location_json)
+    VALUES (?, 'test', 'test-model', 2, 'Harbour city at dusk', '["city"]', ?)""",
+    (${JSON.stringify(byStem["004-green"])}, json.dumps(location)))
+conn.commit()
+conn.close()
+`], { encoding: "utf-8", stdio: "inherit" });
+  const resolveStats = JSON.parse(runSidecar(["--catalog", CATALOG_DIR, "resolve-ai-locations"]));
+  console.log("resolve-ai-locations:", JSON.stringify(resolveStats));
+  if (!resolveStats.resolved || resolveStats.resolved < 1) {
+    throw new Error(
+      "AI location did not resolve — is services/sidecar/src/media_workspace/data/gazetteer.json.gz present?",
+    );
+  }
+
   console.log("\n✓ Seeded catalog:", CATALOG_DIR);
   console.log("✓ Images:", IMAGES_DIR);
 }

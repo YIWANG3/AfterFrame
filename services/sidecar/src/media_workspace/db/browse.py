@@ -89,13 +89,111 @@ def _browse_order_clause(sort: str | None) -> str:
     return "assets.stem, registry.image_path"
 
 
+# Precision ranks for filters.geo min_precision: keep everything at least as
+# precise as the requested level.
+_GEO_PRECISION_RANK = {"exact": 3, "locality": 2, "admin1": 1, "country": 0}
+
+
+def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
+    """WHERE fragment for filters.geo.
+
+    bounds mode filters by the map viewport via the R*Tree; when the viewport
+    crosses the antimeridian (west > east) the longitude test is split into two
+    ranges on the base table instead. place mode (Phase 2 UI) matches place_id.
+
+    Matches against the asset's EFFECTIVE location: the paired RAW's
+    (registry.raw_asset_id) first, or — only when no paired RAW has one — the
+    image's own row. RAW is the authoritative capture metadata; same order as
+    list_map_points and the Inspector's rawMeta-first GPS display. (Phase 3
+    note: a future 'manual' source on the image row must win over RAW exif.)
+    """
+    if not isinstance(geo, dict):
+        return None
+
+    extra_conditions = ""
+    extra_params: list[object] = []
+    for source, included in (("exif", geo.get("include_exif", True)),
+                             ("ai", geo.get("include_ai", True))):
+        if not included:
+            extra_conditions += " AND loc.source != ?"
+            extra_params.append(source)
+    min_precision = geo.get("min_precision")
+    if min_precision in _GEO_PRECISION_RANK:
+        allowed = sorted(
+            name for name, rank in _GEO_PRECISION_RANK.items()
+            if rank >= _GEO_PRECISION_RANK[min_precision]
+        )
+        placeholders = ", ".join("?" for _ in allowed)
+        extra_conditions += f" AND loc.precision_level IN ({placeholders})"
+        extra_params.extend(allowed)
+
+    if geo.get("mode") == "place":
+        place_id = geo.get("place_id")
+        if not place_id:
+            return None
+        location_join = ""
+        location_conditions = "loc.place_id = ?" + extra_conditions
+        location_params: list[object] = [place_id, *extra_params]
+    elif geo.get("mode") == "bounds":
+        try:
+            west = float(geo["west"])
+            south = float(geo["south"])
+            east = float(geo["east"])
+            north = float(geo["north"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if west <= east:
+            location_join = (
+                "JOIN asset_location_rtree geo_idx ON geo_idx.location_id = loc.location_id"
+            )
+            location_conditions = (
+                "geo_idx.max_longitude >= ? AND geo_idx.min_longitude <= ? "
+                "AND geo_idx.max_latitude >= ? AND geo_idx.min_latitude <= ?"
+            ) + extra_conditions
+            location_params = [west, east, south, north, *extra_params]
+        else:
+            # Viewport crosses the antimeridian: split the longitude test in two.
+            location_join = ""
+            location_conditions = (
+                "loc.max_latitude >= ? AND loc.min_latitude <= ? "
+                "AND (loc.max_longitude >= ? OR loc.min_longitude <= ?)"
+            ) + extra_conditions
+            location_params = [south, north, west, east, *extra_params]
+    else:
+        return None
+
+    clause = f"""(
+        EXISTS (
+            SELECT 1 FROM image_lookup_registry reg
+            JOIN asset_locations loc ON loc.asset_id = reg.raw_asset_id
+            {location_join}
+            WHERE reg.image_asset_id = assets.asset_id AND {location_conditions}
+        )
+        OR (
+            NOT EXISTS (
+                SELECT 1 FROM image_lookup_registry reg2
+                JOIN asset_locations raw_loc ON raw_loc.asset_id = reg2.raw_asset_id
+                WHERE reg2.image_asset_id = assets.asset_id
+            )
+            AND EXISTS (
+                SELECT 1 FROM asset_locations loc
+                {location_join}
+                WHERE loc.asset_id = assets.asset_id AND {location_conditions}
+            )
+        )
+    )"""
+    return clause, [*location_params, *location_params]
+
+
 def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     """Build AND-combined WHERE fragments + params from a structured facet dict.
 
     Recognized keys: camera, lens (exact), iso_min/iso_max, aperture_min/max,
     focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
     rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags),
-    people ('with_faces'|'without_faces'), person_group (group ID).
+    people ('with_faces'|'without_faces'), person_group (group ID),
+    annotated ('with'|'without' — AI annotation presence),
+    geo (map viewport/place filter — see _geo_filter_clause).
     Unknown/empty keys are ignored.
     """
     if not filters:
@@ -141,6 +239,10 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
         add("EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
     elif filters.get("people") == "without_faces":
         add("NOT EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
+    if filters.get("annotated") == "with":
+        add("EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
+    elif filters.get("annotated") == "without":
+        add("NOT EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
     if filters.get("person_group"):
         add(
             """EXISTS (
@@ -153,10 +255,46 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
             )""",
             filters["person_group"],
         )
+    geo_clause = _geo_filter_clause(filters.get("geo"))
+    if geo_clause is not None:
+        add(geo_clause[0], *geo_clause[1])
 
     if not clauses:
         return "", []
     return "AND " + " AND ".join(clauses), params
+
+
+def _status_clause(status: str) -> str:
+    """Status → WHERE clause on registry/assets. Shared between the gallery
+    browse and the map-points query so the two scopes can never drift."""
+    if status == "matched":
+        return "registry.match_status IN ('auto_bound', 'manual_confirmed')"
+    if status == "unmatched":
+        return "registry.match_status IN ('unmatched', 'pending_confirmation')"
+    if status == "rated":
+        return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.app_rating > 0"
+    if status == "recent":
+        return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.created_at >= datetime('now', '-7 days')"
+    if status == "all":
+        return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation')"
+    raise ValueError(f"unsupported status: {status}")
+
+
+def _search_clause(search: str | None) -> tuple[str, list[object]]:
+    """Full-text-ish search across filename/path, camera/lens, and the AI
+    annotation (caption, detected OCR text, tags). LIKE is plenty fast at
+    this scale; FTS5 can replace it later if libraries grow very large.
+    Requires `registry` and `anno` to be joined. Shared with map points."""
+    if not search:
+        return "", []
+    clause = (
+        "AND (assets.stem LIKE ? OR registry.image_path LIKE ? "
+        "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
+        "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
+        "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
+    )
+    like_pattern = f"%{search}%"
+    return clause, [like_pattern] * 7
 
 
 def list_image_assets(
@@ -168,34 +306,8 @@ def list_image_assets(
     sort: str | None = None,
     filters: dict | None = None,
 ) -> list[sqlite3.Row]:
-    if status == "matched":
-        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed')"
-    elif status == "unmatched":
-        status_clause = "registry.match_status IN ('unmatched', 'pending_confirmation')"
-    elif status == "rated":
-        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.app_rating > 0"
-    elif status == "recent":
-        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.created_at >= datetime('now', '-7 days')"
-    elif status == "all":
-        status_clause = "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation')"
-    else:
-        raise ValueError(f"unsupported status: {status}")
-
-    params: list[object] = []
-    search_clause = ""
-    if search:
-        # Full-text-ish search across filename/path, camera/lens, and the AI
-        # annotation (caption, detected OCR text, tags). LIKE is plenty fast at
-        # this scale; FTS5 can replace it later if libraries grow very large.
-        search_clause = (
-            "AND (assets.stem LIKE ? OR registry.image_path LIKE ? "
-            "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
-            "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
-            "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
-        )
-        like_pattern = f"%{search}%"
-        params.extend([like_pattern] * 7)
-
+    status_clause = _status_clause(status)
+    search_clause, params = _search_clause(search)
     facet_clause, facet_params = _facet_clauses(filters)
     params.extend(facet_params)
     params.extend([limit, offset])

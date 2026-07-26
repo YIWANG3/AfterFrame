@@ -27,7 +27,18 @@
   "loc": {
     "country": "国家",
     "region": "地区",
-    "landmark": "地标"
+    "landmark": "地标",
+    "admin1": "省/州",
+    "locality": "城市",
+    "jumpTip": "在地图上查看这个位置",
+    "hintTip": "位置不对？提示 AI 重新分析",
+    "clearTip": "清除位置",
+    "hintLabel": "给 AI 一点位置提示，重新分析这张照片",
+    "hintPlaceholder": "如：加州一号公路（可留空）",
+    "hintRun": "重新分析",
+    "hintCancel": "取消",
+    "cleared": "位置已清除",
+    "clearFailed": "清除位置失败"
   },
   "toast": {
     "annotatedTitle": "已标注",

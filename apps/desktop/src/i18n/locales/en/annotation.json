@@ -27,7 +27,18 @@
   "loc": {
     "country": "Country",
     "region": "Region",
-    "landmark": "Landmark"
+    "landmark": "Landmark",
+    "admin1": "State/Province",
+    "locality": "City",
+    "jumpTip": "View this location on the map",
+    "hintTip": "Wrong location? Hint the AI and re-analyze",
+    "clearTip": "Clear location",
+    "hintLabel": "Give the AI a location hint and re-analyze this photo",
+    "hintPlaceholder": "e.g. Highway 1, California (optional)",
+    "hintRun": "Re-analyze",
+    "hintCancel": "Cancel",
+    "cleared": "Location cleared",
+    "clearFailed": "Couldn't clear the location"
   },
   "toast": {
     "annotatedTitle": "Annotated",

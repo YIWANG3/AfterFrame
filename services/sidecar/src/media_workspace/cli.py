@@ -37,6 +37,7 @@ from .db import (
     list_jobs,
     list_catalog_roots,
     list_image_assets,
+    list_map_points,
     list_assets_for_preview,
     list_pending,
     assign_faces_to_group,
@@ -276,6 +277,29 @@ def build_parser() -> argparse.ArgumentParser:
     # Structured facet filters (all optional, AND-combined). Passed as a single
     # JSON object to keep the surface small and forward-compatible.
     browse.add_argument("--filters", default=None, help="JSON object of facet filters")
+
+    # Lightweight location points for the map. Mirrors the gallery scope
+    # (status/collection/search/facets) but ignores filters.geo — the map needs
+    # points outside the current viewport to stay navigable.
+    map_points = subparsers.add_parser("browse-map-points", parents=[common])
+    map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], default="all")
+    map_points.add_argument("--collection-id", default=None)
+    map_points.add_argument("--search", default=None)
+    map_points.add_argument("--filters", default=None, help="JSON object of facet filters (geo key is ignored)")
+    # Coarser AI guesses (admin1/country centroids) look like precise markers
+    # in the middle of a state — hidden from the map by default.
+    map_points.add_argument("--min-precision", choices=["exact", "locality", "admin1", "country"], default="locality")
+    map_points.add_argument("--limit", type=int, default=100000)
+
+    # Backfill: resolve every existing AI annotation's location guess against
+    # the offline gazetteer into asset_locations. New annotations resolve
+    # inline at save time; this covers the pre-existing ones.
+    subparsers.add_parser("resolve-ai-locations", parents=[common])
+
+    # Effective location of one image asset (RAW-first, no precision floor) —
+    # powers the Inspector's "click a location → jump the map there".
+    asset_location_p = subparsers.add_parser("get-asset-location", parents=[common])
+    asset_location_p.add_argument("--asset-id", required=True)
 
     subparsers.add_parser("facet-values", parents=[common])
 
@@ -548,6 +572,7 @@ def build_parser() -> argparse.ArgumentParser:
     annotate_p.add_argument("--max-tags", type=int, default=10)
     annotate_p.add_argument("--max-caption-chars", type=int, default=200)
     annotate_p.add_argument("--custom-instructions")
+    annotate_p.add_argument("--hint", help="User location correction, injected into the prompt with priority over visual inference.")
 
     run_annotation_job_parser = subparsers.add_parser("run-annotation-job", parents=[common])
     run_annotation_job_parser.add_argument("--job-id", required=True)
@@ -568,6 +593,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--video-frame-interval", type=float, default=0.0,
                                            help="Seconds between sampled video frames (0 = first/middle/last).")
     run_annotation_job_parser.add_argument("--limit", type=int)
+    run_annotation_job_parser.add_argument("--max-workers", type=int, default=3,
+                                           help="Concurrent API requests (clamped to 1-16).")
 
     annotation_count_p = subparsers.add_parser("annotation-count", parents=[common])
     annotation_count_p.add_argument("--asset-type", choices=["raw", "image"], default="image")
@@ -577,6 +604,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
+
+    # User veto of a wrong AI location: nulls location_json + drops the point.
+    clear_loc_p = subparsers.add_parser("clear-ai-location", parents=[common])
+    clear_loc_p.add_argument("--asset-id", required=True)
 
     add_tag_p = subparsers.add_parser("add-asset-tag", parents=[common])
     add_tag_p.add_argument("--asset-id", required=True)
@@ -886,6 +917,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
             custom_instructions=args.custom_instructions,
             existing_tags=existing,
             is_video=is_video,
+            location_hint=args.hint,
         )
     finally:
         if tmp_dir:
@@ -916,6 +948,7 @@ def _cmd_run_annotation_job(args, connection, catalog, parser):
         custom_instructions=args.custom_instructions,
         video_frame_interval=args.video_frame_interval,
         limit=args.limit,
+        max_workers=max(1, min(16, args.max_workers)),
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
@@ -1385,6 +1418,97 @@ def _cmd_browse_images(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_clear_ai_location(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    payload = _annotation.clear_ai_location(connection, args.asset_id)
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_get_asset_location(args, connection, catalog, parser):
+    from .db.locations import get_asset_location
+    row = get_asset_location(connection, args.asset_id)
+    print(json.dumps(dict(row) if row else None, ensure_ascii=False))
+    return 0
+
+
+def _cmd_resolve_ai_locations(args, connection, catalog, parser):
+    from .db.locations import delete_asset_location, upsert_ai_asset_location
+    from .geo_resolver import RESOLVER_VERSION, load_gazetteer, resolve_location
+
+    if load_gazetteer() is None:
+        print(json.dumps({"error": "gazetteer data file missing", "scanned": 0}))
+        return 0
+
+    stats = {"scanned": 0, "resolved": 0, "kept_gps_or_manual": 0, "unresolved": 0, "cleared_stale": 0}
+    rows = connection.execute(
+        "SELECT asset_id, location_json FROM asset_ai_annotations "
+        "WHERE location_json IS NOT NULL AND location_json != 'null'"
+    ).fetchall()
+    for row in rows:
+        stats["scanned"] += 1
+        try:
+            location = json.loads(row["location_json"])
+        except ValueError:
+            location = None
+        resolved = resolve_location(location)
+        asset_id = str(row["asset_id"])
+        if resolved is not None:
+            if upsert_ai_asset_location(
+                connection, asset_id, resolved,
+                location=location, resolver_version=RESOLVER_VERSION,
+            ):
+                stats["resolved"] += 1
+            else:
+                stats["kept_gps_or_manual"] += 1
+        else:
+            existing = connection.execute(
+                "SELECT source FROM asset_locations WHERE asset_id = ?", (asset_id,)
+            ).fetchone()
+            if existing is not None and str(existing["source"]) == "ai":
+                delete_asset_location(connection, asset_id)
+                stats["cleared_stale"] += 1
+            else:
+                stats["unresolved"] += 1
+    connection.commit()
+    print(json.dumps(stats))
+    return 0
+
+
+def _cmd_browse_map_points(args, connection, catalog, parser):
+    facet_filters = json.loads(args.filters) if args.filters else None
+    payload = []
+    for row in list_map_points(
+        connection,
+        status=args.status,
+        collection_id=args.collection_id,
+        search=args.search,
+        filters=facet_filters,
+        min_precision=args.min_precision,
+        limit=args.limit,
+    ):
+        preview_path = None
+        if row["preview_relative_path"]:
+            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
+        payload.append(
+            {
+                "asset_id": row["asset_id"],
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "source": row["source"],
+                "accuracy_m": row["accuracy_m"],
+                "precision_level": row["precision_level"],
+                "place_id": row["place_id"],
+                "app_rating": row["app_rating"],
+                "capture_time": row["capture_time"],
+                "preview_path": preview_path,
+            }
+        )
+    # No indent: this payload can be tens of thousands of rows.
+    print(json.dumps(payload))
+    return 0
+
+
 def _cmd_asset_detail(args, connection, catalog, parser):
     if args.image_path:
         row = get_image_asset_detail_by_path(connection, str(args.image_path.resolve()))
@@ -1846,6 +1970,10 @@ COMMAND_HANDLERS = {
     "facet-values": _cmd_facet_values,
     "search-facet": _cmd_search_facet,
     "browse-images": _cmd_browse_images,
+    "browse-map-points": _cmd_browse_map_points,
+    "resolve-ai-locations": _cmd_resolve_ai_locations,
+    "get-asset-location": _cmd_get_asset_location,
+    "clear-ai-location": _cmd_clear_ai_location,
     "asset-detail": _cmd_asset_detail,
     "list-pending": _cmd_list_pending,
     "confirm-match": _cmd_confirm_match,

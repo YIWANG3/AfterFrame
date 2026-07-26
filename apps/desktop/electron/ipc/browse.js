@@ -8,6 +8,39 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.browseImages(options);
   });
 
+  ipcMain.handle("workspace:browse-map-points", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return [];
+    try {
+      return await commands.browseMapPoints(options || {});
+    } catch (err) {
+      console.warn("[workspace:browse-map-points] sidecar error:", err.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle("workspace:get-asset-location", async (_event, assetId) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb() || !assetId) return null;
+    try {
+      return await commands.getAssetLocation(assetId);
+    } catch (err) {
+      console.warn("[workspace:get-asset-location] sidecar error:", err.message);
+      return null;
+    }
+  });
+
+  ipcMain.handle("workspace:resolve-ai-locations", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return null;
+    try {
+      return await commands.resolveAiLocations();
+    } catch (err) {
+      console.warn("[workspace:resolve-ai-locations] sidecar error:", err.message);
+      return null;
+    }
+  });
+
   ipcMain.handle("workspace:facet-values", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return null;

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,12 +96,15 @@ class RegisterAndCropTest(unittest.TestCase):
                 sorted(r["version_kind"] for r in rows), ["derived", "main"]
             )
 
-            # Previews were generated for the derived asset
-            preview = connection.execute(
-                "SELECT status FROM preview_entries WHERE asset_id = ? AND kind = 'preview'",
-                (derived["asset_id"],),
-            ).fetchone()
-            self.assertIsNotNone(preview)
+            # Previews were generated for the derived asset. Rendering shells
+            # out to macOS `sips` — on Linux CI there is no preview to assert,
+            # so only the macOS runner covers this part.
+            if shutil.which("sips"):
+                preview = connection.execute(
+                    "SELECT status FROM preview_entries WHERE asset_id = ? AND kind = 'preview'",
+                    (derived["asset_id"],),
+                ).fetchone()
+                self.assertIsNotNone(preview)
 
     def test_register_with_version_kind_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

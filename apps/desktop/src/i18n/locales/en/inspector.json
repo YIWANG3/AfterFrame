@@ -35,7 +35,9 @@
     "imported": "Imported",
     "captured": "Captured",
     "modified": "Modified",
-    "gps": "GPS"
+    "gps": "GPS",
+    "locationSource": "Source",
+    "gpsJump": "View the capture location on the map"
   },
   "missing": {
     "badge": "Missing",
@@ -92,5 +94,10 @@
     "removedCount_other": "Removed {{count}} faces",
     "showMoreFaces_one": "Show more ({{count}} more face)",
     "showMoreFaces_other": "Show more ({{count}} more faces)"
+  },
+  "locationSource": {
+    "exif": "GPS (EXIF)",
+    "ai": "AI inferred",
+    "manual": "Manual"
   }
 }

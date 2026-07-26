@@ -1,6 +1,6 @@
 {
   "name": "afterframe",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "AfterFrame desktop shell",
   "author": "YI WANG",
@@ -150,10 +150,13 @@
     "i18next": "^26.3.1",
     "justified-layout": "^4.1.0",
     "lucide-react": "^0.541.0",
+    "maplibre-gl": "^5.24.0",
     "react": "^19.1.1",
     "react-calendar": "^6.0.1",
     "react-dom": "^19.1.1",
     "react-i18next": "^17.0.8",
-    "sharp": "^0.34.5"
+    "sharp": "^0.35.3",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   }
 }

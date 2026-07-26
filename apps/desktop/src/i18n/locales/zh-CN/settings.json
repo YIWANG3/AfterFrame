@@ -43,6 +43,8 @@
     "videoFrameInterval": "视频抽帧间隔",
     "videoFrameIntervalHint": "针对视频:每 N 秒抽 1 帧送给 AI。0 = 只取首/中/尾(3 帧)。长视频设大覆盖更全,但更费 token。",
     "seconds": "秒",
+    "maxWorkers": "并发请求数",
+    "maxWorkersHint": "批量标注时同时发出的 API 请求数。越大越快，但可能触发服务商限流。默认 3 比较稳妥。",
     "customInstructions": "自定义指令",
     "customInstructionsHint": "附加到每个提示词后。用它来偏向你的口味，例如「优先风格和氛围标签,而非泛泛的物体」。",
     "optional": "可选…",

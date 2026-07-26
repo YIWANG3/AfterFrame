@@ -37,7 +37,12 @@
       "generatePreviews": "Generate Previews",
       "annotateMissing": "Annotate Un-annotated",
       "reannotateAll": "Re-annotate All"
-    }
+    },
+    "map": {
+      "show": "Show map",
+      "hide": "Hide map"
+    },
+    "displayMode": "Layout"
   },
   "sidebar": {
     "people": "People",
@@ -99,7 +104,16 @@
     "deletedCount_other": "{{count}} person groups deleted — scanning won’t restore them",
     "deleteFailed": "Couldn’t delete person group",
     "emptyTitle": "No people yet",
-    "emptyHint": "Download a face model in Settings, then analyze the library. People appear here after the background task finishes.",
+    "emptyHint": "Click \"Scan faces\" to analyze the library. Recognition runs in the background and people appear here as they are found.",
+    "modelMissingTitle": "Face recognition model needed",
+    "modelMissingHint": "Face analysis runs fully offline on this Mac. First use needs a one-time model download (about {{size}} MB). You can also import a custom Core ML model in Settings.",
+    "downloadAndScan": "Download model & scan ({{size}} MB)",
+    "downloadAndScanHint": "Download the official face model, then start scanning automatically",
+    "downloadingModel": "Downloading model…",
+    "downloadingModelTitle": "Downloading face recognition model",
+    "downloadingModelHint": "Scanning starts automatically once the download finishes.",
+    "modelReady": "Model installed, starting scan",
+    "modelDownloadFailed": "Model download failed",
     "failedTitle": "Couldn’t load people",
     "failedHint": "Try refreshing. Your indexed faces remain safely stored in this catalog.",
     "scan": "Scan faces",
@@ -119,6 +133,9 @@
     "tag": "Tag",
     "format": "Format",
     "people": "Has faces",
+    "annotated": "AI annotated",
+    "notAnnotated": "Not annotated",
+    "annotatedHint": "Filter by AI annotation presence — click to cycle with / without / off",
     "iso": "ISO",
     "aperture": "Aperture",
     "focal": "Focal",
@@ -131,7 +148,9 @@
     "clear": "Clear {{count}}",
     "ratingAtLeast": "Rating ≥ {{n}}",
     "person": "Person",
-    "noNamedPeople": "No named people yet — name them on the People page first."
+    "noNamedPeople": "No named people yet — name them on the People page first.",
+    "mapArea": "Visible map area",
+    "mapAreaRemove": "Remove map area filter"
   },
   "activity": {
     "title": "Background Activity",
@@ -190,5 +209,15 @@
       "copyName": "Copy Name",
       "openWith": "Open With"
     }
+  },
+  "map": {
+    "loading": "Loading map…",
+    "resize": "Resize map",
+    "level": {
+      "world": "World",
+      "region": "Region",
+      "city": "City"
+    },
+    "noLocation": "No mappable location for this photo"
   }
 }

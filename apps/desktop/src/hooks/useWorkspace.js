@@ -39,6 +39,14 @@ export default function useWorkspace({ pushToast } = {}) {
   const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [], auto: false });
   const [collections, setCollections] = useState([]);
   const [activeCollectionId, setActiveCollectionId] = useState(null);
+  // Monotonic catalog-content revision: bumped on every refreshAll, every
+  // catalog-changed event (imports, metadata refresh, agent writes) AND every
+  // in-UI mutation below (deletes, collection membership, ratings) — those
+  // update local React state directly without a catalog-changed broadcast.
+  // Consumers (the map point cache) use it as an invalidation token — asset
+  // COUNTS can stay identical across real changes, so counting is not enough.
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  const bumpCatalogRevision = () => setCatalogRevision((revision) => revision + 1);
   const browserRequestIdRef = useRef(0);
   // While an agent-driven reveal resets query/filters/status, the reload
   // effects below must not fire — the reveal does one imperative load itself.
@@ -276,6 +284,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const catalogChangedRef = useRef(null);
   catalogChangedRef.current = (payload) => {
     const scope = payload?.scope;
+    setCatalogRevision((revision) => revision + 1);
     // Surface agent writes as a toast (jobs excluded — JobDock already shows
     // those). App.jsx watches lastAgentChange.
     if (payload?.reason === "agent" && scope !== "jobs") {
@@ -391,6 +400,7 @@ export default function useWorkspace({ pushToast } = {}) {
 
   async function deleteCollection(collectionId) {
     await api.deleteCollection(collectionId);
+    bumpCatalogRevision();
     if (activeCollectionId === collectionId) {
       setActiveCollectionId(null);
     }
@@ -399,6 +409,7 @@ export default function useWorkspace({ pushToast } = {}) {
 
   async function addToCollection(collectionId, assetIds) {
     await api.collectionAddItems(collectionId, assetIds);
+    bumpCatalogRevision();
     await loadCollections();
     if (activeCollectionId === collectionId) {
       await loadBrowser({ collectionId });
@@ -409,6 +420,7 @@ export default function useWorkspace({ pushToast } = {}) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
     await api.collectionRemoveItems(collectionId, targetIds);
+    bumpCatalogRevision();
     await loadCollections();
     if (activeCollectionId === collectionId) {
       const removedSet = new Set(targetIds);
@@ -420,6 +432,7 @@ export default function useWorkspace({ pushToast } = {}) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
     await api.deleteImageAssets(targetIds);
+    bumpCatalogRevision();
     const deletedSet = new Set(targetIds);
     setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
     if (selectedAssetId && deletedSet.has(selectedAssetId)) {
@@ -435,6 +448,7 @@ export default function useWorkspace({ pushToast } = {}) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return null;
     const result = await api.deleteImageAssetsFromDisk(targetIds, paths || []);
+    bumpCatalogRevision();
     const deletedSet = new Set(targetIds);
     setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
     if (selectedAssetId && deletedSet.has(selectedAssetId)) {
@@ -464,6 +478,8 @@ export default function useWorkspace({ pushToast } = {}) {
     );
 
     await api.setAssetRating(targetIds, normalized);
+    // Ratings order cluster covers on the map — invalidate its point cache.
+    bumpCatalogRevision();
   }
 
   function selectCollection(collectionId) {
@@ -551,6 +567,7 @@ export default function useWorkspace({ pushToast } = {}) {
       loadCollections(),
       loadBrowser({ nextStatus, collectionId, force, preserveView, facetFilters }),
     ]);
+    setCatalogRevision((revision) => revision + 1);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
     void api.getFacetValues().then(setFacetValues).catch(() => {});
@@ -855,6 +872,8 @@ export default function useWorkspace({ pushToast } = {}) {
     pokeJobs,
     collections,
     activeCollectionId,
+    catalogRevision,
+    bumpCatalogRevision,
     selectCollection,
     clearCollection,
     filterByPerson,
