@@ -1,6 +1,6 @@
 {
   "name": "afterframe",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "description": "AfterFrame desktop shell",
   "author": "YI WANG",
@@ -128,8 +128,8 @@
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
     "cross-env": "^10.0.0",
-    "electron": "^35.1.5",
-    "electron-builder": "^26.0.12",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",

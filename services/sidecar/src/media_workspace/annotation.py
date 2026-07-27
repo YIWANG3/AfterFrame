@@ -46,6 +46,12 @@ try:
 except ImportError:  # pragma: no cover — HEIC support is optional
     pass
 
+# Panoramas and stitched exports routinely exceed PIL's 89-megapixel
+# decompression-bomb default (a ~98 MP pano warns today and would hard-fail at
+# 2× the limit). These are the user's own local files and we downscale to
+# THUMB_MAX_EDGE immediately, so the DoS guard doesn't apply here.
+Image.MAX_IMAGE_PIXELS = None
+
 
 # ── Constants ────────────────────────────────────────────────────────────────
 

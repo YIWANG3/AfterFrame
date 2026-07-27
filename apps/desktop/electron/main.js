@@ -191,6 +191,16 @@ function decryptToken(stored) {
   try {
     return safeStorage.decryptString(Buffer.from(stored, "base64"));
   } catch {
+    // Chromium ciphertext carries a v10/v11 magic prefix. If this IS
+    // ciphertext and decryption failed (keychain access denied — e.g. the
+    // re-authorization prompt after an Electron upgrade was dismissed),
+    // returning it would send raw ciphertext to the provider as a "token"
+    // and surface as a baffling 401. Report "no key" instead — actionable.
+    const head = Buffer.from(stored, "base64").subarray(0, 3).toString("latin1");
+    if (head === "v10" || head === "v11") {
+      console.warn("[tokens] stored token is encrypted but keychain decryption failed; treating as unconfigured");
+      return null;
+    }
     // Legacy plaintext token — return as-is
     return stored;
   }
