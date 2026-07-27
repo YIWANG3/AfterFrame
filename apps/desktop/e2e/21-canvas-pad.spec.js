@@ -107,8 +107,14 @@ test.describe("Canvas margin (pad) save", () => {
       .poll(() => window.evaluate(() => window.__afterframeTest.getState().canvasPad?.bottom || 0), { timeout: 5_000 })
       .toBe(0);
     expect(await window.evaluate(() => window.__afterframeTest.getLayerCount())).toBe(beforeCount);
-    const cleared = await window.evaluate(() => window.__afterframeTest.getState());
-    expect(cleared.outputRect.y + cleared.outputRect.height / 2).toBeCloseTo(cleared.placement.centerY, 1);
+    // The outputRect re-layout after clearing lags a frame on slow machines
+    // (CI VMs) — poll until the geometry converges instead of reading once.
+    await expect
+      .poll(async () => {
+        const cleared = await window.evaluate(() => window.__afterframeTest.getState());
+        return Math.abs(cleared.outputRect.y + cleared.outputRect.height / 2 - cleared.placement.centerY);
+      }, { timeout: 5_000 })
+      .toBeLessThan(0.05);
   });
 
   test("adding a bottom border keeps an existing text layer centered on the photo", async () => {
