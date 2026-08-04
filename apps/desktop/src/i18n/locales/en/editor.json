@@ -29,6 +29,10 @@
   "text": {
     "presets": "Presets",
     "layers": "Layers",
+    "addOverlayLayer": "Add overlay layer",
+    "overlayLayer": "Overlay",
+    "overlaySettings": "Overlay fill",
+    "coverage": "Coverage",
     "addTextLayer": "Add text layer",
     "addStickerLayer": "Add sticker layer",
     "hideStickerPicker": "Hide sticker picker",
@@ -99,7 +103,8 @@
     "caseLower": "lowercase",
     "caseTitle": "Title Case",
     "letterSpacing": "Spacing",
-    "lineHeight": "Line height"
+    "lineHeight": "Line height",
+    "addHandwriting": "AI handwriting"
   },
   "sticker": {
     "title": "Sticker",
@@ -197,5 +202,44 @@
     "bottom": "Bottom",
     "left": "Left",
     "right": "Right"
+  },
+  "handwriting": {
+    "title": "AI Handwriting",
+    "textPlaceholder": "Enter text — use / to force a line break",
+    "noProviders": "No AI provider available",
+    "notConfigured": "This provider has no API key configured. Add one in Settings → AI Repaint, then come back.",
+    "generating": "Generating…",
+    "generate": "Generate",
+    "regenerate": "Regenerate",
+    "add": "Add to canvas",
+    "color": "Color",
+    "emptyResult": "The generated image came back blank. Try again or switch styles.",
+    "styles": {
+      "sigDash": "Dashing signature",
+      "chalkFine": "Fine chalk",
+      "penCursive": "Pen cursive",
+      "inkArt": "Ink art",
+      "windFlow": "Wind flow",
+      "gracefulScript": "Graceful script",
+      "boldRomantic": "Bold romantic",
+      "vintageBrush": "Vintage brush",
+      "guofengTitle": "Guofeng title",
+      "healingCalli": "Healing calligraphy",
+      "dryChalk": "Dry chalk",
+      "sharpPen": "Sharp pen",
+      "wildInk": "Wild ink",
+      "journalSoft": "Journal soft",
+      "airyThin": "Airy thin",
+      "brushScript": "Brush script",
+      "monoScript": "Monoline script"
+    },
+    "referencePick": "Use a reference image",
+    "referenceActive": "Writing in the reference image's style — presets are ignored",
+    "referenceClear": "Remove reference image",
+    "customPrompt": "Prompt",
+    "customPromptPlaceholder": "Pick a preset above to fill this in, then edit freely — sent exactly as written. {text} inserts the text field. Tip: black lettering on a pure white background cuts out best.",
+    "missingTextWarn": "The prompt has no {text} — your text above won't be used.",
+    "insertText": "Insert {text}",
+    "presets": "Style presets"
   }
 }

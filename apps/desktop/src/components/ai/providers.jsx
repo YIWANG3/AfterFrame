@@ -33,7 +33,10 @@ export const PROVIDER_TYPES = [
     capability: "Image edit & repaint",
     placeholder: "sk-xxx...",
     defaultModels: [
+      { id: "gpt-image-2", name: "GPT Image 2" },
+      { id: "gpt-image-1.5", name: "GPT Image 1.5" },
       { id: "gpt-image-1", name: "GPT Image 1" },
+      { id: "gpt-image-1-mini", name: "GPT Image 1 Mini" },
     ],
   },
   {
@@ -58,6 +61,20 @@ export const PROVIDER_TYPES = [
       { id: "jimeng_t2i_v40", name: "即梦 图片生成 4.0" },
       { id: "jimeng_seedream46_cvtob", name: "即梦 图片生成 4.6" },
       { id: "jimeng_i2i_seed3_tilesr_cvtob", name: "即梦 智能超清" },
+    ],
+  },
+  {
+    // Newer Seedream models live on 方舟 (Ark), an OpenAI-style JSON API with
+    // its own API Key — a separate credential from the jimeng AK/SK pair.
+    type: "ark",
+    label: "火山方舟 (Seedream)",
+    capability: "Image generation & editing",
+    placeholder: "Ark API Key",
+    defaultModels: [
+      { id: "doubao-seedream-4-5-251128", name: "Seedream 4.5" },
+      { id: "doubao-seedream-5-0-pro-260628", name: "Seedream 5.0 Pro" },
+      { id: "doubao-seedream-5-0-260128", name: "Seedream 5.0 Lite" },
+      { id: "doubao-seedream-4-0-250828", name: "Seedream 4.0" },
     ],
   },
 ];

@@ -1,10 +1,11 @@
-// AfterFrame layer stack — text-only layers.
+// AfterFrame layer stack — text, sticker and full-photo overlay layers.
 // Scene depth is image-level metadata managed separately in EditorOverlay,
 // not a layer.
 
 export const LAYER_TYPES = {
   TEXT: "text",
   STICKER: "sticker",
+  OVERLAY: "overlay",
 };
 
 export function isTextLayer(layer) {
@@ -13,6 +14,10 @@ export function isTextLayer(layer) {
 
 export function isStickerLayer(layer) {
   return layer && layer.type === LAYER_TYPES.STICKER;
+}
+
+export function isOverlayLayer(layer) {
+  return layer && layer.type === LAYER_TYPES.OVERLAY;
 }
 
 export function getTextLayers(layers) {
@@ -45,5 +50,6 @@ export function cloneLayerStack(layers) {
 export function layerLabel(layer) {
   if (isTextLayer(layer)) return layer.text?.trim() || "Empty";
   if (isStickerLayer(layer)) return layer.sourceLabel || "Sticker";
+  if (isOverlayLayer(layer)) return layer.sourceLabel || "Overlay";
   return "Layer";
 }

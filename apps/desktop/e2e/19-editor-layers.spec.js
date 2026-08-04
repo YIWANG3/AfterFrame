@@ -60,6 +60,45 @@ test.describe("Golden: text layers", () => {
   });
 });
 
+test.describe("Overlay layers", () => {
+  let app, window, userDataDir;
+
+  test.beforeAll(async () => {
+    const fixturePath = await ensureFixture();
+    ({ app, window, userDataDir } = await launchApp({ testName: "overlay-layers" }));
+    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
+    await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  });
+  test.afterAll(async () => { await closeApp(app, userDataDir); });
+
+  test("adds multiple overlays, reorders them, and Apply bakes them into the crop source", async () => {
+    const addOverlay = window.getByTitle("Add overlay layer");
+    await expect(addOverlay).toBeVisible();
+    await addOverlay.click();
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(1);
+    await addOverlay.click();
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(2);
+    await expect(window.locator('[data-editor-layer-type="overlay"]')).toHaveCount(2);
+
+    const beforeOrder = (await state(window)).layers.map((layer) => layer.id);
+    expect((await state(window)).layers.every((layer) => layer.type === "overlay")).toBe(true);
+    await window.evaluate((id) => window.__afterframeTest.moveLayer(id, 1), beforeOrder[0]);
+    await expect.poll(async () => (await state(window)).layers[0]?.id, { timeout: 5000 }).toBe(beforeOrder[1]);
+
+    const beforePixel = await window.evaluate(() => window.__afterframeTest.sampleSourcePixel(0.5, 0.9));
+    await window.getByRole("button", { name: /Apply/i }).click();
+    await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(0);
+    const afterPixel = await window.evaluate(() => window.__afterframeTest.sampleSourcePixel(0.5, 0.9));
+    expect(afterPixel.slice(0, 3).reduce((sum, value) => sum + value, 0))
+      .toBeLessThan(beforePixel.slice(0, 3).reduce((sum, value) => sum + value, 0));
+
+    await window.evaluate(() => window.__afterframeTest.setTool("crop"));
+    expect(await window.evaluate(() => window.__afterframeTest.sampleSourcePixel(0.5, 0.9))).toEqual(afterPixel);
+  });
+});
+
 // Unified history: transform edits AND layer edits share ONE undo/redo timeline,
 // so the global undo (Cmd+Z / backdoor.undo) reverses whichever was last — not a
 // separate layer-only stack. Also guards that a frame preset is a single atomic

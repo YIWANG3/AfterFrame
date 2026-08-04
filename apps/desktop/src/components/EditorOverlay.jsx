@@ -17,9 +17,9 @@ import {
   inferMimeType,
   canvasToBlob,
   bgToCss,
-  scrimToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
+import { createOverlayLayer } from "./editor/textState";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
 import ToolRail from "./editor/components/ToolRail";
@@ -58,6 +58,7 @@ import {
 import {
   isTextLayer,
   isStickerLayer,
+  isOverlayLayer,
   getTextLayers,
 } from "./editor/layerStack";
 
@@ -454,7 +455,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
   function handleTextApply() {
     flushLayerCommit();
-    const renderable = layers.filter((l) => isTextLayer(l) || isStickerLayer(l));
+    const renderable = layers.filter((l) => isTextLayer(l) || isStickerLayer(l) || isOverlayLayer(l));
     if (!sourceImage || renderable.length === 0) return;
     const { width: sw, height: sh } = getSourceDimensions(sourceImage);
     const composite = document.createElement("canvas");
@@ -608,7 +609,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const screenOutputRect = screenOutputView?.rect ?? null;
   const screenImageRect = tool === "text" ? (screenOutputView?.photoRect || imageRect) : imageRect;
   const composedView = tool === "text" && padActive && screenOutputView ? screenOutputView : null;
-  const canvasScrim = editorState.canvas?.scrim;
 
   useEffect(() => {
     const canvas = imageCanvasRef.current;
@@ -676,7 +676,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     depthFeather,
     drawLayersToCtx: drawTextLayersOnCanvas,
     nativeSaveSourcePath: nativeSaveSourcePathRef.current,
-    isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer),
+    isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer) || isOverlayLayer(layer),
   });
   const { saving, executeSave, executeSaveRef, handleExport, handleQuickSave } = useEditorSave({
     saveBasePath,
@@ -713,7 +713,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const s = editorStateRef.current;
     const nextPad = res ? res.pad : { top: 0, right: 0, bottom: 0, left: 0 };
     const nextState = res
-      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: res.scrim ?? null } }
+      ? { ...s, canvas: { pad: res.pad, bg: res.bg, scrim: null } }
       : { ...s, canvas: { ...s.canvas, pad: nextPad, bg: null, scrim: null } };
     // Layers are full-photo coords, basis-independent — the user's own layers
     // stay put; the preset's generated layers already arrive in full-photo coords.
@@ -723,8 +723,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       for (const [src, img] of res.stickerImages) stickerImageCache.set(src, img);
     }
     // Apply state + layers live, then commit a single combined (atomic) entry.
+    const presetOverlay = res?.scrim
+      ? createOverlayLayer({ kind: res.scrim.kind ?? "edge", ...res.scrim, sourceLabel: t("text.overlayLayer"), fromPreset: true })
+      : null;
     applyState(nextState);
-    applyLayers(res ? [...cur, ...res.layers] : cur);
+    // The preset scrim used to be canvas metadata beneath every layer. Keep
+    // that visual order, but represent it as a normal editable stack item.
+    applyLayers(res ? [...(presetOverlay ? [presetOverlay] : []), ...cur, ...res.layers] : cur);
     commitCurrent();
     resetViewToFit(nextState);
     setTool("text");
@@ -753,6 +758,18 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       // aborts while the preview image is still decoding.
       getPreviewReady: () => previewReadyRef.current,
       getSaving: () => saving,
+      sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
+        const source = sourceImageRef.current;
+        const { width, height } = getSourceDimensions(source);
+        if (!source || !width || !height) return null;
+        const sample = document.createElement("canvas");
+        sample.width = 1;
+        sample.height = 1;
+        const sx = Math.min(width - 1, Math.max(0, Math.round(fx * (width - 1))));
+        const sy = Math.min(height - 1, Math.max(0, Math.round(fy * (height - 1))));
+        sample.getContext("2d").drawImage(source, sx, sy, 1, 1, 0, 0, 1, 1);
+        return [...sample.getContext("2d").getImageData(0, 0, 1, 1).data];
+      },
       addTextLayer: (text) => addTextLayer(text),
       getLayerCount: () => layers.length,
       getTool: () => tool,
@@ -775,7 +792,17 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           cropRect: s.cropRect,
           // `layers` is the STORED (full-photo) basis; `displayLayers` is the
           // derived current-basis position shown on screen.
-          layers: layers.map((l) => ({ id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale })),
+          layers: layers.map((l) => ({
+            id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale,
+            naturalWidth: l.naturalWidth, naturalHeight: l.naturalHeight,
+            // Data URLs are megabytes — expose only the kind, not the payload.
+            stickerPathKind: typeof l.stickerPath === "string"
+              ? (l.stickerPath.startsWith("data:") ? "data" : "path")
+              : null,
+            handwriting: l.handwriting
+              ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
+              : null,
+          })),
           displayLayers: displayLayers.map((l) => ({ id: l.id, x: l.x, y: l.y })),
           selectedIds: [...selectedIds],
           historyIndex: historyIndexRef.current,
@@ -810,6 +837,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
           "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
           "selectLayers", "undo", "redo", "setPad", "applyFramePreset", "clearFramePreset",
+          "sampleSourcePixel",
         ]) delete window.__afterframeTest[k];
       }
     };
@@ -1076,24 +1104,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               </div>
             )}
 
-            {/* Edge scrim (overlay presets) — darkens the photo edge so on-photo
-                text stays legible; drawn over the photo content window, matching
-                drawScrim on the save path. */}
-            {tool === "text" && canvasScrim && screenOutputView ? (
-              <div
-                className="pointer-events-none absolute"
-                style={{
-                  left: `${screenOutputView.contentRect.x}px`,
-                  top: canvasScrim.edge === "top"
-                    ? `${screenOutputView.contentRect.y}px`
-                    : `${screenOutputView.contentRect.y + screenOutputView.contentRect.height * (1 - (canvasScrim.height ?? 0.3))}px`,
-                  width: `${screenOutputView.contentRect.width}px`,
-                  height: `${screenOutputView.contentRect.height * (canvasScrim.height ?? 0.3)}px`,
-                  background: scrimToCss(canvasScrim),
-                }}
-              />
-            ) : null}
-
             {/* Layer stack — text groups + depth layers, in user-defined order.
                 Wrappers use zIndex: auto so DOM order = paint order; later siblings paint on top.
                 The side panel (z=20) and crop overlay (z=10) stay above the entire stack
@@ -1104,6 +1114,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   layers={displayLayers}
                   selectedIds={selectedIds}
                   imageRect={screenOutputRect || screenImageRect}
+                  overlayRect={screenOutputView?.contentRect || screenImageRect}
                   depthMaskGeom={composedView ? {
                     sx: normalizedCrop?.x ?? 0, sy: normalizedCrop?.y ?? 0,
                     sw: normalizedCrop?.width ?? 1, sh: normalizedCrop?.height ?? 1,

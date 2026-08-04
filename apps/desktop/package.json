@@ -60,6 +60,13 @@
         ]
       },
       {
+        "from": "handwriting-presets",
+        "to": "handwriting-presets",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "sample-photos",
         "to": "sample-photos",
         "filter": [
@@ -120,6 +127,15 @@
       ],
       "category": "Graphics"
     }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "sharp",
+      "@img/sharp-darwin-arm64"
+    ]
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

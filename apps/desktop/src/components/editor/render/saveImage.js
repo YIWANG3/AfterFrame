@@ -161,6 +161,17 @@ export async function saveEditedImage(ctx) {
   // rescaled to the output's 1920-ref (k = fullW / compW) so the saved layer
   // keeps the size shown relative to the photo. One mapping for both shapes.
   const mapLayer = (layer) => {
+    if (layer.type === "overlay") {
+      return {
+        ...layer,
+        overlayRect: {
+          x: contentRect.x / compW,
+          y: contentRect.y / compH,
+          width: contentRect.width / compW,
+          height: contentRect.height / compH,
+        },
+      };
+    }
     const X = layer.x * fullW;
     const Y = layer.y * fullH;
     const k = fullW / compW;

@@ -43,6 +43,35 @@ export function bgToCss(bg) {
 // the frame engine, the unified save path and preset generation.
 export function drawScrim(ctx, scrim, rect) {
   if (!scrim) return;
+  // Fill scrim — full-photo wash (solid or angled gradient) used to dim the
+  // image behind text. `opacity` is the overall 0-100 slider; gradient stops
+  // carry their own 0-1 alphas. Must stay pixel-identical to the live-preview
+  // CSS in EditorOverlay (scrimToCss + element opacity).
+  if (scrim.kind === "fill") {
+    ctx.save();
+    ctx.globalAlpha = (scrim.opacity ?? 100) / 100;
+    ctx.translate(rect.x, rect.y);
+    if (scrim.mode === "gradient" && scrim.gradient) {
+      const g = scrim.gradient;
+      ctx.fillStyle = angledLinearGradient(
+        ctx,
+        {
+          angle: g.angle ?? 180,
+          from: g.from ?? "#000000",
+          fromOpacity: g.fromOpacity ?? 0,
+          to: g.to ?? "#000000",
+          toOpacity: g.toOpacity ?? 0.7,
+        },
+        rect.width,
+        rect.height
+      );
+    } else {
+      ctx.fillStyle = scrim.color ?? "#000000";
+    }
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.restore();
+    return;
+  }
   const sh = (scrim.height ?? 0.3) * rect.height;
   const top = scrim.edge === "top";
   const y0 = top ? rect.y : rect.y + rect.height - sh;
@@ -55,7 +84,16 @@ export function drawScrim(ctx, scrim, rect) {
 }
 
 // Scrim → CSS for the live preview (must match drawScrim's canvas output).
+// Fill scrims: pair this background with `opacity: (scrim.opacity ?? 100)/100`
+// on the element (mirrors drawScrim's globalAlpha).
 export function scrimToCss(scrim) {
+  if (scrim?.kind === "fill") {
+    if (scrim.mode === "gradient" && scrim.gradient) {
+      const g = scrim.gradient;
+      return `linear-gradient(${g.angle ?? 180}deg, ${hexToRgba(g.from ?? "#000000", g.fromOpacity ?? 0)}, ${hexToRgba(g.to ?? "#000000", g.toOpacity ?? 0.7)})`;
+    }
+    return scrim.color ?? "#000000";
+  }
   const top = scrim?.edge === "top";
   const from = scrim?.from ?? "rgba(0,0,0,0)";
   const to = scrim?.to ?? "rgba(0,0,0,0.5)";

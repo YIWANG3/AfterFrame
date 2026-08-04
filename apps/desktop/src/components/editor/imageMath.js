@@ -212,6 +212,7 @@ function basisWidth(transformedPreview, crop, pad) {
 // The size fields that are basis-width relative (mirror saveImage's `k` rescale).
 function rescaleLayerSize(layer, k) {
   if (k === 1) return layer;
+  if (layer.type === "overlay") return layer;
   if (layer.type === "sticker") return { ...layer, scale: (layer.scale ?? 0.4) * k };
   return {
     ...layer,
@@ -234,6 +235,9 @@ export function convertLayersBasis(layers, transformedPreview, from, to) {
   const toW = basisWidth(transformedPreview, to.crop, to.pad || {});
   const k = fromW > 0 ? fromW / toW : 1;
   return layers.map((l) => {
+    // Overlays always resolve against the current photo content rect. They do
+    // not own a positional basis and therefore need no crop/pad conversion.
+    if (l.type === "overlay") return { ...l };
     const p = layerFractionToPhoto(l.x, l.y, transformedPreview, from.crop, from.pad || {});
     const n = photoToLayerFraction(p.px, p.py, transformedPreview, to.crop, to.pad || {});
     return { ...rescaleLayerSize(l, k), x: n.fx, y: n.fy };
@@ -270,6 +274,7 @@ export function bakeLayersIntoCrop(layers, transformedPreview, crop, pad) {
   const newW = crop ? crop.width * transformedPreview.width : transformedPreview.width;
   const k = newW > 0 ? oldW / newW : 1;
   return layers.map((l) => {
+    if (l.type === "overlay") return { ...l };
     const p = layerFractionToPhoto(l.x, l.y, transformedPreview, crop, pad || {});
     const x = crop ? (p.px - crop.x) / crop.width : p.px;
     const y = crop ? (p.py - crop.y) / crop.height : p.py;

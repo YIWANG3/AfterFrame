@@ -3,7 +3,7 @@ import { getBgPadding, measureTextWidthDOM, getDisplayText } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
-import { buildDepthAlphaMask } from "./render/canvasHelpers";
+import { buildDepthAlphaMask, scrimToCss } from "./render/canvasHelpers";
 
 // Half-width / half-height of a layer as fractions of the image rect — for
 // element-to-element alignment snapping. Text is measured via the DOM (see
@@ -11,6 +11,7 @@ import { buildDepthAlphaMask } from "./render/canvasHelpers";
 // the web font loads; stickers use scale.
 function layerHalfFrac(layer, imageRect) {
   if (!imageRect?.width) return { hw: 0, hh: 0 };
+  if (layer.type === "overlay") return { hw: 0, hh: 0 };
   const s = imageRect.width / 1920; // same display scale TextCanvas renders at
   if (layer.type === "sticker") {
     const aspect = layer.naturalHeight && layer.naturalWidth ? layer.naturalHeight / layer.naturalWidth : 1;
@@ -90,6 +91,9 @@ export default function TextCanvas({
   // {dx,dy,dw,dh} = content rect as output fractions). Null = output IS the
   // photo (pad=0), mask stretches edge-to-edge as before.
   depthMaskGeom = null,
+  // Overlays cover the photo content, not any surrounding canvas margins.
+  // When omitted (pad=0), the output and photo rect are identical.
+  overlayRect = null,
 }) {
   const dragRef = useRef(null);
   const containerRef = useRef(null);
@@ -138,7 +142,7 @@ export default function TextCanvas({
     const targetsX = [0, 0.5, 1];
     const targetsY = [0, 0.5, 1];
     for (const l of layers) {
-      if (l.id === layerId) continue;
+      if (l.id === layerId || l.type === "overlay") continue;
       const h = layerHalfFrac(l, imageRect);
       targetsX.push(l.x - h.hw, l.x, l.x + h.hw);
       targetsY.push(l.y - h.hh, l.y, l.y + h.hh);
@@ -318,6 +322,15 @@ export default function TextCanvas({
         />
       ) : null}
       {layers.map((layer) => {
+        if (layer.type === "overlay") {
+          return (
+            <OverlayLayerEl
+              key={layer.id}
+              layer={layer}
+              rect={overlayRect || imageRect}
+            />
+          );
+        }
         // Image-relative coords inside the per-layer mask wrapper
         const px = layer.x * imageRect.width;
         const py = layer.y * imageRect.height;
@@ -398,6 +411,29 @@ export default function TextCanvas({
         <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * guides.y, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
     </div>
+  );
+}
+
+function OverlayLayerEl({ layer, rect }) {
+  if (!rect) return null;
+  const isFill = layer.kind === "fill";
+  const height = isFill ? rect.height : rect.height * (layer.height ?? 0.3);
+  const top = isFill || layer.edge === "top"
+    ? rect.y
+    : rect.y + rect.height - height;
+  return (
+    <div
+      data-editor-layer-type="overlay"
+      className="pointer-events-none absolute overflow-hidden"
+      style={{
+        left: `${rect.x}px`,
+        top: `${top}px`,
+        width: `${rect.width}px`,
+        height: `${height}px`,
+        opacity: isFill ? (layer.opacity ?? 100) / 100 : 1,
+        background: scrimToCss(layer),
+      }}
+    />
   );
 }
 
