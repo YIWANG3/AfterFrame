@@ -412,7 +412,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
     create_job_parser.add_argument("--priority", type=int, default=50)
 
@@ -420,7 +420,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
@@ -434,7 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-active-jobs", parents=[common])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
@@ -528,7 +528,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_ai_repaint_job_parser = subparsers.add_parser("run-ai-repaint-job", parents=[common])
     run_ai_repaint_job_parser.add_argument("--job-id", required=True)
-    run_ai_repaint_job_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "mock"], default="nanobanana")
+    run_ai_repaint_job_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark", "mock"], default="nanobanana")
     run_ai_repaint_job_parser.add_argument("--base-url")
     run_ai_repaint_job_parser.add_argument("--model")
     run_ai_repaint_job_parser.add_argument("--input", type=Path, required=True)
@@ -540,6 +540,19 @@ def build_parser() -> argparse.ArgumentParser:
     run_ai_repaint_job_parser.add_argument("--temperature", type=float)
     run_ai_repaint_job_parser.add_argument("--api-key")
 
+    run_text_image_job_parser = subparsers.add_parser("run-text-image-job", parents=[common])
+    run_text_image_job_parser.add_argument("--job-id", required=True)
+    run_text_image_job_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark", "mock"], default="nanobanana")
+    run_text_image_job_parser.add_argument("--base-url")
+    run_text_image_job_parser.add_argument("--model")
+    run_text_image_job_parser.add_argument("--output", type=Path, required=True)
+    run_text_image_job_parser.add_argument("--prompt", required=True)
+    run_text_image_job_parser.add_argument("--aspect-ratio", choices=["1:1", "16:9", "9:16", "3:1", "1:3"])
+    run_text_image_job_parser.add_argument("--image-size", choices=["1K", "2K", "4K"])
+    run_text_image_job_parser.add_argument("--quality", choices=["low", "medium", "high"])
+    run_text_image_job_parser.add_argument("--ref-image", type=Path)
+    run_text_image_job_parser.add_argument("--api-key")
+
     summary_parser = subparsers.add_parser("summary", parents=[common])
     summary_parser.add_argument("--json", action="store_true")
 
@@ -547,7 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_new_media_parser.add_argument("--image-dir", type=Path, action="append", required=True)
 
     list_models_parser = subparsers.add_parser("list-ai-models", parents=[common])
-    list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng"], default="nanobanana")
+    list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark"], default="nanobanana")
     list_models_parser.add_argument("--api-key")
     list_models_parser.add_argument("--base-url")
 
@@ -845,6 +858,28 @@ def _cmd_run_ai_repaint_job(args, connection, catalog, parser):
         temperature=args.temperature,
         model=getattr(args, "model", None),
         base_url=getattr(args, "base_url", None),
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_run_text_image_job(args, connection, catalog, parser):
+    from .job_runner import run_text_image_job
+
+    payload = run_text_image_job(
+        connection,
+        catalog_path=args.catalog,
+        job_id=args.job_id,
+        provider=args.provider,
+        output_path=args.output,
+        prompt=args.prompt,
+        api_key=args.api_key,
+        aspect_ratio=args.aspect_ratio,
+        image_size=args.image_size,
+        quality=getattr(args, "quality", None),
+        model=getattr(args, "model", None),
+        base_url=getattr(args, "base_url", None),
+        ref_image_path=getattr(args, "ref_image", None),
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -1926,6 +1961,7 @@ COMMAND_HANDLERS = {
     "split-shared-assets": _cmd_split_shared_assets,
     "list-ai-models": _cmd_list_ai_models,
     "run-ai-repaint-job": _cmd_run_ai_repaint_job,
+    "run-text-image-job": _cmd_run_text_image_job,
     "ai-repaint": _cmd_ai_repaint,
     "annotate-asset": _cmd_annotate_asset,
     "run-annotation-job": _cmd_run_annotation_job,

@@ -13,12 +13,52 @@ from urllib.request import Request, urlopen
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 OPENAI_API_BASE = "https://api.openai.com/v1"
+ARK_API_BASE = "https://ark.cn-beijing.volces.com/api/v3"
 DEFAULT_GEMINI_MODEL = "gemini-3-pro-image-preview"
 DEFAULT_OPENAI_MODEL = "gpt-image-1"
 NANOBANANA_PROVIDER = "nanobanana"
 OPENAI_PROVIDER = "openai"
 OPENAI_COMPATIBLE_PROVIDER = "openai_compatible"
 JIMENG_PROVIDER = "jimeng"
+ARK_PROVIDER = "ark"
+
+# Ark (方舟) serves the newer Seedream models over an OpenAI-style JSON API
+# (Bearer key), unlike the legacy AK/SK-signed jimeng CV channel. GET /models
+# works with the same key (validated 2026-08) — this list is only the fallback.
+ARK_MODELS = [
+    {"id": "doubao-seedream-4-5-251128", "name": "Seedream 4.5"},
+    {"id": "doubao-seedream-5-0-pro-260628", "name": "Seedream 5.0 Pro"},
+    {"id": "doubao-seedream-5-0-260128", "name": "Seedream 5.0 Lite"},
+    {"id": "doubao-seedream-4-0-250828", "name": "Seedream 4.0"},
+]
+DEFAULT_ARK_MODEL = "doubao-seedream-4-5-251128"
+
+
+def list_ark_models(api_key: str) -> list[dict[str, str]]:
+    """Fetch Seedream image models from Ark's /models listing."""
+    request = Request(
+        url=f"{ARK_API_BASE}/models",
+        headers={"Authorization": f"Bearer {api_key}"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError):
+        return ARK_MODELS
+
+    results: list[dict[str, str]] = []
+    for m in body.get("data", []):
+        model_id = m.get("id", "")
+        if "seedream" not in model_id.lower():
+            continue
+        if m.get("status") == "Shutdown":
+            continue
+        # "doubao-seedream-4-5" → "Seedream 4.5"
+        base = (m.get("name") or model_id).replace("doubao-", "")
+        pretty = base.replace("seedream-", "Seedream ").replace("-", ".").replace(".pro", " Pro").replace(".lite", " Lite")
+        results.append({"id": model_id, "name": pretty})
+    return results if results else ARK_MODELS
 
 JIMENG_MODELS = [
     {"id": "jimeng_t2i_v40", "name": "即梦 图片生成 4.0"},
@@ -40,7 +80,10 @@ GEMINI_FALLBACK_MODELS = [
 ]
 
 OPENAI_FALLBACK_MODELS = [
+    {"id": "gpt-image-2", "name": "GPT Image 2"},
+    {"id": "gpt-image-1.5", "name": "GPT Image 1.5"},
     {"id": "gpt-image-1", "name": "GPT Image 1"},
+    {"id": "gpt-image-1-mini", "name": "GPT Image 1 Mini"},
 ]
 
 
@@ -96,6 +139,8 @@ def list_provider_models(provider: str, api_key: str, base_url: str | None = Non
         return list_openai_models(api_key, base_url=base_url or OPENAI_API_BASE)
     if provider == JIMENG_PROVIDER:
         return JIMENG_MODELS
+    if provider == ARK_PROVIDER:
+        return list_ark_models(api_key)
     # nanobanana uses Gemini under the hood
     return list_gemini_models(api_key)
 
@@ -563,6 +608,475 @@ def run_jimeng_repaint(
         if "jpeg" in content_type or "jpg" in content_type:
             output_mime = "image/jpeg"
 
+    if output_bytes is None:
+        raise RuntimeError("Jimeng returned no image data")
+
+    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
+    return RepaintResult(
+        provider=JIMENG_PROVIDER,
+        model=req_key,
+        output_path=str(written_path),
+        mime_type=output_mime,
+        prompt=prompt,
+        notes=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Text-to-image (handwriting sticker generation).
+#
+# Unlike repaint these take no source photo: the prompt asks for black
+# handwriting on a plain white background and the renderer mattes the result
+# into an alpha sticker. An optional reference image steers the writing style
+# (all three providers honor it; validated 2026-08).
+
+TEXT_IMAGE_ASPECTS = ("1:1", "16:9", "9:16", "3:1", "1:3")
+
+
+def _openai_t2i_size(aspect_ratio: str | None, model: str) -> str:
+    # gpt-image-2 accepts flexible sizes (multiples of 16, ratio <= 3:1);
+    # earlier models only know the three fixed sizes.
+    flexible = model.startswith("gpt-image-2")
+    if aspect_ratio == "1:1":
+        return "1024x1024"
+    if aspect_ratio == "9:16":
+        return "1024x1536"
+    if aspect_ratio == "3:1":
+        return "1536x512" if flexible else "1536x1024"
+    if aspect_ratio == "1:3":
+        return "512x1536" if flexible else "1024x1536"
+    return "1536x1024"
+
+
+def run_mock_text_image(output_path: Path, prompt: str) -> RepaintResult:
+    """Render black text on white with PIL — offline dev + e2e fixture."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    # The UI wraps the literal text in 「」 inside the prompt template.
+    text = prompt
+    if "「" in prompt and "」" in prompt:
+        text = prompt.split("「", 1)[1].split("」", 1)[0]
+    text = (text or "mock").strip()[:16]
+
+    font = None
+    for candidate in (
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
+    ):
+        try:
+            font = ImageFont.truetype(candidate, 160)
+            break
+        except OSError:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    img = Image.new("RGB", (1536, 512), "white")
+    draw = ImageDraw.Draw(img)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    x = (img.width - (bbox[2] - bbox[0])) // 2 - bbox[0]
+    y = (img.height - (bbox[3] - bbox[1])) // 2 - bbox[1]
+    draw.text((x, y), text, fill="black", font=font)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(output_path, "PNG")
+    return RepaintResult(
+        provider="mock",
+        model="mock-text-image",
+        output_path=str(output_path),
+        mime_type="image/png",
+        prompt=prompt,
+        notes=["Mock mode rendered the text locally to validate the flow."],
+    )
+
+
+def run_gemini_text_image(
+    output_path: Path,
+    prompt: str,
+    *,
+    api_key: str | None,
+    model: str = DEFAULT_GEMINI_MODEL,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+    ref_image_path: Path | None = None,
+) -> RepaintResult:
+    effective_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not effective_key:
+        raise ValueError("Missing Gemini API key. Set GEMINI_API_KEY or pass --api-key.")
+
+    parts: list[dict[str, Any]] = []
+    if ref_image_path is not None:
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": _detect_mime_type(ref_image_path),
+                    "data": base64.b64encode(ref_image_path.read_bytes()).decode("utf-8"),
+                }
+            }
+        )
+    parts.append({"text": prompt})
+
+    payload: dict[str, Any] = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+    }
+    image_config: dict[str, Any] = {}
+    # Gemini's imageConfig has no 3:1 band — fall back to the nearest one.
+    gemini_aspect = {"3:1": "16:9", "1:3": "9:16"}.get(aspect_ratio, aspect_ratio)
+    if gemini_aspect:
+        image_config["aspectRatio"] = gemini_aspect
+    if image_size and model in GEMINI_MODELS_WITH_IMAGE_SIZE:
+        image_config["imageSize"] = image_size
+    if image_config:
+        payload["generationConfig"]["imageConfig"] = image_config
+
+    request = Request(
+        url=f"{GEMINI_API_BASE}/models/{model}:generateContent",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": effective_key},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=300) as response:
+            body = response.read().decode("utf-8")
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Gemini request failed: HTTP {error.code}: {detail}") from error
+    except URLError as error:
+        raise RuntimeError(f"Gemini request failed: {error.reason}") from error
+
+    response_payload = json.loads(body)
+    response_parts = (
+        response_payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    )
+    text_notes: list[str] = []
+    output_bytes: bytes | None = None
+    output_mime = "image/png"
+    for part in response_parts:
+        text = part.get("text")
+        if text:
+            text_notes.append(text)
+        inline_data = part.get("inlineData") or part.get("inline_data")
+        if inline_data and inline_data.get("data"):
+            output_bytes = base64.b64decode(inline_data["data"])
+            output_mime = inline_data.get("mimeType") or inline_data.get("mime_type") or output_mime
+            break
+    if output_bytes is None:
+        raise RuntimeError(f"Gemini returned no image output: {json.dumps(response_payload, indent=2)}")
+
+    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
+    return RepaintResult(
+        provider=NANOBANANA_PROVIDER,
+        model=model,
+        output_path=str(written_path),
+        mime_type=output_mime,
+        prompt=prompt,
+        notes=text_notes,
+    )
+
+
+def run_openai_text_image(
+    output_path: Path,
+    prompt: str,
+    *,
+    api_key: str | None,
+    model: str = DEFAULT_OPENAI_MODEL,
+    aspect_ratio: str | None = None,
+    quality: str | None = None,
+    base_url: str = OPENAI_API_BASE,
+    ref_image_path: Path | None = None,
+) -> RepaintResult:
+    # With a style reference the edits endpoint (multipart, existing repaint
+    # implementation) is the right call; plain generation is a JSON POST.
+    if ref_image_path is not None:
+        return run_openai_repaint(
+            input_path=ref_image_path,
+            output_path=output_path,
+            prompt=prompt,
+            api_key=api_key,
+            model=model,
+            aspect_ratio=aspect_ratio if aspect_ratio in ("1:1", "16:9", "9:16", "4:3", "3:4") else "16:9",
+            image_size=None,
+            base_url=base_url,
+        )
+
+    effective_key = api_key or os.environ.get("OPENAI_API_KEY")
+    if not effective_key:
+        raise ValueError("Missing OpenAI API key. Set OPENAI_API_KEY or pass --api-key.")
+
+    body: dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "size": _openai_t2i_size(aspect_ratio, model),
+        "n": 1,
+    }
+    if quality:
+        body["quality"] = quality
+
+    request = Request(
+        url=f"{base_url}/images/generations",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {effective_key}",
+            "User-Agent": "Framebase/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=300) as response:
+            resp_body = response.read().decode("utf-8")
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenAI request failed: HTTP {error.code}: {detail}") from error
+    except URLError as error:
+        raise RuntimeError(f"OpenAI request failed: {error.reason}") from error
+
+    payload = json.loads(resp_body)
+    data_items = payload.get("data", [])
+    if not data_items:
+        raise RuntimeError(f"OpenAI returned no image data: {json.dumps(payload, indent=2)}")
+    item = data_items[0]
+    b64 = item.get("b64_json")
+    img_url = item.get("url")
+    if b64:
+        output_bytes = base64.b64decode(b64)
+        output_mime = "image/png"
+    elif img_url:
+        with urlopen(img_url, timeout=120) as dl_resp:
+            output_bytes = dl_resp.read()
+        ct = dl_resp.headers.get("Content-Type", "image/png") if hasattr(dl_resp, "headers") else "image/png"
+        output_mime = "image/jpeg" if "jpeg" in ct or "jpg" in ct else "image/png"
+    else:
+        raise RuntimeError("OpenAI response missing both b64_json and url.")
+
+    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
+    return RepaintResult(
+        provider=OPENAI_PROVIDER,
+        model=model,
+        output_path=str(written_path),
+        mime_type=output_mime,
+        prompt=prompt,
+        notes=[],
+    )
+
+
+def _ark_size(aspect_ratio: str | None) -> str:
+    # Ark wants 'WIDTHxHEIGHT' (or 1k/2k/4k) and ≥3,686,400 total pixels
+    # (Seedream 4.5's floor — validated 2026-08); ratio strings are rejected.
+    mapping = {
+        "1:1": "2048x2048",
+        "16:9": "2560x1440",
+        "9:16": "1440x2560",
+        "4:3": "2304x1728",
+        "3:4": "1728x2304",
+        "3:1": "3456x1152",
+        "1:3": "1152x3456",
+    }
+    return mapping.get(aspect_ratio or "", "2k")
+
+
+def _ark_generate(
+    output_path: Path,
+    prompt: str,
+    *,
+    api_key: str | None,
+    model: str,
+    aspect_ratio: str | None,
+    image_input: str | None = None,
+) -> RepaintResult:
+    effective_key = api_key or os.environ.get("ARK_API_KEY")
+    if not effective_key:
+        raise ValueError("Missing Ark API key. Set ARK_API_KEY or configure the provider token.")
+
+    body: dict[str, Any] = {
+        "model": model or DEFAULT_ARK_MODEL,
+        "prompt": prompt,
+        "size": _ark_size(aspect_ratio),
+        "response_format": "b64_json",
+        "watermark": False,
+    }
+    if image_input:
+        body["image"] = image_input
+
+    request = Request(
+        url=f"{ARK_API_BASE}/images/generations",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {effective_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=300) as response:
+            resp_body = response.read().decode("utf-8")
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Ark request failed: HTTP {error.code}: {detail}") from error
+    except URLError as error:
+        raise RuntimeError(f"Ark request failed: {error.reason}") from error
+
+    payload = json.loads(resp_body)
+    data_items = payload.get("data", [])
+    if not data_items:
+        raise RuntimeError(f"Ark returned no image data: {json.dumps(payload, indent=2)}")
+    item = data_items[0]
+    b64 = item.get("b64_json")
+    img_url = item.get("url")
+    if b64:
+        output_bytes = base64.b64decode(b64)
+        output_mime = "image/png"
+    elif img_url:
+        with urlopen(img_url, timeout=120) as dl_resp:
+            output_bytes = dl_resp.read()
+        ct = dl_resp.headers.get("Content-Type", "image/png") if hasattr(dl_resp, "headers") else "image/png"
+        output_mime = "image/jpeg" if "jpeg" in ct or "jpg" in ct else "image/png"
+    else:
+        raise RuntimeError("Ark response missing both b64_json and url.")
+
+    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
+    return RepaintResult(
+        provider=ARK_PROVIDER,
+        model=model or DEFAULT_ARK_MODEL,
+        output_path=str(written_path),
+        mime_type=output_mime,
+        prompt=prompt,
+        notes=[],
+    )
+
+
+def _file_to_data_url(path: Path) -> str:
+    mime = _detect_mime_type(path)
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("utf-8")
+
+
+def run_ark_text_image(
+    output_path: Path,
+    prompt: str,
+    *,
+    api_key: str | None,
+    model: str = DEFAULT_ARK_MODEL,
+    aspect_ratio: str | None = None,
+    ref_image_path: Path | None = None,
+) -> RepaintResult:
+    image_input = _file_to_data_url(ref_image_path) if ref_image_path else None
+    return _ark_generate(
+        output_path, prompt, api_key=api_key, model=model,
+        aspect_ratio=aspect_ratio, image_input=image_input,
+    )
+
+
+def run_ark_repaint(
+    input_path: Path,
+    output_path: Path,
+    prompt: str,
+    *,
+    api_key: str | None,
+    model: str = DEFAULT_ARK_MODEL,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+) -> RepaintResult:
+    return _ark_generate(
+        output_path, prompt, api_key=api_key, model=model,
+        aspect_ratio=aspect_ratio, image_input=_file_to_data_url(input_path),
+    )
+
+
+def run_jimeng_text_image(
+    output_path: Path,
+    prompt: str,
+    *,
+    access_key_id: str | None,
+    secret_access_key: str | None,
+    model: str = "jimeng_seedream46_cvtob",
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+    ref_image_path: Path | None = None,
+) -> RepaintResult:
+    ak = access_key_id or os.environ.get("VOLC_ACCESSKEY")
+    sk = secret_access_key or os.environ.get("VOLC_SECRETKEY")
+    if not ak or not sk:
+        raise ValueError("Missing Volcengine AccessKey/SecretKey.")
+
+    from volcengine.visual.VisualService import VisualService
+
+    vs = VisualService()
+    vs.set_ak(ak)
+    vs.set_sk(sk)
+
+    req_key = model or "jimeng_seedream46_cvtob"
+    submit_body: dict[str, Any] = {
+        "req_key": req_key,
+        "prompt": prompt,
+        "force_single": True,
+    }
+    if ref_image_path is not None:
+        submit_body["binary_data_base64"] = [
+            base64.b64encode(ref_image_path.read_bytes()).decode("utf-8")
+        ]
+
+    res_map = {"1k": 1024, "2k": 2048, "4k": 4096}
+    base = res_map.get((image_size or "2k").lower(), 2048)
+    ratio_map = {
+        "1:1": (base, base),
+        "16:9": (int(base * 1.333), int(base * 0.75)),
+        "9:16": (int(base * 0.75), int(base * 1.333)),
+        "3:1": (int(base * 1.5), int(base * 0.5)),
+        "1:3": (int(base * 0.5), int(base * 1.5)),
+    }
+    if aspect_ratio in ratio_map:
+        w, h = ratio_map[aspect_ratio]
+        submit_body.update({"width": w, "height": h})
+    else:
+        submit_body["size"] = base * base
+
+    submit_resp = vs.cv_sync2async_submit_task(submit_body)
+    code = submit_resp.get("code")
+    if code != 10000:
+        msg = submit_resp.get("message", "Unknown error")
+        raise RuntimeError(f"Jimeng submit failed ({code}): {msg}")
+    task_id = submit_resp["data"]["task_id"]
+
+    import time
+
+    poll_resp: dict[str, Any] = {}
+    for attempt in range(180):
+        time.sleep(2)
+        try:
+            poll_resp = vs.cv_sync2async_get_result({"req_key": req_key, "task_id": task_id})
+        except Exception:
+            if attempt < 179:
+                continue
+            raise
+        poll_code = poll_resp.get("code")
+        if poll_code == 50430:
+            time.sleep(5)
+            continue
+        if poll_code != 10000:
+            msg = poll_resp.get("message", "Unknown error")
+            raise RuntimeError(f"Jimeng poll failed ({poll_code}): {msg}")
+        status = poll_resp.get("data", {}).get("status", "")
+        if status == "done":
+            break
+        if status in ("not_found", "expired"):
+            raise RuntimeError(f"Jimeng task {status}: {task_id}")
+    else:
+        raise RuntimeError(f"Jimeng task timed out: {task_id}")
+
+    data = poll_resp.get("data", {})
+    b64_list = data.get("binary_data_base64") or []
+    url_list = data.get("image_urls") or []
+    output_bytes: bytes | None = None
+    output_mime = "image/png"
+    if b64_list and b64_list[0]:
+        output_bytes = base64.b64decode(b64_list[0])
+    elif url_list:
+        with urlopen(url_list[0], timeout=60) as resp:
+            output_bytes = resp.read()
+        content_type = resp.headers.get("Content-Type", "image/png")
+        if "jpeg" in content_type or "jpg" in content_type:
+            output_mime = "image/jpeg"
     if output_bytes is None:
         raise RuntimeError("Jimeng returned no image data")
 
