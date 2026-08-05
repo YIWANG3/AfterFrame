@@ -31,7 +31,7 @@ Reviewer: Claude（三路并行审查：sidecar Python / Electron 主进程 / �
   `apps/desktop/electron/main.js:900`（cache 目录）+ `HandwritingModal.jsx:86`（`seedRef`）。
   每次 Regenerate 换 seed → 新 SHA1 键 → 新 0.3–2MB PNG；贴纸落地后烘成 data: URL，缓存文件从此无人引用。与 depth-cache 不同（按资产键控、有命中），seed-bump 条目几乎必成永久孤儿。建议：按 mtime 的 LRU 清理（启动时或写入时裁剪到 N MB）。
 
-- [ ] **P2 CONFIRMED — sidecar 新 t2i provider 与既有 repaint 大段复制粘贴**
+- [x] **P2 CONFIRMED — sidecar 新 t2i provider 与既有 repaint 大段复制粘贴**（已重构：`_gemini_generate()` 统一 Gemini 两径；`_post_image_api()` + `_extract_data_image()` 统一 OpenAI/Ark 三处 POST+提取；`_jimeng_client()` + `_jimeng_submit_poll_extract()` 统一 jimeng 两径（顺带加了连续 10 次轮询异常提前失败）；main.js 抽 `resolveProviderCredentials()`。ai_repaint.py 净减 ~140 行）
   `ai_repaint.py`：`b64_json`/url 提取+下载+mime 嗅探三处逐字重复（:406 / :839 / :924）；`run_gemini_text_image`（:693）与 `run_gemini_repaint`（:197）重复约 70 行（key 解析、payload、HTTP、错误处理、parts 循环）；`run_jimeng_text_image`（:986）复制了 repaint 的整套 submit/poll/extract（含 50430 重试）。任何 poll 修复现在要落两处。P1 第一条就是复制把老 bug 带进新代码的实例。桌面端同样有一处小重复：`main.js` `startTextImageTask`（:941）与 `startAiRepaintTask`（:828）的 provider 凭据解包，值得抽 `resolveProviderCredentials()`。
 
 - [x] **P2 CONFIRMED — 模型列表 fallback 只捕获 (HTTPError, URLError)**（已修：三处改为 `(OSError, ValueError)`，覆盖 HTTPError/URLError/TimeoutError 与 JSONDecodeError/解码错误）
@@ -40,7 +40,7 @@ Reviewer: Claude（三路并行审查：sidecar Python / Electron 主进程 / �
 - [x] **P2 CONFIRMED — dev 模式下模型列表不认环境变量 key**（已修：`_cmd_list_ai_models` 增加与生成链路一致的 env fallback 表；jimeng 列表本为静态，不再强制要求 key）
   `services/sidecar/src/media_workspace/cli.py:831`（`_cmd_list_ai_models`）。生成链路本次特意加了 env fallback（GEMINI_API_KEY 等），但列模型仍硬性要求存储 token，dev 下下拉框拉不到模型而生成却能跑，不一致。
 
-- [ ] **P2 PLAUSIBLE — Ark repaint 无 aspect_ratio 时回退小写 "2k"，疑似 400**（部分修：fallback 已改为文档大小写 `"2K"`；是否曾因小写 400 未实测，`image_size` 被静默丢弃的设计问题仍待定）
+- [x] **P2 PLAUSIBLE — Ark repaint 无 aspect_ratio 时回退小写 "2k"，疑似 400**（已修并实测：`_ark_size(aspect_ratio, image_size)` 现在在无 aspect 时把 size 档位透传为官方预设（"1K"/"2K"/"4K"），有 aspect 时像素 band 优先；`image_size` 不再被静默丢弃——repaint 常见路径（保持输入比例 + 用户选档位）从此生效。2026-08-04 用 SEEDREAM_API_KEY 实测 `"2K"` 预设：API 接受，返回 2048×2048 PNG）
   `ai_repaint.py:876`（`_ark_size`）。Ark 文档预设为 `"1K"/"2K"/"4K"`；若 API 大小写敏感，repaint 常见路径（保持输入比例、不传 aspect）全部 400。提交信息只声称验证过 WIDTHxHEIGHT 形式，需实测一次。顺带：`run_ark_repaint`（:970）接受 `image_size` 却静默丢弃（PLAUSIBLE→设计问题：要么支持要么别收这参数）。
 
 - [x] **P2 CONFIRMED — apps/desktop 下未跟踪的 pnpm 残留**（已修：删除 `pnpm-lock.yaml` / `pnpm-workspace.yaml`；`package.json` 的 `pnpm.onlyBuiltDependencies` 保留）
@@ -48,15 +48,14 @@ Reviewer: Claude（三路并行审查：sidecar Python / Electron 主进程 / �
 
 ## P3（可选优化 / 清理）
 
-- [ ] **P3 — 手写预设参考图 5.8MB 全部进仓库和安装包**
-  `apps/desktop/handwriting-presets/`（17 张 1536×512 PNG，最大 504K，extraResources 全量打包）。作为发给模型的风格参考图，灰度化/调色板量化可砍 60–80% 且不影响用途（缩略图 `src/assets/handwriting-styles/` 已是小图，没问题）。
+- [x] **P3 — 手写预设参考图 5.8MB 全部进仓库和安装包**（已修：pngquant `--quality=85-98` + oxipng `-o4`，5.8MB → 2.0MB（-66%），肉眼抽查 airyThin/brushScript 笔画与干刷纹理无损）
 - [x] **P3 — 模态框关闭后轮询不停**（已修：`waitForTextImageJob` 接收 `isAlive` 回调、关闭即返回 null；matte 前也检查 aliveRef）
 - [x] **P3 — 同类型双 provider 切换时 model 不重置**（已修：model 重置 effect 依赖加入 `providerId`）
 - [x] **P3 — undo 历史无上限**（已修：`MAX_HISTORY = 80`，超限丢最旧条目；`baseSnapshotRef` 独立于 history，Reset 不受影响。逐层 stringify 比较保留，仅在 commit 时运行，成本可接受）
 - [ ] **P3 — job 在 sidecar 启动即死时静默卡 queued**（`main.js:972` + `transport.js:252`）：spawn 无 exit 监听，argparse 拒绝（t2i 新增三个 enum 参数 + 独有的 3:1/1:3）或 python 起不来时 job 停在 queued，模态框永远转圈直到 10 分钟心跳收割（且收割仅在有人调 list-active-jobs 时跑）。repaint/import 同款旧模式，但 t2i 参数面更大，值得加 exit 处理或 main 侧参数校验。
-- [ ] **P3 — jimeng 轮询吞掉一切异常磨 180 次**（`ai_repaint.py:563,:1044`）：签名错误/DNS 故障也要磨约 6 分钟（50430 分支最坏 ~21 分钟）才浮出，可在连续 N 次同样异常后提前失败。
-- [ ] **P3 — 死代码/小杂项（sidecar）**：~~`TEXT_IMAGE_ASPECTS` 定义后无引用~~（已删）；~~`jimeng_image2image_dream_inpaint` 分支 unused import + 重读字节~~（已清理，该分支保留）；`_openai_size_from_resolution` 的 `resolution` 形参从未使用；`_write_output_bytes`（:173）可能把 JPEG 写进 .png 扩展名；`run_text_image_job` 的 `catalog_path` 未用、无 cancel 检查（cancel 后仍被覆写为 succeeded，repaint 同款）；`quality` 参数除 OpenAI 外全部静默忽略；`volcengine` 懒加载但未声明为依赖，干净安装下 jimeng 路径 ModuleNotFoundError。
-- [ ] **P3 — 渲染层清理**：`canvas.scrim` 遗留双路径本次新增的部分已不可达（预设现在发 overlay 层并置 `scrim: null`，无人再产生非空 scrim）——`scrimEquals` fill 分支、`cloneCanvas` scrim 克隆、`canvasScrim` 保存管线要么删要么注明是兼容旧存档的 forward-compat；`mediaUrlFor` 在 TextPanel 与 HandwritingModal 逐字重复，抽公共 util；`handwritingMatte.js:73` 裁剪多分配一张全尺寸 canvas（`putImageData` 带 dirty rect 可省）；`alphaCache`（:123）无上限，每个改色贴纸滞留一张全尺寸 alpha canvas；模态框内 `recoloredUrl` 每次改色全尺寸 PNG 编码，可直接渲染 canvas、到 addToCanvas 才编码。
+- [x] **P3 — jimeng 轮询吞掉一切异常磨 180 次**（已修：`_jimeng_submit_poll_extract` 连续 10 次异常（~20s）即抛出，成功一次归零计数）
+- [ ] **P3 — 死代码/小杂项（sidecar）**：~~`TEXT_IMAGE_ASPECTS` 定义后无引用~~（已删）；~~`jimeng_image2image_dream_inpaint` 分支 unused import + 重读字节~~（已清理，该分支保留）；`_openai_size_from_resolution` 的 `resolution` 形参从未使用；`_write_output_bytes`（:173）可能把 JPEG 写进 .png 扩展名；`run_text_image_job` 的 `catalog_path` 未用、无 cancel 检查（cancel 后仍被覆写为 succeeded，repaint 同款）；`quality` 参数除 OpenAI 外全部静默忽略；~~`volcengine` 未声明为依赖~~（已声明为 optional-dependency `[jimeng]`——注意当前 .venv 里并未安装，dev 下 jimeng 生成本就会 ModuleNotFoundError，要用需 `pip install -e .[jimeng]` 并纳入打包）。
+- [x] **P3 — 渲染层清理**（已修：`canvas.scrim` 保留但加了 LEGACY 注释说明其定位；`mediaUrlFor` 两处副本删除，复用 `utils/format` 的 `localFileUrl`（本就是逐字相同）；matte 裁剪改用 `putImageData` dirty rect，省一张全尺寸中间 canvas；`alphaCache` 加 8 条 FIFO 上限；模态框预览直接画 canvas，PNG 编码推迟到 addToCanvas 一次）
 - [ ] **P3 — HandwritingModal 两处值得抽取**（548 行整体尚可，不必仪式性拆分）：(1) 生成流程（generate + waitForTextImageJob + aliveRef/seedRef）抽 `useHandwritingGeneration` hook，顺手修上面的轮询取消；(2) provider/model 选择块（:129-174，与 AiRepaintPanel 的 prefs/modelsCache 处理近重复）抽共享 hook。合计约 -150 行。
 - [ ] **P3 — 其余低风险备忘**：缓存键哈希 refImagePath 路径而非内容（用户原地改参考图会命中陈旧缓存，Regenerate 可绕过）；`.env` 解析正则 `^([A-Z_]+)=` 不认带数字的 key、不剥引号（当前 5 个 key 均安全，属潜伏）；`text-image-start` 的 running 检查与 createJob 之间存在 TOCTOU（UI 单按钮门控下难触发，双开会重复扣一次付费调用）；Ark 模型名清洗对无 name 字段/大写 Doubao- 前缀处理粗糙（仅外观）。
 

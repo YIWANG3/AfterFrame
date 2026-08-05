@@ -16,6 +16,13 @@ dependencies = [
     "numpy>=1.26,<3",
 ]
 
+[project.optional-dependencies]
+# 即梦 (Jimeng) repaint/text-image goes through Volcengine's CV SDK; the import
+# is lazy, so the rest of the sidecar works without it. Install with
+# `pip install -e .[jimeng]` (and include it in packaged builds) if jimeng
+# providers should actually run.
+jimeng = ["volcengine"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

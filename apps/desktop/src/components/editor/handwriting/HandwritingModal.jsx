@@ -22,18 +22,12 @@ import {
   TEXT_IMAGE_CAPABLE_TYPES,
 } from "./styles";
 import { matteHandwriting, colorizeHandwriting, loadHandwritingImage } from "../render/handwritingMatte";
+import { localFileUrl as mediaUrlFor } from "../../../utils/format";
 
 const FIELD =
   "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";
 
 const COLOR_SWATCHES = ["#ffffff", "#000000", "#e8c547", "#f7c6d6", "#e05252", "#4f8fe0"];
-
-function mediaUrlFor(filePath) {
-  if (!filePath) return "";
-  if (filePath.startsWith("media://")) return filePath;
-  const encoded = filePath.split("/").map((seg) => encodeURIComponent(seg)).join("/");
-  return `media://${encoded}`;
-}
 
 async function waitForTextImageJob(startStatus, isAlive = () => true) {
   // Cache hits come back already succeeded (jobId null); live jobs are polled
@@ -194,13 +188,21 @@ export default function HandwritingModal({ onAdd, onClose }) {
         : { mode: "solid", color: fill.color, opacity: fill.opacity ?? 100 },
     [fill]
   );
-  const recoloredUrl = useMemo(
-    () =>
-      candidate
-        ? colorizeHandwriting(candidate.alphaCanvas, effectiveFill).toDataURL("image/png")
-        : null,
+  // Colorize is a cheap fillRect; the expensive part is PNG-encoding the
+  // result. Preview draws the canvas directly and the data: URL is only
+  // encoded once, in addToCanvas.
+  const recoloredCanvas = useMemo(
+    () => (candidate ? colorizeHandwriting(candidate.alphaCanvas, effectiveFill) : null),
     [candidate, effectiveFill]
   );
+  const previewCanvasRef = useRef(null);
+  useEffect(() => {
+    const el = previewCanvasRef.current;
+    if (!el || !recoloredCanvas) return;
+    el.width = recoloredCanvas.width;
+    el.height = recoloredCanvas.height;
+    el.getContext("2d").drawImage(recoloredCanvas, 0, 0);
+  }, [recoloredCanvas]);
 
   async function pickReference() {
     const picked = await window.mediaWorkspace?.pickHandwritingRef?.();
@@ -263,9 +265,9 @@ export default function HandwritingModal({ onAdd, onClose }) {
   }
 
   function addToCanvas() {
-    if (!candidate || !recoloredUrl) return;
+    if (!candidate || !recoloredCanvas) return;
     onAdd({
-      stickerPath: recoloredUrl,
+      stickerPath: recoloredCanvas.toDataURL("image/png"),
       naturalWidth: candidate.width,
       naturalHeight: candidate.height,
       sourceLabel: text.trim() || promptText.trim().slice(0, 20),
@@ -467,9 +469,8 @@ export default function HandwritingModal({ onAdd, onClose }) {
                 <span className="text-[11px]">{t("handwriting.generating")}</span>
               </div>
             ) : (
-              <img
-                src={recoloredUrl}
-                alt=""
+              <canvas
+                ref={previewCanvasRef}
                 className="max-h-32 max-w-full object-contain"
                 data-testid="handwriting-candidate-0"
               />

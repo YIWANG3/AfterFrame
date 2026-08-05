@@ -70,14 +70,12 @@ export function matteHandwriting(image, { noiseCut = 18, gain = 1.1, alphaFloor 
   const cw = maxX - minX + 1;
   const ch = maxY - minY + 1;
 
-  const full = document.createElement("canvas");
-  full.width = w;
-  full.height = h;
-  full.getContext("2d").putImageData(out, 0, 0);
+  // putImageData with a dirty rect writes the crop window straight into the
+  // small canvas — no full-size intermediate needed.
   const cropped = document.createElement("canvas");
   cropped.width = cw;
   cropped.height = ch;
-  cropped.getContext("2d").drawImage(full, minX, minY, cw, ch, 0, 0, cw, ch);
+  cropped.getContext("2d").putImageData(out, -minX, -minY, minX, minY, cw, ch);
   return cropped;
 }
 
@@ -119,13 +117,21 @@ export function colorizeHandwriting(alphaCanvas, fill) {
 
 // Re-coloring a PLACED handwriting sticker re-mattes from the cached raw
 // generation; the alpha canvas is memoized per source so slider drags stay
-// cheap (one per-pixel pass per image, then colorize-only).
+// cheap (one per-pixel pass per image, then colorize-only). Each entry holds a
+// full-res canvas, so the cache is bounded FIFO — old entries just re-matte on
+// the next edit.
 const alphaCache = new Map();
+const ALPHA_CACHE_MAX = 8;
 export async function handwritingAlphaFromUrl(url) {
   if (alphaCache.has(url)) return alphaCache.get(url);
   const img = await loadHandwritingImage(url);
   const alpha = matteHandwriting(img);
-  if (alpha) alphaCache.set(url, alpha);
+  if (alpha) {
+    alphaCache.set(url, alpha);
+    if (alphaCache.size > ALPHA_CACHE_MAX) {
+      alphaCache.delete(alphaCache.keys().next().value);
+    }
+  }
   return alpha;
 }
 

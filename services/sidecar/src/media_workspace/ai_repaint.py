@@ -188,6 +188,38 @@ def _write_output_bytes(target: Path, image_bytes: bytes, mime_type: str) -> Pat
     return resolved
 
 
+def _post_image_api(provider_label: str, url: str, *, data: bytes, headers: dict[str, str]) -> dict:
+    """POST to a provider image endpoint, wrapping transport errors uniformly."""
+    request = Request(url=url, data=data, headers=headers, method="POST")
+    try:
+        with urlopen(request, timeout=300) as response:
+            body = response.read().decode("utf-8")
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"{provider_label} request failed: HTTP {error.code}: {detail}") from error
+    except URLError as error:
+        raise RuntimeError(f"{provider_label} request failed: {error.reason}") from error
+    return json.loads(body)
+
+
+def _extract_data_image(payload: dict, provider_label: str) -> tuple[bytes, str]:
+    """Pull (bytes, mime) from an OpenAI-shaped response: data[0].b64_json or .url."""
+    data_items = payload.get("data", [])
+    if not data_items:
+        raise RuntimeError(f"{provider_label} returned no image data: {json.dumps(payload, indent=2)}")
+    item = data_items[0]
+    b64 = item.get("b64_json")
+    img_url = item.get("url")
+    if b64:
+        return base64.b64decode(b64), "image/png"
+    if img_url:
+        with urlopen(img_url, timeout=120) as dl_resp:
+            output_bytes = dl_resp.read()
+            ct = dl_resp.headers.get("Content-Type", "image/png")
+        return output_bytes, ("image/jpeg" if "jpeg" in ct or "jpg" in ct else "image/png")
+    raise RuntimeError(f"{provider_label} response missing both b64_json and url.")
+
+
 def run_mock_repaint(input_path: Path, output_path: Path, prompt: str) -> RepaintResult:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(input_path, output_path)
@@ -201,6 +233,68 @@ def run_mock_repaint(input_path: Path, output_path: Path, prompt: str) -> Repain
     )
 
 
+def _gemini_generate(
+    output_path: Path,
+    prompt: str,
+    *,
+    api_key: str | None,
+    model: str,
+    parts: list[dict[str, Any]],
+    aspect_ratio: str | None,
+    image_size: str | None,
+    provider: str,
+) -> RepaintResult:
+    """Shared Gemini generateContent flow: repaint and text-image differ only
+    in the request parts they build and the provider name they report."""
+    effective_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not effective_key:
+        raise ValueError("Missing Gemini API key. Set GEMINI_API_KEY or pass --api-key.")
+
+    payload: dict[str, Any] = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+    }
+    image_config: dict[str, Any] = {}
+    if aspect_ratio:
+        image_config["aspectRatio"] = aspect_ratio
+    if image_size and model in GEMINI_MODELS_WITH_IMAGE_SIZE:
+        image_config["imageSize"] = image_size
+    if image_config:
+        payload["generationConfig"]["imageConfig"] = image_config
+
+    response_payload = _post_image_api(
+        "Gemini",
+        f"{GEMINI_API_BASE}/models/{model}:generateContent",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": effective_key},
+    )
+
+    text_notes: list[str] = []
+    output_bytes: bytes | None = None
+    output_mime = "image/png"
+    for part in _gemini_response_parts(response_payload):
+        text = part.get("text")
+        if text:
+            text_notes.append(text)
+        inline_data = part.get("inlineData") or part.get("inline_data")
+        if inline_data and inline_data.get("data"):
+            output_bytes = base64.b64decode(inline_data["data"])
+            output_mime = inline_data.get("mimeType") or inline_data.get("mime_type") or output_mime
+            break
+    if output_bytes is None:
+        raise RuntimeError(f"Gemini returned no image output: {json.dumps(response_payload, indent=2)}")
+
+    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
+    return RepaintResult(
+        provider=provider,
+        model=model,
+        output_path=str(written_path),
+        mime_type=output_mime,
+        prompt=prompt,
+        notes=text_notes,
+    )
+
+
 def run_gemini_repaint(
     input_path: Path,
     output_path: Path,
@@ -211,85 +305,24 @@ def run_gemini_repaint(
     aspect_ratio: str | None = None,
     image_size: str | None = None,
 ) -> RepaintResult:
-    effective_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not effective_key:
-        raise ValueError("Missing Gemini API key. Set GEMINI_API_KEY or pass --api-key.")
-
-    mime_type = _detect_mime_type(input_path)
-    image_bytes = input_path.read_bytes()
-    payload: dict[str, Any] = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inline_data": {
-                            "mime_type": mime_type,
-                            "data": base64.b64encode(image_bytes).decode("utf-8"),
-                        }
-                    },
-                ]
+    parts: list[dict[str, Any]] = [
+        {"text": prompt},
+        {
+            "inline_data": {
+                "mime_type": _detect_mime_type(input_path),
+                "data": base64.b64encode(input_path.read_bytes()).decode("utf-8"),
             }
-        ],
-        "generationConfig": {
-            "responseModalities": ["TEXT", "IMAGE"],
         },
-    }
-
-    image_config: dict[str, Any] = {}
-    if aspect_ratio:
-        image_config["aspectRatio"] = aspect_ratio
-    if image_size and model in GEMINI_MODELS_WITH_IMAGE_SIZE:
-        image_config["imageSize"] = image_size
-    if image_config:
-        payload["generationConfig"]["imageConfig"] = image_config
-
-    request = Request(
-        url=f"{GEMINI_API_BASE}/models/{model}:generateContent",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "x-goog-api-key": effective_key,
-        },
-        method="POST",
-    )
-
-    try:
-        with urlopen(request, timeout=300) as response:
-            body = response.read().decode("utf-8")
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini request failed: HTTP {error.code}: {detail}") from error
-    except URLError as error:
-        raise RuntimeError(f"Gemini request failed: {error.reason}") from error
-
-    payload = json.loads(body)
-    parts = _gemini_response_parts(payload)
-    text_notes: list[str] = []
-    output_bytes: bytes | None = None
-    output_mime = "image/png"
-
-    for part in parts:
-        text = part.get("text")
-        if text:
-            text_notes.append(text)
-        inline_data = part.get("inlineData") or part.get("inline_data")
-        if inline_data and inline_data.get("data"):
-            output_bytes = base64.b64decode(inline_data["data"])
-            output_mime = inline_data.get("mimeType") or inline_data.get("mime_type") or output_mime
-            break
-
-    if output_bytes is None:
-        raise RuntimeError(f"Gemini returned no image output: {json.dumps(payload, indent=2)}")
-
-    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
-    return RepaintResult(
-        provider="gemini",
+    ]
+    return _gemini_generate(
+        output_path,
+        prompt,
+        api_key=api_key,
         model=model,
-        output_path=str(written_path),
-        mime_type=output_mime,
-        prompt=prompt,
-        notes=text_notes,
+        parts=parts,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+        provider="gemini",
     )
 
 
@@ -381,44 +414,17 @@ def run_openai_repaint(
 
     body = b"".join(parts) + f"--{boundary}--\r\n".encode("utf-8")
 
-    request = Request(
-        url=f"{base_url}/images/edits",
+    payload = _post_image_api(
+        "OpenAI",
+        f"{base_url}/images/edits",
         data=body,
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Authorization": f"Bearer {effective_key}",
             "User-Agent": "Framebase/1.0",
         },
-        method="POST",
     )
-
-    try:
-        with urlopen(request, timeout=300) as response:
-            resp_body = response.read().decode("utf-8")
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"OpenAI request failed: HTTP {error.code}: {detail}") from error
-    except URLError as error:
-        raise RuntimeError(f"OpenAI request failed: {error.reason}") from error
-
-    payload = json.loads(resp_body)
-    data_items = payload.get("data", [])
-    if not data_items:
-        raise RuntimeError(f"OpenAI returned no image data: {json.dumps(payload, indent=2)}")
-
-    item = data_items[0]
-    b64 = item.get("b64_json")
-    img_url = item.get("url")
-    if b64:
-        output_bytes = base64.b64decode(b64)
-        output_mime = "image/png"
-    elif img_url:
-        with urlopen(img_url, timeout=120) as dl_resp:
-            output_bytes = dl_resp.read()
-        ct = dl_resp.headers.get("Content-Type", "image/png") if hasattr(dl_resp, "headers") else "image/png"
-        output_mime = "image/jpeg" if "jpeg" in ct or "jpg" in ct else "image/png"
-    else:
-        raise RuntimeError("OpenAI response missing both b64_json and url.")
+    output_bytes, output_mime = _extract_data_image(payload, "OpenAI")
 
     written_path = _write_output_bytes(output_path, output_bytes, output_mime)
     return RepaintResult(
@@ -489,6 +495,76 @@ def _jimeng_size_params(aspect_ratio: str | None, image_size: str | None) -> dic
     return {"size": base * base}
 
 
+def _jimeng_client(access_key_id: str | None, secret_access_key: str | None):
+    ak = access_key_id or os.environ.get("VOLC_ACCESSKEY")
+    sk = secret_access_key or os.environ.get("VOLC_SECRETKEY")
+    if not ak or not sk:
+        raise ValueError("Missing Volcengine AccessKey/SecretKey.")
+
+    from volcengine.visual.VisualService import VisualService
+
+    vs = VisualService()
+    vs.set_ak(ak)
+    vs.set_sk(sk)
+    return vs
+
+
+def _jimeng_submit_poll_extract(vs, submit_body: dict[str, Any], req_key: str) -> tuple[bytes, str]:
+    """Shared submit → poll → extract flow for the sync2async CV API."""
+    submit_resp = vs.cv_sync2async_submit_task(submit_body)
+    code = submit_resp.get("code")
+    if code != 10000:
+        msg = submit_resp.get("message", "Unknown error")
+        raise RuntimeError(f"Jimeng submit failed ({code}): {msg}")
+    task_id = submit_resp["data"]["task_id"]
+
+    import time
+
+    poll_resp: dict[str, Any] = {}
+    consecutive_errors = 0
+    for attempt in range(180):  # up to ~6 minutes (plus 50430 backoff)
+        time.sleep(2)
+        try:
+            poll_resp = vs.cv_sync2async_get_result({"req_key": req_key, "task_id": task_id})
+        except Exception:
+            # Transient network errors — retry, but a persistently failing
+            # poll (bad signature, DNS) should surface long before the full
+            # timeout would.
+            consecutive_errors += 1
+            if consecutive_errors >= 10 or attempt >= 179:
+                raise
+            continue
+        consecutive_errors = 0
+        poll_code = poll_resp.get("code")
+        if poll_code == 50430:
+            # Concurrent limit — wait and retry
+            time.sleep(5)
+            continue
+        if poll_code != 10000:
+            msg = poll_resp.get("message", "Unknown error")
+            raise RuntimeError(f"Jimeng poll failed ({poll_code}): {msg}")
+        status = poll_resp.get("data", {}).get("status", "")
+        if status == "done":
+            break
+        if status in ("not_found", "expired"):
+            raise RuntimeError(f"Jimeng task {status}: {task_id}")
+    else:
+        raise RuntimeError(f"Jimeng task timed out: {task_id}")
+
+    data = poll_resp.get("data", {})
+    b64_list = data.get("binary_data_base64") or []
+    url_list = data.get("image_urls") or []
+    if b64_list and b64_list[0]:
+        return base64.b64decode(b64_list[0]), "image/png"
+    if url_list:
+        with urlopen(url_list[0], timeout=60) as resp:
+            output_bytes = resp.read()
+            content_type = resp.headers.get("Content-Type", "image/png")
+        mime = "image/jpeg" if "jpeg" in content_type or "jpg" in content_type else "image/png"
+        return output_bytes, mime
+    raise RuntimeError("Jimeng returned no image data")
+
+
 def run_jimeng_repaint(
     input_path: Path,
     output_path: Path,
@@ -501,16 +577,7 @@ def run_jimeng_repaint(
     image_size: str | None = None,
     scale: float | None = None,
 ) -> RepaintResult:
-    ak = access_key_id or os.environ.get("VOLC_ACCESSKEY")
-    sk = secret_access_key or os.environ.get("VOLC_SECRETKEY")
-    if not ak or not sk:
-        raise ValueError("Missing Volcengine AccessKey/SecretKey.")
-
-    from volcengine.visual.VisualService import VisualService
-
-    vs = VisualService()
-    vs.set_ak(ak)
-    vs.set_sk(sk)
+    vs = _jimeng_client(access_key_id, secret_access_key)
 
     image_bytes = input_path.read_bytes()
     img_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -548,67 +615,7 @@ def run_jimeng_repaint(
         if scale is not None:
             submit_body["scale"] = scale
 
-    # Submit task
-    submit_resp = vs.cv_sync2async_submit_task(submit_body)
-    code = submit_resp.get("code")
-    if code != 10000:
-        msg = submit_resp.get("message", "Unknown error")
-        raise RuntimeError(f"Jimeng submit failed ({code}): {msg}")
-
-    task_id = submit_resp["data"]["task_id"]
-
-    # Poll for result
-    import time
-    for attempt in range(180):  # up to ~6 minutes
-        time.sleep(2)
-        try:
-            poll_resp = vs.cv_sync2async_get_result({
-                "req_key": req_key,
-                "task_id": task_id,
-            })
-        except Exception as exc:
-            # Transient network errors — retry
-            if attempt < 179:
-                continue
-            raise
-
-        poll_code = poll_resp.get("code")
-        if poll_code == 50430:
-            # Concurrent limit — wait and retry
-            time.sleep(5)
-            continue
-        if poll_code != 10000:
-            msg = poll_resp.get("message", "Unknown error")
-            raise RuntimeError(f"Jimeng poll failed ({poll_code}): {msg}")
-
-        status = poll_resp.get("data", {}).get("status", "")
-        if status == "done":
-            break
-        if status in ("not_found", "expired"):
-            raise RuntimeError(f"Jimeng task {status}: {task_id}")
-    else:
-        raise RuntimeError(f"Jimeng task timed out: {task_id}")
-
-    # Extract result image
-    data = poll_resp.get("data", {})
-    b64_list = data.get("binary_data_base64") or []
-    url_list = data.get("image_urls") or []
-
-    output_bytes: bytes | None = None
-    output_mime = "image/png"
-
-    if b64_list and b64_list[0]:
-        output_bytes = base64.b64decode(b64_list[0])
-    elif url_list:
-        # Download from URL
-        with urlopen(url_list[0], timeout=60) as resp:
-            output_bytes = resp.read()
-        content_type = resp.headers.get("Content-Type", "image/png")
-        if "jpeg" in content_type or "jpg" in content_type:
-            output_mime = "image/jpeg"
-
-    if output_bytes is None:
-        raise RuntimeError("Jimeng returned no image data")
+    output_bytes, output_mime = _jimeng_submit_poll_extract(vs, submit_body, req_key)
 
     written_path = _write_output_bytes(output_path, output_bytes, output_mime)
     return RepaintResult(
@@ -698,10 +705,6 @@ def run_gemini_text_image(
     image_size: str | None = None,
     ref_image_path: Path | None = None,
 ) -> RepaintResult:
-    effective_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not effective_key:
-        raise ValueError("Missing Gemini API key. Set GEMINI_API_KEY or pass --api-key.")
-
     parts: list[dict[str, Any]] = []
     if ref_image_path is not None:
         parts.append(
@@ -714,60 +717,17 @@ def run_gemini_text_image(
         )
     parts.append({"text": prompt})
 
-    payload: dict[str, Any] = {
-        "contents": [{"parts": parts}],
-        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
-    }
-    image_config: dict[str, Any] = {}
     # Gemini's imageConfig has no 3:1 band — fall back to the nearest one.
     gemini_aspect = {"3:1": "16:9", "1:3": "9:16"}.get(aspect_ratio, aspect_ratio)
-    if gemini_aspect:
-        image_config["aspectRatio"] = gemini_aspect
-    if image_size and model in GEMINI_MODELS_WITH_IMAGE_SIZE:
-        image_config["imageSize"] = image_size
-    if image_config:
-        payload["generationConfig"]["imageConfig"] = image_config
-
-    request = Request(
-        url=f"{GEMINI_API_BASE}/models/{model}:generateContent",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "x-goog-api-key": effective_key},
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=300) as response:
-            body = response.read().decode("utf-8")
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini request failed: HTTP {error.code}: {detail}") from error
-    except URLError as error:
-        raise RuntimeError(f"Gemini request failed: {error.reason}") from error
-
-    response_payload = json.loads(body)
-    response_parts = _gemini_response_parts(response_payload)
-    text_notes: list[str] = []
-    output_bytes: bytes | None = None
-    output_mime = "image/png"
-    for part in response_parts:
-        text = part.get("text")
-        if text:
-            text_notes.append(text)
-        inline_data = part.get("inlineData") or part.get("inline_data")
-        if inline_data and inline_data.get("data"):
-            output_bytes = base64.b64decode(inline_data["data"])
-            output_mime = inline_data.get("mimeType") or inline_data.get("mime_type") or output_mime
-            break
-    if output_bytes is None:
-        raise RuntimeError(f"Gemini returned no image output: {json.dumps(response_payload, indent=2)}")
-
-    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
-    return RepaintResult(
-        provider=NANOBANANA_PROVIDER,
+    return _gemini_generate(
+        output_path,
+        prompt,
+        api_key=api_key,
         model=model,
-        output_path=str(written_path),
-        mime_type=output_mime,
-        prompt=prompt,
-        notes=text_notes,
+        parts=parts,
+        aspect_ratio=gemini_aspect,
+        image_size=image_size,
+        provider=NANOBANANA_PROVIDER,
     )
 
 
@@ -811,42 +771,17 @@ def run_openai_text_image(
     if quality:
         body["quality"] = quality
 
-    request = Request(
-        url=f"{base_url}/images/generations",
+    payload = _post_image_api(
+        "OpenAI",
+        f"{base_url}/images/generations",
         data=json.dumps(body).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {effective_key}",
             "User-Agent": "Framebase/1.0",
         },
-        method="POST",
     )
-    try:
-        with urlopen(request, timeout=300) as response:
-            resp_body = response.read().decode("utf-8")
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"OpenAI request failed: HTTP {error.code}: {detail}") from error
-    except URLError as error:
-        raise RuntimeError(f"OpenAI request failed: {error.reason}") from error
-
-    payload = json.loads(resp_body)
-    data_items = payload.get("data", [])
-    if not data_items:
-        raise RuntimeError(f"OpenAI returned no image data: {json.dumps(payload, indent=2)}")
-    item = data_items[0]
-    b64 = item.get("b64_json")
-    img_url = item.get("url")
-    if b64:
-        output_bytes = base64.b64decode(b64)
-        output_mime = "image/png"
-    elif img_url:
-        with urlopen(img_url, timeout=120) as dl_resp:
-            output_bytes = dl_resp.read()
-        ct = dl_resp.headers.get("Content-Type", "image/png") if hasattr(dl_resp, "headers") else "image/png"
-        output_mime = "image/jpeg" if "jpeg" in ct or "jpg" in ct else "image/png"
-    else:
-        raise RuntimeError("OpenAI response missing both b64_json and url.")
+    output_bytes, output_mime = _extract_data_image(payload, "OpenAI")
 
     written_path = _write_output_bytes(output_path, output_bytes, output_mime)
     return RepaintResult(
@@ -859,9 +794,12 @@ def run_openai_text_image(
     )
 
 
-def _ark_size(aspect_ratio: str | None) -> str:
-    # Ark wants 'WIDTHxHEIGHT' (or 1k/2k/4k) and ≥3,686,400 total pixels
-    # (Seedream 4.5's floor — validated 2026-08); ratio strings are rejected.
+def _ark_size(aspect_ratio: str | None, image_size: str | None = None) -> str:
+    # Ark wants 'WIDTHxHEIGHT' (or the '1K'/'2K'/'4K' presets) and ≥3,686,400
+    # total pixels (Seedream 4.5's floor — validated 2026-08); ratio strings
+    # are rejected. An explicit aspect band wins (pixel dims, ~2K tier);
+    # without one the requested size tier passes through as a preset — the
+    # repaint path's common case (preserve input aspect, user-picked size).
     mapping = {
         "1:1": "2048x2048",
         "16:9": "2560x1440",
@@ -871,7 +809,10 @@ def _ark_size(aspect_ratio: str | None) -> str:
         "3:1": "3456x1152",
         "1:3": "1152x3456",
     }
-    return mapping.get(aspect_ratio or "", "2K")
+    if aspect_ratio in mapping:
+        return mapping[aspect_ratio]
+    tier = (image_size or "2K").upper()
+    return tier if tier in ("1K", "2K", "4K") else "2K"
 
 
 def _ark_generate(
@@ -881,6 +822,7 @@ def _ark_generate(
     api_key: str | None,
     model: str,
     aspect_ratio: str | None,
+    image_size: str | None = None,
     image_input: str | None = None,
 ) -> RepaintResult:
     effective_key = api_key or os.environ.get("ARK_API_KEY")
@@ -890,48 +832,23 @@ def _ark_generate(
     body: dict[str, Any] = {
         "model": model or DEFAULT_ARK_MODEL,
         "prompt": prompt,
-        "size": _ark_size(aspect_ratio),
+        "size": _ark_size(aspect_ratio, image_size),
         "response_format": "b64_json",
         "watermark": False,
     }
     if image_input:
         body["image"] = image_input
 
-    request = Request(
-        url=f"{ARK_API_BASE}/images/generations",
+    payload = _post_image_api(
+        "Ark",
+        f"{ARK_API_BASE}/images/generations",
         data=json.dumps(body).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {effective_key}",
         },
-        method="POST",
     )
-    try:
-        with urlopen(request, timeout=300) as response:
-            resp_body = response.read().decode("utf-8")
-    except HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Ark request failed: HTTP {error.code}: {detail}") from error
-    except URLError as error:
-        raise RuntimeError(f"Ark request failed: {error.reason}") from error
-
-    payload = json.loads(resp_body)
-    data_items = payload.get("data", [])
-    if not data_items:
-        raise RuntimeError(f"Ark returned no image data: {json.dumps(payload, indent=2)}")
-    item = data_items[0]
-    b64 = item.get("b64_json")
-    img_url = item.get("url")
-    if b64:
-        output_bytes = base64.b64decode(b64)
-        output_mime = "image/png"
-    elif img_url:
-        with urlopen(img_url, timeout=120) as dl_resp:
-            output_bytes = dl_resp.read()
-        ct = dl_resp.headers.get("Content-Type", "image/png") if hasattr(dl_resp, "headers") else "image/png"
-        output_mime = "image/jpeg" if "jpeg" in ct or "jpg" in ct else "image/png"
-    else:
-        raise RuntimeError("Ark response missing both b64_json and url.")
+    output_bytes, output_mime = _extract_data_image(payload, "Ark")
 
     written_path = _write_output_bytes(output_path, output_bytes, output_mime)
     return RepaintResult(
@@ -977,7 +894,8 @@ def run_ark_repaint(
 ) -> RepaintResult:
     return _ark_generate(
         output_path, prompt, api_key=api_key, model=model,
-        aspect_ratio=aspect_ratio, image_input=_file_to_data_url(input_path),
+        aspect_ratio=aspect_ratio, image_size=image_size,
+        image_input=_file_to_data_url(input_path),
     )
 
 
@@ -992,16 +910,7 @@ def run_jimeng_text_image(
     image_size: str | None = None,
     ref_image_path: Path | None = None,
 ) -> RepaintResult:
-    ak = access_key_id or os.environ.get("VOLC_ACCESSKEY")
-    sk = secret_access_key or os.environ.get("VOLC_SECRETKEY")
-    if not ak or not sk:
-        raise ValueError("Missing Volcengine AccessKey/SecretKey.")
-
-    from volcengine.visual.VisualService import VisualService
-
-    vs = VisualService()
-    vs.set_ak(ak)
-    vs.set_sk(sk)
+    vs = _jimeng_client(access_key_id, secret_access_key)
 
     req_key = model or "jimeng_seedream46_cvtob"
     submit_body: dict[str, Any] = {
@@ -1029,54 +938,7 @@ def run_jimeng_text_image(
     else:
         submit_body["size"] = base * base
 
-    submit_resp = vs.cv_sync2async_submit_task(submit_body)
-    code = submit_resp.get("code")
-    if code != 10000:
-        msg = submit_resp.get("message", "Unknown error")
-        raise RuntimeError(f"Jimeng submit failed ({code}): {msg}")
-    task_id = submit_resp["data"]["task_id"]
-
-    import time
-
-    poll_resp: dict[str, Any] = {}
-    for attempt in range(180):
-        time.sleep(2)
-        try:
-            poll_resp = vs.cv_sync2async_get_result({"req_key": req_key, "task_id": task_id})
-        except Exception:
-            if attempt < 179:
-                continue
-            raise
-        poll_code = poll_resp.get("code")
-        if poll_code == 50430:
-            time.sleep(5)
-            continue
-        if poll_code != 10000:
-            msg = poll_resp.get("message", "Unknown error")
-            raise RuntimeError(f"Jimeng poll failed ({poll_code}): {msg}")
-        status = poll_resp.get("data", {}).get("status", "")
-        if status == "done":
-            break
-        if status in ("not_found", "expired"):
-            raise RuntimeError(f"Jimeng task {status}: {task_id}")
-    else:
-        raise RuntimeError(f"Jimeng task timed out: {task_id}")
-
-    data = poll_resp.get("data", {})
-    b64_list = data.get("binary_data_base64") or []
-    url_list = data.get("image_urls") or []
-    output_bytes: bytes | None = None
-    output_mime = "image/png"
-    if b64_list and b64_list[0]:
-        output_bytes = base64.b64decode(b64_list[0])
-    elif url_list:
-        with urlopen(url_list[0], timeout=60) as resp:
-            output_bytes = resp.read()
-        content_type = resp.headers.get("Content-Type", "image/png")
-        if "jpeg" in content_type or "jpg" in content_type:
-            output_mime = "image/jpeg"
-    if output_bytes is None:
-        raise RuntimeError("Jimeng returned no image data")
+    output_bytes, output_mime = _jimeng_submit_poll_extract(vs, submit_body, req_key)
 
     written_path = _write_output_bytes(output_path, output_bytes, output_mime)
     return RepaintResult(

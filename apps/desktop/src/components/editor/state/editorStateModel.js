@@ -43,6 +43,10 @@ function bgEquals(a, b) {
   return a.mode === b.mode && a.color === b.color && gradientEquals(a.gradient ?? null, b.gradient ?? null);
 }
 
+// canvas.scrim is a LEGACY slot: since overlay layers landed, frame presets
+// emit their wash as an overlay layer and set scrim to null, so nothing in the
+// current app produces a non-null scrim. The plumbing (equals/clone/save) is
+// kept deliberately so any state that still carries one keeps rendering.
 function scrimEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
   if ((a.kind ?? "edge") !== (b.kind ?? "edge")) return false;

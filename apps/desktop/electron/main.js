@@ -825,17 +825,7 @@ async function startAiRepaintTask(options) {
   if (current.running) {
     return current;
   }
-  const providerConfig = await getStoredProviderConfigWithMigration(providerId);
-  let apiKey = providerConfig?.token || null;
-  let baseUrl = null;
-  // For openai_compatible, token is JSON with base_url + token fields
-  if (providerType === "openai_compatible" && apiKey) {
-    try {
-      const parsed = JSON.parse(apiKey);
-      apiKey = parsed.token || null;
-      baseUrl = parsed.base_url || null;
-    } catch (_) { /* plain string token */ }
-  }
+  const { apiKey, baseUrl } = await resolveProviderCredentials(providerId, providerType);
   if (!apiKey) {
     throw new Error(`No API token configured for provider.`);
   }
@@ -891,6 +881,22 @@ async function startAiRepaintTask(options) {
   command.push("--api-key", apiKey);
   launchSidecarJob(command);
   return formatJobStatus(job);
+}
+
+// Stored provider token → { apiKey, baseUrl }. openai_compatible packs both
+// fields into one JSON token; every other type stores the key as-is.
+async function resolveProviderCredentials(providerId, providerType) {
+  const providerConfig = await getStoredProviderConfigWithMigration(providerId);
+  let apiKey = providerConfig?.token || null;
+  let baseUrl = null;
+  if (providerType === "openai_compatible" && apiKey) {
+    try {
+      const parsed = JSON.parse(apiKey);
+      apiKey = parsed.token || null;
+      baseUrl = parsed.base_url || null;
+    } catch (_) { /* plain string token */ }
+  }
+  return { apiKey, baseUrl };
 }
 
 // Text-to-image (handwriting stickers). Output is a sticker source asset, not
@@ -973,16 +979,7 @@ async function startTextImageTask(options) {
   if (current.running) {
     return current;
   }
-  const providerConfig = await getStoredProviderConfigWithMigration(providerId);
-  let apiKey = providerConfig?.token || null;
-  let baseUrl = null;
-  if (providerType === "openai_compatible" && apiKey) {
-    try {
-      const parsed = JSON.parse(apiKey);
-      apiKey = parsed.token || null;
-      baseUrl = parsed.base_url || null;
-    } catch (_) { /* plain string token */ }
-  }
+  const { apiKey, baseUrl } = await resolveProviderCredentials(providerId, providerType);
   // Env fallback (dev): the sidecar reads these when no --api-key is passed.
   const envFallback =
     providerType === "openai" ? Boolean(process.env.OPENAI_API_KEY)

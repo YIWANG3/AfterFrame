@@ -10,12 +10,6 @@ function hexToRgba(hex, alpha = 1) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function mediaUrlFor(filePath) {
-  if (!filePath) return "";
-  if (filePath.startsWith("media://")) return filePath;
-  const encoded = filePath.split("/").map((seg) => encodeURIComponent(seg)).join("/");
-  return `media://${encoded}`;
-}
 import {
   Plus, Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
@@ -24,6 +18,7 @@ import {
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
 import { handwritingAlphaFromUrl, colorizeHandwriting } from "./render/handwritingMatte";
+import { localFileUrl as mediaUrlFor } from "../../utils/format";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import BorderControls from "./components/BorderControls";
