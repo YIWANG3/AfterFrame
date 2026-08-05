@@ -425,6 +425,13 @@ def build_parser() -> argparse.ArgumentParser:
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
 
+    # Desktop main uses this when a job's runner process dies before it ever
+    # reports status (spawn failure, argparse rejection) — the row would
+    # otherwise sit 'queued' until the heartbeat reaper.
+    fail_job_parser = subparsers.add_parser("fail-job", parents=[common])
+    fail_job_parser.add_argument("--job-id", required=True)
+    fail_job_parser.add_argument("--error", default="job process exited before reporting status")
+
     pause_job_parser = subparsers.add_parser("pause-job", parents=[common])
     pause_job_parser.add_argument("--job-id", required=True)
 
@@ -1198,6 +1205,20 @@ def _cmd_merge_people_groups(args, connection, catalog, parser):
 def _cmd_cancel_job(args, connection, catalog, parser):
     from .db import request_job_cancel
     print(json.dumps(request_job_cancel(connection, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_fail_job(args, connection, catalog, parser):
+    from .db import update_job
+    job = get_job(connection, args.job_id)
+    if not job:
+        print(json.dumps({"error": f"Unknown job: {args.job_id}"}))
+        return 1
+    # Only a job that never finished may be failed this way — a completed row
+    # keeps its real outcome even if the fail request races the runner.
+    if job.get("status") in ("queued", "running", "paused"):
+        job = update_job(connection, args.job_id, status="failed", error_text=args.error)
+    print(json.dumps(job, indent=2))
     return 0
 
 
@@ -2004,6 +2025,7 @@ COMMAND_HANDLERS = {
     "remove-face-from-person": _cmd_remove_face_from_person,
     "assign-face-to-person": _cmd_assign_face_to_person,
     "cancel-job": _cmd_cancel_job,
+    "fail-job": _cmd_fail_job,
     "pause-job": _cmd_pause_job,
     "resume-job": _cmd_resume_job,
     "list-active-jobs": _cmd_list_active_jobs,

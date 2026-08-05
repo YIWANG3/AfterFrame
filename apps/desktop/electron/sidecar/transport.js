@@ -257,6 +257,28 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
 
   function launchSidecarJob(command) {
     const child = spawnDetachedSidecar(command);
+    // A runner that dies before its first update_job (spawn failure, argparse
+    // rejection) would leave the row 'queued' until the heartbeat reaper —
+    // and the UI polling it spinning. Mark it failed so the error surfaces
+    // immediately. fail-job refuses to touch rows that already finished, so
+    // a nonzero exit AFTER completion can't clobber a real outcome.
+    const jobIdIdx = command.indexOf("--job-id");
+    const jobId = jobIdIdx >= 0 ? command[jobIdIdx + 1] : null;
+    if (jobId) {
+      child.on("exit", (code) => {
+        if (code === 0 || code == null) return;
+        callSidecarJsonAsync([
+          "fail-job", "--job-id", jobId,
+          "--error", `sidecar job process exited with code ${code} before reporting status`,
+        ]).catch(() => {});
+      });
+      child.on("error", () => {
+        callSidecarJsonAsync([
+          "fail-job", "--job-id", jobId,
+          "--error", "sidecar job process failed to start",
+        ]).catch(() => {});
+      });
+    }
     child.unref();
   }
 

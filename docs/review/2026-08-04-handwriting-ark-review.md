@@ -52,7 +52,7 @@ Reviewer: Claude（三路并行审查：sidecar Python / Electron 主进程 / �
 - [x] **P3 — 模态框关闭后轮询不停**（已修：`waitForTextImageJob` 接收 `isAlive` 回调、关闭即返回 null；matte 前也检查 aliveRef）
 - [x] **P3 — 同类型双 provider 切换时 model 不重置**（已修：model 重置 effect 依赖加入 `providerId`）
 - [x] **P3 — undo 历史无上限**（已修：`MAX_HISTORY = 80`，超限丢最旧条目；`baseSnapshotRef` 独立于 history，Reset 不受影响。逐层 stringify 比较保留，仅在 commit 时运行，成本可接受）
-- [ ] **P3 — job 在 sidecar 启动即死时静默卡 queued**（`main.js:972` + `transport.js:252`）：spawn 无 exit 监听，argparse 拒绝（t2i 新增三个 enum 参数 + 独有的 3:1/1:3）或 python 起不来时 job 停在 queued，模态框永远转圈直到 10 分钟心跳收割（且收割仅在有人调 list-active-jobs 时跑）。repaint/import 同款旧模式，但 t2i 参数面更大，值得加 exit 处理或 main 侧参数校验。
+- [x] **P3 — job 在 sidecar 启动即死时静默卡 queued**（已修：新增 `fail-job` CLI verb（只允许 fail 未完成的 row，已实测幂等/不覆盖真实结果）；`launchSidecarJob` 挂 exit/error 监听，非零退出立即把 job 标 failed，错误直达模态框。repaint/import 等所有走 `launchSidecarJob` 的 job 一并受益）
 - [x] **P3 — jimeng 轮询吞掉一切异常磨 180 次**（已修：`_jimeng_submit_poll_extract` 连续 10 次异常（~20s）即抛出，成功一次归零计数）
 - [ ] **P3 — 死代码/小杂项（sidecar）**：~~`TEXT_IMAGE_ASPECTS` 定义后无引用~~（已删）；~~`jimeng_image2image_dream_inpaint` 分支 unused import + 重读字节~~（已清理，该分支保留）；`_openai_size_from_resolution` 的 `resolution` 形参从未使用；`_write_output_bytes`（:173）可能把 JPEG 写进 .png 扩展名；`run_text_image_job` 的 `catalog_path` 未用、无 cancel 检查（cancel 后仍被覆写为 succeeded，repaint 同款）；`quality` 参数除 OpenAI 外全部静默忽略；~~`volcengine` 未声明为依赖~~（已声明为 optional-dependency `[jimeng]`——注意当前 .venv 里并未安装，dev 下 jimeng 生成本就会 ModuleNotFoundError，要用需 `pip install -e .[jimeng]` 并纳入打包）。
 - [x] **P3 — 渲染层清理**（已修：`canvas.scrim` 保留但加了 LEGACY 注释说明其定位；`mediaUrlFor` 两处副本删除，复用 `utils/format` 的 `localFileUrl`（本就是逐字相同）；matte 裁剪改用 `putImageData` dirty rect，省一张全尺寸中间 canvas；`alphaCache` 加 8 条 FIFO 上限；模态框预览直接画 canvas，PNG 编码推迟到 addToCanvas 一次）
