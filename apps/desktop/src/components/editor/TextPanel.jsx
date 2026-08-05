@@ -1384,7 +1384,44 @@ function OverlayLayerInspector({ layer, update }) {
 // Handwriting stickers keep the raw black-on-white generation around, so fill
 // is re-editable after placement: merge the PaintRow patch into the stored
 // fill, re-colorize the memoized alpha, and swap the sticker's data URL.
+//
+// Color-picker drags fire per pointer event, and each run ends in a full-res
+// PNG encode (toDataURL) — so runs are serialized per layer with latest-wins
+// coalescing: while one encode is in flight, further patches just replace the
+// pending one. Encode rate becomes "as fast as encoding allows", not per event.
+const pendingHandwritingFill = new Map(); // layerId → { layer, patch, update }
+
+function mergeHandwritingPatch(base, patch) {
+  const a = base || {};
+  const merged = { ...a, ...patch };
+  if (a.gradient || patch.gradient) merged.gradient = { ...a.gradient, ...patch.gradient };
+  return merged;
+}
+
 async function applyHandwritingFill(layer, patch, update) {
+  const id = layer.id;
+  if (pendingHandwritingFill.has(id)) {
+    const prev = pendingHandwritingFill.get(id);
+    prev.layer = layer;
+    prev.patch = mergeHandwritingPatch(prev.patch, patch);
+    prev.update = update;
+    return;
+  }
+  pendingHandwritingFill.set(id, { layer, patch, update });
+  try {
+    while (pendingHandwritingFill.has(id)) {
+      const job = pendingHandwritingFill.get(id);
+      pendingHandwritingFill.set(id, { ...job, patch: null });
+      await runHandwritingFill(job.layer, job.patch, job.update);
+      // Nothing new arrived during the run → done; otherwise loop with it.
+      if (pendingHandwritingFill.get(id)?.patch == null) pendingHandwritingFill.delete(id);
+    }
+  } finally {
+    pendingHandwritingFill.delete(id);
+  }
+}
+
+async function runHandwritingFill(layer, patch, update) {
   const prev = layer.handwriting?.fill || { mode: "solid", color: "#ffffff" };
   const g = patch.gradient || {};
   const next = { ...prev };

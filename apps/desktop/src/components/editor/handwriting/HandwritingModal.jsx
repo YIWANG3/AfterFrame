@@ -35,15 +35,18 @@ function mediaUrlFor(filePath) {
   return `media://${encoded}`;
 }
 
-async function waitForTextImageJob(startStatus) {
+async function waitForTextImageJob(startStatus, isAlive = () => true) {
   // Cache hits come back already succeeded (jobId null); live jobs are polled
-  // until the latest text_image job leaves the running state.
+  // until the latest text_image job leaves the running state. Returns null if
+  // the caller went away (modal closed) — the job itself keeps running in the
+  // main process and lands in the cache for next time.
   if (!startStatus?.running && startStatus?.status === "succeeded") return startStatus;
   if (!startStatus?.running && startStatus?.status === "failed") {
     throw new Error(startStatus?.error || "generation failed");
   }
   for (;;) {
     await new Promise((res) => setTimeout(res, 1200));
+    if (!isAlive()) return null;
     const task = await window.mediaWorkspace?.getTextImageStatus?.();
     if (task?.running) continue;
     if (task?.status === "succeeded" && task?.result?.output_path) return task;
@@ -160,9 +163,11 @@ export default function HandwritingModal({ onAdd, onClose }) {
     return () => { cancelled = true; };
   }, [providerId, providerType]);
 
+  // providerId included: switching between two providers of the SAME type must
+  // also reset the model — the old provider's model id may not exist there.
   useEffect(() => {
     setModel(TEXT_IMAGE_DEFAULT_MODELS[providerType] || "");
-  }, [providerType]);
+  }, [providerId, providerType]);
 
   const modelOptions = useMemo(() => {
     const cached = modelsByProvider[providerId] || [];
@@ -232,12 +237,15 @@ export default function HandwritingModal({ onAdd, onClose }) {
         refImagePath: effectiveRef,
         seed,
       });
-      const done = await waitForTextImageJob(start);
+      const done = await waitForTextImageJob(start, () => aliveRef.current);
+      if (!done) return; // modal closed mid-generation
       const rawPath = done.result.output_path;
       const img = await loadHandwritingImage(mediaUrlFor(rawPath));
+      // Check BEFORE the per-pixel matte, not just after — a closed modal
+      // shouldn't pay for a full-image pass it will throw away.
+      if (!aliveRef.current) return;
       const alphaCanvas = matteHandwriting(img);
       if (!alphaCanvas) throw new Error(t("handwriting.emptyResult"));
-      if (!aliveRef.current) return;
       setCandidate({ rawPath, alphaCanvas, width: alphaCanvas.width, height: alphaCanvas.height });
     } catch (err) {
       if (aliveRef.current) {

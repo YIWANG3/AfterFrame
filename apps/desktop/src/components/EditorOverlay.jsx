@@ -470,16 +470,21 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     // in saveImage.js, otherwise Apply bakes text in front of foreground objects
     // even when zPosition < 1 places it behind them.
     const depthCanvas = depthFieldCanvasRef.current;
+    // Overlays resolve against the visible content rect (the crop), not the
+    // full photo — same mapping as the export path in saveImage.js, otherwise
+    // Apply-then-export and direct export bake different gradient slices.
+    const forBake = (layer) =>
+      layer.type === "overlay" && normalizedCrop ? { ...layer, overlayRect: normalizedCrop } : layer;
     for (const layer of renderable) {
       const useDepth = depthCanvas && layer.zPosition != null && layer.zPosition < 1;
       if (!useDepth) {
-        drawTextLayersOnCanvas(ctx, sw, sh, [layer]);
+        drawTextLayersOnCanvas(ctx, sw, sh, [forBake(layer)]);
         continue;
       }
       const tmp = document.createElement("canvas");
       tmp.width = sw;
       tmp.height = sh;
-      drawTextLayersOnCanvas(tmp.getContext("2d"), sw, sh, [layer]);
+      drawTextLayersOnCanvas(tmp.getContext("2d"), sw, sh, [forBake(layer)]);
       const mask = buildDepthMaskCanvas(depthCanvas, sw, sh, layer.zPosition, depthFeather);
       const tctx = tmp.getContext("2d");
       tctx.globalCompositeOperation = "destination-in";

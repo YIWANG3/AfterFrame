@@ -905,6 +905,38 @@ function handwritingCachePath(params) {
   return path.join(app.getPath("userData"), "handwriting-cache", `${key}.png`);
 }
 
+// The cache only ever grows (every Regenerate mints a new seed → new key, and
+// placed stickers are baked to data: URLs, so old entries are never read
+// again). Trim to a byte budget by oldest mtime; cache hits bump mtime so
+// recently reused entries survive. Runs fire-and-forget per generation.
+const HANDWRITING_CACHE_MAX_BYTES = 200 * 1024 * 1024;
+let handwritingTrimRunning = false;
+async function trimHandwritingCache() {
+  if (handwritingTrimRunning) return;
+  handwritingTrimRunning = true;
+  try {
+    const dir = path.join(app.getPath("userData"), "handwriting-cache");
+    const names = await fs.promises.readdir(dir).catch(() => []);
+    const entries = [];
+    for (const name of names) {
+      if (!name.endsWith(".png")) continue;
+      const filePath = path.join(dir, name);
+      const stat = await fs.promises.stat(filePath).catch(() => null);
+      if (stat) entries.push({ filePath, size: stat.size, mtimeMs: stat.mtimeMs });
+    }
+    let total = entries.reduce((sum, e) => sum + e.size, 0);
+    if (total <= HANDWRITING_CACHE_MAX_BYTES) return;
+    entries.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const entry of entries) {
+      if (total <= HANDWRITING_CACHE_MAX_BYTES) break;
+      await fs.promises.unlink(entry.filePath).catch(() => {});
+      total -= entry.size;
+    }
+  } finally {
+    handwritingTrimRunning = false;
+  }
+}
+
 async function startTextImageTask(options) {
   const prompt = String(options?.prompt || "");
   if (!prompt.trim()) {
@@ -925,6 +957,9 @@ async function startTextImageTask(options) {
     providerType, model, prompt, aspectRatio, imageSize, quality, refImagePath, seed,
   });
   if (fs.existsSync(outputPath)) {
+    // Bump recency so the LRU trim keeps entries that still get hits.
+    const now = new Date();
+    fs.promises.utimes(outputPath, now, now).catch(() => {});
     return {
       ...formatJobStatus(null),
       running: false,
@@ -985,6 +1020,7 @@ async function startTextImageTask(options) {
   if (refImagePath) command.push("--ref-image", refImagePath);
   if (apiKey) command.push("--api-key", apiKey);
   launchSidecarJob(command);
+  void trimHandwritingCache();
   return formatJobStatus(job);
 }
 

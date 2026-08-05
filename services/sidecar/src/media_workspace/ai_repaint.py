@@ -44,7 +44,7 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
     try:
         with urlopen(request, timeout=15) as response:
             body = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError):
+    except (OSError, ValueError):  # network/timeout + malformed JSON
         return ARK_MODELS
 
     results: list[dict[str, str]] = []
@@ -97,7 +97,7 @@ def list_gemini_models(api_key: str) -> list[dict[str, str]]:
     try:
         with urlopen(request, timeout=15) as response:
             body = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError):
+    except (OSError, ValueError):
         return GEMINI_FALLBACK_MODELS
 
     results: list[dict[str, str]] = []
@@ -120,7 +120,7 @@ def list_openai_models(api_key: str, base_url: str = OPENAI_API_BASE) -> list[di
     try:
         with urlopen(request, timeout=15) as response:
             body = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError):
+    except (OSError, ValueError):
         return OPENAI_FALLBACK_MODELS
 
     results: list[dict[str, str]] = []
@@ -168,6 +168,13 @@ def _image_ext_from_mime(mime_type: str) -> str:
     if mime_type == "image/webp":
         return ".webp"
     return ".jpg"
+
+
+def _gemini_response_parts(payload: dict) -> list[dict]:
+    # candidates can be present-but-empty (safety block); fall through to the
+    # "no image output" error, whose payload dump carries the block reason.
+    candidates = payload.get("candidates") or [{}]
+    return candidates[0].get("content", {}).get("parts", [])
 
 
 def _write_output_bytes(target: Path, image_bytes: bytes, mime_type: str) -> Path:
@@ -257,11 +264,7 @@ def run_gemini_repaint(
         raise RuntimeError(f"Gemini request failed: {error.reason}") from error
 
     payload = json.loads(body)
-    parts = (
-        payload.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [])
-    )
+    parts = _gemini_response_parts(payload)
     text_notes: list[str] = []
     output_bytes: bytes | None = None
     output_mime = "image/png"
@@ -531,11 +534,7 @@ def run_jimeng_repaint(
             submit_body["scale"] = int(scale * 100)
     elif req_key == "jimeng_image2image_dream_inpaint":
         # Inpainting needs image + mask; for repaint without mask, use full white mask
-        import struct
-        import zlib
-        # Get image dimensions from JPEG/PNG header
-        raw = input_path.read_bytes()
-        w, h = _get_image_dimensions(raw)
+        w, h = _get_image_dimensions(image_bytes)
         # Build a grayscale PNG (all 255 = repaint everything)
         mask_png = _make_white_mask_png(w, h)
         mask_b64 = base64.b64encode(mask_png).decode("utf-8")
@@ -630,7 +629,6 @@ def run_jimeng_repaint(
 # into an alpha sticker. An optional reference image steers the writing style
 # (all three providers honor it; validated 2026-08).
 
-TEXT_IMAGE_ASPECTS = ("1:1", "16:9", "9:16", "3:1", "1:3")
 
 
 def _openai_t2i_size(aspect_ratio: str | None, model: str) -> str:
@@ -746,9 +744,7 @@ def run_gemini_text_image(
         raise RuntimeError(f"Gemini request failed: {error.reason}") from error
 
     response_payload = json.loads(body)
-    response_parts = (
-        response_payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    )
+    response_parts = _gemini_response_parts(response_payload)
     text_notes: list[str] = []
     output_bytes: bytes | None = None
     output_mime = "image/png"
@@ -795,7 +791,9 @@ def run_openai_text_image(
             prompt=prompt,
             api_key=api_key,
             model=model,
-            aspect_ratio=aspect_ratio if aspect_ratio in ("1:1", "16:9", "9:16", "4:3", "3:4") else "16:9",
+            aspect_ratio=aspect_ratio
+            if aspect_ratio in ("1:1", "16:9", "9:16", "4:3", "3:4")
+            else ("9:16" if aspect_ratio == "1:3" else "16:9"),
             image_size=None,
             base_url=base_url,
         )
@@ -873,7 +871,7 @@ def _ark_size(aspect_ratio: str | None) -> str:
         "3:1": "3456x1152",
         "1:3": "1152x3456",
     }
-    return mapping.get(aspect_ratio or "", "2k")
+    return mapping.get(aspect_ratio or "", "2K")
 
 
 def _ark_generate(

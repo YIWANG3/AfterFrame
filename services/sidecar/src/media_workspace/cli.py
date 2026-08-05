@@ -828,6 +828,14 @@ def _cmd_split_shared_assets(args, connection, catalog, parser):
     return 0
 
 
+_MODEL_LIST_ENV_KEYS = {
+    "nanobanana": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "openai": ("OPENAI_API_KEY",),
+    "openai_compatible": ("OPENAI_API_KEY",),
+    "ark": ("ARK_API_KEY",),
+}
+
+
 def _cmd_list_ai_models(args, connection, catalog, parser):
     effective_key = args.api_key
     if not effective_key:
@@ -835,6 +843,13 @@ def _cmd_list_ai_models(args, connection, catalog, parser):
         config = get_app_setting(connection, provider_key)
         effective_key = config.get("token") if isinstance(config, dict) else None
     if not effective_key:
+        # Same dev-mode env fallback as the generation paths (keychain tokens
+        # are unreadable from the dev binary).
+        for env_name in _MODEL_LIST_ENV_KEYS.get(args.provider, ()):
+            effective_key = os.environ.get(env_name)
+            if effective_key:
+                break
+    if not effective_key and args.provider != "jimeng":
         print(json.dumps({"error": f"No API key for {args.provider}"}))
         return 1
     models = list_provider_models(args.provider, effective_key, base_url=getattr(args, "base_url", None))
