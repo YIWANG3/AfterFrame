@@ -26,23 +26,44 @@ export function brandIdForMake(make, registry) {
   return null;
 }
 
+/** Match both EXIF Make and Model. Some Insta360 files identify the maker as
+ *  "Arashi Vision" while carrying the consumer brand only in Model. */
+export function brandIdForExif(exif, registry) {
+  const haystack = [exif?.make, exif?.camera_model].filter(Boolean).join(" ");
+  return brandIdForMake(haystack, registry);
+}
+
+function matchesModel(variant, model) {
+  if (!variant?.models?.length || !model) return false;
+  const normalized = String(model).toLowerCase();
+  return variant.models.some((needle) => normalized.includes(String(needle).toLowerCase()));
+}
+
 /** Pick a variant from a brand by id, or by kind, or the first available.
  *  With `strict`, return null (instead of falling back) when the requested
  *  variant/kind isn't present — lets dual-logo templates skip a missing mark
  *  rather than duplicate the only one a brand has. */
-export function pickVariant(brand, { variantId, kind, strict } = {}) {
+export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
   if (!brand?.variants?.length) return null;
+  const modelVariants = brand.variants.filter((variant) => matchesModel(variant, model));
   if (variantId) {
+    // A model-specific wordmark supersedes the generic wordmark. This keeps
+    // templates brand-agnostic while allowing product lines such as Luna Ultra
+    // to carry their own official lockup.
+    const modelVariant = modelVariants.find((x) => x.id === variantId || x.kind === variantId);
+    if (modelVariant) return modelVariant;
     const v = brand.variants.find((x) => x.id === variantId);
     if (v) return v;
     if (strict) return null;
   }
   if (kind) {
+    const modelVariant = modelVariants.find((x) => x.kind === kind);
+    if (modelVariant) return modelVariant;
     const v = brand.variants.find((x) => x.kind === kind);
     if (v) return v;
     if (strict) return null;
   }
-  return brand.variants[0];
+  return modelVariants[0] || brand.variants[0];
 }
 
 function viewBoxAspect(svgText) {
@@ -71,16 +92,29 @@ function svgToImage(svgText) {
   });
 }
 
+/** Recolor selected SVG paints while preserving spot colors in a multi-color mark. */
+export function recolorSvgColors(svgText, colors, color) {
+  if (!color || !colors?.length) return svgText;
+  return colors.reduce((text, sourceColor) => {
+    const escaped = String(sourceColor).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return text.replace(new RegExp(`((?:fill|color)\\s*=\\s*["'])${escaped}(["'])`, "gi"), `$1${color}$2`);
+  }, svgText);
+}
+
 /**
  * Rasterize + tint a logo variant.
  * @returns {Promise<HTMLCanvasElement>} an RGBA canvas, height ≈ `heightPx`.
  *   When `colorLocked` (or no `color`), original colors are kept.
  */
-export async function prepareLogo(svgText, { color = "#000", colorLocked = false, heightPx = 256 } = {}) {
-  const aspect = viewBoxAspect(svgText);
+export async function prepareLogo(svgText, {
+  color = "#000", colorLocked = false, tintableColors = [], heightPx = 256,
+} = {}) {
+  const partiallyTinted = !colorLocked && !!color && tintableColors.length > 0;
+  const sourceSvg = partiallyTinted ? recolorSvgColors(svgText, tintableColors, color) : svgText;
+  const aspect = viewBoxAspect(sourceSvg);
   const h = Math.max(8, Math.round(heightPx));
   const w = Math.max(8, Math.round(h * aspect));
-  const sized = sizeSvg(svgText, w, h);
+  const sized = sizeSvg(sourceSvg, w, h);
   const img = await svgToImage(sized);
 
   const canvas = document.createElement("canvas");
@@ -90,7 +124,7 @@ export async function prepareLogo(svgText, { color = "#000", colorLocked = false
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, w, h);
 
-  if (!colorLocked && color) {
+  if (!colorLocked && color && !partiallyTinted) {
     // Recolor the opaque silhouette to `color`, preserving alpha edges.
     ctx.globalCompositeOperation = "source-in";
     ctx.fillStyle = color;

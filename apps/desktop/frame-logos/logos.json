@@ -179,6 +179,42 @@
           "color": "#d7063b"
         }
       ]
+    },
+    {
+      "id": "insta360",
+      "name": "Insta360",
+      "accent": "#000000",
+      "tags": [
+        "camera",
+        "action-camera",
+        "360-camera",
+        "gimbal-camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "insta360/wordmark.svg",
+          "aspect": 5.28,
+          "h": 0.45
+        },
+        {
+          "id": "luna-ultra",
+          "kind": "wordmark",
+          "file": "insta360/insta360-luna-ultra.svg",
+          "aspect": 5.37,
+          "h": 0.45,
+          "models": [
+            "luna ultra"
+          ],
+          "covers": [
+            "camera_model"
+          ],
+          "tintableColors": [
+            "#FEFEFE"
+          ]
+        }
+      ]
     }
   ],
   "match": {
@@ -192,6 +228,8 @@
     "leica": "leica",
     "panasonic": "lumix",
     "lumix": "lumix",
-    "ricoh": "ricoh"
+    "ricoh": "ricoh",
+    "insta360": "insta360",
+    "arashi vision": "insta360"
   }
 }

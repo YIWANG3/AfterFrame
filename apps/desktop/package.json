@@ -56,7 +56,10 @@
         "from": "frame-logos",
         "to": "frame-logos",
         "filter": [
-          "**/*"
+          "logos.json",
+          "README.md",
+          "TRADEMARKS.md",
+          "**/*.svg"
         ]
       },
       {

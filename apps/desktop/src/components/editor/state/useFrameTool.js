@@ -135,7 +135,12 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     for (const n of collectLogoNeeds(tpl, exif, lg.registry, { outH: geomH }, override)) {
       if (logoCacheRef.current.has(n.key)) continue;
       const svg = lg.svgs[n.file];
-      if (svg) logoCacheRef.current.set(n.key, await prepareLogo(svg, { color: n.color, colorLocked: n.colorLocked, heightPx: n.heightPx }));
+      if (svg) logoCacheRef.current.set(n.key, await prepareLogo(svg, {
+        color: n.color,
+        colorLocked: n.colorLocked,
+        tintableColors: n.tintableColors,
+        heightPx: n.heightPx,
+      }));
     }
   }
 

@@ -21,6 +21,8 @@ const BRANDS = [
   { label: "Lumix", exif: { camera_model: "DC-S5M2", lens_model: "LUMIX S 20-60mm F3.5-5.6", make: "Panasonic", focal_length: 35, aperture: 4, shutter_speed: 1/200, iso: 200, capture_time: "2024-09-10T12:00:00Z" } },
   { label: "Ricoh", exif: { camera_model: "RICOH GR III", lens_model: "GR 18.3mm F2.8", make: "RICOH IMAGING COMPANY, LTD.", focal_length: 28, aperture: 2.8, shutter_speed: 1/250, iso: 400, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "Sony", exif: { camera_model: "ILCE-7CR", lens_model: "FE 35mm F1.4 GM", make: "Sony", focal_length: 35, aperture: 1.4, shutter_speed: 1/320, iso: 125, capture_time: "2024-08-02T11:00:00Z" } },
+  { label: "Insta360", exif: { camera_model: "Insta360 X5", lens_model: "", make: "Arashi Vision Inc.", focal_length: 6, aperture: 2, shutter_speed: 1/500, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
+  { label: "Luna Ultra", exif: { camera_model: "Insta360 Luna Ultra", lens_model: "Summicron", make: "Arashi Vision Inc.", focal_length: 14, aperture: 2, shutter_speed: 1/250, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
 ];
 
 function samplePhoto(w = 1400) {
@@ -47,7 +49,12 @@ async function logosFor(tpl, exif, photo) {
   const logoImages = new Map();
   for (const n of collectLogoNeeds(tpl, exif, registry, { outH: photo.height })) {
     const txt = svgFor(n.file);
-    if (txt) logoImages.set(n.key, await prepareLogo(txt, { color: n.color, colorLocked: n.colorLocked, heightPx: n.heightPx }));
+    if (txt) logoImages.set(n.key, await prepareLogo(txt, {
+      color: n.color,
+      colorLocked: n.colorLocked,
+      tintableColors: n.tintableColors,
+      heightPx: n.heightPx,
+    }));
   }
   return logoImages;
 }
