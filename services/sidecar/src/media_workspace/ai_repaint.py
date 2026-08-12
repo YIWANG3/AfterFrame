@@ -100,13 +100,22 @@ def list_gemini_models(api_key: str) -> list[dict[str, str]]:
     except (OSError, ValueError):
         return GEMINI_FALLBACK_MODELS
 
-    results: list[dict[str, str]] = []
+    # Google lists several ids under one displayName (e.g. gemini-3-pro-image
+    # AND gemini-3-pro-image-preview are both "Nano Banana Pro") — dedupe by
+    # display name, preferring the stable (non "-preview") id.
+    by_name: dict[str, dict[str, str]] = {}
     for m in body.get("models", []):
         name = m.get("name", "")
         model_id = name.split("/")[-1] if "/" in name else name
         methods = m.get("supportedGenerationMethods", [])
-        if "generateContent" in methods and "image" in model_id.lower():
-            results.append({"id": model_id, "name": m.get("displayName", model_id)})
+        if "generateContent" not in methods or "image" not in model_id.lower():
+            continue
+        display = m.get("displayName", model_id)
+        entry = {"id": model_id, "name": display}
+        prev = by_name.get(display)
+        if prev is None or (prev["id"].endswith("-preview") and not model_id.endswith("-preview")):
+            by_name[display] = entry
+    results = list(by_name.values())
     return results if results else GEMINI_FALLBACK_MODELS
 
 

@@ -432,6 +432,10 @@ function OverlayLayerEl({ layer, rect }) {
         height: `${height}px`,
         opacity: isFill ? (layer.opacity ?? 100) / 100 : 1,
         background: scrimToCss(layer),
+        // Text/sticker elements carry zIndex 1 (2 while selected). Match them
+        // so sibling DOM order — i.e. the layer array order — decides who
+        // paints on top, same as the export path.
+        zIndex: 1,
       }}
     />
   );
