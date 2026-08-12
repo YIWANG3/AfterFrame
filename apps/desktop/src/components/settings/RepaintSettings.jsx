@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "./SettingsPrimitives";
-import { PROVIDER_TYPES, getProviderType, ProviderModal } from "../ai/providers";
+import { PROVIDER_TYPES, getProviderType, dedupeModels, ProviderModal } from "../ai/providers";
 
 export default function RepaintSettings() {
   const { t } = useTranslation("settings");
@@ -33,7 +33,7 @@ export default function RepaintSettings() {
   function modelOptions(inst) {
     const cached = prefs.modelsCache?.[inst.id];
     const models = Array.isArray(cached) && cached.length ? cached : getProviderType(inst.type)?.defaultModels || [];
-    return models.map((m) => ({ value: m.id, label: m.name || m.id }));
+    return dedupeModels(models).map((m) => ({ value: m.id, label: m.name || m.id }));
   }
 
   async function refreshModels(inst) {

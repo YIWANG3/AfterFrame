@@ -47,7 +47,17 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
     except (OSError, ValueError):  # network/timeout + malformed JSON
         return ARK_MODELS
 
-    results: list[dict[str, str]] = []
+    def snapshot_key(model_id: str) -> str:
+        # Trailing date snapshot: either YYMMDD or YYYYMMDD — normalize so
+        # "250828" (2025-08-28) sorts below "20260415" (2026-04-15).
+        tail = model_id.rsplit("-", 1)[-1]
+        if tail.isdigit():
+            return tail if len(tail) == 8 else f"20{tail}"
+        return ""
+
+    # Several dated snapshots share one product name (e.g. two 4.0 releases)
+    # — keep the newest per display name.
+    by_name: dict[str, dict[str, str]] = {}
     for m in body.get("data", []):
         model_id = m.get("id", "")
         if "seedream" not in model_id.lower():
@@ -57,7 +67,10 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
         # "doubao-seedream-4-5" → "Seedream 4.5"
         base = (m.get("name") or model_id).replace("doubao-", "")
         pretty = base.replace("seedream-", "Seedream ").replace("-", ".").replace(".pro", " Pro").replace(".lite", " Lite")
-        results.append({"id": model_id, "name": pretty})
+        prev = by_name.get(pretty)
+        if prev is None or snapshot_key(model_id) > snapshot_key(prev["id"]):
+            by_name[pretty] = {"id": model_id, "name": pretty}
+    results = list(by_name.values())
     return results if results else ARK_MODELS
 
 JIMENG_MODELS = [
