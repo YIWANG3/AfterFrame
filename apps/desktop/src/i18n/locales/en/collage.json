@@ -33,5 +33,6 @@
   "replace": "Replace",
   "pickFromScreen": "Pick color from screen",
   "presets": "Presets",
-  "reverseStops": "Reverse stops"
+  "reverseStops": "Reverse stops",
+  "alreadyAdded": "Already in collage"
 }
