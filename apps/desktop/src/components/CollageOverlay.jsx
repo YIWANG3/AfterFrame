@@ -15,12 +15,12 @@ const PICKER_OVERSCAN_PX = 600;
 const PICKER_PRELOAD_PX = 1200;
 
 function builtInSources(summary) {
-  const items = [{ id: "all", labelKey: "collage.filterAll" }];
+  const items = [{ id: "all", labelKey: "filterAll" }];
   if (Number(summary?.rated_count ?? 0) > 0) {
-    items.push({ id: "rated", labelKey: "collage.filterRated" });
+    items.push({ id: "rated", labelKey: "filterRated" });
   }
   if (Number(summary?.raw_assets ?? 0) > 0) {
-    items.push({ id: "matched", labelKey: "collage.filterMatched" });
+    items.push({ id: "matched", labelKey: "filterMatched" });
   }
   return items;
 }
