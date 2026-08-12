@@ -50,7 +50,12 @@ frame-logos/
 
 Variant fields: `id`, `kind` (`symbol`|`wordmark`|`lockup`), `orientation`
 (`h`|`v`, lockups), `file` (relative to this dir), `aspect` (w/h, for layout),
-`colorLocked` (optional `true` → don't tint, keep original colors).
+`colorLocked` (optional `true` → don't tint, keep original colors), `models`
+(optional lowercase model-name substrings that prefer this variant), and
+`tintableColors` (optional SVG paint colors that follow the template while other
+spot colors remain intact). Product lockups may also declare `covers`, such as
+`["camera_model"]`, to suppress duplicate text only in templates where that
+logo is actually rendered.
 
 The brand is auto-detected from EXIF and bound to the logo slot. In the UI the
 user can switch **variants within that same brand** only — never swap to another

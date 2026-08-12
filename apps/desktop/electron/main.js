@@ -95,6 +95,26 @@ const configuredCatalogPath = process.env.MEDIA_WORKSPACE_CATALOG;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const isPackaged = app.isPackaged;
 
+// Dev convenience: keychain-encrypted provider tokens saved by the PACKAGED
+// app are unreadable from the dev binary (different Safe Storage keychain
+// item), so in dev also load API keys from the repo-root .env — the sidecar
+// providers already fall back to these env vars when no --api-key is passed.
+// Never runs in the packaged app, and never overrides existing env.
+if (!isPackaged) {
+  try {
+    const envFile = path.join(__dirname, "..", "..", "..", ".env");
+    for (const line of fs.readFileSync(envFile, "utf-8").split("\n")) {
+      const match = line.match(/^([A-Z_]+)=(.*)$/);
+      if (match && !process.env[match[1]]) process.env[match[1]] = match[2].trim();
+    }
+    // Sidecar's Jimeng fallback reads the Volcengine names.
+    if (!process.env.VOLC_ACCESSKEY && process.env.JIMENG_API_KEY) process.env.VOLC_ACCESSKEY = process.env.JIMENG_API_KEY;
+    if (!process.env.VOLC_SECRETKEY && process.env.JIMENG_API_SECRET) process.env.VOLC_SECRETKEY = process.env.JIMENG_API_SECRET;
+    // Ark (Seedream) — accept either name for the same key.
+    if (!process.env.ARK_API_KEY && process.env.SEEDREAM_API_KEY) process.env.ARK_API_KEY = process.env.SEEDREAM_API_KEY;
+  } catch { /* no .env — fine */ }
+}
+
 const rootCandidates = [
   path.resolve(__dirname, "..", "..", ".."),
   path.resolve(process.cwd(), "..", ".."),
@@ -805,17 +825,7 @@ async function startAiRepaintTask(options) {
   if (current.running) {
     return current;
   }
-  const providerConfig = await getStoredProviderConfigWithMigration(providerId);
-  let apiKey = providerConfig?.token || null;
-  let baseUrl = null;
-  // For openai_compatible, token is JSON with base_url + token fields
-  if (providerType === "openai_compatible" && apiKey) {
-    try {
-      const parsed = JSON.parse(apiKey);
-      apiKey = parsed.token || null;
-      baseUrl = parsed.base_url || null;
-    } catch (_) { /* plain string token */ }
-  }
+  const { apiKey, baseUrl } = await resolveProviderCredentials(providerId, providerType);
   if (!apiKey) {
     throw new Error(`No API token configured for provider.`);
   }
@@ -870,6 +880,144 @@ async function startAiRepaintTask(options) {
   }
   command.push("--api-key", apiKey);
   launchSidecarJob(command);
+  return formatJobStatus(job);
+}
+
+// Stored provider token → { apiKey, baseUrl }. openai_compatible packs both
+// fields into one JSON token; every other type stores the key as-is.
+async function resolveProviderCredentials(providerId, providerType) {
+  const providerConfig = await getStoredProviderConfigWithMigration(providerId);
+  let apiKey = providerConfig?.token || null;
+  let baseUrl = null;
+  if (providerType === "openai_compatible" && apiKey) {
+    try {
+      const parsed = JSON.parse(apiKey);
+      apiKey = parsed.token || null;
+      baseUrl = parsed.base_url || null;
+    } catch (_) { /* plain string token */ }
+  }
+  return { apiKey, baseUrl };
+}
+
+// Text-to-image (handwriting stickers). Output is a sticker source asset, not
+// a photo derivative: it lands in userData/handwriting-cache (already inside
+// the baseline media:// allowlist) keyed by a hash of the generation params,
+// so an identical request returns the cached file without another paid call.
+function handwritingCachePath(params) {
+  const key = crypto
+    .createHash("sha1")
+    .update(JSON.stringify(params))
+    .digest("hex");
+  return path.join(app.getPath("userData"), "handwriting-cache", `${key}.png`);
+}
+
+// The cache only ever grows (every Regenerate mints a new seed → new key, and
+// placed stickers are baked to data: URLs, so old entries are never read
+// again). Trim to a byte budget by oldest mtime; cache hits bump mtime so
+// recently reused entries survive. Runs fire-and-forget per generation.
+const HANDWRITING_CACHE_MAX_BYTES = 200 * 1024 * 1024;
+let handwritingTrimRunning = false;
+async function trimHandwritingCache() {
+  if (handwritingTrimRunning) return;
+  handwritingTrimRunning = true;
+  try {
+    const dir = path.join(app.getPath("userData"), "handwriting-cache");
+    const names = await fs.promises.readdir(dir).catch(() => []);
+    const entries = [];
+    for (const name of names) {
+      if (!name.endsWith(".png")) continue;
+      const filePath = path.join(dir, name);
+      const stat = await fs.promises.stat(filePath).catch(() => null);
+      if (stat) entries.push({ filePath, size: stat.size, mtimeMs: stat.mtimeMs });
+    }
+    let total = entries.reduce((sum, e) => sum + e.size, 0);
+    if (total <= HANDWRITING_CACHE_MAX_BYTES) return;
+    entries.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const entry of entries) {
+      if (total <= HANDWRITING_CACHE_MAX_BYTES) break;
+      await fs.promises.unlink(entry.filePath).catch(() => {});
+      total -= entry.size;
+    }
+  } finally {
+    handwritingTrimRunning = false;
+  }
+}
+
+async function startTextImageTask(options) {
+  const prompt = String(options?.prompt || "");
+  if (!prompt.trim()) {
+    throw new Error("Missing prompt");
+  }
+  const providerId = String(options?.provider || "");
+  const providerType = String(options?.providerType || "nanobanana");
+  const model = String(options?.model || "");
+  const aspectRatio = options?.aspectRatio || null;
+  const imageSize = options?.imageSize ? String(options.imageSize).toUpperCase() : null;
+  const quality = options?.quality || null;
+  const refImagePath = options?.refImagePath ? String(options.refImagePath) : null;
+  // seed lets the UI request several candidates for otherwise identical params
+  // without colliding in the cache.
+  const seed = Number(options?.seed || 0);
+
+  const outputPath = handwritingCachePath({
+    providerType, model, prompt, aspectRatio, imageSize, quality, refImagePath, seed,
+  });
+  if (fs.existsSync(outputPath)) {
+    // Bump recency so the LRU trim keeps entries that still get hits.
+    const now = new Date();
+    fs.promises.utimes(outputPath, now, now).catch(() => {});
+    return {
+      ...formatJobStatus(null),
+      running: false,
+      status: "succeeded",
+      progress: 1,
+      result: { output_path: outputPath, cached: true },
+    };
+  }
+
+  const current = await latestJobStatus("text_image");
+  if (current.running) {
+    return current;
+  }
+  const { apiKey, baseUrl } = await resolveProviderCredentials(providerId, providerType);
+  // Env fallback (dev): the sidecar reads these when no --api-key is passed.
+  const envFallback =
+    providerType === "openai" ? Boolean(process.env.OPENAI_API_KEY)
+    : providerType === "jimeng" ? Boolean(process.env.VOLC_ACCESSKEY && process.env.VOLC_SECRETKEY)
+    : providerType === "nanobanana" ? Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)
+    : providerType === "ark" ? Boolean(process.env.ARK_API_KEY)
+    : false;
+  if (!apiKey && providerType !== "mock" && !envFallback) {
+    throw new Error("No API token configured for provider.");
+  }
+
+  const payload = {
+    provider: providerType,
+    output_path: outputPath,
+    prompt,
+    aspect_ratio: aspectRatio,
+    image_size: imageSize,
+    quality,
+    model,
+    seed,
+  };
+  const job = await createJob("text_image", payload);
+  const command = [
+    "run-text-image-job",
+    "--job-id", job.job_id,
+    "--provider", providerType,
+    "--output", outputPath,
+    "--prompt", prompt,
+  ];
+  if (aspectRatio) command.push("--aspect-ratio", aspectRatio);
+  if (imageSize) command.push("--image-size", imageSize);
+  if (quality) command.push("--quality", quality);
+  if (model) command.push("--model", model);
+  if (baseUrl) command.push("--base-url", baseUrl);
+  if (refImagePath) command.push("--ref-image", refImagePath);
+  if (apiKey) command.push("--api-key", apiKey);
+  launchSidecarJob(command);
+  void trimHandwritingCache();
   return formatJobStatus(job);
 }
 
@@ -1102,6 +1250,21 @@ ipcMain.handle("workspace:register-roots", (_event, rootType, paths) => {
   return registerRoots(rootType, paths);
 });
 
+// Handwriting reference image (style-transfer source). The chosen file is fed
+// to the text-image job as --ref-image; allow it through media:// so the modal
+// can show a thumbnail.
+ipcMain.handle("workspace:pick-handwriting-ref", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "Choose reference image",
+    properties: ["openFile"],
+    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const filePath = result.filePaths[0];
+  addAllowedMediaDir(path.dirname(filePath));
+  return filePath;
+});
+
 ipcMain.handle("workspace:pick-catalog", async () => {
   const defaultDir = isPackaged
     ? app.getPath("documents")
@@ -1189,7 +1352,7 @@ aiIpc.register({
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
-  startAiRepaintTask, latestJobStatus, formatJobStatus,
+  startAiRepaintTask, startTextImageTask, latestJobStatus, formatJobStatus,
 });
 
 const annotationApi = annotationIpc.register({

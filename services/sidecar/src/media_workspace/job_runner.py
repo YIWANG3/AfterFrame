@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from .ai_repaint import DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_JIMENG_MODEL, OPENAI_PROVIDER, OPENAI_COMPATIBLE_PROVIDER, JIMENG_PROVIDER, run_mock_repaint, run_nanobanana_repaint, run_openai_repaint, run_jimeng_repaint
+from .ai_repaint import DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_JIMENG_MODEL, DEFAULT_ARK_MODEL, OPENAI_PROVIDER, OPENAI_COMPATIBLE_PROVIDER, JIMENG_PROVIDER, ARK_PROVIDER, run_mock_repaint, run_nanobanana_repaint, run_openai_repaint, run_jimeng_repaint, run_ark_repaint, run_mock_text_image, run_gemini_text_image, run_openai_text_image, run_jimeng_text_image, run_ark_text_image
 from .catalog import ensure_catalog
 from .config import Thresholds
 from .db import (
@@ -1138,6 +1138,16 @@ def run_ai_repaint_job(
                     image_size=image_size,
                     scale=temperature,
                 )
+            elif provider == ARK_PROVIDER:
+                result = run_ark_repaint(
+                    input_path=input_path,
+                    output_path=output_path,
+                    prompt=prompt,
+                    api_key=effective_api_key,
+                    model=model or DEFAULT_ARK_MODEL,
+                    aspect_ratio=aspect_ratio,
+                    image_size=image_size,
+                )
             elif provider == OPENAI_PROVIDER:
                 result = run_openai_repaint(
                     input_path=input_path,
@@ -1197,6 +1207,133 @@ def run_ai_repaint_job(
             "asset_id": asset_id,
             "match_status": match_status,
             "score": match_score,
+            "current_phase": None,
+        }
+        update_job(
+            connection,
+            job_id,
+            status="succeeded",
+            payload={**payload, "phase": None, "phase_label": None},
+            result=final_result,
+            progress=1.0,
+            error_text=None,
+        )
+        return final_result
+    except Exception as error:
+        update_job(
+            connection,
+            job_id,
+            status="failed",
+            payload=payload,
+            result={},
+            progress=0.0,
+            error_text=str(error),
+        )
+        raise
+
+
+def run_text_image_job(
+    connection,
+    catalog_path: Path,
+    job_id: str,
+    *,
+    provider: str,
+    output_path: Path,
+    prompt: str,
+    api_key: str | None = None,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+    quality: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    ref_image_path: Path | None = None,
+) -> dict[str, object]:
+    """Text-to-image generation (handwriting stickers). Unlike repaint the
+    output is a sticker source asset, not a photo derivative — it is NOT
+    registered into the catalog."""
+    payload = {
+        "provider": provider,
+        "output_path": str(output_path.resolve()),
+        "prompt": prompt,
+        "api_key_supplied": bool(api_key),
+        "aspect_ratio": aspect_ratio,
+        "image_size": image_size,
+        "quality": quality,
+        "ref_image_path": str(ref_image_path.resolve()) if ref_image_path else None,
+        "phase": "generate_text_image",
+        "phase_label": "Generate Text Image",
+        "phase_index": 1,
+        "phase_count": 1,
+    }
+    update_job(connection, job_id, status="running", payload=payload, progress=0.1, result={"current_phase": {"status": "running"}}, error_text=None)
+    try:
+        if provider == "mock":
+            result = run_mock_text_image(output_path=output_path, prompt=prompt)
+        else:
+            effective_api_key = api_key
+            if not effective_api_key:
+                provider_key = f"ai_provider_token:{provider}"
+                config = get_app_setting(connection, provider_key)
+                effective_api_key = config.get("token") if isinstance(config, dict) else None
+            # No hard key requirement here (unlike repaint): the provider
+            # implementations fall back to env vars (GEMINI_API_KEY /
+            # OPENAI_API_KEY / VOLC_*) — the dev-mode path — and raise their
+            # own clear errors when neither source has a key.
+            if provider == JIMENG_PROVIDER:
+                ak, sk = None, None
+                try:
+                    creds = json.loads(effective_api_key)
+                    ak, sk = creds.get("access_key_id"), creds.get("secret_access_key")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                result = run_jimeng_text_image(
+                    output_path=output_path,
+                    prompt=prompt,
+                    access_key_id=ak,
+                    secret_access_key=sk,
+                    model=model or "jimeng_seedream46_cvtob",
+                    aspect_ratio=aspect_ratio,
+                    image_size=image_size,
+                    ref_image_path=ref_image_path,
+                )
+            elif provider == ARK_PROVIDER:
+                result = run_ark_text_image(
+                    output_path=output_path,
+                    prompt=prompt,
+                    api_key=effective_api_key,
+                    model=model or DEFAULT_ARK_MODEL,
+                    aspect_ratio=aspect_ratio,
+                    ref_image_path=ref_image_path,
+                )
+            elif provider in (OPENAI_PROVIDER, OPENAI_COMPATIBLE_PROVIDER):
+                result = run_openai_text_image(
+                    output_path=output_path,
+                    prompt=prompt,
+                    api_key=effective_api_key,
+                    model=model or DEFAULT_OPENAI_MODEL,
+                    aspect_ratio=aspect_ratio,
+                    quality=quality,
+                    base_url=base_url or "https://api.openai.com/v1",
+                    ref_image_path=ref_image_path,
+                )
+            else:
+                result = run_gemini_text_image(
+                    output_path=output_path,
+                    prompt=prompt,
+                    api_key=effective_api_key,
+                    model=model or DEFAULT_GEMINI_MODEL,
+                    aspect_ratio=aspect_ratio,
+                    image_size=image_size,
+                    ref_image_path=ref_image_path,
+                )
+
+        final_result = {
+            "provider": result.provider,
+            "model": result.model,
+            "output_path": result.output_path,
+            "mime_type": result.mime_type,
+            "prompt": result.prompt,
+            "notes": result.notes,
             "current_phase": None,
         }
         update_job(

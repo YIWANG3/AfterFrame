@@ -77,10 +77,16 @@ export function useEditorHistory() {
     return !!head && stateEquals(head.state, state) && layersEqual(head.layers, layersValue);
   }
 
+  // Entries can be heavy (handwriting stickers store data: URLs measured in
+  // MB), so the timeline is bounded: past MAX_HISTORY the oldest entry falls
+  // off. 80 steps is far beyond practical undo depth.
+  const MAX_HISTORY = 80;
+
   function pushEntry(state, layersValue) {
     const entry = { state: cloneState(state), layers: cloneLayers(layersValue) };
     const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
     nextHistory.push(entry);
+    if (nextHistory.length > MAX_HISTORY) nextHistory.splice(0, nextHistory.length - MAX_HISTORY);
     syncHistory(nextHistory, nextHistory.length - 1);
   }
 

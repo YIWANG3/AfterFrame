@@ -29,6 +29,10 @@
   "text": {
     "presets": "预设",
     "layers": "图层",
+    "addOverlayLayer": "添加蒙层",
+    "overlayLayer": "蒙层",
+    "overlaySettings": "蒙层填充",
+    "coverage": "覆盖范围",
     "addTextLayer": "添加文字图层",
     "addStickerLayer": "添加贴纸图层",
     "hideStickerPicker": "隐藏贴纸选择器",
@@ -99,7 +103,8 @@
     "caseLower": "全部小写",
     "caseTitle": "首字母大写",
     "letterSpacing": "字间距",
-    "lineHeight": "行高"
+    "lineHeight": "行高",
+    "addHandwriting": "AI 手写字"
   },
   "sticker": {
     "title": "贴纸",
@@ -197,5 +202,44 @@
     "bottom": "下",
     "left": "左",
     "right": "右"
+  },
+  "handwriting": {
+    "title": "AI 手写字",
+    "textPlaceholder": "输入文字，用 / 可强制换行",
+    "noProviders": "没有可用的 AI 服务",
+    "notConfigured": "该服务还没有配置 API Key，请先到 设置 → AI 重绘 里配置，再回来生成。",
+    "generating": "正在生成…",
+    "generate": "生成",
+    "regenerate": "重新生成",
+    "add": "添加到画布",
+    "color": "颜色",
+    "emptyResult": "生成结果是空白图，请重试或换个风格。",
+    "styles": {
+      "sigDash": "潇洒签名",
+      "chalkFine": "纤细粉笔",
+      "penCursive": "钢笔行草",
+      "inkArt": "水墨艺术",
+      "windFlow": "风动飘逸",
+      "gracefulScript": "秀丽行书",
+      "boldRomantic": "粗犷浪漫",
+      "vintageBrush": "复古毛笔",
+      "guofengTitle": "国风标题",
+      "healingCalli": "治愈书法",
+      "dryChalk": "干粉笔",
+      "sharpPen": "锋利钢笔",
+      "wildInk": "狂草墨块",
+      "journalSoft": "手账软笔",
+      "airyThin": "轻盈细笔",
+      "brushScript": "英文毛刷",
+      "monoScript": "英文手写"
+    },
+    "referencePick": "上传参考图",
+    "referenceActive": "将模仿参考图的笔迹书写，风格预设已忽略",
+    "referenceClear": "移除参考图",
+    "customPrompt": "Prompt",
+    "customPromptPlaceholder": "点击上方预设自动填入，可随意修改，将原样发送；{text} 代表上方输入的文字。建议保留纯白背景黑色字的要求，抠图效果最好。",
+    "missingTextWarn": "Prompt 中没有 {text}，上方输入的文字不会被写入画面。",
+    "insertText": "补回 {text}",
+    "presets": "风格预设"
   }
 }

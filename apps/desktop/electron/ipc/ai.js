@@ -17,6 +17,7 @@ function register({
   setStoredProviderConfig,
   deleteStoredProviderConfig,
   startAiRepaintTask,
+  startTextImageTask,
   latestJobStatus,
   formatJobStatus,
 }) {
@@ -43,6 +44,27 @@ function register({
   });
 
   ipcMain.handle("workspace:ai-repaint-start", (_event, options) => startAiRepaintTask(options));
+
+  ipcMain.handle("workspace:text-image-status", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
+    try { return await latestJobStatus("text_image"); } catch { return formatJobStatus(null); }
+  });
+
+  ipcMain.handle("workspace:text-image-start", (_event, options) => startTextImageTask(options));
+
+  // Bundled handwriting preset reference images (handwriting-presets/,
+  // extraResources — resolved dev-vs-packaged like frame-logos). Returns the
+  // absolute path for --ref-image, or null when missing.
+  ipcMain.handle("workspace:handwriting-preset-ref", (_event, presetId) => {
+    const id = String(presetId || "");
+    if (!/^[a-zA-Z]+$/.test(id)) return null;
+    const dir = app.isPackaged
+      ? path.join(process.resourcesPath, "handwriting-presets")
+      : path.join(__dirname, "..", "..", "handwriting-presets");
+    const filePath = path.join(dir, `${id}.png`);
+    return fs.existsSync(filePath) ? filePath : null;
+  });
 
   ipcMain.handle("workspace:list-ai-models", async (_event, providerId, providerType) => {
     const instanceId = String(providerId || "");

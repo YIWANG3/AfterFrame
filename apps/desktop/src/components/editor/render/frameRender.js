@@ -10,7 +10,7 @@
 import { drawLayersOnCanvas } from "./drawLayers";
 import { drawScrim } from "./canvasHelpers";
 import { FRAME_FONTS } from "../frameTemplates";
-import { brandIdForMake, pickVariant } from "./frameLogos";
+import { brandIdForExif, pickVariant } from "./frameLogos";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
 } from "../../../utils/format";
@@ -67,9 +67,10 @@ function captureDate(exif) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function resolveTokens(str, exif, profile) {
+export function resolveTokens(str, exif, profile, coveredFields = new Set()) {
   if (str == null) return "";
   return String(str).replace(/\{(\w+)\}/g, (_, key) => {
+    if (coveredFields.has(key)) return "";
     switch (key) {
       case "camera_model": return exif?.camera_model || "";
       case "lens_model": return exif?.lens_model || "";
@@ -77,7 +78,11 @@ function resolveTokens(str, exif, profile) {
       case "author": return profile?.author || "";
       default: return "";
     }
-  });
+  }).trim();
+}
+
+export function coveredFieldsFromLogoVariants(variants) {
+  return new Set((variants || []).flatMap((variant) => variant?.covers || []));
 }
 
 // Resolve an anchor to a point on the OUTPUT canvas (fractional x/y) + text
@@ -137,14 +142,48 @@ function logoColorFor(el, variant, override) {
   return base;
 }
 
+/** Return the rotated visual bounds of a logo and optionally keep them inside
+ *  the canvas vertically. `scale` and width are output-width fractions; height
+ *  is converted to an output-height fraction. */
+export function fitLogoBounds({
+  x, y, scale, aspect, rotation, outW, outH, clampY = false, edgeInsetY = 0,
+}) {
+  const normalizedRotation = ((rotation % 180) + 180) % 180;
+  const quarterTurn = Math.abs(normalizedRotation - 90) < 0.001;
+  const boundsFor = (nextScale) => ({
+    w: quarterTurn ? nextScale / aspect : nextScale,
+    h: quarterTurn
+      ? nextScale * (outW / outH)
+      : (nextScale / aspect) * (outW / outH),
+  });
+
+  let fittedScale = scale;
+  let bounds = boundsFor(fittedScale);
+  let fittedY = y;
+  if (clampY) {
+    const availableH = Math.max(0.01, 1 - edgeInsetY * 2);
+    if (bounds.h > availableH) {
+      fittedScale *= availableH / bounds.h;
+      bounds = boundsFor(fittedScale);
+    }
+    const minY = edgeInsetY + bounds.h / 2;
+    const maxY = 1 - edgeInsetY - bounds.h / 2;
+    fittedY = minY <= maxY ? Math.min(maxY, Math.max(minY, fittedY)) : 0.5;
+  }
+
+  return { x, y: fittedY, scale: fittedScale, ...bounds };
+}
+
 /** Logos a template needs for this photo: [{ brandId, variant, color, colorLocked, key, heightPx }]. */
 export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
-  const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
+  const brandId = brandIdForExif(exif, registry);
   const brand = brandId ? registry.byId.get(brandId) : null;
   const needs = [];
   for (const el of template.elements) {
     if (el.type !== "logo" || !brand) continue;
-    const variant = pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict });
+    const variant = pickVariant(brand, {
+      variantId: el.variant, kind: el.kind, strict: el.strict, model: exif?.camera_model,
+    });
     if (!variant) continue;
     const color = logoColorFor(el, variant, logoColor);
     const colorLocked = !!variant.colorLocked;
@@ -153,7 +192,10 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
     // small thumbnails and the big preview (cache is keyed by color, not size).
     const heightPx = Math.min(1400, Math.max(320,
       Math.round((el.style?.size || 0.05) * (variant.h ?? 1) * (geom?.outH || 1600) * 2.5)));
-    needs.push({ brandId, variant, color, colorLocked, key, heightPx, file: variant.file });
+    needs.push({
+      brandId, variant, color, colorLocked, tintableColors: variant.tintableColors,
+      key, heightPx, file: variant.file,
+    });
   }
   return needs;
 }
@@ -201,17 +243,33 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
   const adj = adjust;
   const { wref, outW, outH } = geom;
   // Resolve which brand applies, for logo lookup.
-  const brandId = brandIdForMake(exif?.make || exif?.camera_model, registry);
+  const brandId = brandIdForExif(exif, registry);
   const brand = brandId ? registry.byId.get(brandId) : null;
+
+  // Resolve logo slots once. A product lockup can declare that it already
+  // contains an EXIF field (e.g. Luna Ultra includes the camera model). Only
+  // suppress that text when the matching logo image is actually available.
+  const resolvedLogoElements = new Map();
+  if (brand) {
+    template.elements.forEach((el, index) => {
+      if (el.type !== "logo") return;
+      const variant = pickVariant(brand, {
+        variantId: el.variant, kind: el.kind, strict: el.strict, model: exif?.camera_model,
+      });
+      if (!variant) return;
+      const color = logoColorFor(el, variant, logoColor);
+      const key = `${brandId}:${variant.id}:${variant.colorLocked ? "orig" : color}`;
+      const img = logoImages.get(key);
+      if (img) resolvedLogoElements.set(index, { variant, color, key, img });
+    });
+  }
+  const coveredFields = coveredFieldsFromLogoVariants(
+    [...resolvedLogoElements.values()].map(({ variant }) => variant),
+  );
 
   // Dual-logo templates degrade gracefully on single-mark brands: if only one
   // of the two logo slots resolves, center it via each element's `soloAnchor`.
-  let resolvedLogos = 0;
-  if (template.family === "dual" && brand) {
-    for (const el of template.elements) {
-      if (el.type === "logo" && pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict })) resolvedLogos++;
-    }
-  }
+  const resolvedLogos = resolvedLogoElements.size;
   const solo = template.family === "dual" && resolvedLogos === 1;
 
   // Vertical auto-centering for text stacks: elements sharing a `group` are
@@ -220,18 +278,32 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
   // remaining line(s) stay centered instead of hanging off to one side. The
   // computed offset is ADDED to the group's shared base `dy`.
   const groupDy = new Map();
+  const groupStyle = new Map();
+  const groupMembers = new Map();
   const stacks = new Map();
   template.elements.forEach((el, i) => {
     if (!el.group || el.type === "logo") return;
+    if (!groupMembers.has(el.group)) groupMembers.set(el.group, []);
+    groupMembers.get(el.group).push(i);
     const t = el.type === "exif"
       ? formatExif(el.fields, exif, { labeled: el.labeled, sep: el.sep })
-      : resolveTokens(el.content, exif, profile);
+      : resolveTokens(el.content, exif, profile, coveredFields);
     if (!t) return; // empty line — excluded from the stack
     if (!stacks.has(el.group)) stacks.set(el.group, []);
     stacks.get(el.group).push(i);
   });
-  for (const idxs of stacks.values()) {
-    const lh = idxs.map((i) => (template.elements[i].style?.size || 0.02) * adj.text * 1.6);
+  for (const [group, idxs] of stacks) {
+    const members = groupMembers.get(group) || [];
+    // If the primary line is absent (for Luna Ultra it is already present in
+    // the product lockup), promote the remaining lens line into the primary
+    // line's visual role instead of leaving a tiny gray orphan.
+    if (idxs.length === 1 && members[0] !== idxs[0]) {
+      groupStyle.set(idxs[0], {
+        ...(template.elements[idxs[0]].style || {}),
+        ...(template.elements[members[0]]?.style || {}),
+      });
+    }
+    const lh = idxs.map((i) => ((groupStyle.get(i) || template.elements[i].style)?.size || 0.02) * adj.text * 1.6);
     const total = lh.reduce((s, h) => s + h, 0);
     let cur = -total / 2;
     idxs.forEach((i, k) => { groupDy.set(i, cur + lh[k] / 2); cur += lh[k]; });
@@ -245,13 +317,9 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     const a = resolveAnchor(anchorDef, g, adj);
 
     if (el.type === "logo") {
-      if (!brand) continue;
-      const variant = pickVariant(brand, { variantId: el.variant, kind: el.kind, strict: el.strict });
-      if (!variant) continue;
-      const color = logoColorFor(el, variant, logoColor);
-      const key = `${brandId}:${variant.id}:${variant.colorLocked ? "orig" : color}`;
-      const img = logoImages.get(key);
-      if (!img) continue; // caller didn't prepare it
+      const resolved = resolvedLogoElements.get(ei);
+      if (!resolved) continue;
+      const { variant, key, img } = resolved;
       // Size logos by HEIGHT (× a per-variant multiplier that normalizes tall
       // square symbols vs short wide wordmarks), so ONE template renders any
       // brand's mark at a consistent visual weight. drawLayers wants the sticker
@@ -263,18 +331,32 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       // to read vertically. Square-ish marks (symbols/roundels) stay upright.
       const inStrip = anchorDef.region === "left" || anchorDef.region === "right";
       const rotation = (inStrip && aspect > 1.6) ? 90 : (el.style?.rotation ?? 0);
-      // Stickers are CENTER-anchored. Shift by half the logo width so its edge
-      // (not its center) sits flush at the margin — matching the text's edge.
+      // A wide wordmark becomes tall after the automatic 90° rotation. Clamp
+      // that ROTATED box inside the canvas; otherwise a top anchor such as 0.1
+      // can place its first letters above the frame and crop them off.
+      const bounds = fitLogoBounds({
+        x: a.x,
+        y: a.y,
+        scale,
+        aspect,
+        rotation,
+        outW,
+        outH,
+        clampY: inStrip,
+        edgeInsetY: inStrip ? Math.max(2 / outH, 0.015 * wref / outH) : 0,
+      });
+      // Stickers are CENTER-anchored. Shift by half the ROTATED visual width so
+      // its edge (not its center) sits flush at the margin.
       let lx = a.x;
-      if (a.align === "left") lx = a.x + scale / 2;
-      else if (a.align === "right") lx = a.x - scale / 2;
+      if (a.align === "left") lx = a.x + bounds.w / 2;
+      else if (a.align === "right") lx = a.x - bounds.w / 2;
       layers.push({
         type: "sticker", stickerPath: key, ei,
-        x: lx, y: a.y, scale,
+        x: lx, y: bounds.y, scale: bounds.scale,
         // Bounding box for editor hit-testing: size (output fractions) + the
-        // element's VISUAL center (cx/cy). Stickers are center-anchored, so
-        // cx === the draw x.
-        box: { w: scale, h: aspect ? (scale / aspect) * (outW / outH) : scale, cx: lx, cy: a.y },
+        // element's ROTATED visual center (cx/cy). Stickers are center-anchored,
+        // so cx/cy are also the draw position.
+        box: { w: bounds.w, h: bounds.h, cx: lx, cy: bounds.y },
         rotation, opacity: el.style?.opacity ?? 100,
         outlineWidth: 0, outlineColor: "#fff",
         // On a photo, give the mark a soft shadow so a light logo survives a
@@ -288,14 +370,15 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     // text / exif -> a text layer
     let text;
     if (el.type === "exif") text = formatExif(el.fields, exif, { labeled: el.labeled, sep: el.sep });
-    else text = resolveTokens(el.content, exif, profile);
+    else text = resolveTokens(el.content, exif, profile, coveredFields);
     if (!text) continue; // hide elements with no value
 
-    const family = FRAME_FONTS[el.style?.font] || FRAME_FONTS.grotesk;
-    const weight = el.style?.weight ?? 400;
-    const italic = !!el.style?.italic;
-    const tracking = el.style?.tracking ?? 0;
-    const sizeFrac = (el.style?.size || 0.02) * adj.text;
+    const style = groupStyle.get(ei) || el.style || {};
+    const family = FRAME_FONTS[style.font] || FRAME_FONTS.grotesk;
+    const weight = style.weight ?? 400;
+    const italic = !!style.italic;
+    const tracking = style.tracking ?? 0;
+    const sizeFrac = (style.size || 0.02) * adj.text;
     const fontPx = sizeFrac * wref; // rendered px
     const tw = measureTextWidth(text, { fontPx, weight, italic, family, tracking });
     let x = a.x;
@@ -305,7 +388,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     // On-photo text: choose black/white by the luminance behind it (scrim
     // included) and add an opposite-color soft shadow, so it's legible on any
     // photo — solving "dark text vanishes on a dark photo" and vice versa.
-    let fillColor = el.style?.color || "#141414";
+    let fillColor = style.color || "#141414";
     let shadow = false, shadowColor = "#000000";
     if (isOverlay && ctx) {
       // On-photo text: pick black/white by the luminance behind it (needs the
@@ -343,7 +426,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       fillMode: "solid",
       fillColor,
       fillOpacity: 100,
-      opacity: el.style?.opacity ?? 100,
+      opacity: style.opacity ?? 100,
       bgMode: "none",
       strokeEnabled: false,
       shadow,
@@ -352,7 +435,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       shadowBlur: sizeFrac * 1920 * factor * 0.4,
       shadowX: 0,
       shadowY: 0,
-      rotation: el.style?.rotation ?? 0,
+      rotation: style.rotation ?? 0,
     });
   }
   return layers;

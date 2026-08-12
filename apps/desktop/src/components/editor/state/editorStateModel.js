@@ -43,8 +43,17 @@ function bgEquals(a, b) {
   return a.mode === b.mode && a.color === b.color && gradientEquals(a.gradient ?? null, b.gradient ?? null);
 }
 
+// canvas.scrim is a LEGACY slot: since overlay layers landed, frame presets
+// emit their wash as an overlay layer and set scrim to null, so nothing in the
+// current app produces a non-null scrim. The plumbing (equals/clone/save) is
+// kept deliberately so any state that still carries one keeps rendering.
 function scrimEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
+  if ((a.kind ?? "edge") !== (b.kind ?? "edge")) return false;
+  if (a.kind === "fill") {
+    return a.mode === b.mode && a.color === b.color && a.opacity === b.opacity &&
+      gradientEquals(a.gradient ?? null, b.gradient ?? null);
+  }
   return a.edge === b.edge && a.height === b.height && a.from === b.from && a.to === b.to;
 }
 
@@ -59,7 +68,10 @@ function cloneCanvas(canvas) {
   const bg = canvas.bg
     ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: { ...canvas.bg.gradient } } : {}) }
     : null;
-  return { pad: { ...canvas.pad }, bg, scrim: canvas.scrim ? { ...canvas.scrim } : null };
+  const scrim = canvas.scrim
+    ? { ...canvas.scrim, ...(canvas.scrim.gradient ? { gradient: { ...canvas.scrim.gradient } } : {}) }
+    : null;
+  return { pad: { ...canvas.pad }, bg, scrim };
 }
 
 export function cloneState(state) {

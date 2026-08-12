@@ -10,25 +10,22 @@ function hexToRgba(hex, alpha = 1) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function mediaUrlFor(filePath) {
-  if (!filePath) return "";
-  if (filePath.startsWith("media://")) return filePath;
-  const encoded = filePath.split("/").map((seg) => encodeURIComponent(seg)).join("/");
-  return `media://${encoded}`;
-}
 import {
   Plus, Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X,
+  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X, Brush, Blend,
 } from "lucide-react";
+import HandwritingModal from "./handwriting/HandwritingModal";
+import { handwritingAlphaFromUrl, colorizeHandwriting } from "./render/handwritingMatte";
+import { localFileUrl as mediaUrlFor } from "../../utils/format";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import BorderControls from "./components/BorderControls";
-import { isTextLayer, isStickerLayer, layerLabel } from "./layerStack";
+import { isTextLayer, isStickerLayer, isOverlayLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
-  createDefaultLayer, createStickerLayer, applyPreset, cloneLayers, getBgPadding,
+  createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, cloneLayers, getBgPadding,
 } from "./textState";
 import {
   alignLeft, alignCenterH, alignRight,
@@ -81,12 +78,13 @@ export default function TextPanel({
   const current = selected.length === 1 ? selected[0] : null;
   const currentIsText = isTextLayer(current);
   const currentIsSticker = isStickerLayer(current);
+  const currentIsOverlay = isOverlayLayer(current);
   // Inspector always shows text controls when applicable. If no text is selected
   // and no sticker is selected, fall back to the topmost text layer so the panel
   // layout never collapses (avoids jumpy UX).
   const editTarget = currentIsText
     ? current
-    : (currentIsSticker ? null : (layers.filter(isTextLayer).slice(-1)[0] || null));
+    : ((currentIsSticker || currentIsOverlay) ? null : (layers.filter(isTextLayer).slice(-1)[0] || null));
 
   // Style edits (sliders, scrubbers, toggles, typing) apply live and coalesce
   // into ONE undo step per gesture — a run of same-target/same-field edits is
@@ -114,7 +112,22 @@ export default function TextPanel({
   };
 
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [handwritingOpen, setHandwritingOpen] = useState(false);
   const [presetsExpanded, setPresetsExpanded] = useState(false);
+  const addOverlayLayer = () => {
+    const nl = createOverlayLayer({ sourceLabel: t("text.overlayLayer") });
+    onLayersChange([...layers, nl]);
+    onSelectionChange(new Set([nl.id]));
+  };
+  const handleAddHandwriting = ({ stickerPath, naturalWidth, naturalHeight, sourceLabel, handwriting }) => {
+    const nl = createStickerLayer(
+      { stickerPath, naturalWidth, naturalHeight, sourceLabel },
+      { handwriting }
+    );
+    onLayersChange([...layers, nl]);
+    onSelectionChange(new Set([nl.id]));
+    setHandwritingOpen(false);
+  };
   const handleAddSticker = (sticker) => {
     const nl = createStickerLayer({
       stickerPath: sticker.path,
@@ -323,9 +336,19 @@ export default function TextPanel({
           </div>
         </Section>
 
-        {/* Layers — text + sticker */}
+        {/* Layers — overlay + text + sticker */}
         <Section label={t("text.layers")} action={
           <div className="flex items-center gap-0.5">
+            <IconBtn
+              icon={Blend}
+              title={t("text.addOverlayLayer")}
+              onClick={addOverlayLayer}
+            />
+            <IconBtn
+              icon={Brush}
+              title={t("text.addHandwriting")}
+              onClick={() => setHandwritingOpen(true)}
+            />
             <IconBtn
               icon={Cannabis}
               title={stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer")}
@@ -350,6 +373,10 @@ export default function TextPanel({
             update={update}
             hasSceneDepth={hasSceneDepth}
           />
+        )}
+
+        {currentIsOverlay && current && (
+          <OverlayLayerInspector layer={current} update={update} />
         )}
 
         {editTarget && (() => {
@@ -499,6 +526,12 @@ export default function TextPanel({
           onClose={() => setStickerPickerOpen(false)}
         />
       )}
+      {handwritingOpen && (
+        <HandwritingModal
+          onAdd={handleAddHandwriting}
+          onClose={() => setHandwritingOpen(false)}
+        />
+      )}
       </div>
 
       {/* Footer */}
@@ -595,7 +628,7 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
     <div className="flex flex-col gap-0.5">
       {display.map((l) => {
         const isSelected = selectedIds.has(l.id);
-        const TypeIcon = isStickerLayer(l) ? Cannabis : Type;
+        const TypeIcon = isOverlayLayer(l) ? Blend : (isStickerLayer(l) ? Cannabis : Type);
         const showLineAbove = overInfo?.id === l.id && overInfo.position === "above";
         const showLineBelow = overInfo?.id === l.id && overInfo.position === "below";
         return (
@@ -1295,15 +1328,151 @@ function AlignBar({ layers, onLayersChange, allLayers }) {
 
 /* ─── Sticker layer inspector ─────────────────────────────── */
 
+function OverlayLayerInspector({ layer, update }) {
+  const { t } = useTranslation("editor");
+  if (layer.kind !== "fill") {
+    return (
+      <Section label={t("text.overlaySettings")}>
+        <SliderRow
+          label={t("text.coverage")}
+          min={5}
+          max={100}
+          value={Math.round((layer.height ?? 0.3) * 100)}
+          onChange={(height) => update(layer.id, { height: height / 100 })}
+          suffix="%"
+        />
+      </Section>
+    );
+  }
+  const updatePaint = (patch) => {
+    const next = {};
+    if (patch.mode !== undefined) next.mode = patch.mode;
+    if (patch.color !== undefined) next.color = patch.color;
+    if (patch.opacity !== undefined) next.opacity = Math.round(patch.opacity * 100);
+    if (patch.gradient) next.gradient = { ...layer.gradient, ...patch.gradient };
+    update(layer.id, next);
+  };
+  return (
+    <Section label={t("text.overlaySettings")}>
+      <PaintRow
+        paint={{
+          mode: layer.mode === "gradient" ? "gradient" : "solid",
+          color: layer.color ?? "#000000",
+          opacity: (layer.opacity ?? 100) / 100,
+          gradient: {
+            from: layer.gradient?.from ?? "#000000",
+            fromOpacity: layer.gradient?.fromOpacity ?? 0,
+            to: layer.gradient?.to ?? "#000000",
+            toOpacity: layer.gradient?.toOpacity ?? 0.7,
+            angle: layer.gradient?.angle ?? 180,
+          },
+        }}
+        availableModes={["solid", "gradient"]}
+        onUpdate={updatePaint}
+        opacityValue={layer.opacity ?? 100}
+        onOpacityChange={(opacity) => update(layer.id, { opacity })}
+      />
+    </Section>
+  );
+}
+
+// Handwriting stickers keep the raw black-on-white generation around, so fill
+// is re-editable after placement: merge the PaintRow patch into the stored
+// fill, re-colorize the memoized alpha, and swap the sticker's data URL.
+//
+// Color-picker drags fire per pointer event, and each run ends in a full-res
+// PNG encode (toDataURL) — so runs are serialized per layer with latest-wins
+// coalescing: while one encode is in flight, further patches just replace the
+// pending one. Encode rate becomes "as fast as encoding allows", not per event.
+const pendingHandwritingFill = new Map(); // layerId → { layer, patch, update }
+
+function mergeHandwritingPatch(base, patch) {
+  const a = base || {};
+  const merged = { ...a, ...patch };
+  if (a.gradient || patch.gradient) merged.gradient = { ...a.gradient, ...patch.gradient };
+  return merged;
+}
+
+async function applyHandwritingFill(layer, patch, update) {
+  const id = layer.id;
+  if (pendingHandwritingFill.has(id)) {
+    const prev = pendingHandwritingFill.get(id);
+    prev.layer = layer;
+    prev.patch = mergeHandwritingPatch(prev.patch, patch);
+    prev.update = update;
+    return;
+  }
+  pendingHandwritingFill.set(id, { layer, patch, update });
+  try {
+    while (pendingHandwritingFill.has(id)) {
+      const job = pendingHandwritingFill.get(id);
+      pendingHandwritingFill.set(id, { ...job, patch: null });
+      await runHandwritingFill(job.layer, job.patch, job.update);
+      // Nothing new arrived during the run → done; otherwise loop with it.
+      if (pendingHandwritingFill.get(id)?.patch == null) pendingHandwritingFill.delete(id);
+    }
+  } finally {
+    pendingHandwritingFill.delete(id);
+  }
+}
+
+async function runHandwritingFill(layer, patch, update) {
+  const prev = layer.handwriting?.fill || { mode: "solid", color: "#ffffff" };
+  const g = patch.gradient || {};
+  const next = { ...prev };
+  if (patch.mode !== undefined) next.mode = patch.mode;
+  if (patch.color !== undefined) next.color = patch.color;
+  if (patch.opacity !== undefined) next.opacity = Math.round(patch.opacity * 100);
+  for (const k of ["from", "fromOpacity", "to", "toOpacity", "angle"]) {
+    if (g[k] !== undefined) next[k] = g[k];
+  }
+  if (next.mode === "gradient" && next.from === undefined) {
+    Object.assign(next, { from: "#ffd76a", fromOpacity: 1, to: "#ff7a59", toOpacity: 1, angle: 90 });
+  }
+  const alpha = await handwritingAlphaFromUrl(mediaUrlFor(layer.handwriting.rawPath));
+  if (!alpha) return;
+  const canvas = colorizeHandwriting(alpha, next);
+  update(layer.id, {
+    stickerPath: canvas.toDataURL("image/png"),
+    handwriting: { ...layer.handwriting, fill: next },
+  });
+}
+
 function StickerLayerInspector({ layer, update, hasSceneDepth }) {
   const { t } = useTranslation("editor");
   const hasOutline = (layer.outlineWidth || 0) > 0;
+  const hwFill = layer.handwriting?.fill;
   return (
     <>
       <Section label={t("text.transform")}>
         <SliderRow label={t("text.size")} min={2} max={200} value={Math.round((layer.scale ?? 0.4) * 100)} onChange={(v) => update(layer.id, { scale: v / 100 })} suffix="%" />
         <SliderRow label={t("text.opacity")} min={0} max={100} value={layer.opacity ?? 100} onChange={(v) => update(layer.id, { opacity: v })} suffix="%" />
       </Section>
+
+      {/* Fill — handwriting stickers only: re-colorized from the cached raw
+          generation, same controls as the text fill. */}
+      {layer.handwriting?.rawPath && (
+        <Section label={t("text.fill")}>
+          <PaintRow
+            paint={{
+              mode: hwFill?.mode === "gradient" ? "gradient" : "solid",
+              color: hwFill?.color ?? "#ffffff",
+              opacity: (hwFill?.opacity ?? 100) / 100,
+              gradient: {
+                from: hwFill?.from ?? "#ffd76a",
+                fromOpacity: hwFill?.fromOpacity ?? 1,
+                to: hwFill?.to ?? "#ff7a59",
+                toOpacity: hwFill?.toOpacity ?? 1,
+                angle: hwFill?.angle ?? 90,
+              },
+            }}
+            availableModes={["solid", "gradient"]}
+            onUpdate={(patch) => { void applyHandwritingFill(layer, patch, update); }}
+            opacityValue={layer.opacity ?? 100}
+            onOpacityChange={(v) => update(layer.id, { opacity: v })}
+          />
+        </Section>
+      )}
 
       {hasSceneDepth && (
         <Section label={t("text.depthPosition")}>

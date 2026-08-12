@@ -247,6 +247,30 @@ export function createStickerLayer({ stickerPath, naturalWidth, naturalHeight, s
   };
 }
 
+// Full-photo color wash. It deliberately has no x/y/size transform: the photo
+// content rect is resolved by the preview/export pipeline, so crop and canvas
+// margins cannot make the overlay drift. Because it is a normal stack item,
+// users can add several and interleave them with text/sticker layers.
+export function createOverlayLayer(overrides = {}) {
+  return {
+    id: `overlay-${nextId++}`,
+    type: "overlay",
+    sourceLabel: "Overlay",
+    kind: "fill",
+    mode: "gradient",
+    color: "#000000",
+    opacity: 100,
+    gradient: {
+      from: "#000000",
+      fromOpacity: 0,
+      to: "#000000",
+      toOpacity: 0.7,
+      angle: 180,
+    },
+    ...overrides,
+  };
+}
+
 export function isStickerLayer(layer) {
   return layer && layer.type === "sticker";
 }

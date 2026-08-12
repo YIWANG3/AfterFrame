@@ -2,7 +2,7 @@
 // context. Pure: takes everything it needs as args, no React, no globals.
 // Used by both the inline-apply path and the export-to-disk path.
 
-import { hexToRgba } from "./canvasHelpers";
+import { drawScrim, hexToRgba } from "./canvasHelpers";
 import { getBgPadding, applyTextCase } from "../textState";
 
 /**
@@ -16,6 +16,16 @@ import { getBgPadding, applyTextCase } from "../textState";
 export function drawLayersOnCanvas(ctx, canvasWidth, canvasHeight, layersToRender, stickerImageCache) {
   const scale = canvasWidth / 1920;
   for (const layer of layersToRender) {
+    if (layer.type === "overlay") {
+      const r = layer.overlayRect || { x: 0, y: 0, width: 1, height: 1 };
+      drawScrim(ctx, layer, {
+        x: r.x * canvasWidth,
+        y: r.y * canvasHeight,
+        width: r.width * canvasWidth,
+        height: r.height * canvasHeight,
+      });
+      continue;
+    }
     const px = layer.x * canvasWidth;
     const py = layer.y * canvasHeight;
 

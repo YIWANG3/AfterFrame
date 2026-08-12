@@ -412,7 +412,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
     create_job_parser.add_argument("--priority", type=int, default=50)
 
@@ -420,10 +420,17 @@ def build_parser() -> argparse.ArgumentParser:
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
+
+    # Desktop main uses this when a job's runner process dies before it ever
+    # reports status (spawn failure, argparse rejection) — the row would
+    # otherwise sit 'queued' until the heartbeat reaper.
+    fail_job_parser = subparsers.add_parser("fail-job", parents=[common])
+    fail_job_parser.add_argument("--job-id", required=True)
+    fail_job_parser.add_argument("--error", default="job process exited before reporting status")
 
     pause_job_parser = subparsers.add_parser("pause-job", parents=[common])
     pause_job_parser.add_argument("--job-id", required=True)
@@ -434,7 +441,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-active-jobs", parents=[common])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "annotation", "people_model_download", "people_index"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
@@ -528,7 +535,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_ai_repaint_job_parser = subparsers.add_parser("run-ai-repaint-job", parents=[common])
     run_ai_repaint_job_parser.add_argument("--job-id", required=True)
-    run_ai_repaint_job_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "mock"], default="nanobanana")
+    run_ai_repaint_job_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark", "mock"], default="nanobanana")
     run_ai_repaint_job_parser.add_argument("--base-url")
     run_ai_repaint_job_parser.add_argument("--model")
     run_ai_repaint_job_parser.add_argument("--input", type=Path, required=True)
@@ -540,6 +547,19 @@ def build_parser() -> argparse.ArgumentParser:
     run_ai_repaint_job_parser.add_argument("--temperature", type=float)
     run_ai_repaint_job_parser.add_argument("--api-key")
 
+    run_text_image_job_parser = subparsers.add_parser("run-text-image-job", parents=[common])
+    run_text_image_job_parser.add_argument("--job-id", required=True)
+    run_text_image_job_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark", "mock"], default="nanobanana")
+    run_text_image_job_parser.add_argument("--base-url")
+    run_text_image_job_parser.add_argument("--model")
+    run_text_image_job_parser.add_argument("--output", type=Path, required=True)
+    run_text_image_job_parser.add_argument("--prompt", required=True)
+    run_text_image_job_parser.add_argument("--aspect-ratio", choices=["1:1", "16:9", "9:16", "3:1", "1:3"])
+    run_text_image_job_parser.add_argument("--image-size", choices=["1K", "2K", "4K"])
+    run_text_image_job_parser.add_argument("--quality", choices=["low", "medium", "high"])
+    run_text_image_job_parser.add_argument("--ref-image", type=Path)
+    run_text_image_job_parser.add_argument("--api-key")
+
     summary_parser = subparsers.add_parser("summary", parents=[common])
     summary_parser.add_argument("--json", action="store_true")
 
@@ -547,7 +567,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_new_media_parser.add_argument("--image-dir", type=Path, action="append", required=True)
 
     list_models_parser = subparsers.add_parser("list-ai-models", parents=[common])
-    list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng"], default="nanobanana")
+    list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark"], default="nanobanana")
     list_models_parser.add_argument("--api-key")
     list_models_parser.add_argument("--base-url")
 
@@ -815,6 +835,14 @@ def _cmd_split_shared_assets(args, connection, catalog, parser):
     return 0
 
 
+_MODEL_LIST_ENV_KEYS = {
+    "nanobanana": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "openai": ("OPENAI_API_KEY",),
+    "openai_compatible": ("OPENAI_API_KEY",),
+    "ark": ("ARK_API_KEY",),
+}
+
+
 def _cmd_list_ai_models(args, connection, catalog, parser):
     effective_key = args.api_key
     if not effective_key:
@@ -822,6 +850,13 @@ def _cmd_list_ai_models(args, connection, catalog, parser):
         config = get_app_setting(connection, provider_key)
         effective_key = config.get("token") if isinstance(config, dict) else None
     if not effective_key:
+        # Same dev-mode env fallback as the generation paths (keychain tokens
+        # are unreadable from the dev binary).
+        for env_name in _MODEL_LIST_ENV_KEYS.get(args.provider, ()):
+            effective_key = os.environ.get(env_name)
+            if effective_key:
+                break
+    if not effective_key and args.provider != "jimeng":
         print(json.dumps({"error": f"No API key for {args.provider}"}))
         return 1
     models = list_provider_models(args.provider, effective_key, base_url=getattr(args, "base_url", None))
@@ -845,6 +880,28 @@ def _cmd_run_ai_repaint_job(args, connection, catalog, parser):
         temperature=args.temperature,
         model=getattr(args, "model", None),
         base_url=getattr(args, "base_url", None),
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_run_text_image_job(args, connection, catalog, parser):
+    from .job_runner import run_text_image_job
+
+    payload = run_text_image_job(
+        connection,
+        catalog_path=args.catalog,
+        job_id=args.job_id,
+        provider=args.provider,
+        output_path=args.output,
+        prompt=args.prompt,
+        api_key=args.api_key,
+        aspect_ratio=args.aspect_ratio,
+        image_size=args.image_size,
+        quality=getattr(args, "quality", None),
+        model=getattr(args, "model", None),
+        base_url=getattr(args, "base_url", None),
+        ref_image_path=getattr(args, "ref_image", None),
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -1148,6 +1205,20 @@ def _cmd_merge_people_groups(args, connection, catalog, parser):
 def _cmd_cancel_job(args, connection, catalog, parser):
     from .db import request_job_cancel
     print(json.dumps(request_job_cancel(connection, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_fail_job(args, connection, catalog, parser):
+    from .db import update_job
+    job = get_job(connection, args.job_id)
+    if not job:
+        print(json.dumps({"error": f"Unknown job: {args.job_id}"}))
+        return 1
+    # Only a job that never finished may be failed this way — a completed row
+    # keeps its real outcome even if the fail request races the runner.
+    if job.get("status") in ("queued", "running", "paused"):
+        job = update_job(connection, args.job_id, status="failed", error_text=args.error)
+    print(json.dumps(job, indent=2))
     return 0
 
 
@@ -1926,6 +1997,7 @@ COMMAND_HANDLERS = {
     "split-shared-assets": _cmd_split_shared_assets,
     "list-ai-models": _cmd_list_ai_models,
     "run-ai-repaint-job": _cmd_run_ai_repaint_job,
+    "run-text-image-job": _cmd_run_text_image_job,
     "ai-repaint": _cmd_ai_repaint,
     "annotate-asset": _cmd_annotate_asset,
     "run-annotation-job": _cmd_run_annotation_job,
@@ -1953,6 +2025,7 @@ COMMAND_HANDLERS = {
     "remove-face-from-person": _cmd_remove_face_from_person,
     "assign-face-to-person": _cmd_assign_face_to_person,
     "cancel-job": _cmd_cancel_job,
+    "fail-job": _cmd_fail_job,
     "pause-job": _cmd_pause_job,
     "resume-job": _cmd_resume_job,
     "list-active-jobs": _cmd_list_active_jobs,
