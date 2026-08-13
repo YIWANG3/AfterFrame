@@ -469,6 +469,13 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
   // can show through the transparent areas. drop-shadow operates on the actual
   // rendered output, so it always paints behind the gradient text.
   const useDropShadow = layer.fillMode === "gradient" && shadowParts;
+  // Outer glow — stacked zero-offset drop-shadows on the glyph silhouette
+  // (works for solid and gradient fills alike).
+  const glowFilter = layer.glow
+    ? Array.from({ length: layer.glowIntensity ?? 2 }, () =>
+        `drop-shadow(0px 0px ${(layer.glowBlur ?? 24) * scale}px ${hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100)})`
+      ).join(" ")
+    : null;
 
   const strokeWidth = layer.strokeEnabled && layer.strokeWidth > 0
     ? layer.strokeWidth * scale : 0;
@@ -486,7 +493,7 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
     WebkitBackgroundClip: webkitBackgroundClip,
     WebkitTextFillColor: webkitTextFillColor,
     textShadow: !useDropShadow && shadowParts ? shadowParts : "none",
-    filter: useDropShadow ? `drop-shadow(${shadowParts})` : undefined,
+    filter: [glowFilter, useDropShadow ? `drop-shadow(${shadowParts})` : null].filter(Boolean).join(" ") || undefined,
     opacity: layer.opacity / 100,
     // pre: no wrapping, but \n renders as a line break (multi-line layers).
     whiteSpace: "pre",
