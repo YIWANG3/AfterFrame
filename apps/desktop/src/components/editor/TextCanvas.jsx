@@ -661,6 +661,13 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
   const shadow = layer.shadow
     ? `drop-shadow(${layer.shadowX * scale}px ${layer.shadowY * scale}px ${layer.shadowBlur * scale}px ${hexToRgba(layer.shadowColor, layer.shadowOpacity / 100)})`
     : undefined;
+  // Outer glow — stacked zero-offset colored drop-shadows (one is too faint).
+  const glow = layer.glow
+    ? Array.from({ length: layer.glowIntensity ?? 2 }, () =>
+        `drop-shadow(0px 0px ${(layer.glowBlur ?? 24) * scale}px ${hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100)})`
+      ).join(" ")
+    : undefined;
+  const filterCss = [glow, shadow].filter(Boolean).join(" ") || undefined;
 
   // Runtime outline via SVG feMorphology — dilate alpha → flood color → composite under the source.
   // outlineWidth is in image-px (matches sticker scale) so it grows with zoom.
@@ -681,7 +688,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
         userSelect: "none",
         zIndex: isSelected ? 2 : 1,
         opacity: layer.opacity / 100,
-        filter: shadow,
+        filter: filterCss,
         pointerEvents: "auto",
       }}
       onPointerDown={(e) => {

@@ -95,6 +95,24 @@ function drawStickerLayer(ctx, scale, px, py, canvasWidth, layer, stickerImageCa
   }
   offCtx.drawImage(img, pad, pad, widthPx, heightPx);
 
+  // Outer glow — draw far off-canvas with the shadow offset pulling the halo
+  // back into place, so only the glow lands (no double-stamping the sticker).
+  // ctx.shadowOffset* is DEVICE-space while our draw offset is in the rotated
+  // local frame, hence the cos/sin correction.
+  if (layer.glow) {
+    const rad = (((layer.rotation || 0) % 360) * Math.PI) / 180;
+    const L = 100000;
+    ctx.save();
+    ctx.shadowColor = hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100);
+    ctx.shadowBlur = (layer.glowBlur ?? 24) * scale;
+    ctx.shadowOffsetX = Math.cos(rad) * L;
+    ctx.shadowOffsetY = Math.sin(rad) * L;
+    for (let i = 0; i < (layer.glowIntensity ?? 2); i++) {
+      ctx.drawImage(off, -widthPx / 2 - pad - L, -heightPx / 2 - pad);
+    }
+    ctx.restore();
+  }
+
   ctx.drawImage(off, -widthPx / 2 - pad, -heightPx / 2 - pad);
   ctx.restore();
 }

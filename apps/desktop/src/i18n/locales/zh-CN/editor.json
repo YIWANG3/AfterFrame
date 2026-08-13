@@ -104,7 +104,9 @@
     "caseTitle": "首字母大写",
     "letterSpacing": "字间距",
     "lineHeight": "行高",
-    "addHandwriting": "AI 手写字"
+    "addHandwriting": "AI 手写字",
+    "glow": "外发光",
+    "glowIntensity": "强度"
   },
   "sticker": {
     "title": "贴纸",

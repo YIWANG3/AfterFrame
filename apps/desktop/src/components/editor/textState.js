@@ -243,6 +243,12 @@ export function createStickerLayer({ stickerPath, naturalWidth, naturalHeight, s
     outlineWidth: 0,
     outlineColor: "#ffffff",
     outlineOpacity: 100,
+    // Outer glow — zero-offset colored blur stacked `glowIntensity` times.
+    glow: false,
+    glowColor: "#ffd76a",
+    glowBlur: 24,
+    glowOpacity: 80,
+    glowIntensity: 2,
     zPosition: 1.0,
     ...overrides,
   };
