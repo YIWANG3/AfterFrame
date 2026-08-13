@@ -91,7 +91,7 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 
 ![AI 手写字](docs/assets/editor-handwriting.png)
 
-![AI 手写字上画布](docs/assets/editor-handwriting-result.png)
+![AI 手写字作品（AfterFrame 制作）](docs/assets/editor-handwriting-gallery.jpg)
 
 - **蒙层图层**：可叠加的纯色/渐变压暗层，让标题在复杂背景上保持可读。蒙层就是普通图层：可与文字、贴纸自由排序、可叠多层，Apply 时一并烘焙进图像
 

@@ -91,7 +91,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 ![AI Handwriting](docs/assets/editor-handwriting.png)
 
-![AI Handwriting on canvas](docs/assets/editor-handwriting-result.png)
+![AI Handwriting — made with AfterFrame](docs/assets/editor-handwriting-gallery.jpg)
 
 - **Overlay layers** — stackable solid/gradient washes that dim the photo for readable titles. They are normal layers: reorder them against text and stickers, add several, and they bake into the image on Apply
 
