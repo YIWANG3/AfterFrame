@@ -1489,12 +1489,15 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
             paint={{
               mode: "solid",
               color: layer.outlineColor || "#ffffff",
-              opacity: 1,
+              opacity: (layer.outlineOpacity ?? 100) / 100,
               gradient: { from: "#fff", fromOpacity: 1, to: "#000", toOpacity: 1, angle: 90 },
             }}
             availableModes={["solid"]}
             onPaintUpdate={(patch) => {
-              if (patch.color !== undefined) update(layer.id, { outlineColor: patch.color });
+              const next = {};
+              if (patch.color !== undefined) next.outlineColor = patch.color;
+              if (patch.opacity !== undefined) next.outlineOpacity = Math.round(patch.opacity * 100);
+              if (Object.keys(next).length) update(layer.id, next);
             }}
             width={layer.outlineWidth}
             maxWidth={200}

@@ -242,6 +242,7 @@ export function createStickerLayer({ stickerPath, naturalWidth, naturalHeight, s
     // 0 = no extra outline.
     outlineWidth: 0,
     outlineColor: "#ffffff",
+    outlineOpacity: 100,
     zPosition: 1.0,
     ...overrides,
   };

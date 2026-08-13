@@ -699,7 +699,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
           <defs>
             <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
               <feMorphology in="SourceAlpha" operator="dilate" radius={outlineWidth} result="dilated" />
-              <feFlood floodColor={layer.outlineColor || "#ffffff"} result="floodColor" />
+              <feFlood floodColor={layer.outlineColor || "#ffffff"} floodOpacity={(layer.outlineOpacity ?? 100) / 100} result="floodColor" />
               <feComposite in="floodColor" in2="dilated" operator="in" result="outline" />
               <feMerge>
                 <feMergeNode in="outline" />

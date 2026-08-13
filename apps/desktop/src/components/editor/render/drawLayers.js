@@ -89,7 +89,7 @@ function drawStickerLayer(ctx, scale, px, py, canvasWidth, layer, stickerImageCa
       );
     }
     mCtx.globalCompositeOperation = "source-in";
-    mCtx.fillStyle = layer.outlineColor || "#ffffff";
+    mCtx.fillStyle = hexToRgba(layer.outlineColor || "#ffffff", (layer.outlineOpacity ?? 100) / 100);
     mCtx.fillRect(0, 0, offW, offH);
     offCtx.drawImage(maskCanvas, 0, 0);
   }
