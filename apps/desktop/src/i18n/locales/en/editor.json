@@ -104,7 +104,9 @@
     "caseTitle": "Title Case",
     "letterSpacing": "Spacing",
     "lineHeight": "Line height",
-    "addHandwriting": "AI handwriting"
+    "addHandwriting": "AI handwriting",
+    "glow": "Glow",
+    "glowIntensity": "Intensity"
   },
   "sticker": {
     "title": "Sticker",

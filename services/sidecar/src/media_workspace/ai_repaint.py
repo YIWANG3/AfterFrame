@@ -47,7 +47,17 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
     except (OSError, ValueError):  # network/timeout + malformed JSON
         return ARK_MODELS
 
-    results: list[dict[str, str]] = []
+    def snapshot_key(model_id: str) -> str:
+        # Trailing date snapshot: either YYMMDD or YYYYMMDD — normalize so
+        # "250828" (2025-08-28) sorts below "20260415" (2026-04-15).
+        tail = model_id.rsplit("-", 1)[-1]
+        if tail.isdigit():
+            return tail if len(tail) == 8 else f"20{tail}"
+        return ""
+
+    # Several dated snapshots share one product name (e.g. two 4.0 releases)
+    # — keep the newest per display name.
+    by_name: dict[str, dict[str, str]] = {}
     for m in body.get("data", []):
         model_id = m.get("id", "")
         if "seedream" not in model_id.lower():
@@ -57,7 +67,10 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
         # "doubao-seedream-4-5" → "Seedream 4.5"
         base = (m.get("name") or model_id).replace("doubao-", "")
         pretty = base.replace("seedream-", "Seedream ").replace("-", ".").replace(".pro", " Pro").replace(".lite", " Lite")
-        results.append({"id": model_id, "name": pretty})
+        prev = by_name.get(pretty)
+        if prev is None or snapshot_key(model_id) > snapshot_key(prev["id"]):
+            by_name[pretty] = {"id": model_id, "name": pretty}
+    results = list(by_name.values())
     return results if results else ARK_MODELS
 
 JIMENG_MODELS = [
@@ -100,13 +113,22 @@ def list_gemini_models(api_key: str) -> list[dict[str, str]]:
     except (OSError, ValueError):
         return GEMINI_FALLBACK_MODELS
 
-    results: list[dict[str, str]] = []
+    # Google lists several ids under one displayName (e.g. gemini-3-pro-image
+    # AND gemini-3-pro-image-preview are both "Nano Banana Pro") — dedupe by
+    # display name, preferring the stable (non "-preview") id.
+    by_name: dict[str, dict[str, str]] = {}
     for m in body.get("models", []):
         name = m.get("name", "")
         model_id = name.split("/")[-1] if "/" in name else name
         methods = m.get("supportedGenerationMethods", [])
-        if "generateContent" in methods and "image" in model_id.lower():
-            results.append({"id": model_id, "name": m.get("displayName", model_id)})
+        if "generateContent" not in methods or "image" not in model_id.lower():
+            continue
+        display = m.get("displayName", model_id)
+        entry = {"id": model_id, "name": display}
+        prev = by_name.get(display)
+        if prev is None or (prev["id"].endswith("-preview") and not model_id.endswith("-preview")):
+            by_name[display] = entry
+    results = list(by_name.values())
     return results if results else GEMINI_FALLBACK_MODELS
 
 

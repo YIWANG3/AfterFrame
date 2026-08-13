@@ -202,6 +202,12 @@ export function createDefaultLayer(overrides = {}) {
     shadowBlur: 8,
     shadowColor: "#000000",
     shadowOpacity: 60,
+    // Outer glow — zero-offset colored blur stacked `glowIntensity` times.
+    glow: false,
+    glowColor: "#ffd76a",
+    glowBlur: 24,
+    glowOpacity: 80,
+    glowIntensity: 2,
     x: 0.5,
     y: 0.5,
     rotation: 0,
@@ -242,6 +248,13 @@ export function createStickerLayer({ stickerPath, naturalWidth, naturalHeight, s
     // 0 = no extra outline.
     outlineWidth: 0,
     outlineColor: "#ffffff",
+    outlineOpacity: 100,
+    // Outer glow — zero-offset colored blur stacked `glowIntensity` times.
+    glow: false,
+    glowColor: "#ffd76a",
+    glowBlur: 24,
+    glowOpacity: 80,
+    glowIntensity: 2,
     zPosition: 1.0,
     ...overrides,
   };

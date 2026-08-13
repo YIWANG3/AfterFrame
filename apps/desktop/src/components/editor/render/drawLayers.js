@@ -89,11 +89,29 @@ function drawStickerLayer(ctx, scale, px, py, canvasWidth, layer, stickerImageCa
       );
     }
     mCtx.globalCompositeOperation = "source-in";
-    mCtx.fillStyle = layer.outlineColor || "#ffffff";
+    mCtx.fillStyle = hexToRgba(layer.outlineColor || "#ffffff", (layer.outlineOpacity ?? 100) / 100);
     mCtx.fillRect(0, 0, offW, offH);
     offCtx.drawImage(maskCanvas, 0, 0);
   }
   offCtx.drawImage(img, pad, pad, widthPx, heightPx);
+
+  // Outer glow — draw far off-canvas with the shadow offset pulling the halo
+  // back into place, so only the glow lands (no double-stamping the sticker).
+  // ctx.shadowOffset* is DEVICE-space while our draw offset is in the rotated
+  // local frame, hence the cos/sin correction.
+  if (layer.glow) {
+    const rad = (((layer.rotation || 0) % 360) * Math.PI) / 180;
+    const L = 100000;
+    ctx.save();
+    ctx.shadowColor = hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100);
+    ctx.shadowBlur = (layer.glowBlur ?? 24) * scale;
+    ctx.shadowOffsetX = Math.cos(rad) * L;
+    ctx.shadowOffsetY = Math.sin(rad) * L;
+    for (let i = 0; i < (layer.glowIntensity ?? 2); i++) {
+      ctx.drawImage(off, -widthPx / 2 - pad - L, -heightPx / 2 - pad);
+    }
+    ctx.restore();
+  }
 
   ctx.drawImage(off, -widthPx / 2 - pad, -heightPx / 2 - pad);
   ctx.restore();
@@ -240,6 +258,20 @@ function drawTextLayer(ctx, scale, px, py, layer) {
 
   // Paint onto the main canvas with shadow enabled.
   ctx.globalAlpha = layer.opacity / 100;
+  // Outer glow — same off-canvas trick as stickers (see drawStickerLayer).
+  if (layer.glow) {
+    const rad = (((layer.rotation || 0) % 360) * Math.PI) / 180;
+    const L = 100000;
+    ctx.save();
+    ctx.shadowColor = hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100);
+    ctx.shadowBlur = (layer.glowBlur ?? 24) * scale;
+    ctx.shadowOffsetX = Math.cos(rad) * L;
+    ctx.shadowOffsetY = Math.sin(rad) * L;
+    for (let i = 0; i < (layer.glowIntensity ?? 2); i++) {
+      ctx.drawImage(off, alignOffsetX - offX - L, -offY);
+    }
+    ctx.restore();
+  }
   if (layer.shadow) {
     ctx.shadowColor = hexToRgba(layer.shadowColor, layer.shadowOpacity / 100);
     ctx.shadowBlur = layer.shadowBlur * scale;

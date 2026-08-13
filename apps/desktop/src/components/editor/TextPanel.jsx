@@ -516,6 +516,8 @@ export default function TextPanel({
                 <ShadowFieldRow layer={current} onChange={(patch) => update(current.id, patch)} />
               )}
             </Section>
+
+            <GlowSection layer={current} update={update} />
           </>
           );
         })()}
@@ -1489,12 +1491,15 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
             paint={{
               mode: "solid",
               color: layer.outlineColor || "#ffffff",
-              opacity: 1,
+              opacity: (layer.outlineOpacity ?? 100) / 100,
               gradient: { from: "#fff", fromOpacity: 1, to: "#000", toOpacity: 1, angle: 90 },
             }}
             availableModes={["solid"]}
             onPaintUpdate={(patch) => {
-              if (patch.color !== undefined) update(layer.id, { outlineColor: patch.color });
+              const next = {};
+              if (patch.color !== undefined) next.outlineColor = patch.color;
+              if (patch.opacity !== undefined) next.outlineOpacity = Math.round(patch.opacity * 100);
+              if (Object.keys(next).length) update(layer.id, next);
             }}
             width={layer.outlineWidth}
             maxWidth={200}
@@ -1510,7 +1515,51 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
           <ShadowFieldRow layer={layer} onChange={(patch) => update(layer.id, patch)} />
         )}
       </Section>
+
+      <GlowSection layer={layer} update={update} />
     </>
+  );
+}
+
+/* Outer glow — shared by the text and sticker inspectors: stacked zero-offset
+   colored blur; blur size rides the stroke-row width input, intensity = number
+   of stacked passes. */
+function GlowSection({ layer, update }) {
+  const { t } = useTranslation("editor");
+  return (
+    <Section label={t("text.glow")} right={
+      <Switch on={layer.glow} onToggle={() => update(layer.id, { glow: !layer.glow })} />
+    }>
+      {layer.glow && (
+        <>
+          <StrokeFieldRow
+            paint={{
+              mode: "solid",
+              color: layer.glowColor || "#ffd76a",
+              opacity: (layer.glowOpacity ?? 80) / 100,
+              gradient: { from: "#fff", fromOpacity: 1, to: "#000", toOpacity: 1, angle: 90 },
+            }}
+            availableModes={["solid"]}
+            onPaintUpdate={(patch) => {
+              const next = {};
+              if (patch.color !== undefined) next.glowColor = patch.color;
+              if (patch.opacity !== undefined) next.glowOpacity = Math.round(patch.opacity * 100);
+              if (Object.keys(next).length) update(layer.id, next);
+            }}
+            width={layer.glowBlur ?? 24}
+            maxWidth={120}
+            onWidthChange={(v) => update(layer.id, { glowBlur: v })}
+          />
+          <SliderRow
+            label={t("text.glowIntensity")}
+            min={1}
+            max={4}
+            value={layer.glowIntensity ?? 2}
+            onChange={(v) => update(layer.id, { glowIntensity: v })}
+          />
+        </>
+      )}
+    </Section>
   );
 }
 

@@ -432,6 +432,10 @@ function OverlayLayerEl({ layer, rect }) {
         height: `${height}px`,
         opacity: isFill ? (layer.opacity ?? 100) / 100 : 1,
         background: scrimToCss(layer),
+        // Text/sticker elements carry zIndex 1 (2 while selected). Match them
+        // so sibling DOM order — i.e. the layer array order — decides who
+        // paints on top, same as the export path.
+        zIndex: 1,
       }}
     />
   );
@@ -465,6 +469,13 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
   // can show through the transparent areas. drop-shadow operates on the actual
   // rendered output, so it always paints behind the gradient text.
   const useDropShadow = layer.fillMode === "gradient" && shadowParts;
+  // Outer glow — stacked zero-offset drop-shadows on the glyph silhouette
+  // (works for solid and gradient fills alike).
+  const glowFilter = layer.glow
+    ? Array.from({ length: layer.glowIntensity ?? 2 }, () =>
+        `drop-shadow(0px 0px ${(layer.glowBlur ?? 24) * scale}px ${hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100)})`
+      ).join(" ")
+    : null;
 
   const strokeWidth = layer.strokeEnabled && layer.strokeWidth > 0
     ? layer.strokeWidth * scale : 0;
@@ -482,7 +493,7 @@ function TextLayerEl({ layer, fontSize, scale, px, py, isSelected, isEditing, on
     WebkitBackgroundClip: webkitBackgroundClip,
     WebkitTextFillColor: webkitTextFillColor,
     textShadow: !useDropShadow && shadowParts ? shadowParts : "none",
-    filter: useDropShadow ? `drop-shadow(${shadowParts})` : undefined,
+    filter: [glowFilter, useDropShadow ? `drop-shadow(${shadowParts})` : null].filter(Boolean).join(" ") || undefined,
     opacity: layer.opacity / 100,
     // pre: no wrapping, but \n renders as a line break (multi-line layers).
     whiteSpace: "pre",
@@ -657,6 +668,13 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
   const shadow = layer.shadow
     ? `drop-shadow(${layer.shadowX * scale}px ${layer.shadowY * scale}px ${layer.shadowBlur * scale}px ${hexToRgba(layer.shadowColor, layer.shadowOpacity / 100)})`
     : undefined;
+  // Outer glow — stacked zero-offset colored drop-shadows (one is too faint).
+  const glow = layer.glow
+    ? Array.from({ length: layer.glowIntensity ?? 2 }, () =>
+        `drop-shadow(0px 0px ${(layer.glowBlur ?? 24) * scale}px ${hexToRgba(layer.glowColor || "#ffd76a", (layer.glowOpacity ?? 80) / 100)})`
+      ).join(" ")
+    : undefined;
+  const filterCss = [glow, shadow].filter(Boolean).join(" ") || undefined;
 
   // Runtime outline via SVG feMorphology — dilate alpha → flood color → composite under the source.
   // outlineWidth is in image-px (matches sticker scale) so it grows with zoom.
@@ -677,7 +695,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
         userSelect: "none",
         zIndex: isSelected ? 2 : 1,
         opacity: layer.opacity / 100,
-        filter: shadow,
+        filter: filterCss,
         pointerEvents: "auto",
       }}
       onPointerDown={(e) => {
@@ -695,7 +713,7 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
           <defs>
             <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
               <feMorphology in="SourceAlpha" operator="dilate" radius={outlineWidth} result="dilated" />
-              <feFlood floodColor={layer.outlineColor || "#ffffff"} result="floodColor" />
+              <feFlood floodColor={layer.outlineColor || "#ffffff"} floodOpacity={(layer.outlineOpacity ?? 100) / 100} result="floodColor" />
               <feComposite in="floodColor" in2="dilated" operator="in" result="outline" />
               <feMerge>
                 <feMergeNode in="outline" />

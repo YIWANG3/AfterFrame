@@ -15,12 +15,12 @@ const PICKER_OVERSCAN_PX = 600;
 const PICKER_PRELOAD_PX = 1200;
 
 function builtInSources(summary) {
-  const items = [{ id: "all", labelKey: "collage.filterAll" }];
+  const items = [{ id: "all", labelKey: "filterAll" }];
   if (Number(summary?.rated_count ?? 0) > 0) {
-    items.push({ id: "rated", labelKey: "collage.filterRated" });
+    items.push({ id: "rated", labelKey: "filterRated" });
   }
   if (Number(summary?.raw_assets ?? 0) > 0) {
-    items.push({ id: "matched", labelKey: "collage.filterMatched" });
+    items.push({ id: "matched", labelKey: "filterMatched" });
   }
   return items;
 }
@@ -143,15 +143,19 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showDropdown]);
 
-  const items = useMemo(() => {
-    const used = excludeIds instanceof Set ? excludeIds : new Set(excludeIds || []);
-    return sourceItems.filter((item) => !used.has(item.asset_id));
-  }, [sourceItems, excludeIds]);
+  // Items already on the canvas stay VISIBLE but disabled (grayed + check) —
+  // hiding them read as "photos missing" rather than "already added".
+  const usedIds = useMemo(
+    () => (excludeIds instanceof Set ? excludeIds : new Set(excludeIds || [])),
+    [excludeIds]
+  );
+  const items = sourceItems;
 
   const selectedItems = useMemo(() => Array.from(selectedItemsById.values()), [selectedItemsById]);
   const selectedIds = useMemo(() => new Set(selectedItemsById.keys()), [selectedItemsById]);
 
   const toggleSelected = useCallback((item) => {
+    if (usedIds.has(item.asset_id)) return;
     setSelectedItemsById((current) => {
       const next = new Map(current);
       if (next.has(item.asset_id)) {
@@ -161,7 +165,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
       }
       return next;
     });
-  }, []);
+  }, [usedIds]);
 
   const addSelected = useCallback(() => {
     if (!selectedItems.length) return;
@@ -310,15 +314,20 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
               {visibleItems.map(({ item, left, top }) => {
                 const src = item.preview_path || item.image_preview_path || item.raw_preview_path;
                 const selected = selectedIds.has(item.asset_id);
+                const used = usedIds.has(item.asset_id);
                 return (
                   <button
                     key={item.asset_id}
                     type="button"
+                    disabled={used}
+                    title={used ? t("alreadyAdded") : undefined}
                     className={[
                       "group absolute overflow-hidden rounded-md bg-panel2 transition",
-                      selected
-                        ? "ring-2 ring-[rgb(var(--accent-color))]"
-                        : "hover:ring-2 hover:ring-[rgb(var(--accent-color)/0.6)]",
+                      used
+                        ? "cursor-default"
+                        : selected
+                          ? "ring-2 ring-[rgb(var(--accent-color))]"
+                          : "hover:ring-2 hover:ring-[rgb(var(--accent-color)/0.6)]",
                     ].join(" ")}
                     style={{
                       left: `${left}px`,
@@ -334,7 +343,10 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                         alt=""
                         loading="lazy"
                         decoding="async"
-                        className="absolute inset-0 h-full w-full object-cover"
+                        className={[
+                          "absolute inset-0 h-full w-full object-cover",
+                          used ? "opacity-40 saturate-50" : "",
+                        ].join(" ")}
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-app text-[10px] text-muted2">{t("noPreview")}</div>
@@ -342,12 +354,12 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                     <span
                       className={[
                         "absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border text-black shadow-sm transition",
-                        selected
+                        used || selected
                           ? "border-[rgb(var(--accent-color))] bg-[rgb(var(--accent-color))] opacity-100"
                           : "border-text/55 bg-app/70 opacity-75 group-hover:opacity-100",
                       ].join(" ")}
                     >
-                      {selected ? <Check className="h-3.5 w-3.5" /> : null}
+                      {used || selected ? <Check className="h-3.5 w-3.5" /> : null}
                     </span>
                   </button>
                 );

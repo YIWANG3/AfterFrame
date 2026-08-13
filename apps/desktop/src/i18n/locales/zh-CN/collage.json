@@ -33,5 +33,6 @@
   "replace": "替换",
   "pickFromScreen": "从屏幕取色",
   "presets": "预设",
-  "reverseStops": "反转渐变"
+  "reverseStops": "反转渐变",
+  "alreadyAdded": "已在拼图中"
 }

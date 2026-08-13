@@ -83,6 +83,26 @@ export function getProviderType(typeKey) {
   return PROVIDER_TYPES.find((t) => t.type === typeKey) || null;
 }
 
+// Defensive display-time dedupe: stale modelsCache entries may hold several
+// ids under one display name (Gemini stable + "-preview", Ark dated
+// snapshots). Keep one per name, preferring the stable / newer id.
+export function dedupeModels(models) {
+  const byName = new Map();
+  for (const m of models || []) {
+    const key = m.name || m.id;
+    const prev = byName.get(key);
+    if (!prev) {
+      byName.set(key, m);
+      continue;
+    }
+    const prevPreview = /-preview$/.test(prev.id || "");
+    const curPreview = /-preview$/.test(m.id || "");
+    if (prevPreview && !curPreview) byName.set(key, m);
+    else if (prevPreview === curPreview && String(m.id) > String(prev.id)) byName.set(key, m);
+  }
+  return [...byName.values()];
+}
+
 export function generateInstanceId() {
   return `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }

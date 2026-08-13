@@ -190,6 +190,10 @@ dd {
 .hero-screen {
   transform: translateY(8px);
 }
+.handwriting-showcase {
+  width: min(100%, 620px);
+  justify-self: center;
+}
 .strip {
   padding: 18px 4vw;
   border-top: 1px solid var(--line);

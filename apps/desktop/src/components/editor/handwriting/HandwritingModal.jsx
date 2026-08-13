@@ -21,6 +21,7 @@ import {
   TEXT_IMAGE_DEFAULT_MODELS,
   TEXT_IMAGE_CAPABLE_TYPES,
 } from "./styles";
+import { dedupeModels } from "../../ai/providers";
 import { matteHandwriting, colorizeHandwriting, loadHandwritingImage } from "../render/handwritingMatte";
 import { localFileUrl as mediaUrlFor } from "../../../utils/format";
 
@@ -169,7 +170,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
     const ids = new Set(cached.map((m) => m.id));
     const merged = [...cached];
     if (fallback && !ids.has(fallback)) merged.unshift({ id: fallback, name: fallback });
-    return merged;
+    return dedupeModels(merged);
   }, [modelsByProvider, providerId, providerType]);
 
   // If the prompt still references {text}, the text field must be filled;
