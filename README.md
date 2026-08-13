@@ -83,15 +83,23 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 ![Crop Editor](docs/assets/editor-crop.png)
 
-- **Text Overlay** with system fonts, solid/gradient fill, stroke, shadow, background, opacity, and snap-to-center guides
+- **Text Overlay** with system fonts, solid/gradient fill, stroke, shadow, outer glow, background, opacity, and snap-to-center guides
 
 ![Text Editor](docs/assets/editor-text.png)
+
+- **AI Handwriting (BYOK)** — generate handwritten-calligraphy titles no font could give you. 17 built-in style presets (brush, pen signature, chalk, marker, English scripts — every preset ships its own reference image, all self-generated), or upload any handwriting sample as a style reference. The full prompt is visible and editable, long sentences auto-break at punctuation, and the result is matted locally into an alpha sticker you can recolor (solid or gradient) at any time — no re-generation needed. Works with Gemini, GPT Image, Seedream (Volcengine Ark), or Jimeng
+
+![AI Handwriting](docs/assets/editor-handwriting.png)
+
+![AI Handwriting on canvas](docs/assets/editor-handwriting-result.png)
+
+- **Overlay layers** — stackable solid/gradient washes that dim the photo for readable titles. They are normal layers: reorder them against text and stickers, add several, and they bake into the image on Apply
 
 - **Depth-aware Text** — on-device CoreML depth inference (Depth Anything V2) lets text sit behind subjects in the scene, iPhone-wallpaper style. Bring your own model via the model picker; preference is persisted
 
 ![Depth-aware Text](docs/assets/editor-text-depth.png)
 
-- **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, and rotation controls as text layers
+- **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, rotation, outline (with opacity), shadow, and outer-glow controls as text layers
 
 ![Sticker Library](docs/assets/sticker-library.png)
 
@@ -116,7 +124,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 ### AI Repaint (BYOK)
 Bring your own API key. AfterFrame does not bundle or proxy any AI service — you connect your own provider and all requests go directly from your machine to the API.
 
-- Supports Gemini, GPT Image, Jimeng, or any OpenAI-compatible endpoint — manage providers and per-provider model defaults in Settings → AI Repaint
+- Supports Gemini, GPT Image, Seedream (Volcengine Ark), Jimeng, or any OpenAI-compatible endpoint — manage providers and per-provider model defaults in Settings → AI Repaint; model lists refresh live from each provider's API
 - 25 built-in style prompts (oil painting, anime, watercolor, ink, concept art, and more)
 - Side-by-side and stacked before/after comparison
 - Version history for every repaint

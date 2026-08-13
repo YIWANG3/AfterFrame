@@ -83,15 +83,23 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 
 ![裁剪编辑器](docs/assets/editor-crop.png)
 
-- **文字叠加**：系统字体、纯色/渐变填充、描边、阴影、背景、透明度、自动吸附居中线
+- **文字叠加**：系统字体、纯色/渐变填充、描边、阴影、外发光、背景、透明度、自动吸附居中线
 
 ![文字编辑器](docs/assets/editor-text.png)
+
+- **AI 手写字（BYOK）**：生成任何字体都给不了的手写书法标题。内置 17 个风格预设（毛笔、钢笔签名、粉笔、马克笔、英文手写等，每个预设自带一张自产参考图），也可上传任意手写样例作为风格参考。完整 prompt 可见可改，长句按标点自动换行；结果在本地抠成透明贴纸，随时换纯色/渐变填充，无需重新生成。支持 Gemini、GPT Image、Seedream（火山方舟）、即梦
+
+![AI 手写字](docs/assets/editor-handwriting.png)
+
+![AI 手写字上画布](docs/assets/editor-handwriting-result.png)
+
+- **蒙层图层**：可叠加的纯色/渐变压暗层，让标题在复杂背景上保持可读。蒙层就是普通图层：可与文字、贴纸自由排序、可叠多层，Apply 时一并烘焙进图像
 
 - **深度感知文字**：本地 CoreML 深度推理（Depth Anything V2），让文字像 iPhone 锁屏壁纸一样落在主体后面。支持选择自定义模型，偏好设置自动持久化
 
 ![深度感知文字](docs/assets/editor-text-depth.png)
 
-- **贴纸**：一键从任意照片中抠出主体（macOS 14+ 使用 VisionKit），存入按 catalog 隔离的贴纸库，可选描边与阴影；再把贴纸作为图层放到其他照片上，深度、不透明度、旋转控件与文字图层共用一套
+- **贴纸**：一键从任意照片中抠出主体（macOS 14+ 使用 VisionKit），存入按 catalog 隔离的贴纸库，可选描边与阴影；再把贴纸作为图层放到其他照片上，深度、不透明度、旋转、描边（含透明度）、阴影、外发光控件与文字图层共用一套
 
 ![贴纸库](docs/assets/sticker-library.png)
 
@@ -116,7 +124,7 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 ### AI 重绘（BYOK）
 自带 API Key 模式。AfterFrame 不内置也不代理任何 AI 服务 — 你自行配置 API 密钥，所有请求从你的电脑直连 API。
 
-- 支持 Gemini、GPT Image、即梦，或任意 OpenAI 兼容端点——在 设置 → AI Repaint 中管理服务商与各自的默认模型
+- 支持 Gemini、GPT Image、Seedream（火山方舟）、即梦，或任意 OpenAI 兼容端点——在 设置 → AI Repaint 中管理服务商与各自的默认模型；模型列表从各家 API 实时拉取
 - 25 个内置风格提示词（油画、动漫、水彩、水墨、概念艺术等）
 - 并排和上下对比的前后效果预览
 - 每次重绘的版本历史记录
