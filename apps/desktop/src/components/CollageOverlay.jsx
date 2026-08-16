@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Download, Loader2, X, ChevronDown, Folder, Images } from "lucide-react";
+import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
 import CollagePanel from "./collage/CollagePanel";
+import BatchPanel from "./collage/BatchPanel";
+import { TemplateGrid } from "./collage/PanelControls";
 import { getTemplatesForCount } from "./collage/collageTemplates";
+import { computeGroups, orderImages, MAX_TEMPLATE_COUNT } from "./collage/collageBatch";
 
 const PANEL_WIDTH = 300;
 const PAGE_SIZE = 48;
+// Batch page preview width: landscape/square pages are 320px wide; portrait
+// pages shrink so their height matches a square page's.
+const BATCH_PAGE_WIDTH = (ratio) => (ratio >= 1 ? 320 : Math.round(320 * ratio));
 const PICKER_COLUMNS = 4;
 const PICKER_GAP = 4;
 const PICKER_HORIZONTAL_PADDING = 24;
@@ -409,13 +415,83 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   const [selectedCellIdx, setSelectedCellIdx] = useState(-1);
   const [selectedCellState, setSelectedCellState] = useState({ pan: { x: 0, y: 0 }, zoom: 1 });
 
+  // Batch mode
+  const [mode, setMode] = useState("single");
+  const [groupSize, setGroupSize] = useState(4);
+  const [orderBy, setOrderBy] = useState("selection");
+  const [remainderMode, setRemainderMode] = useState("own");
+  const [batchTemplateId, setBatchTemplateId] = useState(null);
+  const [pageOverrides, setPageOverrides] = useState({});
+  const [layoutPopoverPage, setLayoutPopoverPage] = useState(-1);
+  const [namePrefix, setNamePrefix] = useState("collage");
+  const [exportProgress, setExportProgress] = useState(null);
+  const batchPageRefs = useRef([]);
+  // Cross-page drag: { fromPage, fromCell, item, x, y, target: {page, cell} | null }
+  const [cellDrag, setCellDrag] = useState(null);
+  const cellDragRef = useRef(null);
+  // Pan/zoom per image, shared by every batch page canvas (keyed by asset).
+  const batchCellStates = useRef(new Map());
+
   // Initialize from items prop
   useEffect(() => {
     if (!open || !items?.length) return;
     setImages(items);
     const templates = getTemplatesForCount(items.length);
     setTemplate(templates[0] || null);
+    // Single mode can only lay out up to MAX_TEMPLATE_COUNT images on one
+    // canvas; anything beyond that must be split, so default to batch.
+    setMode(items.length > MAX_TEMPLATE_COUNT ? "batch" : "single");
+    setPageOverrides({});
+    setLayoutPopoverPage(-1);
   }, [open, items]);
+
+  // ── Batch derivations ──
+  const orderedImages = useMemo(() => orderImages(images, orderBy), [images, orderBy]);
+  const groups = useMemo(
+    () => computeGroups(orderedImages, groupSize, remainderMode),
+    [orderedImages, groupSize, remainderMode],
+  );
+
+  // Keep the global batch template valid for the current group size
+  useEffect(() => {
+    const pool = getTemplatesForCount(groupSize);
+    if (!pool.some((tp) => tp.id === batchTemplateId)) {
+      setBatchTemplateId(pool[0]?.id || null);
+    }
+  }, [groupSize, batchTemplateId]);
+
+  // Per-page layouts are indexed by page; anything that changes the page
+  // structure (image count, grouping) invalidates them. Reordering (drag swap,
+  // sort) and the HD-preview patch keep the structure, so they don't.
+  useEffect(() => {
+    setPageOverrides({});
+    setLayoutPopoverPage(-1);
+  }, [images.length, groupSize, remainderMode]);
+
+  // Shared batch pan/zoom store: drop entries for images no longer in the pool.
+  useEffect(() => {
+    const live = new Set(images.map((img) => img.asset_id || img.image_path));
+    for (const key of batchCellStates.current.keys()) {
+      if (!live.has(key)) batchCellStates.current.delete(key);
+    }
+  }, [images]);
+
+  // Panel layout = every page. Picking it also clears per-page tweaks, so the
+  // model stays "panel sets all, card sets one" with no override bookkeeping.
+  function applyLayoutToAllPages(tmplId) {
+    setBatchTemplateId(tmplId);
+    setPageOverrides({});
+  }
+
+  function templateForPage(pageIdx, group) {
+    const pool = getTemplatesForCount(group.length);
+    const overrideId = pageOverrides[pageIdx];
+    if (overrideId) {
+      const found = pool.find((tp) => tp.id === overrideId);
+      if (found) return found;
+    }
+    return pool.find((tp) => tp.id === batchTemplateId) || pool[0] || null;
+  }
 
   // Lazily generate 2000px HD previews for cells that lack one, so the canvas
   // and export render from HD rather than the 512px thumbnail. HD generation is
@@ -470,6 +546,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
       if (e.key === "Escape") {
         if (showPicker) {
           setShowPicker(false);
+        } else if (mode === "batch" && layoutPopoverPage >= 0) {
+          setLayoutPopoverPage(-1);
         } else {
           onClose?.();
         }
@@ -479,7 +557,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, showPicker, onClose]);
+  }, [open, showPicker, onClose, mode, layoutPopoverPage]);
 
   async function handleExport() {
     if (!canvasRef.current) return;
@@ -513,6 +591,130 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     }
   }
 
+  // Batch cells reference items from the ordered/grouped view — map them back
+  // to their position in the flat images pool before mutating it.
+  function imageIndexOf(item) {
+    if (!item) return -1;
+    const byIdentity = images.indexOf(item);
+    if (byIdentity >= 0) return byIdentity;
+    return images.findIndex((img) => img.asset_id && img.asset_id === item.asset_id);
+  }
+
+  function beginReplace(item) {
+    const idx = imageIndexOf(item);
+    if (idx < 0) return;
+    setReplaceIndex(idx);
+    setShowPicker(true);
+  }
+
+  function removeBatchImage(item) {
+    const idx = imageIndexOf(item);
+    if (idx < 0) return;
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  // ── Cross-page drag & swap ──
+  // Same gesture family as single mode: dragging inside a cell pans the photo
+  // (the canvas handles that); dragging OUT of the cell becomes a swap —
+  // releasing over any cell on any page swaps the two images. Swapping is a
+  // reorder of the flat pool, so grouping re-derives and both pages update.
+  function swapImages(a, b) {
+    if (!a || !b || a === b) return;
+    // A custom sort would immediately undo the swap — bake the current order
+    // in and switch to manual ordering first.
+    const base = orderBy === "selection" ? images : orderedImages;
+    const ia = base.indexOf(a);
+    const ib = base.indexOf(b);
+    if (ia < 0 || ib < 0) return;
+    const next = [...base];
+    [next[ia], next[ib]] = [next[ib], next[ia]];
+    if (orderBy !== "selection") setOrderBy("selection");
+    setImages(next);
+  }
+
+  function findDropTarget(clientX, clientY) {
+    const refs = batchPageRefs.current;
+    for (let p = 0; p < groups.length; p++) {
+      const cell = refs[p]?.hitTestClient?.(clientX, clientY) ?? -1;
+      if (cell >= 0 && cell < groups[p].length) return { page: p, cell };
+    }
+    return null;
+  }
+
+  // Called by a page canvas once a drag leaves its source cell (drags that
+  // stay inside the cell are pans, handled by the canvas itself).
+  function beginCellDrag(pageIdx, cellIdx, e) {
+    const item = groups[pageIdx]?.[cellIdx];
+    if (!item) return;
+    e.preventDefault();
+    const start = { fromPage: pageIdx, fromCell: cellIdx, item, x: e.clientX, y: e.clientY, moved: true, target: findDropTarget(e.clientX, e.clientY) };
+    if (start.target && start.target.page === pageIdx && start.target.cell === cellIdx) start.target = null;
+    cellDragRef.current = start;
+    setCellDrag(start);
+    setLayoutPopoverPage(-1);
+
+    const onMove = (ev) => {
+      const d = cellDragRef.current;
+      if (!d) return;
+      const target = findDropTarget(ev.clientX, ev.clientY);
+      const sameAsSource = target && target.page === d.fromPage && target.cell === d.fromCell;
+      cellDragRef.current = { ...d, x: ev.clientX, y: ev.clientY, target: sameAsSource ? null : target };
+      setCellDrag(cellDragRef.current);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const d = cellDragRef.current;
+      cellDragRef.current = null;
+      setCellDrag(null);
+      if (d?.moved && d.target) {
+        const other = groups[d.target.page]?.[d.target.cell];
+        swapImages(d.item, other);
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  async function handleBatchExport() {
+    if (!groups.length || exporting) return;
+    const dir = await window.mediaWorkspace?.pickDirectory?.();
+    if (!dir) return;
+    setExporting(true);
+    setExportProgress({ done: 0, total: groups.length });
+    const prefix = (namePrefix || "collage").replace(/[/\\:]/g, "_").trim() || "collage";
+    let exportedAny = false;
+    let failed = 0;
+    try {
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        try {
+          const blob = await batchPageRefs.current[i]?.exportToBlob?.(exportWidth);
+          if (!blob) { failed += 1; continue; }
+          const name = `${prefix}_${String(i + 1).padStart(2, "0")}.jpg`;
+          const savePath = `${dir}/${name}`;
+          const buffer = await blob.arrayBuffer();
+          const firstSrc = group[0]?.image_path || null;
+          const sourceAssetIds = group.map((g) => g.asset_id).filter(Boolean);
+          await window.mediaWorkspace?.saveImage?.(savePath, buffer, firstSrc);
+          await window.mediaWorkspace?.quickRegister?.(savePath, firstSrc, sourceAssetIds);
+          exportedAny = true;
+        } catch (err) {
+          failed += 1;
+          console.error(`[Collage] batch export page ${i + 1} failed:`, err);
+        }
+        setExportProgress({ done: i + 1, total: groups.length });
+      }
+      if (failed > 0) console.warn(`[Collage] batch export: ${failed}/${groups.length} pages failed`);
+      if (exportedAny) onExportComplete?.(dir);
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }
+
   // Exclude IDs for picker
   const excludeIds = useMemo(() => new Set(images.map((img) => img.asset_id)), [images]);
 
@@ -522,16 +724,43 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     <div className="fixed inset-0 z-[10200] flex flex-col bg-app text-text">
       {/* Header */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-chrome px-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("title")}</div>
+        <div className="flex items-center gap-3.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("title")}</div>
+          <div className="flex rounded-[7px] bg-app p-0.5">
+            {[
+              { id: "single", label: t("singleMode") },
+              { id: "batch", label: t("batchMode") },
+            ].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className={[
+                  "rounded-[5px] px-3 py-0.5 text-[11px] transition-colors",
+                  mode === m.id ? "bg-panel2 text-text" : "text-muted hover:text-text",
+                ].join(" ")}
+                onClick={() => setMode(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {mode === "batch" && (
+            <div className="text-[11px] text-muted">
+              {t("batchSummary", { images: images.length, size: groupSize, pages: groups.length })}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color)/0.12)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgb(var(--accent-color)/0.18)]"
-            onClick={handleExport}
-            disabled={exporting || images.length < 2}
+            onClick={mode === "batch" ? handleBatchExport : handleExport}
+            disabled={exporting || (mode === "batch" ? groups.length === 0 : images.length < 2)}
           >
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {exporting ? t("exporting") : t("image")}
+            {exporting
+              ? (exportProgress ? t("exportingProgress", exportProgress) : t("exporting"))
+              : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("image"))}
           </button>
           <button
             type="button"
@@ -547,6 +776,115 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
       {/* Body */}
       <div className="flex min-h-0 flex-1">
         {/* Canvas area */}
+        {mode === "batch" ? (
+          <div
+            className="min-w-0 flex-1 overflow-y-auto p-6"
+            data-testid="batch-pages-area"
+            onClick={(e) => {
+              // Click on empty space closes any open per-page layout popover.
+              if (!(e.target instanceof Element) || !e.target.closest("[data-testid='batch-page-card']")) {
+                setLayoutPopoverPage(-1);
+              }
+            }}
+          >
+            {/* Grid as a whole is centered in the area; pages fill each row
+                left→right so a partial last row stays left-aligned. Fixed
+                auto-fit columns give exactly that (flex-wrap can't). */}
+            <div
+              className="grid content-start gap-5"
+              style={{
+                gridTemplateColumns: `repeat(auto-fit, ${BATCH_PAGE_WIDTH(canvasRatio)}px)`,
+                justifyContent: "center",
+              }}
+            >
+              {groups.map((group, gi) => {
+                const tmpl = templateForPage(gi, group);
+                const w = BATCH_PAGE_WIDTH(canvasRatio);
+                const pool = getTemplatesForCount(group.length);
+                const popoverOpen = layoutPopoverPage === gi;
+                const dragTarget = cellDrag?.target?.page === gi ? cellDrag.target.cell : -1;
+                const dragSource = cellDrag?.moved && cellDrag.fromPage === gi ? cellDrag.fromCell : -1;
+                return (
+                  <div key={gi} className="group/page relative" data-testid="batch-page-card">
+                    <div
+                      className={[
+                        "relative overflow-hidden rounded-md ring-1 transition-shadow",
+                        dragTarget >= 0 ? "ring-[rgb(var(--accent-color))]" : "ring-border/80",
+                      ].join(" ")}
+                      style={{ width: `${w}px`, aspectRatio: canvasRatio }}
+                    >
+                      <CollageCanvas
+                        ref={(el) => { batchPageRefs.current[gi] = el; }}
+                        images={group}
+                        template={tmpl}
+                        canvasRatio={canvasRatio}
+                        gap={gap}
+                        padding={padding}
+                        borderRadius={borderRadius}
+                        bgColor={bgColor}
+                        exportWidth={exportWidth}
+                        mode="batch"
+                        sharedStates={batchCellStates.current}
+                        highlightCell={dragTarget}
+                        dimCell={dragSource}
+                        className="h-full w-full"
+                        onCellDragOut={(cellIdx, e) => beginCellDrag(gi, cellIdx, e)}
+                        onReplace={(cellIdx) => beginReplace(group[cellIdx])}
+                        onRemove={(cellIdx) => removeBatchImage(group[cellIdx])}
+                      />
+                      {/* Per-page layout: lives on the card, so "only this page"
+                          needs no explanation. Shown on hover / while open. */}
+                      <button
+                        type="button"
+                        title={t("pageLayoutBtn")}
+                        data-testid="page-layout-btn"
+                        className={[
+                          "absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-black/55 text-white/85 backdrop-blur-sm transition-opacity hover:bg-black/75",
+                          popoverOpen ? "opacity-100" : "opacity-0 group-hover/page:opacity-100",
+                        ].join(" ")}
+                        onClick={(e) => { e.stopPropagation(); setLayoutPopoverPage(popoverOpen ? -1 : gi); }}
+                      >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {popoverOpen && (
+                      <div
+                        className="absolute right-0 top-9 z-20 w-[196px] rounded-lg border border-border/60 bg-chrome p-2 shadow-menu"
+                        data-testid="page-layout-popover"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">
+                          {t("pageTitle", { n: gi + 1, imgs: group.length })}
+                        </div>
+                        <TemplateGrid
+                          templates={pool}
+                          activeId={tmpl?.id}
+                          ratio={canvasRatio || 1}
+                          onSelect={(picked) => setPageOverrides((prev) => ({ ...prev, [gi]: picked.id }))}
+                        />
+                      </div>
+                    )}
+                    <div className="mt-1.5 px-0.5 text-[11px] text-muted">
+                      {t("pageTitle", { n: gi + 1, imgs: group.length })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Drag ghost: thumbnail of the picked-up image following the cursor */}
+            {cellDrag?.moved && (
+              <div
+                className="pointer-events-none fixed z-[10250] h-16 w-16 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md shadow-overlay ring-2 ring-[rgb(var(--accent-color))]"
+                style={{ left: cellDrag.x, top: cellDrag.y }}
+              >
+                {(() => {
+                  const src = cellDrag.item?.preview_path || cellDrag.item?.image_preview_path || cellDrag.item?.image_path;
+                  return src ? <img src={localFileUrl(src)} alt="" className="h-full w-full object-cover" /> : null;
+                })()}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="flex min-w-0 flex-1 items-center justify-center p-8">
           <div
             className="relative"
@@ -585,12 +923,44 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             />
           </div>
         </div>
+        )}
 
         {/* Right panel */}
         <div
           className="shrink-0 overflow-hidden border-l border-border/60 bg-chrome"
           style={{ width: `${PANEL_WIDTH}px` }}
         >
+          {mode === "batch" ? (
+            <BatchPanel
+              imageCount={images.length}
+              groups={groups}
+              groupSize={groupSize}
+              onGroupSizeChange={setGroupSize}
+              orderBy={orderBy}
+              onOrderByChange={setOrderBy}
+              remainderMode={remainderMode}
+              onRemainderModeChange={setRemainderMode}
+              templateId={batchTemplateId}
+              onTemplateIdChange={applyLayoutToAllPages}
+              canvasRatio={canvasRatio}
+              onCanvasRatioChange={setCanvasRatio}
+              gap={gap}
+              onGapChange={setGap}
+              padding={padding}
+              onPaddingChange={setPadding}
+              borderRadius={borderRadius}
+              onBorderRadiusChange={setBorderRadius}
+              bgColor={bgColor}
+              onBgColorChange={setBgColor}
+              exportWidth={exportWidth}
+              onExportWidthChange={setExportWidth}
+              namePrefix={namePrefix}
+              onNamePrefixChange={setNamePrefix}
+              images={orderedImages}
+              onRemoveImage={removeBatchImage}
+              onAddImages={() => setShowPicker(true)}
+            />
+          ) : (
           <CollagePanel
             images={images}
             onImagesChange={setImages}
@@ -616,6 +986,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             onResetSelected={() => canvasRef.current?.resetSelected()}
             onDeselect={() => canvasRef.current?.deselect()}
           />
+          )}
         </div>
       </div>
 

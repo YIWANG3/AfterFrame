@@ -4,6 +4,10 @@
  */
 
 const TEMPLATES = {
+  // Single-image "collage": used by batch mode when a remainder group has 1 image.
+  1: [
+    { id: "1-full", name: "Full", cells: [{x:0,y:0,w:1,h:1}] },
+  ],
   2: [
     { id: "2-lr", name: "Left / Right", cells: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:1}] },
     { id: "2-tb", name: "Top / Bottom", cells: [{x:0,y:0,w:1,h:.5},{x:0,y:.5,w:1,h:.5}] },

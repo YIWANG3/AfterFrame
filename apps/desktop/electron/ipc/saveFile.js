@@ -24,6 +24,18 @@ function register({
     return result.filePath;
   });
 
+  // Directory picker for batch export (e.g. batch collage → N files).
+  ipcMain.handle("workspace:pick-directory", async (_event, options) => {
+    const result = await dialog.showOpenDialog({
+      title: options?.title || "Choose export folder",
+      defaultPath: options?.defaultPath || undefined,
+      buttonLabel: options?.buttonLabel || "Export Here",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled || !result.filePaths?.length) return null;
+    return result.filePaths[0];
+  });
+
   ipcMain.handle("workspace:save-image", async (_event, targetPath, arrayBuffer, sourceMetadataPath) => {
     if (!targetPath) throw new Error("Missing target path");
     addAllowedMediaDir?.(require("node:path").dirname(targetPath));

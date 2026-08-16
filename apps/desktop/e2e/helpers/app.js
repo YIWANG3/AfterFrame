@@ -22,6 +22,10 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
  *   (10 gradient images). Set false for tests that want a blank-state app.
  * @param {"default"|"people"} [opts.catalogFixture="default"] - which seeded
  *   catalog to copy in; "people" loads people-catalog.afcatalog.
+ * @param {(catalogDir: string) => void} [opts.prepareCatalog] - runs against
+ *   the private working copy before Electron starts — for specs that need the
+ *   fixture in a specific state (e.g. HD previews stripped so lazy generation
+ *   is exercised).
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
 // Each launch gets its own MCP port: the dev app holds the default 41706, and
@@ -29,7 +33,7 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
 // which would make MCP-dependent specs flake in confusing ways.
 let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default" } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog } = {}) {
   // Fresh userData so each run starts from a clean slate
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
   const mcpPort = nextMcpPort++;
@@ -52,6 +56,7 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
     const seeded = catalogFixture === "people" ? SEEDED_PEOPLE_CATALOG : SEEDED_CATALOG;
     workCatalog = path.join(userDataDir, path.basename(seeded));
     fs.cpSync(seeded, workCatalog, { recursive: true });
+    prepareCatalog?.(workCatalog);
     env.MEDIA_WORKSPACE_CATALOG = workCatalog;
   }
 
