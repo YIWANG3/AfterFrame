@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>批量拼图 UI Mock</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --app-bg: 12 12 12;
+    --chrome-bg: 18 18 18;
+    --panel-bg: 24 24 24;
+    --panel-bg-2: 32 32 32;
+    --hover-bg: 40 40 40;
+    --selected-bg: 30 27 22;
+    --border-color: 32 32 32;
+    --text-color: 240 240 240;
+    --muted-text: 160 160 160;
+    --muted-text-2: 100 100 100;
+    --accent-color: 210 160 90;
+    --shadow-overlay: 0 18px 48px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: rgb(var(--app-bg));
+    color: rgb(var(--text-color));
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .overlay { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ── Header ─────────────────────────────── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 40px; flex-shrink: 0; padding: 0 16px;
+    background: rgb(var(--chrome-bg));
+    border-bottom: 1px solid rgb(var(--border-color) / .6);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .title {
+    font-size: 10px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: rgb(var(--muted-text-2));
+  }
+  .mode-toggle { display: flex; background: rgb(var(--app-bg)); border-radius: 7px; padding: 2px; }
+  .mode-toggle button {
+    border: 0; background: transparent; color: rgb(var(--muted-text));
+    font-size: 11px; padding: 3px 12px; border-radius: 5px; cursor: pointer; font-family: inherit;
+  }
+  .mode-toggle button.active { background: rgb(var(--panel-bg-2)); color: rgb(var(--text-color)); }
+  .summary { font-size: 11px; color: rgb(var(--muted-text)); }
+  .summary b { color: rgb(var(--accent-color)); font-weight: 600; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .btn-export {
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
+    border: 0; border-radius: 6px; cursor: pointer; font-family: inherit;
+    background: rgb(var(--accent-color) / .12); color: rgb(var(--accent-color));
+    font-size: 11px; font-weight: 500;
+  }
+  .btn-export:hover { background: rgb(var(--accent-color) / .18); }
+  .btn-close {
+    display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+    border: 0; border-radius: 6px; background: transparent; color: rgb(var(--muted-text-2)); cursor: pointer;
+  }
+  .btn-close:hover { background: rgb(var(--hover-bg)); color: rgb(var(--text-color)); }
+
+  /* ── Body ─────────────────────────────── */
+  .body { display: flex; flex: 1; min-height: 0; }
+  .pages-area { flex: 1; min-width: 0; overflow-y: auto; padding: 24px; }
+  .pages-grid { display: grid; gap: 20px; align-content: start; justify-content: center; }
+  .page-card { cursor: pointer; }
+  .page-canvas {
+    position: relative; overflow: hidden; border-radius: 6px;
+    background: #000; outline: 1px solid rgb(var(--border-color) / .8);
+    transition: outline-color .1s;
+  }
+  .page-card.selected .page-canvas { outline: 2px solid rgb(var(--accent-color)); }
+  .page-card:hover:not(.selected) .page-canvas { outline-color: rgb(var(--accent-color) / .5); }
+  .cell { position: absolute; overflow: hidden; }
+  .cell-img {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600; color: rgba(255,255,255,.75);
+    text-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+  .page-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 6px; padding: 0 2px;
+  }
+  .page-label { font-size: 11px; color: rgb(var(--muted-text)); }
+  .page-card.selected .page-label { color: rgb(var(--accent-color)); }
+  .page-badge {
+    font-size: 10px; color: rgb(var(--muted-text-2));
+  }
+  .page-badge.override { color: rgb(var(--accent-color)); }
+
+  /* ── Right panel ─────────────────────────────── */
+  .panel {
+    width: 300px; flex-shrink: 0; overflow-y: auto;
+    background: rgb(var(--chrome-bg));
+    border-left: 1px solid rgb(var(--border-color) / .6);
+  }
+  .section { padding: 12px 16px; border-bottom: 1px solid rgb(var(--border-color) / .6); }
+  .section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: rgb(var(--muted-text-2)); margin-bottom: 12px;
+  }
+  .field-label { font-size: 11px; color: rgb(var(--muted-text)); margin-bottom: 6px; }
+  .field { margin-bottom: 12px; }
+  .field:last-child { margin-bottom: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-family: inherit;
+    background: rgb(var(--app-bg)); color: rgb(var(--muted-text)); font-size: 11px;
+  }
+  .chip:hover { background: rgb(var(--hover-bg)); color: rgb(var(--text-color)); }
+  .chip.active { background: rgb(var(--selected-bg)); color: rgb(var(--text-color)); }
+  .chip input {
+    width: 28px; border: 0; background: transparent; color: inherit; font-family: inherit;
+    font-size: 11px; text-align: center; outline: none;
+  }
+  .hint { font-size: 10px; line-height: 1.6; color: rgb(var(--muted-text-2)); margin-top: 8px; }
+  .hint b { color: rgb(var(--accent-color)); font-weight: 500; }
+  .tmpl-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+  .tmpl-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; aspect-ratio: 1; border: 0; background: transparent; cursor: pointer; padding: 4px;
+  }
+  .tmpl-btn:hover { opacity: .7; }
+  .slider-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .slider-val { font-size: 11px; color: rgb(var(--muted-text-2)); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 100%; accent-color: rgb(var(--accent-color)); }
+  .color-dots { display: flex; flex-wrap: wrap; gap: 6px; }
+  .color-dot {
+    width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; padding: 0; background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
+  }
+  .color-dot.active { border-color: rgb(var(--accent-color)); }
+  .text-input {
+    width: 100%; border: 1px solid rgb(var(--border-color) / .4); border-radius: 6px;
+    background: rgb(var(--app-bg)); color: rgb(var(--text-color));
+    padding: 5px 8px; font-size: 11px; font-family: inherit; outline: none;
+  }
+  .text-input:focus { border-color: rgb(var(--accent-color) / .5); }
+  .name-preview { font-size: 10px; color: rgb(var(--muted-text-2)); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+  .btn-add {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; margin-top: 10px; padding: 8px 0; cursor: pointer; font-family: inherit;
+    border: 1px dashed rgb(var(--border-color)); border-radius: 6px;
+    background: transparent; color: rgb(var(--muted-text)); font-size: 11px;
+  }
+  .btn-add:hover { border-color: rgb(var(--muted-text-2)); color: rgb(var(--text-color)); }
+
+  /* picker modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.35); backdrop-filter: blur(2px);
+  }
+  .modal {
+    width: 440px; max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
+    background: rgb(var(--panel-bg)); border: 1px solid rgb(var(--border-color) / .6);
+    border-radius: 12px; box-shadow: var(--shadow-overlay);
+  }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 8px; }
+  .picker-grid {
+    flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 4px; padding: 4px 12px 12px;
+  }
+  .pick-item { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; cursor: pointer; border: 0; padding: 0; }
+  .pick-item .cell-img { font-size: 13px; }
+  .pick-item.used { opacity: .4; filter: saturate(.5); cursor: default; }
+  .pick-item.selected { outline: 2px solid rgb(var(--accent-color)); outline-offset: -2px; }
+  .pick-check {
+    position: absolute; right: 6px; top: 6px; width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #000; background: rgb(var(--accent-color));
+  }
+  .modal-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    height: 48px; flex-shrink: 0; border-top: 1px solid rgb(var(--border-color) / .6); padding: 0 12px;
+  }
+  .btn-primary {
+    border: 0; border-radius: 6px; height: 30px; padding: 0 14px; cursor: pointer; font-family: inherit;
+    background: rgb(var(--accent-color)); color: #000; font-size: 12px; font-weight: 500;
+  }
+  .btn-primary:disabled { background: rgb(var(--app-bg)); color: rgb(var(--muted-text-2)); cursor: default; }
+
+  /* cell context menu */
+  .ctx-menu {
+    position: fixed; z-index: 120; min-width: 120px; padding: 4px 0;
+    background: rgb(var(--chrome-bg)); border: 1px solid rgb(var(--border-color) / .6);
+    border-radius: 8px; box-shadow: var(--shadow-overlay);
+  }
+  .ctx-menu button {
+    display: block; width: 100%; border: 0; background: transparent; cursor: pointer; font-family: inherit;
+    text-align: left; padding: 6px 12px; font-size: 12px; color: rgb(var(--text-color));
+  }
+  .ctx-menu button:hover { background: rgb(var(--hover-bg)); }
+
+  /* per-page override card */
+  .override-card {
+    background: rgb(var(--app-bg) / .4); border-bottom: 1px solid rgb(var(--border-color) / .6);
+    padding: 12px 16px;
+  }
+  .override-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .override-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .btn-soft {
+    flex: 1; border: 0; border-radius: 6px; padding: 6px 0; cursor: pointer; font-family: inherit;
+    background: rgb(var(--app-bg)); color: rgb(var(--muted-text)); font-size: 11px;
+  }
+  .btn-soft:hover { background: rgb(var(--hover-bg)); color: rgb(var(--text-color)); }
+</style>
+</head>
+<body>
+<div class="overlay">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="title">拼图</div>
+      <div class="mode-toggle">
+        <button>单张</button>
+        <button class="active">批量</button>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+    <div class="header-right">
+      <button class="btn-export" id="exportBtn">⬇ 导出到文件夹</button>
+      <button class="btn-close">✕</button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <div class="pages-area"><div class="pages-grid" id="pagesGrid"></div></div>
+
+    <div class="panel">
+      <!-- per-page override (visible when a page is selected) -->
+      <div class="override-card" id="overrideCard" style="display:none">
+        <div class="override-head">
+          <div class="section-label" style="margin-bottom:0" id="overrideTitle">第 1 张</div>
+          <button class="btn-close" style="width:20px;height:20px" onclick="deselectPage()">✕</button>
+        </div>
+        <div class="field-label">此页布局（覆盖全局）</div>
+        <div class="tmpl-grid" id="overrideTmplGrid"></div>
+        <div class="override-actions">
+          <button class="btn-soft" onclick="resetOverride()">恢复全局布局</button>
+          <button class="btn-soft" onclick="alert('mock：进入单页编辑器，可拖拽换位、缩放、平移单元格（复用现有单张拼图编辑器）')">进入单页编辑 ›</button>
+        </div>
+      </div>
+
+      <!-- Grouping -->
+      <div class="section">
+        <div class="section-label">分组</div>
+        <div class="field">
+          <div class="field-label">每张拼图的图片数</div>
+          <div class="chips" id="groupChips"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">图片顺序</div>
+          <div class="chips">
+            <button class="chip active">选择顺序</button>
+            <button class="chip">拍摄时间</button>
+            <button class="chip">文件名</button>
+          </div>
+        </div>
+        <div class="field" id="remainderField" style="display:none">
+          <div class="field-label">余下图片处理</div>
+          <div class="chips" id="remainderChips">
+            <button class="chip active" data-mode="own">单独成图</button>
+            <button class="chip" data-mode="merge">并入最后一张</button>
+            <button class="chip" data-mode="drop">不使用</button>
+          </div>
+        </div>
+        <div class="hint" id="groupHint"></div>
+        <button class="btn-add" id="addImagesBtn">＋ 添加图片</button>
+      </div>
+
+      <!-- Layout -->
+      <div class="section">
+        <div class="section-label">布局（应用到所有页）</div>
+        <div class="tmpl-grid" id="tmplGrid"></div>
+        <div class="hint">点击左侧任意一页可单独覆盖布局或微调</div>
+      </div>
+
+      <!-- Canvas -->
+      <div class="section">
+        <div class="section-label">画布</div>
+        <div class="field">
+          <div class="field-label">宽高比</div>
+          <div class="chips" id="ratioChips"></div>
+        </div>
+        <div class="field">
+          <div class="slider-row"><div class="field-label" style="margin:0">间距</div><div class="slider-val" id="gapVal">4px</div></div>
+          <input type="range" min="0" max="40" value="4" id="gapSlider">
+        </div>
+        <div class="field">
+          <div class="slider-row"><div class="field-label" style="margin:0">页边距</div><div class="slider-val" id="padVal">0px</div></div>
+          <input type="range" min="0" max="40" value="0" id="padSlider">
+        </div>
+        <div class="field">
+          <div class="field-label">背景</div>
+          <div class="color-dots" id="bgDots"></div>
+        </div>
+      </div>
+
+      <!-- Export -->
+      <div class="section">
+        <div class="section-label">导出</div>
+        <div class="field">
+          <div class="field-label">导出宽度</div>
+          <div class="chips" id="widthChips"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">文件命名</div>
+          <input class="text-input" id="nameInput" value="collage">
+          <div class="name-preview" id="namePreview"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Mock data: image "library" (24 photos), first 12 pre-selected ──
+const ALL_HUES = [18, 205, 140, 268, 340, 45, 190, 90, 320, 220, 8, 160,
+                  30, 250, 120, 300, 60, 182, 12, 275, 148, 330, 236, 80];
+const LIBRARY = ALL_HUES.map((h, i) => ({
+  id: i + 1,
+  bg: `linear-gradient(135deg, hsl(${h} 32% 30%), hsl(${(h + 40) % 360} 38% 16%))`,
+}));
+let IMAGES = LIBRARY.slice(0, 12);
+
+// ── Templates (subset of app's collageTemplates.js) ──
+const TEMPLATES = {
+  1: [ { id: "1-full", cells: [{x:0,y:0,w:1,h:1}] } ],
+  2: [
+    { id: "2-lr", cells: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:1}] },
+    { id: "2-tb", cells: [{x:0,y:0,w:1,h:.5},{x:0,y:.5,w:1,h:.5}] },
+    { id: "2-big-left", cells: [{x:0,y:0,w:.65,h:1},{x:.65,y:0,w:.35,h:1}] },
+  ],
+  3: [
+    { id: "3-cols", cells: [{x:0,y:0,w:1/3,h:1},{x:1/3,y:0,w:1/3,h:1},{x:2/3,y:0,w:1/3,h:1}] },
+    { id: "3-rows", cells: [{x:0,y:0,w:1,h:1/3},{x:0,y:1/3,w:1,h:1/3},{x:0,y:2/3,w:1,h:1/3}] },
+    { id: "3-left-2r", cells: [{x:0,y:0,w:.5,h:1},{x:.5,y:0,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}] },
+    { id: "3-big-2small", cells: [{x:0,y:0,w:.6,h:1},{x:.6,y:0,w:.4,h:.5},{x:.6,y:.5,w:.4,h:.5}] },
+  ],
+  4: [
+    { id: "4-grid", cells: [{x:0,y:0,w:.5,h:.5},{x:.5,y:0,w:.5,h:.5},{x:0,y:.5,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}] },
+    { id: "4-cols", cells: [{x:0,y:0,w:.25,h:1},{x:.25,y:0,w:.25,h:1},{x:.5,y:0,w:.25,h:1},{x:.75,y:0,w:.25,h:1}] },
+    { id: "4-big-3r", cells: [{x:0,y:0,w:.6,h:1},{x:.6,y:0,w:.4,h:1/3},{x:.6,y:1/3,w:.4,h:1/3},{x:.6,y:2/3,w:.4,h:1/3}] },
+    { id: "4-t1-b3", cells: [{x:0,y:0,w:1,h:.5},{x:0,y:.5,w:1/3,h:.5},{x:1/3,y:.5,w:1/3,h:.5},{x:2/3,y:.5,w:1/3,h:.5}] },
+  ],
+  5: [
+    { id: "5-t2-b3", cells: [{x:0,y:0,w:.5,h:.5},{x:.5,y:0,w:.5,h:.5},{x:0,y:.5,w:1/3,h:.5},{x:1/3,y:.5,w:1/3,h:.5},{x:2/3,y:.5,w:1/3,h:.5}] },
+    { id: "5-big-4r", cells: [{x:0,y:0,w:.6,h:1},{x:.6,y:0,w:.4,h:.25},{x:.6,y:.25,w:.4,h:.25},{x:.6,y:.5,w:.4,h:.25},{x:.6,y:.75,w:.4,h:.25}] },
+  ],
+  6: [
+    { id: "6-2x3", cells: [{x:0,y:0,w:1/3,h:.5},{x:1/3,y:0,w:1/3,h:.5},{x:2/3,y:0,w:1/3,h:.5},{x:0,y:.5,w:1/3,h:.5},{x:1/3,y:.5,w:1/3,h:.5},{x:2/3,y:.5,w:1/3,h:.5}] },
+    { id: "6-3x2", cells: [{x:0,y:0,w:.5,h:1/3},{x:.5,y:0,w:.5,h:1/3},{x:0,y:1/3,w:.5,h:1/3},{x:.5,y:1/3,w:.5,h:1/3},{x:0,y:2/3,w:.5,h:1/3},{x:.5,y:2/3,w:.5,h:1/3}] },
+    { id: "6-2big-4small", cells: [{x:0,y:0,w:.5,h:.6},{x:.5,y:0,w:.5,h:.6},{x:0,y:.6,w:.25,h:.4},{x:.25,y:.6,w:.25,h:.4},{x:.5,y:.6,w:.25,h:.4},{x:.75,y:.6,w:.25,h:.4}] },
+  ],
+  9: [
+    { id: "9-3x3", cells: Array.from({length:9},(_,i)=>({x:(i%3)/3,y:Math.floor(i/3)/3,w:1/3,h:1/3})) },
+  ],
+  12: [
+    { id: "12-3x4", cells: Array.from({length:12},(_,i)=>({x:(i%4)/4,y:Math.floor(i/4)/3,w:1/4,h:1/3})) },
+  ],
+};
+function templatesForCount(n) {
+  if (TEMPLATES[n]) return TEMPLATES[n];
+  const keys = Object.keys(TEMPLATES).map(Number).sort((a,b)=>a-b);
+  for (let i = keys.length - 1; i >= 0; i--) if (keys[i] <= n) return TEMPLATES[keys[i]];
+  return TEMPLATES[2];
+}
+
+// ── State ──
+const state = {
+  groupSize: 4,
+  remainderMode: "own",   // own | merge | drop
+  templateId: null,       // global template id (per group-size)
+  ratio: 1,
+  gap: 4, pad: 0,
+  bg: "#000000",
+  exportWidth: 3000,
+  prefix: "collage",
+  selectedPage: -1,
+  overrides: {},          // pageIdx -> templateId
+};
+
+const GROUP_OPTIONS = [2, 3, 4, 6, 9];
+const RATIOS = [
+  { v: 1, label: "1:1" }, { v: 3/4, label: "3:4" }, { v: 4/3, label: "4:3" },
+  { v: 2/3, label: "2:3" }, { v: 3/2, label: "3:2" }, { v: 16/9, label: "16:9" }, { v: 9/16, label: "9:16" },
+];
+const BG_PRESETS = ["#000000","#2c2c2c","#555555","#ffffff","#f5f0e8","#0a1628"];
+const WIDTHS = [1080, 2048, 3000, 4096];
+
+// ── Grouping logic ──
+function computeGroups() {
+  const n = state.groupSize;
+  const groups = [];
+  for (let i = 0; i < IMAGES.length; i += n) groups.push(IMAGES.slice(i, i + n));
+  const last = groups[groups.length - 1];
+  if (last && last.length < n) {
+    if (state.remainderMode === "drop") groups.pop();
+    else if (state.remainderMode === "merge" && groups.length > 1) {
+      const rem = groups.pop();
+      groups[groups.length - 1] = groups[groups.length - 1].concat(rem);
+    }
+    // "own": keep as its own page with a smaller template
+  }
+  return groups;
+}
+
+function pickTemplate(count, pageIdx) {
+  const pool = templatesForCount(count);
+  const overrideId = state.overrides[pageIdx];
+  if (overrideId) {
+    const o = pool.find(t => t.id === overrideId);
+    if (o) return o;
+  }
+  const g = pool.find(t => t.id === state.templateId);
+  return g || pool[0];
+}
+
+// ── Rendering ──
+function renderPages() {
+  const groups = computeGroups();
+  const grid = document.getElementById("pagesGrid");
+  grid.innerHTML = "";
+  const areaW = grid.parentElement.clientWidth - 48;
+  const perRow = groups.length <= 2 ? groups.length : (groups.length <= 4 ? 2 : 3);
+  const baseW = Math.min(340, Math.max(200, (areaW - (perRow - 1) * 20) / perRow));
+  const W = state.ratio >= 1 ? baseW : baseW * state.ratio;
+  const H = W / state.ratio;
+  grid.style.gridTemplateColumns = `repeat(auto-fit, ${W}px)`;
+
+  groups.forEach((group, gi) => {
+    const tmpl = pickTemplate(group.length, gi);
+    const card = document.createElement("div");
+    card.className = "page-card" + (state.selectedPage === gi ? " selected" : "");
+    card.onclick = () => selectPage(gi);
+
+    const canvas = document.createElement("div");
+    canvas.className = "page-canvas";
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    canvas.style.background = state.bg;
+
+    const scale = W / 340;  // gap/pad sliders are in export-relative px; scale down for preview
+    const gap = state.gap * scale, pad = state.pad * scale;
+    const innerW = W - pad * 2, innerH = H - pad * 2;
+    tmpl.cells.forEach((c, ci) => {
+      const img = group[ci];
+      if (!img) return;
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.style.left = (pad + c.x * innerW + gap / 2) + "px";
+      cell.style.top = (pad + c.y * innerH + gap / 2) + "px";
+      cell.style.width = Math.max(1, c.w * innerW - gap) + "px";
+      cell.style.height = Math.max(1, c.h * innerH - gap) + "px";
+      cell.innerHTML = `<div class="cell-img" style="background:${img.bg}">${img.id}</div>`;
+      cell.oncontextmenu = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        showCtxMenu(e.clientX, e.clientY, IMAGES.indexOf(img));
+      };
+      canvas.appendChild(cell);
+    });
+    // merge mode: extra images beyond template cells stack indicator
+    if (group.length > tmpl.cells.length) {
+      const extra = group.length - tmpl.cells.length;
+      const badge = document.createElement("div");
+      badge.style.cssText = "position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.55);border-radius:5px;padding:2px 7px;font-size:10px;color:#fff";
+      badge.textContent = `+${extra}`;
+      canvas.appendChild(badge);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "page-meta";
+    const hasOverride = !!state.overrides[gi];
+    meta.innerHTML = `<span class="page-label">第 ${gi + 1} 张 · ${group.length} 图</span>
+      <span class="page-badge${hasOverride ? " override" : ""}">${hasOverride ? "已覆盖布局" : ""}</span>`;
+
+    card.appendChild(canvas);
+    card.appendChild(meta);
+    grid.appendChild(card);
+  });
+
+  // header summary + naming preview + export button
+  document.getElementById("summary").innerHTML =
+    `已选 <b>${IMAGES.length}</b> 张图片 · 每 <b>${state.groupSize}</b> 张一拼 · 生成 <b>${groups.length}</b> 张拼图`;
+  document.getElementById("exportBtn").innerHTML = `⬇ 导出 ${groups.length} 张到文件夹`;
+  const pv = groups.map((_, i) => `${state.prefix}_${String(i + 1).padStart(2, "0")}.jpg`);
+  document.getElementById("namePreview").textContent =
+    pv.length <= 3 ? pv.join("、") : `${pv[0]} … ${pv[pv.length - 1]}（共 ${pv.length} 个）`;
+
+  // grouping hint
+  const rem = IMAGES.length % state.groupSize;
+  const hint = document.getElementById("groupHint");
+  document.getElementById("remainderField").style.display = rem ? "" : "none";
+  if (!rem) {
+    hint.innerHTML = `${IMAGES.length} 张图片刚好分成 <b>${IMAGES.length / state.groupSize}</b> 组，无余图`;
+  } else {
+    const modeText = { own: `余 ${rem} 张单独成一张拼图（自动使用 ${rem} 图布局）`,
+                       merge: `余 ${rem} 张并入最后一张`,
+                       drop: `余 ${rem} 张不使用` }[state.remainderMode];
+    hint.innerHTML = `${IMAGES.length} ÷ ${state.groupSize} = ${Math.floor(IMAGES.length / state.groupSize)} 组，${modeText}`;
+  }
+}
+
+function tmplSvg(tmpl, active) {
+  const color = active ? "rgb(210 160 90)" : "rgb(100 100 100 / .55)";
+  const cells = tmpl.cells.map(c => {
+    const x = c.x * 30 + 1, y = c.y * 30 + 1, w = c.w * 30 - 2, h = c.h * 30 - 2;
+    return `<rect x="${x+3}" y="${y+3}" width="${Math.max(w,1)}" height="${Math.max(h,1)}" rx="0.8" fill="${color}"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 36 36" style="width:100%;height:100%">${cells}</svg>`;
+}
+
+function renderTemplateGrid() {
+  const pool = templatesForCount(state.groupSize);
+  if (!pool.some(t => t.id === state.templateId)) state.templateId = pool[0].id;
+  const grid = document.getElementById("tmplGrid");
+  grid.innerHTML = "";
+  pool.forEach(t => {
+    const btn = document.createElement("button");
+    btn.className = "tmpl-btn";
+    btn.innerHTML = tmplSvg(t, t.id === state.templateId);
+    btn.onclick = () => { state.templateId = t.id; renderTemplateGrid(); renderPages(); };
+    grid.appendChild(btn);
+  });
+}
+
+function renderOverridePanel() {
+  const card = document.getElementById("overrideCard");
+  if (state.selectedPage < 0) { card.style.display = "none"; return; }
+  card.style.display = "";
+  const groups = computeGroups();
+  const group = groups[state.selectedPage];
+  if (!group) { card.style.display = "none"; return; }
+  document.getElementById("overrideTitle").textContent = `第 ${state.selectedPage + 1} 张 · ${group.length} 图`;
+  const pool = templatesForCount(group.length);
+  const activeId = state.overrides[state.selectedPage] || state.templateId;
+  const grid = document.getElementById("overrideTmplGrid");
+  grid.innerHTML = "";
+  pool.forEach(t => {
+    const btn = document.createElement("button");
+    btn.className = "tmpl-btn";
+    btn.innerHTML = tmplSvg(t, t.id === activeId || (activeId === state.templateId && t.id === pool[0].id && !pool.some(x => x.id === state.templateId) && !state.overrides[state.selectedPage]));
+    btn.onclick = () => { state.overrides[state.selectedPage] = t.id; renderOverridePanel(); renderPages(); };
+    grid.appendChild(btn);
+  });
+}
+
+function selectPage(i) {
+  state.selectedPage = state.selectedPage === i ? -1 : i;
+  renderOverridePanel();
+  renderPages();
+}
+function deselectPage() { state.selectedPage = -1; renderOverridePanel(); renderPages(); }
+function resetOverride() {
+  delete state.overrides[state.selectedPage];
+  renderOverridePanel(); renderPages();
+}
+
+// ── Add / replace / remove images ──
+// Membership changes shift grouping, so per-page overrides and selection reset.
+function onImagesChanged() {
+  state.overrides = {};
+  state.selectedPage = -1;
+  refreshAll();
+}
+
+let picker = null;   // { mode: "add" | "replace", targetIdx, sel: Set<id> }
+function openPicker(mode, targetIdx = -1) {
+  picker = { mode, targetIdx, sel: new Set() };
+  renderPicker();
+}
+function closePicker() {
+  document.getElementById("pickerBackdrop")?.remove();
+  picker = null;
+}
+function renderPicker() {
+  document.getElementById("pickerBackdrop")?.remove();
+  if (!picker) return;
+  const usedIds = new Set(IMAGES.map(i => i.id));
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.id = "pickerBackdrop";
+  backdrop.onclick = (e) => { if (e.target === backdrop) closePicker(); };
+
+  const items = LIBRARY.map(img => {
+    const used = usedIds.has(img.id);
+    const selected = picker.sel.has(img.id);
+    return `<button class="pick-item${used ? " used" : ""}${selected ? " selected" : ""}" data-id="${img.id}" ${used ? "disabled" : ""}>
+      <div class="cell-img" style="background:${img.bg};width:100%;height:100%">${img.id}</div>
+      ${used || selected ? `<span class="pick-check">✓</span>` : ""}
+    </button>`;
+  }).join("");
+
+  backdrop.innerHTML = `<div class="modal">
+    <div class="modal-head">
+      <div class="title">${picker.mode === "replace" ? "替换图片" : "添加图片"}<span style="margin-left:8px;color:rgb(var(--muted-text-2))">${LIBRARY.length}</span></div>
+      <button class="btn-close" id="pickerClose">✕</button>
+    </div>
+    <div style="padding:0 12px 8px"><button class="chip">📁 全部图片 ▾</button></div>
+    <div class="picker-grid">${items}</div>
+    <div class="modal-foot">
+      <span style="font-size:11px;color:rgb(var(--muted-text-2))">${picker.mode === "replace" ? "点击一张图片进行替换" : "灰色为已在拼图中"}</span>
+      ${picker.mode === "add" ? `<button class="btn-primary" id="pickerAdd" ${picker.sel.size ? "" : "disabled"}>添加${picker.sel.size ? ` ${picker.sel.size}` : ""}</button>` : ""}
+    </div>
+  </div>`;
+  document.body.appendChild(backdrop);
+
+  backdrop.querySelector("#pickerClose").onclick = closePicker;
+  backdrop.querySelectorAll(".pick-item:not(.used)").forEach(btn => {
+    btn.onclick = () => {
+      const id = +btn.dataset.id;
+      if (picker.mode === "replace") {
+        IMAGES[picker.targetIdx] = LIBRARY.find(i => i.id === id);
+        closePicker();
+        onImagesChanged();
+      } else {
+        picker.sel.has(id) ? picker.sel.delete(id) : picker.sel.add(id);
+        renderPicker();
+      }
+    };
+  });
+  const addBtn = backdrop.querySelector("#pickerAdd");
+  if (addBtn) addBtn.onclick = () => {
+    IMAGES = IMAGES.concat(LIBRARY.filter(i => picker.sel.has(i.id)));
+    closePicker();
+    onImagesChanged();
+  };
+}
+
+function showCtxMenu(x, y, imgIdx) {
+  if (imgIdx < 0) return;
+  document.getElementById("cellCtxMenu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "ctx-menu";
+  menu.id = "cellCtxMenu";
+  menu.style.left = Math.min(x, window.innerWidth - 140) + "px";
+  menu.style.top = Math.min(y, window.innerHeight - 80) + "px";
+  menu.innerHTML = `<button id="ctxReplace">替换…</button><button id="ctxRemove">移除</button>`;
+  document.body.appendChild(menu);
+  menu.querySelector("#ctxReplace").onclick = () => { menu.remove(); openPicker("replace", imgIdx); };
+  menu.querySelector("#ctxRemove").onclick = () => {
+    menu.remove();
+    IMAGES.splice(imgIdx, 1);
+    onImagesChanged();
+  };
+  const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); window.removeEventListener("pointerdown", close, true); } };
+  setTimeout(() => window.addEventListener("pointerdown", close, true), 0);
+}
+
+document.getElementById("addImagesBtn").onclick = () => openPicker("add");
+
+// ── Control wiring ──
+function renderChips(elId, options, getVal, setVal, format) {
+  const el = document.getElementById(elId);
+  el.innerHTML = "";
+  options.forEach(opt => {
+    const btn = document.createElement("button");
+    btn.className = "chip" + (getVal() === opt.v ? " active" : "");
+    btn.textContent = format ? format(opt) : opt.label;
+    btn.onclick = () => { setVal(opt.v); refreshAll(); };
+    el.appendChild(btn);
+  });
+}
+
+function refreshAll() {
+  renderChips("groupChips", GROUP_OPTIONS.map(v => ({ v, label: `${v} 张` })), () => state.groupSize,
+    v => { state.groupSize = v; state.overrides = {}; state.selectedPage = -1; });
+  renderChips("ratioChips", RATIOS, () => state.ratio, v => { state.ratio = v; });
+  renderChips("widthChips", WIDTHS.map(v => ({ v, label: `${v}px` })), () => state.exportWidth, v => { state.exportWidth = v; });
+  const dots = document.getElementById("bgDots");
+  dots.innerHTML = "";
+  BG_PRESETS.forEach(c => {
+    const d = document.createElement("button");
+    d.className = "color-dot" + (state.bg === c ? " active" : "");
+    d.style.background = c;
+    d.onclick = () => { state.bg = c; refreshAll(); };
+    dots.appendChild(d);
+  });
+  renderTemplateGrid();
+  renderOverridePanel();
+  renderPages();
+}
+
+document.querySelectorAll("#remainderChips .chip").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("#remainderChips .chip").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.remainderMode = btn.dataset.mode;
+    state.selectedPage = -1; state.overrides = {};
+    refreshAll();
+  };
+});
+document.getElementById("gapSlider").oninput = e => {
+  state.gap = +e.target.value;
+  document.getElementById("gapVal").textContent = state.gap + "px";
+  renderPages();
+};
+document.getElementById("padSlider").oninput = e => {
+  state.pad = +e.target.value;
+  document.getElementById("padVal").textContent = state.pad + "px";
+  renderPages();
+};
+document.getElementById("nameInput").oninput = e => { state.prefix = e.target.value || "collage"; renderPages(); };
+document.getElementById("exportBtn").onclick = () =>
+  alert(`mock：弹出系统文件夹选择器，然后逐页离屏渲染导出\n\n${computeGroups().map((_, i) => `${state.prefix}_${String(i+1).padStart(2,"0")}.jpg（${state.exportWidth}px 宽）`).join("\n")}\n\n导出后各拼图自动 quickRegister 回目录（与单张拼图一致）`);
+window.addEventListener("resize", renderPages);
+
+refreshAll();
+</script>
+</body>
+</html>

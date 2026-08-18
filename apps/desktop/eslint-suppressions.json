@@ -63,11 +63,6 @@
       "count": 6
     }
   },
-  "src/components/collage/CollagePanel.jsx": {
-    "no-unused-vars": {
-      "count": 3
-    }
-  },
   "src/components/collage/ColorPickerPopover.jsx": {
     "no-unused-vars": {
       "count": 1

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { localFileUrl } from "../../utils/format";
 
@@ -122,13 +122,32 @@ export const COLLAGE_ZOOM_MIN = MIN_ZOOM;
 export const COLLAGE_ZOOM_MAX = MAX_ZOOM;
 
 const CollageCanvas = forwardRef(function CollageCanvas(
-  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, onSwap, onReplace, onSelectionChange, onSelectedStateChange },
+  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, mode = "single", highlightCell = -1, dimCell = -1, sharedStates, onSwap, onReplace, onRemove, onCellDragOut, onSelectionChange, onSelectedStateChange },
   ref,
 ) {
   const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
   const loadedImgsRef = useRef(new Map());
-  const cellStatesRef = useRef([]); // { pan: {x,y}, zoom }
+  // Per-image pan/zoom, keyed by image identity (not cell index) so the state
+  // follows the photo through swaps, template changes and HD-preview patches.
+  // Batch mode passes one shared Map to every page canvas, so a photo keeps
+  // its pan/zoom when it is swapped onto another page.
+  const localStatesRef = useRef(new Map()); // key -> { pan: {x,y}, zoom }
+  const cellStatesRef = useRef(localStatesRef.current);
+  cellStatesRef.current = sharedStates || localStatesRef.current;
+  const isSharedRef = useRef(false);
+  isSharedRef.current = !!sharedStates;
+  const DEFAULT_STATE = () => ({ pan: { x: 0, y: 0 }, zoom: 1 });
+  const stateKey = (item, i) => item?.asset_id || item?.image_path || `#${i}`;
+  // Stable accessors (only touch refs) so effects can list them as deps.
+  const getState = useCallback((i) => {
+    const item = propsRef.current.images[i];
+    return cellStatesRef.current.get(stateKey(item, i)) || DEFAULT_STATE();
+  }, []);
+  const setState = useCallback((i, next) => {
+    const item = propsRef.current.images[i];
+    cellStatesRef.current.set(stateKey(item, i), next);
+  }, []);
   const rafRef = useRef(0);
   const dragRef = useRef(null);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -140,43 +159,70 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   onSelectedStateChangeRef.current = onSelectedStateChange;
 
   // Emit selection changes to parent
+  // Store latest props in refs so redraw/handlers always see current values
+  const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, highlightCell, dimCell });
+  propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, highlightCell, dimCell };
+
   useEffect(() => {
     onSelectionChangeRef.current?.(selectedIdx);
     if (selectedIdx >= 0) {
-      const state = cellStatesRef.current[selectedIdx];
-      if (state) onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
+      const state = getState(selectedIdx);
+      onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
     }
-  }, [selectedIdx]);
+  }, [selectedIdx, getState]);
 
   function emitSelectedState() {
     if (selectedIdx < 0) return;
-    const state = cellStatesRef.current[selectedIdx];
-    if (state) onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
+    const state = getState(selectedIdx);
+    onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
   }
-  // Store latest props in refs so redraw/handlers always see current values
-  const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth });
-  propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth };
 
-  // Sync cell states count with template
+  // Drop states for images no longer on this canvas (a shared store is owned
+  // by the parent and pruned there); clamp selection.
   useEffect(() => {
     const count = template?.cells?.length || 0;
-    const prev = cellStatesRef.current;
-    const next = [];
-    for (let i = 0; i < count; i++) {
-      next.push(prev[i] || { pan: { x: 0, y: 0 }, zoom: 1 });
+    if (!isSharedRef.current) {
+      const live = new Set(images.slice(0, count).map((it, i) => stateKey(it, i)));
+      for (const key of localStatesRef.current.keys()) {
+        if (!live.has(key)) localStatesRef.current.delete(key);
+      }
     }
-    cellStatesRef.current = next;
     if (selectedIdx >= count) setSelectedIdx(-1);
-  }, [template, images.length]);
+  }, [template, images]);
 
-  function getPreviewSrc(item) {
-    if (!item) return null;
-    return item.preview_hd_path || item.image_preview_hd_path || item.preview_path || item.image_preview_path || item.image_path;
+  // Candidate sources for a cell, best first. The HD preview is generated
+  // lazily and patched in later; until it has actually decoded we keep
+  // drawing the thumbnail so the upgrade is a seamless swap, not a flash.
+  function getPreviewCandidates(item) {
+    if (!item) return [];
+    const out = [];
+    for (const src of [
+      item.preview_hd_path, item.image_preview_hd_path,
+      item.preview_path, item.image_preview_path,
+      item.image_path,
+    ]) {
+      if (src && !out.includes(src)) out.push(src);
+    }
+    return out;
+  }
+
+  function isReady(img) {
+    return !!img && img.complete && img.naturalWidth > 0;
+  }
+
+  // Best already-decoded image for a cell (HD if ready, else thumbnail…).
+  function getLoadedImage(item) {
+    const map = loadedImgsRef.current;
+    for (const src of getPreviewCandidates(item)) {
+      const img = map.get(src);
+      if (isReady(img)) return img;
+    }
+    return null;
   }
 
   function redraw() {
     const canvas = canvasRef.current;
-    const { template: tmpl, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs, exportWidth: ew } = propsRef.current;
+    const { template: tmpl, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs, exportWidth: ew, highlightCell: hl, dimCell: dim } = propsRef.current;
     if (!canvas || !tmpl?.cells) return;
 
     const ctx = canvas.getContext("2d");
@@ -199,21 +245,39 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     ctx.fillRect(0, 0, displayW, displayH);
 
     const cellRects = computeCellRects(tmpl.cells, displayW, displayH, g * scale, (p || 0) * scale);
-    const map = loadedImgsRef.current;
 
     const displayBr = br * scale;
     for (let i = 0; i < cellRects.length; i++) {
       const rect = cellRects[i];
-      const src = getPreviewSrc(imgs[i]);
-      const img = src ? map.get(src) : null;
-      const state = cellStatesRef.current[i] || { pan: { x: 0, y: 0 }, zoom: 1 };
-      if (img && img.complete && img.naturalWidth > 0) {
+      const img = getLoadedImage(imgs[i]);
+      const state = getState(i);
+      if (img) {
         drawCellImage(ctx, img, rect, state.pan, state.zoom, displayBr);
       } else {
         ctx.save();
         if (displayBr > 0) { roundRectPath(ctx, rect.x, rect.y, rect.w, rect.h, displayBr); ctx.clip(); }
         ctx.fillStyle = "rgba(255,255,255,0.04)";
         ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.restore();
+      }
+      // Cross-page drag feedback: source cell dims, hovered target gets a ring.
+      if (i === dim) {
+        ctx.save();
+        if (displayBr > 0) { roundRectPath(ctx, rect.x, rect.y, rect.w, rect.h, displayBr); ctx.clip(); }
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.restore();
+      }
+      if (i === hl) {
+        ctx.save();
+        const accentRaw = getComputedStyle(canvas).getPropertyValue("--accent-color").trim() || "210 160 90";
+        ctx.strokeStyle = `rgb(${accentRaw.replace(/\s+/g, ",")})`;
+        ctx.lineWidth = 3;
+        if (displayBr > 0) roundRectPath(ctx, rect.x + 1.5, rect.y + 1.5, rect.w - 3, rect.h - 3, Math.max(0, displayBr - 1.5));
+        else { ctx.beginPath(); ctx.rect(rect.x + 1.5, rect.y + 1.5, rect.w - 3, rect.h - 3); }
+        ctx.stroke();
+        ctx.fillStyle = `rgba(${accentRaw.replace(/\s+/g, ",")},0.18)`;
+        ctx.fill();
         ctx.restore();
       }
     }
@@ -264,24 +328,34 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     });
   }
 
-  // Redraw on selection changes / guide changes
-  useEffect(() => { scheduleRedraw(); }, [selectedIdx, snapGuides.x, snapGuides.y]);
+  // Redraw on selection changes / guide changes / drag feedback
+  useEffect(() => { scheduleRedraw(); }, [selectedIdx, snapGuides.x, snapGuides.y, highlightCell, dimCell]);
 
-  // Load images
+  // Load images. Only the best candidate per cell is fetched, but every
+  // candidate stays "needed" so a thumbnail that is already decoded survives
+  // the moment its HD sibling appears — the cell keeps drawing the thumbnail
+  // until the HD image finishes decoding, then swaps in place.
   useEffect(() => {
     const map = loadedImgsRef.current;
     const needed = new Set();
+    const load = (src) => {
+      if (map.has(src)) return;
+      const el = new Image();
+      el.crossOrigin = "anonymous";
+      el.src = localFileUrl(src);
+      el.onload = () => scheduleRedraw();
+      map.set(src, el);
+    };
     for (const item of images) {
-      const src = getPreviewSrc(item);
-      if (!src) continue;
-      needed.add(src);
-      if (!map.has(src)) {
-        const el = new Image();
-        el.crossOrigin = "anonymous";
-        el.src = localFileUrl(src);
-        el.onload = () => scheduleRedraw();
-        map.set(src, el);
-      }
+      const candidates = getPreviewCandidates(item);
+      if (!candidates.length) continue;
+      for (const src of candidates) needed.add(src);
+      const best = candidates[0];
+      load(best);
+      // A photo that just arrived (e.g. swapped in from another page) has no
+      // decoded source here yet; the small thumbnail lands far sooner than the
+      // HD render, so fetch it too and let HD replace it when ready.
+      if (!isReady(map.get(best)) && candidates[1]) load(candidates[1]);
     }
     for (const key of map.keys()) {
       if (!needed.has(key)) map.delete(key);
@@ -309,48 +383,82 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   onSwapRef.current = onSwap;
   const onReplaceRef = useRef(onReplace);
   onReplaceRef.current = onReplace;
+  const onRemoveRef = useRef(onRemove);
+  onRemoveRef.current = onRemove;
+  const onCellDragOutRef = useRef(onCellDragOut);
+  onCellDragOutRef.current = onCellDragOut;
   const [ctxMenu, setCtxMenu] = useState(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const isBatch = mode === "batch";
+
+    function cellRectAt(idx) {
+      const { template: tmpl, gap: g, padding: p, exportWidth: ew } = propsRef.current;
+      if (!tmpl?.cells) return null;
+      const s = canvas.clientWidth / (ew || 3000);
+      return computeCellRects(tmpl.cells, canvas.clientWidth, canvas.clientHeight, g * s, (p || 0) * s)[idx] || null;
+    }
 
     function onPointerDown(e) {
+      if (e.button !== 0) return;
       const rect = canvas.getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
       const idx = hitTest(px, py);
       if (idx < 0) {
-        setSelectedIdx(-1);
+        if (!isBatch) setSelectedIdx(-1);
         return;
       }
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = "grabbing";
-      const state = cellStatesRef.current[idx] || { pan: { x: 0, y: 0 }, zoom: 1 };
+      const state = getState(idx);
       dragRef.current = {
         idx,
+        pointerId: e.pointerId,
         startX: e.clientX,
         startY: e.clientY,
         startPan: { x: state.pan.x, y: state.pan.y },
         moved: false,
-        shift: e.shiftKey,
+        handedOff: false,
       };
       // Selection always follows the cell being interacted with — snap guides,
       // panel controls and slider all track the dragged cell, not whatever
       // was selected before.
-      if (idx !== selectedIdx) setSelectedIdx(idx);
+      if (!isBatch && idx !== selectedIdx) setSelectedIdx(idx);
     }
 
     function onPointerMove(e) {
       const d = dragRef.current;
-      if (!d) return;
+      if (!d || d.handedOff) return;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
       if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
       if (!d.moved) return;
 
-      const state = cellStatesRef.current[d.idx];
+      // Batch pages: dragging inside the cell pans; leaving the cell turns
+      // the gesture into a swap, which the parent drives across pages. Undo
+      // the partial pan so the photo snaps back, then hand off.
+      if (isBatch) {
+        const rect = canvas.getBoundingClientRect();
+        const cell = cellRectAt(d.idx);
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        const inside = cell && px >= cell.x && px <= cell.x + cell.w && py >= cell.y && py <= cell.y + cell.h;
+        if (!inside) {
+          d.handedOff = true;
+          setState(d.idx, { ...getState(d.idx), pan: { ...d.startPan } });
+          canvas.style.cursor = "grab";
+          if (canvas.hasPointerCapture(d.pointerId)) canvas.releasePointerCapture(d.pointerId);
+          redraw();
+          onCellDragOutRef.current?.(d.idx, e);
+          return;
+        }
+      }
+
+      const state = getState(d.idx);
       let newPan = { x: d.startPan.x + dx, y: d.startPan.y + dy };
 
       // Snap to center (hold Shift to bypass)
@@ -360,9 +468,9 @@ const CollageCanvas = forwardRef(function CollageCanvas(
         if (Math.abs(newPan.x) < SNAP_THRESHOLD) { newPan.x = 0; gx = true; }
         if (Math.abs(newPan.y) < SNAP_THRESHOLD) { newPan.y = 0; gy = true; }
       }
-      if (gx !== snapGuides.x || gy !== snapGuides.y) setSnapGuides({ x: gx, y: gy });
+      if (!isBatch && (gx !== snapGuides.x || gy !== snapGuides.y)) setSnapGuides({ x: gx, y: gy });
 
-      state.pan = newPan;
+      setState(d.idx, { ...state, pan: newPan });
       redraw();
     }
 
@@ -374,13 +482,15 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       if (canvas.hasPointerCapture(e.pointerId)) {
         canvas.releasePointerCapture(e.pointerId);
       }
-      setSnapGuides({ x: false, y: false });
+      if (d.handedOff) return;
+      if (!isBatch) setSnapGuides({ x: false, y: false });
 
       if (!d.moved) {
-        // Click → select
-        setSelectedIdx(d.idx);
+        // Click → select (single mode only)
+        if (!isBatch) setSelectedIdx(d.idx);
         return;
       }
+      if (isBatch) return; // pan committed live
 
       // Released over a different cell → swap
       const rect = canvas.getBoundingClientRect();
@@ -388,13 +498,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const py = e.clientY - rect.top;
       const targetIdx = hitTest(px, py);
       if (targetIdx >= 0 && targetIdx !== d.idx) {
-        cellStatesRef.current[d.idx] = {
-          ...cellStatesRef.current[d.idx],
-          pan: { x: d.startPan.x, y: d.startPan.y },
-        };
-        const tmp = cellStatesRef.current[d.idx];
-        cellStatesRef.current[d.idx] = cellStatesRef.current[targetIdx] || { pan: { x: 0, y: 0 }, zoom: 1 };
-        cellStatesRef.current[targetIdx] = tmp;
+        // Undo the live pan; states are keyed by image so they follow the swap.
+        setState(d.idx, { ...getState(d.idx), pan: { x: d.startPan.x, y: d.startPan.y } });
         onSwapRef.current?.(d.idx, targetIdx);
       } else {
         // Dragged within same cell → keep selection on it
@@ -410,7 +515,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const py = e.clientY - rect.top;
       // Prefer selected cell so pinch zooms what the panel slider controls,
       // even if cursor drifts. Fall back to hit-test.
-      const idx = selectedIdx >= 0 ? selectedIdx : hitTest(px, py);
+      const idx = !isBatch && selectedIdx >= 0 ? selectedIdx : hitTest(px, py);
       if (idx < 0) return;
       // Mac trackpad pinch fires wheel with ctrlKey=true and small deltaY.
       // Use exponential factor for smooth, proportional response.
@@ -423,12 +528,14 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       } else {
         factor = e.deltaY > 0 ? 0.94 : 1.06;
       }
-      const state = cellStatesRef.current[idx] || { pan: { x: 0, y: 0 }, zoom: 1 };
+      const state = getState(idx);
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom * factor));
-      cellStatesRef.current[idx] = { ...state, zoom: newZoom };
-      // Auto-select the cell being pinched, so the slider tracks it
-      if (idx !== selectedIdx) setSelectedIdx(idx);
-      else if (idx === selectedIdx) emitSelectedState();
+      setState(idx, { ...state, zoom: newZoom });
+      if (!isBatch) {
+        // Auto-select the cell being pinched, so the slider tracks it
+        if (idx !== selectedIdx) setSelectedIdx(idx);
+        else emitSelectedState();
+      }
       redraw();
     }
 
@@ -457,7 +564,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [template, gap, padding, exportWidth, selectedIdx, snapGuides.x, snapGuides.y]);
+  }, [template, gap, padding, exportWidth, selectedIdx, snapGuides.x, snapGuides.y, mode]);
 
   // Keyboard: arrows nudge selected cell pan, esc deselects
   useEffect(() => {
@@ -475,9 +582,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       else if (e.key === "ArrowDown") dy = step;
       else return;
       e.preventDefault();
-      const state = cellStatesRef.current[selectedIdx];
-      if (!state) return;
-      state.pan = { x: state.pan.x + dx, y: state.pan.y + dy };
+      const state = getState(selectedIdx);
+      setState(selectedIdx, { ...state, pan: { x: state.pan.x + dx, y: state.pan.y + dy } });
       emitSelectedState();
       redraw();
     }
@@ -487,25 +593,29 @@ const CollageCanvas = forwardRef(function CollageCanvas(
 
   // Export at target resolution + cell controls for panel
   useImperativeHandle(ref, () => ({
+    // Cell index under a viewport point, or -1 (used for cross-page drops).
+    hitTestClient(clientX, clientY) {
+      const canvas = canvasRef.current;
+      if (!canvas) return -1;
+      const rect = canvas.getBoundingClientRect();
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return -1;
+      return hitTest(clientX - rect.left, clientY - rect.top);
+    },
     setSelectedZoom(z) {
       if (selectedIdx < 0) return;
-      const state = cellStatesRef.current[selectedIdx];
-      if (!state) return;
-      state.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+      setState(selectedIdx, { ...getState(selectedIdx), zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)) });
       emitSelectedState();
       redraw();
     },
     centerSelected() {
       if (selectedIdx < 0) return;
-      const state = cellStatesRef.current[selectedIdx];
-      if (!state) return;
-      state.pan = { x: 0, y: 0 };
+      setState(selectedIdx, { ...getState(selectedIdx), pan: { x: 0, y: 0 } });
       emitSelectedState();
       redraw();
     },
     resetSelected() {
       if (selectedIdx < 0) return;
-      cellStatesRef.current[selectedIdx] = { pan: { x: 0, y: 0 }, zoom: 1 };
+      setState(selectedIdx, DEFAULT_STATE());
       emitSelectedState();
       redraw();
     },
@@ -528,12 +638,27 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const cellRects = computeCellRects(tmpl.cells, targetWidth, targetH, g, p || 0);
       const map = loadedImgsRef.current;
 
+      // Export wants the best source. If the HD image is still decoding, wait
+      // for it (bounded) rather than silently exporting the thumbnail — or,
+      // worse, an empty cell.
+      const waitFor = (img, ms = 8000) => new Promise((resolve) => {
+        if (isReady(img)) return resolve(true);
+        const timer = setTimeout(() => resolve(false), ms);
+        const done = () => { clearTimeout(timer); resolve(isReady(img)); };
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      });
+      await Promise.all(imgs.slice(0, cellRects.length).map(async (item) => {
+        const best = getPreviewCandidates(item)[0];
+        const img = best ? map.get(best) : null;
+        if (img && !isReady(img)) await waitFor(img);
+      }));
+
       for (let i = 0; i < cellRects.length; i++) {
         const rect = cellRects[i];
-        const src = getPreviewSrc(imgs[i]);
-        const img = src ? map.get(src) : null;
-        const state = cellStatesRef.current[i] || { pan: { x: 0, y: 0 }, zoom: 1 };
-        if (img && img.complete && img.naturalWidth > 0) {
+        const img = getLoadedImage(imgs[i]);
+        const state = getState(i);
+        if (img) {
           drawCellImage(ctx, img, rect, { x: state.pan.x * panScale, y: state.pan.y * panScale }, state.zoom, br);
         }
       }
@@ -574,6 +699,19 @@ const CollageCanvas = forwardRef(function CollageCanvas(
           >
             {t("replace")}
           </button>
+          {onRemove && (
+            <button
+              type="button"
+              className="flex w-full items-center px-3 py-1.5 text-left text-[12px] text-text transition-colors hover:bg-hover"
+              onClick={() => {
+                const idx = ctxMenu.cellIndex;
+                setCtxMenu(null);
+                onRemoveRef.current?.(idx);
+              }}
+            >
+              {t("remove")}
+            </button>
+          )}
         </div>
       )}
     </div>

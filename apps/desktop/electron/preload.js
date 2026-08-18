@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   setLocale: (lng) => ipcRenderer.invoke("app:set-locale", lng),
   openExternal: (url) => ipcRenderer.invoke("workspace:open-external", url),
   pickSavePath: (options) => ipcRenderer.invoke("workspace:pick-save-path", options),
+  pickDirectory: (options) => ipcRenderer.invoke("workspace:pick-directory", options),
   saveImage: (targetPath, arrayBuffer, sourceMetadataPath) => ipcRenderer.invoke("workspace:save-image", targetPath, arrayBuffer, sourceMetadataPath),
   processAndSave: (options) => ipcRenderer.invoke("workspace:process-and-save", options),
   quickRegister: (imagePath, originPath, collageSourceIds) => ipcRenderer.invoke("workspace:quick-register", imagePath, originPath, collageSourceIds),
