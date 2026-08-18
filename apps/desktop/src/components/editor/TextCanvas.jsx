@@ -3,7 +3,7 @@ import { getBgPadding, measureTextWidthDOM, getDisplayText } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
-import { buildDepthAlphaMask, scrimToCss } from "./render/canvasHelpers";
+import { buildDepthAlphaMask, scrimCoverageRect, scrimToCss } from "./render/canvasHelpers";
 
 // Half-width / half-height of a layer as fractions of the image rect — for
 // element-to-element alignment snapping. Text is measured via the DOM (see
@@ -416,21 +416,19 @@ export default function TextCanvas({
 
 function OverlayLayerEl({ layer, rect }) {
   if (!rect) return null;
-  const isFill = layer.kind === "fill";
-  const height = isFill ? rect.height : rect.height * (layer.height ?? 0.3);
-  const top = isFill || layer.edge === "top"
-    ? rect.y
-    : rect.y + rect.height - height;
+  // Geometry + paint both come from the shared scrim helpers so the DOM
+  // preview and the canvas export (drawScrim) can't drift apart.
+  const r = scrimCoverageRect(layer, rect);
   return (
     <div
       data-editor-layer-type="overlay"
       className="pointer-events-none absolute overflow-hidden"
       style={{
-        left: `${rect.x}px`,
-        top: `${top}px`,
-        width: `${rect.width}px`,
-        height: `${height}px`,
-        opacity: isFill ? (layer.opacity ?? 100) / 100 : 1,
+        left: `${r.x}px`,
+        top: `${r.y}px`,
+        width: `${r.width}px`,
+        height: `${r.height}px`,
+        opacity: (layer.opacity ?? 100) / 100,
         background: scrimToCss(layer),
         // Text/sticker elements carry zIndex 1 (2 while selected). Match them
         // so sibling DOM order — i.e. the layer array order — decides who

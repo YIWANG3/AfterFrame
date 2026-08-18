@@ -3,9 +3,10 @@
 // existing layer renderer (drawLayers) — template elements are instantiated as
 // text/sticker layers, so the frame tool and the text tool share one renderer.
 //
-// All template sizes/insets are fractions of the photo width (WREF), so output
-// is resolution-independent. drawLayers expects fontSize in "1920-ref px" and
-// sticker scale as a fraction of the *output* canvas width; we convert.
+// All template sizes/insets are fractions of one LAYOUT REFERENCE length
+// (WREF, see layoutRef()), so output is resolution-independent. drawLayers
+// expects fontSize in "1920-ref px" and sticker scale as a fraction of the
+// *output* canvas width; we convert.
 
 import { drawLayersOnCanvas } from "./drawLayers";
 import { drawScrim } from "./canvasHelpers";
@@ -200,9 +201,22 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
   return needs;
 }
 
+// Template fractions (pad bands, insets, text size, logo height) are all
+// relative to ONE reference length so the frame chrome scales as a unit. That
+// reference is the photo's SHORT edge × 1.5 — i.e. exactly the width of a 3:2
+// landscape frame (the aspect the templates were tuned on), so 3:2 renders as
+// before while portrait, square and panoramic photos get the same visual weight
+// of logo/text/margins relative to the picture. Sizing by raw width made a
+// 16:9/pano logo ~2× the height-relative size of the same logo on a 4:5.
+export const LAYOUT_REF_PER_SHORT_EDGE = 1.5;
+export function layoutRef(width, height) {
+  return Math.min(width, height) * LAYOUT_REF_PER_SHORT_EDGE;
+}
+
 export function geometry(photo, template, adjust) {
-  const wref = photo.width || photo.naturalWidth;
+  const photoW = photo.width || photo.naturalWidth;
   const href = photo.height || photo.naturalHeight;
+  const wref = layoutRef(photoW, href);
   const pad = template.canvas?.pad || {};
   const m = adjust?.margin ?? 1; // "blank area" knob scales the padding bands
   const padPx = {
@@ -211,9 +225,9 @@ export function geometry(photo, template, adjust) {
     bottom: (pad.bottom || 0) * wref * m,
     left: (pad.left || 0) * wref * m,
   };
-  const outW = Math.round(wref + padPx.left + padPx.right);
+  const outW = Math.round(photoW + padPx.left + padPx.right);
   const outH = Math.round(href + padPx.top + padPx.bottom);
-  return { wref, href, padPx, outW, outH };
+  return { wref, photoW, href, padPx, outW, outH };
 }
 
 // Average luminance (0..1) of a canvas region — for picking legible text color
@@ -455,7 +469,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
 export function renderFrame({ photo, exif = {}, profile = {}, template, registry, logoImages = new Map(), adjust, logoColor }) {
   const adj = { text: adjust?.text ?? 1, margin: adjust?.margin ?? 1 };
   const g = geometry(photo, template, adj);
-  const { wref, padPx, outW, outH } = g;
+  const { wref, photoW, padPx, outW, outH } = g;
   const factor = wref / outW; // size(frac of wref) -> drawLayers conventions
   const isOverlay = template.family === "overlay"; // on-photo text needs adaptive contrast
 
@@ -472,11 +486,11 @@ export function renderFrame({ photo, exif = {}, profile = {}, template, registry
   // Background + photo.
   ctx.fillStyle = template.canvas?.bg?.color || "#ffffff";
   ctx.fillRect(0, 0, outW, outH);
-  ctx.drawImage(photo, padPx.left, padPx.top, wref, g.href);
+  ctx.drawImage(photo, padPx.left, padPx.top, photoW, g.href);
 
   // Optional edge scrim — keeps on-photo (overlay) text legible regardless of
   // how bright the photo is at the edge.
-  drawScrim(ctx, template.canvas?.scrim, { x: padPx.left, y: padPx.top, width: wref, height: g.href });
+  drawScrim(ctx, template.canvas?.scrim, { x: padPx.left, y: padPx.top, width: photoW, height: g.href });
 
   const layers = buildFrameLayers(ctx, {
     template, exif, profile, geom: g, adjust: adj, factor,

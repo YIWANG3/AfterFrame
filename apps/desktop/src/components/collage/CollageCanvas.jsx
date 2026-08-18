@@ -658,6 +658,13 @@ const CollageCanvas = forwardRef(function CollageCanvas(
         const rect = cellRects[i];
         const img = getLoadedImage(imgs[i]);
         const state = getState(i);
+        // Silent degradation is what makes "some cells are blurry" so hard to
+        // trace after the fact — leave a breadcrumb when a cell exports from
+        // anything other than its best (HD) candidate.
+        const best = getPreviewCandidates(imgs[i])[0];
+        if (img && best && map.get(best) !== img) {
+          console.warn(`[Collage] cell ${i} exported from a lower-res source (${img.naturalWidth}x${img.naturalHeight}); best candidate not ready: ${best}`);
+        }
         if (img) {
           drawCellImage(ctx, img, rect, { x: state.pan.x * panScale, y: state.pan.y * panScale }, state.zoom, br);
         }

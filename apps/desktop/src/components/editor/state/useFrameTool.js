@@ -212,7 +212,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       sampleCtx.fillStyle = tpl.canvas?.bg?.color || "#ffffff";
       sampleCtx.fillRect(0, 0, g.outW, g.outH);
       sampleCtx.drawImage(base, g.padPx.left, g.padPx.top);
-      drawScrim(sampleCtx, tpl.canvas?.scrim, { x: g.padPx.left, y: g.padPx.top, width: g.wref, height: g.href });
+      drawScrim(sampleCtx, tpl.canvas?.scrim, { x: g.padPx.left, y: g.padPx.top, width: g.photoW, height: g.href });
     }
 
     const built = buildFrameLayers(sampleCtx, {
@@ -220,11 +220,12 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       registry: lg.registry, logoImages: logoCacheRef.current,
       logoColor: null, isOverlay,
     });
-    // Convert width-based template pad → short-edge basis so the same pixel
-    // margin lands whatever the editor uses.
+    // Convert layout-ref-based template pad → the editor's short-edge basis so
+    // the same pixel margin lands whatever the editor uses (g.wref is the
+    // renderer's layout reference; see frameRender.layoutRef).
     const tp = tpl.canvas?.pad || {};
     const short = Math.min(base.width, base.height);
-    const k = base.width / short;
+    const k = g.wref / short;
     const pad = {
       top: (tp.top || 0) * k, right: (tp.right || 0) * k,
       bottom: (tp.bottom || 0) * k, left: (tp.left || 0) * k,

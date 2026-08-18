@@ -15,12 +15,14 @@ import {
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X, Brush, Blend,
+  PanelTop, PanelBottom, PanelLeft, PanelRight,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
 import { handwritingAlphaFromUrl, colorizeHandwriting } from "./render/handwritingMatte";
 import { localFileUrl as mediaUrlFor } from "../../utils/format";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
+import { gradientToCss, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
 import { isTextLayer, isStickerLayer, isOverlayLayer, layerLabel } from "./layerStack";
 import {
@@ -1120,14 +1122,15 @@ function paintToFields(patch, kind) {
 // Inline row: [swatch (opens picker)] + [Type dropdown] + [Opacity %] (+ optional trailing).
 // All children are 24px tall. Swatch is a 36x24 rectangle so a gradient is legible
 // without the endpoint colors looking like a "band" at the edge of a tiny square.
-function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChange, opacityMax = 100, trailing }) {
+function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChange, opacityMax = 100, trailing, multiStop = false }) {
   const { t } = useTranslation("editor");
   const [open, setOpen] = useState(false);
   const swatchRef = useRef(null);
   const isGrad = paint.mode === "gradient";
   const checker = "repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 5px 5px";
+  // The swatch previews the gradient left→right regardless of its angle.
   const swatchBg = isGrad
-    ? `linear-gradient(90deg, ${hexToRgba(paint.gradient.from, paint.gradient.fromOpacity)}, ${hexToRgba(paint.gradient.to, paint.gradient.toOpacity)}), ${checker}`
+    ? `${gradientToCss({ ...(multiStop ? paint.gradient : { from: paint.gradient.from, fromOpacity: paint.gradient.fromOpacity, to: paint.gradient.to, toOpacity: paint.gradient.toOpacity }), angle: 90 })}, ${checker}`
     : `linear-gradient(${hexToRgba(paint.color, paint.opacity)}, ${hexToRgba(paint.color, paint.opacity)}), ${checker}`;
   return (
     <div className="mt-2 flex items-center gap-2">
@@ -1175,6 +1178,7 @@ function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChan
           onOpacityChange={(o) => onUpdate({ opacity: o })}
           gradient={paint.gradient}
           onGradientChange={(g) => onUpdate({ gradient: g })}
+          multiStop={multiStop}
         />
       )}
     </div>
@@ -1330,51 +1334,72 @@ function AlignBar({ layers, onLayersChange, allLayers }) {
 
 /* ─── Sticker layer inspector ─────────────────────────────── */
 
+const OVERLAY_EDGE_ICON = { bottom: PanelBottom, top: PanelTop, left: PanelLeft, right: PanelRight };
+
+// One inspector for every overlay: the wash a frame preset ships with and the
+// user's own 蒙层 are the same layer type, so both get paint (solid / multi-
+// stop gradient) AND coverage (which edge it grows from + how far it reaches).
 function OverlayLayerInspector({ layer, update }) {
   const { t } = useTranslation("editor");
-  if (layer.kind !== "fill") {
-    return (
-      <Section label={t("text.overlaySettings")}>
-        <SliderRow
-          label={t("text.coverage")}
-          min={5}
-          max={100}
-          value={Math.round((layer.height ?? 0.3) * 100)}
-          onChange={(height) => update(layer.id, { height: height / 100 })}
-          suffix="%"
-        />
-      </Section>
-    );
-  }
+  const s = normalizeScrim(layer);
   const updatePaint = (patch) => {
     const next = {};
     if (patch.mode !== undefined) next.mode = patch.mode;
     if (patch.color !== undefined) next.color = patch.color;
     if (patch.opacity !== undefined) next.opacity = Math.round(patch.opacity * 100);
-    if (patch.gradient) next.gradient = { ...layer.gradient, ...patch.gradient };
+    if (patch.gradient) next.gradient = { ...s.gradient, ...patch.gradient };
     update(layer.id, next);
   };
+  const edgeBtn = (active) => [
+    "flex h-6 w-6 items-center justify-center rounded border transition-colors",
+    active
+      ? "border-[rgb(var(--accent-color)/0.4)] bg-[rgb(var(--accent-color)/0.08)] text-[rgb(var(--accent-color))]"
+      : "border-border/60 bg-app text-muted2 hover:bg-hover hover:text-text",
+  ].join(" ");
   return (
-    <Section label={t("text.overlaySettings")}>
-      <PaintRow
-        paint={{
-          mode: layer.mode === "gradient" ? "gradient" : "solid",
-          color: layer.color ?? "#000000",
-          opacity: (layer.opacity ?? 100) / 100,
-          gradient: {
-            from: layer.gradient?.from ?? "#000000",
-            fromOpacity: layer.gradient?.fromOpacity ?? 0,
-            to: layer.gradient?.to ?? "#000000",
-            toOpacity: layer.gradient?.toOpacity ?? 0.7,
-            angle: layer.gradient?.angle ?? 180,
-          },
-        }}
-        availableModes={["solid", "gradient"]}
-        onUpdate={updatePaint}
-        opacityValue={layer.opacity ?? 100}
-        onOpacityChange={(opacity) => update(layer.id, { opacity })}
-      />
-    </Section>
+    <>
+      <Section label={t("text.overlaySettings")}>
+        <PaintRow
+          paint={{ mode: s.mode, color: s.color, opacity: s.opacity / 100, gradient: s.gradient }}
+          availableModes={["solid", "gradient"]}
+          multiStop
+          onUpdate={updatePaint}
+          opacityValue={s.opacity}
+          onOpacityChange={(opacity) => update(layer.id, { opacity })}
+        />
+      </Section>
+      <Section
+        label={t("text.coverage")}
+        right={(
+          <div className="flex items-center gap-1" title={t("text.coverageEdge")}>
+            {OVERLAY_EDGES.map((edge) => {
+              const Icon = OVERLAY_EDGE_ICON[edge];
+              return (
+                <button
+                  key={edge}
+                  type="button"
+                  title={t(`text.coverageEdges.${edge}`)}
+                  aria-pressed={s.edge === edge}
+                  className={edgeBtn(s.edge === edge)}
+                  onClick={() => update(layer.id, { edge })}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      >
+        <SliderRow
+          label={t("text.coverage")}
+          min={5}
+          max={100}
+          value={Math.round(s.coverage * 100)}
+          onChange={(coverage) => update(layer.id, { coverage: coverage / 100 })}
+          suffix="%"
+        />
+      </Section>
+    </>
   );
 }
 

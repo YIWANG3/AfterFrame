@@ -1,3 +1,5 @@
+import { normalizeScrim } from "./render/canvasHelpers";
+
 let nextId = 1;
 
 // Measure a text run's width the SAME WAY the editor renders it — via a hidden
@@ -260,27 +262,31 @@ export function createStickerLayer({ stickerPath, naturalWidth, naturalHeight, s
   };
 }
 
-// Full-photo color wash. It deliberately has no x/y/size transform: the photo
-// content rect is resolved by the preview/export pipeline, so crop and canvas
-// margins cannot make the overlay drift. Because it is a normal stack item,
-// users can add several and interleave them with text/sticker layers.
+// Color wash over the photo (the "蒙层"). It deliberately has no x/y/size
+// transform: the photo content rect is resolved by the preview/export
+// pipeline, so crop and canvas margins cannot make the overlay drift. Where it
+// paints is instead described by `edge` + `coverage` (fraction of the photo
+// measured from that edge; 1 = the whole photo), so ONE layer type serves both
+// the user's own overlays and the edge scrim a frame preset ships with. Because
+// it is a normal stack item, users can add several and interleave them with
+// text/sticker layers.
+//
+// `overrides` may also be a template scrim in the legacy edge shape
+// ({ edge, from, to, height } with rgba strings) — normalizeScrim converts it.
 export function createOverlayLayer(overrides = {}) {
+  const { id, type, sourceLabel, fromPreset, ...scrim } = overrides || {};
+  const normalized = normalizeScrim(scrim);
   return {
-    id: `overlay-${nextId++}`,
-    type: "overlay",
-    sourceLabel: "Overlay",
-    kind: "fill",
-    mode: "gradient",
-    color: "#000000",
-    opacity: 100,
-    gradient: {
-      from: "#000000",
-      fromOpacity: 0,
-      to: "#000000",
-      toOpacity: 0.7,
-      angle: 180,
-    },
-    ...overrides,
+    id: id || `overlay-${nextId++}`,
+    type: type || "overlay",
+    sourceLabel: sourceLabel || "Overlay",
+    ...(fromPreset != null ? { fromPreset } : {}),
+    mode: normalized.mode,
+    color: normalized.color,
+    opacity: normalized.opacity,
+    gradient: normalized.gradient,
+    edge: normalized.edge,
+    coverage: normalized.coverage,
   };
 }
 

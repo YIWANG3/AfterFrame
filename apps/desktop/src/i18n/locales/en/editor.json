@@ -33,6 +33,8 @@
     "overlayLayer": "Overlay",
     "overlaySettings": "Overlay fill",
     "coverage": "Coverage",
+    "coverageEdge": "From edge",
+    "coverageEdges": { "bottom": "From bottom", "top": "From top", "left": "From left", "right": "From right" },
     "addTextLayer": "Add text layer",
     "addStickerLayer": "Add sticker layer",
     "hideStickerPicker": "Hide sticker picker",

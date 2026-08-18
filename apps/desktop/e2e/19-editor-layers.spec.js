@@ -99,6 +99,110 @@ test.describe("Overlay layers", () => {
   });
 });
 
+// One overlay model: the wash a frame preset ships with IS an overlay layer,
+// with the same paint controls (solid / multi-stop gradient) plus a coverage
+// (edge + how far the wash reaches). Guards that the preset's scrim arrives
+// as an editable overlay with its edge/coverage, that editing coverage/edge
+// moves the live element the way the export math does, and that the picker
+// can add a third gradient stop.
+test.describe("Overlay coverage + multi-stop gradient", () => {
+  let app, window, userDataDir;
+
+  test.beforeAll(async () => {
+    const fixturePath = await ensureFixture();
+    ({ app, window, userDataDir } = await launchApp({ testName: "overlay-coverage" }));
+    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
+    await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
+      .toBe(true);
+    await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  });
+  test.afterAll(async () => { await closeApp(app, userDataDir); });
+
+  const overlayEl = () => window.locator('[data-editor-layer-type="overlay"]').first();
+  const box = async () => {
+    const b = await overlayEl().boundingBox();
+    return b;
+  };
+
+  test("a frame preset's scrim is a normal overlay layer with edge + coverage", async () => {
+    await window.evaluate(() => window.__afterframeTest.applyFramePreset("overlay-exif"));
+    await expect.poll(async () => (await state(window)).layers.filter((l) => l.type === "overlay").length, { timeout: 5000 }).toBe(1);
+    const scrim = (await state(window)).layers.find((l) => l.type === "overlay");
+    expect(scrim.fromPreset).toBe(true);
+    expect(scrim.edge).toBe("bottom");
+    expect(scrim.coverage).toBeCloseTo(0.32, 5);
+    expect(scrim.mode).toBe("gradient");
+    expect(scrim.gradientStops).toHaveLength(2);
+    // Template stops run inner (transparent) → edge (dark).
+    expect(scrim.gradientStops[0].opacity).toBe(0);
+    expect(scrim.gradientStops[1].opacity).toBeCloseTo(0.5, 5);
+    // The live element only covers 32% of the photo's height.
+    const content = (await state(window)).outputContentRect;
+    const b = await box();
+    expect(b.height / content.height).toBeCloseTo(0.32, 1);
+    expect(b.width / content.width).toBeCloseTo(1, 1);
+  });
+
+  test("coverage + edge edits move the live overlay element", async () => {
+    const scrimId = (await state(window)).layers.find((l) => l.type === "overlay").id;
+    await window.evaluate((id) => window.__afterframeTest.selectLayers([id]), scrimId);
+    const coverage = async () => (await state(window)).layers.find((l) => l.id === scrimId).coverage;
+    const edge = async () => (await state(window)).layers.find((l) => l.id === scrimId).edge;
+
+    // 100% = the whole photo; use that as the reference frame for the edges.
+    const slider = window.locator('input[type="range"][min="5"][max="100"]').first();
+    await expect(slider).toBeVisible();
+    await slider.fill("100");
+    await expect.poll(coverage, { timeout: 5000 }).toBe(1);
+    const full = await box();
+
+    // 60% from the bottom: bottom edges line up, height shrinks.
+    await slider.fill("60");
+    await expect.poll(coverage, { timeout: 5000 }).toBeCloseTo(0.6, 5);
+    let b = await box();
+    expect(b.height / full.height).toBeCloseTo(0.6, 1);
+    expect(b.y + b.height).toBeCloseTo(full.y + full.height, 0);
+
+    // Switch the edge to "top": the same 60% now hangs from the top.
+    await window.getByTitle("From top").click();
+    await expect.poll(edge, { timeout: 5000 }).toBe("top");
+    b = await box();
+    expect(b.y).toBeCloseTo(full.y, 0);
+    expect(b.height / full.height).toBeCloseTo(0.6, 1);
+
+    // "left": coverage becomes a width fraction.
+    await window.getByTitle("From left").click();
+    await expect.poll(edge, { timeout: 5000 }).toBe("left");
+    b = await box();
+    expect(b.x).toBeCloseTo(full.x, 0);
+    expect(b.width / full.width).toBeCloseTo(0.6, 1);
+    expect(b.height / full.height).toBeCloseTo(1, 1);
+  });
+
+  test("the picker adds a third gradient stop where the bar is clicked", async () => {
+    const scrimId = (await state(window)).layers.find((l) => l.type === "overlay").id;
+    await window.evaluate((id) => window.__afterframeTest.selectLayers([id]), scrimId);
+    await window.getByTitle("Edit gradient").first().click();
+    const bar = window.locator('[aria-label^="Gradient stop"]').first().locator("..").locator("div").first();
+    await expect(bar).toBeVisible();
+    await expect(window.locator('[aria-label^="Gradient stop"]')).toHaveCount(2);
+    const bb = await bar.boundingBox();
+    await window.mouse.click(bb.x + bb.width * 0.5, bb.y + bb.height / 2);
+    await expect(window.locator('[aria-label^="Gradient stop"]')).toHaveCount(3);
+    const stops = (await state(window)).layers.find((l) => l.id === scrimId).gradientStops;
+    expect(stops).toHaveLength(3);
+    expect(stops[1].pos).toBeGreaterThan(0.35);
+    expect(stops[1].pos).toBeLessThan(0.65);
+    // Inserted stop starts invisible: interpolated between its neighbours.
+    expect(stops[1].opacity).toBeGreaterThan(0);
+    expect(stops[1].opacity).toBeLessThan(0.5);
+    await window.keyboard.press("Escape");
+  });
+});
+
 // Unified history: transform edits AND layer edits share ONE undo/redo timeline,
 // so the global undo (Cmd+Z / backdoor.undo) reverses whichever was last — not a
 // separate layer-only stack. Also guards that a frame preset is a single atomic

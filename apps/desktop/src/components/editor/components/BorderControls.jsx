@@ -159,6 +159,7 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
             onModeChange={(m) => onBg({ ...bg, mode: m, gradient: bg?.gradient || DEFAULT_GRAD })}
             gradient={grad}
             onGradientChange={(patch) => onBg({ ...bg, mode: "gradient", gradient: { ...grad, ...patch } })}
+            multiStop
           />
         )}
       </div>
