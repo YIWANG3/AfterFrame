@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coveredFieldsFromLogoVariants, fitLogoBounds, resolveTokens } from "./frameRender";
+import { coveredFieldsFromLogoVariants, fitLogoBounds, geometry, layoutRef, resolveTokens } from "./frameRender";
 
 describe("frame logo bounds", () => {
   it("moves a rotated wordmark down when its top edge would be clipped", () => {
@@ -66,5 +66,34 @@ describe("product lockup text coverage", () => {
     const covered = coveredFieldsFromLogoVariants([{}]);
 
     expect(resolveTokens("{camera_model}", exif, {}, covered)).toBe("Luna Ultra");
+  });
+});
+
+describe("frame layout reference", () => {
+  const tpl = { canvas: { pad: { bottom: 0.1 } } };
+
+  it("is the photo width for a 3:2 landscape (templates' native aspect)", () => {
+    expect(layoutRef(3000, 2000)).toBe(3000);
+    const g = geometry({ width: 3000, height: 2000 }, tpl, {});
+    expect(g.wref).toBe(3000);
+    expect(g.photoW).toBe(3000);
+    expect(g.padPx.bottom).toBeCloseTo(300);
+    expect(g.outW).toBe(3000);
+    expect(g.outH).toBe(2300);
+  });
+
+  it("gives portrait and panoramic photos the same chrome weight relative to the short edge", () => {
+    // 4:5 portrait and a ~1.86:1 panorama with the same short edge → same
+    // layout reference, so a 5%-of-wref logo is the same fraction of the
+    // picture's short side on both (was 5% of the WIDTH: 2× taller on the pano).
+    const portrait = geometry({ width: 3943, height: 4320 }, tpl, {});
+    const pano = geometry({ width: 7680, height: 4135 }, tpl, {});
+    expect(portrait.wref).toBeCloseTo(3943 * 1.5);
+    expect(pano.wref).toBeCloseTo(4135 * 1.5);
+    expect(portrait.wref / Math.min(3943, 4320)).toBeCloseTo(pano.wref / Math.min(7680, 4135));
+    // The photo itself still draws at its real width.
+    expect(pano.photoW).toBe(7680);
+    expect(pano.outW).toBe(7680);
+    expect(portrait.outW).toBe(3943);
   });
 });

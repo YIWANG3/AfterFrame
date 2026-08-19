@@ -18,11 +18,7 @@ import { hasPad, getOutputDimensions } from "../imageMath";
 // across the WxH output (same angle convention as the live preview / text).
 function bgFillStyle(ctx, bg, W, H) {
   if (bg?.mode === "gradient" && bg.gradient) {
-    const g = bg.gradient;
-    return angledLinearGradient(ctx, {
-      angle: g.angle ?? 180, from: g.from, to: g.to,
-      fromOpacity: g.fromOpacity ?? 1, toOpacity: g.toOpacity ?? 1,
-    }, W, H);
+    return angledLinearGradient(ctx, bg.gradient, W, H, { fromDefault: "#ffffff", toDefault: "#000000" });
   }
   return bg?.color || "#ffffff";
 }

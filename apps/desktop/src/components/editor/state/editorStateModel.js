@@ -32,10 +32,19 @@ function padEquals(a, b) {
 }
 
 // Field-wise (no JSON.stringify: stateEquals runs in per-frame drag paths).
+function stopsEqual(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].pos !== b[i].pos || a[i].color !== b[i].color || a[i].opacity !== b[i].opacity) return false;
+  }
+  return true;
+}
+
 function gradientEquals(a, b) {
   if (!a || !b) return a === b;
   return a.from === b.from && a.to === b.to && a.fromOpacity === b.fromOpacity &&
-    a.toOpacity === b.toOpacity && a.angle === b.angle;
+    a.toOpacity === b.toOpacity && a.angle === b.angle && stopsEqual(a.stops ?? null, b.stops ?? null);
 }
 
 function bgEquals(a, b) {
@@ -49,12 +58,10 @@ function bgEquals(a, b) {
 // kept deliberately so any state that still carries one keeps rendering.
 function scrimEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
-  if ((a.kind ?? "edge") !== (b.kind ?? "edge")) return false;
-  if (a.kind === "fill") {
-    return a.mode === b.mode && a.color === b.color && a.opacity === b.opacity &&
-      gradientEquals(a.gradient ?? null, b.gradient ?? null);
-  }
-  return a.edge === b.edge && a.height === b.height && a.from === b.from && a.to === b.to;
+  return a.mode === b.mode && a.color === b.color && a.opacity === b.opacity &&
+    a.edge === b.edge && a.coverage === b.coverage &&
+    a.height === b.height && a.from === b.from && a.to === b.to &&
+    gradientEquals(a.gradient ?? null, b.gradient ?? null);
 }
 
 export function canvasEquals(a, b) {
@@ -65,11 +72,12 @@ export function canvasEquals(a, b) {
 
 function cloneCanvas(canvas) {
   if (!canvas) return { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null };
+  const cloneGradient = (g) => (g ? { ...g, ...(g.stops ? { stops: g.stops.map((s) => ({ ...s })) } : {}) } : g);
   const bg = canvas.bg
-    ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: { ...canvas.bg.gradient } } : {}) }
+    ? { ...canvas.bg, ...(canvas.bg.gradient ? { gradient: cloneGradient(canvas.bg.gradient) } : {}) }
     : null;
   const scrim = canvas.scrim
-    ? { ...canvas.scrim, ...(canvas.scrim.gradient ? { gradient: { ...canvas.scrim.gradient } } : {}) }
+    ? { ...canvas.scrim, ...(canvas.scrim.gradient ? { gradient: cloneGradient(canvas.scrim.gradient) } : {}) }
     : null;
   return { pad: { ...canvas.pad }, bg, scrim };
 }

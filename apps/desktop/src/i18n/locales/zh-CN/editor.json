@@ -33,6 +33,8 @@
     "overlayLayer": "蒙层",
     "overlaySettings": "蒙层填充",
     "coverage": "覆盖范围",
+    "coverageEdge": "起始边",
+    "coverageEdges": { "bottom": "从底部", "top": "从顶部", "left": "从左侧", "right": "从右侧" },
     "addTextLayer": "添加文字图层",
     "addStickerLayer": "添加贴纸图层",
     "hideStickerPicker": "隐藏贴纸选择器",

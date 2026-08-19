@@ -729,7 +729,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     }
     // Apply state + layers live, then commit a single combined (atomic) entry.
     const presetOverlay = res?.scrim
-      ? createOverlayLayer({ kind: res.scrim.kind ?? "edge", ...res.scrim, sourceLabel: t("text.overlayLayer"), fromPreset: true })
+      ? createOverlayLayer({ ...res.scrim, sourceLabel: t("text.overlayLayer"), fromPreset: true })
       : null;
     applyState(nextState);
     // The preset scrim used to be canvas metadata beneath every layer. Keep
@@ -807,6 +807,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             handwriting: l.handwriting
               ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
               : null,
+            // Overlay (蒙层) model: paint + where it covers.
+            ...(l.type === "overlay" ? {
+              fromPreset: !!l.fromPreset, mode: l.mode, opacity: l.opacity,
+              edge: l.edge, coverage: l.coverage,
+              gradientStops: l.gradient?.stops?.map((st) => ({ ...st })) || null,
+              gradientAngle: l.gradient?.angle,
+            } : {}),
           })),
           displayLayers: displayLayers.map((l) => ({ id: l.id, x: l.x, y: l.y })),
           selectedIds: [...selectedIds],

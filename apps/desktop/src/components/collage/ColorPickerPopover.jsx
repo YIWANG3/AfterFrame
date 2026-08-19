@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
+import { gradientColorAt, gradientStops, gradientWithStops } from "../editor/render/canvasHelpers";
 
 // ── Color math ────────────────────────────────────────────
 
@@ -220,6 +221,10 @@ export default function ColorPickerPopover({
   onModeChange,
   gradient,
   onGradientChange,
+  // Multi-stop gradients (Figma/Sketch style): the bar holds N draggable stops
+  // and onGradientChange receives the whole gradient ({ stops, angle, from/to
+  // kept in sync }). Off by default: text-layer paint stores only two stops.
+  multiStop = false,
 }) {
   const { t } = useTranslation("collage");
   const popoverRef = useRef(null);
@@ -227,19 +232,67 @@ export default function ColorPickerPopover({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const [activeStop, setActiveStop] = useState(0); // 0 = from, 1 = to
+  const [activeStopState, setActiveStop] = useState(0); // index into stops (2-stop: 0 = from, 1 = to)
   const isGradient = mode === "gradient";
   const showTabs = Array.isArray(availableModes) && availableModes.length > 1;
+
+  // Resolved stop list. Two-stop mode reads from/to directly (never `stops`)
+  // so a consumer that only persists from/to can't drift from what it shows.
+  const stops = isGradient && gradient
+    ? (multiStop
+      ? gradientStops(gradient)
+      : [
+        { pos: 0, color: gradient.from || "#000000", opacity: gradient.fromOpacity ?? 1 },
+        { pos: 1, color: gradient.to || "#000000", opacity: gradient.toOpacity ?? 1 },
+      ])
+    : null;
+  const activeStop = stops ? Math.min(activeStopState, stops.length - 1) : activeStopState;
 
   // What color/opacity the SV-square + hue + hex currently edit.
   // - solid mode: the prop color/opacity
   // - gradient mode: the active stop's color/opacity
-  const effectiveColor = isGradient && gradient
-    ? (activeStop === 0 ? (gradient.from || "#000000") : (gradient.to || "#000000"))
-    : (color || "#000000");
-  const effectiveOpacity = isGradient && gradient
-    ? (activeStop === 0 ? (gradient.fromOpacity ?? 1) : (gradient.toOpacity ?? 1))
-    : (opacityProp ?? 1);
+  const effectiveColor = stops ? (stops[activeStop]?.color || "#000000") : (color || "#000000");
+  const effectiveOpacity = stops ? (stops[activeStop]?.opacity ?? 1) : (opacityProp ?? 1);
+
+  // Emit a stop-list change. Two-stop consumers get the legacy {from,to,...}
+  // patch; multi-stop consumers get the full gradient with `stops`.
+  function emitStops(nextStops) {
+    if (!onGradientChange) return;
+    if (multiStop) {
+      onGradientChange(gradientWithStops(gradient, nextStops));
+    } else {
+      const [a, b] = nextStops;
+      onGradientChange({ from: a.color, fromOpacity: a.opacity, to: b.color, toOpacity: b.opacity });
+    }
+  }
+  function patchActiveStop(patch) {
+    if (!stops) return;
+    emitStops(stops.map((st, i) => (i === activeStop ? { ...st, ...patch } : st)));
+  }
+  function addStopAt(pos) {
+    if (!stops || !multiStop) return;
+    const p = Math.max(0, Math.min(1, pos));
+    const next = [...stops, { pos: p, ...gradientColorAt(stops, p) }].sort((a, b) => a.pos - b.pos);
+    setActiveStop(next.findIndex((st) => st.pos === p));
+    emitStops(next);
+  }
+  function removeActiveStop() {
+    if (!stops || !multiStop || stops.length <= 2) return;
+    const next = stops.filter((_, i) => i !== activeStop);
+    setActiveStop(Math.max(0, activeStop - 1));
+    emitStops(next);
+  }
+  function moveStop(index, pos) {
+    if (!stops || !multiStop) return;
+    const p = Math.max(0, Math.min(1, pos));
+    const moved = stops.map((st, i) => (i === index ? { ...st, pos: p } : st));
+    // Keep the active handle on the stop the user is dragging even when it
+    // crosses a neighbour (the list re-sorts by position).
+    const target = moved[index];
+    const sorted = [...moved].sort((a, b) => a.pos - b.pos);
+    setActiveStop(sorted.indexOf(target));
+    emitStops(sorted);
+  }
 
   // Init HSV from effective color. Only carry hue across if the color is
   // chromatic (s > threshold); for grayscale colors hue is meaningless and
@@ -255,15 +308,17 @@ export default function ColorPickerPopover({
   const opacity = effectiveOpacity != null ? effectiveOpacity : localOpacity;
 
   function emitColorChange(hex) {
-    if (isGradient && onGradientChange) {
-      onGradientChange(activeStop === 0 ? { from: hex } : { to: hex });
+    if (stops && onGradientChange) {
+      if (multiStop) patchActiveStop({ color: hex });
+      else onGradientChange(activeStop === 0 ? { from: hex } : { to: hex });
     } else if (onChange) {
       onChange(hex);
     }
   }
   function emitOpacityChange(op) {
-    if (isGradient && onGradientChange) {
-      onGradientChange(activeStop === 0 ? { fromOpacity: op } : { toOpacity: op });
+    if (stops && onGradientChange) {
+      if (multiStop) patchActiveStop({ opacity: op });
+      else onGradientChange(activeStop === 0 ? { fromOpacity: op } : { toOpacity: op });
     } else if (onOpacityChange) {
       onOpacityChange(op);
     } else {
@@ -271,6 +326,8 @@ export default function ColorPickerPopover({
     }
   }
   const setOpacity = emitOpacityChange;
+  const removeStopRef = useRef(null);
+  removeStopRef.current = removeActiveStop;
 
   // When the externally-driven effective color changes (mode flip, stop switch,
   // parent updated the value), re-sync the internal HSV so the SV square reflects it.
@@ -288,7 +345,7 @@ export default function ColorPickerPopover({
     if (!anchorEl) return;
     const rect = anchorEl.getBoundingClientRect();
     const popW = 240;
-    const popH = isGradient ? 400 : 310;
+    const popH = isGradient ? (multiStop ? 430 : 400) : 310;
     const m = 8; // viewport margin
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -315,7 +372,7 @@ export default function ColorPickerPopover({
       };
     }
     setPos(chosen);
-  }, [anchorEl, isGradient]);
+  }, [anchorEl, isGradient, multiStop]);
 
   // Click outside — delay registration by one frame to avoid catching the opening click
   useEffect(() => {
@@ -327,6 +384,12 @@ export default function ColorPickerPopover({
     }
     function handleKey(e) {
       if (e.key === "Escape") onCloseRef.current();
+      // Delete/Backspace removes the active gradient stop (Figma/Sketch), but
+      // never while the user is typing in one of the popover's inputs.
+      if ((e.key === "Delete" || e.key === "Backspace") && popoverRef.current?.contains(document.activeElement)
+        && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
+        removeStopRef.current?.();
+      }
     }
     id = requestAnimationFrame(() => {
       document.addEventListener("pointerdown", handle);
@@ -419,28 +482,54 @@ export default function ColorPickerPopover({
           </div>
         )}
 
-        {isGradient && gradient && (
+        {isGradient && stops && (
           <>
             <div className="flex items-center gap-2">
               <GradientStopsBar
-                gradient={gradient}
+                stops={stops}
                 activeStop={activeStop}
                 onSelectStop={setActiveStop}
+                onAddStop={multiStop ? addStopAt : null}
+                onMoveStop={multiStop ? moveStop : null}
+                addHint={multiStop ? t("addStopHint") : undefined}
               />
+              {multiStop && (
+                <button
+                  type="button"
+                  title={t("removeStop")}
+                  disabled={stops.length <= 2}
+                  onClick={removeActiveStop}
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-border/60 bg-app text-muted hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-app disabled:hover:text-muted"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"/></svg>
+                </button>
+              )}
               <button
                 type="button"
                 title={t("reverseStops")}
-                onClick={() => onGradientChange?.({
-                  from: gradient.to,
-                  fromOpacity: gradient.toOpacity,
-                  to: gradient.from,
-                  toOpacity: gradient.fromOpacity,
-                })}
+                onClick={() => emitStops(stops.map((st) => ({ ...st, pos: 1 - st.pos })).reverse())}
                 className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-border/60 bg-app text-muted hover:bg-hover hover:text-text"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
               </button>
             </div>
+            {multiStop && (
+              <div className="flex items-center gap-2 text-[11px] text-muted2">
+                <span className="flex-1 truncate">{t("stopPosition")}</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round((stops[activeStop]?.pos ?? 0) * 100)}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) moveStop(activeStop, Math.max(0, Math.min(100, v)) / 100);
+                  }}
+                  className="hide-spinner w-12 h-6 rounded border border-border/60 bg-app px-1.5 text-center text-[11px] text-text outline-none"
+                />
+                <span className="text-[10px] text-muted2">%</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="range"
@@ -549,45 +638,93 @@ export default function ColorPickerPopover({
 
 // ── Gradient sub-components ─────────────────────────────────
 
-function GradientStopsBar({ gradient, activeStop, onSelectStop }) {
-  const fromCss = hexToRgba(gradient.from || "#000000", gradient.fromOpacity ?? 1);
-  const toCss = hexToRgba(gradient.to || "#ffffff", gradient.toOpacity ?? 1);
-  // Stop handles sit INSIDE the bar (not protruding) and are a thin vertical
-  // line with a soft outline — visible enough to grab, never visually noisy.
-  const Handle = ({ side, isActive, onClick }) => {
-    const stopCss = side === "left" ? fromCss : toCss;
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={`Edit ${side === "left" ? "start" : "end"} stop`}
-        className={[
-          "absolute top-0 bottom-0 rounded-[2px] cursor-pointer transition-[width] duration-100",
-          isActive ? "w-3" : "w-2",
-        ].join(" ")}
-        style={{
-          [side]: "2px",
-          background: stopCss,
-          // Always neutral white + dark double-outline so handles read on any
-          // gradient color. Active is signalled by being slightly WIDER, not
-          // by a coloured ring (which collides with the brand accent).
-          boxShadow: isActive
-            ? "0 0 0 1.5px rgba(255,255,255,1), inset 0 0 0 1px rgba(0,0,0,0.35)"
-            : "0 0 0 1px rgba(255,255,255,0.85), inset 0 0 0 1px rgba(0,0,0,0.25)",
-        }}
-      />
-    );
+function GradientStopsBar({ stops, activeStop, onSelectStop, onAddStop, onMoveStop, addHint }) {
+  const barRef = useRef(null);
+  const dragRef = useRef(null); // { index, moved }
+  const css = stops.map((st) => `${hexToRgba(st.color, st.opacity)} ${Math.round(st.pos * 1000) / 10}%`).join(", ");
+  const editable = !!onMoveStop;
+
+  const posFromEvent = (e) => {
+    const rect = barRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return 0;
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   };
+
+  // Drag a stop handle along the bar (pointer capture keeps the drag alive
+  // when the cursor leaves the 24px-tall bar). A plain click just selects.
+  const onHandleDown = (index) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onSelectStop(index);
+    if (!editable) return;
+    dragRef.current = { index, moved: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onHandleMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.moved = true;
+    onMoveStop(d.index, posFromEvent(e));
+  };
+  const onHandleUp = (e) => {
+    if (!dragRef.current) return;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    dragRef.current = null;
+  };
+  // Click on the bar itself (not a handle) inserts a stop there — the way
+  // Figma/Sketch gradient bars work.
+  const onBarDown = (e) => {
+    if (!onAddStop) return;
+    e.stopPropagation();
+    e.preventDefault();
+    onAddStop(posFromEvent(e));
+  };
+
   return (
-    <div className="relative h-6 flex-1">
+    <div className="relative h-6 flex-1" ref={barRef}>
       <div
-        className="absolute inset-0 rounded"
+        className={["absolute inset-0 rounded", onAddStop ? "cursor-copy" : ""].join(" ")}
+        title={addHint}
         style={{
-          background: `linear-gradient(90deg, ${fromCss}, ${toCss}), repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%) 50% / 6px 6px`,
+          background: `linear-gradient(90deg, ${css}), repeating-conic-gradient(#aaa 0% 25%, transparent 0% 50%) 50% / 6px 6px`,
         }}
+        onPointerDown={onBarDown}
       />
-      <Handle side="left" isActive={activeStop === 0} onClick={(e) => { e.stopPropagation(); onSelectStop(0); }} />
-      <Handle side="right" isActive={activeStop === 1} onClick={(e) => { e.stopPropagation(); onSelectStop(1); }} />
+      {stops.map((st, i) => {
+        const isActive = i === activeStop;
+        // Handles sit INSIDE the bar (translate so the end stops don't
+        // protrude) as thin vertical bars with a neutral white + dark double
+        // outline, so they read on any gradient color. Active = slightly WIDER
+        // (not a coloured ring, which would collide with the brand accent).
+        // The stop's own color fills the handle so its alpha is visible against
+        // the checkerboard.
+        const w = isActive ? 12 : 8;
+        return (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Gradient stop ${i + 1}`}
+            onPointerDown={onHandleDown(i)}
+            onPointerMove={onHandleMove}
+            onPointerUp={onHandleUp}
+            onPointerCancel={onHandleUp}
+            onClick={(e) => e.stopPropagation()}
+            className={[
+              "absolute top-0 bottom-0 rounded-[2px] transition-[width] duration-100",
+              editable ? "cursor-ew-resize" : "cursor-pointer",
+            ].join(" ")}
+            style={{
+              left: `calc(${st.pos * 100}% - ${st.pos * w}px)`,
+              width: w,
+              zIndex: isActive ? 2 : 1,
+              background: hexToRgba(st.color, st.opacity),
+              boxShadow: isActive
+                ? "0 0 0 1.5px rgba(255,255,255,1), inset 0 0 0 1px rgba(0,0,0,0.35)"
+                : "0 0 0 1px rgba(255,255,255,0.85), inset 0 0 0 1px rgba(0,0,0,0.25)",
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

@@ -432,9 +432,17 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   // Pan/zoom per image, shared by every batch page canvas (keyed by asset).
   const batchCellStates = useRef(new Map());
 
+  // Assets whose HD preview we already asked for in THIS collage session.
+  // Reset on every open: the overlay stays mounted across sessions and the
+  // incoming items come from the gallery cache (no HD path even when the file
+  // exists), so a stale "attempted" set would leave those cells on the 512px
+  // thumbnail forever — the exported collage then has some cells blurry.
+  const hdAttemptedRef = useRef(new Set());
+
   // Initialize from items prop
   useEffect(() => {
     if (!open || !items?.length) return;
+    hdAttemptedRef.current = new Set();
     setImages(items);
     const templates = getTemplatesForCount(items.length);
     setTemplate(templates[0] || null);
@@ -496,8 +504,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   // Lazily generate 2000px HD previews for cells that lack one, so the canvas
   // and export render from HD rather than the 512px thumbnail. HD generation is
   // off by default catalog-wide; here we generate just for the cells in use and
-  // patch the HD path back in once ready. Tracked per asset so it runs once.
-  const hdAttemptedRef = useRef(new Set());
+  // patch the HD path back in once ready. Tracked per asset (hdAttemptedRef)
+  // so it runs once per session.
   useEffect(() => {
     if (!open || !images.length) return undefined;
     const targets = images.filter(

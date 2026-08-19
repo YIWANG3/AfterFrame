@@ -13,93 +13,213 @@ export function hexToRgba(hex, alpha = 1) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// Parse a CSS color (#rgb / #rrggbb / #rrggbbaa / rgb() / rgba()) into
+// { hex, opacity }. Frame templates declare their scrim stops as
+// "rgba(0,0,0,0.5)" strings; the editor model wants hex + a separate 0-1 alpha.
+export function parseCssColor(value, fallbackOpacity = 1) {
+  const s = String(value ?? "").trim();
+  const m = s.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
+  if (m) {
+    const c = (n) => Math.max(0, Math.min(255, Math.round(Number(n)))).toString(16).padStart(2, "0");
+    return {
+      hex: `#${c(m[1])}${c(m[2])}${c(m[3])}`,
+      opacity: m[4] === undefined ? fallbackOpacity : Math.max(0, Math.min(1, Number(m[4]))),
+    };
+  }
+  if (/^#[0-9a-f]{3}$/i.test(s)) {
+    const [, r, g, b] = s;
+    return { hex: `#${r}${r}${g}${g}${b}${b}`.toLowerCase(), opacity: fallbackOpacity };
+  }
+  if (/^#[0-9a-f]{6}$/i.test(s)) return { hex: s.toLowerCase(), opacity: fallbackOpacity };
+  if (/^#[0-9a-f]{8}$/i.test(s)) return { hex: s.slice(0, 7).toLowerCase(), opacity: parseInt(s.slice(7, 9), 16) / 255 };
+  return { hex: "#000000", opacity: fallbackOpacity };
+}
+
+// ── Multi-stop gradients ────────────────────────────────────────────────────
+// A gradient is { angle, stops: [{ pos: 0..1, color: "#hex", opacity: 0..1 }] }.
+// The older two-stop shape { from, fromOpacity, to, toOpacity, angle } is still
+// accepted everywhere (text layers only ever write that shape); when both are
+// present `stops` wins. gradientStops() is the ONE place that resolves it, so
+// canvas and CSS renderers can't disagree about what a gradient means.
+const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+
+export function gradientStops(g, opts = {}) {
+  const {
+    fromDefault = "#ffffff", toDefault = "#000000",
+    fromOpacityDefault = 1, toOpacityDefault = 1,
+  } = opts;
+  if (Array.isArray(g?.stops) && g.stops.length >= 2) {
+    return g.stops
+      .map((s, i) => ({
+        pos: clamp01(s.pos ?? (i / (g.stops.length - 1))),
+        color: s.color || "#000000",
+        opacity: s.opacity == null ? 1 : clamp01(s.opacity),
+      }))
+      .sort((a, b) => a.pos - b.pos);
+  }
+  return [
+    { pos: 0, color: g?.from || fromDefault, opacity: g?.fromOpacity ?? fromOpacityDefault },
+    { pos: 1, color: g?.to || toDefault, opacity: g?.toOpacity ?? toOpacityDefault },
+  ];
+}
+
+// Build a gradient value from an explicit stops array. Keeps the two-stop
+// fields (from/to) in sync with the outermost stops so consumers that only
+// read the legacy shape (text-layer field mapping, equality checks) still see
+// a coherent value.
+export function gradientWithStops(g, stops) {
+  const sorted = [...stops].sort((a, b) => a.pos - b.pos);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  return {
+    ...(g || {}),
+    stops: sorted,
+    from: first?.color, fromOpacity: first?.opacity,
+    to: last?.color, toOpacity: last?.opacity,
+  };
+}
+
+// Color at position `t` along the stops (linear interpolation) — used when the
+// user inserts a stop mid-bar so it starts visually invisible.
+export function gradientColorAt(stops, t) {
+  const s = [...stops].sort((a, b) => a.pos - b.pos);
+  if (!s.length) return { color: "#000000", opacity: 1 };
+  if (t <= s[0].pos) return { color: s[0].color, opacity: s[0].opacity };
+  if (t >= s[s.length - 1].pos) return { color: s[s.length - 1].color, opacity: s[s.length - 1].opacity };
+  let i = 0;
+  while (i < s.length - 1 && s[i + 1].pos < t) i++;
+  const a = s[i], b = s[i + 1];
+  const span = b.pos - a.pos || 1;
+  const k = (t - a.pos) / span;
+  const ca = parseCssColor(a.color).hex, cb = parseCssColor(b.color).hex;
+  const ch = (h, o) => parseInt(h.slice(o, o + 2), 16);
+  const mix = (o) => Math.round(ch(ca, o) + (ch(cb, o) - ch(ca, o)) * k).toString(16).padStart(2, "0");
+  return { color: `#${mix(1)}${mix(3)}${mix(5)}`, opacity: a.opacity + (b.opacity - a.opacity) * k };
+}
+
+export function gradientToCss(g, opts) {
+  const stops = gradientStops(g, opts);
+  const list = stops.map((s) => `${hexToRgba(s.color, s.opacity)} ${Math.round(s.pos * 10000) / 100}%`).join(", ");
+  return `linear-gradient(${g?.angle ?? 180}deg, ${list})`;
+}
+
 // Canvas fillStyle for an angled linear gradient across a WxH box — one home
 // for the angle→vector math (0deg = up, CSS convention) shared by text fills,
-// the border background and the save path.
-export function angledLinearGradient(ctx, { angle = 180, from, to, fromOpacity = 1, toOpacity = 1 }, W, H) {
+// the border background, overlay layers and the save path. Accepts either
+// gradient shape (see gradientStops).
+export function angledLinearGradient(ctx, g, W, H, opts) {
+  const angle = g?.angle ?? 180;
   const rad = (angle * Math.PI) / 180;
   const dx = Math.sin(rad), dy = -Math.cos(rad);
   const half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
   const grad = ctx.createLinearGradient(W / 2 - dx * half, H / 2 - dy * half, W / 2 + dx * half, H / 2 + dy * half);
-  grad.addColorStop(0, hexToRgba(from || "#ffffff", fromOpacity));
-  grad.addColorStop(1, hexToRgba(to || "#000000", toOpacity));
+  for (const s of gradientStops(g, opts)) grad.addColorStop(s.pos, hexToRgba(s.color, s.opacity));
   return grad;
 }
 
 // Canvas background (the border area) → a CSS value. Solid color or a linear
-// gradient (same angle convention as text gradients: 0deg = up). Shared by the
-// live preview and the border-controls swatch so they can't diverge.
+// gradient (same angle convention as text gradients: 0deg = up). Shared by
+// the live preview and the border-controls swatch so they can't diverge.
 export function bgToCss(bg) {
   if (bg?.mode === "gradient" && bg.gradient) {
-    const g = bg.gradient;
-    return `linear-gradient(${g.angle ?? 180}deg, ${hexToRgba(g.from || "#fff", g.fromOpacity ?? 1)}, ${hexToRgba(g.to || "#000", g.toOpacity ?? 1)})`;
+    return gradientToCss(bg.gradient, { fromDefault: "#ffffff", toDefault: "#000000" });
   }
   return bg?.color || "#ffffff";
 }
 
-// Optional edge scrim over the photo — keeps on-photo (overlay preset) text
-// legible regardless of how bright the photo is at the edge. `rect` is the
-// photo's rect on the target canvas; heights are fractions of it. Shared by
-// the frame engine, the unified save path and preset generation.
-export function drawScrim(ctx, scrim, rect) {
-  if (!scrim) return;
-  // Fill scrim — full-photo wash (solid or angled gradient) used to dim the
-  // image behind text. `opacity` is the overall 0-100 slider; gradient stops
-  // carry their own 0-1 alphas. Must stay pixel-identical to the live-preview
-  // CSS in EditorOverlay (scrimToCss + element opacity).
-  if (scrim.kind === "fill") {
-    ctx.save();
-    ctx.globalAlpha = (scrim.opacity ?? 100) / 100;
-    ctx.translate(rect.x, rect.y);
-    if (scrim.mode === "gradient" && scrim.gradient) {
-      const g = scrim.gradient;
-      ctx.fillStyle = angledLinearGradient(
-        ctx,
-        {
-          angle: g.angle ?? 180,
-          from: g.from ?? "#000000",
-          fromOpacity: g.fromOpacity ?? 0,
-          to: g.to ?? "#000000",
-          toOpacity: g.toOpacity ?? 0.7,
-        },
-        rect.width,
-        rect.height
-      );
-    } else {
-      ctx.fillStyle = scrim.color ?? "#000000";
-    }
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    ctx.restore();
-    return;
-  }
-  const sh = (scrim.height ?? 0.3) * rect.height;
-  const top = scrim.edge === "top";
-  const y0 = top ? rect.y : rect.y + rect.height - sh;
-  const grad = ctx.createLinearGradient(0, y0, 0, y0 + sh);
-  // gradient runs dark→transparent away from the edge it hugs
-  grad.addColorStop(0, top ? (scrim.to ?? "rgba(0,0,0,0.5)") : (scrim.from ?? "rgba(0,0,0,0)"));
-  grad.addColorStop(1, top ? (scrim.from ?? "rgba(0,0,0,0)") : (scrim.to ?? "rgba(0,0,0,0.5)"));
-  ctx.fillStyle = grad;
-  ctx.fillRect(rect.x, y0, rect.width, sh);
+// ── Overlay / scrim ─────────────────────────────────────────────────────────
+// ONE model for "a wash over the photo", whether it came from a frame template
+// (edge scrim: { edge, from, to, height } with rgba strings) or from the user's
+// own overlay layer. Normalized shape:
+//   { mode: "solid"|"gradient", color, opacity: 0-100,
+//     gradient: { angle, stops },
+//     edge: "bottom"|"top"|"left"|"right",
+//     coverage: 0..1 }   // fraction of the photo the wash covers, measured
+//                        // from `edge`; 1 = the whole photo
+export const OVERLAY_EDGES = ["bottom", "top", "left", "right"];
+// A template edge scrim's stops run inner (from) → the edge it hugs (to).
+export const OVERLAY_EDGE_ANGLE = { bottom: 180, top: 0, left: 270, right: 90 };
+export const OVERLAY_GRADIENT_DEFAULTS = {
+  fromDefault: "#000000", toDefault: "#000000", fromOpacityDefault: 0, toOpacityDefault: 0.7,
+};
+
+export function isLegacyEdgeScrim(scrim) {
+  if (!scrim) return false;
+  if (scrim.kind === "edge") return true;
+  if (scrim.kind === "fill" || scrim.mode != null || scrim.coverage != null) return false;
+  return scrim.height != null || typeof scrim.from === "string" || typeof scrim.to === "string";
 }
 
-// Scrim → CSS for the live preview (must match drawScrim's canvas output).
-// Fill scrims: pair this background with `opacity: (scrim.opacity ?? 100)/100`
-// on the element (mirrors drawScrim's globalAlpha).
-export function scrimToCss(scrim) {
-  if (scrim?.kind === "fill") {
-    if (scrim.mode === "gradient" && scrim.gradient) {
-      const g = scrim.gradient;
-      return `linear-gradient(${g.angle ?? 180}deg, ${hexToRgba(g.from ?? "#000000", g.fromOpacity ?? 0)}, ${hexToRgba(g.to ?? "#000000", g.toOpacity ?? 0.7)})`;
-    }
-    return scrim.color ?? "#000000";
+export function normalizeScrim(scrim) {
+  if (!scrim) return null;
+  if (isLegacyEdgeScrim(scrim)) {
+    const edge = OVERLAY_EDGES.includes(scrim.edge) ? scrim.edge : "bottom";
+    const from = parseCssColor(scrim.from ?? "rgba(0,0,0,0)", 0);
+    const to = parseCssColor(scrim.to ?? "rgba(0,0,0,0.5)", 0.5);
+    return {
+      mode: "gradient",
+      color: to.hex,
+      opacity: 100,
+      gradient: gradientWithStops({ angle: OVERLAY_EDGE_ANGLE[edge] }, [
+        { pos: 0, color: from.hex, opacity: from.opacity },
+        { pos: 1, color: to.hex, opacity: to.opacity },
+      ]),
+      edge,
+      coverage: Math.max(0.01, clamp01(scrim.height ?? 0.3)),
+    };
   }
-  const top = scrim?.edge === "top";
-  const from = scrim?.from ?? "rgba(0,0,0,0)";
-  const to = scrim?.to ?? "rgba(0,0,0,0.5)";
-  return top
-    ? `linear-gradient(180deg, ${to}, ${from})`
-    : `linear-gradient(180deg, ${from}, ${to})`;
+  const edge = OVERLAY_EDGES.includes(scrim.edge) ? scrim.edge : "bottom";
+  const coverage = scrim.coverage == null ? 1 : Math.max(0.01, clamp01(scrim.coverage));
+  const g = scrim.gradient || {};
+  return {
+    mode: scrim.mode === "solid" ? "solid" : "gradient",
+    color: scrim.color ?? "#000000",
+    opacity: scrim.opacity ?? 100,
+    gradient: gradientWithStops({ angle: g.angle ?? 180 }, gradientStops(g, OVERLAY_GRADIENT_DEFAULTS)),
+    edge,
+    coverage,
+  };
+}
+
+// The sub-rectangle of `rect` an overlay actually covers.
+export function scrimCoverageRect(scrim, rect) {
+  const s = normalizeScrim(scrim);
+  if (!s || s.coverage >= 1) return { ...rect };
+  const { x, y, width, height } = rect;
+  switch (s.edge) {
+    case "top": return { x, y, width, height: height * s.coverage };
+    case "left": return { x, y, width: width * s.coverage, height };
+    case "right": { const w = width * s.coverage; return { x: x + width - w, y, width: w, height }; }
+    default: { const h = height * s.coverage; return { x, y: y + height - h, width, height: h }; }
+  }
+}
+
+// Wash over the photo — keeps on-photo (overlay preset) text legible
+// regardless of how bright the photo is at the edge, or dims the whole image.
+// `rect` is the photo's rect on the target canvas. Shared by the frame engine,
+// the unified save path and preset generation. Must stay pixel-identical to
+// the live preview (scrimToCss + element opacity/geometry in TextCanvas).
+export function drawScrim(ctx, scrim, rect) {
+  const s = normalizeScrim(scrim);
+  if (!s) return;
+  const r = scrimCoverageRect(s, rect);
+  ctx.save();
+  ctx.globalAlpha = (s.opacity ?? 100) / 100;
+  ctx.translate(r.x, r.y);
+  ctx.fillStyle = s.mode === "gradient"
+    ? angledLinearGradient(ctx, s.gradient, r.width, r.height, OVERLAY_GRADIENT_DEFAULTS)
+    : s.color;
+  ctx.fillRect(0, 0, r.width, r.height);
+  ctx.restore();
+}
+
+// Scrim → CSS background for the live preview (must match drawScrim's canvas
+// output). Pair with `opacity: (scrim.opacity ?? 100)/100` on the element and
+// size/position it by scrimCoverageRect().
+export function scrimToCss(scrim) {
+  const s = normalizeScrim(scrim);
+  if (!s) return "transparent";
+  return s.mode === "gradient" ? gradientToCss(s.gradient, OVERLAY_GRADIENT_DEFAULTS) : s.color;
 }
 
 export function getSourceDimensions(source) {
