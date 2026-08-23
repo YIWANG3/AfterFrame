@@ -9,6 +9,9 @@ const api = {
   // Capability check — facade methods always exist, so guards that previously
   // tested `window.mediaWorkspace?.method` must ask the bridge instead.
   has: (method) => typeof bridge()[method] === "function",
+  // Coarse feature flags a bridge may declare (web bridge sets these); absent
+  // on the desktop bridge, where every capability is implied by has().
+  get capabilities() { return bridge().capabilities || {}; },
 
 
   // ── files & external ──

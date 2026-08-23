@@ -76,3 +76,4 @@ apps/desktop/e2e/fixtures/big-frame-*.jpg
 
 # python packaging artefacts
 *.egg-info/
+dist-web/

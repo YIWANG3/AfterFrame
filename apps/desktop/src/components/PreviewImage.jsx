@@ -47,6 +47,9 @@ export default function PreviewImage({
       ) : null}
       {src && shouldLoad && !errored ? (
         <img
+          // A cached/instant source (blob:, warm cache) can finish before
+          // React attaches onLoad — the ref catches that missed event.
+          ref={(el) => { if (el && el.complete && el.naturalWidth > 0) setLoaded(true); }}
           src={src}
           alt={alt}
           loading="lazy"
