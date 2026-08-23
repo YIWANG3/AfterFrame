@@ -1,3 +1,4 @@
+import api from "../api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid } from "lucide-react";
@@ -84,11 +85,11 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
     try {
       const isCollection = !builtInItems.some((s) => s.id === source);
       const batch = isCollection
-        ? await window.mediaWorkspace?.browseCollection?.(source, {
+        ? await api.browseCollection(source, {
           limit: PAGE_SIZE,
           offset: nextOffset,
         })
-        : await window.mediaWorkspace?.browseImages?.({
+        : await api.browseImages({
           status: source,
           limit: PAGE_SIZE,
           offset: nextOffset,
@@ -518,9 +519,9 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     (async () => {
       for (const img of targets) hdAttemptedRef.current.add(img.asset_id);
       try {
-        await window.mediaWorkspace?.ensureHdPreviews?.(targets.map((t) => t.image_path));
+        await api.ensureHdPreviews(targets.map((t) => t.image_path));
         const details = await Promise.all(
-          targets.map((t) => Promise.resolve(window.mediaWorkspace?.getAssetDetailById?.(t.asset_id)).catch(() => null)),
+          targets.map((t) => Promise.resolve(api.getAssetDetailById(t.asset_id)).catch(() => null)),
         );
         if (cancelled) return;
         const hdById = new Map();
@@ -581,7 +582,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
       const baseStem = allSameSet ? (images[0].primary_stem || firstStem) : firstStem;
       const defaultName = `${baseStem}_collage.jpg`;
 
-      const savePath = await window.mediaWorkspace?.pickSavePath?.({
+      const savePath = await api.pickSavePath({
         defaultPath: defaultName,
         filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }, { name: "PNG", extensions: ["png"] }],
       });
@@ -589,8 +590,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
 
       const buffer = await blob.arrayBuffer();
       const firstSrc = images[0]?.image_path || null;
-      await window.mediaWorkspace?.saveImage?.(savePath, buffer, firstSrc);
-      await window.mediaWorkspace?.quickRegister?.(savePath, firstSrc, sourceAssetIds);
+      await api.saveImage(savePath, buffer, firstSrc);
+      await api.quickRegister(savePath, firstSrc, sourceAssetIds);
       onExportComplete?.(savePath);
     } catch (err) {
       console.error("[Collage] export failed:", err);
@@ -688,7 +689,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
 
   async function handleBatchExport() {
     if (!groups.length || exporting) return;
-    const dir = await window.mediaWorkspace?.pickDirectory?.();
+    const dir = await api.pickDirectory();
     if (!dir) return;
     setExporting(true);
     setExportProgress({ done: 0, total: groups.length });
@@ -706,8 +707,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
           const buffer = await blob.arrayBuffer();
           const firstSrc = group[0]?.image_path || null;
           const sourceAssetIds = group.map((g) => g.asset_id).filter(Boolean);
-          await window.mediaWorkspace?.saveImage?.(savePath, buffer, firstSrc);
-          await window.mediaWorkspace?.quickRegister?.(savePath, firstSrc, sourceAssetIds);
+          await api.saveImage(savePath, buffer, firstSrc);
+          await api.quickRegister(savePath, firstSrc, sourceAssetIds);
           exportedAny = true;
         } catch (err) {
           failed += 1;

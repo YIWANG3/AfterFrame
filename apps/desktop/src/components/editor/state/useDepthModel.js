@@ -1,3 +1,4 @@
+import api from "../../../api";
 import { useEffect, useState } from "react";
 
 // Depth model picker state. The Sticker tool lets the user swap the CoreML
@@ -8,14 +9,14 @@ export function useDepthModel({ sourcePath, onComputeDepth, onError }) {
   const [depthModel, setDepthModel] = useState(null);
 
   useEffect(() => {
-    if (!window.mediaWorkspace?.getDepthModel) return;
-    window.mediaWorkspace.getDepthModel().then(setDepthModel).catch(() => {});
+    if (!api.has("getDepthModel")) return;
+    api.getDepthModel().then(setDepthModel).catch(() => {});
   }, []);
 
   async function pickDepthModel() {
-    if (!window.mediaWorkspace?.pickDepthModel) return;
+    if (!api.has("pickDepthModel")) return;
     try {
-      const next = await window.mediaWorkspace.pickDepthModel();
+      const next = await api.pickDepthModel();
       if (next) {
         setDepthModel(next);
         if (sourcePath) await onComputeDepth?.({ force: true });
@@ -26,9 +27,9 @@ export function useDepthModel({ sourcePath, onComputeDepth, onError }) {
   }
 
   async function resetDepthModel() {
-    if (!window.mediaWorkspace?.resetDepthModel) return;
+    if (!api.has("resetDepthModel")) return;
     try {
-      const next = await window.mediaWorkspace.resetDepthModel();
+      const next = await api.resetDepthModel();
       setDepthModel(next);
       if (sourcePath) await onComputeDepth?.({ force: true });
     } catch (err) {

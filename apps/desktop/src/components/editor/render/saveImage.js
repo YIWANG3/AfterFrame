@@ -2,6 +2,7 @@
 // Pure function: every dependency is passed in. Used by both `handleQuickSave`
 // and `handleExport` in EditorOverlay.
 
+import api from "../../../api";
 import {
   getSourceDimensions,
   buildTransformedCanvas,
@@ -59,9 +60,9 @@ export async function saveEditedImage(ctx) {
   // Native sharp fast-path: full source resolution, no canvas overhead. Only
   // valid when there are zero overlay layers AND no canvas margin/scrim (sharp
   // can't do the padded-canvas composite).
-  if (window.mediaWorkspace?.processAndSave && nativeSaveSourcePath && layers.length === 0 && !padActive && !canvasScrim) {
+  if (api.has("processAndSave") && nativeSaveSourcePath && layers.length === 0 && !padActive && !canvasScrim) {
     try {
-      await window.mediaWorkspace.processAndSave({
+      await api.processAndSave({
         sourcePath: nativeSaveSourcePath,
         savePath,
         quarterTurns,
@@ -73,7 +74,7 @@ export async function saveEditedImage(ctx) {
       });
       // Catalog registration is a nice-to-have — if it fails (no catalog
       // loaded, sidecar down) we still consider the save successful.
-      try { await window.mediaWorkspace.quickRegister?.(savePath, sourcePath); }
+      try { await api.quickRegister(savePath, sourcePath); }
       catch (e) { console.warn("[saveImage] quickRegister skipped:", e?.message || e); }
       return;
     } catch (nativeError) {
@@ -239,10 +240,10 @@ export async function saveEditedImage(ctx) {
   }
 
   const blob = await canvasToBlob(outputCanvas, inferMimeType(savePath));
-  await window.mediaWorkspace?.saveImage?.(savePath, await blob.arrayBuffer(), sourcePath);
+  await api.saveImage(savePath, await blob.arrayBuffer(), sourcePath);
   releaseCanvasImage(transformedFull);
   releaseCanvasImage(outputCanvas);
 
-  try { await window.mediaWorkspace.quickRegister?.(savePath, sourcePath); }
+  try { await api.quickRegister(savePath, sourcePath); }
   catch (e) { console.warn("[saveImage] quickRegister skipped:", e?.message || e); }
 }

@@ -4,6 +4,7 @@
 // via generatePresetLayers. The old baked-frame pipeline (FrameStage /
 // FramePanel) is gone; rendering and export go through TextCanvas + saveImage.
 
+import api from "../../../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES, FRAME_FONTS } from "../frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
@@ -92,7 +93,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     if (!item?.asset_id) return;
     let alive = true;
     (async () => {
-      const detail = await window.mediaWorkspace?.getAssetDetailById?.(item.asset_id);
+      const detail = await api.getAssetDetailById(item.asset_id);
       if (alive && detail) setExif(exifFromItem(detail));
     })();
     return () => { alive = false; };
@@ -119,7 +120,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   function loadLogos() {
     if (!logosPromiseRef.current) {
       logosPromiseRef.current = (async () => {
-        const res = await window.mediaWorkspace?.getFrameLogos?.();
+        const res = await api.getFrameLogos();
         const next = res
           ? { registry: buildLogoRegistry(res.manifest), svgs: res.svgs || {} }
           : { registry: { byId: new Map() }, svgs: {} };

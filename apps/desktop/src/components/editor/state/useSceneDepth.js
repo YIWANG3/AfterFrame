@@ -1,3 +1,4 @@
+import api from "../../../api";
 import { useRef, useState } from "react";
 import { localFileUrl } from "../../../utils/format";
 
@@ -44,14 +45,14 @@ export function useSceneDepth({ sourcePath } = {}) {
       setError("No source image.");
       return;
     }
-    if (!window.mediaWorkspace?.computeDepth) {
+    if (!api.has("computeDepth")) {
       setError("Depth API unavailable.");
       return;
     }
     setGenerating(true);
     setError(null);
     try {
-      const result = await window.mediaWorkspace.computeDepth({ sourcePath, force });
+      const result = await api.computeDepth({ sourcePath, force });
       if (!result?.outputPath) throw new Error("Empty result");
       await loadFromPath(result.outputPath);
     } catch (err) {

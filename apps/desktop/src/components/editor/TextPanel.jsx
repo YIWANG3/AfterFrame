@@ -1,3 +1,4 @@
+import api from "../../api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
@@ -890,7 +891,7 @@ function FontSelect({ value, onChange }) {
     } catch {}
     // Fallback to IPC
     try {
-      const fonts = await window.mediaWorkspace?.listSystemFonts?.();
+      const fonts = await api.listSystemFonts();
       if (Array.isArray(fonts)) setSystemFonts(fonts);
     } catch {}
   };
@@ -1600,7 +1601,7 @@ function StickerPickerModal({ onPick, onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        const list = await window.mediaWorkspace?.stickerList?.();
+        const list = await api.stickerList();
         if (!cancelled) setStickers(list || []);
       } finally {
         if (!cancelled) setLoading(false);

@@ -1,3 +1,4 @@
+import api from "../../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -299,7 +300,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
   function persistPrefs(patch) {
     const next = { ...prefsRef.current, ...patch };
     prefsRef.current = next;
-    void window.mediaWorkspace?.saveAiPreferences?.(next);
+    void api.saveAiPreferences(next);
   }
 
   function persistInstances(nextInstances) {
@@ -319,7 +320,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
   }
 
   async function fetchModels(providerId, providerType, tokenValue) {
-    const models = await window.mediaWorkspace?.listAiModels?.(providerId, providerType);
+    const models = await api.listAiModels(providerId, providerType);
     if (Array.isArray(models) && models.length) {
       setAvailableModels((current) => ({ ...current, [providerId]: models }));
       persistPrefs({ modelsCache: { ...prefsRef.current.modelsCache, [providerId]: models } });
@@ -339,7 +340,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
     const oldKeys = Object.keys(LEGACY_KEY_TO_TYPE);
     const payloads = await Promise.all(
       oldKeys.map((key) =>
-        window.mediaWorkspace?.getAiProviderToken?.(key).then((r) => ({ key, ...r })).catch(() => ({ key })),
+        api.getAiProviderToken(key).then((r) => ({ key, ...r })).catch(() => ({ key })),
       ),
     );
 
@@ -355,7 +356,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
       };
       migrated.push(inst);
       // Copy token under new instance id
-      await window.mediaWorkspace?.setAiProviderToken?.(inst.id, payload.token);
+      await api.setAiProviderToken(inst.id, payload.token);
     }
 
     if (migrated.length) {
@@ -392,8 +393,8 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
     async function loadStored() {
       // Load prefs and styles in parallel — styles first so migration can't interfere
       const [prefs, savedStyles] = await Promise.all([
-        window.mediaWorkspace?.getAiPreferences?.().then((p) => p || {}),
-        window.mediaWorkspace?.getAiStyles?.(),
+        api.getAiPreferences().then((p) => p || {}),
+        api.getAiStyles(),
       ]);
       prefsRef.current = prefs;
 
@@ -418,7 +419,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
       setProviderInstances(instances);
 
       // Reload prefs after migration may have changed them
-      const freshPrefs = (await window.mediaWorkspace?.getAiPreferences?.()) || prefs;
+      const freshPrefs = (await api.getAiPreferences()) || prefs;
       prefsRef.current = freshPrefs;
 
       if (freshPrefs.activeProvider) setActiveProviderId(freshPrefs.activeProvider);
@@ -444,7 +445,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
 
       // Load tokens and fetch models for configured instances
       for (const inst of instances) {
-        const payload = await window.mediaWorkspace?.getAiProviderToken?.(inst.id);
+        const payload = await api.getAiProviderToken(inst.id);
         if (payload?.token) {
           setProviderConfigs((current) => ({ ...current, [inst.id]: payload }));
           fetchModels(inst.id, inst.type);
@@ -471,7 +472,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
   useEffect(() => {
     if (!sourcePath) return;
     void (async () => {
-      const history = await window.mediaWorkspace?.listRepaintHistory?.(sourcePath);
+      const history = await api.listRepaintHistory(sourcePath);
       if (Array.isArray(history)) setRepaintHistory(history);
     })();
   }, [sourcePath]);
@@ -479,13 +480,13 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
   function refreshHistory() {
     if (!sourcePath) return;
     void (async () => {
-      const history = await window.mediaWorkspace?.listRepaintHistory?.(sourcePath);
+      const history = await api.listRepaintHistory(sourcePath);
       if (Array.isArray(history)) setRepaintHistory(history);
     })();
   }
 
   function persistStyles(nextStyles) {
-    void window.mediaWorkspace?.saveAiStyles?.(nextStyles);
+    void api.saveAiStyles(nextStyles);
   }
 
   function resetDraft() {
@@ -551,7 +552,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
     // Save token
     if (tokenValue) {
       void (async () => {
-        const payload = await window.mediaWorkspace?.setAiProviderToken?.(inst.id, tokenValue);
+        const payload = await api.setAiProviderToken(inst.id, tokenValue);
         setProviderConfigs((current) => ({
           ...current,
           [inst.id]: payload?.token ? payload : { token: tokenValue },
@@ -583,7 +584,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
       persistInstances(next);
       return next;
     });
-    void window.mediaWorkspace?.deleteAiProviderToken?.(instanceId);
+    void api.deleteAiProviderToken(instanceId);
     setProviderConfigs((current) => {
       const next = { ...current };
       delete next[instanceId];
@@ -615,7 +616,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
     if (!sourcePath) return;
     void (async () => {
       const inst = providerInstances.find((p) => p.id === activeProviderId);
-      const task = await window.mediaWorkspace?.startAiRepaint?.({
+      const task = await api.startAiRepaint({
         provider: activeProviderId,
         providerType: inst?.type || "nanobanana",
         sourcePath,
@@ -645,7 +646,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
       return undefined;
     }
     repaintPollRef.current = window.setInterval(async () => {
-      const task = await window.mediaWorkspace?.getAiRepaintStatus?.();
+      const task = await api.getAiRepaintStatus();
       setGenerateStatus({
         running: Boolean(task?.running),
         status: task?.status || null,

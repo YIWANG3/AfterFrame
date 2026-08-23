@@ -22,6 +22,7 @@ const api = {
   savePreviewSettings: (...args) => invoke("savePreviewSettings", ...args),
   openExternal: (...args) => invoke("openExternal", ...args),
   pickSavePath: (...args) => invoke("pickSavePath", ...args),
+  pickDirectory: (...args) => invoke("pickDirectory", ...args),
   pickDirectories: (...args) => invoke("pickDirectories", ...args),
   pickCatalog: (...args) => invoke("pickCatalog", ...args),
   createCatalog: (...args) => invoke("createCatalog", ...args),
@@ -130,6 +131,10 @@ const api = {
   listRepaintHistory: (...args) => invoke("listRepaintHistory", ...args),
   getAiStyles: (...args) => invoke("getAiStyles", ...args),
   saveAiStyles: (...args) => invoke("saveAiStyles", ...args),
+  getTextImageStatus: (...args) => invoke("getTextImageStatus", ...args),
+  startTextImage: (...args) => invoke("startTextImage", ...args),
+  pickHandwritingRef: (...args) => invoke("pickHandwritingRef", ...args),
+  getHandwritingPresetRef: (...args) => invoke("getHandwritingPresetRef", ...args),
 
   // ── stickers / depth / misc ──
   computeDepth: (...args) => invoke("computeDepth", ...args),

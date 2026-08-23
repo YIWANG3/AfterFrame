@@ -6,6 +6,7 @@
 // managed in Settings only — an unconfigured provider shows a hint instead of
 // a key field.
 
+import api from "../../../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Sparkles, Loader2, ImagePlus, ChevronDown } from "lucide-react";
@@ -42,7 +43,7 @@ async function waitForTextImageJob(startStatus, isAlive = () => true) {
   for (;;) {
     await new Promise((res) => setTimeout(res, 1200));
     if (!isAlive()) return null;
-    const task = await window.mediaWorkspace?.getTextImageStatus?.();
+    const task = await api.getTextImageStatus();
     if (task?.running) continue;
     if (task?.status === "succeeded" && task?.result?.output_path) return task;
     throw new Error(task?.error || "generation failed");
@@ -126,7 +127,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
 
   useEffect(() => {
     (async () => {
-      const prefs = (await window.mediaWorkspace?.getAiPreferences?.()) || {};
+      const prefs = (await api.getAiPreferences()) || {};
       const capable = (prefs.providers || []).filter((p) => TEXT_IMAGE_CAPABLE_TYPES.has(p.type));
       setProviders(capable);
       setModelsByProvider(prefs.modelsCache || {});
@@ -149,7 +150,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
     setProviderConfigured(null);
     (async () => {
       try {
-        const config = await window.mediaWorkspace?.getAiProviderToken?.(providerId);
+        const config = await api.getAiProviderToken(providerId);
         if (!cancelled) setProviderConfigured(Boolean(config?.token));
       } catch {
         if (!cancelled) setProviderConfigured(null);
@@ -206,7 +207,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
   }, [recoloredCanvas]);
 
   async function pickReference() {
-    const picked = await window.mediaWorkspace?.pickHandwritingRef?.();
+    const picked = await api.pickHandwritingRef();
     if (picked) setRefPath(picked);
   }
 
@@ -224,13 +225,13 @@ export default function HandwritingModal({ onAdd, onClose }) {
       let effectiveRef = refPath;
       if (!effectiveRef) {
         try {
-          effectiveRef = (await window.mediaWorkspace?.getHandwritingPresetRef?.(styleId)) || null;
+          effectiveRef = (await api.getHandwritingPresetRef(styleId)) || null;
         } catch {
           effectiveRef = null;
         }
       }
       const seed = seedRef.current++;
-      const start = await window.mediaWorkspace?.startTextImage?.({
+      const start = await api.startTextImage({
         provider: providerId,
         providerType,
         prompt,
