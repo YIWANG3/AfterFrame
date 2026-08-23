@@ -25,13 +25,25 @@ function createSidecarCommands(callJson) {
     // Lightweight location points for the map. Mirrors the gallery scope
     // (status/collection/search/facets); the sidecar ignores filters.geo so
     // the map keeps showing clusters outside the current viewport.
-    browseMapPoints({ status = "all", collectionId, search, filters, limit = 100000 } = {}) {
+    browseMapPoints({ status = "all", collectionId, search, filters, minPrecision, limit = 100000 } = {}) {
       const argv = ["browse-map-points", "--limit", String(limit)];
       if (collectionId) argv.push("--collection-id", String(collectionId));
       else argv.push("--status", String(status));
       if (search) argv.push("--search", String(search));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      if (minPrecision) argv.push("--min-precision", String(minPrecision));
       return callJson(argv).then((rows) => rows || []);
+    },
+
+    setAssetLocation({ assetId, lat, lng, clear = false } = {}) {
+      const argv = ["set-asset-location", "--asset-id", String(assetId)];
+      if (clear) argv.push("--clear");
+      else argv.push("--lat", String(lat), "--lng", String(lng));
+      return callJson(argv);
+    },
+
+    clearAiLocation(assetId) {
+      return callJson(["clear-ai-location", "--asset-id", String(assetId)]);
     },
 
     // One-shot backfill: resolve existing AI annotations' location guesses
@@ -146,6 +158,16 @@ function createSidecarCommands(callJson) {
       return callJson(["list-pending"]).then((rows) => rows || []);
     },
 
+    confirmMatch({ imagePath, rawAssetId } = {}) {
+      return callJson(["confirm-match", "--image-path", String(imagePath), "--raw-asset-id", String(rawAssetId)]);
+    },
+
+    scanNewMedia(imageDirs) {
+      const argv = ["scan-new-media"];
+      for (const dir of imageDirs || []) argv.push("--image-dir", String(dir));
+      return callJson(argv);
+    },
+
     catalogRoots() {
       return callJson(["catalog-roots"]).then((rows) => rows || []);
     },
@@ -252,6 +274,26 @@ function createSidecarCommands(callJson) {
         argv.push("--collage-source-ids", ...collageSourceIds.map(String));
       }
       return callJson(argv);
+    },
+
+    // Pillow-rendered text overlay → derived version (the one renderer-
+    // independent compositor in the sidecar). Coordinates are normalized 0-1.
+    addText({ assetId, text, x, y, size, color, strokeColor, strokeWidth, opacity, align, fontPath } = {}) {
+      const argv = ["add-text", "--asset-id", String(assetId), "--text", String(text)];
+      if (x != null) argv.push("--x", String(x));
+      if (y != null) argv.push("--y", String(y));
+      if (size != null) argv.push("--size", String(size));
+      if (color) argv.push("--color", String(color));
+      if (strokeColor) argv.push("--stroke-color", String(strokeColor));
+      if (strokeWidth != null) argv.push("--stroke-width", String(strokeWidth));
+      if (opacity != null) argv.push("--opacity", String(opacity));
+      if (align) argv.push("--align", String(align));
+      if (fontPath) argv.push("--font-path", String(fontPath));
+      return callJson(argv);
+    },
+
+    listRepaintHistory(assetPath) {
+      return callJson(["list-repaint-history", "--asset-path", String(assetPath)]).then((rows) => rows || []);
     },
 
     // ── Derived / export ─────────────────────────────────────────────────
