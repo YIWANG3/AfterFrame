@@ -84,6 +84,27 @@ test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
     expect(derived.some((a) => a.width === a.height)).toBe(true);
   });
 
+  test("collage task → agent renders a 2x2 grid page into the catalog", async () => {
+    test.setTimeout(240_000);
+    // Bridge-backed tools need the React app mounted, not just the MCP server.
+    await ctx.window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15000 });
+    const { assets } = await callTool(ctx.mcpPort, "search_assets", { asset_type: "image", sort: "name-asc", limit: 4 });
+    const ids = assets.map((a) => a.asset_id);
+    expect(ids.length).toBe(4);
+
+    const run = await runAgentTask({
+      port: ctx.mcpPort,
+      task: `Combine the four photos with asset ids ${ids.join(", ")} into ONE collage page using a 2x2 grid layout. Use the afterframe tools. Do not do anything else.`,
+    });
+    expect(calledTool(run.toolCalls, "render_collage"), JSON.stringify(run.toolCalls)).toBe(true);
+
+    // Outcome: a new collage asset exists on disk and in the catalog.
+    const after = await callTool(ctx.mcpPort, "search_assets", { query: "collage_", limit: 20 });
+    expect(after.count).toBeGreaterThan(0);
+    const fs = require("node:fs");
+    expect(fs.existsSync(after.assets[0].image_path)).toBe(true);
+  });
+
   test("discovery task → agent answers from search without hallucinating tools", async () => {
     test.setTimeout(240_000);
     const run = await runAgentTask({

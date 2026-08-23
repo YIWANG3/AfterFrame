@@ -69,6 +69,7 @@ const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const editorsIpc = require("./ipc/editors");
+const { createAgentRenderBridge } = require("./agentRender");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
@@ -1738,6 +1739,7 @@ app.whenReady().then(() => {
     sharp,
     processAndSave: saveFileApi.processAndSave,
     watcher: watcherApi,
+    askRenderer: createAgentRenderBridge({ BrowserWindow, ipcMain }).askRenderer,
     // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
     startPeopleIndex: (options) => peopleApi?.startPeopleIndex(options),
     resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
