@@ -12,6 +12,7 @@
 // Frame logos: same static assets the desktop reads from disk
 // (electron/ipc/frameLogos.js), bundled at build time the way frame-lab.js
 // does. Keys mirror the desktop shape: file paths relative to frame-logos/.
+import exifr from "exifr";
 import frameLogoManifest from "/frame-logos/logos.json";
 const frameLogoGlob = import.meta.glob("/frame-logos/**/*.svg", { query: "?raw", import: "default", eager: true });
 const frameLogoSvgs = Object.fromEntries(
@@ -59,6 +60,29 @@ async function makePreviewUrl(bmp, maxDim) {
   return blob ? URL.createObjectURL(blob) : null;
 }
 
+// EXIF → the sidecar's image_metadata field names (what Inspector, frame
+// auto-params and the capture-time sort read).
+async function readExifMetadata(file) {
+  try {
+    const exif = await exifr.parse(file);
+    if (!exif) return {};
+    const captureRaw = exif.DateTimeOriginal || exif.CreateDate || null;
+    return {
+      camera_model: exif.Model || null,
+      make: exif.Make || null,
+      lens_model: exif.LensModel || null,
+      aperture: exif.FNumber ?? null,
+      shutter_speed: exif.ExposureTime ?? null,
+      iso: exif.ISO ?? null,
+      focal_length: exif.FocalLength ?? null,
+      capture_time: captureRaw instanceof Date ? captureRaw.toISOString() : captureRaw,
+      software: exif.Software || null,
+      gps_latitude: exif.latitude ?? null,
+      gps_longitude: exif.longitude ?? null,
+    };
+  } catch { return {}; }
+}
+
 async function ingestFile(file) {
   // Real dimensions matter: Gallery treats missing width/height as a broken
   // asset and queues repair loops (Gallery.jsx queueAssetRepair).
@@ -71,6 +95,7 @@ async function ingestFile(file) {
   const thumbUrl = await makePreviewUrl(bmp, 512);
   const hdUrl = await makePreviewUrl(bmp, 2000);
   bmp.close();
+  const exifMeta = await readExifMetadata(file);
   // The fragment carries the filename: blob resolution ignores it, but every
   // basename-of-path UI (card captions, Inspector, save names) shows the real
   // name — and Gallery's `?r=` cache-bust lands harmlessly inside it.
@@ -95,8 +120,15 @@ async function ingestFile(file) {
     app_rating: 0,
     annotation: null,
     has_face: false,
+    imported_at: new Date().toISOString(),
     modified_time: Math.floor((file.lastModified || Date.now()) / 1000),
-    image_metadata: { width, height, file_size: file.size },
+    image_metadata: {
+      width,
+      height,
+      file_size: file.size,
+      modified_time: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+      ...exifMeta,
+    },
   });
 }
 
@@ -183,6 +215,7 @@ export const browserBridge = {
     people: false,       // CoreML face indexing
     libraryManagement: false,
     integrations: false, // MCP server etc.
+    video: false,        // decoding/proxy/keyframes live in the sidecar
   },
   openExternal: (url) => { window.open(url, "_blank", "noopener"); },
   listPeopleGroups: async () => [],
@@ -233,7 +266,13 @@ export const browserBridge = {
     if (sort === "name-asc") sorted.sort((a, b) => a.stem.localeCompare(b.stem));
     else if (sort === "name-desc") sorted.sort((a, b) => b.stem.localeCompare(a.stem));
     else if (sort === "rating-desc") sorted.sort((a, b) => b.app_rating - a.app_rating);
-    else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported/captured desc
+    else if (sort === "captured-asc" || sort === "captured-desc") {
+      // ISO strings compare lexicographically; missing capture_time sinks last.
+      const key = (a) => a.image_metadata?.capture_time || "￿";
+      sorted.sort((a, b) => key(a).localeCompare(key(b)));
+      if (sort === "captured-desc") sorted.reverse();
+    }
+    else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported desc
     return sorted.slice(offset, offset + limit);
   },
   browseCollection: async () => [],

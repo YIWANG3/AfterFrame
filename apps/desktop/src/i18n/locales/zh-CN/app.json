@@ -78,5 +78,6 @@
   "watchAdd": "加入监控",
   "watchedCatchUpTitle_one": "监控文件夹有 1 个新文件",
   "watchedCatchUpTitle_other": "监控文件夹有 {{count}} 个新文件",
-  "watchedCatchUpMsg": "正在导入"
+  "watchedCatchUpMsg": "正在导入",
+  "webUnsupportedFiles": "已跳过 {{count}} 个文件，视频和 RAW 请使用桌面版"
 }

@@ -700,9 +700,16 @@ export default function App() {
     if (!event.dataTransfer?.files?.length) return;
     event.preventDefault();
     const paths = [];
+    let unsupported = 0;
     for (const file of event.dataTransfer.files) {
       const p = api.getPathForFile(file) || file.path;
       if (p) paths.push(p);
+      else unsupported += 1;
+    }
+    // Web bridge accepts only images; tell the user instead of silently
+    // dropping their videos/RAWs (desktop resolves a path for everything).
+    if (unsupported > 0 && api.capabilities.video === false) {
+      pushToast({ title: t("webUnsupportedFiles", { count: unsupported }), ttl: 6000 });
     }
     if (paths.length) workspace.addImagesFromPaths(paths);
   }
