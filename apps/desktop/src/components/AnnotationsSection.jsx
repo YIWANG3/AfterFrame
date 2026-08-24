@@ -5,7 +5,6 @@
 //   - revisiting an already-loaded asset is synchronous (no flicker)
 
 import api from "../api";
-import { openDesktopSite } from "./DesktopOnly";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, RotateCcw, ChevronRight, X, Plus, Wand2, MapPinOff, LoaderCircle } from "lucide-react";
@@ -286,9 +285,9 @@ export default function AnnotationsSection({
         <Section title={t("section.ai")}>
           <button
             type="button"
-            onClick={openDesktopSite}
+            disabled
             title={t("desktop.hint", { ns: "common" })}
-            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border/40 bg-app px-3 py-1.5 text-[11px] font-medium text-muted2 transition-colors hover:text-muted"
+            className="flex w-full cursor-default items-center justify-center gap-1.5 rounded-md border border-border/40 bg-app px-3 py-1.5 text-[11px] font-medium text-muted2"
           >
             <Sparkles className="h-3 w-3" />
             {t("annotate")}

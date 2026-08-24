@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { openDesktopSite } from "./DesktopOnly";
 import ActivityCenter from "./ActivityCenter";
 import {
   ChevronDown,
@@ -260,13 +259,13 @@ export default function Toolbar({
                         key={key}
                         type="button"
                         className={[
-                          "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium transition-colors hover:bg-hover",
-                          locked ? "text-muted2" : "text-text",
+                          "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium transition-colors",
+                          locked ? "cursor-default text-muted2" : "cursor-pointer text-text hover:bg-hover",
                         ].join(" ")}
                         title={locked ? tc("desktop.hint") : undefined}
                         onClick={async () => {
+                          if (locked) return;
                           setMenuOpen(false);
-                          if (locked) { openDesktopSite(); return; }
                           await actionMap[action]?.();
                         }}
                       >

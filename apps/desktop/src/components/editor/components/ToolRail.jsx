@@ -5,7 +5,6 @@
 
 import { Crop, Type, Cannabis, Sparkles } from "lucide-react";
 import api from "../../../api";
-import { openDesktopSite } from "../../DesktopOnly";
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -40,9 +39,8 @@ export default function ToolRail({ tool, onSelect, t }) {
       ) : (
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted2/50 transition-colors hover:bg-hover hover:text-muted2"
+          className="flex h-8 w-8 cursor-default items-center justify-center rounded-md text-muted2/50"
           title={`${t("overlay.tools.repaint")} · ${t("desktop.hint", { ns: "common" })}`}
-          onClick={openDesktopSite}
         >
           <Sparkles className="h-4 w-4" />
         </button>

@@ -1,5 +1,4 @@
 import api from "../../api";
-import { openDesktopSite } from "../DesktopOnly";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
@@ -245,13 +244,9 @@ export default function TextPanel({
             depth backend (web build) the section advertises the desktop app. */}
         {!api.has("computeDepth") && (
           <Section label={t("text.depth.title")}>
-            <button
-              type="button"
-              onClick={openDesktopSite}
-              className="w-full rounded-md border border-border/40 bg-app px-3 py-2 text-left text-[11px] leading-snug text-muted2 transition-colors hover:text-muted"
-            >
+            <div className="w-full rounded-md border border-border/40 bg-app px-3 py-2 text-left text-[11px] leading-snug text-muted2">
               {t("desktop.hint", { ns: "common" })}
-            </button>
+            </div>
           </Section>
         )}
         {api.has("computeDepth") && <Section label={t("text.depth.title")} action={
@@ -363,7 +358,8 @@ export default function TextPanel({
             <IconBtn
               icon={Brush}
               title={api.has("startTextImage") ? t("text.addHandwriting") : `${t("text.addHandwriting")} · ${t("desktop.hint", { ns: "common" })}`}
-              onClick={api.has("startTextImage") ? () => setHandwritingOpen(true) : openDesktopSite}
+              disabled={!api.has("startTextImage")}
+              onClick={() => setHandwritingOpen(true)}
             />
             <IconBtn
               icon={Cannabis}

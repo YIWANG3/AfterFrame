@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import api from "../api";
-import { openDesktopSite } from "./DesktopOnly";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
 
@@ -170,11 +169,11 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
     <button
       type="button"
       className={[
-        "flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-[12px] hover:bg-hover",
-        locked ? "text-muted2" : "text-muted hover:text-text",
+        "flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px]",
+        locked ? "cursor-default text-muted2" : "cursor-pointer text-muted hover:bg-hover hover:text-text",
       ].join(" ")}
       title={locked ? tc("desktop.hint") : undefined}
-      onClick={locked ? openDesktopSite : onClick}
+      onClick={locked ? undefined : onClick}
     >
       <span className="flex items-center gap-2.5">
         {Icon && <Icon className="h-3.5 w-3.5" />}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles, UsersRound } from "lucide-react";
+import { DesktopHint } from "./DesktopOnly";
 import { baseName, formatTimestamp, navItems } from "../utils/format";
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
@@ -304,6 +305,7 @@ export default function Sidebar({
 
       {/* Bottom: Settings — global, always accessible */}
       <div className="mt-2 border-t border-border/40 pt-2">
+        <DesktopHint />
         <button
           type="button"
           onClick={() => onOpenSettings?.()}

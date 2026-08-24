@@ -9,8 +9,8 @@
     "close": "关闭"
   },
   "desktop": {
-    "badge": "桌面版",
     "hint": "此功能在 AfterFrame 桌面版中提供",
-    "get": "获取桌面版"
+    "get": "获取桌面版",
+    "try": "在桌面版体验完整功能"
   }
 }
