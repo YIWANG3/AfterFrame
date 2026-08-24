@@ -46,18 +46,108 @@ const subscribe = (set) => (cb) => {
   return () => set.delete(cb);
 };
 
-// Downscale a decoded bitmap to maxDim and return an object URL, or null when
-// the source is already small enough. Mirrors the desktop preview tiers
-// (512px gallery thumbs, 2000px HD) so the gallery never decodes originals.
-async function makePreviewUrl(bmp, maxDim) {
+// Downscale a decoded bitmap to maxDim, or null when the source is already
+// small enough. Mirrors the desktop preview tiers (512px gallery thumbs,
+// 2000px HD) so the gallery never decodes originals.
+async function makePreviewBlob(bmp, maxDim) {
   const scale = maxDim / Math.max(bmp.width, bmp.height);
   if (scale >= 1) return null;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bmp.width * scale);
   canvas.height = Math.round(bmp.height * scale);
   canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
-  return blob ? URL.createObjectURL(blob) : null;
+  return await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+}
+
+// ── persistence (IndexedDB) ──
+// One row per asset: the catalog record plus original/thumb/hd blobs. The
+// catalog restores lazily — every catalog-facing method awaits ensureRestored
+// before answering, so components need no boot coordination.
+const DB_NAME = "afterframe-web";
+let dbPromise = null;
+function openDb() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("assets")) db.createObjectStore("assets", { keyPath: "asset_id" });
+        if (!db.objectStoreNames.contains("collections")) db.createObjectStore("collections", { keyPath: "collection_id" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return dbPromise;
+}
+
+async function idbRun(store, mode, fn) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, mode);
+    fn(tx.objectStore(store));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function idbGetAll(store) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store).objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// URL fields are session-scoped (object URLs) — persist everything else.
+const URL_FIELDS = ["_objectUrls", "image_path", "preview_path", "image_preview_path", "image_preview_hd_path", "preview_hd_path"];
+
+async function persistAsset(asset, blobs) {
+  const row = { ...asset, _blobs: blobs };
+  for (const f of URL_FIELDS) delete row[f];
+  try {
+    await idbRun("assets", "readwrite", (os) => os.put(row));
+  } catch (err) {
+    console.warn("[web] persist failed (session-only asset):", err);
+  }
+}
+
+function hydrateAsset(record, blobs) {
+  const url = URL.createObjectURL(blobs.original);
+  const thumbUrl = blobs.thumb ? URL.createObjectURL(blobs.thumb) : null;
+  const hdUrl = blobs.hd ? URL.createObjectURL(blobs.hd) : null;
+  const withName = (u) => `${u}#/${encodeURIComponent(record.file_name || "image.jpg")}`;
+  return {
+    ...record,
+    _objectUrls: [url, thumbUrl, hdUrl].filter(Boolean),
+    image_path: withName(url),
+    preview_path: withName(thumbUrl || url),
+    image_preview_path: withName(thumbUrl || url),
+    image_preview_hd_path: withName(hdUrl || url),
+    preview_hd_path: withName(hdUrl || url),
+  };
+}
+
+let restorePromise = null;
+function ensureRestored() {
+  if (!restorePromise) {
+    restorePromise = (async () => {
+      try { void navigator.storage?.persist?.(); } catch { /* best effort */ }
+      let rows;
+      try { rows = await idbGetAll("assets"); } catch { return; }
+      const numId = (row) => Number(String(row.asset_id).replace("web-", "")) || 0;
+      rows.sort((a, b) => (a.imported_at || "").localeCompare(b.imported_at || "") || numId(a) - numId(b));
+      for (const row of rows) {
+        const { _blobs, ...record } = row;
+        if (!_blobs?.original) continue;
+        assets.push(hydrateAsset(record, _blobs));
+        if (numId(row) >= nextId) nextId = numId(row) + 1;
+      }
+    })().catch(() => {});
+  }
+  return restorePromise;
 }
 
 // EXIF → the sidecar's image_metadata field names (what Inspector, frame
@@ -91,29 +181,16 @@ async function ingestFile(file) {
     bmp = await createImageBitmap(file);
   } catch { /* undecodable file — keep it out of the catalog */ return; }
   const { width, height } = bmp;
-  const url = URL.createObjectURL(file);
-  const thumbUrl = await makePreviewUrl(bmp, 512);
-  const hdUrl = await makePreviewUrl(bmp, 2000);
+  const thumbBlob = await makePreviewBlob(bmp, 512);
+  const hdBlob = await makePreviewBlob(bmp, 2000);
   bmp.close();
   const exifMeta = await readExifMetadata(file);
-  // The fragment carries the filename: blob resolution ignores it, but every
-  // basename-of-path UI (card captions, Inspector, save names) shows the real
-  // name — and Gallery's `?r=` cache-bust lands harmlessly inside it.
-  const withName = (u) => `${u}#/${encodeURIComponent(file.name)}`;
-  const pathUrl = withName(url);
-  const thumb = thumbUrl ? withName(thumbUrl) : pathUrl;
-  const hd = hdUrl ? withName(hdUrl) : pathUrl;
-  assets.push({
-    _objectUrls: [url, thumbUrl, hdUrl].filter(Boolean),
+  // The filename rides in a URL fragment (see hydrateAsset): blob resolution
+  // ignores it, but every basename-of-path UI shows the real name — and
+  // Gallery's `?r=` cache-bust lands harmlessly inside it.
+  const record = {
     asset_id: `web-${nextId++}`,
     asset_type: "image",
-    image_path: pathUrl,
-    preview_path: thumb,
-    image_preview_path: thumb,
-    // 2000px tier, same as the desktop's HD previews — collage exports from
-    // this; the editor loads image_path (the original) directly.
-    image_preview_hd_path: hd,
-    preview_hd_path: hd,
     stem: file.name.replace(/\.[^.]+$/, ""),
     file_name: file.name,
     exists_on_disk: true,
@@ -129,7 +206,12 @@ async function ingestFile(file) {
       modified_time: file.lastModified ? new Date(file.lastModified).toISOString() : null,
       ...exifMeta,
     },
-  });
+  };
+  // 2000px tier, same as the desktop's HD previews — collage exports from
+  // this; the editor loads image_path (the original) directly.
+  const blobs = { original: file, thumb: thumbBlob, hd: hdBlob };
+  assets.push(hydrateAsset(record, blobs));
+  await persistAsset(record, blobs);
 }
 
 function stageFiles(files) {
@@ -235,14 +317,17 @@ export const browserBridge = {
     sidecarSrc: null,
     isSampleCatalog: false,
   }),
-  getSummary: async () => ({
-    image_assets: assets.length,
-    raw_assets: 0,
-    rated_count: assets.filter((a) => a.app_rating > 0).length,
-    confirmed_matches: 0,
-    recently_added_count: assets.length,
-    updated_at: null,
-  }),
+  getSummary: async () => {
+    await ensureRestored();
+    return {
+      image_assets: assets.length,
+      raw_assets: 0,
+      rated_count: assets.filter((a) => a.app_rating > 0).length,
+      confirmed_matches: 0,
+      recently_added_count: assets.length,
+      updated_at: null,
+    };
+  },
   getCatalogRoots: async () => [],
   registerRoots: async () => {},
   getWatchedDirs: async () => [],
@@ -254,6 +339,7 @@ export const browserBridge = {
 
   // ── browse ──
   browseImages: async ({ status = "all", limit = 180, offset = 0, search, sort, filters } = {}) => {
+    await ensureRestored();
     let list = assets;
     if (status === "rated") list = list.filter((a) => a.app_rating > 0);
     else if (status === "matched") list = [];
@@ -277,14 +363,27 @@ export const browserBridge = {
   },
   browseCollection: async () => [],
   listCollections: async () => [],
-  getAssetDetailById: async (assetId) => assets.find((a) => a.asset_id === assetId) || null,
+  getAssetDetailById: async (assetId) => {
+    await ensureRestored();
+    return assets.find((a) => a.asset_id === assetId) || null;
+  },
   ensureHdPreviews: async () => {},
   setAssetRating: async (assetId, rating) => {
+    await ensureRestored();
     const a = assets.find((x) => x.asset_id === assetId);
     if (a) a.app_rating = rating;
+    try {
+      await idbRun("assets", "readwrite", (os) => {
+        const req = os.get(assetId);
+        req.onsuccess = () => {
+          if (req.result) { req.result.app_rating = rating; os.put(req.result); }
+        };
+      });
+    } catch { /* rating stays session-only */ }
     return { ok: true };
   },
   deleteImageAssets: async (assetIds) => {
+    await ensureRestored();
     const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
     for (let i = assets.length - 1; i >= 0; i--) {
       if (ids.has(assets[i].asset_id)) {
@@ -292,6 +391,9 @@ export const browserBridge = {
         assets.splice(i, 1);
       }
     }
+    try {
+      await idbRun("assets", "readwrite", (os) => { for (const id of ids) os.delete(id); });
+    } catch { /* records linger; harmless */ }
     return { removed: ids.size };
   },
   copyText: (text) => navigator.clipboard?.writeText?.(String(text ?? "")),
@@ -308,6 +410,7 @@ export const browserBridge = {
     return key || undefined;
   },
   startImport: async ({ imageDirs = [], rawDirs = [] } = {}) => {
+    await ensureRestored(); // ids must resume after restored assets
     const dirs = [...imageDirs, ...rawDirs];
     const files = dirs.flatMap((d) => {
       const staged = pendingFiles.get(d) || [];
