@@ -145,9 +145,26 @@ function ensureRestored() {
         assets.push(hydrateAsset(record, _blobs));
         if (numId(row) >= nextId) nextId = numId(row) + 1;
       }
+      try {
+        const cols = await idbGetAll("collections");
+        cols.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        collections.push(...cols);
+      } catch { /* collections stay empty */ }
     })().catch(() => {});
   }
   return restorePromise;
+}
+
+// ── collections (manual albums, sidecar row shape) ──
+const collections = []; // rows carry asset_ids; item_count derives from it
+const publicCollection = ({ asset_ids, ...row }) => ({ ...row, item_count: asset_ids?.length ?? 0 });
+let nextCollectionId = 1;
+
+async function persistCollection(row) {
+  try { await idbRun("collections", "readwrite", (os) => os.put(row)); } catch { /* session-only */ }
+}
+function emitCollectionsChanged() {
+  for (const cb of listeners.catalogChanged) cb({ scope: "collections" });
 }
 
 // EXIF → the sidecar's image_metadata field names (what Inspector, frame
@@ -361,8 +378,86 @@ export const browserBridge = {
     else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported desc
     return sorted.slice(offset, offset + limit);
   },
-  browseCollection: async () => [],
-  listCollections: async () => [],
+  browseCollection: async (collectionId, { limit = 180, offset = 0 } = {}) => {
+    await ensureRestored();
+    const row = collections.find((c) => c.collection_id === collectionId);
+    if (!row) return [];
+    const byId = new Map(assets.map((a) => [a.asset_id, a]));
+    return (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean).slice(offset, offset + limit);
+  },
+  listCollections: async () => {
+    await ensureRestored();
+    return collections.map(publicCollection);
+  },
+  createCollection: async (name, kind = "manual") => {
+    await ensureRestored();
+    const now = new Date().toISOString();
+    const row = {
+      collection_id: `webcol-${Date.now()}-${nextCollectionId++}`,
+      name: String(name || "").trim() || "Untitled",
+      kind: kind || "manual",
+      parent_collection_id: null,
+      rules_json: null,
+      sort_order: collections.length,
+      created_at: now,
+      updated_at: now,
+      asset_ids: [],
+    };
+    collections.push(row);
+    await persistCollection(row);
+    emitCollectionsChanged();
+    return publicCollection(row);
+  },
+  updateCollection: async (collectionId, updates = {}) => {
+    await ensureRestored();
+    const row = collections.find((c) => c.collection_id === collectionId);
+    if (!row) return null;
+    if (typeof updates.name === "string" && updates.name.trim()) row.name = updates.name.trim();
+    row.updated_at = new Date().toISOString();
+    await persistCollection(row);
+    emitCollectionsChanged();
+    return publicCollection(row);
+  },
+  deleteCollection: async (collectionId) => {
+    await ensureRestored();
+    const idx = collections.findIndex((c) => c.collection_id === collectionId);
+    if (idx >= 0) collections.splice(idx, 1);
+    try { await idbRun("collections", "readwrite", (os) => os.delete(collectionId)); } catch { /* row lingers */ }
+    emitCollectionsChanged();
+    return { ok: true };
+  },
+  collectionAddItems: async (collectionId, assetIds) => {
+    await ensureRestored();
+    const row = collections.find((c) => c.collection_id === collectionId);
+    if (!row) return { added: 0 };
+    const have = new Set(row.asset_ids);
+    const valid = new Set(assets.map((a) => a.asset_id));
+    let added = 0;
+    for (const id of assetIds || []) {
+      if (valid.has(id) && !have.has(id)) { row.asset_ids.push(id); have.add(id); added += 1; }
+    }
+    if (added) {
+      row.updated_at = new Date().toISOString();
+      await persistCollection(row);
+      emitCollectionsChanged();
+    }
+    return { added };
+  },
+  collectionRemoveItems: async (collectionId, assetIds) => {
+    await ensureRestored();
+    const row = collections.find((c) => c.collection_id === collectionId);
+    if (!row) return { removed: 0 };
+    const drop = new Set(assetIds || []);
+    const before = row.asset_ids.length;
+    row.asset_ids = row.asset_ids.filter((id) => !drop.has(id));
+    const removed = before - row.asset_ids.length;
+    if (removed) {
+      row.updated_at = new Date().toISOString();
+      await persistCollection(row);
+      emitCollectionsChanged();
+    }
+    return { removed };
+  },
   getAssetDetailById: async (assetId) => {
     await ensureRestored();
     return assets.find((a) => a.asset_id === assetId) || null;
@@ -394,6 +489,12 @@ export const browserBridge = {
     try {
       await idbRun("assets", "readwrite", (os) => { for (const id of ids) os.delete(id); });
     } catch { /* records linger; harmless */ }
+    // Keep collections consistent with the deleted assets.
+    for (const row of collections) {
+      const before = row.asset_ids.length;
+      row.asset_ids = row.asset_ids.filter((id) => !ids.has(id));
+      if (row.asset_ids.length !== before) await persistCollection(row);
+    }
     return { removed: ids.size };
   },
   copyText: (text) => navigator.clipboard?.writeText?.(String(text ?? "")),
