@@ -341,16 +341,14 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             ) : null}
           </Section>
 
-          {api.can("annotation") && (
-            <AnnotationsSection
-              assetId={detail.asset_id}
-              imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
-              onTagClick={onTagFilter}
-              onJumpToLocation={onJumpToLocation}
-              onLocationChanged={onLocationChanged}
-              pushToast={pushToast}
-            />
-          )}
+          <AnnotationsSection
+            assetId={detail.asset_id}
+            imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
+            onTagClick={onTagFilter}
+            onJumpToLocation={onJumpToLocation}
+            onLocationChanged={onLocationChanged}
+            pushToast={pushToast}
+          />
 
           {api.can("fileSystem") && <Section title={t("sections.source")}>
             <DetailRow label={t("rows.asset")}>

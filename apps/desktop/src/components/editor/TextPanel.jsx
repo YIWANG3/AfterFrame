@@ -1,4 +1,5 @@
 import api from "../../api";
+import { DesktopBadge, openDesktopSite } from "../DesktopOnly";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
@@ -240,8 +241,19 @@ export default function TextPanel({
         ) : null}
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
-            cached and shared by every text layer's z position slider. Hidden when
-            the bridge has no depth backend (web build). */}
+            cached and shared by every text layer's z position slider. Without a
+            depth backend (web build) the section advertises the desktop app. */}
+        {!api.has("computeDepth") && (
+          <Section label={t("text.depth.title")} action={<DesktopBadge />}>
+            <button
+              type="button"
+              onClick={openDesktopSite}
+              className="w-full rounded-md border border-border/40 bg-app px-3 py-2 text-left text-[11px] leading-snug text-muted2 transition-colors hover:text-muted"
+            >
+              {t("desktop.hint", { ns: "common" })}
+            </button>
+          </Section>
+        )}
         {api.has("computeDepth") && <Section label={t("text.depth.title")} action={
           hasSceneDepth ? (
             <button
@@ -348,13 +360,11 @@ export default function TextPanel({
               title={t("text.addOverlayLayer")}
               onClick={addOverlayLayer}
             />
-            {api.has("startTextImage") && (
-              <IconBtn
-                icon={Brush}
-                title={t("text.addHandwriting")}
-                onClick={() => setHandwritingOpen(true)}
-              />
-            )}
+            <IconBtn
+              icon={Brush}
+              title={api.has("startTextImage") ? t("text.addHandwriting") : `${t("text.addHandwriting")} · ${t("desktop.hint", { ns: "common" })}`}
+              onClick={api.has("startTextImage") ? () => setHandwritingOpen(true) : openDesktopSite}
+            />
             <IconBtn
               icon={Cannabis}
               title={stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer")}

@@ -7,5 +7,10 @@
     "save": "保存",
     "cancel": "取消",
     "close": "关闭"
+  },
+  "desktop": {
+    "badge": "桌面版",
+    "hint": "此功能在 AfterFrame 桌面版中提供",
+    "get": "获取桌面版"
   }
 }

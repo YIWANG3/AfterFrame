@@ -150,7 +150,8 @@ function downloadBuffer(savePath, buffer) {
 
 export const browserBridge = {
   isPackaged: true,
-  // Explicit false = the matching UI hides (api.can). Desktop declares none.
+  // Explicit false = the matching UI renders locked ("Desktop app" badge,
+  // click opens the download page — see DesktopOnly.jsx). Desktop declares none.
   capabilities: {
     web: true,
     catalog: "memory",
@@ -161,7 +162,14 @@ export const browserBridge = {
     aiRepaint: false,    // until the BYOK Gemini fetch path lands (Phase 3)
     depth: false,
     stickerExtract: false,
+    people: false,       // CoreML face indexing
+    libraryManagement: false,
+    integrations: false, // MCP server etc.
   },
+  openExternal: (url) => { window.open(url, "_blank", "noopener"); },
+  listPeopleGroups: async () => [],
+  getPeopleIndexStatus: async () => null,
+  getPeopleSettings: async () => ({}),
 
   // ── locale (read synchronously at i18n import time) ──
   getInitialLocale: () => (navigator.language?.toLowerCase().startsWith("zh") ? "zh-CN" : "en"),

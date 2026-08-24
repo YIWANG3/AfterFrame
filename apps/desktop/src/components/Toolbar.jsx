@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
+import { DesktopBadge, openDesktopSite } from "./DesktopOnly";
 import ActivityCenter from "./ActivityCenter";
 import {
   ChevronDown,
@@ -225,6 +226,7 @@ export default function Toolbar({
   onResumeJob,
 }) {
   const { t } = useTranslation("nav");
+  const { t: tc } = useTranslation("common");
   const [menuOpen, setMenuOpen] = useState(false);
   const actionMap = {
     processed: onAddProcessed,
@@ -246,25 +248,34 @@ export default function Toolbar({
           <>
             <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpen(false)} />
             <div className="absolute top-full z-[101] mt-2.5 w-[248px] rounded-lg border border-border/60 bg-chrome p-1.5 shadow-overlay">
-              {MENU_SECTIONS.filter((s) => api.can(s.cap)).map((section, sectionIndex) => (
+              {MENU_SECTIONS.map((section, sectionIndex) => (
                 <div key={section.key} className={sectionIndex > 0 ? "mt-1 border-t border-border/80 pt-1.5" : ""}>
                   <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted2">
                     {t(`toolbar.menu.${section.key}`)}
                   </div>
-                  {section.items.filter((i) => api.can(i.cap)).map(({ key, icon: Icon, action }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium text-text transition-colors hover:bg-hover"
-                      onClick={async () => {
-                        setMenuOpen(false);
-                        await actionMap[action]?.();
-                      }}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0 text-muted" />
-                      <span className="min-w-0 flex-1 truncate">{t(`toolbar.menu.${key}`)}</span>
-                    </button>
-                  ))}
+                  {section.items.map(({ key, icon: Icon, action, cap }) => {
+                    const locked = !api.can(section.cap) || !api.can(cap);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={[
+                          "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium transition-colors hover:bg-hover",
+                          locked ? "text-muted2" : "text-text",
+                        ].join(" ")}
+                        title={locked ? tc("desktop.hint") : undefined}
+                        onClick={async () => {
+                          setMenuOpen(false);
+                          if (locked) { openDesktopSite(); return; }
+                          await actionMap[action]?.();
+                        }}
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${locked ? "text-muted2/70" : "text-muted"}`} />
+                        <span className="min-w-0 flex-1 truncate">{t(`toolbar.menu.${key}`)}</span>
+                        {locked && <DesktopBadge />}
+                      </button>
+                    );
+                  })}
                 </div>
               ))}
             </div>

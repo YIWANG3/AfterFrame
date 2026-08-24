@@ -7,5 +7,10 @@
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close"
+  },
+  "desktop": {
+    "badge": "Desktop",
+    "hint": "This feature is available in the AfterFrame desktop app",
+    "get": "Get the desktop app"
   }
 }
