@@ -269,6 +269,39 @@ const jobStatus = (over = {}) => ({
   ...over,
 });
 
+const fileExt = (name) => {
+  const m = /\.([^.]+)$/.exec(String(name || ""));
+  return m ? m[1].toLowerCase() : null;
+};
+
+// Mirrors the sidecar's facet filter semantics (db/browse.py _facet_clauses),
+// AND-combined. Faces/annotations/person groups don't exist on the web
+// catalog, so "with" matches nothing and "without" matches everything.
+function matchesFacetFilters(asset, filters) {
+  const meta = asset.image_metadata || {};
+  if (filters.camera && meta.camera_model !== filters.camera) return false;
+  if (filters.lens && meta.lens_model !== filters.lens) return false;
+  for (const [key, field] of [["iso", "iso"], ["aperture", "aperture"], ["focal", "focal_length"], ["shutter", "shutter_speed"]]) {
+    const lo = filters[`${key}_min`];
+    const hi = filters[`${key}_max`];
+    if (lo != null && !(meta[field] != null && meta[field] >= lo)) return false;
+    if (hi != null && !(meta[field] != null && meta[field] <= hi)) return false;
+  }
+  const day = meta.capture_time ? String(meta.capture_time).slice(0, 10) : null;
+  if (filters.date_from && !(day && day >= String(filters.date_from).slice(0, 10))) return false;
+  if (filters.date_to && !(day && day <= String(filters.date_to).slice(0, 10))) return false;
+  if (filters.rating_min != null && !(asset.app_rating >= filters.rating_min)) return false;
+  if (filters.orientation === "portrait" && !(meta.height > meta.width)) return false;
+  if (filters.orientation === "landscape" && !(meta.width > meta.height)) return false;
+  if (filters.orientation === "square" && !(meta.width && meta.width === meta.height)) return false;
+  if (filters.extension && fileExt(asset.file_name) !== String(filters.extension).toLowerCase().replace(/^\./, "")) return false;
+  if (filters.tag) return false;
+  if (filters.people === "with_faces") return false;
+  if (filters.annotated === "with") return false;
+  if (filters.person_group) return false;
+  return true;
+}
+
 const importJobStatus = () => (importJob
   ? jobStatus({
     jobId: importJob.jobId,
@@ -349,8 +382,52 @@ export const browserBridge = {
   registerRoots: async () => {},
   getWatchedDirs: async () => [],
   detectEditors: async () => [],
-  getFacetValues: async () => null,
-  searchFacet: async () => [],
+  // Facets aggregate over the in-memory catalog, mirroring the sidecar's
+  // get_facet_values keys (db/browse.py).
+  getFacetValues: async () => {
+    await ensureRestored();
+    const metas = assets.map((a) => a.image_metadata || {});
+    const counts = (values) => {
+      const m = new Map();
+      for (const v of values) { if (v) m.set(v, (m.get(v) || 0) + 1); }
+      return [...m.entries()]
+        .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+        .map(([value, count]) => ({ value, count }));
+    };
+    const minMax = (key) => {
+      const vals = metas.map((m) => m[key]).filter((v) => v != null && Number.isFinite(Number(v)));
+      return vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : { min: null, max: null };
+    };
+    const times = metas.map((m) => m.capture_time).filter(Boolean).sort();
+    return {
+      cameras: counts(metas.map((m) => m.camera_model)),
+      lenses: counts(metas.map((m) => m.lens_model)),
+      tags: [],
+      extensions: counts(assets.map((a) => fileExt(a.file_name))),
+      iso: minMax("iso"),
+      aperture: minMax("aperture"),
+      focal: minMax("focal_length"),
+      shutter: minMax("shutter_speed"),
+      capture_time: times.length ? { min: times[0], max: times[times.length - 1] } : { min: null, max: null },
+    };
+  },
+  searchFacet: async ({ field, q = "", limit = 50 } = {}) => {
+    await ensureRestored();
+    const needle = String(q).toLowerCase();
+    const pick = (get) => {
+      const m = new Map();
+      for (const a of assets) {
+        const v = get(a);
+        if (v && String(v).toLowerCase().includes(needle)) m.set(v, (m.get(v) || 0) + 1);
+      }
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit)
+        .map(([value, count]) => ({ value, count }));
+    };
+    if (field === "camera") return pick((a) => a.image_metadata?.camera_model);
+    if (field === "lens") return pick((a) => a.image_metadata?.lens_model);
+    if (field === "extension") return pick((a) => fileExt(a.file_name));
+    return []; // tags don't exist on the web catalog (annotation is desktop-only)
+  },
   getPreviewSettings: async () => ({ generateHd: false }),
   savePreviewSettings: async () => {},
 
@@ -364,7 +441,7 @@ export const browserBridge = {
       const q = String(search).toLowerCase();
       list = list.filter((a) => (a.stem || "").toLowerCase().includes(q));
     }
-    if (filters?.rating_min) list = list.filter((a) => a.app_rating >= filters.rating_min);
+    if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
     let sorted = [...list];
     if (sort === "name-asc") sorted.sort((a, b) => a.stem.localeCompare(b.stem));
     else if (sort === "name-desc") sorted.sort((a, b) => b.stem.localeCompare(a.stem));
