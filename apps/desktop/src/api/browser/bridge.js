@@ -299,7 +299,26 @@ function matchesFacetFilters(asset, filters) {
   if (filters.people === "with_faces") return false;
   if (filters.annotated === "with") return false;
   if (filters.person_group) return false;
+  if (filters.geo && !matchesGeo(meta, filters.geo)) return false;
   return true;
+}
+
+// Map viewport filter (sidecar _geo_filter_clause semantics). Web locations
+// only come from EXIF, so exclude-exif or place mode can never match.
+function matchesGeo(meta, geo) {
+  if (!geo || typeof geo !== "object") return true;
+  if (geo.mode === "place") return false;
+  if (geo.mode !== "bounds") return true;
+  if (geo.include_exif === false) return false;
+  const lat = meta.gps_latitude;
+  const lon = meta.gps_longitude;
+  if (lat == null || lon == null) return false;
+  const west = Number(geo.west); const east = Number(geo.east);
+  const south = Number(geo.south); const north = Number(geo.north);
+  if (![west, east, south, north].every(Number.isFinite)) return true;
+  if (!(lat >= south && lat <= north)) return false;
+  // Antimeridian-crossing viewport: split the longitude test.
+  return west <= east ? lon >= west && lon <= east : lon >= west || lon <= east;
 }
 
 const importJobStatus = () => (importJob
@@ -454,6 +473,43 @@ export const browserBridge = {
     }
     else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported desc
     return sorted.slice(offset, offset + limit);
+  },
+  // Location points for the map drawer, scoped like the gallery. Same row
+  // shape as the sidecar's browse-map-points; all web points are EXIF-exact.
+  browseMapPoints: async ({ status = "all", collectionId, search, filters } = {}) => {
+    await ensureRestored();
+    let list = assets;
+    if (collectionId) {
+      const row = collections.find((c) => c.collection_id === collectionId);
+      const member = new Set(row?.asset_ids || []);
+      list = list.filter((a) => member.has(a.asset_id));
+    } else {
+      if (status === "rated") list = list.filter((a) => a.app_rating > 0);
+      else if (status === "matched") list = [];
+      if (search) {
+        const q = String(search).toLowerCase();
+        list = list.filter((a) => (a.stem || "").toLowerCase().includes(q));
+      }
+      if (filters) {
+        const nonGeo = { ...filters };
+        delete nonGeo.geo;
+        list = list.filter((a) => matchesFacetFilters(a, nonGeo));
+      }
+    }
+    return list
+      .filter((a) => a.image_metadata?.gps_latitude != null && a.image_metadata?.gps_longitude != null)
+      .map((a) => ({
+        asset_id: a.asset_id,
+        latitude: a.image_metadata.gps_latitude,
+        longitude: a.image_metadata.gps_longitude,
+        source: "exif",
+        accuracy_m: null,
+        precision_level: "exact",
+        place_id: null,
+        app_rating: a.app_rating,
+        capture_time: a.image_metadata.capture_time || null,
+        preview_path: a.preview_path,
+      }));
   },
   browseCollection: async (collectionId, { limit = 180, offset = 0 } = {}) => {
     await ensureRestored();
