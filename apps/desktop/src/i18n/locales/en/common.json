@@ -11,6 +11,6 @@
   "desktop": {
     "hint": "This feature is available in the AfterFrame desktop app",
     "get": "Get the desktop app",
-    "try": "Try full features in the desktop app"
+    "try": "Try the desktop app"
   }
 }

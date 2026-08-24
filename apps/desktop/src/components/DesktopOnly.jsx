@@ -23,10 +23,10 @@ export function DesktopHint() {
     <button
       type="button"
       onClick={openDesktopSite}
-      className="mb-1.5 flex w-full items-center gap-2.5 rounded-lg bg-accent px-3 py-2 text-left font-medium text-white shadow-glow transition-colors hover:bg-accent/90"
+      className="mb-1.5 flex w-full items-center gap-2.5 rounded-lg bg-accent/15 px-3 py-2 text-left font-medium text-accent transition-colors hover:bg-accent/25"
     >
       <MonitorDown className="h-4 w-4 shrink-0 stroke-[1.8]" />
-      <span className="text-[12.5px] leading-snug">{t("desktop.try")}</span>
+      <span className="whitespace-nowrap text-[12.5px]">{t("desktop.try")}</span>
     </button>
   );
 }
