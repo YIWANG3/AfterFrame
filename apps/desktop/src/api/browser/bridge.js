@@ -123,6 +123,10 @@ function pickFiles() {
   });
 }
 
+// The one active import job; progress surfaces through getActiveJobs /
+// getImportStatus like a desktop sidecar import.
+let importJob = null;
+
 // electron/main.js formatJobStatus(null) shape.
 const jobStatus = (over = {}) => ({
   running: false, active: false, paused: false,
@@ -133,6 +137,20 @@ const jobStatus = (over = {}) => ({
   createdAt: null, updatedAt: null,
   ...over,
 });
+
+const importJobStatus = () => (importJob
+  ? jobStatus({
+    jobId: importJob.jobId,
+    running: importJob.running,
+    active: importJob.running,
+    status: importJob.status,
+    progress: importJob.progress,
+    startedAt: importJob.startedAt,
+    finishedAt: importJob.finishedAt,
+    kind: "import",
+    result: { current_phase: { result: { processed: importJob.done, total: importJob.total } } },
+  })
+  : jobStatus());
 
 function downloadBuffer(savePath, buffer) {
   const name = String(savePath).split("/").pop() || "export.jpg";
@@ -243,6 +261,8 @@ export const browserBridge = {
   // pickDirectories opens the browser file picker and returns a staged
   // pseudo-path; startImport ingests whatever was staged under those paths.
   // getPathForFile does the same per dropped File, so drag-drop import works.
+  // Ingestion runs as an async job so the ActivityCenter shows live progress
+  // exactly like a desktop import (getActiveJobs poll → finish → refresh).
   pickDirectories: () => pickFiles(),
   getPathForFile: (file) => {
     const key = file?.type?.startsWith("image/") ? stageFiles([file]) : null;
@@ -250,20 +270,48 @@ export const browserBridge = {
   },
   startImport: async ({ imageDirs = [], rawDirs = [] } = {}) => {
     const dirs = [...imageDirs, ...rawDirs];
-    for (const dir of dirs) {
-      const files = pendingFiles.get(dir) || [];
-      pendingFiles.delete(dir);
-      for (const file of files) await ingestFile(file);
-    }
-    const now = Date.now();
-    return jobStatus({ status: "succeeded", startedAt: now, finishedAt: now, progress: 1 });
+    const files = dirs.flatMap((d) => {
+      const staged = pendingFiles.get(d) || [];
+      pendingFiles.delete(d);
+      return staged;
+    });
+    importJob = {
+      jobId: `web-import-${Date.now()}`,
+      running: true, status: "running", progress: 0,
+      done: 0, total: files.length,
+      startedAt: Date.now(), finishedAt: null,
+    };
+    void (async () => {
+      for (const file of files) {
+        await ingestFile(file);
+        importJob.done += 1;
+        importJob.progress = importJob.total ? importJob.done / importJob.total : 1;
+      }
+      importJob.running = false;
+      importJob.status = "succeeded";
+      importJob.finishedAt = Date.now();
+      // Belt and suspenders alongside job-finish detection: force a browse
+      // reload even if the poll never saw this (very fast) job.
+      for (const cb of listeners.catalogChanged) cb({ scope: "assets" });
+    })();
+    return importJobStatus();
   },
 
   // ── jobs ──
-  getImportStatus: async () => jobStatus(),
+  getImportStatus: async () => importJobStatus(),
   getPreviewStatus: async () => jobStatus(),
   getEnrichmentStatus: async () => jobStatus(),
-  getActiveJobs: async () => [],
+  getActiveJobs: async () => (importJob?.running
+    ? [{
+      jobId: importJob.jobId,
+      jobType: "import",
+      kind: "import",
+      running: true,
+      status: "running",
+      progress: importJob.progress,
+      result: { current_phase: { result: { processed: importJob.done, total: importJob.total } } },
+    }]
+    : []),
 
   // ── subscriptions (synchronous; return unsubscribe) ──
   onCatalogChanged: subscribe(listeners.catalogChanged),
