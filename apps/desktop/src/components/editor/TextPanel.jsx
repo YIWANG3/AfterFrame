@@ -240,8 +240,9 @@ export default function TextPanel({
         ) : null}
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
-            cached and shared by every text layer's z position slider. */}
-        <Section label={t("text.depth.title")} action={
+            cached and shared by every text layer's z position slider. Hidden when
+            the bridge has no depth backend (web build). */}
+        {api.has("computeDepth") && <Section label={t("text.depth.title")} action={
           hasSceneDepth ? (
             <button
               type="button"
@@ -337,7 +338,7 @@ export default function TextPanel({
               </span>
             </button>
           </div>
-        </Section>
+        </Section>}
 
         {/* Layers — overlay + text + sticker */}
         <Section label={t("text.layers")} action={
@@ -347,11 +348,13 @@ export default function TextPanel({
               title={t("text.addOverlayLayer")}
               onClick={addOverlayLayer}
             />
-            <IconBtn
-              icon={Brush}
-              title={t("text.addHandwriting")}
-              onClick={() => setHandwritingOpen(true)}
-            />
+            {api.has("startTextImage") && (
+              <IconBtn
+                icon={Brush}
+                title={t("text.addHandwriting")}
+                onClick={() => setHandwritingOpen(true)}
+              />
+            )}
             <IconBtn
               icon={Cannabis}
               title={stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer")}

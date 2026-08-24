@@ -4,6 +4,7 @@
 // Extracted from EditorOverlay (Phase 4).
 
 import { Crop, Type, Cannabis, Sparkles } from "lucide-react";
+import api from "../../../api";
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -33,7 +34,9 @@ export default function ToolRail({ tool, onSelect, t }) {
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
       <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => onSelect("sticker")} />
-      <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => onSelect("ai")} />
+      {api.can("aiRepaint") && (
+        <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => onSelect("ai")} />
+      )}
     </div>
   );
 }

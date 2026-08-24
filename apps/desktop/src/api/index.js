@@ -12,6 +12,9 @@ const api = {
   // Coarse feature flags a bridge may declare (web bridge sets these); absent
   // on the desktop bridge, where every capability is implied by has().
   get capabilities() { return bridge().capabilities || {}; },
+  // Capability gate for UI: hidden only when the bridge EXPLICITLY declares
+  // the flag false — undeclared (desktop) means available.
+  can: (flag) => !flag || bridge().capabilities?.[flag] !== false,
 
 
   // ── files & external ──

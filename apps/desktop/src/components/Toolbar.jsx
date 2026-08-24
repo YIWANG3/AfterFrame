@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import api from "../api";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import {
@@ -32,16 +33,19 @@ const DISPLAY_MODES = [
 
 const SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
+// `cap` marks entries a bridge may declare unavailable (api.can) — the web
+// bridge hides RAW sources, sidecar tasks and AI annotation.
 const MENU_SECTIONS = [
   {
     key: "library",
     items: [
       { key: "import", icon: ImagePlus, action: "processed" },
-      { key: "addRawSources", icon: FolderPlus, action: "sources" },
+      { key: "addRawSources", icon: FolderPlus, action: "sources", cap: "rawSources" },
     ],
   },
   {
     key: "tasks",
+    cap: "sidecarJobs",
     items: [
       { key: "runImport", icon: Play, action: "import" },
       { key: "runEnrichment", icon: Sparkles, action: "enrichment" },
@@ -50,6 +54,7 @@ const MENU_SECTIONS = [
   },
   {
     key: "ai",
+    cap: "annotation",
     items: [
       { key: "annotateMissing", icon: Tags, action: "annotateMissing" },
       { key: "reannotateAll", icon: Tags, action: "annotateAll" },
@@ -241,12 +246,12 @@ export default function Toolbar({
           <>
             <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpen(false)} />
             <div className="absolute top-full z-[101] mt-2.5 w-[248px] rounded-lg border border-border/60 bg-chrome p-1.5 shadow-overlay">
-              {MENU_SECTIONS.map((section, sectionIndex) => (
+              {MENU_SECTIONS.filter((s) => api.can(s.cap)).map((section, sectionIndex) => (
                 <div key={section.key} className={sectionIndex > 0 ? "mt-1 border-t border-border/80 pt-1.5" : ""}>
                   <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted2">
                     {t(`toolbar.menu.${section.key}`)}
                   </div>
-                  {section.items.map(({ key, icon: Icon, action }) => (
+                  {section.items.filter((i) => api.can(i.cap)).map(({ key, icon: Icon, action }) => (
                     <button
                       key={key}
                       type="button"

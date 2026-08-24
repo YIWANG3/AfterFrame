@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import api from "../api";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
 
@@ -227,22 +228,24 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       {assetIds?.length >= 2 && (
         <MenuItem icon={LayoutGrid} label={t("gallery.menu.collage")} onClick={() => { onCollage?.(assetIds); onClose(); }} />
       )}
-      <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")}>
-        <button
-          type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
-          onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
-        >
-          {t("gallery.menu.annotateSkip", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
-        </button>
-        <button
-          type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
-          onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
-        >
-          {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
-        </button>
-      </MenuItem>
+      {api.can("annotation") && (
+        <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")}>
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+            onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
+          >
+            {t("gallery.menu.annotateSkip", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
+          </button>
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+            onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
+          >
+            {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
+          </button>
+        </MenuItem>
+      )}
       {editors?.length > 0 && (
         <MenuItem icon={ExternalLink} label={t("gallery.menu.openWith")}>
           {editors.map((ed) => (
@@ -258,16 +261,22 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
           ))}
         </MenuItem>
       )}
-      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.image_path); onClose(); }} />
-      <MenuItem
-        icon={RefreshCw}
-        label={t("gallery.menu.refreshFromDisk", { count: assetIds?.length || 1 })}
-        onClick={() => { void onRefreshFromDisk?.(assetIds || [item.asset_id]); onClose(); }}
-      />
-      <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
+      {api.can("fileSystem") && (
+        <>
+          <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.image_path); onClose(); }} />
+          <MenuItem
+            icon={RefreshCw}
+            label={t("gallery.menu.refreshFromDisk", { count: assetIds?.length || 1 })}
+            onClick={() => { void onRefreshFromDisk?.(assetIds || [item.asset_id]); onClose(); }}
+          />
+          <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
+        </>
+      )}
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
-      <MenuItem icon={Trash} label={t("gallery.menu.deleteFromDisk")} onClick={() => { onDeleteFromDisk?.(); onClose(); }} />
+      {api.can("fileSystem") && (
+        <MenuItem icon={Trash} label={t("gallery.menu.deleteFromDisk")} onClick={() => { onDeleteFromDisk?.(); onClose(); }} />
+      )}
 
       {(manualFolders.length > 0 || inActiveFolder) && (
         <div className="my-1 border-t border-border/40" />

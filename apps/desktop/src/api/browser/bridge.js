@@ -45,31 +45,50 @@ const subscribe = (set) => (cb) => {
   return () => set.delete(cb);
 };
 
+// Downscale a decoded bitmap to maxDim and return an object URL, or null when
+// the source is already small enough. Mirrors the desktop preview tiers
+// (512px gallery thumbs, 2000px HD) so the gallery never decodes originals.
+async function makePreviewUrl(bmp, maxDim) {
+  const scale = maxDim / Math.max(bmp.width, bmp.height);
+  if (scale >= 1) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+  return blob ? URL.createObjectURL(blob) : null;
+}
+
 async function ingestFile(file) {
-  const url = URL.createObjectURL(file);
   // Real dimensions matter: Gallery treats missing width/height as a broken
   // asset and queues repair loops (Gallery.jsx queueAssetRepair).
-  let dims;
+  let bmp;
   try {
-    const bmp = await createImageBitmap(file);
-    dims = { width: bmp.width, height: bmp.height };
-    bmp.close();
+    bmp = await createImageBitmap(file);
   } catch { /* undecodable file — keep it out of the catalog */ return; }
-  const { width, height } = dims;
+  const { width, height } = bmp;
+  const url = URL.createObjectURL(file);
+  const thumbUrl = await makePreviewUrl(bmp, 512);
+  const hdUrl = await makePreviewUrl(bmp, 2000);
+  bmp.close();
   // The fragment carries the filename: blob resolution ignores it, but every
   // basename-of-path UI (card captions, Inspector, save names) shows the real
   // name — and Gallery's `?r=` cache-bust lands harmlessly inside it.
-  const pathUrl = `${url}#/${encodeURIComponent(file.name)}`;
+  const withName = (u) => `${u}#/${encodeURIComponent(file.name)}`;
+  const pathUrl = withName(url);
+  const thumb = thumbUrl ? withName(thumbUrl) : pathUrl;
+  const hd = hdUrl ? withName(hdUrl) : pathUrl;
   assets.push({
-    _objectUrl: url,
+    _objectUrls: [url, thumbUrl, hdUrl].filter(Boolean),
     asset_id: `web-${nextId++}`,
     asset_type: "image",
     image_path: pathUrl,
-    preview_path: pathUrl,
-    image_preview_path: pathUrl,
-    // Original file IS the HD source — also skips the ensureHdPreviews chain.
-    image_preview_hd_path: pathUrl,
-    preview_hd_path: pathUrl,
+    preview_path: thumb,
+    image_preview_path: thumb,
+    // 2000px tier, same as the desktop's HD previews — collage exports from
+    // this; the editor loads image_path (the original) directly.
+    image_preview_hd_path: hd,
+    preview_hd_path: hd,
     stem: file.name.replace(/\.[^.]+$/, ""),
     file_name: file.name,
     exists_on_disk: true,
@@ -131,7 +150,18 @@ function downloadBuffer(savePath, buffer) {
 
 export const browserBridge = {
   isPackaged: true,
-  capabilities: { web: true, catalog: "memory", depth: false, stickerExtract: false },
+  // Explicit false = the matching UI hides (api.can). Desktop declares none.
+  capabilities: {
+    web: true,
+    catalog: "memory",
+    rawSources: false,   // RAW pairing needs the sidecar
+    sidecarJobs: false,  // import pipeline / enrichment / preview generation
+    annotation: false,   // AI annotation job queue
+    fileSystem: false,   // reveal in Finder, copy path, refresh/delete from disk
+    aiRepaint: false,    // until the BYOK Gemini fetch path lands (Phase 3)
+    depth: false,
+    stickerExtract: false,
+  },
 
   // ── locale (read synchronously at i18n import time) ──
   getInitialLocale: () => (navigator.language?.toLowerCase().startsWith("zh") ? "zh-CN" : "en"),
@@ -193,7 +223,7 @@ export const browserBridge = {
     const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
     for (let i = assets.length - 1; i >= 0; i--) {
       if (ids.has(assets[i].asset_id)) {
-        URL.revokeObjectURL(assets[i]._objectUrl);
+        for (const u of assets[i]._objectUrls || []) URL.revokeObjectURL(u);
         assets.splice(i, 1);
       }
     }

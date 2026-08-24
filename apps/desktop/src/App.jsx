@@ -1257,11 +1257,11 @@ export default function App() {
               title: t("saved"),
               message: savePath,
               ttl: 20_000,
-              actions: [{
+              actions: api.has("revealPath") ? [{
                 label: t("showInFinder"),
                 primary: true,
                 onClick: () => api.revealPath(savePath),
-              }],
+              }] : [],
             });
           }
         }}
@@ -1288,11 +1288,11 @@ export default function App() {
               title: t("collageExported"),
               message: savePath,
               ttl: 20_000,
-              actions: [{
+              actions: api.has("revealPath") ? [{
                 label: t("showInFinder"),
                 primary: true,
                 onClick: () => api.revealPath(savePath),
-              }],
+              }] : [],
             });
           }
         }}
