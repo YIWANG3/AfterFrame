@@ -283,10 +283,11 @@ export default function AnnotationsSection({
     // what the desktop app offers; the button opens the download page.
     if (!api.can("annotation")) {
       return (
-        <Section title={t("section.ai")} badge={t("desktop.badge", { ns: "common" })}>
+        <Section title={t("section.ai")}>
           <button
             type="button"
             onClick={openDesktopSite}
+            title={t("desktop.hint", { ns: "common" })}
             className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border/40 bg-app px-3 py-1.5 text-[11px] font-medium text-muted2 transition-colors hover:text-muted"
           >
             <Sparkles className="h-3 w-3" />

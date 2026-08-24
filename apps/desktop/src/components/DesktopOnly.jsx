@@ -12,18 +12,6 @@ export function openDesktopSite() {
   else window.open(DESKTOP_SITE_URL, "_blank", "noopener");
 }
 
-// Small tag appended to a locked entry's label.
-export function DesktopBadge({ className = "" }) {
-  const { t } = useTranslation("common");
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-sm border border-border/70 px-1 py-px text-[8px] font-semibold uppercase tracking-wider text-muted2 ${className}`}
-    >
-      {t("desktop.badge")}
-    </span>
-  );
-}
-
 // Wraps a whole pane (settings tab) that only functions on desktop: a banner
 // links to the download; the content stays visible but dimmed and inert.
 export function DesktopOnlyPane({ children }) {

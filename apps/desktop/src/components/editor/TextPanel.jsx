@@ -1,5 +1,5 @@
 import api from "../../api";
-import { DesktopBadge, openDesktopSite } from "../DesktopOnly";
+import { openDesktopSite } from "../DesktopOnly";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
@@ -244,7 +244,7 @@ export default function TextPanel({
             cached and shared by every text layer's z position slider. Without a
             depth backend (web build) the section advertises the desktop app. */}
         {!api.has("computeDepth") && (
-          <Section label={t("text.depth.title")} action={<DesktopBadge />}>
+          <Section label={t("text.depth.title")}>
             <button
               type="button"
               onClick={openDesktopSite}

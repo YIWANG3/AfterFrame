@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { DesktopBadge, openDesktopSite } from "./DesktopOnly";
+import { openDesktopSite } from "./DesktopOnly";
 import ActivityCenter from "./ActivityCenter";
 import {
   ChevronDown,
@@ -272,7 +272,6 @@ export default function Toolbar({
                       >
                         <Icon className={`h-3.5 w-3.5 shrink-0 ${locked ? "text-muted2/70" : "text-muted"}`} />
                         <span className="min-w-0 flex-1 truncate">{t(`toolbar.menu.${key}`)}</span>
-                        {locked && <DesktopBadge />}
                       </button>
                     );
                   })}

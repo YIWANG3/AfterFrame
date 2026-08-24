@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import api from "../api";
-import { DesktopBadge, openDesktopSite } from "./DesktopOnly";
+import { openDesktopSite } from "./DesktopOnly";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
 
@@ -127,6 +127,7 @@ function createDragPreview(sourceElement, count) {
 }
 
 function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, children }) {
+  const { t: tc } = useTranslation("common");
   const [subOpen, setSubOpen] = useState(false);
   const timerRef = useRef(null);
   // Locked = desktop-only on this bridge: stays visible (so the entry
@@ -172,13 +173,14 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
         "flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-[12px] hover:bg-hover",
         locked ? "text-muted2" : "text-muted hover:text-text",
       ].join(" ")}
+      title={locked ? tc("desktop.hint") : undefined}
       onClick={locked ? openDesktopSite : onClick}
     >
       <span className="flex items-center gap-2.5">
         {Icon && <Icon className="h-3.5 w-3.5" />}
         {label}
       </span>
-      {locked ? <DesktopBadge className="ml-4" /> : shortcut && <span className="ml-4 text-[10px] text-muted2">{shortcut}</span>}
+      {!locked && shortcut && <span className="ml-4 text-[10px] text-muted2">{shortcut}</span>}
     </button>
   );
 }
