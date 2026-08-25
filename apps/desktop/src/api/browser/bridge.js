@@ -142,6 +142,9 @@ function ensureRestored() {
       for (const row of rows) {
         const { _blobs, ...record } = row;
         if (!_blobs?.original) continue;
+        // Migration: early web imports stored EXIF Make as `make`.
+        const meta = record.image_metadata;
+        if (meta?.make && !meta.camera_make) meta.camera_make = meta.make;
         assets.push(hydrateAsset(record, _blobs));
         if (numId(row) >= nextId) nextId = numId(row) + 1;
       }
@@ -176,7 +179,8 @@ async function readExifMetadata(file) {
     const captureRaw = exif.DateTimeOriginal || exif.CreateDate || null;
     return {
       camera_model: exif.Model || null,
-      make: exif.Make || null,
+      // Sidecar field name — frame brand auto-match reads camera_make.
+      camera_make: exif.Make || null,
       lens_model: exif.LensModel || null,
       aperture: exif.FNumber ?? null,
       shutter_speed: exif.ExposureTime ?? null,
