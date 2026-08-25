@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
+import api from "../../api";
 import { Modal, Button, cx } from "../../ui";
 
 const FIELD =
@@ -208,7 +209,7 @@ export function ProviderModal({
                 onChange={(e) => handleTypeChange(e.target.value)}
                 className={FIELD}
               >
-                {PROVIDER_TYPES.map((t) => (
+                {PROVIDER_TYPES.filter((t) => api.can("aiRepaintMultiProvider") || t.type === "nanobanana").map((t) => (
                   <option key={t.type} value={t.type}>{t.label}</option>
                 ))}
               </select>

@@ -68,11 +68,12 @@ let dbPromise = null;
 function openDb() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, 2);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains("assets")) db.createObjectStore("assets", { keyPath: "asset_id" });
         if (!db.objectStoreNames.contains("collections")) db.createObjectStore("collections", { keyPath: "collection_id" });
+        if (!db.objectStoreNames.contains("repaints")) db.createObjectStore("repaints", { keyPath: "repaint_id" });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -194,6 +195,42 @@ async function readExifMetadata(file) {
   } catch { return {}; }
 }
 
+// ── AI helpers ──
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function base64ToBlob(b64, mime) {
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime || "image/png" });
+}
+
+const randomHex = (n = 8) => Array.from(crypto.getRandomValues(new Uint8Array(n / 2)))
+  .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+// Sidecar encode_image_for_llm: RGB, longest edge 512, JPEG q85, base64.
+async function encodeImageForLlm(blob) {
+  const bmp = await createImageBitmap(blob);
+  const scale = Math.min(1, 512 / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff"; // flatten alpha like the RGB conversion
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close();
+  const jpeg = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+  return await blobToBase64(jpeg);
+}
+
 async function ingestFile(file) {
   // Real dimensions matter: Gallery treats missing width/height as a broken
   // asset and queues repair loops (Gallery.jsx queueAssetRepair).
@@ -231,8 +268,10 @@ async function ingestFile(file) {
   // 2000px tier, same as the desktop's HD previews — collage exports from
   // this; the editor loads image_path (the original) directly.
   const blobs = { original: file, thumb: thumbBlob, hd: hdBlob };
-  assets.push(hydrateAsset(record, blobs));
+  const hydrated = hydrateAsset(record, blobs);
+  assets.push(hydrated);
   await persistAsset(record, blobs);
+  return hydrated;
 }
 
 function stageFiles(files) {
@@ -278,6 +317,17 @@ const fileExt = (name) => {
   return m ? m[1].toLowerCase() : null;
 };
 
+// Sidecar _search_clause fields, minus paths: stem, camera/lens, annotation
+// caption/detected_text/tags.
+function matchesSearch(asset, search) {
+  const q = String(search).toLowerCase();
+  const meta = asset.image_metadata || {};
+  const ann = asset.annotation;
+  return [asset.stem, meta.camera_model, meta.lens_model, ann?.caption, ann?.detected_text]
+    .some((v) => v && String(v).toLowerCase().includes(q))
+    || (ann?.tags || []).some((t) => String(t).toLowerCase().includes(q));
+}
+
 // Mirrors the sidecar's facet filter semantics (db/browse.py _facet_clauses),
 // AND-combined. Faces/annotations/person groups don't exist on the web
 // catalog, so "with" matches nothing and "without" matches everything.
@@ -299,9 +349,13 @@ function matchesFacetFilters(asset, filters) {
   if (filters.orientation === "landscape" && !(meta.width > meta.height)) return false;
   if (filters.orientation === "square" && !(meta.width && meta.width === meta.height)) return false;
   if (filters.extension && fileExt(asset.file_name) !== String(filters.extension).toLowerCase().replace(/^\./, "")) return false;
-  if (filters.tag) return false;
+  if (filters.tag) {
+    const t = normalizeTag(filters.tag);
+    if (!(asset.annotation?.tags || []).some((x) => normalizeTag(x) === t)) return false;
+  }
   if (filters.people === "with_faces") return false;
-  if (filters.annotated === "with") return false;
+  if (filters.annotated === "with" && !asset.annotation) return false;
+  if (filters.annotated === "without" && asset.annotation) return false;
   if (filters.person_group) return false;
   if (filters.geo && !matchesGeo(meta, filters.geo)) return false;
   return true;
@@ -323,6 +377,279 @@ function matchesGeo(meta, geo) {
   if (!(lat >= south && lat <= north)) return false;
   // Antimeridian-crossing viewport: split the longitude test.
   return west <= east ? lon >= west && lon <= east : lon >= west || lon <= east;
+}
+
+// ── AI repaint (Gemini direct fetch, sidecar ai_repaint.py semantics) ──
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const DEFAULT_GEMINI_MODEL = "gemini-3-pro-image-preview";
+const GEMINI_MODELS_WITH_IMAGE_SIZE = new Set(["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"]);
+
+let repaintJob = null; // singleton, mirrors formatJobStatus fields the panel reads
+
+async function geminiGenerateImage({ apiKey, model, prompt, sourceBlob, aspectRatio, imageSize }) {
+  const generationConfig = { responseModalities: ["TEXT", "IMAGE"] };
+  const imageConfig = {};
+  if (aspectRatio) imageConfig.aspectRatio = aspectRatio;
+  if (imageSize && GEMINI_MODELS_WITH_IMAGE_SIZE.has(model)) imageConfig.imageSize = imageSize;
+  if (Object.keys(imageConfig).length) generationConfig.imageConfig = imageConfig;
+  const res = await fetch(`${GEMINI_BASE}/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: sourceBlob.type || "image/jpeg", data: await blobToBase64(sourceBlob) } },
+        ],
+      }],
+      generationConfig,
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini request failed: HTTP ${res.status}: ${(await res.text()).slice(0, 500)}`);
+  const payload = await res.json();
+  const parts = payload?.candidates?.[0]?.content?.parts || [];
+  for (const part of parts) {
+    const inline = part.inlineData || part.inline_data;
+    if (inline?.data) return base64ToBlob(inline.data, inline.mimeType || inline.mime_type || "image/png");
+  }
+  throw new Error(`Gemini returned no image output: ${JSON.stringify(payload).slice(0, 500)}`);
+}
+
+async function runRepaint(opts) {
+  const providerConfig = sessionTokens.get(opts.provider);
+  if (!providerConfig?.token) throw new Error("No API token configured for provider.");
+  const source = assets.find((a) => a.image_path === opts.sourcePath)
+    || assets.find((a) => a.asset_id === opts.sourcePath);
+  const sourceBlob = await (await fetch(opts.sourcePath)).blob();
+  const model = opts.model || DEFAULT_GEMINI_MODEL;
+  const outputBlob = await geminiGenerateImage({
+    apiKey: providerConfig.token,
+    model,
+    prompt: opts.prompt || "",
+    sourceBlob,
+    aspectRatio: opts.aspectRatio || null,
+    imageSize: opts.resolution ? String(opts.resolution).toUpperCase() : null,
+  });
+  // Register the result as a catalog asset (the desktop registers it as an
+  // ai_repaint version via the sidecar).
+  const stem = source?.stem || "image";
+  const name = `${stem}_ai-repaint_${randomHex(8)}.png`;
+  const outputAsset = await ingestFile(new File([outputBlob], name, { type: outputBlob.type || "image/png" }));
+  if (!outputAsset) throw new Error("Could not decode the generated image.");
+  // History row survives reloads via asset ids (blob URLs are session-scoped).
+  const now = new Date();
+  const createdAt = now.toISOString().slice(0, 19).replace("T", " "); // panel appends "Z" itself
+  const row = {
+    repaint_id: `rp-${Date.now()}-${randomHex(4)}`,
+    source_asset_id: source?.asset_id || null,
+    output_asset_id: outputAsset.asset_id,
+    prompt: opts.prompt || "",
+    provider: opts.providerType || "nanobanana",
+    model,
+    temperature: opts.temperature ?? null,
+    aspect_ratio: opts.aspectRatio || null,
+    resolution: opts.resolution || null,
+    created_at: createdAt,
+  };
+  try { await idbRun("repaints", "readwrite", (os) => os.put(row)); } catch { /* history is session-only */ }
+  return { outputAsset, row };
+}
+
+const repaintStatus = () => (repaintJob ? jobStatus(repaintJob) : jobStatus());
+
+// ── AI annotation (Anthropic / OpenAI-compatible direct fetch) ──
+const ANNOTATION_SETTINGS_KEY = "afterframe.annotationSettings";
+let annotationJob = null; // batch job singleton
+
+function readAnnotationSettings() {
+  try { return JSON.parse(localStorage.getItem(ANNOTATION_SETTINGS_KEY)) || {}; } catch { return {}; }
+}
+
+const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+function aggregateTags(limit = 50, needle = "") {
+  const q = needle.toLowerCase();
+  const m = new Map();
+  for (const a of assets) {
+    for (const t of a.annotation?.tags || []) {
+      if (!q || t.toLowerCase().includes(q)) m.set(t, (m.get(t) || 0) + 1);
+    }
+  }
+  return [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, limit)
+    .map(([value, count]) => ({ value, count }));
+}
+
+async function setAssetAnnotation(assetId, annotation) {
+  const a = assets.find((x) => x.asset_id === assetId);
+  if (a) a.annotation = annotation;
+  try {
+    await idbRun("assets", "readwrite", (os) => {
+      const req = os.get(assetId);
+      req.onsuccess = () => {
+        if (req.result) { req.result.annotation = annotation; os.put(req.result); }
+      };
+    });
+  } catch { /* session-only */ }
+  return annotation;
+}
+
+// Sidecar build_system_prompt, condensed to the same contract.
+function buildAnnotationSystemPrompt({ languages = ["en", "zh"], maxTags = 10, maxCaptionChars = 200, customInstructions = null, existingTags = [] }) {
+  const names = { en: "English", zh: "Chinese" };
+  const wanted = (languages.length ? languages : ["en"]).map((l) => names[l] || l).join(" and ");
+  let p = "You are a photo annotation assistant. Analyze the image and respond with ONLY a JSON object of this exact shape:\n"
+    + `{"caption": "1-2 sentences, at most ${maxCaptionChars} characters", `
+    + `"tags": ["up to ${maxTags} lowercase tags, no # symbols"], `
+    + `"location": {"country": "", "admin1": "", "locality": "", "landmark": "", "confidence": 0-100} or null when unsure, `
+    + `"detected_text": "verbatim text visible in the image" or null}\n`
+    + `Write the caption and tags in ${wanted}.`;
+  if (existingTags.length) p += `\nPREFER reusing these existing tags when they apply: ${existingTags.slice(0, 200).join(", ")}`;
+  if (customInstructions) p += `\nAdditional instructions: ${customInstructions}`;
+  p += "\nRespond with ONLY the JSON object.";
+  return p;
+}
+
+// Sidecar parse_llm_json: strip fences, else grab the first {...} block.
+function parseLlmJson(text) {
+  let t = String(text || "").trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/m.exec(t);
+  if (fence) t = fence[1];
+  try { return JSON.parse(t); } catch { /* fall through */ }
+  const m = /\{[\s\S]*\}/.exec(t);
+  if (m) { try { return JSON.parse(m[0]); } catch { /* fall through */ } }
+  throw new Error("Model did not return valid JSON.");
+}
+
+async function callAnnotationProvider({ provider, model, baseUrl, apiKey, systemPrompt, promptText, imageB64 }) {
+  if (provider === "anthropic") {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey || "",
+        "anthropic-version": "2023-06-01",
+        // Official opt-in for browser BYOK — the user's own key, stored locally.
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageB64 } },
+            { type: "text", text: promptText },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) throw new Error(`Anthropic API HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const payload = await res.json();
+    const block = (payload.content || []).find((b) => b.type === "text");
+    if (!block?.text) throw new Error("Anthropic returned no text content.");
+    return block.text;
+  }
+  const base = String(baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+  const res = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageB64}` } },
+            { type: "text", text: promptText },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI-compatible API HTTP ${res.status} at ${base}: ${(await res.text()).slice(0, 300)}`);
+  const payload = await res.json();
+  const text = payload?.choices?.[0]?.message?.content;
+  if (!text) throw new Error("Provider returned no content.");
+  return typeof text === "string" ? text : JSON.stringify(text);
+}
+
+async function annotateOne(opts) {
+  const asset = assets.find((a) => a.asset_id === opts.assetId)
+    || assets.find((a) => a.image_path === opts.imagePath);
+  if (!asset) throw new Error("Asset not found.");
+  const apiKey = opts.apiKey || sessionTokens.get(`annotation:${opts.providerId}`)?.token || null;
+  const blob = await (await fetch(asset.image_path)).blob();
+  const imageB64 = await encodeImageForLlm(blob);
+  const systemPrompt = buildAnnotationSystemPrompt({
+    languages: opts.languages,
+    maxTags: opts.maxTags,
+    maxCaptionChars: opts.maxCaptionChars,
+    customInstructions: opts.customInstructions,
+    existingTags: aggregateTags(200).map((t) => t.value),
+  });
+  let promptText = "Annotate this image as instructed.";
+  if (opts.hint) promptText += ` User correction: this photo was taken at/in: ${opts.hint}. Trust this over visual inference.`;
+  const raw = await callAnnotationProvider({
+    provider: opts.provider, model: opts.model, baseUrl: opts.baseUrl,
+    apiKey, systemPrompt, promptText, imageB64,
+  });
+  const parsed = parseLlmJson(raw);
+  const now = new Date().toISOString();
+  const maxTags = opts.maxTags || 10;
+  const maxCaption = opts.maxCaptionChars || 200;
+  const annotation = {
+    asset_id: asset.asset_id,
+    provider: opts.provider,
+    model: opts.model || null,
+    schema_version: 1,
+    caption: typeof parsed.caption === "string" ? parsed.caption.slice(0, maxCaption) : "",
+    tags: (Array.isArray(parsed.tags) ? parsed.tags : [])
+      .map((t) => (typeof t === "string" ? t : t?.tag))
+      .filter((t) => typeof t === "string" && t.trim())
+      .map((t) => normalizeTag(t))
+      .slice(0, maxTags),
+    location: parsed.location && typeof parsed.location === "object" && !Array.isArray(parsed.location) ? parsed.location : null,
+    detected_text: typeof parsed.detected_text === "string" ? parsed.detected_text : null,
+    created_at: now,
+    updated_at: now,
+  };
+  await setAssetAnnotation(asset.asset_id, annotation);
+  return annotation;
+}
+
+// Payload fields AnnotationsSection sends for a single asset — the batch job
+// derives the same from stored settings.
+function annotationOptsFromSettings(settings) {
+  const providers = Array.isArray(settings.providers) ? settings.providers : [];
+  const active = providers.find((p) => p.id === settings.activeProviderId) || providers[0];
+  if (!active) throw new Error("No annotation provider configured.");
+  return {
+    providerId: active.id,
+    provider: active.type === "anthropic" ? "anthropic" : "openai_compatible",
+    model: active.model,
+    baseUrl: active.baseUrl || null,
+    languages: settings.languages || ["en", "zh"],
+    maxTags: settings.maxTags || 10,
+    maxCaptionChars: settings.maxCaptionChars || 200,
+    customInstructions: settings.customInstructions || null,
+  };
+}
+
+function resolveAnnotationTargets({ scope = "all", onlyMissing = true, assetIds = null, collectionId = null } = {}) {
+  let list = assets;
+  if (Array.isArray(assetIds) && assetIds.length) {
+    const wanted = new Set(assetIds);
+    list = list.filter((a) => wanted.has(a.asset_id));
+  } else if (scope === "collection" && collectionId) {
+    const row = collections.find((c) => c.collection_id === collectionId);
+    const member = new Set(row?.asset_ids || []);
+    list = list.filter((a) => member.has(a.asset_id));
+  }
+  if (onlyMissing) list = list.filter((a) => !a.annotation);
+  return list;
 }
 
 const importJobStatus = () => (importJob
@@ -362,9 +689,10 @@ export const browserBridge = {
     catalog: "memory",
     rawSources: false,   // RAW pairing needs the sidecar
     sidecarJobs: false,  // import pipeline / enrichment / preview generation
-    annotation: false,   // AI annotation job queue
+    annotation: true,    // BYOK direct fetch (Anthropic / OpenAI-compatible)
     fileSystem: false,   // reveal in Finder, copy path, refresh/delete from disk
-    aiRepaint: false,    // until the BYOK Gemini fetch path lands (Phase 3)
+    aiRepaint: true,     // BYOK Gemini direct fetch
+    aiRepaintMultiProvider: false, // ark/jimeng/OpenAI need the sidecar
     depth: false,
     stickerExtract: false,
     people: false,       // CoreML face indexing
@@ -434,7 +762,7 @@ export const browserBridge = {
     return {
       cameras: counts(metas.map((m) => m.camera_model)),
       lenses: counts(metas.map((m) => m.lens_model)),
-      tags: [],
+      tags: aggregateTags(60),
       extensions: counts(assets.map((a) => fileExt(a.file_name))),
       iso: minMax("iso"),
       aperture: minMax("aperture"),
@@ -458,7 +786,8 @@ export const browserBridge = {
     if (field === "camera") return pick((a) => a.image_metadata?.camera_model);
     if (field === "lens") return pick((a) => a.image_metadata?.lens_model);
     if (field === "extension") return pick((a) => fileExt(a.file_name));
-    return []; // tags don't exist on the web catalog (annotation is desktop-only)
+    if (field === "tag") return aggregateTags(limit, needle);
+    return [];
   },
   getPreviewSettings: async () => ({ generateHd: false }),
   savePreviewSettings: async () => {},
@@ -469,10 +798,7 @@ export const browserBridge = {
     let list = assets;
     if (status === "rated") list = list.filter((a) => a.app_rating > 0);
     else if (status === "matched") list = [];
-    if (search) {
-      const q = String(search).toLowerCase();
-      list = list.filter((a) => (a.stem || "").toLowerCase().includes(q));
-    }
+    if (search) list = list.filter((a) => matchesSearch(a, search));
     if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
     let sorted = [...list];
     if (sort === "name-asc") sorted.sort((a, b) => a.stem.localeCompare(b.stem));
@@ -499,10 +825,7 @@ export const browserBridge = {
     } else {
       if (status === "rated") list = list.filter((a) => a.app_rating > 0);
       else if (status === "matched") list = [];
-      if (search) {
-        const q = String(search).toLowerCase();
-        list = list.filter((a) => (a.stem || "").toLowerCase().includes(q));
-      }
+      if (search) list = list.filter((a) => matchesSearch(a, search));
       if (filters) {
         const nonGeo = { ...filters };
         delete nonGeo.geo;
@@ -690,17 +1013,32 @@ export const browserBridge = {
   getImportStatus: async () => importJobStatus(),
   getPreviewStatus: async () => jobStatus(),
   getEnrichmentStatus: async () => jobStatus(),
-  getActiveJobs: async () => (importJob?.running
-    ? [{
-      jobId: importJob.jobId,
-      jobType: "import",
-      kind: "import",
-      running: true,
-      status: "running",
-      progress: importJob.progress,
-      result: { current_phase: { result: { processed: importJob.done, total: importJob.total } } },
-    }]
-    : []),
+  getActiveJobs: async () => {
+    const jobs = [];
+    if (importJob?.running) {
+      jobs.push({
+        jobId: importJob.jobId,
+        jobType: "import",
+        kind: "import",
+        running: true,
+        status: "running",
+        progress: importJob.progress,
+        result: { current_phase: { result: { processed: importJob.done, total: importJob.total } } },
+      });
+    }
+    if (annotationJob?.running) {
+      jobs.push({
+        jobId: annotationJob.jobId,
+        jobType: "annotation",
+        kind: "annotation",
+        running: true,
+        status: "running",
+        progress: annotationJob.progress,
+        result: { current_phase: { result: { processed: annotationJob.done, total: annotationJob.total } } },
+      });
+    }
+    return jobs;
+  },
 
   // ── subscriptions (synchronous; return unsubscribe) ──
   onCatalogChanged: subscribe(listeners.catalogChanged),
@@ -740,7 +1078,147 @@ export const browserBridge = {
   getAiProviderToken: async (id) => sessionTokens.get(id) || null,
   setAiProviderToken: async (id, token) => { sessionTokens.set(id, { token }); return { token }; },
   deleteAiProviderToken: async (id) => { sessionTokens.delete(id); },
-  listAiModels: async () => [],
-  listRepaintHistory: async () => [],
-  getAiRepaintStatus: async () => null,
+  listAiModels: async (providerId) => {
+    const key = sessionTokens.get(providerId)?.token;
+    if (!key) return [];
+    try {
+      const res = await fetch(`${GEMINI_BASE}/models`, { headers: { "x-goog-api-key": key } });
+      if (!res.ok) return [];
+      const payload = await res.json();
+      const seen = new Map();
+      for (const m of payload.models || []) {
+        const id = String(m.name || "").replace(/^models\//, "");
+        if (!(m.supportedGenerationMethods || []).includes("generateContent")) continue;
+        if (!id.includes("image")) continue;
+        const label = m.displayName || id;
+        // Prefer non-preview ids per display name, like list_gemini_models.
+        if (!seen.has(label) || (seen.get(label).id.includes("preview") && !id.includes("preview"))) {
+          seen.set(label, { id, name: label });
+        }
+      }
+      return [...seen.values()];
+    } catch { return []; }
+  },
+
+  // ── AI repaint job (singleton, ai_repaint.py semantics) ──
+  startAiRepaint: async (opts = {}) => {
+    await ensureRestored();
+    if (repaintJob?.running) return repaintStatus(); // mirror desktop: one at a time
+    repaintJob = { running: true, active: true, status: "running", kind: "ai_repaint", error: null, result: null, startedAt: Date.now() };
+    void (async () => {
+      try {
+        const { outputAsset, row } = await runRepaint(opts);
+        repaintJob = {
+          running: false, active: false, status: "succeeded", kind: "ai_repaint",
+          finishedAt: Date.now(), error: null,
+          result: {
+            provider: row.provider, model: row.model,
+            output_path: outputAsset.image_path,
+            mime_type: "image/png", prompt: row.prompt,
+            asset_id: outputAsset.asset_id, notes: [], current_phase: null,
+          },
+        };
+      } catch (err) {
+        repaintJob = { running: false, active: false, status: "failed", kind: "ai_repaint", finishedAt: Date.now(), error: err?.message || String(err), result: null };
+      }
+    })();
+    return repaintStatus();
+  },
+  getAiRepaintStatus: async () => repaintStatus(),
+  listRepaintHistory: async (sourcePath) => {
+    await ensureRestored();
+    const source = assets.find((a) => a.image_path === sourcePath);
+    if (!source) return [];
+    let rows;
+    try { rows = await idbGetAll("repaints"); } catch { return []; }
+    const byId = new Map(assets.map((a) => [a.asset_id, a]));
+    return rows
+      .filter((r) => r.source_asset_id === source.asset_id && byId.has(r.output_asset_id))
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+      .map((r) => ({
+        asset_id: r.output_asset_id,
+        output_path: byId.get(r.output_asset_id).image_path,
+        parent_asset_id: r.source_asset_id,
+        input_path: source.image_path,
+        prompt: r.prompt, provider: r.provider, model: r.model,
+        temperature: r.temperature, aspect_ratio: r.aspect_ratio,
+        resolution: r.resolution, created_at: r.created_at,
+      }));
+  },
+
+  // ── AI annotation ──
+  getAnnotationSettings: async () => readAnnotationSettings(),
+  saveAnnotationSettings: async (next) => {
+    const merged = { ...readAnnotationSettings(), ...(next || {}) };
+    localStorage.setItem(ANNOTATION_SETTINGS_KEY, JSON.stringify(merged));
+    return merged;
+  },
+  getAnnotationKey: async (id) => sessionTokens.get(`annotation:${id}`) || null,
+  setAnnotationKey: async (id, token) => { sessionTokens.set(`annotation:${id}`, { token }); return { token }; },
+  deleteAnnotationKey: async (id) => { sessionTokens.delete(`annotation:${id}`); },
+  annotateAsset: async (opts = {}) => {
+    await ensureRestored();
+    return await annotateOne(opts);
+  },
+  getAnnotation: async (assetId) => {
+    await ensureRestored();
+    return assets.find((a) => a.asset_id === assetId)?.annotation || null;
+  },
+  addAssetTag: async (assetId, tag) => {
+    await ensureRestored();
+    const asset = assets.find((a) => a.asset_id === assetId);
+    if (!asset) return null;
+    const t = normalizeTag(tag);
+    const ann = asset.annotation
+      ? { ...asset.annotation }
+      : { asset_id: assetId, provider: "user", model: "manual", schema_version: 1, caption: "", tags: [], location: null, detected_text: null, created_at: new Date().toISOString() };
+    if (t && !ann.tags.some((x) => normalizeTag(x) === t)) ann.tags = [...ann.tags, t];
+    ann.updated_at = new Date().toISOString();
+    return await setAssetAnnotation(assetId, ann);
+  },
+  removeAssetTag: async (assetId, tag) => {
+    await ensureRestored();
+    const asset = assets.find((a) => a.asset_id === assetId);
+    if (!asset?.annotation) return asset?.annotation || null;
+    const t = normalizeTag(tag);
+    const ann = { ...asset.annotation, tags: asset.annotation.tags.filter((x) => normalizeTag(x) !== t), updated_at: new Date().toISOString() };
+    return await setAssetAnnotation(assetId, ann);
+  },
+  listTags: async (limit = 50) => {
+    await ensureRestored();
+    return aggregateTags(limit).map((t) => t.value);
+  },
+  clearAiLocation: async (assetId) => {
+    await ensureRestored();
+    const asset = assets.find((a) => a.asset_id === assetId);
+    if (!asset?.annotation) return asset?.annotation || null;
+    return await setAssetAnnotation(assetId, { ...asset.annotation, location: null, updated_at: new Date().toISOString() });
+  },
+  countAnnotationTargets: async (opts = {}) => {
+    await ensureRestored();
+    return { count: resolveAnnotationTargets(opts).length };
+  },
+  startAnnotationJob: async (opts = {}) => {
+    await ensureRestored();
+    if (annotationJob?.running) return jobStatus(annotationJob);
+    const targets = resolveAnnotationTargets(opts);
+    const shared = annotationOptsFromSettings(readAnnotationSettings()); // throws when unconfigured
+    annotationJob = { jobId: `web-annotate-${Date.now()}`, running: true, active: true, status: "running", kind: "annotation", progress: 0, done: 0, failed: 0, total: targets.length };
+    void (async () => {
+      for (const asset of targets) {
+        try {
+          await annotateOne({ ...shared, assetId: asset.asset_id, imagePath: asset.image_path });
+        } catch { annotationJob.failed += 1; }
+        annotationJob.done += 1;
+        annotationJob.progress = annotationJob.total ? annotationJob.done / annotationJob.total : 1;
+      }
+      annotationJob.running = false;
+      annotationJob.active = false;
+      annotationJob.status = "succeeded";
+      annotationJob.finishedAt = Date.now();
+      for (const cb of listeners.catalogChanged) cb({ scope: "assets" });
+    })();
+    return jobStatus(annotationJob);
+  },
+  getAnnotationJobStatus: async () => (annotationJob ? jobStatus(annotationJob) : jobStatus()),
 };

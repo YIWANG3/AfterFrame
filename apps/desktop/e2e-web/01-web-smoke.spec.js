@@ -72,9 +72,9 @@ test("editor opens, applies a text preset, saves as a browser download", async (
   await c.click();
   await page.keyboard.press("e");
   await expect(page.getByTestId("tool-crop")).toBeVisible();
-  // Sticker + AI tools are locked on the web bridge.
+  // Sticker stays locked on the web bridge; AI repaint is BYOK-unlocked.
   await expect(page.getByRole("button", { name: /Sticker · This feature/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /AI Repaint · This feature|Repaint · This feature/ })).toBeVisible();
+  await expect(page.getByTestId("tool-ai-repaint")).toBeVisible();
   await page.getByTestId("tool-text").click();
   // Scene depth is a desktop-only hint block.
   await expect(page.getByText("Scene Depth", { exact: false })).toBeVisible();
