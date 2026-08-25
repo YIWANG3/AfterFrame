@@ -11,6 +11,7 @@
   "desktop": {
     "hint": "This feature is available in the AfterFrame desktop app",
     "get": "Get the desktop app",
-    "try": "Try the desktop app"
+    "try": "Try the desktop app",
+    "byokNotice": "Your API key is stored only in this browser and requests go directly to the AI provider. Nothing passes through our servers."
   }
 }

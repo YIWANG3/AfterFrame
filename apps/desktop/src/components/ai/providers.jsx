@@ -265,6 +265,11 @@ export function ProviderModal({
           {hasExistingToken && !tokenValue.trim() && (
             <div className="mt-1 text-[11px] text-muted">{t("providers.savedNote")}</div>
           )}
+          {api.capabilities.web && (
+            <div className="mt-2 text-[11px] leading-snug text-muted2">
+              {t("desktop.byokNotice", { ns: "common" })}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 border-t border-border/60 px-4 py-3">

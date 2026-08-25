@@ -8,6 +8,7 @@
 //     languages, autoOnImport, maxTags, maxCaptionChars, customInstructions
 //   }
 
+import api from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, Brain, X } from "lucide-react";
@@ -52,6 +53,9 @@ const DEFAULT_MODEL = {
 };
 
 const DEFAULT_HOST_URL = {
+  // Gemini's OpenAI-compatible endpoint (CORS-enabled) — the google type is
+  // sent through the openai_compatible adapter and needs this base URL.
+  google: "https://generativelanguage.googleapis.com/v1beta/openai",
   ollama: "http://localhost:11434/v1",
   openai_compatible: "",
 };
@@ -562,6 +566,11 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
             </SecondaryButton>
           )}
         </div>
+        {api.capabilities.web && (
+          <div className="mt-2 text-[11px] leading-snug text-muted2">
+            {t("desktop.byokNotice", { ns: "common" })}
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-2">
           <SecondaryButton onClick={handleTest} disabled={testState === "running"}>
             {testState === "running" ? t("annotation.testing") : t("annotation.testConnection")}

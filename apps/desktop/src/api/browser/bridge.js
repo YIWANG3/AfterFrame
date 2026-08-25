@@ -26,9 +26,17 @@ let nextPathId = 1;
 // Files staged for import, keyed by the pseudo-path handed to the app
 // (pickDirectories/getPathForFile return keys; startImport consumes them).
 const pendingFiles = new Map();
-// BYOK provider keys, memory-only (persisting is an explicit opt-in that
-// lands with the web repaint phase).
-const sessionTokens = new Map();
+// BYOK provider keys. Persisted in localStorage at the user's request — the
+// key never leaves this browser except in requests straight to the provider.
+const TOKENS_KEY = "afterframe.aiTokens";
+const sessionTokens = (() => {
+  try { return new Map(Object.entries(JSON.parse(localStorage.getItem(TOKENS_KEY)) || {})); }
+  catch { return new Map(); }
+})();
+function persistTokens() {
+  try { localStorage.setItem(TOKENS_KEY, JSON.stringify(Object.fromEntries(sessionTokens))); }
+  catch { /* session-only */ }
+}
 
 // ── event subscriptions ──
 // useEffect returns these directly: they MUST be synchronous and return an
@@ -1076,8 +1084,8 @@ export const browserBridge = {
     localStorage.setItem("afterframe.aiStyles", JSON.stringify(styles ?? null));
   },
   getAiProviderToken: async (id) => sessionTokens.get(id) || null,
-  setAiProviderToken: async (id, token) => { sessionTokens.set(id, { token }); return { token }; },
-  deleteAiProviderToken: async (id) => { sessionTokens.delete(id); },
+  setAiProviderToken: async (id, token) => { sessionTokens.set(id, { token }); persistTokens(); return { token }; },
+  deleteAiProviderToken: async (id) => { sessionTokens.delete(id); persistTokens(); },
   listAiModels: async (providerId) => {
     const key = sessionTokens.get(providerId)?.token;
     if (!key) return [];
@@ -1154,8 +1162,8 @@ export const browserBridge = {
     return merged;
   },
   getAnnotationKey: async (id) => sessionTokens.get(`annotation:${id}`) || null,
-  setAnnotationKey: async (id, token) => { sessionTokens.set(`annotation:${id}`, { token }); return { token }; },
-  deleteAnnotationKey: async (id) => { sessionTokens.delete(`annotation:${id}`); },
+  setAnnotationKey: async (id, token) => { sessionTokens.set(`annotation:${id}`, { token }); persistTokens(); return { token }; },
+  deleteAnnotationKey: async (id) => { sessionTokens.delete(`annotation:${id}`); persistTokens(); },
   annotateAsset: async (opts = {}) => {
     await ensureRestored();
     return await annotateOne(opts);
