@@ -33,7 +33,17 @@ export default function ToolRail({ tool, onSelect, t }) {
     >
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
-      <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => onSelect("sticker")} />
+      {api.can("stickerExtract") ? (
+        <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => onSelect("sticker")} />
+      ) : (
+        <button
+          type="button"
+          className="flex h-8 w-8 cursor-default items-center justify-center rounded-md text-muted2/50"
+          title={`${t("overlay.tools.sticker")} · ${t("desktop.hint", { ns: "common" })}`}
+        >
+          <Cannabis className="h-4 w-4" />
+        </button>
+      )}
       {api.can("aiRepaint") ? (
         <ToolTab active={tool === "ai"} icon={Sparkles} label={t("overlay.tools.repaint")} onClick={() => onSelect("ai")} />
       ) : (

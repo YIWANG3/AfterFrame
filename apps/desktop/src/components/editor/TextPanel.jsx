@@ -363,7 +363,10 @@ export default function TextPanel({
             />
             <IconBtn
               icon={Cannabis}
-              title={stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer")}
+              title={api.can("stickerExtract")
+                ? (stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer"))
+                : `${t("text.addStickerLayer")} · ${t("desktop.hint", { ns: "common" })}`}
+              disabled={!api.can("stickerExtract")}
               onClick={() => setStickerPickerOpen((v) => !v)}
             />
             <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />

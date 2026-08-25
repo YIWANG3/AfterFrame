@@ -10,9 +10,13 @@ installBridge(browserBridge);
 window.mediaWorkspace = browserBridge;
 
 const { default: App } = await import("./App");
-await import("./i18n");
+const { default: i18n } = await import("./i18n");
 await import("./index.css");
 await import("./fonts");
+
+// Keep <html lang> in sync with the active locale (a11y / font selection).
+document.documentElement.lang = i18n.language;
+i18n.on("languageChanged", (lng) => { document.documentElement.lang = lng; });
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

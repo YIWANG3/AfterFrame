@@ -374,8 +374,17 @@ export const browserBridge = {
   getPeopleSettings: async () => ({}),
 
   // ── locale (read synchronously at i18n import time) ──
-  getInitialLocale: () => (navigator.language?.toLowerCase().startsWith("zh") ? "zh-CN" : "en"),
-  setLocale: () => {},
+  // Settings → General persists the choice; first visit follows the browser.
+  getInitialLocale: () => {
+    try {
+      const saved = localStorage.getItem("afterframe.locale");
+      if (saved) return saved;
+    } catch { /* fall through */ }
+    return navigator.language?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+  },
+  setLocale: (locale) => {
+    try { localStorage.setItem("afterframe.locale", String(locale)); } catch { /* session-only */ }
+  },
 
   // ── workspace / catalog ──
   getInfo: async () => ({
