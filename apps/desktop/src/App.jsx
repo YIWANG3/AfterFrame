@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { filterTitle } from "./utils/format";
+import { filterTitle, fileName } from "./utils/format";
+
+// Web save targets are blob URLs — show the human filename (carried in the
+// URL fragment) instead of the raw URL in toasts.
+const toastPathLabel = (savePath) =>
+  (api.capabilities.web ? decodeURIComponent(fileName(savePath)) : savePath);
 import useWorkspace from "./hooks/useWorkspace";
 import api from "./api";
 import i18n from "./i18n";
@@ -1262,7 +1267,7 @@ export default function App() {
           if (savePath) {
             pushToast({
               title: t("saved"),
-              message: savePath,
+              message: toastPathLabel(savePath),
               ttl: 20_000,
               actions: api.has("revealPath") ? [{
                 label: t("showInFinder"),
@@ -1293,7 +1298,7 @@ export default function App() {
           if (savePath) {
             pushToast({
               title: t("collageExported"),
-              message: savePath,
+              message: toastPathLabel(savePath),
               ttl: 20_000,
               actions: api.has("revealPath") ? [{
                 label: t("showInFinder"),
