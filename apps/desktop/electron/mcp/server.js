@@ -18,13 +18,16 @@ const SERVER_INFO = { name: "afterframe", version: "0.1.0" };
 const SERVER_INSTRUCTIONS = `AfterFrame is a desktop photo library the user is running right now. You are operating on their real catalog.
 
 Domain model:
-- ASSET: one photo (an export/processed image, optionally paired with its RAW source file). Identified by asset_id.
-- RESOURCE SET (version stack): a family of versions of the same photo — original, crops, AI repaints. crop_assets adds versions; originals are never modified.
+- ASSET: one photo or video (an export/processed file, optionally paired with its RAW source file). Identified by asset_id; asset_type tells photos and videos apart.
+- RESOURCE SET (version stack): a family of versions of the same photo — original, crops, text overlays, AI repaints. crop_assets/add_text add versions; originals are never modified.
 - COLLECTION: a manual album. Smart collections are rule-based and read-only here.
-- JOB: long-running background work (import / annotation / previews). Jobs appear in the app's JobDock where the user can watch and cancel them.
+- PERSON: a face group produced by the offline face recognizer (list_people). person_id filters search_assets; update_person renames/merges/hides groups.
+- LOCATION: one effective location per asset, priority manual > EXIF GPS > AI-resolved place guess. browse_map lists points; search_assets geo filters by area; set_asset_location pins manually.
+- JOB: long-running background work (import / annotation / previews / people indexing). Jobs appear in the app's JobDock where the user can watch, pause and cancel them.
 
 Working style:
 - "These photos" / "this one" → call get_selection (the user's live selection in the app window).
+- Creative output (collages, frames/EXIF watermarks, text/sticker composites) → render_collage / apply_frame / edit_asset render with the app's own pipeline; check get_editor_capabilities for valid template/font ids first. Results land in the catalog like any user export. show_in_app with view "editor"/"collage" hands unfinished work to the user.
 - Locating photos by description → search_assets free-text matches filename, camera, AI caption, tags, OCR. If results are ambiguous, view_assets and look. Annotation coverage determines text-search quality — annotate_assets fills it.
 - After finding or producing images for the user, prefer show_in_app over describing them: the app window is the best viewer. Use view_assets when YOU need to see them.
 - Destructive-ish operations: crops/exports are non-destructive. delete_assets removes catalog records but never touches the original files on disk — still, confirm with the user before deleting unless they explicitly asked. Ratings/tags/collections are cheap to write and easy for the user to revert.
@@ -63,6 +66,7 @@ function compactAsset(row, port) {
   const meta = row.image_metadata || {};
   return {
     asset_id: row.asset_id,
+    asset_type: row.asset_type || "image",
     stem: row.stem,
     image_path: row.image_path,
     rating: row.app_rating || 0,
@@ -74,13 +78,35 @@ function compactAsset(row, port) {
     focal_length: meta.focal_length ?? null,
     width: meta.width ?? null,
     height: meta.height ?? null,
+    duration: row.asset_type === "video" ? meta.duration ?? null : undefined,
     match_status: row.match_status,
     caption: row.annotation?.caption ?? null,
     tags: row.annotation?.tags?.length ? row.annotation.tags : undefined,
     has_raw: !!row.raw_asset_id,
+    has_face: row.has_face ? true : undefined,
+    // Only surfaced when something is wrong — keeps the common case compact.
+    missing_original: row.exists_on_disk === false ? true : undefined,
+    source_changed: row.source_changed === true ? true : undefined,
     resource_set_id: row.resource_set_id || null,
     version_kind: row.version_kind || null,
     thumbnail_url: row.preview_path ? `http://127.0.0.1:${port}/assets/${row.asset_id}` : null,
+  };
+}
+
+// {lat, lng, km} → the bounds-mode bbox the sidecar's geo filter understands.
+function nearToBounds(near) {
+  const lat = Number(near.lat);
+  const lng = Number(near.lng);
+  const km = Number(near.km) || 5;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("near requires numeric lat and lng.");
+  const dLat = km / 111;
+  const dLng = km / (111 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
+  return {
+    mode: "bounds",
+    west: Math.max(-180, lng - dLng),
+    east: Math.min(180, lng + dLng),
+    south: Math.max(-90, lat - dLat),
+    north: Math.min(90, lat + dLat),
   };
 }
 
@@ -181,6 +207,23 @@ function createMcpServer(deps) {
           rating_min: { type: "number", description: "Minimum star rating 1-5" },
           orientation: { type: "string", enum: ["portrait", "landscape", "square"] },
           tag: { type: "string", description: "Exact tag match" },
+          asset_type: { type: "string", enum: ["image", "video"], description: "Only photos or only videos" },
+          extension: { type: "string", description: "File format, e.g. 'jpg', 'png', 'mp4', 'cr2'" },
+          shutter_min: { type: "number", description: "Shutter speed lower bound in seconds (e.g. 0.001 for 1/1000s)" },
+          shutter_max: { type: "number" },
+          people: { type: "string", enum: ["with_faces", "without_faces"], description: "Filter by detected faces" },
+          person_id: { type: "string", description: "Only photos of this person (a people group id from list_people)" },
+          annotated: { type: "string", enum: ["with", "without"], description: "Whether AI annotation exists" },
+          geo: {
+            type: "object",
+            description: "Location filter. Either bounds {west,south,east,north} (degrees), or near {lat,lng,km}. " +
+              "min_precision (exact|locality|admin1|country) drops coarse AI guesses; default includes all.",
+            properties: {
+              west: { type: "number" }, south: { type: "number" }, east: { type: "number" }, north: { type: "number" },
+              near: { type: "object", properties: { lat: { type: "number" }, lng: { type: "number" }, km: { type: "number" } } },
+              min_precision: { type: "string", enum: ["exact", "locality", "admin1", "country"] },
+            },
+          },
         },
       },
       async handler(args) {
@@ -189,8 +232,20 @@ function createMcpServer(deps) {
         for (const key of [
           "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
           "focal_min", "focal_max", "date_from", "date_to", "rating_min", "orientation", "tag",
+          "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
         ]) {
           if (args[key] !== undefined && args[key] !== null && args[key] !== "") filters[key] = args[key];
+        }
+        if (args.person_id) filters.person_group = String(args.person_id);
+        if (args.geo && typeof args.geo === "object") {
+          const geo = args.geo.near
+            ? nearToBounds(args.geo.near)
+            : { mode: "bounds", west: args.geo.west, south: args.geo.south, east: args.geo.east, north: args.geo.north };
+          for (const edge of ["west", "south", "east", "north"]) {
+            if (!Number.isFinite(Number(geo[edge]))) throw new Error("geo requires either near{lat,lng,km} or all of west/south/east/north.");
+          }
+          if (args.geo.min_precision) geo.min_precision = args.geo.min_precision;
+          filters.geo = geo;
         }
         const rows = await commands.browseImages({
           status: args.status || "all",
@@ -211,7 +266,8 @@ function createMcpServer(deps) {
       name: "get_asset",
       description:
         "Full detail for one asset by id: complete EXIF metadata, RAW match status and candidates, " +
-        "version siblings in its resource set (crops, AI repaints), and duplicates.",
+        "version siblings in its resource set (crops, AI repaints), duplicates, effective location " +
+        "(GPS or AI-resolved) and AI-repaint history.",
       inputSchema: {
         type: "object",
         properties: { asset_id: { type: "string" } },
@@ -221,7 +277,17 @@ function createMcpServer(deps) {
         requireCatalog();
         const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
         rememberPreview(detail?.asset_id, detail?.image_preview_path, detail?.image_preview_hd_path);
-        return detail;
+        // Best-effort enrichments — a missing gazetteer or history must not
+        // break basic detail reads.
+        const [location, repaintHistory] = await Promise.all([
+          commands.getAssetLocation(String(args.asset_id)).catch(() => null),
+          detail?.image_path ? commands.listRepaintHistory(detail.image_path).catch(() => []) : [],
+        ]);
+        return {
+          ...detail,
+          location: location || null,
+          repaint_history: repaintHistory?.length ? repaintHistory : undefined,
+        };
       },
     },
     {
@@ -266,22 +332,31 @@ function createMcpServer(deps) {
     {
       name: "show_in_app",
       description:
-        "Show photos to the USER: brings the AfterFrame window to front, selects the given assets in the " +
-        "gallery and scrolls to them. The app is the best image viewer — prefer this over describing images " +
-        "when the user wants to see results (e.g. after search_assets). Returns which ids were actually revealed.",
+        "Show something to the USER in the AfterFrame window (brings it to front). Default view 'gallery' " +
+        "selects the given assets and scrolls to them — prefer this over describing images. Other views hand " +
+        "the baton to the user: 'editor' opens the first asset in the image editor, 'collage' opens the collage " +
+        "composer with the assets, 'people' / 'stickers' switch to those library views (no asset_ids needed).",
       inputSchema: {
         type: "object",
         properties: {
-          asset_ids: { type: "array", items: { type: "string" }, description: "Asset ids to select in the app" },
+          asset_ids: { type: "array", items: { type: "string" }, description: "Asset ids (required for gallery/editor/collage)" },
+          view: { type: "string", enum: ["gallery", "editor", "collage", "people", "stickers"], description: "Default gallery" },
         },
-        required: ["asset_ids"],
       },
       async handler(args) {
         requireCatalog();
-        if (!deps.revealAssetsInApp) throw new Error("App window bridge unavailable.");
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
-        if (!ids.length) throw new Error("asset_ids is empty.");
-        return await deps.revealAssetsInApp(ids);
+        const view = args.view || "gallery";
+        if (view === "gallery") {
+          if (!deps.revealAssetsInApp) throw new Error("App window bridge unavailable.");
+          if (!ids.length) throw new Error("asset_ids is empty.");
+          return await deps.revealAssetsInApp(ids);
+        }
+        if (!deps.askRenderer) throw new Error("App window bridge unavailable.");
+        // Views resolve assets from the gallery's current item map — reveal
+        // first so the items are guaranteed loaded (and the window is front).
+        if (ids.length && deps.revealAssetsInApp) await deps.revealAssetsInApp(ids);
+        return await deps.askRenderer("open_view", { view, assetIds: ids }, { timeoutMs: 15_000 });
       },
     },
     {
@@ -382,6 +457,7 @@ function createMcpServer(deps) {
           action: { type: "string", enum: ["list", "create", "rename", "delete", "add_items", "remove_items", "browse"] },
           collection_id: { type: "string" },
           name: { type: "string", description: "For create/rename" },
+          sort_order: { type: "number", description: "For rename: optional new position in the sidebar" },
           asset_ids: { type: "array", items: { type: "string" }, description: "For add_items/remove_items" },
           limit: { type: "number", description: "For browse, default 24" },
           offset: { type: "number", description: "For browse" },
@@ -404,8 +480,11 @@ function createMcpServer(deps) {
           return created;
         }
         if (action === "rename") {
-          if (!args.name) throw new Error("name is required for rename.");
-          const updated = await commands.updateCollection(String(args.collection_id), { name: String(args.name) });
+          if (!args.name && args.sort_order == null) throw new Error("name and/or sort_order is required for rename.");
+          const updated = await commands.updateCollection(String(args.collection_id), {
+            name: args.name != null ? String(args.name) : undefined,
+            sortOrder: args.sort_order != null ? Number(args.sort_order) : undefined,
+          });
           deps.broadcastCatalogChanged?.("collections");
           return updated;
         }
@@ -518,31 +597,73 @@ function createMcpServer(deps) {
     {
       name: "crop_assets",
       description:
-        "Crop photos to an aspect ratio (e.g. '4:3', '1:1', '16:9'). Non-destructive: each crop becomes a new " +
-        "derived version in the original's version stack — the original is untouched. EXIF is preserved and the " +
-        "RAW pairing is inherited. Returns the new asset ids with thumbnail URLs; use show_in_app to present results.",
+        "Crop / rotate / flip photos. Two modes: (1) `ratio` (e.g. '4:3', '1:1') with optional gravity — " +
+        "aspect-ratio crop; (2) `rect` (normalized 0-1 {x,y,w,h}) and/or quarter_turns / free_angle / " +
+        "flip_x / flip_y — the same arbitrary geometry the app's editor offers, applied at full source " +
+        "resolution. Non-destructive: each result becomes a new derived version in the original's version " +
+        "stack — the original is untouched. EXIF is preserved and the RAW pairing is inherited.",
       inputSchema: {
         type: "object",
         properties: {
           asset_ids: { type: "array", items: { type: "string" } },
-          ratio: { type: "string", description: "Target aspect ratio like '4:3', '1:1', '16:9', '3:4'" },
-          gravity: { type: "string", enum: ["center", "top", "bottom", "left", "right"], description: "Which part to keep. Default center" },
+          ratio: { type: "string", description: "Mode 1: target aspect ratio like '4:3', '1:1', '16:9', '3:4'" },
+          gravity: { type: "string", enum: ["center", "top", "bottom", "left", "right"], description: "Mode 1: which part to keep. Default center" },
+          rect: {
+            type: "object",
+            description: "Mode 2: normalized crop rectangle (0-1, relative to the rotated image)",
+            properties: { x: { type: "number" }, y: { type: "number" }, w: { type: "number" }, h: { type: "number" } },
+          },
+          quarter_turns: { type: "number", description: "Mode 2: 90° clockwise turns (0-3)" },
+          free_angle: { type: "number", description: "Mode 2: additional fine rotation in degrees (-45..45)" },
+          flip_x: { type: "boolean" },
+          flip_y: { type: "boolean" },
         },
-        required: ["asset_ids", "ratio"],
+        required: ["asset_ids"],
       },
       async handler(args) {
         requireCatalog();
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
         if (!ids.length) throw new Error("asset_ids is empty.");
+        const advanced = !!(args.rect || args.quarter_turns || args.free_angle || args.flip_x || args.flip_y);
+        if (!advanced && !args.ratio) throw new Error("Pass ratio, or rect / rotation / flip arguments.");
+        if (advanced && args.ratio) throw new Error("ratio and rect/rotation modes are mutually exclusive.");
+        if (advanced && !deps.processAndSave) throw new Error("Geometry pipeline unavailable.");
         const results = [];
         // Sequential: SQLite single-writer + full-res image decode per call.
         for (const id of ids) {
           try {
-            const payload = await commands.createDerived({
-              assetId: id,
-              ratio: String(args.ratio),
-              gravity: String(args.gravity || "center"),
-            });
+            let payload;
+            if (!advanced) {
+              payload = await commands.createDerived({
+                assetId: id,
+                ratio: String(args.ratio),
+                gravity: String(args.gravity || "center"),
+              });
+            } else {
+              const detail = await commands.assetDetail({ assetId: id });
+              if (!detail?.image_path) throw new Error("no file path for asset");
+              const src = detail.image_path;
+              const ext = /\.(png|webp)$/i.test(src) ? path.extname(src).toLowerCase() : ".jpg";
+              // Same destination as the sidecar's own derived outputs — never
+              // next to the source (that would litter the user's folders).
+              const derivedDir = path.join(requireCatalog(), "derived");
+              fs.mkdirSync(derivedDir, { recursive: true });
+              const savePath = path.join(
+                derivedDir,
+                `${path.basename(src).replace(/\.[^.]+$/, "")}_edit_${Date.now()}${ext}`,
+              );
+              const rect = args.rect;
+              await deps.processAndSave({
+                sourcePath: src,
+                savePath,
+                quarterTurns: Number(args.quarter_turns) || 0,
+                freeAngle: Number(args.free_angle) || 0,
+                flipX: !!args.flip_x,
+                flipY: !!args.flip_y,
+                crop: rect ? { x: Number(rect.x) || 0, y: Number(rect.y) || 0, width: Number(rect.w), height: Number(rect.h) } : undefined,
+              });
+              payload = await commands.quickRegister({ imagePath: savePath, originPath: src });
+            }
             rememberPreview(payload.asset_id, null, null);
             results.push({
               source_asset_id: id,
@@ -557,7 +678,7 @@ function createMcpServer(deps) {
           }
         }
         deps.broadcastCatalogChanged?.("assets", { ids });
-        return { ratio: args.ratio, results };
+        return { results };
       },
     },
     {
@@ -714,6 +835,640 @@ function createMcpServer(deps) {
         const result = await commands.cancelJob(String(args.job_id));
         deps.broadcastCatalogChanged?.("jobs");
         return result;
+      },
+    },
+    {
+      name: "pause_job",
+      description: "Pause a running job at its next checkpoint (resumable later with resume_job).",
+      inputSchema: {
+        type: "object",
+        properties: { job_id: { type: "string" } },
+        required: ["job_id"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const result = await commands.pauseJob(String(args.job_id));
+        deps.broadcastCatalogChanged?.("jobs");
+        return result;
+      },
+    },
+    {
+      name: "resume_job",
+      description: "Resume a paused job.",
+      inputSchema: {
+        type: "object",
+        properties: { job_id: { type: "string" } },
+        required: ["job_id"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const jobId = String(args.job_id);
+        // people_index needs its worker process relaunched, not just a status
+        // flip — same routing as the app's Activity Center resume button.
+        const job = await getJob(jobId);
+        let result;
+        if (job?.job_type === "people_index" && deps.resumePeopleIndexJob) {
+          result = await deps.resumePeopleIndexJob(jobId);
+        } else {
+          result = await commands.resumeJob(jobId);
+        }
+        deps.broadcastCatalogChanged?.("jobs");
+        return result;
+      },
+    },
+    {
+      name: "list_people",
+      description:
+        "Recognized people (face groups) in the catalog: id, name (if the user named them), face count, state " +
+        "(candidate/confirmed/ignored) and cover thumbnail. Use the group id with search_assets person_id to " +
+        "find someone's photos, or with get_person / update_person.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          state: { type: "string", enum: ["candidate", "confirmed", "ignored"], description: "Filter by state; default all non-ignored" },
+        },
+      },
+      async handler(args) {
+        requireCatalog();
+        const groups = await commands.listPeopleGroups({ state: args.state });
+        return { count: groups.length, people: groups };
+      },
+    },
+    {
+      name: "get_person",
+      description:
+        "Detail for one people group: name, state, faces (paginated — each face has its asset_id), and " +
+        "optionally similar groups that might be the same person (merge candidates for update_person).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          person_id: { type: "string" },
+          face_limit: { type: "number", description: "Max faces to return, default 24" },
+          face_offset: { type: "number" },
+          include_similar: { type: "boolean", description: "Also return likely-same-person groups" },
+        },
+        required: ["person_id"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const groupId = String(args.person_id);
+        const [detail, similar] = await Promise.all([
+          commands.peopleGroupDetail({ groupId, faceLimit: args.face_limit || 24, faceOffset: args.face_offset || 0 }),
+          args.include_similar ? commands.similarPeopleGroups({ groupId }).catch(() => []) : null,
+        ]);
+        return { ...detail, similar: similar || undefined };
+      },
+    },
+    {
+      name: "update_person",
+      description:
+        "Edit a people group. Actions: 'rename' (name); 'set_cover' (face_id); 'set_state' " +
+        "(state: confirmed accepts the person, ignored hides the group and a rescan will NOT restore it — " +
+        "confirm with the user first); 'merge' (merge this group INTO target_person_id); " +
+        "'assign_faces' / 'remove_faces' (face_ids — move faces into this group / detach them).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["rename", "set_cover", "set_state", "merge", "assign_faces", "remove_faces"] },
+          person_id: { type: "string" },
+          name: { type: "string", description: "For rename" },
+          face_id: { type: "string", description: "For set_cover" },
+          face_ids: { type: "array", items: { type: "string" }, description: "For assign_faces/remove_faces" },
+          state: { type: "string", enum: ["candidate", "confirmed", "ignored"], description: "For set_state" },
+          target_person_id: { type: "string", description: "For merge: the group that survives" },
+        },
+        required: ["action", "person_id"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const groupId = String(args.person_id);
+        let result;
+        if (args.action === "rename") {
+          if (!args.name) throw new Error("name is required for rename.");
+          result = await commands.renamePeopleGroup({ groupId, name: String(args.name) });
+        } else if (args.action === "set_cover") {
+          if (!args.face_id) throw new Error("face_id is required for set_cover.");
+          result = await commands.setPeopleGroupCover({ groupId, faceId: String(args.face_id) });
+        } else if (args.action === "set_state") {
+          if (!args.state) throw new Error("state is required for set_state.");
+          result = await commands.setPeopleGroupState({ groupId, state: String(args.state) });
+        } else if (args.action === "merge") {
+          if (!args.target_person_id) throw new Error("target_person_id is required for merge.");
+          result = await commands.mergePeopleGroups({ sourceGroupId: groupId, targetGroupId: String(args.target_person_id) });
+        } else if (args.action === "assign_faces") {
+          const faceIds = (args.face_ids || []).map(String).filter(Boolean);
+          if (!faceIds.length) throw new Error("face_ids is required for assign_faces.");
+          result = await commands.assignFaceToPerson({ faceIds, groupId });
+        } else if (args.action === "remove_faces") {
+          const faceIds = (args.face_ids || []).map(String).filter(Boolean);
+          if (!faceIds.length) throw new Error("face_ids is required for remove_faces.");
+          result = await commands.removeFaceFromPerson({ faceIds });
+        } else {
+          throw new Error(`Unknown action: ${args.action}`);
+        }
+        deps.broadcastCatalogChanged?.("people");
+        return result;
+      },
+    },
+    {
+      name: "index_people",
+      description:
+        "Run face recognition over the library (or specific assets) using the app's local Core ML model. " +
+        "Fully offline. Long-running: returns a job_id — poll get_job_status. Fails with guidance when no " +
+        "face model is installed (the user sets one up in Settings → People).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset_ids: { type: "array", items: { type: "string" }, description: "Limit to these assets; default whole catalog" },
+        },
+      },
+      async handler(args) {
+        requireCatalog();
+        if (!deps.startPeopleIndex) throw new Error("People indexing bridge unavailable.");
+        const status = await deps.startPeopleIndex({ assetIds: (args.asset_ids || []).map(String).filter(Boolean) });
+        deps.broadcastCatalogChanged?.("jobs", { jobId: status.jobId, jobType: "people_index" });
+        return {
+          job_id: status.jobId,
+          status: status.status,
+          note: "Recognition runs in the background — poll get_job_status. People appear in the app's People view as they are found.",
+        };
+      },
+    },
+    {
+      name: "browse_map",
+      description:
+        "Photo locations for map-style queries: returns {asset_id, latitude, longitude, precision, source} points. " +
+        "Scope with the same free-text query as search_assets, and/or a collection. min_precision hides coarse " +
+        "AI-guessed locations (default locality). To filter full asset records by area instead, use " +
+        "search_assets with the geo filter.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Free-text scope, same as search_assets query" },
+          collection_id: { type: "string" },
+          min_precision: { type: "string", enum: ["exact", "locality", "admin1", "country"], description: "Default locality" },
+          limit: { type: "number", description: "Default 5000" },
+        },
+      },
+      async handler(args) {
+        requireCatalog();
+        const points = await commands.browseMapPoints({
+          collectionId: args.collection_id,
+          search: args.query,
+          minPrecision: args.min_precision,
+          limit: args.limit || 5000,
+        });
+        return { count: points.length, points };
+      },
+    },
+    {
+      name: "set_asset_location",
+      description:
+        "Set or clear a photo's location pin. action 'set' writes a manual location (lat/lng — overrides EXIF " +
+        "and AI guesses); 'clear' removes the pin (EXIF GPS, if the file has any, comes back); " +
+        "'resolve_ai' backfills locations from existing AI annotations' place guesses for the whole catalog.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["set", "clear", "resolve_ai"] },
+          asset_ids: { type: "array", items: { type: "string" }, description: "For set/clear" },
+          lat: { type: "number" },
+          lng: { type: "number" },
+        },
+        required: ["action"],
+      },
+      async handler(args) {
+        requireCatalog();
+        if (args.action === "resolve_ai") {
+          const result = await commands.resolveAiLocations();
+          deps.broadcastCatalogChanged?.("assets");
+          return result;
+        }
+        const ids = (args.asset_ids || []).map(String).filter(Boolean);
+        if (!ids.length) throw new Error("asset_ids is empty.");
+        if (args.action === "set" && (!Number.isFinite(Number(args.lat)) || !Number.isFinite(Number(args.lng)))) {
+          throw new Error("lat and lng are required for set.");
+        }
+        const results = [];
+        for (const id of ids) {
+          try {
+            const location = await commands.setAssetLocation({
+              assetId: id,
+              lat: args.lat,
+              lng: args.lng,
+              clear: args.action === "clear",
+            });
+            results.push({ asset_id: id, location });
+          } catch (error) {
+            results.push({ asset_id: id, error: error.message });
+          }
+        }
+        deps.broadcastCatalogChanged?.("assets", { ids });
+        return { results };
+      },
+    },
+    {
+      name: "maintain_library",
+      description:
+        "Library housekeeping. Actions: 'verify_assets' — sweep for missing/changed originals (scope all|missing); " +
+        "'refresh_from_disk' (asset_ids) — re-read metadata and regenerate previews after files changed on disk; " +
+        "'relink' (asset_id, new_path) — point a missing asset at its moved file; " +
+        "'scan_new_media' (dirs) — one-shot import sweep of folders; " +
+        "'list_watched_dirs' / 'add_watched_dir' / 'remove_watched_dir' (dir) — folders the app auto-imports from.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["verify_assets", "refresh_from_disk", "relink", "scan_new_media", "list_watched_dirs", "add_watched_dir", "remove_watched_dir"] },
+          scope: { type: "string", enum: ["all", "missing"], description: "For verify_assets, default all" },
+          asset_ids: { type: "array", items: { type: "string" }, description: "For refresh_from_disk" },
+          asset_id: { type: "string", description: "For relink" },
+          new_path: { type: "string", description: "For relink" },
+          dirs: { type: "array", items: { type: "string" }, description: "For scan_new_media" },
+          dir: { type: "string", description: "For add_watched_dir/remove_watched_dir" },
+        },
+        required: ["action"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const action = args.action;
+        if (action === "verify_assets") {
+          const result = await commands.verifyAssets({ scope: args.scope || "all" });
+          deps.broadcastCatalogChanged?.("assets");
+          return result;
+        }
+        if (action === "refresh_from_disk") {
+          const ids = (args.asset_ids || []).map(String).filter(Boolean);
+          if (!ids.length) throw new Error("asset_ids is required for refresh_from_disk.");
+          const paths = [];
+          for (const id of ids) {
+            const detail = await commands.assetDetail({ assetId: id }).catch(() => null);
+            if (detail?.image_path) paths.push(detail.image_path);
+          }
+          if (!paths.length) throw new Error("None of the asset_ids resolved to a file path.");
+          const result = await commands.refreshAssets(paths);
+          deps.broadcastCatalogChanged?.("assets", { ids });
+          return result;
+        }
+        if (action === "relink") {
+          if (!args.asset_id || !args.new_path) throw new Error("asset_id and new_path are required for relink.");
+          if (!fs.existsSync(String(args.new_path))) throw new Error(`Path does not exist: ${args.new_path}`);
+          const result = await commands.relinkAsset({ assetId: String(args.asset_id), newPath: String(args.new_path) });
+          deps.broadcastCatalogChanged?.("assets", { ids: [String(args.asset_id)] });
+          return result;
+        }
+        if (action === "scan_new_media") {
+          const dirs = (args.dirs || []).map(String).filter(Boolean);
+          if (!dirs.length) throw new Error("dirs is required for scan_new_media.");
+          for (const dir of dirs) {
+            if (!fs.existsSync(dir)) throw new Error(`Path does not exist: ${dir}`);
+          }
+          const result = await commands.scanNewMedia(dirs);
+          deps.broadcastCatalogChanged?.("assets");
+          return result;
+        }
+        if (action === "list_watched_dirs") {
+          if (!deps.watcher) throw new Error("Watcher bridge unavailable.");
+          return { dirs: deps.watcher.watchedDirs() };
+        }
+        if (action === "add_watched_dir" || action === "remove_watched_dir") {
+          if (!deps.watcher) throw new Error("Watcher bridge unavailable.");
+          if (!args.dir) throw new Error(`dir is required for ${action}.`);
+          const dirs = action === "add_watched_dir"
+            ? await deps.watcher.addWatchedDir(String(args.dir))
+            : await deps.watcher.removeWatchedDir(String(args.dir));
+          return { dirs };
+        }
+        throw new Error(`Unknown action: ${action}`);
+      },
+    },
+    {
+      name: "raw_pairing",
+      description:
+        "Manual RAW↔JPEG pairing. Actions: 'list_pending' — processed images whose RAW match is ambiguous " +
+        "(each with candidate RAW assets); 'confirm_match' (image_path, raw_asset_id) — confirm which RAW " +
+        "belongs to an image. To register new RAW folders, use import_directory with raw_dirs.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list_pending", "confirm_match"] },
+          image_path: { type: "string", description: "For confirm_match" },
+          raw_asset_id: { type: "string", description: "For confirm_match" },
+        },
+        required: ["action"],
+      },
+      async handler(args) {
+        requireCatalog();
+        if (args.action === "list_pending") {
+          const pending = await commands.listPending();
+          return { count: pending.length, pending };
+        }
+        if (args.action === "confirm_match") {
+          if (!args.image_path || !args.raw_asset_id) throw new Error("image_path and raw_asset_id are required.");
+          const result = await commands.confirmMatch({ imagePath: String(args.image_path), rawAssetId: String(args.raw_asset_id) });
+          deps.broadcastCatalogChanged?.("assets");
+          return result;
+        }
+        throw new Error(`Unknown action: ${args.action}`);
+      },
+    },
+    {
+      name: "add_text",
+      description:
+        "Render a text overlay onto a photo (caption, date stamp, watermark text). Position/size are " +
+        "normalized 0-1 (x,y = text center; size = fraction of image height). Handles CJK. Non-destructive: " +
+        "the result is a new derived version in the original's version stack. For rich multi-layer layouts " +
+        "the user has the app's editor — this is the simple one-line variant.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset_id: { type: "string" },
+          text: { type: "string" },
+          x: { type: "number", description: "Normalized center x (0-1), default 0.5" },
+          y: { type: "number", description: "Normalized center y (0-1), default 0.9" },
+          size: { type: "number", description: "Font height as a fraction of image height, default 0.05" },
+          color: { type: "string", description: "Hex color, default #FFFFFF" },
+          stroke_color: { type: "string", description: "Outline color, default #000000" },
+          stroke_width: { type: "number", description: "Outline width in px; default scales with size" },
+          opacity: { type: "number", description: "0-1, default 1" },
+          align: { type: "string", enum: ["left", "center", "right"] },
+        },
+        required: ["asset_id", "text"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const payload = await commands.addText({
+          assetId: String(args.asset_id),
+          text: String(args.text),
+          x: args.x, y: args.y, size: args.size,
+          color: args.color, strokeColor: args.stroke_color, strokeWidth: args.stroke_width,
+          opacity: args.opacity, align: args.align,
+        });
+        rememberPreview(payload.asset_id, null, null);
+        deps.broadcastCatalogChanged?.("assets", { ids: [String(args.asset_id)] });
+        return {
+          source_asset_id: String(args.asset_id),
+          new_asset_id: payload.asset_id,
+          path: payload.image_path || payload.path,
+          thumbnail_url: payload.asset_id ? `http://127.0.0.1:${port}/assets/${payload.asset_id}` : undefined,
+        };
+      },
+    },
+    {
+      name: "list_tags",
+      description: "All tags in the catalog with usage counts — for tag autocomplete and 'what tags exist' questions.",
+      inputSchema: {
+        type: "object",
+        properties: { limit: { type: "number", description: "Default all" } },
+      },
+      async handler(args) {
+        requireCatalog();
+        const tags = await commands.listTags(args.limit);
+        return { count: tags.length, tags };
+      },
+    },
+    {
+      name: "generate_previews",
+      description:
+        "Generate preview thumbnails for specific assets — 'hd' (2000px) before view_assets on detail-critical " +
+        "work, or 'standard' (512px) to repair missing/stale thumbnails (force-regenerates).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset_ids: { type: "array", items: { type: "string" } },
+          kind: { type: "string", enum: ["standard", "hd"], description: "Default hd" },
+        },
+        required: ["asset_ids"],
+      },
+      async handler(args) {
+        requireCatalog();
+        const ids = (args.asset_ids || []).map(String).filter(Boolean);
+        if (!ids.length) throw new Error("asset_ids is empty.");
+        const paths = [];
+        for (const id of ids) {
+          const detail = await commands.assetDetail({ assetId: id }).catch(() => null);
+          if (detail?.image_path) paths.push(detail.image_path);
+        }
+        if (!paths.length) throw new Error("None of the asset_ids resolved to a file path.");
+        const result = args.kind === "standard"
+          ? await commands.regeneratePreviews(paths, "preview")
+          : await commands.ensureHdPreviews(paths);
+        for (const id of ids) previewPathCache.delete(id);
+        deps.broadcastCatalogChanged?.("assets", { ids });
+        return result;
+      },
+    },
+    {
+      name: "get_editor_capabilities",
+      description:
+        "Enumerations for the rendering tools: frame template ids (apply_frame), collage template ids per " +
+        "photo count (render_collage), available fonts and layer types (edit_asset). Call before using those " +
+        "tools when you need valid values.",
+      inputSchema: { type: "object", properties: {} },
+      async handler() {
+        requireCatalog();
+        if (!deps.askRenderer) throw new Error("Render bridge unavailable.");
+        return await deps.askRenderer("capabilities", {}, { timeoutMs: 15_000 });
+      },
+    },
+    {
+      name: "render_collage",
+      description:
+        "Compose photos into collage pages — the same renderer as the app's collage tool, pixel-identical. " +
+        "Without per_page: ONE page from all asset_ids (2-12). With per_page: batch mode — assets are chunked " +
+        "into pages of that size. template_id (see get_editor_capabilities) must match the per-page photo " +
+        "count; omit it for the default layout. Each page is saved as a new catalog asset linked to its " +
+        "source photos. Requires the app window to be open.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset_ids: { type: "array", items: { type: "string" } },
+          template_id: { type: "string", description: "Collage layout id, e.g. '4-grid'; default first layout for the count" },
+          per_page: { type: "number", description: "Batch mode: photos per page (2-12)" },
+          ratio: { type: "number", description: "Canvas aspect ratio W/H, default 1 (square)" },
+          gap: { type: "number", description: "Gap between cells in export px, default 4" },
+          padding: { type: "number", description: "Outer margin in export px, default 0" },
+          radius: { type: "number", description: "Cell corner radius in export px, default 0" },
+          bg: { type: "string", description: "Background color, default #000000" },
+          export_width: { type: "number", description: "Output width in px, default 3000" },
+        },
+        required: ["asset_ids"],
+      },
+      async handler(args) {
+        const catalogPath = requireCatalog();
+        if (!deps.askRenderer) throw new Error("Render bridge unavailable.");
+        const ids = (args.asset_ids || []).map(String).filter(Boolean);
+        if (ids.length < 2) throw new Error("render_collage needs at least 2 asset_ids.");
+        const perPage = args.per_page ? Math.max(1, Math.min(12, Math.round(args.per_page))) : ids.length;
+        if (!args.per_page && ids.length > 12) throw new Error("A single page holds at most 12 photos — pass per_page for batch mode.");
+        const files = [];
+        for (const id of ids) {
+          const detail = await commands.assetDetail({ assetId: id });
+          if (!detail?.image_path) throw new Error(`No file path for asset ${id}.`);
+          files.push({
+            assetId: id,
+            imagePath: detail.image_path,
+            previewPath: detail.image_preview_hd_path || detail.image_preview_path || null,
+          });
+        }
+        const derivedDir = path.join(catalogPath, "derived");
+        fs.mkdirSync(derivedDir, { recursive: true });
+        const stamp = Date.now();
+        const pages = [];
+        for (let i = 0; i < files.length; i += perPage) pages.push(files.slice(i, i + perPage));
+        // A trailing 1-photo remainder still renders (template "1-full").
+        const results = [];
+        for (let p = 0; p < pages.length; p++) {
+          const page = pages[p];
+          const savePath = path.join(derivedDir, `collage_${stamp}_p${p + 1}.jpg`);
+          try {
+            const out = await deps.askRenderer("collage", {
+              files: page,
+              templateId: page.length === perPage ? args.template_id || null : null,
+              canvasRatio: args.ratio,
+              gap: args.gap,
+              padding: args.padding,
+              borderRadius: args.radius,
+              bgColor: args.bg,
+              width: args.export_width,
+              savePath,
+              sourceAssetIds: page.map((f) => f.assetId),
+            });
+            rememberPreview(out.asset?.asset_id, null, null);
+            results.push({
+              page: p + 1,
+              new_asset_id: out.asset?.asset_id,
+              template_id: out.template_id,
+              width: out.width,
+              height: out.height,
+              path: out.saved_path,
+              thumbnail_url: out.asset?.asset_id ? `http://127.0.0.1:${port}/assets/${out.asset.asset_id}` : undefined,
+            });
+          } catch (error) {
+            results.push({ page: p + 1, error: error.message });
+          }
+        }
+        deps.broadcastCatalogChanged?.("assets", { ids });
+        return { pages: results.length, results };
+      },
+    },
+    {
+      name: "edit_asset",
+      description:
+        "Composite edit on one photo using the app's editor pipeline: geometry (crop rect / rotation / flip), " +
+        "canvas margins with background color, and overlay layers (text with font/color/outline/glow/shadow, " +
+        "sticker from a PNG path). Positions are normalized 0-1; text size is a fraction of image width. " +
+        "Non-destructive: the result is a new derived version in the original's version stack. " +
+        "Requires the app window to be open. For a plain crop use crop_assets; for one-line text add_text also works.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset_id: { type: "string" },
+          geometry: {
+            type: "object",
+            properties: {
+              crop: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, w: { type: "number" }, h: { type: "number" } } },
+              quarter_turns: { type: "number" },
+              free_angle: { type: "number" },
+              flip_x: { type: "boolean" },
+              flip_y: { type: "boolean" },
+            },
+          },
+          canvas: {
+            type: "object",
+            description: "Optional margins: pad fractions of the photo's short edge, bg color",
+            properties: {
+              pad: { type: "object", properties: { top: { type: "number" }, right: { type: "number" }, bottom: { type: "number" }, left: { type: "number" } } },
+              bg: { type: "string", description: "Margin color, default #ffffff" },
+            },
+          },
+          layers: {
+            type: "array",
+            description: "Overlay layers, drawn in order. type 'text': {text, x, y, size, font, color, align, bold, italic, rotation, opacity, outline{width,color}, glow{radius,color,opacity}, shadow{x,y,blur,color,opacity}}. type 'sticker': {path, x, y, scale, rotation, opacity}",
+            items: { type: "object" },
+          },
+          format: { type: "string", enum: ["jpeg", "png"], description: "Default jpeg" },
+        },
+        required: ["asset_id"],
+      },
+      async handler(args) {
+        const catalogPath = requireCatalog();
+        if (!deps.askRenderer) throw new Error("Render bridge unavailable.");
+        const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
+        if (!detail?.image_path) throw new Error(`No file path for asset ${args.asset_id}.`);
+        const hasWork = args.geometry || args.canvas || (args.layers || []).length;
+        if (!hasWork) throw new Error("Nothing to do — pass geometry, canvas and/or layers.");
+        const derivedDir = path.join(catalogPath, "derived");
+        fs.mkdirSync(derivedDir, { recursive: true });
+        const ext = args.format === "png" ? ".png" : ".jpg";
+        const stem = path.basename(detail.image_path).replace(/\.[^.]+$/, "");
+        const savePath = path.join(derivedDir, `${stem}_edit_${Date.now()}${ext}`);
+        const out = await deps.askRenderer("edit", {
+          imagePath: detail.image_path,
+          savePath,
+          geometry: args.geometry || {},
+          canvas: args.canvas || {},
+          layers: args.layers || [],
+        });
+        rememberPreview(out.asset?.asset_id, null, null);
+        deps.broadcastCatalogChanged?.("assets", { ids: [String(args.asset_id)] });
+        return {
+          source_asset_id: String(args.asset_id),
+          new_asset_id: out.asset?.asset_id,
+          path: out.saved_path,
+          thumbnail_url: out.asset?.asset_id ? `http://127.0.0.1:${port}/assets/${out.asset.asset_id}` : undefined,
+        };
+      },
+    },
+    {
+      name: "apply_frame",
+      description:
+        "Apply a photo frame / EXIF watermark template (the app's Frame presets: white borders with camera, " +
+        "lens and exposure text plus brand logo — e.g. classic bottom bar, polaroid, overlay captions). " +
+        "template ids come from get_editor_capabilities frame_templates. EXIF is read from the photo " +
+        "automatically. Non-destructive: each result is a new derived version. Requires the app window to be open.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          asset_ids: { type: "array", items: { type: "string" } },
+          template: { type: "string", description: "Frame template id" },
+        },
+        required: ["asset_ids", "template"],
+      },
+      async handler(args) {
+        const catalogPath = requireCatalog();
+        if (!deps.askRenderer) throw new Error("Render bridge unavailable.");
+        const ids = (args.asset_ids || []).map(String).filter(Boolean);
+        if (!ids.length) throw new Error("asset_ids is empty.");
+        const derivedDir = path.join(catalogPath, "derived");
+        fs.mkdirSync(derivedDir, { recursive: true });
+        const results = [];
+        for (const id of ids) {
+          try {
+            const detail = await commands.assetDetail({ assetId: id });
+            if (!detail?.image_path) throw new Error("no file path for asset");
+            const stem = path.basename(detail.image_path).replace(/\.[^.]+$/, "");
+            const savePath = path.join(derivedDir, `${stem}_frame_${Date.now()}.jpg`);
+            const out = await deps.askRenderer("frame", {
+              imagePath: detail.image_path,
+              templateId: String(args.template),
+              exifItem: { image_metadata: detail.image_metadata, raw_metadata: detail.raw_metadata },
+              savePath,
+            });
+            rememberPreview(out.asset?.asset_id, null, null);
+            results.push({
+              source_asset_id: id,
+              new_asset_id: out.asset?.asset_id,
+              width: out.width,
+              height: out.height,
+              path: out.saved_path,
+              thumbnail_url: out.asset?.asset_id ? `http://127.0.0.1:${port}/assets/${out.asset.asset_id}` : undefined,
+            });
+          } catch (error) {
+            results.push({ source_asset_id: id, error: error.message });
+          }
+        }
+        deps.broadcastCatalogChanged?.("assets", { ids });
+        return { template: args.template, results };
       },
     },
   ];

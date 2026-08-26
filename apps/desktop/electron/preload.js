@@ -22,6 +22,16 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   },
   sendAgentRevealResult: (requestId, result) =>
     ipcRenderer.send(`workspace:agent-reveal-result:${requestId}`, result),
+  // Render bridge: agent (MCP) asks the renderer to run a canvas render
+  // (collage / edit recipe / frame) or open a view. Same per-request-channel
+  // answer pattern as the reveal flow.
+  onAgentRender: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("workspace:agent-render", listener);
+    return () => ipcRenderer.removeListener("workspace:agent-render", listener);
+  },
+  sendAgentRenderResult: (requestId, result) =>
+    ipcRenderer.send(`workspace:agent-render-result:${requestId}`, result),
   // Push selection changes to main so the MCP get_selection tool can answer
   // "these photos" instantly.
   reportSelection: (assets) => ipcRenderer.send("workspace:selection-changed", assets),

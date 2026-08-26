@@ -52,10 +52,16 @@ test("tools/list exposes the full tool surface", async () => {
     "get_selection", "update_assets", "manage_collections", "annotate_assets",
     "repaint_asset", "delete_assets", "crop_assets", "export_assets",
     "import_directory", "get_job_status", "list_active_jobs", "cancel_job",
+    // Phase 1 parity additions (full coverage in 26-mcp-parity.spec.js)
+    "pause_job", "resume_job", "list_people", "get_person", "update_person",
+    "index_people", "browse_map", "set_asset_location", "maintain_library",
+    "raw_pairing", "add_text", "list_tags", "generate_previews",
+    // Phase 2 render-bridge additions (coverage in 28-mcp-render.spec.js)
+    "get_editor_capabilities", "render_collage", "edit_asset", "apply_frame",
   ]) {
     expect(names).toContain(expected);
   }
-  expect(tools.length).toBe(17);
+  expect(tools.length).toBe(34);
 });
 
 test("search_assets returns the seeded catalog with thumbnail urls", async () => {

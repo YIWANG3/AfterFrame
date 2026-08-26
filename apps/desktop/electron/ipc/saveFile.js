@@ -45,8 +45,9 @@ function register({
 
   // Sharp-based "fast path" — bypasses canvas entirely and works at the
   // source's native resolution. Used by the editor when there are no overlay
-  // layers (just rotate/flip/crop on the original image).
-  ipcMain.handle("workspace:process-and-save", async (_event, options) => {
+  // layers (just rotate/flip/crop on the original image), and by the MCP
+  // crop_assets tool's rect/rotate mode (hence the named function).
+  async function processAndSave(options) {
     const {
       sourcePath,
       savePath,
@@ -148,7 +149,11 @@ function register({
 
     console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${savePath}`);
     return { path: savePath, width: result.width, height: result.height };
-  });
+  }
+
+  ipcMain.handle("workspace:process-and-save", (_event, options) => processAndSave(options));
+
+  return { processAndSave };
 }
 
 module.exports = { register };

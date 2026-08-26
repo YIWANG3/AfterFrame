@@ -380,6 +380,36 @@ class LocationTestCase(unittest.TestCase):
 
     # -- migration -------------------------------------------------------
 
+    def test_manual_location_overrides_and_clear_restores_exif(self):
+        from media_workspace.db import get_asset_location, set_manual_asset_location
+
+        asset_id = self._import_image(48.8566, 2.3522)  # EXIF GPS: Paris
+        set_manual_asset_location(self.connection, asset_id, 37.8025, -122.4058, commit=True)
+        row = get_asset_location(self.connection, asset_id)
+        self.assertEqual(row["source"], "manual")
+        self.assertAlmostEqual(row["latitude"], 37.8025, places=4)
+        # One row per asset; R*Tree stays in sync.
+        self.assertEqual(len(self._locations()), 1)
+        self.assertEqual(self._rtree_count(), 1)
+
+        # Clear = delete + re-derive from metadata → EXIF comes back.
+        delete_asset_location(self.connection, asset_id)
+        meta_json = self.connection.execute(
+            "SELECT metadata_json FROM assets WHERE asset_id = ?", (asset_id,)
+        ).fetchone()["metadata_json"]
+        import json as _json
+        upsert_asset_location_from_metadata(self.connection, asset_id, _json.loads(meta_json or "{}"), commit=True)
+        row = get_asset_location(self.connection, asset_id)
+        self.assertEqual(row["source"], "exif")
+        self.assertAlmostEqual(row["latitude"], 48.8566, places=4)
+
+    def test_manual_location_rejects_invalid_coordinates(self):
+        from media_workspace.db import set_manual_asset_location
+
+        asset_id = self._import_image(None, None)
+        with self.assertRaises(ValueError):
+            set_manual_asset_location(self.connection, asset_id, 123.0, 500.0)
+
     def test_migration_7_to_8_backfills_and_is_idempotent(self):
         # Simulate a v7 catalog: drop the v8 tables, reset the version marker.
         asset_id = self._import_image(48.8566, 2.3522)

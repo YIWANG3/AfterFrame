@@ -229,6 +229,8 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
         add("assets.meta_width > assets.meta_height")
     elif orientation == "square":
         add("assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL")
+    if filters.get("asset_type") in ("image", "video", "raw"):
+        add("assets.asset_type = ?", filters["asset_type"])
     if filters.get("tag"):
         add("EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = assets.asset_id AND t.tag = ?)", filters["tag"])
     if filters.get("extension"):

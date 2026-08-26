@@ -69,6 +69,7 @@ const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const editorsIpc = require("./ipc/editors");
+const { createAgentRenderBridge } = require("./agentRender");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
@@ -1512,7 +1513,7 @@ ipcMain.handle("app:copy-text", (_event, text) => {
   return true;
 });
 
-saveFileIpc.register({
+const saveFileApi = saveFileIpc.register({
   ipcMain, dialog,
   rootDir,
   writeImageWithSourceMetadata,
@@ -1736,6 +1737,12 @@ app.whenReady().then(() => {
     startAiRepaintTask,
     readAppSettings,
     sharp,
+    processAndSave: saveFileApi.processAndSave,
+    watcher: watcherApi,
+    askRenderer: createAgentRenderBridge({ BrowserWindow, ipcMain }).askRenderer,
+    // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
+    startPeopleIndex: (options) => peopleApi?.startPeopleIndex(options),
+    resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
     // Dev and packaged builds get DIFFERENT default ports so running both at
     // once never collides — and agents deterministically reach the instance
     // they were configured for (repo .mcp.json → dev :41707; user-scope

@@ -165,6 +165,63 @@ def upsert_ai_asset_location(
     return True
 
 
+def set_manual_asset_location(
+    connection: sqlite3.Connection,
+    asset_id: str,
+    latitude: float,
+    longitude: float,
+    *,
+    commit: bool = False,
+) -> None:
+    """Write a user/agent-provided location. Manual is the top of the source
+    priority (manual > exif > ai) so it plainly replaces whatever row exists."""
+    coordinates = _valid_coordinates(latitude, longitude)
+    if coordinates is None:
+        raise ValueError(f"invalid coordinates: {latitude}, {longitude}")
+    lat, lon = coordinates
+    existing = connection.execute(
+        "SELECT location_id FROM asset_locations WHERE asset_id = ?",
+        (asset_id,),
+    ).fetchone()
+    if existing is not None:
+        location_id = int(existing["location_id"])
+        connection.execute(
+            """
+            UPDATE asset_locations SET
+                latitude = ?, longitude = ?,
+                min_latitude = ?, max_latitude = ?, min_longitude = ?, max_longitude = ?,
+                source = 'manual', accuracy_m = NULL, precision_level = 'exact',
+                confidence = NULL, place_id = NULL, country_code = NULL,
+                admin1 = NULL, locality = NULL, landmark = NULL, resolver_version = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE location_id = ?
+            """,
+            (lat, lon, lat, lat, lon, lon, location_id),
+        )
+    else:
+        cursor = connection.execute(
+            """
+            INSERT INTO asset_locations (
+                asset_id, latitude, longitude,
+                min_latitude, max_latitude, min_longitude, max_longitude,
+                source, precision_level
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', 'exact')
+            """,
+            (asset_id, lat, lon, lat, lat, lon, lon),
+        )
+        location_id = int(cursor.lastrowid)
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO asset_location_rtree (
+            location_id, min_longitude, max_longitude, min_latitude, max_latitude
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (location_id, lon, lon, lat, lat),
+    )
+    if commit:
+        connection.commit()
+
+
 def delete_asset_location(connection: sqlite3.Connection, asset_id: str) -> None:
     """Remove an asset's location and its R*Tree entry (same transaction).
 

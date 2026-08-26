@@ -1,122 +1,18 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { localFileUrl } from "../../utils/format";
+import { computeCellRects, drawCellImage, roundRectPath } from "./collageRender";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
 const SNAP_THRESHOLD = 8; // display px
 
-function getDrawSize(img, cellW, cellH, zoom) {
-  const imgAspect = img.naturalWidth / img.naturalHeight;
-  const cellAspect = cellW / cellH;
-  let drawW, drawH;
-  if (imgAspect > cellAspect) {
-    drawH = cellH * zoom;
-    drawW = drawH * imgAspect;
-  } else {
-    drawW = cellW * zoom;
-    drawH = drawW / imgAspect;
-  }
-  return { drawW, drawH };
-}
 
-function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
-  const { x, y, w, h } = cellRect;
-  ctx.save();
-  if (borderRadius > 0) {
-    roundRectPath(ctx, x, y, w, h, borderRadius);
-    ctx.clip();
-  } else {
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-  }
-  const { drawW, drawH } = getDrawSize(img, w, h, zoom);
-  const drawX = x + (w - drawW) / 2 + pan.x;
-  const drawY = y + (h - drawH) / 2 + pan.y;
-  ctx.drawImage(img, drawX, drawY, drawW, drawH);
-  ctx.restore();
-}
 
-function roundRectPath(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
 
-function uniqueSortedBreakpoints(values, tol = 0.001) {
-  const arr = [...values].sort((a, b) => a - b);
-  const out = [];
-  for (const v of arr) {
-    if (out.length === 0 || Math.abs(v - out[out.length - 1]) > tol) out.push(v);
-  }
-  return out;
-}
 
-function findBreakIndex(breakpoints, v, tol = 0.001) {
-  for (let i = 0; i < breakpoints.length; i++) {
-    if (Math.abs(breakpoints[i] - v) < tol) return i;
-  }
-  return -1;
-}
 
-function computeTracks(breakpoints, innerSize, gap) {
-  // CSS-Grid style: reserve (N-1)*gap total, distribute remaining space
-  // proportionally to each track's ratio. Tracks with equal ratio end up
-  // at equal pixel size regardless of position — no shrinkage on inner cells.
-  const N = breakpoints.length - 1;
-  const totalGap = Math.max(0, (N - 1) * gap);
-  const effective = Math.max(0, innerSize - totalGap);
-  const tracks = [];
-  let cursor = 0;
-  for (let i = 0; i < N; i++) {
-    const ratio = breakpoints[i + 1] - breakpoints[i];
-    const size = Math.max(0, ratio * effective);
-    tracks.push({ start: cursor, size });
-    cursor += size + gap;
-  }
-  return tracks;
-}
 
-function computeCellRects(cells, canvasW, canvasH, gap, padding = 0) {
-  const innerW = Math.max(0, canvasW - padding * 2);
-  const innerH = Math.max(0, canvasH - padding * 2);
-  const xVals = [0, 1];
-  const yVals = [0, 1];
-  for (const c of cells) {
-    xVals.push(c.x, c.x + c.w);
-    yVals.push(c.y, c.y + c.h);
-  }
-  const xBreaks = uniqueSortedBreakpoints(xVals);
-  const yBreaks = uniqueSortedBreakpoints(yVals);
-  const xTracks = computeTracks(xBreaks, innerW, gap);
-  const yTracks = computeTracks(yBreaks, innerH, gap);
-  return cells.map((cell) => {
-    const sx = findBreakIndex(xBreaks, cell.x);
-    const ex = findBreakIndex(xBreaks, cell.x + cell.w);
-    const sy = findBreakIndex(yBreaks, cell.y);
-    const ey = findBreakIndex(yBreaks, cell.y + cell.h);
-    const xStart = xTracks[sx].start;
-    const yStart = yTracks[sy].start;
-    const xEnd = xTracks[ex - 1].start + xTracks[ex - 1].size;
-    const yEnd = yTracks[ey - 1].start + yTracks[ey - 1].size;
-    return {
-      x: padding + xStart,
-      y: padding + yStart,
-      w: xEnd - xStart,
-      h: yEnd - yStart,
-    };
-  });
-}
 
 export const COLLAGE_ZOOM_MIN = MIN_ZOOM;
 export const COLLAGE_ZOOM_MAX = MAX_ZOOM;
