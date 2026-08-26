@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import api from "../api";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import {
@@ -32,16 +33,19 @@ const DISPLAY_MODES = [
 
 const SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
+// `cap` marks entries a bridge may declare unavailable (api.can) — the web
+// bridge hides RAW sources, sidecar tasks and AI annotation.
 const MENU_SECTIONS = [
   {
     key: "library",
     items: [
       { key: "import", icon: ImagePlus, action: "processed" },
-      { key: "addRawSources", icon: FolderPlus, action: "sources" },
+      { key: "addRawSources", icon: FolderPlus, action: "sources", cap: "rawSources" },
     ],
   },
   {
     key: "tasks",
+    cap: "sidecarJobs",
     items: [
       { key: "runImport", icon: Play, action: "import" },
       { key: "runEnrichment", icon: Sparkles, action: "enrichment" },
@@ -50,6 +54,7 @@ const MENU_SECTIONS = [
   },
   {
     key: "ai",
+    cap: "annotation",
     items: [
       { key: "annotateMissing", icon: Tags, action: "annotateMissing" },
       { key: "reannotateAll", icon: Tags, action: "annotateAll" },
@@ -220,6 +225,7 @@ export default function Toolbar({
   onResumeJob,
 }) {
   const { t } = useTranslation("nav");
+  const { t: tc } = useTranslation("common");
   const [menuOpen, setMenuOpen] = useState(false);
   const actionMap = {
     processed: onAddProcessed,
@@ -246,20 +252,28 @@ export default function Toolbar({
                   <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted2">
                     {t(`toolbar.menu.${section.key}`)}
                   </div>
-                  {section.items.map(({ key, icon: Icon, action }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium text-text transition-colors hover:bg-hover"
-                      onClick={async () => {
-                        setMenuOpen(false);
-                        await actionMap[action]?.();
-                      }}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0 text-muted" />
-                      <span className="min-w-0 flex-1 truncate">{t(`toolbar.menu.${key}`)}</span>
-                    </button>
-                  ))}
+                  {section.items.map(({ key, icon: Icon, action, cap }) => {
+                    const locked = !api.can(section.cap) || !api.can(cap);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={[
+                          "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium transition-colors",
+                          locked ? "cursor-default text-muted2" : "cursor-pointer text-text hover:bg-hover",
+                        ].join(" ")}
+                        title={locked ? tc("desktop.hint") : undefined}
+                        onClick={async () => {
+                          if (locked) return;
+                          setMenuOpen(false);
+                          await actionMap[action]?.();
+                        }}
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${locked ? "text-muted2/70" : "text-muted"}`} />
+                        <span className="min-w-0 flex-1 truncate">{t(`toolbar.menu.${key}`)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               ))}
             </div>

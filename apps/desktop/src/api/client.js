@@ -8,6 +8,12 @@ export function bridge() {
   return bridgeOverride || window.mediaWorkspace || {};
 }
 
+// The web build (web.html) installs its browser bridge here at startup;
+// components keep calling api.* unchanged.
+export function installBridge(impl) {
+  bridgeOverride = impl;
+}
+
 export function __setBridgeForTests(mock) {
   bridgeOverride = mock;
 }

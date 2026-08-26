@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon } from "lucide-react";
@@ -392,41 +393,50 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         />
       )}
 
-      <button
-        type="button"
-        onClick={() => onChange(setOrDelete(f, "people", f.people === "with_faces" ? undefined : "with_faces"))}
-        className={[
-          "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
-          f.people === "with_faces" ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
-        ].join(" ")}
-      >
-        <ScanFace className="h-3 w-3" />
-        {t("filter.people")}
-      </button>
+      {/* Face/annotation-backed filters need their data pipelines (People
+          indexing, AI annotation) — hidden where the bridge declares those
+          capabilities off (web build). */}
+      {api.can("people") && (
+        <button
+          type="button"
+          onClick={() => onChange(setOrDelete(f, "people", f.people === "with_faces" ? undefined : "with_faces"))}
+          className={[
+            "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
+            f.people === "with_faces" ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
+          ].join(" ")}
+        >
+          <ScanFace className="h-3 w-3" />
+          {t("filter.people")}
+        </button>
+      )}
 
       {/* AI annotation presence — cycles off → with → without → off. */}
-      <button
-        type="button"
-        onClick={() => onChange(setOrDelete(f, "annotated",
-          f.annotated === "with" ? "without" : f.annotated === "without" ? undefined : "with"))}
-        title={t("filter.annotatedHint")}
-        className={[
-          "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
-          f.annotated ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
-        ].join(" ")}
-      >
-        <Sparkles className="h-3 w-3" />
-        {f.annotated === "without" ? t("filter.notAnnotated") : t("filter.annotated")}
-      </button>
+      {api.can("annotation") && (
+        <button
+          type="button"
+          onClick={() => onChange(setOrDelete(f, "annotated",
+            f.annotated === "with" ? "without" : f.annotated === "without" ? undefined : "with"))}
+          title={t("filter.annotatedHint")}
+          className={[
+            "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
+            f.annotated ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
+          ].join(" ")}
+        >
+          <Sparkles className="h-3 w-3" />
+          {f.annotated === "without" ? t("filter.notAnnotated") : t("filter.annotated")}
+        </button>
+      )}
 
-      <PersonFilterPopover
-        value={f.person_group}
-        personGroup={personGroup}
-        onSelect={(group) => {
-          onPersonGroup?.(group || null);
-          onChange(setOrDelete(f, "person_group", group?.group_id));
-        }}
-      />
+      {api.can("people") && (
+        <PersonFilterPopover
+          value={f.person_group}
+          personGroup={personGroup}
+          onSelect={(group) => {
+            onPersonGroup?.(group || null);
+            onChange(setOrDelete(f, "person_group", group?.group_id));
+          }}
+        />
+      )}
 
       <RangePopover label={t("filter.iso")} bounds={facetValues?.iso} step={50} minKey="iso_min" maxKey="iso_max" filters={f} onChange={onChange} />
       <RangePopover label={t("filter.aperture")} bounds={facetValues?.aperture} step={0.1} minKey="aperture_min" maxKey="aperture_max" filters={f} onChange={onChange} prefix="ƒ/" decimals={1} />

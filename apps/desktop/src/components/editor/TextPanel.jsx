@@ -1,3 +1,4 @@
+import api from "../../api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
@@ -239,8 +240,16 @@ export default function TextPanel({
         ) : null}
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
-            cached and shared by every text layer's z position slider. */}
-        <Section label={t("text.depth.title")} action={
+            cached and shared by every text layer's z position slider. Without a
+            depth backend (web build) the section advertises the desktop app. */}
+        {!api.has("computeDepth") && (
+          <Section label={t("text.depth.title")}>
+            <div className="w-full rounded-md border border-border/40 bg-app px-3 py-2 text-left text-[11px] leading-snug text-muted2">
+              {t("desktop.hint", { ns: "common" })}
+            </div>
+          </Section>
+        )}
+        {api.has("computeDepth") && <Section label={t("text.depth.title")} action={
           hasSceneDepth ? (
             <button
               type="button"
@@ -336,7 +345,7 @@ export default function TextPanel({
               </span>
             </button>
           </div>
-        </Section>
+        </Section>}
 
         {/* Layers — overlay + text + sticker */}
         <Section label={t("text.layers")} action={
@@ -348,12 +357,16 @@ export default function TextPanel({
             />
             <IconBtn
               icon={Brush}
-              title={t("text.addHandwriting")}
+              title={api.has("startTextImage") ? t("text.addHandwriting") : `${t("text.addHandwriting")} · ${t("desktop.hint", { ns: "common" })}`}
+              disabled={!api.has("startTextImage")}
               onClick={() => setHandwritingOpen(true)}
             />
             <IconBtn
               icon={Cannabis}
-              title={stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer")}
+              title={api.can("stickerExtract")
+                ? (stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer"))
+                : `${t("text.addStickerLayer")} · ${t("desktop.hint", { ns: "common" })}`}
+              disabled={!api.can("stickerExtract")}
               onClick={() => setStickerPickerOpen((v) => !v)}
             />
             <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />
@@ -890,7 +903,7 @@ function FontSelect({ value, onChange }) {
     } catch {}
     // Fallback to IPC
     try {
-      const fonts = await window.mediaWorkspace?.listSystemFonts?.();
+      const fonts = await api.listSystemFonts();
       if (Array.isArray(fonts)) setSystemFonts(fonts);
     } catch {}
   };
@@ -1600,7 +1613,7 @@ function StickerPickerModal({ onPick, onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        const list = await window.mediaWorkspace?.stickerList?.();
+        const list = await api.stickerList();
         if (!cancelled) setStickers(list || []);
       } finally {
         if (!cancelled) setLoading(false);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import api from "../api";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Star, Copy, Layers, AlertTriangle, Link2, ScanFace, UserRoundX, UserRoundPen, Images } from "lucide-react";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
@@ -349,7 +350,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             pushToast={pushToast}
           />
 
-          <Section title={t("sections.source")}>
+          {api.can("fileSystem") && <Section title={t("sections.source")}>
             <DetailRow label={t("rows.asset")}>
               {missing ? (
                 <span className="flex min-w-0 items-center justify-end gap-1.5">
@@ -380,7 +381,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
               ) : t("notLinked")}
             </DetailRow>
             {imageMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{imageMeta.software}</DetailRow> : null}
-          </Section>
+          </Section>}
 
           {!isVideo ? (
             <Section title={t("sections.camera")}>

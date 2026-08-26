@@ -82,5 +82,6 @@
   "watchAdd": "Add to Watched",
   "watchedCatchUpTitle_one": "1 new file in watched folders",
   "watchedCatchUpTitle_other": "{{count}} new files in watched folders",
-  "watchedCatchUpMsg": "Importing them now…"
+  "watchedCatchUpMsg": "Importing them now…",
+  "webUnsupportedFiles": "{{count}} file(s) skipped: videos and RAW need the desktop app"
 }

@@ -8,6 +8,7 @@
 //     languages, autoOnImport, maxTags, maxCaptionChars, customInstructions
 //   }
 
+import api from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, Brain, X } from "lucide-react";
@@ -17,19 +18,22 @@ import {
   Chip, SecondaryButton, Callout, ActiveRadio, IconActionButton,
 } from "./SettingsPrimitives";
 
+// Ollama has no dedicated entry — "Custom endpoint…" covers it (it is just an
+// OpenAI-compatible base URL). Existing ollama-typed providers keep working
+// via the lookup tables below. OpenAI is desktop-only: api.openai.com sends
+// no CORS headers, so the web build's direct fetch can never reach it.
 const PROVIDER_TYPES = [
   {
     label: "First-party APIs",
     options: [
       { value: "anthropic", label: "Anthropic (Claude)" },
-      { value: "openai", label: "OpenAI (GPT-4o)" },
+      { value: "openai", label: "OpenAI", desktopOnly: true },
       { value: "google", label: "Google (Gemini)" },
     ],
   },
   {
     label: "Other (OpenAI-compatible)",
     options: [
-      { value: "ollama", label: "Ollama (local)" },
       { value: "openai_compatible", label: "Custom endpoint…" },
     ],
   },
@@ -52,6 +56,9 @@ const DEFAULT_MODEL = {
 };
 
 const DEFAULT_HOST_URL = {
+  // Gemini's OpenAI-compatible endpoint (CORS-enabled) — the google type is
+  // sent through the openai_compatible adapter and needs this base URL.
+  google: "https://generativelanguage.googleapis.com/v1beta/openai",
   ollama: "http://localhost:11434/v1",
   openai_compatible: "",
 };
@@ -380,9 +387,11 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
     label: g.label === "First-party APIs" ? t("annotation.typeGroupFirstParty")
       : g.label === "Other (OpenAI-compatible)" ? t("annotation.typeGroupOther")
       : g.label,
-    options: g.options.map((o) => (o.value === "openai_compatible"
-      ? { ...o, label: t("annotation.typeCustomEndpoint") }
-      : o)),
+    options: g.options
+      .filter((o) => !o.desktopOnly || !api.capabilities.web)
+      .map((o) => (o.value === "openai_compatible"
+        ? { ...o, label: t("annotation.typeCustomEndpoint") }
+        : o)),
   })), [t]);
   const [draft, setDraft] = useState(initial);
   const [keyValue, setKeyValue] = useState("");
@@ -528,14 +537,16 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
       {showHostUrl && (
         <FieldRow
           label={t("annotation.hostUrl")}
-          hint={t("annotation.hostUrlHint")}
+          hint={api.capabilities.web
+            ? `${t("annotation.hostUrlHint")} ${t("desktop.corsNotice", { ns: "common" })}`
+            : t("annotation.hostUrlHint")}
         >
           <TextInput
             value={draft.baseUrl || ""}
             onChange={(v) => update({ baseUrl: v })}
             monospace
             className="w-[280px]"
-            placeholder="http://localhost:11434/v1"
+            placeholder="https://openrouter.ai/api/v1"
           />
         </FieldRow>
       )}
@@ -562,6 +573,11 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
             </SecondaryButton>
           )}
         </div>
+        {api.capabilities.web && (
+          <div className="mt-2 text-[11px] leading-snug text-muted2">
+            {t("desktop.byokNotice", { ns: "common" })}
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-2">
           <SecondaryButton onClick={handleTest} disabled={testState === "running"}>
             {testState === "running" ? t("annotation.testing") : t("annotation.testConnection")}

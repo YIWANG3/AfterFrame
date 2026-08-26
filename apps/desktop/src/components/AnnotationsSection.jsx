@@ -4,6 +4,7 @@
 //   - flipping providers in Settings updates the button state instantly
 //   - revisiting an already-loaded asset is synchronous (no flicker)
 
+import api from "../api";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, RotateCcw, ChevronRight, X, Plus, Wand2, MapPinOff, LoaderCircle } from "lucide-react";
@@ -277,6 +278,26 @@ export default function AnnotationsSection({
   // Known to have no annotation: show the CTA.
   if (!annotation) {
     const providerKnown = hasProvider !== null;
+    // Desktop-only on this bridge: the section stays visible as a preview of
+    // what the desktop app offers; the button opens the download page.
+    if (!api.can("annotation")) {
+      return (
+        <Section title={t("section.ai")}>
+          <button
+            type="button"
+            disabled
+            title={t("desktop.hint", { ns: "common" })}
+            className="flex w-full cursor-default items-center justify-center gap-1.5 rounded-md border border-border/40 bg-app px-3 py-1.5 text-[11px] font-medium text-muted2"
+          >
+            <Sparkles className="h-3 w-3" />
+            {t("annotate")}
+          </button>
+          <div className="mt-2 text-[10px] leading-snug text-muted2">
+            {t("desktop.hint", { ns: "common" })}
+          </div>
+        </Section>
+      );
+    }
     const enabled = providerKnown && hasProvider && !running && !!imagePath;
     return (
       <Section title={t("section.ai")}>

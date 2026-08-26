@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
+import api from "../../api";
 import { Modal, Button, cx } from "../../ui";
 
 const FIELD =
@@ -208,7 +209,7 @@ export function ProviderModal({
                 onChange={(e) => handleTypeChange(e.target.value)}
                 className={FIELD}
               >
-                {PROVIDER_TYPES.map((t) => (
+                {PROVIDER_TYPES.filter((t) => api.can("aiRepaintMultiProvider") || t.type === "nanobanana").map((t) => (
                   <option key={t.type} value={t.type}>{t.label}</option>
                 ))}
               </select>
@@ -263,6 +264,11 @@ export function ProviderModal({
           )}
           {hasExistingToken && !tokenValue.trim() && (
             <div className="mt-1 text-[11px] text-muted">{t("providers.savedNote")}</div>
+          )}
+          {api.capabilities.web && (
+            <div className="mt-2 text-[11px] leading-snug text-muted2">
+              {t("desktop.byokNotice", { ns: "common" })}
+            </div>
           )}
         </div>
 

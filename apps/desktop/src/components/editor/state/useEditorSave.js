@@ -10,6 +10,7 @@
 // path refs are owned by EditorOverlay (reset + Apply also touch them) and
 // passed in.
 
+import api from "../../../api";
 import { useRef, useState } from "react";
 import { saveEditedImage } from "../render/saveImage";
 import { deriveEditedFileName, replaceFileName } from "../render/canvasHelpers";
@@ -52,7 +53,7 @@ export function useEditorSave({
   async function handleExport() {
     if (!canSaveRef.current() || savingRef.current) return;
     const defaultPath = replaceFileName(saveBasePath, deriveEditedFileName(saveBasePath));
-    const savePath = await window.mediaWorkspace?.pickSavePath?.({ defaultPath, filters: SAVE_FILTERS });
+    const savePath = await api.pickSavePath({ defaultPath, filters: SAVE_FILTERS });
     if (!savePath) return;
     await executeSave(savePath);
   }

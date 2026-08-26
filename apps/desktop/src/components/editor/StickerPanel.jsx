@@ -1,3 +1,4 @@
+import api from "../../api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, Sparkles, Trash2, Star, Loader2, Check, RotateCcw } from "lucide-react";
@@ -22,7 +23,7 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
 
   const refresh = useCallback(async () => {
     try {
-      const list = await window.mediaWorkspace.stickerList();
+      const list = await api.stickerList();
       setStickers(list || []);
     } catch (err) {
       console.error("[StickerPanel] list failed", err);
@@ -91,11 +92,11 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
 
   async function handleDelete(sticker) {
     if (!confirm(t("sticker.deleteConfirm", { label: stickerLabel(sticker) }))) return;
-    await window.mediaWorkspace.stickerDelete(sticker.id);
+    await api.stickerDelete(sticker.id);
     onChanged();
   }
   async function handleStar(sticker) {
-    await window.mediaWorkspace.stickerToggleStar(sticker.id);
+    await api.stickerToggleStar(sticker.id);
     onChanged();
   }
 
@@ -236,7 +237,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
   useEffect(() => {
     return () => {
       if (previousScratchRef.current) {
-        window.mediaWorkspace.stickerCleanupScratch?.(previousScratchRef.current);
+        api.stickerCleanupScratch(previousScratchRef.current);
         previousScratchRef.current = null;
       }
     };
@@ -249,10 +250,10 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
     try {
       // Clean up previous scratch dir if any.
       if (previousScratchRef.current) {
-        await window.mediaWorkspace.stickerCleanupScratch?.(previousScratchRef.current);
+        await api.stickerCleanupScratch(previousScratchRef.current);
         previousScratchRef.current = null;
       }
-      const result = await window.mediaWorkspace.stickerDetect({ sourcePath, region });
+      const result = await api.stickerDetect({ sourcePath, region });
       previousScratchRef.current = result.scratchDir;
       setScratchDir(result.scratchDir);
       setInstances(result.instances || []);
@@ -281,7 +282,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
     setError(null);
     try {
       const bytes = await bakeOutline(inst.absolutePath, outline);
-      const entry = await window.mediaWorkspace.stickerSave({
+      const entry = await api.stickerSave({
         bytes,
         width: inst.width,
         height: inst.height,
@@ -294,7 +295,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
       });
       // Reset state for next extraction
       if (previousScratchRef.current) {
-        window.mediaWorkspace.stickerCleanupScratch?.(previousScratchRef.current);
+        api.stickerCleanupScratch(previousScratchRef.current);
         previousScratchRef.current = null;
       }
       setScratchDir(null);
@@ -314,7 +315,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
     setActiveIdx(0);
     setPhase("idle");
     if (previousScratchRef.current) {
-      window.mediaWorkspace.stickerCleanupScratch?.(previousScratchRef.current);
+      api.stickerCleanupScratch(previousScratchRef.current);
       previousScratchRef.current = null;
     }
   }

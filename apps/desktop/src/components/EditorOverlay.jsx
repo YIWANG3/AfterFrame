@@ -1,3 +1,4 @@
+import api from "../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName } from "../utils/format";
@@ -532,8 +533,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
     // Auto-load cached depth if it exists for this source image. Same image
     // (path + size + mtime) hits the cache; no ML inference.
-    if (window.mediaWorkspace?.computeDepth) {
-      window.mediaWorkspace.computeDepth({ sourcePath, checkOnly: true })
+    if (api.has("computeDepth")) {
+      api.computeDepth({ sourcePath, checkOnly: true })
         .then((cached) => {
           if (active && cached?.outputPath) {
             loadDepthFromPath(cached.outputPath).catch(() => {});

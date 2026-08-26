@@ -2,6 +2,9 @@ import justifiedLayout from "justified-layout";
 
 export function localFileUrl(filePath) {
   if (!filePath) return "";
+  // Already browser-servable (web build hands out blob:/data: URLs) — pass
+  // through; media:// is the desktop-only privileged scheme.
+  if (/^(blob:|data:|https?:)/.test(filePath)) return filePath;
   if (filePath.startsWith("media://")) return filePath;
   const encoded = filePath.split("/").map((seg) => encodeURIComponent(seg)).join("/");
   return `media://${encoded}`;

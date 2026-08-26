@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import api from "../api";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
 
@@ -124,10 +125,14 @@ function createDragPreview(sourceElement, count) {
   };
 }
 
-function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
+function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, children }) {
+  const { t: tc } = useTranslation("common");
   const [subOpen, setSubOpen] = useState(false);
   const timerRef = useRef(null);
-  const hasSub = !!children;
+  // Locked = desktop-only on this bridge: stays visible (so the entry
+  // advertises the desktop app), loses its submenu, and clicks open the
+  // download page.
+  const hasSub = !!children && !locked;
 
   function enterItem() {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -163,14 +168,18 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, children }) {
   return (
     <button
       type="button"
-      className="flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
-      onClick={onClick}
+      className={[
+        "flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px]",
+        locked ? "cursor-default text-muted2" : "cursor-pointer text-muted hover:bg-hover hover:text-text",
+      ].join(" ")}
+      title={locked ? tc("desktop.hint") : undefined}
+      onClick={locked ? undefined : onClick}
     >
       <span className="flex items-center gap-2.5">
         {Icon && <Icon className="h-3.5 w-3.5" />}
         {label}
       </span>
-      {shortcut && <span className="ml-4 text-[10px] text-muted2">{shortcut}</span>}
+      {!locked && shortcut && <span className="ml-4 text-[10px] text-muted2">{shortcut}</span>}
     </button>
   );
 }
@@ -227,7 +236,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       {assetIds?.length >= 2 && (
         <MenuItem icon={LayoutGrid} label={t("gallery.menu.collage")} onClick={() => { onCollage?.(assetIds); onClose(); }} />
       )}
-      <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")}>
+      <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")} locked={!api.can("annotation")}>
         <button
           type="button"
           className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
@@ -258,16 +267,17 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
           ))}
         </MenuItem>
       )}
-      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" onClick={() => { onReveal?.(item.image_path); onClose(); }} />
+      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" locked={!api.can("fileSystem")} onClick={() => { onReveal?.(item.image_path); onClose(); }} />
       <MenuItem
         icon={RefreshCw}
         label={t("gallery.menu.refreshFromDisk", { count: assetIds?.length || 1 })}
+        locked={!api.can("fileSystem")}
         onClick={() => { void onRefreshFromDisk?.(assetIds || [item.asset_id]); onClose(); }}
       />
-      <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} onClick={() => { onCopyPath?.(); onClose(); }} />
+      <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} locked={!api.can("fileSystem")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
-      <MenuItem icon={Trash} label={t("gallery.menu.deleteFromDisk")} onClick={() => { onDeleteFromDisk?.(); onClose(); }} />
+      <MenuItem icon={Trash} label={t("gallery.menu.deleteFromDisk")} locked={!api.can("fileSystem")} onClick={() => { onDeleteFromDisk?.(); onClose(); }} />
 
       {(manualFolders.length > 0 || inActiveFolder) && (
         <div className="my-1 border-t border-border/40" />

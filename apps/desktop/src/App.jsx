@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { filterTitle } from "./utils/format";
+import { filterTitle, fileName } from "./utils/format";
+
+// Web save targets are blob URLs — show the human filename (carried in the
+// URL fragment) instead of the raw URL in toasts.
+const toastPathLabel = (savePath) =>
+  (api.capabilities.web ? decodeURIComponent(fileName(savePath)) : savePath);
 import useWorkspace from "./hooks/useWorkspace";
 import api from "./api";
 import { registerRenderBridge } from "./agent/renderBridge";
@@ -735,9 +740,16 @@ export default function App() {
     if (!event.dataTransfer?.files?.length) return;
     event.preventDefault();
     const paths = [];
+    let unsupported = 0;
     for (const file of event.dataTransfer.files) {
       const p = api.getPathForFile(file) || file.path;
       if (p) paths.push(p);
+      else unsupported += 1;
+    }
+    // Web bridge accepts only images; tell the user instead of silently
+    // dropping their videos/RAWs (desktop resolves a path for everything).
+    if (unsupported > 0 && api.capabilities.video === false) {
+      pushToast({ title: t("webUnsupportedFiles", { count: unsupported }), ttl: 6000 });
     }
     if (paths.length) workspace.addImagesFromPaths(paths);
   }
@@ -1290,13 +1302,13 @@ export default function App() {
           if (savePath) {
             pushToast({
               title: t("saved"),
-              message: savePath,
+              message: toastPathLabel(savePath),
               ttl: 20_000,
-              actions: [{
+              actions: api.has("revealPath") ? [{
                 label: t("showInFinder"),
                 primary: true,
                 onClick: () => api.revealPath(savePath),
-              }],
+              }] : [],
             });
           }
         }}
@@ -1321,13 +1333,13 @@ export default function App() {
           if (savePath) {
             pushToast({
               title: t("collageExported"),
-              message: savePath,
+              message: toastPathLabel(savePath),
               ttl: 20_000,
-              actions: [{
+              actions: api.has("revealPath") ? [{
                 label: t("showInFinder"),
                 primary: true,
                 onClick: () => api.revealPath(savePath),
-              }],
+              }] : [],
             });
           }
         }}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, UsersRound } from "lucide-react";
+import api from "../api";
+import { DesktopOnlyPane } from "./DesktopOnly";
 import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
 import RepaintSettings from "./settings/RepaintSettings";
@@ -14,13 +16,16 @@ import PeopleSettings from "./settings/PeopleSettings";
    shell pattern as EditorOverlay / CollageOverlay — fixed
    backdrop, centered modal, ESC + backdrop click close. */
 
+// `cap` marks tabs a bridge may declare desktop-only (api.can): the tab stays
+// visible with a "Desktop" badge and its pane renders dimmed inside
+// DesktopOnlyPane, advertising what the desktop app offers.
 const TABS = [
   { id: "general", key: "general", icon: Languages },
-  { id: "ai", key: "ai", icon: Brain },
-  { id: "repaint", key: "repaint", icon: Wand2 },
-  { id: "people", key: "people", icon: UsersRound },
-  { id: "library", key: "library", icon: FolderOpen },
-  { id: "integrations", key: "integrations", icon: Plug },
+  { id: "ai", key: "ai", icon: Brain, cap: "annotation" },
+  { id: "repaint", key: "repaint", icon: Wand2, cap: "aiRepaint" },
+  { id: "people", key: "people", icon: UsersRound, cap: "people" },
+  { id: "library", key: "library", icon: FolderOpen, cap: "libraryManagement" },
+  { id: "integrations", key: "integrations", icon: Plug, cap: "integrations" },
   { id: "about", key: "about", icon: Info },
 ];
 
@@ -79,32 +84,42 @@ export default function SettingsOverlay({
             {TABS.map((entry) => {
               const Icon = entry.icon;
               const active = tab === entry.id;
+              const locked = !api.can(entry.cap);
               return (
                 <button
                   key={entry.id}
                   type="button"
                   onClick={() => setTab(entry.id)}
+                  title={locked ? t("desktop.hint", { ns: "common" }) : undefined}
                   className={[
                     "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",
-                    active ? "bg-accent/10 text-accent" : "text-muted hover:bg-hover hover:text-text",
+                    active ? "bg-accent/10 text-accent" : locked ? "text-muted2 hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
                   ].join(" ")}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span>{t(`tabs.${entry.key}`)}</span>
+                  <span className="min-w-0 flex-1 truncate">{t(`tabs.${entry.key}`)}</span>
                 </button>
               );
             })}
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
-            {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
-            {tab === "ai" && <AnnotationSettings />}
-            {tab === "repaint" && <RepaintSettings />}
-            {tab === "people" && <PeopleSettings />}
-            {tab === "library" && (
-              <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
-            )}
-            {tab === "integrations" && <IntegrationsSettings />}
-            {tab === "about" && <AboutSettings />}
+            {(() => {
+              const pane = (
+                <>
+                  {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
+                  {tab === "ai" && <AnnotationSettings />}
+                  {tab === "repaint" && <RepaintSettings />}
+                  {tab === "people" && <PeopleSettings />}
+                  {tab === "library" && (
+                    <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
+                  )}
+                  {tab === "integrations" && <IntegrationsSettings />}
+                  {tab === "about" && <AboutSettings />}
+                </>
+              );
+              const entry = TABS.find((x) => x.id === tab);
+              return api.can(entry?.cap) ? pane : <DesktopOnlyPane>{pane}</DesktopOnlyPane>;
+            })()}
           </div>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import api from "../api";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles, UsersRound } from "lucide-react";
+import { DesktopHint } from "./DesktopOnly";
 import { baseName, formatTimestamp, navItems } from "../utils/format";
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
@@ -59,6 +61,7 @@ export default function Sidebar({
   peopleMode = false,
 }) {
   const { t } = useTranslation("nav");
+  const { t: tc } = useTranslation("common");
   const browse = navItems(summary);
   const rootSummary = [];
   if (Number(summary?.image_assets ?? 0)) rootSummary.push(t("sidebar.assetsCount", { count: summary.image_assets }));
@@ -139,12 +142,15 @@ export default function Sidebar({
           })}
           <button
             type="button"
-            onClick={(e) => { e.currentTarget.blur(); onOpenStickerBrowser?.(); }}
+            title={!api.can("stickerExtract") ? tc("desktop.hint") : undefined}
+            onClick={api.can("stickerExtract") ? (e) => { e.currentTarget.blur(); onOpenStickerBrowser?.(); } : undefined}
             className={[
               "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
-              stickerMode
-                ? "bg-selected text-text"
-                : "text-muted hover:bg-hover/70 hover:text-text",
+              !api.can("stickerExtract")
+                ? "cursor-default text-muted2"
+                : stickerMode
+                  ? "bg-selected text-text"
+                  : "text-muted hover:bg-hover/70 hover:text-text",
             ].join(" ")}
           >
             <span className="flex items-center gap-2.5">
@@ -154,12 +160,15 @@ export default function Sidebar({
           </button>
           <button
             type="button"
-            onClick={(e) => { e.currentTarget.blur(); onOpenPeople?.(); }}
+            title={!api.can("people") ? tc("desktop.hint") : undefined}
+            onClick={api.can("people") ? (e) => { e.currentTarget.blur(); onOpenPeople?.(); } : undefined}
             className={[
               "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
-              peopleMode
-                ? "bg-selected text-text"
-                : "text-muted hover:bg-hover/70 hover:text-text",
+              !api.can("people")
+                ? "cursor-default text-muted2"
+                : peopleMode
+                  ? "bg-selected text-text"
+                  : "text-muted hover:bg-hover/70 hover:text-text",
             ].join(" ")}
           >
             <span className="flex items-center gap-2.5">
@@ -304,6 +313,7 @@ export default function Sidebar({
 
       {/* Bottom: Settings — global, always accessible */}
       <div className="mt-2 border-t border-border/40 pt-2">
+        <DesktopHint />
         <button
           type="button"
           onClick={() => onOpenSettings?.()}
