@@ -8,6 +8,7 @@ const toastPathLabel = (savePath) =>
   (api.capabilities.web ? decodeURIComponent(fileName(savePath)) : savePath);
 import useWorkspace from "./hooks/useWorkspace";
 import api from "./api";
+import { registerRenderBridge } from "./agent/renderBridge";
 import i18n from "./i18n";
 import usePaneResize from "./hooks/usePaneResize";
 import useSelection from "./hooks/useSelection";
@@ -632,6 +633,40 @@ export default function App() {
     if (!ok) return;
     await runSampleCatalogAction(() => api.resetSampleCatalog());
   }
+
+  // Agent render bridge (MCP render_collage / edit_asset / apply_frame /
+  // get_editor_capabilities / show_in_app views). Handlers live in
+  // src/agent/renderBridge.js; only open_view needs UI state, injected here
+  // through a ref so the subscription survives re-renders without re-binding.
+  const agentViewRef = useRef(null);
+  agentViewRef.current = ({ view, assetIds }) => {
+    const ids = (assetIds || []).map(String);
+    const items = ids.map((id) => itemById.get(id)).filter(Boolean);
+    switch (view) {
+      case "editor": {
+        if (!items[0]) throw new Error("asset not found in the current gallery view");
+        if (items[0].asset_type === "video") throw new Error("cannot edit a video");
+        openEditor(items[0]);
+        return { opened: "editor", asset_id: items[0].asset_id };
+      }
+      case "collage": {
+        if (items.length < 2) throw new Error("collage view needs at least 2 asset_ids");
+        setCollageItems(items);
+        return { opened: "collage", count: items.length };
+      }
+      case "people":
+        setViewMode("people");
+        return { opened: "people" };
+      case "stickers":
+        setViewMode("stickers");
+        return { opened: "stickers" };
+      default:
+        throw new Error(`unknown view: ${view}`);
+    }
+  };
+  useEffect(() => {
+    return registerRenderBridge({ openView: (payload) => agentViewRef.current(payload) });
+  }, []);
 
   // External editors for the right-click "Open with" submenu (auto-detected once).
   useEffect(() => {

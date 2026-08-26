@@ -301,6 +301,13 @@ def build_parser() -> argparse.ArgumentParser:
     asset_location_p = subparsers.add_parser("get-asset-location", parents=[common])
     asset_location_p.add_argument("--asset-id", required=True)
 
+    set_location_p = subparsers.add_parser("set-asset-location", parents=[common])
+    set_location_p.add_argument("--asset-id", required=True)
+    set_location_p.add_argument("--lat", type=float)
+    set_location_p.add_argument("--lng", type=float)
+    set_location_p.add_argument("--clear", action="store_true",
+                                help="Remove the stored location; EXIF GPS (if the file has any) is re-derived")
+
     subparsers.add_parser("facet-values", parents=[common])
 
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
@@ -1503,6 +1510,36 @@ def _cmd_get_asset_location(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_set_asset_location(args, connection, catalog, parser):
+    from .db.locations import (
+        delete_asset_location,
+        get_asset_location,
+        set_manual_asset_location,
+        upsert_asset_location_from_metadata,
+    )
+
+    row = connection.execute(
+        "SELECT metadata_json FROM assets WHERE asset_id = ?", (args.asset_id,)
+    ).fetchone()
+    if row is None:
+        print(json.dumps({"error": f"unknown asset {args.asset_id}"}))
+        return 1
+    if args.clear:
+        delete_asset_location(connection, args.asset_id)
+        # A cleared manual/AI pin falls back to the file's own GPS when present.
+        upsert_asset_location_from_metadata(
+            connection, args.asset_id, json.loads(row["metadata_json"] or "{}")
+        )
+    else:
+        if args.lat is None or args.lng is None:
+            parser.error("--lat and --lng are required unless --clear is given")
+        set_manual_asset_location(connection, args.asset_id, args.lat, args.lng)
+    connection.commit()
+    effective = get_asset_location(connection, args.asset_id)
+    print(json.dumps(dict(effective) if effective else None, ensure_ascii=False))
+    return 0
+
+
 def _cmd_resolve_ai_locations(args, connection, catalog, parser):
     from .db.locations import delete_asset_location, upsert_ai_asset_location
     from .geo_resolver import RESOLVER_VERSION, load_gazetteer, resolve_location
@@ -2046,6 +2083,7 @@ COMMAND_HANDLERS = {
     "browse-map-points": _cmd_browse_map_points,
     "resolve-ai-locations": _cmd_resolve_ai_locations,
     "get-asset-location": _cmd_get_asset_location,
+    "set-asset-location": _cmd_set_asset_location,
     "clear-ai-location": _cmd_clear_ai_location,
     "asset-detail": _cmd_asset_detail,
     "list-pending": _cmd_list_pending,

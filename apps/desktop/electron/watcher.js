@@ -93,9 +93,9 @@ function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings,
   getWindow = getMainWindow;
   catalog = { path: getCatalogPath, read: readCatalogSettings, update: updateCatalogSettings };
 
-  ipcMain.handle("app:get-watched-dirs", () => watchedDirs());
-
-  ipcMain.handle("app:add-watched-dir", async (_e, dir) => {
+  // Named (not inline in the handlers) so the MCP maintain_library tool can
+  // manage watched dirs through the same code path as the settings UI.
+  async function addWatchedDir(dir) {
     const d = String(dir || "");
     const catalogPath = catalog.path();
     if (catalogPath && d && isDir(d)) {
@@ -108,9 +108,9 @@ function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings,
       send([d], catalogPath); // catch up the newly-added dir's current contents (dedup-safe)
     }
     return watchedDirs();
-  });
+  }
 
-  ipcMain.handle("app:remove-watched-dir", async (_e, dir) => {
+  async function removeWatchedDir(dir) {
     const d = String(dir || "");
     const catalogPath = catalog.path();
     if (!catalogPath) return [];
@@ -120,12 +120,16 @@ function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings,
     }, catalogPath);
     rebuild();
     return watchedDirs();
-  });
+  }
+
+  ipcMain.handle("app:get-watched-dirs", () => watchedDirs());
+  ipcMain.handle("app:add-watched-dir", (_e, dir) => addWatchedDir(dir));
+  ipcMain.handle("app:remove-watched-dir", (_e, dir) => removeWatchedDir(dir));
 
   // For the contextual "add to watched?" toast: which of these paths are dirs.
   ipcMain.handle("app:stat-dirs", (_e, paths) => (paths || []).map(String).filter(isDir));
 
-  return { start: rebuild, rebuild };
+  return { start: rebuild, rebuild, watchedDirs, addWatchedDir, removeWatchedDir };
 }
 
 module.exports = { register };

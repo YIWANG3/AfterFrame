@@ -29,6 +29,7 @@
     "e2e": "npm run build && playwright test",
     "e2e:only": "playwright test",
     "e2e:web": "playwright test --config playwright.web.config.js",
+    "e2e:agent": "npm run build && cross-env AGENT_E2E=1 playwright test e2e/27-agent-mcp.spec.js --workers=1",
     "build:sidecar": "cd ../../services/sidecar && pyinstaller media-workspace.spec --distpath dist --noconfirm"
   },
   "build": {
