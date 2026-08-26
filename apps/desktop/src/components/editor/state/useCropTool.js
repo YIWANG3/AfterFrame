@@ -212,12 +212,35 @@ export function useCropTool({
     commitState: commitCurrent,
   });
 
-  // Re-clamp image placement whenever the geometry changes so the crop never
-  // drifts off the image. Crop geometry is pad-free (canvas margins live in the
-  // composed output view), so this holds regardless of any active border.
+  // Crop geometry lives in stage pixels, so a placement change (window resize,
+  // late first measurement) must REMAP it — scale crop + pan offsets around the
+  // old/new stage centers — before the usual clamp. Without this the photo
+  // refits but the crop veil stays at its old pixels.
+  const prevPlacementRef = useRef(placement);
   useEffect(() => {
+    const prev = prevPlacementRef.current;
+    prevPlacementRef.current = placement;
     if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
-    const clamped = clampImagePlacement(editorStateRef.current, transformedPreview, placement);
+    let state = editorStateRef.current;
+    if (
+      prev && prev !== placement && prev.fitScale > 0 && Number.isFinite(placement.fitScale)
+      && (prev.fitScale !== placement.fitScale || prev.centerX !== placement.centerX || prev.centerY !== placement.centerY)
+    ) {
+      const s = placement.fitScale / prev.fitScale;
+      const r = state.cropRect;
+      state = {
+        ...state,
+        cropRect: {
+          x: placement.centerX + (r.x - prev.centerX) * s,
+          y: placement.centerY + (r.y - prev.centerY) * s,
+          width: r.width * s,
+          height: r.height * s,
+        },
+        imageOffsetX: state.imageOffsetX * s,
+        imageOffsetY: state.imageOffsetY * s,
+      };
+    }
+    const clamped = clampImagePlacement(state, transformedPreview, placement);
     if (!stateEquals(clamped, editorStateRef.current)) {
       apply(clamped);
     }
