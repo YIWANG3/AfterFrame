@@ -18,19 +18,22 @@ import {
   Chip, SecondaryButton, Callout, ActiveRadio, IconActionButton,
 } from "./SettingsPrimitives";
 
+// Ollama has no dedicated entry — "Custom endpoint…" covers it (it is just an
+// OpenAI-compatible base URL). Existing ollama-typed providers keep working
+// via the lookup tables below. OpenAI is desktop-only: api.openai.com sends
+// no CORS headers, so the web build's direct fetch can never reach it.
 const PROVIDER_TYPES = [
   {
     label: "First-party APIs",
     options: [
       { value: "anthropic", label: "Anthropic (Claude)" },
-      { value: "openai", label: "OpenAI (GPT-4o)" },
+      { value: "openai", label: "OpenAI", desktopOnly: true },
       { value: "google", label: "Google (Gemini)" },
     ],
   },
   {
     label: "Other (OpenAI-compatible)",
     options: [
-      { value: "ollama", label: "Ollama (local)" },
       { value: "openai_compatible", label: "Custom endpoint…" },
     ],
   },
@@ -384,9 +387,11 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
     label: g.label === "First-party APIs" ? t("annotation.typeGroupFirstParty")
       : g.label === "Other (OpenAI-compatible)" ? t("annotation.typeGroupOther")
       : g.label,
-    options: g.options.map((o) => (o.value === "openai_compatible"
-      ? { ...o, label: t("annotation.typeCustomEndpoint") }
-      : o)),
+    options: g.options
+      .filter((o) => !o.desktopOnly || !api.capabilities.web)
+      .map((o) => (o.value === "openai_compatible"
+        ? { ...o, label: t("annotation.typeCustomEndpoint") }
+        : o)),
   })), [t]);
   const [draft, setDraft] = useState(initial);
   const [keyValue, setKeyValue] = useState("");
