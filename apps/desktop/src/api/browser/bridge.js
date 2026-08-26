@@ -640,13 +640,21 @@ async function probeAnnotationEndpoint({ providerId, provider, apiKey, baseUrl }
       },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    return ((await res.json()).data || []).map((m) => ({ id: m.id }));
+    return ((await res.json()).data || []).map((m) => ({ id: m.id, label: m.display_name || m.id }));
   }
   const base = String(baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
   const res = await fetch(`${base}/models`, { headers: key ? { authorization: `Bearer ${key}` } : {} });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const payload = await res.json();
-  return (payload.data || payload.models || []).map((m) => ({ id: m.id || m.name })).filter((m) => m.id);
+  return (payload.data || payload.models || [])
+    // Annotation needs a vision model — when the endpoint advertises input
+    // modalities (OpenRouter does), keep only image-capable entries.
+    .filter((m) => {
+      const modalities = m.architecture?.input_modalities;
+      return !Array.isArray(modalities) || modalities.includes("image");
+    })
+    .map((m) => ({ id: m.id || m.name, label: m.name || m.id }))
+    .filter((m) => m.id);
 }
 
 // A fetch that dies before reaching the server ("Failed to fetch") is, on a
