@@ -628,6 +628,36 @@ async function annotateOne(opts) {
   return annotation;
 }
 
+// GET the provider's model list — cheapest possible connectivity/CORS probe.
+async function probeAnnotationEndpoint({ providerId, provider, apiKey, baseUrl } = {}) {
+  const key = apiKey || sessionTokens.get(`annotation:${providerId}`)?.token || null;
+  if (provider === "anthropic") {
+    const res = await fetch("https://api.anthropic.com/v1/models?limit=100", {
+      headers: {
+        "x-api-key": key || "",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    return ((await res.json()).data || []).map((m) => ({ id: m.id }));
+  }
+  const base = String(baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+  const res = await fetch(`${base}/models`, { headers: key ? { authorization: `Bearer ${key}` } : {} });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const payload = await res.json();
+  return (payload.data || payload.models || []).map((m) => ({ id: m.id || m.name })).filter((m) => m.id);
+}
+
+// A fetch that dies before reaching the server ("Failed to fetch") is, on a
+// BYOK page, almost always a missing CORS header on the endpoint.
+function corsFriendlyError(e) {
+  const msg = e?.message || String(e);
+  return /failed to fetch|load failed|networkerror/i.test(msg)
+    ? "Request never reached the endpoint — it likely does not allow browser cross-origin requests (CORS), or the URL is unreachable."
+    : msg;
+}
+
 // Payload fields AnnotationsSection sends for a single asset — the batch job
 // derives the same from stored settings.
 function annotationOptsFromSettings(settings) {
@@ -1229,4 +1259,16 @@ export const browserBridge = {
     return jobStatus(annotationJob);
   },
   getAnnotationJobStatus: async () => (annotationJob ? jobStatus(annotationJob) : jobStatus()),
+  // Cheap connectivity probes (a /models GET, no tokens spent) — on the web
+  // these double as a CORS check, since a blocked preflight fails right here.
+  testAnnotationConnection: async (opts = {}) => {
+    try {
+      const models = await probeAnnotationEndpoint(opts);
+      return { ok: true, info: `${models.length} models` };
+    } catch (e) { return { ok: false, error: corsFriendlyError(e) }; }
+  },
+  listAnnotationModels: async (opts = {}) => {
+    try { return { ok: true, models: await probeAnnotationEndpoint(opts) }; }
+    catch (e) { return { ok: false, error: corsFriendlyError(e) }; }
+  },
 };

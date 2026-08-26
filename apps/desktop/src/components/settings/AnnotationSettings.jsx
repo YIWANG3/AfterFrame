@@ -537,14 +537,16 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
       {showHostUrl && (
         <FieldRow
           label={t("annotation.hostUrl")}
-          hint={t("annotation.hostUrlHint")}
+          hint={api.capabilities.web
+            ? `${t("annotation.hostUrlHint")} ${t("desktop.corsNotice", { ns: "common" })}`
+            : t("annotation.hostUrlHint")}
         >
           <TextInput
             value={draft.baseUrl || ""}
             onChange={(v) => update({ baseUrl: v })}
             monospace
             className="w-[280px]"
-            placeholder="http://localhost:11434/v1"
+            placeholder="https://openrouter.ai/api/v1"
           />
         </FieldRow>
       )}

@@ -12,6 +12,7 @@
     "hint": "此功能在 AfterFrame 桌面版中提供",
     "get": "获取桌面版",
     "try": "在桌面版体验完整功能",
-    "byokNotice": "API Key 仅保存在本机浏览器中，请求直接发往 AI 服务商，不经过我们的任何服务器。"
+    "byokNotice": "API Key 仅保存在本机浏览器中，请求直接发往 AI 服务商，不经过我们的任何服务器。",
+    "corsNotice": "该端点需支持浏览器跨域访问（CORS）。OpenRouter 已支持；自建服务需自行开启。可用 Test connection 一键验证。"
   }
 }
