@@ -35,7 +35,7 @@ function builtInSources(summary) {
 // Same sort surface as the gallery toolbar (labels come from nav:toolbar.sort.*).
 const PICKER_SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
-function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) {
+function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, replaceMode = false }) {
   const { t } = useTranslation("collage");
   const { t: tNav } = useTranslation("nav");
   const scrollRef = useRef(null);
@@ -184,6 +184,10 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
   const toggleSelected = useCallback((item) => {
     if (usedIds.has(item.asset_id)) return;
     setSelectedItemsById((current) => {
+      // Replace targets exactly one photo — picking another swaps the choice.
+      if (replaceMode) {
+        return current.has(item.asset_id) ? new Map() : new Map([[item.asset_id, item]]);
+      }
       const next = new Map(current);
       if (next.has(item.asset_id)) {
         next.delete(item.asset_id);
@@ -192,7 +196,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
       }
       return next;
     });
-  }, [usedIds]);
+  }, [usedIds, replaceMode]);
 
   const addSelected = useCallback(() => {
     if (!selectedItems.length) return;
@@ -256,7 +260,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-              {t("addImagesTitle")}
+              {replaceMode ? t("replaceImageTitle") : t("addImagesTitle")}
               <span className="ml-2 text-muted2">{loading ? "…" : countLabel}</span>
             </div>
           </div>
@@ -467,7 +471,9 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
             disabled={!selectedItems.length}
             onClick={addSelected}
           >
-            Add{selectedItems.length ? ` ${selectedItems.length}` : ""}
+            {replaceMode
+              ? t("replace")
+              : `${t("addAction")}${selectedItems.length ? ` ${selectedItems.length}` : ""}`}
           </button>
         </div>
       </div>
@@ -1080,6 +1086,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
           excludeIds={excludeIds}
           collections={collections}
           summary={summary}
+          replaceMode={replaceIndex >= 0}
           onAdd={(pickedItems) => {
             if (replaceIndex >= 0 && pickedItems.length > 0) {
               setImages((prev) => {
