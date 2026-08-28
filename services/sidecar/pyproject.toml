@@ -14,6 +14,8 @@ dependencies = [
     "pillow-heif>=0.16",
     # Batched cosine clustering for local face embeddings.
     "numpy>=1.26,<3",
+    # Safe XML parsing (guards against XXE) for embedded XMP metadata.
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
