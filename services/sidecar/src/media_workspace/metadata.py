@@ -4,7 +4,7 @@ import hashlib
 import os
 import re
 import struct
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from io import BytesIO
@@ -88,7 +88,7 @@ def quick_fingerprint_from_handle(
 ) -> str:
     if mode not in FINGERPRINT_MODES:
         raise ValueError(f"unsupported fingerprint mode: {mode}")
-    sha1 = hashlib.sha1()
+    sha1 = hashlib.sha1(usedforsecurity=False)
     start = head_bytes[:chunk_size] if head_bytes is not None else handle.read(chunk_size)
     sha1.update(start)
     if mode == "head-tail" and file_size > chunk_size:
