@@ -1,7 +1,7 @@
 import api from "../api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid } from "lucide-react";
+import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid, ArrowUpDown, Search } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
 import CollagePanel from "./collage/CollagePanel";
@@ -32,11 +32,18 @@ function builtInSources(summary) {
   return items;
 }
 
+// Same sort surface as the gallery toolbar (labels come from nav:toolbar.sort.*).
+const PICKER_SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
+
 function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) {
   const { t } = useTranslation("collage");
+  const { t: tNav } = useTranslation("nav");
   const scrollRef = useRef(null);
   const requestIdRef = useRef(0);
   const [source, setSource] = useState("all");
+  const [sort, setSort] = useState("imported-desc");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [sourceItems, setSourceItems] = useState([]);
   const [selectedItemsById, setSelectedItemsById] = useState(() => new Map());
   const [loading, setLoading] = useState(false);
@@ -47,7 +54,15 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
   const [viewportHeight, setViewportHeight] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const sortDropdownRef = useRef(null);
+
+  // Same debounce cadence as the gallery search — one query per typing burst.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const manualCollections = useMemo(
     () => (collections || []).filter((c) => c.kind === "manual"),
@@ -93,6 +108,8 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
           status: source,
           limit: PAGE_SIZE,
           offset: nextOffset,
+          sort,
+          search: search || undefined,
         });
       if (requestIdRef.current !== requestId) return;
       const nextBatch = batch || [];
@@ -111,7 +128,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
         }
       }
     }
-  }, [builtInItems, hasMore, loading, loadingMore, offset, source]);
+  }, [builtInItems, hasMore, loading, loadingMore, offset, source, sort, search]);
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -122,7 +139,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
     setScrollTop(0);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     void loadPage({ append: false });
-  }, [source]);
+  }, [source, sort, search]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -138,17 +155,20 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
     return () => observer.disconnect();
   }, []);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
-    if (!showDropdown) return;
+    if (!showDropdown && !showSortDropdown) return;
     function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      if (showDropdown && dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowDropdown(false);
+      }
+      if (showSortDropdown && sortDropdownRef.current && !sortDropdownRef.current.contains(e.target)) {
+        setShowSortDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [showDropdown]);
+  }, [showDropdown, showSortDropdown]);
 
   // Items already on the canvas stay VISIBLE but disabled (grayed + check) —
   // hiding them read as "photos missing" rather than "already added".
@@ -249,8 +269,9 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
           </button>
         </div>
 
-        {/* Source selector */}
-        <div className="relative px-3 pb-2" ref={dropdownRef}>
+        {/* Source / sort / search controls */}
+        <div className="flex items-center gap-1.5 px-3 pb-2">
+          <div className="relative shrink-0" ref={dropdownRef}>
           <button
             type="button"
             className="flex items-center gap-1.5 rounded-lg bg-app px-3 py-1.5 text-[11px] font-medium text-muted transition-colors hover:bg-hover hover:text-text"
@@ -262,7 +283,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
           </button>
 
           {showDropdown && (
-            <div className="absolute left-3 top-full z-10 mt-1 min-w-[180px] overflow-hidden rounded-lg border border-border/60 bg-chrome py-1 shadow-menu">
+            <div className="absolute left-0 top-full z-10 mt-1 min-w-[180px] overflow-hidden rounded-lg border border-border/60 bg-chrome py-1 shadow-menu">
               {builtInItems.map((s) => (
                 <button
                   key={s.id}
@@ -305,6 +326,61 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose }) 
                 </>
               )}
             </div>
+          )}
+          </div>
+
+          {/* Sort + search don't apply to collection browsing (fixed manual
+              order on the desktop backend), so they hide there. */}
+          {builtInItems.some((s) => s.id === source) && (
+            <>
+              <div className="relative shrink-0" ref={sortDropdownRef}>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 rounded-lg bg-app px-2.5 py-1.5 text-[11px] font-medium text-muted transition-colors hover:bg-hover hover:text-text"
+                  title={tNav(`toolbar.sort.${sort}`)}
+                  onClick={() => setShowSortDropdown((v) => !v)}
+                >
+                  <ArrowUpDown className="h-3 w-3 text-muted2" />
+                  <span className="max-w-[90px] truncate">{tNav(`toolbar.sort.${sort}`)}</span>
+                  <ChevronDown className="ml-0.5 h-3 w-3 text-muted2" />
+                </button>
+                {showSortDropdown && (
+                  <div className="absolute left-0 top-full z-10 mt-1 min-w-[160px] overflow-hidden rounded-lg border border-border/60 bg-chrome py-1 shadow-menu">
+                    {PICKER_SORT_OPTIONS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={[
+                          "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors",
+                          sort === value ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
+                        ].join(" ")}
+                        onClick={() => { setSort(value); setShowSortDropdown(false); }}
+                      >
+                        <span className="flex h-3 w-3 items-center justify-center">
+                          {sort === value && <Check className="h-3 w-3 text-accent" />}
+                        </span>
+                        {tNav(`toolbar.sort.${value}`)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex h-[26px] min-w-0 flex-1 items-center gap-1.5 rounded-lg bg-app px-2.5 focus-within:ring-1 focus-within:ring-accent/40">
+                <Search className="h-3 w-3 shrink-0 text-muted2" />
+                <input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder={tNav("toolbar.search")}
+                  className="min-w-0 flex-1 bg-transparent text-[11px] text-text outline-none placeholder:text-muted2"
+                />
+                {searchInput && (
+                  <button type="button" className="text-muted2 hover:text-text" onClick={() => setSearchInput("")}>
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
 
