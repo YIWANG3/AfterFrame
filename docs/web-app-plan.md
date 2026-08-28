@@ -1,6 +1,16 @@
 # AfterFrame Web 版方案（拼图 / 加文字 / AI 重绘 BYOK）
 
-日期：2026-08-22　状态：设计稿
+日期：2026-08-22　状态：Phase 0 + Phase 1 骨架已实现（feat/web-shell，worktree ../media-resource-management-web）
+
+**入口形态（2026-08-23 已定，取代下文 §1.3 的落地页设想）**：web 版不做自定义落地页，直接跑真实 `App.jsx`——打开即空 catalog（侧栏/工具栏/图库/Inspector 与桌面一致），用户通过 `+` 或拖拽导入照片（文件不上传，object URL 内存 catalog），之后编辑/拼图走桌面版原有入口（选中 → E / 右键菜单）。browser bridge 扮演"内存 catalog 后端"（`src/api/browser/bridge.js`，271 行）。已在 Chrome 全链路验证：导入 → 图库 → 编辑器（文字图层）→ 拼图（单张+批量）→ 导出下载，console 干净。
+
+**已知待办（web 打磨项）**：
+- [ ] capability 门控桌面残留 UI：右键菜单 Reveal in Finder / Refresh from Disk / Delete from Disk、导出 toast 的 "Show in Finder"、TextPanel 的 Scene Depth 区块、Settings 中桌面项
+- [x] 编辑器首开布局竞态 + 窗口 resize 裁剪框不跟随——同一根源已修（useCropTool 在 placement 变化时对 cropRect/pan 做等比重映射，两端生效）
+- [ ] 部署体积：地图懒加载 chunk（~22MB）应从 web 构建剔除或按需拆分
+- [ ] Playwright e2e 补 web.html 目标（vite dev server + 浏览器，覆盖 StrictMode）
+- [ ] Cloudflare Pages 部署 workflow（build:web → dist-web）
+- [ ] 剩余 ~60 处桌面模块直连 window.mediaWorkspace 渐进收敛（不影响 web 主路径）
 
 目标：把桌面版中可移植的功能放到纯静态 Web 端做推广引流。硬约束：
 
@@ -91,6 +101,18 @@ apps/desktop/src/web-main.jsx← 新增：Web 壳（安装 browser bridge → �
 
 **结论：Web 版只上 Gemini 一条链路。** 这不是妥协——桌面端实测本来就是 Gemini 效果最好（默认模型 `gemini-3-pro-image-preview`），而且"零后端 + key 不经过任何第三方"恰好只有 Gemini 能做到。
 
+**（2026-08-23 调研更新）BYOK 版图比上表更宽，新增两个可行通道：**
+
+| 通道 | 浏览器直连 | 能做什么 | 说明 |
+|---|---|---|---|
+| **OpenRouter**（`openrouter.ai/api/v1`） | ✅ 官方支持 CORS | **重绘 + 打标签都行**：图像生成/编辑走 chat completions + `modalities:["image","text"]`（含 nano banana / Gemini 3.1 Flash Image，即桌面 nanobanana 同款模型family），vision 打标走标准 chat（任意 vision 模型：Claude/GPT-4o/Gemini） | 杀手锏是 **OAuth PKCE**：用户点"连接 OpenRouter"一键授权拿 key，无需复制粘贴、无需后端、key 归用户账号管——BYOK 摩擦最低的方案 |
+| **Anthropic**（`api.anthropic.com`） | ✅ 加 header `anthropic-dangerous-direct-browser-access: true` | 打标签（vision caption/tags）——桌面 annotation 的主 adapter 就是 Anthropic，请求形状原样可移植 | 官方明确说该通道就是为 BYOK/内部工具场景开的 |
+
+修正后的结论：
+- **重绘**：Gemini 直连 + OpenRouter（一个小 adapter，chat 格式返回图片）两条链路；OpenAI/ark/即梦直连仍不可行，但 OpenRouter 间接覆盖了多模型需求。
+- **打标签（AI 标注）也可以上 web**：Anthropic 直连 + Gemini 直连 + OpenRouter 三条链路可选；桌面 sidecar 的 anthropic / openai_compatible 两个 adapter 直译成 fetch 即可（OpenRouter 就是 openai_compatible 形状）。标注数据落内存 catalog（随 P1 持久化落 IndexedDB），直接提升 web 端搜索质量。
+- 推荐产品形态：BYOK 设置里给两个入口——"Gemini API Key"（手动填）+"连接 OpenRouter"（PKCE 一键），后者同时解锁重绘与标注的多模型。
+
 ### 3.2 不需要 Node 转发，且不转发反而是卖点
 
 你担心的两个方案对比：
@@ -180,6 +202,17 @@ Cloudflare Pages（免费档）：不限带宽、`_headers` 文件可自定义�
 ### 6.6 届时的分级建议
 
 拼图按"手机完整可用"标准做（降采样、Web Share、捏合手势、底部抽屉）；文字编辑器"桌面优先、手机能看能简单用"。
+
+## 6.5 Web 完善路线（2026-08-23 排期，AI 最后）
+
+- [x] **P0 EXIF（exifr）+ 视频/RAW 拒收提示**：相机/镜头/曝光/拍摄时间/GPS 进 image_metadata，Inspector/相框参数/按拍摄时间排序生效
+- [x] **P1 IndexedDB 持久化**：资产记录 + 原图/512/2000 blob 全落库，懒恢复（ensureRestored），评分/删除写穿，刷新不丢
+- [x] **P2 收藏夹**：完整 collections 面（sidecar 行形状），IndexedDB 持久化，删资产自动清成员
+- [x] **P3 筛选器**：getFacetValues/searchFacet 内存聚合 + browseImages 全量 facet 过滤（相机/镜头/格式/ISO/光圈/焦距/日期/星级/构图），人脸/标注/人物筛选按 capability 隐藏
+- [x] **P4 地图**：browseMapPoints（EXIF GPS，sidecar 行形状）+ filters.geo 视口过滤（含反子午线分割）；离线 topojson 地图原样可用。GPS 阳性路径待真实带 GPS 照片实测
+- [x] **web e2e**：`npm run e2e:web`（playwright.web.config.js + e2e-web/，Chromium 驱动 web.html，dev/StrictMode），6 条冒烟 ~17s：启动+锁定项、导入+EXIF、持久化、编辑器保存下载、拼图导出下载、视频拒收
+- [x] **AI BYOK**（bridge 直连 fetch，key 仅存内存）：重绘 = Gemini（ai_repaint.py 同款请求；结果登记为资产 + IndexedDB v2 repaints 历史；listAiModels 查真实模型表；ProviderModal 在 web 只出 Gemini）；标注 = Anthropic（官方浏览器 header）/ OpenAI-compatible（OpenRouter 填 base_url 即用），复刻 sidecar 的 prompt/JSON 规范化，含批量任务（ActivityCenter 进度）、tag 增删、搜索/筛选吃标注数据。**真实 Gemini 调用待用户 key 实测**；OpenRouter PKCE 一键连接为后续增强
+- 暂缓：Compare/Lightbox 专项验证、真视频支持、Cloudflare Pages 部署 workflow、OpenRouter PKCE、贴纸上传 PNG
 
 ## 7. 风险与开口问题
 
