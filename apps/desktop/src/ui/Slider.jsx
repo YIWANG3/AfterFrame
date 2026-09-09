@@ -7,13 +7,17 @@ export function NumberDragInput({ value, min, max, onChange, onCommit, className
   const ref = useRef(null);
   const focusValueRef = useRef(null);
   const DRAG_THRESHOLD = 3;
+  // Layer sizes get rescaled by float ratios when the crop/margin basis
+  // changes (fontSize, shadow, stroke...), so the model can hold 17.999999.
+  // Show and scrub from a 2-decimal rounding; the model keeps its precision.
+  const shown = Number.isFinite(value) ? Math.round(value * 100) / 100 : value;
 
   const handleMouseDown = (e) => {
     // If already focused (editing), let native input handle it
     if (document.activeElement === ref.current) return;
     e.preventDefault();
     const startX = e.clientX;
-    const startVal = value;
+    const startVal = shown;
     let dragging = false;
 
     const onMove = (ev) => {
@@ -41,7 +45,7 @@ export function NumberDragInput({ value, min, max, onChange, onCommit, className
   return (
     <input
       ref={ref}
-      type="number" min={min} max={max} value={value}
+      type="number" min={min} max={max} value={shown}
       onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
       onFocus={(e) => { focusValueRef.current = value; e.target.select(); }}
       // Commit only when the value actually changed while focused — an idle
