@@ -552,7 +552,7 @@ Dribbble 类概念稿不够用,以下按「借什么」分组,均为真实产品
 
 第四次修正:① 瓦片选中不用内描边,改**放大 4% 突出 + 外环压在邻格之上**(选中格 z-index 提到最上);② **硬边根因**:Chromium 里伪元素上的 `backdrop-filter` 不吃 mask 羽化,模糊在盒边直接切断,左右底三边都硬。放弃 mask,改两级模糊条(强模糊 72px + 弱模糊 116px,开筛选行各加 40);③ 胶囊与 chip 的发丝边全部去掉,只留弹层;④ 玻璃带**滚动驱动**:`scroll-timeline-name` 挂在网格滚动容器、`timeline-scope` 挂在内容区,伪元素用 `animation-timeline` 在滚过 80px 内淡入,静止时不出现、不干扰首行(与 demo 一致)。
 
-第五次修正:① 瓦片选中格放大后加 8px 圆角;② **渐进模糊的最终做法**:实测这版 Chromium 里带 `backdrop-filter` 的元素(伪元素和真实元素都一样)mask 只按二值生效,渐变段完全不模糊,所以 mask 路线彻底放弃。改成**五段递减模糊条**(14 → 8 → 4 → 1.5 → 0px,每段 28 至 44px)叠出渐进模糊,压色由一整块渐变背景负责;宿主是地图抽屉的空占位 div(`[data-testid="map-drawer"]:empty`,MapDrawer 打开前始终存在)及其伪元素 + split 的伪元素,共五层,全部滚动驱动。地图打开后占位 div 有子节点,`:empty` 自动退出;③ 滚动条改常驻低亮度(16%)细条,hover 加深,不再只在 hover 时出现。
+第五次修正:① 瓦片选中格放大后加 8px 圆角,容器四边留 8px 空防裁切;② **渐进模糊的最终做法(与 demo 一致)**:`[data-testid="workspace-split"]::before` 一个伪元素,backdrop-filter + 渐变 mask 羽化 + 压色渐变,滚动驱动。之前两轮硬边的真正原因:**带 mask 的 backdrop-filter 只有在元素独立合成时才正确羽化**(demo 的宿主是 fixed 元素,天然独立合成),普通元素上 mask 退化为二值切断;加 `transform: translateZ(0)` 强制独立合成层后羽化正常。中间试过的「五段递减模糊条」和「map-drawer:empty 宿主」都撤了(后者在用户打开过地图后失效);③ 滚动条改常驻低亮度(16%)细条,hover 加深。
 
 用户追加:「header 要改掉,三个圆要融合进来」→ `electron/main.js` createWindow 加 `titleBarStyle:"hiddenInset"` + `trafficLightPosition:{x:18,y:16}`(两行,未 commit,可回退;这是 P3 唯一先做的一项),皮肤里侧栏面板 padding-top 44 让位、拖拽区 = 侧栏头 44px + 内容区顶部 8px 细条(避开控件防光标闪)。
 

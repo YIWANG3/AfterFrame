@@ -407,23 +407,20 @@ section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
 section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
 /* 顶部软边渐进模糊(Apple 的 scroll edge effect):静止时舞台均匀,带子不可见;照片滚到顶部时被渐进模糊压暗 */
-/* 滚动边缘效果(Apple scroll edge effect):
-   实测这版 Chromium 里 backdrop-filter 元素的 mask 只按二值生效(渐变段没有模糊),伪元素和真实元素都一样,所以不用 mask 做羽化,
-   改成五段递减模糊条(14 → 8 → 4 → 1.5 → 0)叠出渐进模糊,压色由一整块渐变背景负责。宿主:地图抽屉的空占位 div(始终存在)及其伪元素 + split 的伪元素。
-   全部滚动驱动:静止时不出现,滚过 80px 内淡入。地图打开后占位 div 有子节点,:empty 退出,不干扰地图。 */
+/* 滚动边缘效果(Apple scroll edge effect),做法与 demo 一致:
+   split 容器的 ::before(始终存在)挂 backdrop-filter + 渐变 mask 羽化 + 压色渐变;
+   关键:带 mask 的 backdrop-filter 只有在元素独立合成时才正确羽化(demo 的宿主是 fixed 元素),这里用 translateZ(0) 强制独立合成层。
+   滚动驱动:静止时不出现,滚过 80px 内淡入。 */
 [data-testid="gallery-scroll"] { scroll-timeline-name: --grid; scroll-timeline-axis: block; }
 .noise-overlay > .grid > section.bg-app { timeline-scope: --grid; }
 [data-testid="workspace-split"] { position: relative; }
 @keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
-[data-testid="map-drawer"]:empty, [data-testid="map-drawer"]:empty::before, [data-testid="map-drawer"]:empty::after,
-[data-testid="workspace-split"]::before, [data-testid="workspace-split"]::after {
-  content: ""; position: absolute; left: 0; right: 0; z-index: 45; pointer-events: none; opacity: 0;
+[data-testid="workspace-split"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 150px; z-index: 45; pointer-events: none; opacity: 0;
+  transform: translateZ(0); will-change: transform;
+  backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.72), rgb(var(--app-bg) / 0.3) 40%, rgb(var(--app-bg) / 0));
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%); mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%);
   animation: app-edge-in linear both; animation-timeline: --grid; animation-range: 0 80px; }
-[data-testid="map-drawer"]:empty { top: 0; height: 150px; background: linear-gradient(180deg, rgb(var(--app-bg) / 0.72), rgb(var(--app-bg) / 0.3) 40%, rgb(var(--app-bg) / 0)); }
-[data-testid="map-drawer"]:empty::before { top: 0; height: 44px; backdrop-filter: blur(14px) saturate(1.15); }
-[data-testid="map-drawer"]:empty::after { top: 44px; height: 28px; backdrop-filter: blur(8px) saturate(1.1); }
-[data-testid="workspace-split"]::before { top: 72px; height: 28px; backdrop-filter: blur(4px); }
-[data-testid="workspace-split"]::after { top: 100px; height: 28px; backdrop-filter: blur(1.5px); }
 
 .app-toolbar { background: transparent; height: 48px; gap: 6px; padding: 0 12px; }
 .app-toolbar .truncate.font-semibold { font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
