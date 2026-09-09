@@ -523,6 +523,16 @@ aside.border-l [class*="fill-\[rgb(225"] { fill: rgb(var(--accent-color)); color
 aside.border-l .bg-hover { background: var(--fill); }
 aside.border-l .border-accent\/50 { border-color: transparent; }
 
+/* ───────── 8b · 编辑器面板 / 工具栏:零分割线,用留白分组(Apple 侧栏做法),分组标题略提亮承担分组职责 ───────── */
+[data-editor-wheel-scope="panel"] .border-b, [data-editor-wheel-scope="panel"] .border-t,
+[data-editor-wheel-scope="panel"] .border-l, [data-editor-wheel-scope="panel"] .border-r { border-color: transparent; }
+[data-editor-wheel-scope="panel"] .px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
+[data-editor-wheel-scope="panel"] .border-t.px-3.py-2, [data-editor-wheel-scope="panel"] .border-t.px-4.py-3 { padding-top: 6px; }
+[data-editor-wheel-scope="panel"] .tracking-\[0\.14em\].text-muted2 { color: rgb(var(--muted-text)); }
+[data-editor-wheel-scope="panel"], .fixed.inset-0.z-\[10100\] .rounded-xl.border.bg-chrome\/95 { border-color: transparent; background: var(--pop); }
+/* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
+[data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgba(255, 255, 255, 0.22); }
+
 /* ───────── 9 · 弹层 / 菜单 / JobDock / Toast:玻璃,无边框,微影 ───────── */
 .shadow-overlay.bg-chrome, .shadow-menu.bg-chrome, .shadow-overlay.bg-panel2,
 .shadow-overlay.bg-panel, .shadow-lg.bg-chrome {
