@@ -406,6 +406,9 @@ html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z
 section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
 section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
+/* 滚动条轨道从工具栏(及筛选行)下方开始,不从窗口顶部起(WebKit 支持给 track 设 margin 缩短轨道两端) */
+section.bg-app [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 56px; margin-bottom: 6px; }
+section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 96px; }
 /* 顶部软边渐进模糊(Apple 的 scroll edge effect):静止时舞台均匀,带子不可见;照片滚到顶部时被渐进模糊压暗 */
 /* 滚动边缘效果(Apple scroll edge effect),做法与 demo 一致:
    split 容器的 ::before(始终存在)挂 backdrop-filter + 渐变 mask 羽化 + 压色渐变;
