@@ -412,6 +412,11 @@ html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-
   position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
 }
 .fixed.inset-0.z-\[10100\] > .h-11 button.h-7.w-7, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7.w-7 { border-radius: 999px; }
+/* 头部主动作(编辑器「保存」/ 拼图「导出」):同一款胶囊,fill-2 底、正文色,不再各自用 accent 10% / 12% */
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7), .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7) {
+  height: 28px; padding: 0 12px; border-radius: 999px; background: var(--fill-2); color: rgb(var(--text-color));
+}
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7):hover, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7):hover { background: var(--fill-3); }
 .fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; background: var(--fill); padding: 2px; }
 .fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; height: 24px; padding: 0 12px; }
 .fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button.bg-panel2 { background: var(--fill-3); }

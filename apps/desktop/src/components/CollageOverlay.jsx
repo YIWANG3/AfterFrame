@@ -851,7 +851,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {exporting
               ? (exportProgress ? t("exportingProgress", exportProgress) : t("exporting"))
-              : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("image"))}
+              : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("export"))}
           </button>
           <button
             type="button"
