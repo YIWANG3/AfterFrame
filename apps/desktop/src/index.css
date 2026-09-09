@@ -407,15 +407,21 @@ section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
 section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
 /* 顶部软边渐进模糊(Apple 的 scroll edge effect):静止时舞台均匀,带子不可见;照片滚到顶部时被渐进模糊压暗 */
-/* 两层叠出渐进模糊:::before 强模糊 + 压色,短羽化;::after 弱模糊、长羽化,把边缘揉开(单层 mask 的羽化只有几十像素,行界处会显生硬) */
-.noise-overlay > .grid > section.bg-app::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 120px; z-index: 40; pointer-events: none;
-  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.66), rgb(var(--app-bg) / 0) 85%); backdrop-filter: blur(16px) saturate(1.15);
-  -webkit-mask-image: linear-gradient(180deg, #000 35%, transparent); mask-image: linear-gradient(180deg, #000 35%, transparent); }
-.noise-overlay > .grid > section.bg-app::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 200px; z-index: 39; pointer-events: none;
-  backdrop-filter: blur(5px);
-  -webkit-mask-image: linear-gradient(180deg, #000 25%, transparent); mask-image: linear-gradient(180deg, #000 25%, transparent); }
-section.bg-app:has(> .flex-wrap.border-b)::before { height: 160px; }
-section.bg-app:has(> .flex-wrap.border-b)::after { height: 240px; }
+/* 滚动边缘效果(Apple scroll edge effect 的 CSS 近似):
+   - 伪元素上的 backdrop-filter 不吃 mask 羽化(模糊在盒边直接切断),所以不用 mask,改两级模糊条:强模糊短条 + 弱模糊长条;
+   - 静止时完全不出现,网格滚过 80px 内淡入(scroll-driven animation 绑定网格滚动位置),不干扰首行。 */
+[data-testid="gallery-scroll"] { scroll-timeline-name: --grid; scroll-timeline-axis: block; }
+.noise-overlay > .grid > section.bg-app { timeline-scope: --grid; }
+@keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
+.noise-overlay > .grid > section.bg-app::before,
+.noise-overlay > .grid > section.bg-app::after { content: ""; position: absolute; top: 0; left: 0; right: 0; pointer-events: none; opacity: 0;
+  animation: app-edge-in linear both; animation-timeline: --grid; animation-range: 0 80px; }
+.noise-overlay > .grid > section.bg-app::before { height: 72px; z-index: 40; backdrop-filter: blur(14px) saturate(1.15);
+  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.7), rgb(var(--app-bg) / 0.25)); }
+.noise-overlay > .grid > section.bg-app::after { height: 116px; z-index: 39; backdrop-filter: blur(4px);
+  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.25) 60%, rgb(var(--app-bg) / 0)); }
+section.bg-app:has(> .flex-wrap.border-b)::before { height: 108px; }
+section.bg-app:has(> .flex-wrap.border-b)::after { height: 156px; }
 
 .app-toolbar { background: transparent; height: 48px; gap: 6px; padding: 0 12px; }
 .app-toolbar .truncate.font-semibold { font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
@@ -427,7 +433,7 @@ section.bg-app:has(> .flex-wrap.border-b)::after { height: 240px; }
 .app-toolbar > .relative:not(.min-w-0) {
   border-radius: 999px; background: var(--glass);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-  box-shadow: inset 0 0 0 1px var(--edge); height: 34px; padding: 0 3px; display: flex; align-items: center;
+  height: 34px; padding: 0 3px; display: flex; align-items: center;
 }
 .app-toolbar { height: 52px; }
 .app-toolbar button.rounded-md, .app-toolbar button.h-8 { height: 28px; min-width: 28px; border-radius: 999px; }
@@ -449,17 +455,17 @@ section.bg-app:has(> .flex-wrap.border-b)::after { height: 240px; }
 .app-toolbar button[class*="border-border"] { background: transparent; border-color: transparent; border-radius: 999px; }
 .app-toolbar .bg-selected { background: var(--fill-3); }
 /* 单独的图标钮(刷新等)也上胶囊玻璃 */
-.app-toolbar > button { height: 34px; width: 34px; min-width: 34px; border-radius: 999px; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); }
+.app-toolbar > button { height: 34px; width: 34px; min-width: 34px; border-radius: 999px; background: var(--glass); backdrop-filter: var(--blur); }
 /* 筛选计数徽标:accent 白底黑字 */
 .app-toolbar .bg-accent.text-black { color: rgb(var(--accent-ink)); }
 
 /* ───────── 6 · 筛选行:透明底、无底线;chip 胶囊无描边 ───────── */
 .flex-wrap.border-b[class*="bg-chrome"] { background: transparent; border-color: transparent; padding: 4px 12px 10px; }
-.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); height: 28px; color: rgb(var(--text-color)); }
+.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
 .flex-wrap.border-b button.rounded-md.border:hover { background: var(--fill-2); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] { background: rgb(var(--accent-color)); color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
-.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 999px; }
+.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; }
 .flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
 
 /* ───────── 7 · 网格:缩略图去描边,选中留单色环;网格底透明 ───────── */
@@ -469,9 +475,9 @@ section.bg-app:has(> .flex-wrap.border-b)::after { height: 240px; }
 [data-gallery-item] [class*="ring-2"] { --tw-ring-color: rgb(var(--accent-color)); box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
 [data-gallery-item] .shadow-glow { box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
 /* 瓦片模式:内描边用 outline(inset box-shadow 会被绝对定位的 img 盖住;outline 在绘制顺序最后,压在子元素之上) */
-[data-testid="gallery-scroll"].px-0 [data-gallery-item] [class*="ring-2"] { box-shadow: none; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none;
-  box-shadow: inset 0 0 0 2.5px rgb(var(--accent-color)); }
+/* 瓦片模式(无缝):选中格提到最上层并放大 4%,外环压在邻格之上,突出出来 */
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] { z-index: 10; }
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div { transform: scale(1.04); }
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }

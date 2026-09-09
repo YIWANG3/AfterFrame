@@ -550,6 +550,8 @@ Dribbble 类概念稿不够用,以下按「借什么」分组,均为真实产品
 
 第三次修正(用户五条):① 检查器大图圆角 10;② 顶部滚动边缘效果改**两层叠出的渐进模糊**(`::before` 强模糊 + 压色、短羽化;`::after` 弱模糊、长羽化 200 / 240px),单层 mask 的几十像素羽化在瓦片行界处显生硬;③ 瓦片模式选中环改为画在 `[data-selected="true"]` 按钮自身的 `::after` 内描边上(外描边会被相邻格盖住;inset box-shadow 又会被绝对定位的 img 盖住);④ 胶囊松紧按 demo:外壳 34、内部按钮 28 全圆角、3px 呼吸,工具栏 52;⑤ 筛选 chip 改玻璃底 + 发丝边 + 正文色,浅色主题下 6% 填充在模糊带上不可读。
 
+第四次修正:① 瓦片选中不用内描边,改**放大 4% 突出 + 外环压在邻格之上**(选中格 z-index 提到最上);② **硬边根因**:Chromium 里伪元素上的 `backdrop-filter` 不吃 mask 羽化,模糊在盒边直接切断,左右底三边都硬。放弃 mask,改两级模糊条(强模糊 72px + 弱模糊 116px,开筛选行各加 40);③ 胶囊与 chip 的发丝边全部去掉,只留弹层;④ 玻璃带**滚动驱动**:`scroll-timeline-name` 挂在网格滚动容器、`timeline-scope` 挂在内容区,伪元素用 `animation-timeline` 在滚过 80px 内淡入,静止时不出现、不干扰首行(与 demo 一致)。
+
 用户追加:「header 要改掉,三个圆要融合进来」→ `electron/main.js` createWindow 加 `titleBarStyle:"hiddenInset"` + `trafficLightPosition:{x:18,y:16}`(两行,未 commit,可回退;这是 P3 唯一先做的一项),皮肤里侧栏面板 padding-top 44 让位、拖拽区 = 侧栏头 44px + 内容区顶部 8px 细条(避开控件防光标闪)。
 
 未做(结构相关,留待确认后):工具栏浮到内容之上的滚动边缘效果、图标簇合并为三组、检查器点选滑入、vibrancy / 透明窗(P3 其余)。
