@@ -286,9 +286,12 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
 /* 滚动条只在滚动时出现(main.jsx 在滚动中的元素上打 data-scrolling,停 700ms 后摘掉),平时隐形,不与圆角面板打架 */
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; cursor: pointer; }
+::-webkit-scrollbar { cursor: pointer; }
+/* 鼠标在滚动区域内时淡淡地露出拇指(16%),这样停止滚动后仍找得到它;滚动中 30%,按住 / 悬停拇指 45% */
+:hover::-webkit-scrollbar-thumb { background: rgb(var(--text-color) / 0.16); background-clip: padding-box; }
 [data-scrolling]::-webkit-scrollbar-thumb { background: rgb(var(--text-color) / 0.3); background-clip: padding-box; }
-[data-scrolling]::-webkit-scrollbar-thumb:hover { background: rgb(var(--text-color) / 0.45); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: rgb(var(--text-color) / 0.45); background-clip: padding-box; }
 /* 圆角面板内的轨道两端内缩,拇指不伸进圆角 */
 .noise-overlay > .grid > aside ::-webkit-scrollbar-track, .noise-overlay > .grid > aside::-webkit-scrollbar-track { margin: 10px 0; }
 [data-editor-wheel-scope="panel"] ::-webkit-scrollbar-track { margin: 12px 0 48px; }
