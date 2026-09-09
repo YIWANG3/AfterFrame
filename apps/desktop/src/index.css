@@ -516,7 +516,16 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 [data-gallery-item]:hover [class*="ring-1"] { box-shadow: none; --tw-ring-color: transparent; }
 /* 选中态 = 照片自身色彩的光晕:把缩略图(Gallery.jsx 通过 --thumb 传入)铺在格子底下、放大并高斯模糊,
    像 Apple Music 的专辑光晕。照片本身只留 1.5px 细环。--img-h 是图片高,光晕不罩住下方文字 */
-[data-gallery-item] [class*="ring-2"], [data-gallery-item] .shadow-glow { --tw-ring-color: transparent; box-shadow: 0 0 0 1.5px rgb(var(--accent-color) / 0.95); }
+/* 照片边:白描边弱化为 1px 35%,再叠一层玻璃高光(::after 盖在图上,不被 img 挡):顶边 1px 亮线 + 四周 1px 22% 内沿 */
+[data-gallery-item] [class*="ring-2"], [data-gallery-item] .shadow-glow { --tw-ring-color: transparent; box-shadow: 0 0 0 1px rgb(var(--accent-color) / 0.35); }
+[data-gallery-item][data-selected="true"]::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: var(--img-h, 100%); z-index: 2; pointer-events: none;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgb(var(--accent-color) / 0.6), inset 0 0 0 1px rgb(var(--accent-color) / 0.22);
+}
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after {
+  left: -5px; right: -5px; top: -5px; height: calc(var(--img-h, 100%) + 10px); border-radius: 8px;
+}
 [data-gallery-item][data-selected="true"] { z-index: 10; isolation: isolate; }
 [data-gallery-item][data-selected="true"]::before {
   content: ""; position: absolute; z-index: -1; pointer-events: none;
