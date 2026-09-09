@@ -530,6 +530,16 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] .border-t.px-3.py-2, [data-editor-wheel-scope="panel"] .border-t.px-4.py-3 { padding-top: 6px; }
 [data-editor-wheel-scope="panel"] .tracking-\[0\.14em\].text-muted2 { color: rgb(var(--muted-text)); }
 [data-editor-wheel-scope="panel"], .fixed.inset-0.z-\[10100\] .rounded-xl.border.bg-chrome\/95 { border-color: transparent; background: var(--pop); }
+/* 面板底栏(重置 / 撤销 / 重做 / Apply):浮在面板底部的玻璃条,内容从它底下滚过;滚动区底部让位 52px。
+   四个面板的底栏都是 `.border-t.px-3.py-2`;AI 面板未激活时整块 .hidden,其底栏不算数 */
+[data-editor-wheel-scope="panel"] { position: relative; }
+[data-editor-wheel-scope="panel"] .border-t.px-3.py-2 {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: 8px 12px 10px; border-color: transparent;
+  background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+}
+[data-editor-wheel-scope="panel"]:has(> .border-t.px-3.py-2, > :not(.hidden) .border-t.px-3.py-2)
+  .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]) { padding-bottom: 52px; }
 /* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
 [data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgba(255, 255, 255, 0.22); }
 
