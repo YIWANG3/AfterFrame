@@ -335,6 +335,12 @@ const CardContent = memo(function CardContent({
   // map cursor-x → frame so dragging across the card scrubs the clip.
   const isVideo = item.asset_type === "video";
   const [hoverFrames, setHoverFrames] = useState(null);
+  // Natural aspect of the loaded preview: in contain mode (justified) the
+  // drawn photo can be smaller than the cell, and the selection frame must
+  // hug the photo, not the cell.
+  const [naturalAr, setNaturalAr] = useState(null);
+  const onNaturalSize = useCallback((w, h) => { if (w > 0 && h > 0) setNaturalAr(w / h); }, []);
+  const frameAr = fit === "contain" && naturalAr ? naturalAr : width / height;
   const [hoverIdx, setHoverIdx] = useState(-1);
   const onVideoEnter = useCallback(() => {
     if (!isVideo || hoverFrames) return;
@@ -421,8 +427,12 @@ const CardContent = memo(function CardContent({
         width: `${width}px`,
         height: `${totalHeight}px`,
         minWidth: 0,
-        // Selection glow (index.css): the photo's own colours, blurred, behind the tile.
+        // Selection glow + frame (index.css): the photo's own colours, blurred,
+        // behind the tile; the frame is sized from --img-w/--img-h/--ar so it
+        // follows the drawn photo even when contain-fit leaves a gap.
+        "--img-w": `${width}px`,
         "--img-h": `${height}px`,
+        "--ar": String(frameAr),
         "--thumb": selected && previewSrc ? `url("${previewSrc.replace(/"/g, '\\"')}")` : "none",
       }}
     >
@@ -447,6 +457,7 @@ const CardContent = memo(function CardContent({
             fit={fit}
             className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
             onLoadError={item.exists_on_disk === false ? undefined : () => onPreviewError?.(item)}
+            onNaturalSize={onNaturalSize}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">{t("gallery.noPreview")}</div>
