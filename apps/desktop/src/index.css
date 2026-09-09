@@ -369,7 +369,8 @@ select {
   border: none; background: var(--pane);
   padding-top: 12px;
 }
-.noise-overlay > .grid > section.bg-app { background: transparent; }
+/* 内容区包一层圆角面板(同 demo C):顶部玻璃与筛选行被限制在框内,四边留 8px 与侧栏 / 窗口边同缝 */
+.noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 8px; background: var(--pane); }
 .noise-overlay > .grid > aside.border-l { border: none; background: transparent; }
 .noise-overlay > .grid > div.bg-chrome { background: transparent; }
 /* 拖拽把手:平时无线,hover 才现细线(既有行为,只换颜色) */
