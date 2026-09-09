@@ -514,18 +514,27 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 [data-testid="gallery-scroll"] { background: transparent; }
 [data-gallery-item] [class*="ring-1"] { --tw-ring-color: transparent; box-shadow: none; }
 [data-gallery-item]:hover [class*="ring-1"] { box-shadow: none; --tw-ring-color: transparent; }
-[data-gallery-item] [class*="ring-2"] { --tw-ring-color: rgb(var(--accent-color)); box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
-[data-gallery-item] .shadow-glow { box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
+/* 选中态 = 玻璃光环:1.5px 细环 + 5.5px 半透明玻璃带 + 1px 外沿高光 + 下沉投影,全部用 box-shadow 叠出。
+   试过在图片底下放 backdrop-filter 伪元素,Chromium 里它会把图片本身也糊掉;而且网格模式下光环压的只是平底,
+   模糊本来就没东西可糊,玻璃感来自半透明带 + 高光边 + 投影 */
+[data-gallery-item] [class*="ring-2"], [data-gallery-item] .shadow-glow {
+  --tw-ring-color: transparent;
+  box-shadow: 0 0 0 1.5px rgb(var(--accent-color) / 0.95), 0 0 0 7px rgb(var(--accent-color) / 0.14), 0 0 0 8px rgb(var(--accent-color) / 0.3), 0 10px 24px -6px rgba(0, 0, 0, 0.5);
+}
+[data-gallery-item][data-selected="true"] { z-index: 10; }
 /* 瓦片模式:内描边用 outline(inset box-shadow 会被绝对定位的 img 盖住;outline 在绘制顺序最后,压在子元素之上) */
 /* 瓦片模式(无缝):选中格提到最上层并放大 4%,外环压在邻格之上,突出出来 */
 /* 瓦片模式容器四边留 8px 空,放大 4% 加 2.5px 环的溢出才不会被容器边裁掉 */
 /* 瓦片模式:滚动容器留 8px 边(Gallery.jsx 的瓦片布局也按 VIEW_PADDING 扣宽,否则末列溢出被裁);
    选中格改为固定 5px 外扩(绝对定位负 inset,不再用 scale:scale 的外扩随格子变大,600px 格子要 12px,边留不住),
-   5 + 2.5 环 = 7.5 < 8,任何尺寸都不会被容器裁切 */
+   3 + 5 环 = 8,任何尺寸都不会被容器裁切 */
 [data-testid="gallery-scroll"].px-0 { padding-left: 8px !important; padding-right: 8px !important; padding-bottom: 8px !important; }
 [data-testid="gallery-scroll"].px-0 [data-gallery-item] > div { position: absolute; inset: 0; height: auto !important; }
 [data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] { z-index: 10; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div { inset: -5px; border-radius: 8px; }
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div {
+  inset: -3px; border-radius: 8px;   /* 外扩 3 + 光环 5 = 8,仍在容器留边之内 */
+  box-shadow: 0 0 0 1.5px rgb(var(--accent-color) / 0.95), 0 0 0 4px rgb(var(--accent-color) / 0.14), 0 0 0 5px rgb(var(--accent-color) / 0.3), 0 10px 24px -6px rgba(0, 0, 0, 0.5);
+}
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }
