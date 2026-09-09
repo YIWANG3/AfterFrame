@@ -564,6 +564,15 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   border-color: transparent; border-radius: 14px; box-shadow: var(--shadow-menu), inset 0 0 0 1px var(--edge);
 }
 .shadow-overlay .border-t, .shadow-menu .border-t { border-color: var(--edge); }
+/* 小对话框(新建风格 / 服务商 / 标注服务 / 手写):底栏无线、按钮靠右、主按钮最右、删除类按钮靠左(Apple 顺序);
+   字段与带边框按钮 5px,底栏按钮 8px,关闭钮圆形 */
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 { border-color: transparent; padding-top: 4px; justify-content: flex-end; }
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { order: 2; border-radius: 8px; }
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="accent-color"] { order: 3; }
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="rose-"] { order: 1; margin-right: auto; }
+.shadow-overlay.bg-chrome :is(input, select, textarea)[class*="rounded"],
+.shadow-overlay.bg-chrome div.h-8.rounded-md.border.bg-app { border-radius: 5px; }
+.shadow-overlay.bg-chrome button.p-1.rounded-md { border-radius: 999px; }
 .hover\:bg-hover:hover { background: var(--fill); }
 
 /* ───────── 10 · Modal / 设置:实色卡 18px、无边框、无分割线 ───────── */
