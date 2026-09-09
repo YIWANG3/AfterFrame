@@ -398,9 +398,20 @@ aside.border-r .text-accent { color: rgb(var(--text-color)); }
 
 /* ───────── 4b · 红绿灯安全区:盖住侧栏区域的全屏层,左上角让出 88px(灯占 18 至 70)───────── */
 html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-left: 88px; }            /* 灯箱头部 */
-html.electron .fixed.inset-0.z-\[10100\] > .h-11 > .absolute.left-3 { left: 88px; }                      /* 编辑器头部 */
-html.electron .fixed.inset-0.z-\[10200\] > .h-10 { padding-left: 88px; }                                 /* 拼图头部 */
-html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10 { border-color: transparent; }
+/* 编辑器 / 拼图头部不再靠左让位:标题改居中(见 4c),左上角天然空出来给红绿灯 */
+
+/* ───────── 4c · 覆盖层头部(编辑器 / 拼图):统一 44 高(红绿灯中心 22)、标题居中、动作靠右、关闭钮圆形 ───────── */
+.fixed.inset-0.z-\[10100\] > .h-11, .fixed.inset-0.z-\[10200\] > .h-10 {
+  position: relative; height: 44px; justify-content: center; border-color: transparent; padding: 0 12px;
+}
+.fixed.inset-0.z-\[10100\] > .h-11 > .absolute.left-3 { position: static; }                        /* 编辑器:文件名 · 尺寸 居中 */
+.fixed.inset-0.z-\[10200\] > .h-10 > .flex.items-center.gap-2 {                                    /* 拼图:导出 + 关闭 绝对靠右 */
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+}
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7.w-7, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7.w-7 { border-radius: 999px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; background: var(--fill); padding: 2px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; height: 24px; padding: 0 12px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button.bg-panel2 { background: var(--fill-3); }
 
 /* ───────── 5 · 工具栏:浮在内容之上,控件各自成玻璃胶囊;网格顶部让位,照片从胶囊底下穿过 ───────── */
 .noise-overlay > .grid > section.bg-app { position: relative; }

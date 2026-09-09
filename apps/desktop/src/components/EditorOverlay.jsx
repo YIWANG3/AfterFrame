@@ -329,15 +329,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const discreteRotationDeg = quarterTurns * 90;
   const rotationDeg = discreteRotationDeg + freeAngle;
   const showCropUi = tool === "crop";
-  const panelMeta = tool === "crop"
-    ? { title: t("overlay.tools.crop"), badge: null }
-    : tool === "ai"
-      ? { title: t("overlay.tools.repaint"), badge: null }
-      : tool === "text"
-        ? { title: t("overlay.tools.text"), badge: null }
-        : tool === "sticker"
-          ? { title: t("overlay.tools.sticker"), badge: null }
-          : { title: "", badge: null };
 
   // Soft reset (panel "Reset"): clear layers as an undoable step.
   function layerReset() {
@@ -1174,7 +1165,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
 
         <div className="pointer-events-none absolute right-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3">
-          <PanelChrome panelMeta={panelMeta} width={PANEL_WIDTH}>
+          <PanelChrome width={PANEL_WIDTH}>
             {tool === "crop" ? (
               <CropPanel
                 t={t}
