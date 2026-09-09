@@ -556,6 +556,8 @@ Dribbble 类概念稿不够用,以下按「借什么」分组,均为真实产品
 
 第六次修正:① 滚动条轨道用 `::-webkit-scrollbar-track { margin-top }` 从工具栏 / 筛选行底下开始(之前从窗口顶部起,用户:「滚动起始点在屏幕顶部有点莫名其妙」);② **内容区包一层圆角面板**(同 demo C 的「全部素材」框):`section.bg-app` 四边 8px、圆角 8、底 `--pane`,顶部玻璃与筛选行被 `overflow-hidden` 限制在框内,不再溢出到窗口边;③ **检查器同样包一层面板**(右 / 上 / 下 8px,含未选中空态 aside),三栏于是都是内缩圆角面板、8px 同缝;不做检查器隐藏 / 折叠功能。
 
+第七次修正(瓦片选中环仍被右边裁掉):两个根因。① `Gallery.jsx` 瓦片布局按 `clientWidth`(含 padding)铺满、横向内边距传 0,皮肤又给滚动容器加了 8px 边,于是整排右移 8px、末列溢出被裁,选中与否都裁。改为瓦片布局也按 `VIEW_PADDING` 扣宽(一处参数)。② `scale(1.04)` 的外扩随格子变大:thumb 300 时格子可到 600px,外扩 12px + 环 2.5 远超 8px 边。改为**固定像素外扩**:瓦片模式下图片容器改绝对定位 `inset:0`(`height:auto!important` 覆盖行内高),选中 `inset:-5px`,inset 可过渡所以放大动画保留;5 + 2.5 = 7.5 < 8,任何缩略图尺寸都不裁。
+
 用户追加:「header 要改掉,三个圆要融合进来」→ `electron/main.js` createWindow 加 `titleBarStyle:"hiddenInset"` + `trafficLightPosition:{x:18,y:16}`(两行,未 commit,可回退;这是 P3 唯一先做的一项),皮肤里侧栏面板 padding-top 44 让位、拖拽区 = 侧栏头 44px + 内容区顶部 8px 细条(避开控件防光标闪)。
 
 未做(结构相关,留待确认后):工具栏浮到内容之上的滚动边缘效果、图标簇合并为三组、检查器点选滑入、vibrancy / 透明窗(P3 其余)。

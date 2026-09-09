@@ -695,7 +695,9 @@ export default function Gallery({
   }, [containerWidth, items, thumbSize]);
 
   const tileLayout = useMemo(() => {
-    return buildGridLayout(items, containerWidth, thumbSize, TILE_GAP, TILE_ASPECT_RATIO, 0, 0);
+    // Tile mode keeps an 8px gutter (index.css pads the scroller) so a
+    // selected tile can pop out without being clipped at the pane edge.
+    return buildGridLayout(items, containerWidth, thumbSize, TILE_GAP, TILE_ASPECT_RATIO, 0, VIEW_PADDING);
   }, [containerWidth, items, thumbSize]);
 
   const justifiedLayoutData = useMemo(() => {
