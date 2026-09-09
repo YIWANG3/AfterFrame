@@ -401,16 +401,21 @@ html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z
 .noise-overlay > .grid > section.bg-app > .app-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 50; pointer-events: none; }
 .noise-overlay > .grid > section.bg-app > .app-toolbar > * { pointer-events: auto; }
 /* 筛选行也浮在工具栏之下一行 */
-.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b { position: absolute; top: 48px; left: 0; right: 0; z-index: 49; }
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b { position: absolute; top: 52px; left: 0; right: 0; z-index: 49; }
 /* 滚动容器让位:仅工具栏 48;开着筛选行再加 40 */
-section.bg-app [data-testid="gallery-scroll"] { padding-top: 56px !important; }
-section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 96px !important; }
+section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
+section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
 section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
 /* 顶部软边渐进模糊(Apple 的 scroll edge effect):静止时舞台均匀,带子不可见;照片滚到顶部时被渐进模糊压暗 */
-.noise-overlay > .grid > section.bg-app::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 104px; z-index: 40; pointer-events: none;
-  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.72), rgb(var(--app-bg) / 0)); backdrop-filter: blur(18px) saturate(1.15);
-  -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent); mask-image: linear-gradient(180deg, #000 45%, transparent); }
-section.bg-app:has(> .flex-wrap.border-b)::before { height: 144px; }
+/* 两层叠出渐进模糊:::before 强模糊 + 压色,短羽化;::after 弱模糊、长羽化,把边缘揉开(单层 mask 的羽化只有几十像素,行界处会显生硬) */
+.noise-overlay > .grid > section.bg-app::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 120px; z-index: 40; pointer-events: none;
+  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.66), rgb(var(--app-bg) / 0) 85%); backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-mask-image: linear-gradient(180deg, #000 35%, transparent); mask-image: linear-gradient(180deg, #000 35%, transparent); }
+.noise-overlay > .grid > section.bg-app::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 200px; z-index: 39; pointer-events: none;
+  backdrop-filter: blur(5px);
+  -webkit-mask-image: linear-gradient(180deg, #000 25%, transparent); mask-image: linear-gradient(180deg, #000 25%, transparent); }
+section.bg-app:has(> .flex-wrap.border-b)::before { height: 160px; }
+section.bg-app:has(> .flex-wrap.border-b)::after { height: 240px; }
 
 .app-toolbar { background: transparent; height: 48px; gap: 6px; padding: 0 12px; }
 .app-toolbar .truncate.font-semibold { font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
@@ -422,35 +427,40 @@ section.bg-app:has(> .flex-wrap.border-b)::before { height: 144px; }
 .app-toolbar > .relative:not(.min-w-0) {
   border-radius: 999px; background: var(--glass);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-  box-shadow: inset 0 0 0 1px var(--edge); height: 32px; padding: 0 4px; display: flex; align-items: center;
+  box-shadow: inset 0 0 0 1px var(--edge); height: 34px; padding: 0 3px; display: flex; align-items: center;
 }
+.app-toolbar { height: 52px; }
+.app-toolbar button.rounded-md, .app-toolbar button.h-8 { height: 28px; min-width: 28px; border-radius: 999px; }
+.app-toolbar button.w-8 { width: 28px; }
+.app-toolbar > .toolbar-modes button { padding-left: 10px; padding-right: 10px; }
 .app-toolbar > .toolbar-thumbsize { padding: 0 10px; }
 /* 分组胶囊(布局 / 地图):内部按钮 28 高、全圆角,高亮态与外壳同心 */
-.app-toolbar > .toolbar-modes { padding: 0 2px; gap: 2px; }
+.app-toolbar > .toolbar-modes { padding: 0 3px; gap: 2px; }
 .app-toolbar > .toolbar-modes button { height: 28px; min-width: 28px; border-radius: 999px; padding-left: 8px; padding-right: 8px; }
 .app-toolbar > .toolbar-modes button:hover, .app-toolbar button.rounded-md:hover { background: var(--fill-2); }
 /* 单按钮的胶囊(排序 / 筛选 / 后台活动 / 加号):外壳不留内边距,按钮撑满,发丝边与填充重合 */
-.app-toolbar > .relative:not(.min-w-0) { padding: 0; }
-.app-toolbar > .relative:not(.min-w-0) > button { height: 32px; min-width: 32px; border-radius: 999px; margin: 0; }
+.app-toolbar > .relative:not(.min-w-0) { padding: 0 3px; }
+.app-toolbar > .relative:not(.min-w-0) > button { height: 28px; min-width: 28px; border-radius: 999px; margin: 0; }
 .app-toolbar > .relative:not(.min-w-0) > button.w-\[100px\] { width: auto; padding: 0 14px; }
 .app-toolbar > .relative.ml-1 { margin-left: 0; }
 .app-toolbar > label { padding: 0; }
-.app-toolbar > label input { background: transparent; border-color: transparent; border-radius: 999px; height: 32px; }
+.app-toolbar > label input { background: transparent; border-color: transparent; border-radius: 999px; height: 34px; }
 .app-toolbar > label input:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); }
 .app-toolbar button[class*="border-border"] { background: transparent; border-color: transparent; border-radius: 999px; }
 .app-toolbar .bg-selected { background: var(--fill-3); }
 /* 单独的图标钮(刷新等)也上胶囊玻璃 */
-.app-toolbar > button { border-radius: 999px; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); }
+.app-toolbar > button { height: 34px; width: 34px; min-width: 34px; border-radius: 999px; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); }
 /* 筛选计数徽标:accent 白底黑字 */
 .app-toolbar .bg-accent.text-black { color: rgb(var(--accent-ink)); }
 
 /* ───────── 6 · 筛选行:透明底、无底线;chip 胶囊无描边 ───────── */
 .flex-wrap.border-b[class*="bg-chrome"] { background: transparent; border-color: transparent; padding: 4px 12px 10px; }
-.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--fill); height: 26px; }
+.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); height: 28px; color: rgb(var(--text-color)); }
 .flex-wrap.border-b button.rounded-md.border:hover { background: var(--fill-2); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] { background: rgb(var(--accent-color)); color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
-.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--fill); border-radius: 999px; }
+.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--edge); border-radius: 999px; }
+.flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
 
 /* ───────── 7 · 网格:缩略图去描边,选中留单色环;网格底透明 ───────── */
 [data-testid="gallery-scroll"] { background: transparent; }
@@ -458,6 +468,10 @@ section.bg-app:has(> .flex-wrap.border-b)::before { height: 144px; }
 [data-gallery-item]:hover [class*="ring-1"] { box-shadow: none; --tw-ring-color: transparent; }
 [data-gallery-item] [class*="ring-2"] { --tw-ring-color: rgb(var(--accent-color)); box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
 [data-gallery-item] .shadow-glow { box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
+/* 瓦片模式:内描边用 outline(inset box-shadow 会被绝对定位的 img 盖住;outline 在绘制顺序最后,压在子元素之上) */
+[data-testid="gallery-scroll"].px-0 [data-gallery-item] [class*="ring-2"] { box-shadow: none; }
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  box-shadow: inset 0 0 0 2.5px rgb(var(--accent-color)); }
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }
@@ -466,6 +480,7 @@ section.bg-app:has(> .flex-wrap.border-b)::before { height: 144px; }
 
 /* ───────── 8 · 检查器:贴边透明、无分割线、星级单色 ───────── */
 aside.border-l .border-t { border-color: transparent; }
+aside.border-l img.object-contain { border-radius: 10px; }
 aside.border-l [class*="fill-\[rgb(225"] { fill: rgb(var(--accent-color)); color: rgb(var(--accent-color)); }
 aside.border-l .bg-hover { background: var(--fill); }
 aside.border-l .border-accent\/50 { border-color: transparent; }
