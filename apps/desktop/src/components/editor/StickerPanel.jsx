@@ -325,35 +325,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto px-3 pb-3">
-        <Section label={t("sticker.source")}>
-          <div className="mb-2 truncate rounded-md border border-border/60 bg-app px-2 py-1.5 text-[11px] text-text">
-            {sourceLabel || fileName(sourcePath) || "—"}
-          </div>
-
-          {/* Region indicator: tells user whether detection runs full-image or just inside the marquee */}
-          <div className="mb-2 flex items-center gap-2 rounded-md border border-border/60 bg-app px-2 py-1.5 text-[10px]">
-            {region ? (
-              <>
-                <span className="h-2 w-2 rounded-full bg-[rgb(var(--accent-color))]" />
-                <span className="text-text">{t("sticker.limitedToSelection")}</span>
-                <span className="text-muted2">({Math.round(region.w * 100)}% × {Math.round(region.h * 100)}%)</span>
-                <button
-                  type="button"
-                  onClick={onClearRegion}
-                  className="ml-auto text-muted2 hover:text-text"
-                  title={t("sticker.clearSelection")}
-                >
-                  {t("sticker.clear")}
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="h-2 w-2 rounded-full bg-muted3" />
-                <span className="text-muted2">{t("sticker.detectsFull")}</span>
-              </>
-            )}
-          </div>
-
+        <div className="mb-3">
           {phase === "idle" && (
             <button
               type="button"
@@ -369,7 +341,21 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("sticker.detecting")}
             </div>
           )}
-        </Section>
+
+          {/* Plain caption, no box: full-image by default, or the marquee the user drew on the canvas. */}
+          {region ? (
+            <div className="mt-2 flex items-center gap-1.5 px-0.5 text-[10px] text-muted2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-color))]" />
+              <span>{t("sticker.limitedToSelection")}</span>
+              <span className="text-muted3">{Math.round(region.w * 100)}% × {Math.round(region.h * 100)}%</span>
+              <button type="button" onClick={onClearRegion} className="ml-auto hover:text-text" title={t("sticker.clearSelection")}>
+                {t("sticker.clear")}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 px-0.5 text-[10px] leading-4 text-muted3">{t("sticker.detectsFull")}</div>
+          )}
+        </div>
 
         {error && (
           <div className="mb-3 rounded-md bg-[rgb(var(--error-color)/0.08)] px-2 py-1.5 text-[10px] text-[rgb(var(--error-color))]">
