@@ -478,6 +478,8 @@ section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48p
 [data-gallery-item] .shadow-glow { box-shadow: 0 0 0 2.5px rgb(var(--accent-color)); }
 /* 瓦片模式:内描边用 outline(inset box-shadow 会被绝对定位的 img 盖住;outline 在绘制顺序最后,压在子元素之上) */
 /* 瓦片模式(无缝):选中格提到最上层并放大 4%,外环压在邻格之上,突出出来 */
+/* 瓦片模式容器四边留 8px 空,放大 4% 加 2.5px 环的溢出才不会被容器边裁掉 */
+[data-testid="gallery-scroll"].px-0 { padding-left: 8px !important; padding-right: 8px !important; padding-bottom: 8px !important; }
 [data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] { z-index: 10; }
 [data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div { transform: scale(1.04); border-radius: 8px; }
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
