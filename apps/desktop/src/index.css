@@ -629,16 +629,20 @@ button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border
 /* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):
    之前四处四个样子(描边 / 无描边、accent 淡底、py 撑高、hover 亮边)。统一:32 高、8px 圆角、无边框、fill 底、正文色;
    accent 变体(可用 / 已就绪)只是更亮一档的 fill ───────── */
-button.w-full[class*="border-border"][class*="bg-app"], button.w-full[class*="border-accent"],
+button.w-full:not(.flex-col)[class*="border-border"][class*="bg-app"], button.w-full:not(.flex-col)[class*="border-accent"],
 [data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2 {
   height: 32px; padding-top: 0; padding-bottom: 0; border-color: transparent; border-radius: 8px;
   background: var(--fill); color: rgb(var(--text-color)); font-weight: 500;
 }
-button.w-full[class*="border-border"][class*="bg-app"]:hover, button.w-full[class*="border-accent"]:hover,
+button.w-full:not(.flex-col)[class*="border-border"][class*="bg-app"]:hover, button.w-full:not(.flex-col)[class*="border-accent"]:hover,
 [data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2:hover { background: var(--fill-2); border-color: transparent; }
-button.w-full[class*="border-accent"] { background: var(--fill-2); }
-button.w-full[class*="border-accent"]:hover { background: var(--fill-3); }
-button.w-full[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
+button.w-full:not(.flex-col)[class*="border-accent"] { background: var(--fill-2); }
+button.w-full:not(.flex-col)[class*="border-accent"]:hover { background: var(--fill-3); }
+button.w-full:not(.flex-col)[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
+/* 文字预设卡(flex-col 的整宽按钮,里面是字样 + 名称):不走上面的 32 高动作钮,只换底色去描边 */
+[data-editor-wheel-scope="panel"] button.w-full.flex-col { border-color: transparent; background: var(--fill); border-radius: 8px; }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col:hover { background: var(--fill-2); border-color: transparent; }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] { background: var(--fill-2); box-shadow: inset 0 0 0 1.5px rgb(var(--accent-color)); }
 /* 选择器类(模型文件、字体来源):左对齐、28 高、字段圆角 5px */
 [data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
 
