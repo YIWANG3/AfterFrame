@@ -36,7 +36,7 @@ export default function AboutSettings() {
     <div>
       <Group>
         <div className="flex items-center gap-4 py-4">
-          <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-2xl" />
+          <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-[14px]" />
           <div>
             <div className="text-[18px] font-semibold text-text">AfterFrame</div>
             <div className="text-[12px] text-muted2">{t("about.tagline")}</div>
