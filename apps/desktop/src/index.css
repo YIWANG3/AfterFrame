@@ -285,10 +285,10 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
 /* 纤细滚动条:7px 槽、3px 拇指,滚动容器 hover 时才显(接鼠标时系统条是常驻粗条,不能依赖 overlay) */
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb { background: rgb(var(--text-color) / 0.16); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
 [data-testid="gallery-scroll"]:hover::-webkit-scrollbar-thumb, aside:hover::-webkit-scrollbar-thumb, .overflow-y-auto:hover::-webkit-scrollbar-thumb, .overflow-auto:hover::-webkit-scrollbar-thumb {
-  background: rgb(var(--text-color) / 0.22); background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background: rgb(var(--text-color) / 0.4); background-clip: padding-box; }
+  background: rgb(var(--text-color) / 0.28); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--text-color) / 0.45); background-clip: padding-box; }
 
 select {
   cursor: pointer;
@@ -407,21 +407,23 @@ section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
 section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
 /* 顶部软边渐进模糊(Apple 的 scroll edge effect):静止时舞台均匀,带子不可见;照片滚到顶部时被渐进模糊压暗 */
-/* 滚动边缘效果(Apple scroll edge effect 的 CSS 近似):
-   - 伪元素上的 backdrop-filter 不吃 mask 羽化(模糊在盒边直接切断),所以不用 mask,改两级模糊条:强模糊短条 + 弱模糊长条;
-   - 静止时完全不出现,网格滚过 80px 内淡入(scroll-driven animation 绑定网格滚动位置),不干扰首行。 */
+/* 滚动边缘效果(Apple scroll edge effect):
+   实测这版 Chromium 里 backdrop-filter 元素的 mask 只按二值生效(渐变段没有模糊),伪元素和真实元素都一样,所以不用 mask 做羽化,
+   改成五段递减模糊条(14 → 8 → 4 → 1.5 → 0)叠出渐进模糊,压色由一整块渐变背景负责。宿主:地图抽屉的空占位 div(始终存在)及其伪元素 + split 的伪元素。
+   全部滚动驱动:静止时不出现,滚过 80px 内淡入。地图打开后占位 div 有子节点,:empty 退出,不干扰地图。 */
 [data-testid="gallery-scroll"] { scroll-timeline-name: --grid; scroll-timeline-axis: block; }
 .noise-overlay > .grid > section.bg-app { timeline-scope: --grid; }
+[data-testid="workspace-split"] { position: relative; }
 @keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
-.noise-overlay > .grid > section.bg-app::before,
-.noise-overlay > .grid > section.bg-app::after { content: ""; position: absolute; top: 0; left: 0; right: 0; pointer-events: none; opacity: 0;
+[data-testid="map-drawer"]:empty, [data-testid="map-drawer"]:empty::before, [data-testid="map-drawer"]:empty::after,
+[data-testid="workspace-split"]::before, [data-testid="workspace-split"]::after {
+  content: ""; position: absolute; left: 0; right: 0; z-index: 45; pointer-events: none; opacity: 0;
   animation: app-edge-in linear both; animation-timeline: --grid; animation-range: 0 80px; }
-.noise-overlay > .grid > section.bg-app::before { height: 72px; z-index: 40; backdrop-filter: blur(14px) saturate(1.15);
-  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.7), rgb(var(--app-bg) / 0.25)); }
-.noise-overlay > .grid > section.bg-app::after { height: 116px; z-index: 39; backdrop-filter: blur(4px);
-  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.25) 60%, rgb(var(--app-bg) / 0)); }
-section.bg-app:has(> .flex-wrap.border-b)::before { height: 108px; }
-section.bg-app:has(> .flex-wrap.border-b)::after { height: 156px; }
+[data-testid="map-drawer"]:empty { top: 0; height: 150px; background: linear-gradient(180deg, rgb(var(--app-bg) / 0.72), rgb(var(--app-bg) / 0.3) 40%, rgb(var(--app-bg) / 0)); }
+[data-testid="map-drawer"]:empty::before { top: 0; height: 44px; backdrop-filter: blur(14px) saturate(1.15); }
+[data-testid="map-drawer"]:empty::after { top: 44px; height: 28px; backdrop-filter: blur(8px) saturate(1.1); }
+[data-testid="workspace-split"]::before { top: 72px; height: 28px; backdrop-filter: blur(4px); }
+[data-testid="workspace-split"]::after { top: 100px; height: 28px; backdrop-filter: blur(1.5px); }
 
 .app-toolbar { background: transparent; height: 48px; gap: 6px; padding: 0 12px; }
 .app-toolbar .truncate.font-semibold { font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
@@ -477,7 +479,7 @@ section.bg-app:has(> .flex-wrap.border-b)::after { height: 156px; }
 /* 瓦片模式:内描边用 outline(inset box-shadow 会被绝对定位的 img 盖住;outline 在绘制顺序最后,压在子元素之上) */
 /* 瓦片模式(无缝):选中格提到最上层并放大 4%,外环压在邻格之上,突出出来 */
 [data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] { z-index: 10; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div { transform: scale(1.04); }
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div { transform: scale(1.04); border-radius: 8px; }
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }
