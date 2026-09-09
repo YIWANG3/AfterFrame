@@ -546,6 +546,8 @@ Dribbble 类概念稿不够用,以下按「借什么」分组,均为真实产品
 - demo 资产从 `public/` 移到 `lg-demo-electron/`(photos / lab),避免打进安装包;注入脚本删除。
 - 验证:vite build 通过;真 App 深 / 浅两套截图确认;滚动时照片从工具栏胶囊底下穿过并被顶部渐进模糊压暗。
 
+随后三处修正(同分支第二次提交):① 分组胶囊(布局 / 地图)里的高亮改 28 高全圆角,与 32 高外壳同心,之前 rounded-md 的高亮矩形和胶囊边不重合;② 菜单 / 弹层底从 78% 提到 94%(浅色 95%),用户:「透明的话可读性太差」,Apple 的 Regular 菜单玻璃本来也接近实色;③ **红绿灯安全区**:hiddenInset 后灯箱 / 编辑器 / 拼图这些盖住侧栏区域的全屏层左上角会撞灯,统一让出 88px(灯占 18 至 70),规则挂在 `html.electron` 下按各层的 z-index 选择器定位,web 版不受影响。
+
 用户追加:「header 要改掉,三个圆要融合进来」→ `electron/main.js` createWindow 加 `titleBarStyle:"hiddenInset"` + `trafficLightPosition:{x:18,y:16}`(两行,未 commit,可回退;这是 P3 唯一先做的一项),皮肤里侧栏面板 padding-top 44 让位、拖拽区 = 侧栏头 44px + 内容区顶部 8px 细条(避开控件防光标闪)。
 
 未做(结构相关,留待确认后):工具栏浮到内容之上的滚动边缘效果、图标簇合并为三组、检查器点选滑入、vibrancy / 透明窗(P3 其余)。

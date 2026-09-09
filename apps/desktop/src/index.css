@@ -48,7 +48,7 @@
   /* 材质层 */
   --pane: rgba(255, 255, 255, 0.055);      /* 侧栏面板 */
   --glass: rgba(16, 16, 20, 0.6);          /* 工具栏胶囊 */
-  --pop: rgba(18, 18, 22, 0.78);           /* 菜单 / 弹层 / JobDock */
+  --pop: rgba(20, 20, 24, 0.94);           /* 菜单 / 弹层 / JobDock:可读性优先,近实色 */
   --edge: rgba(255, 255, 255, 0.08);       /* 发丝边 */
   --fill: rgba(255, 255, 255, 0.07);
   --fill-2: rgba(255, 255, 255, 0.11);
@@ -81,7 +81,7 @@
   --crop-scrim: rgba(60, 60, 64, 0.18);
   --pane: rgba(255, 255, 255, 0.62);
   --glass: rgba(253, 253, 254, 0.66);
-  --pop: rgba(250, 250, 252, 0.84);
+  --pop: rgba(251, 251, 253, 0.95);
   --edge: rgba(0, 0, 0, 0.05);
   --fill: rgba(29, 29, 31, 0.06);
   --fill-2: rgba(29, 29, 31, 0.1);
@@ -390,6 +390,12 @@ aside.border-r .bg-selected { background: var(--fill-2); }
 aside.border-r [class*="hover:bg-hover"]:hover { background: var(--fill); }
 aside.border-r .text-accent { color: rgb(var(--text-color)); }
 
+/* ───────── 4b · 红绿灯安全区:盖住侧栏区域的全屏层,左上角让出 88px(灯占 18 至 70)───────── */
+html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-left: 88px; }            /* 灯箱头部 */
+html.electron .fixed.inset-0.z-\[10100\] > .h-11 > .absolute.left-3 { left: 88px; }                      /* 编辑器头部 */
+html.electron .fixed.inset-0.z-\[10200\] > .h-10 { padding-left: 88px; }                                 /* 拼图头部 */
+html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10 { border-color: transparent; }
+
 /* ───────── 5 · 工具栏:浮在内容之上,控件各自成玻璃胶囊;网格顶部让位,照片从胶囊底下穿过 ───────── */
 .noise-overlay > .grid > section.bg-app { position: relative; }
 .noise-overlay > .grid > section.bg-app > .app-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 50; pointer-events: none; }
@@ -419,6 +425,10 @@ section.bg-app:has(> .flex-wrap.border-b)::before { height: 144px; }
   box-shadow: inset 0 0 0 1px var(--edge); height: 32px; padding: 0 4px; display: flex; align-items: center;
 }
 .app-toolbar > .toolbar-thumbsize { padding: 0 10px; }
+/* 分组胶囊(布局 / 地图):内部按钮 28 高、全圆角,高亮态与外壳同心 */
+.app-toolbar > .toolbar-modes { padding: 0 2px; gap: 2px; }
+.app-toolbar > .toolbar-modes button { height: 28px; min-width: 28px; border-radius: 999px; padding-left: 8px; padding-right: 8px; }
+.app-toolbar > .toolbar-modes button:hover, .app-toolbar button.rounded-md:hover { background: var(--fill-2); }
 /* 单按钮的胶囊(排序 / 筛选 / 后台活动 / 加号):外壳不留内边距,按钮撑满,发丝边与填充重合 */
 .app-toolbar > .relative:not(.min-w-0) { padding: 0; }
 .app-toolbar > .relative:not(.min-w-0) > button { height: 32px; min-width: 32px; border-radius: 999px; margin: 0; }
