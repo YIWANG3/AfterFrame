@@ -61,7 +61,7 @@ function AspectButton({ preset, active, onClick }) {
             width: `${preview.width}px`,
             height: `${preview.height}px`,
             borderStyle: preview.dashed ? "dashed" : "solid",
-            borderRadius: "3px",
+            borderRadius: "1.5px",
           }}
         />
       </span>

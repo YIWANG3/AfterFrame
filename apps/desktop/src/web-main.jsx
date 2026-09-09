@@ -12,6 +12,7 @@ window.mediaWorkspace = browserBridge;
 const { default: App } = await import("./App");
 const { default: i18n } = await import("./i18n");
 await import("./index.css");
+await import("./ui/scrollFlag");
 await import("./fonts");
 
 // Keep <html lang> in sync with the active locale (a11y / font selection).

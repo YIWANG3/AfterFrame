@@ -561,7 +561,7 @@ export default function TextPanel({
           className="ml-auto flex h-[30px] items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-4 text-[11px] font-semibold text-[#111] transition-all hover:brightness-110"
           onClick={onApply}
         >
-          <Check className="h-3.5 w-3.5" /> Apply
+          <Check className="h-3.5 w-3.5" /> {t("overlay.apply")}
         </button>
       </div>
     </>
