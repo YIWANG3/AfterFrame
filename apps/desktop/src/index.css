@@ -556,7 +556,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 /* 文本 / 数值输入框、下拉、多行框:一律小圆角 5px,不随高度放大(用户:「这种输入框不能用大 radius」) */
 [data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]) { border-radius: 5px; }
 /* 带边框、bg-app 底的按钮(AI 面板的 + / 钥匙 / 新建风格)与旁边的字段同行,圆角跟字段走 5px */
-[data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"] { border-radius: 5px; }
+[data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"]:not(.w-full) { border-radius: 5px; }
 /* 只靠 padding 撑起来的小图标钮(风格卡片的编辑 / 删除、清空提示词):20-24 高,rounded-md 的 10px 太圆 */
 [data-editor-wheel-scope="panel"] :is(button.p-1, button.p-0\.5, button.py-1).rounded-md { border-radius: 6px; }
 /* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
@@ -591,6 +591,22 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
 button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); border-radius: 999px; }
 button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border-color: transparent; }
+
+/* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):
+   之前四处四个样子(描边 / 无描边、accent 淡底、py 撑高、hover 亮边)。统一:32 高、8px 圆角、无边框、fill 底、正文色;
+   accent 变体(可用 / 已就绪)只是更亮一档的 fill ───────── */
+button.w-full[class*="border-border"][class*="bg-app"], button.w-full[class*="border-accent"],
+[data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2 {
+  height: 32px; padding-top: 0; padding-bottom: 0; border-color: transparent; border-radius: 8px;
+  background: var(--fill); color: rgb(var(--text-color)); font-weight: 500;
+}
+button.w-full[class*="border-border"][class*="bg-app"]:hover, button.w-full[class*="border-accent"]:hover,
+[data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2:hover { background: var(--fill-2); border-color: transparent; }
+button.w-full[class*="border-accent"] { background: var(--fill-2); }
+button.w-full[class*="border-accent"]:hover { background: var(--fill-3); }
+button.w-full[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
+/* 选择器类(模型文件、字体来源):左对齐、28 高、字段圆角 5px */
+[data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
 
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
 .bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }
