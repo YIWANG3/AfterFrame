@@ -336,7 +336,7 @@ export default function Toolbar({
           <SlidersHorizontal className="h-3.5 w-3.5 stroke-[1.8]" />
         </IconButton>
         {filterCount > 0 && (
-          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-semibold text-black">
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-semibold text-accentInk">
             {filterCount}
           </span>
         )}

@@ -20,6 +20,7 @@ module.exports = {
         text: "rgb(var(--text-color) / <alpha-value>)",
         accent: "rgb(var(--accent-color) / <alpha-value>)",
         accentSoft: "rgb(var(--accent-soft) / <alpha-value>)",
+        accentInk: "rgb(var(--accent-ink) / <alpha-value>)",
         glow: "rgb(var(--glow-accent) / <alpha-value>)",
         success: "rgb(var(--success-color) / <alpha-value>)",
         warn: "rgb(var(--warn-color) / <alpha-value>)",
@@ -28,11 +29,16 @@ module.exports = {
       boxShadow: {
         overlay: "var(--shadow-overlay)",
         menu: "var(--shadow-menu)",
-        glow: "0 0 12px rgba(var(--glow-accent), 0.25), 0 0 4px rgba(var(--glow-accent), 0.15)",
-        "card-hover": "0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.15)",
+        glow: "0 0 0 2.5px rgb(var(--accent-color))",
+        "card-hover": "none",
       },
+      // 圆角体系:小控件 10 / 菜单胶囊 14 / 大面板 18(Tahoe 皮肤)
       borderRadius: {
-        app: "8px",
+        md: "10px",
+        lg: "14px",
+        xl: "18px",
+        "2xl": "22px",
+        app: "10px",
       },
       gridTemplateColumns: {
         app: "var(--sidebar-width, 240px) minmax(0, 1fr) var(--inspector-width, 300px)",

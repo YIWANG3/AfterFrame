@@ -1071,6 +1071,9 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 720,
+    // Tahoe 皮肤:去掉系统标题栏,红绿灯落进侧栏面板(P3 第一步;渲染层让位 + 拖拽区在皮肤里)
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 18, y: 16 },
     backgroundColor: "#000000",
     show: true,
     webPreferences: {

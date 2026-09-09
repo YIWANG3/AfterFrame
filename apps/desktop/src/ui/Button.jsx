@@ -11,7 +11,7 @@ import cx from "./cx";
 //  danger     destructive bordered (delete)
 const VARIANTS = {
   primary:
-    "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-black transition-colors hover:brightness-110",
+    "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-accentInk transition-colors hover:brightness-110",
   secondary:
     "inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-app px-3 py-0 text-[12px] font-medium text-text transition-colors hover:border-border hover:bg-hover",
   ghost:

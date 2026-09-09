@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>AfterFrame · 方向 D · Photos 式(日期分组 + 浮动信息窗)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  :root { --win-r:16px; --inset:8px; --pane-r:calc(var(--win-r) - var(--inset)); --side:224px; --cell:168px; }
+  :root[data-theme="dark"] {
+    --bg:#1a1a1d; --well-rgb:13 13 15; --pane:rgba(255,255,255,.055); --text:#f2f2f2; --muted:rgba(242,242,242,.62); --muted2:rgba(242,242,242,.46);
+    --fill:rgba(255,255,255,.07); --fill-2:rgba(255,255,255,.11); --fill-3:rgba(255,255,255,.16); --accent:#f5f5f5; --accent-ink:#141414; --chk:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E");
+    --hud:rgba(28,28,32,.78); --hud-line:rgba(255,255,255,.08); --tint:rgba(26,26,29,.85); --sec:rgba(26,26,29,.92); --edge:rgba(255,255,255,.07); color-scheme:dark;
+  }
+  :root[data-theme="light"] {
+    --bg:#f2f2f4; --well-rgb:246 246 247; --pane:rgba(255,255,255,.62); --text:#1d1d1f; --muted:rgba(29,29,31,.66); --muted2:rgba(29,29,31,.5);
+    --fill:rgba(29,29,31,.06); --fill-2:rgba(29,29,31,.1); --fill-3:rgba(29,29,31,.15); --accent:#1d1d1f; --accent-ink:#fff; --chk:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E");
+    --hud:rgba(250,250,252,.8); --hud-line:rgba(0,0,0,.06); --tint:rgba(242,242,244,.88); --sec:rgba(242,242,244,.94); --edge:rgba(0,0,0,.05); color-scheme:light;
+  }
+  body { background:var(--bg); color:var(--text); overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif; font-size:13px; -webkit-font-smoothing:antialiased; }
+  body.electron { background:rgb(var(--well-rgb) / .8); }
+  svg.ic { width:16px; height:16px; stroke:currentColor; stroke-width:1.75; fill:none; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  button { font:inherit; color:inherit; border:none; background:none; cursor:pointer; }
+  ::-webkit-scrollbar { width:7px; height:7px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background:transparent; }
+  ::-webkit-scrollbar-thumb { background-color:transparent; border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
+  .scroll:hover::-webkit-scrollbar-thumb { background-color:color-mix(in srgb, var(--text) 22%, transparent); }
+  #dragzone, #dragzone2 { display:none; -webkit-app-region:drag; position:fixed; z-index:15; }
+  body.electron #dragzone { display:block; top:0; left:0; width:calc(var(--side) + var(--inset) * 2); height:44px; }
+  body.electron #dragzone2 { display:block; top:0; left:calc(var(--side) + var(--inset) * 2); right:0; height:10px; }
+  body.fs #dragzone, body.fs #dragzone2 { display:none; }
+
+  /* ── 侧栏:Tahoe 内缩面板,Photos 式三组树 ── */
+  #side { position:fixed; inset:var(--inset) auto var(--inset) var(--inset); width:var(--side); z-index:40; border-radius:var(--pane-r); background:var(--pane);
+    padding:12px 8px 10px; display:flex; flex-direction:column; overflow:hidden; -webkit-app-region:no-drag; }
+  body.electron #side { padding-top:42px; } body.electron.fs #side { padding-top:12px; }
+  #side nav { flex:1; overflow-y:auto; }
+  #side h3 { font-size:11px; font-weight:600; color:var(--muted2); padding:14px 10px 4px; display:flex; align-items:center; gap:4px; cursor:pointer; }
+  #side h3 svg { width:10px; height:10px; transition:transform .15s; } #side h3.c svg { transform:rotate(-90deg); } #side h3.c + div { display:none; }
+  .it { display:flex; align-items:center; gap:9px; padding:5px 10px; border-radius:6px; color:var(--text); cursor:pointer; font-size:13px; }
+  .it:hover { background:var(--fill); }
+  .it.on { background:var(--fill-3); }
+  .it svg { color:var(--muted); width:15px; height:15px; } .it.on svg { color:var(--text); }
+  .it i { margin-left:auto; font-style:normal; font-size:11px; color:var(--muted2); font-variant-numeric:tabular-nums; }
+  .it.sub { padding-left:28px; } .it .cv { width:18px; height:18px; border-radius:3px; object-fit:cover; }
+
+  /* ── 主区 ── */
+  #view { position:fixed; inset:0 0 0 calc(var(--side) + var(--inset) * 2); overflow-y:auto; overflow-x:hidden; padding:62px 16px 40px; }
+  #top { position:fixed; top:0; left:calc(var(--side) + var(--inset) * 2); right:0; height:52px; z-index:30; display:flex; align-items:center; gap:8px; padding:0 16px;
+    background:transparent; transition:background .2s; }
+  #top.tint { background:var(--tint); backdrop-filter:blur(20px) saturate(1.4); }
+  #top .title { display:flex; flex-direction:column; min-width:0; margin-right:8px; }
+  #top h1 { font-size:17px; font-weight:700; letter-spacing:-.2px; white-space:nowrap; }
+  #top .title p { font-size:11px; color:var(--muted2); white-space:nowrap; }
+  #top .sp { flex:1; }
+  #top .back { display:none; } body.single #top .back { display:flex; }
+  .ib { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:var(--muted); position:relative; transition:background .12s, color .12s; }
+  .ib:hover { background:var(--fill-2); color:var(--text); }
+  .ib.on { background:var(--fill-3); color:var(--text); }
+  .grp { display:flex; align-items:center; gap:2px; height:32px; padding:0 3px; border-radius:9px; background:var(--fill); }
+  .grp .zoom { display:flex; align-items:center; gap:6px; padding:0 6px; color:var(--muted2); }
+  .grp .zoom input { width:96px; -webkit-appearance:none; appearance:none; height:3px; border-radius:2px; background:var(--fill-3); outline:none; }
+  .grp .zoom input::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.2); }
+  .search { display:flex; align-items:center; gap:6px; height:32px; border-radius:9px; padding:0 10px; width:190px; background:var(--fill); color:var(--muted2); }
+  .search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font:inherit; font-size:12.5px; }
+  .search input::placeholder { color:var(--muted2); }
+  #filCnt { position:absolute; top:-2px; right:-2px; min-width:14px; height:14px; padding:0 3px; border-radius:7px; background:var(--accent); color:var(--accent-ink); font-size:9px; font-weight:700; font-style:normal; display:none; align-items:center; justify-content:center; }
+  #filCnt.show { display:flex; }
+  .btn-imp { height:32px; border-radius:9px; padding:0 13px; background:var(--accent); color:var(--accent-ink); font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:5px; }
+  .rel { position:relative; display:flex; }
+  .pop { position:absolute; top:38px; right:0; min-width:180px; z-index:80; border-radius:12px; padding:5px; background:var(--hud); backdrop-filter:blur(20px) saturate(1.4); box-shadow:0 8px 24px rgba(0,0,0,.3), inset 0 0 0 1px var(--hud-line);
+    opacity:0; transform:translateY(-4px); pointer-events:none; transition:opacity .12s, transform .16s; }
+  .pop.open { opacity:1; transform:none; pointer-events:auto; }
+  .pop h5 { font-size:10.5px; font-weight:600; color:var(--muted2); padding:8px 10px 3px; }
+  .pop .opt { display:flex; align-items:center; gap:9px; padding:6px 10px; border-radius:7px; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+  .pop .opt:hover { background:var(--fill-2); }
+  .pop .opt.on::after { content:""; width:12px; height:12px; margin-left:auto; background:currentColor; -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E") center/contain no-repeat; }
+  .pop .opt em { font-style:normal; margin-left:auto; padding-left:14px; font-size:11px; color:var(--muted2); }
+
+  /* 筛选 chips 行 */
+  #filters { display:none; align-items:center; gap:4px; padding:0 0 12px; }
+  body.fil #filters { display:flex; }
+  #filters .fc { flex:1; min-width:0; display:flex; gap:5px; overflow-x:auto; scrollbar-width:none; }
+  #filters .fc::-webkit-scrollbar { display:none; }
+  .chip { height:26px; padding:0 10px; border-radius:999px; background:var(--fill); color:var(--muted); font-size:12px; white-space:nowrap; display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .chip:hover { background:var(--fill-2); color:var(--text); } .chip.on { background:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .chip .ic { width:11px; height:11px; }
+  .starrow { display:flex; gap:2px; padding:0 6px; cursor:pointer; align-items:center; } .starrow b { display:flex; color:var(--muted2); } .starrow b.on { color:var(--text); } .starrow b.on svg { fill:currentColor; }
+  #filters .reset { color:var(--muted2); font-size:12px; padding:0 8px; }
+
+  /* ── 日期分组网格(Photos 式)── */
+  .page { display:none; } .page.on { display:block; }
+  .sec { margin-bottom:22px; }
+  .sec h3 { position:sticky; top:0; z-index:5; display:flex; align-items:baseline; gap:8px; padding:8px 4px 8px; margin:0 -4px 4px; background:var(--sec); backdrop-filter:blur(12px); font-size:14px; font-weight:700; }
+  .sec h3 span { font-size:12px; color:var(--muted2); font-weight:500; }
+  .sec h3 a { margin-left:auto; font-size:12px; color:var(--muted); font-weight:500; cursor:pointer; padding:2px 8px; border-radius:6px; }
+  .sec h3 a:hover { background:var(--fill-2); color:var(--text); }
+  .cells { display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--cell), 1fr)); gap:3px; }
+  .cell { position:relative; aspect-ratio:1; overflow:hidden; border-radius:3px; cursor:pointer; background:var(--fill); }
+  .cell img { width:100%; height:100%; object-fit:cover; display:block; }
+  body.fit .cell img { object-fit:contain; }
+  .cell.sel::after { content:""; position:absolute; inset:0; border-radius:inherit; box-shadow:inset 0 0 0 3px var(--accent); }
+  .cell.sel::before { content:""; position:absolute; top:6px; left:6px; z-index:2; width:20px; height:20px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 1px rgba(0,0,0,.2);
+    background-image:var(--chk); background-size:12px 12px; background-position:center; background-repeat:no-repeat; }
+  .cell .st { position:absolute; right:6px; bottom:6px; display:flex; gap:1px; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.7)); opacity:0; transition:opacity .12s; }
+  .cell .st svg { width:10px; height:10px; fill:currentColor; stroke:none; }
+  .cell:hover .st, .cell.rated .st { opacity:1; }
+
+  /* ── 单张视图:顶部缩略图带 + 大图 ── */
+  #single { position:fixed; inset:0 0 0 calc(var(--side) + var(--inset) * 2); display:none; flex-direction:column; padding:52px 0 0; }
+  body.single #single { display:flex; } body.single #view { display:none; }
+  #strip { height:64px; display:flex; align-items:center; gap:3px; padding:0 16px; overflow-x:auto; scrollbar-width:none; flex-shrink:0; }
+  #strip::-webkit-scrollbar { display:none; }
+  #strip img { height:50px; width:50px; object-fit:cover; border-radius:3px; opacity:.55; cursor:pointer; flex-shrink:0; transition:opacity .12s; }
+  #strip img:hover { opacity:.85; } #strip img.on { opacity:1; box-shadow:0 0 0 2px var(--accent); }
+  #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px 24px 24px; }
+  #stage img { max-width:100%; max-height:100%; object-fit:contain; border-radius:4px; }
+
+  /* ── 浮动信息窗(⌘I,Photos 式 HUD)── */
+  #info { position:fixed; top:64px; right:20px; width:300px; z-index:70; border-radius:12px; background:var(--hud); backdrop-filter:blur(24px) saturate(1.5);
+    box-shadow:0 16px 48px rgba(0,0,0,.35), inset 0 0 0 1px var(--hud-line); display:none; flex-direction:column; max-height:calc(100% - 84px); -webkit-app-region:no-drag; }
+  body.info #info { display:flex; }
+  #info .hh { display:flex; align-items:center; gap:8px; padding:8px 8px 8px 14px; font-size:12px; font-weight:600; color:var(--muted); cursor:grab; user-select:none; }
+  #info .hh .ib { margin-left:auto; width:24px; height:24px; }
+  #info .hb { overflow-y:auto; padding:0 14px 14px; }
+  #info .th { width:100%; aspect-ratio:4/3; border-radius:8px; object-fit:cover; display:block; background:var(--fill); }
+  #info .nm { font-size:15px; font-weight:700; margin:12px 0 2px; } #info .sub { font-size:12px; color:var(--muted); }
+  #info .sect { margin-top:12px; padding-top:10px; }
+  #info .sect h4 { font-size:11px; font-weight:600; color:var(--muted2); margin-bottom:6px; }
+  #info .kv { display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:3px 0; } #info .kv b { font-weight:400; color:var(--muted); } #info .kv span { text-align:right; }
+  #info .exp { display:flex; gap:6px; flex-wrap:wrap; } #info .exp span { padding:3px 8px; border-radius:6px; background:var(--fill-2); font-size:12px; font-variant-numeric:tabular-nums; }
+  #info .map { height:96px; border-radius:8px; background:radial-gradient(circle at 60% 45%, #2c3b52, #16202f 70%); position:relative; margin:4px 0 6px; }
+  #info .map::before { content:""; position:absolute; left:60%; top:45%; width:10px; height:10px; border-radius:50%; background:#fff; box-shadow:0 0 0 4px rgba(255,255,255,.25); transform:translate(-50%,-50%); }
+  #info .tags { display:flex; flex-wrap:wrap; gap:5px; } #info .tag { height:24px; padding:0 9px; border-radius:999px; background:var(--fill-2); font-size:12px; display:flex; align-items:center; }
+  #info .tag.add { color:var(--muted2); background:transparent; box-shadow:inset 0 0 0 1px var(--fill-3); }
+  #info .stars { display:flex; gap:2px; cursor:pointer; color:var(--muted2); margin-top:6px; } #info .stars svg { width:14px; height:14px; } #info .stars svg.on { fill:currentColor; color:var(--text); }
+  #info .empty { padding:30px 14px; color:var(--muted2); font-size:12.5px; text-align:center; line-height:1.5; }
+  body.sel #info .empty { display:none; } body:not(.sel) #info .hb { display:none; }
+
+  /* ── 批量条(≥2 张)── */
+  #bar { position:fixed; left:calc(var(--side) + var(--inset) * 2 + 16px); right:16px; bottom:20px; margin:0 auto; width:max-content; height:48px; z-index:60; border-radius:999px;
+    background:var(--hud); backdrop-filter:blur(20px) saturate(1.4); box-shadow:0 12px 40px rgba(0,0,0,.35), inset 0 0 0 1px var(--hud-line); display:flex; align-items:center; gap:2px; padding:0 8px 0 16px;
+    opacity:0; transform:translateY(16px); pointer-events:none; transition:opacity .15s, transform .2s cubic-bezier(.3,1,.35,1); }
+  body.multi #bar { opacity:1; transform:none; pointer-events:auto; }
+  #bar b { font-size:12.5px; font-weight:600; margin-right:8px; } #bar .act { height:32px; padding:0 10px; border-radius:8px; font-size:12.5px; display:flex; align-items:center; gap:5px; } #bar .act:hover { background:var(--fill-2); }
+</style>
+</head>
+<body>
+<div id="dragzone"></div><div id="dragzone2"></div>
+<aside id="side">
+  <nav class="scroll">
+    <h3><svg class="ic" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>图库</h3>
+    <div>
+      <div class="it on" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/></svg>全部照片<i>1,247</i></div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>最近添加<i>36</i></div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>已评分<i>89</i></div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>人物<i>12</i></div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>地点</div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>视频<i>33</i></div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M14 3v4a2 2 0 0 0 2 2h4"/><path d="M8 13h.01"/><path d="M16 13h.01"/><path d="M10 16s.8 1 2 1c1.3 0 2-1 2-1"/></svg>贴纸</div>
+    </div>
+    <h3><svg class="ic" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>相簿</h3>
+    <div id="albums"></div>
+    <h3><svg class="ic" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>项目</h3>
+    <div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="9" height="7" x="3" y="14" rx="1"/><rect width="5" height="7" x="16" y="14" rx="1"/></svg>拼图 · 大阪合集</div>
+      <div class="it"><svg class="ic" viewBox="0 0 24 24"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="9" height="7" x="3" y="14" rx="1"/><rect width="5" height="7" x="16" y="14" rx="1"/></svg>拼图 · 婚礼九宫格</div>
+    </div>
+  </nav>
+</aside>
+
+<header id="top">
+  <button class="ib back" id="back"><svg class="ic" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+  <div class="title"><h1 id="vtitle">全部照片</h1><p id="vsub">1,247 张照片 · 33 个视频</p></div>
+  <div class="sp"></div>
+  <div class="grp" id="gZoom"><div class="zoom"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M5 12h14"/></svg><input type="range" id="zr" min="96" max="320" value="168"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M5 12h14"/><path d="M12 5v14"/></svg></div><button class="ib" id="aspect" title="方形 / 原比例"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg></button></div>
+  <div class="search"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><input placeholder="搜索"></div>
+  <div class="grp">
+    <button class="ib" id="filBtn" title="筛选"><svg class="ic" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg><i id="filCnt"></i></button>
+    <div class="rel"><button class="ib" id="sortBtn" title="排序"><svg class="ic" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button><div class="pop" id="sortPop"></div></div>
+    <div class="rel"><button class="ib" id="moreBtn" title="更多"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+      <div class="pop" id="morePop"><h5>外观</h5><div class="opt on" data-theme="dark">深色</div><div class="opt" data-theme="light">浅色</div><div class="opt" data-theme="system">跟随系统</div><h5>更多</h5><div class="opt"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>幻灯片</div><div class="opt"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>刷新<em>⌘R</em></div><div class="opt"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>设置<em>⌘,</em></div></div></div>
+  </div>
+  <button class="btn-imp"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M5 12h14"/><path d="M12 5v14"/></svg>导入</button>
+  <button class="ib" id="infoBtn" title="信息 (⌘I)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
+</header>
+
+<main id="view" class="scroll">
+  <div id="filters"><div class="fc">
+    <button class="chip" data-menu="相机">相机 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="镜头">镜头 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="标签">标签 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="格式">格式 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="chip tgl">含人脸</button><button class="chip tgl">有 AI 标注</button><button class="chip" data-menu="人物">人物 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="ISO">ISO <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="光圈">光圈 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="焦距">焦距 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button><button class="chip" data-menu="日期">日期 <svg class="ic" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="m6 9 6 6 6-6"/></svg></button>
+    <span class="starrow" id="stars"><b><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b></span>
+  </div><button class="reset" id="filReset">重置</button></div>
+  <div id="secs"></div>
+</main>
+
+<section id="single">
+  <div id="strip"></div>
+  <div id="stage"><img id="big" src="" alt=""></div>
+</section>
+
+<div id="info">
+  <div class="hh" id="infoDrag"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>信息<button class="ib" id="infoClose"><svg class="ic" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+  <div class="empty">选一张照片查看信息。<br>⌘I 显示 / 隐藏这个窗口,可以拖到任何位置。</div>
+  <div class="hb scroll">
+    <img class="th" id="iTh" src="" alt="">
+    <div class="nm" id="iName">—</div><div class="sub" id="iSub">—</div>
+    <div class="stars" id="iStars"></div>
+    <div class="sect"><h4>相机</h4><div class="kv"><b>机身</b><span id="iCam"></span></div><div class="kv"><b>镜头</b><span id="iLens"></span></div><div class="exp" id="iExp"></div></div>
+    <div class="sect"><h4>文件</h4><div class="kv"><b>尺寸</b><span id="iDim"></span></div><div class="kv"><b>大小</b><span id="iSize"></span></div><div class="kv"><b>成品</b><span id="iPath"></span></div><div class="kv"><b>RAW 源</b><span>未关联</span></div></div>
+    <div class="sect"><h4>位置</h4><div class="map"></div><div class="kv"><b>GPS</b><span id="iGps"></span></div></div>
+    <div class="sect"><h4>人物</h4><div class="tags"><span class="tag">家人</span><span class="tag">阿明</span><span class="tag add">+ 命名</span></div></div>
+    <div class="sect"><h4>关键词</h4><div class="tags" id="iTags"></div></div>
+  </div>
+</div>
+
+<div id="bar"><b id="bCount">已选 0 张</b><button class="act"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>评分</button><button class="act"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>标签</button><button class="act"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>导出</button><button class="act"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="9" height="7" x="3" y="14" rx="1"/><rect width="5" height="7" x="16" y="14" rx="1"/></svg>拼图</button><button class="act"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>AI 标注</button><button class="ib" id="bClear"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+
+<script>
+const BASE = location.protocol === 'file:' ? './photos/' : '/lg-photos/';
+const P = [
+  ['p01.jpg','金色路口','4708 × 3128','8.6 MB','Canon EOS 6D','EF24-105mm f/4L','55mm','f/8','1/250','ISO 100','2018-02-18 14:02',4,['街道','黄昏','城市'],'37.8727° N, 122.4932° W','旧金山'],
+  ['p02.jpg','道顿堀之夜','5203 × 4000','11.2 MB','Canon EOS R6m2','RF24-70mm F2.8 L','24mm','f/2.8','1/60','ISO 200','2025-12-15 19:48',5,['霓虹','夜景','人群'],'34.6687° N, 135.5013° E','大阪'],
+  ['p03.jpg','通天阁','5911 × 3949','12.4 MB','Canon EOS R6m2','RF100-500mm L','186mm','f/10','1/125','ISO 100','2025-12-16 16:21',5,['地标','夜景','长焦'],'34.6525° N, 135.5063° E','大阪'],
+  ['p04.jpg','加州街角','5918 × 4000','9.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','39mm','f/3.5','1/500','ISO 100','2026-05-23 11:35',3,['街角','蓝天','美式'],'36.9741° N, 122.0308° W','圣克鲁兹'],
+  ['p05.jpg','欧洲黄昏','5184 × 4000','10.5 MB','Canon EOS R6m2','RF24-70mm F2.8 L','24mm','f/2.8','1/200','ISO 125','2025-07-26 19:10',4,['黄昏','广场','旅行'],'48.8566° N, 2.3522° E','巴黎'],
+  ['p06.jpg','夜市','5728 × 4000','11.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','24mm','f/4','1/80','ISO 640','2025-12-17 20:05',3,['夜市','美食','烟火气'],'34.6937° N, 135.5023° E','大阪'],
+  ['p07.jpg','玩具摊','5627 × 3687','10.1 MB','Canon EOS R6m2','RF24-70mm F2.8 L','70mm','f/5.6','1/100','ISO 640','2025-12-17 20:31',4,['摊位','玩具','色彩'],'34.6937° N, 135.5023° E','大阪'],
+  ['p08.jpg','市场小巷','5189 × 3815','9.4 MB','Canon EOS R6m2','RF24-70mm F2.8 L','35mm','f/5','1/60','ISO 640','2025-12-17 20:44',3,['小巷','市场','夜晚'],'34.6937° N, 135.5023° E','大阪'],
+  ['p09.jpg','宠物街','5150 × 3954','9.9 MB','Canon EOS R6m2','RF24-70mm F2.8 L','35mm','f/5','1/60','ISO 640','2025-12-17 21:02',2,['宠物','街道','夜晚'],'34.6937° N, 135.5023° E','大阪'],
+  ['p10.jpg','庙会人潮','6000 × 4000','13.0 MB','Canon EOS R6m2','RF24-70mm F2.8 L','24mm','f/10','1/160','ISO 1000','2025-12-19 18:20',5,['庙会','人潮','灯笼'],'25.0375° N, 121.5637° E','台北'],
+  ['p11.jpg','龙脊','5394 × 4000','11.5 MB','Canon EOS R6m2','RF24-70mm F2.8 L','70mm','f/2.8','1/40','ISO 1000','2025-12-19 19:15',4,['龙','庙宇','雕刻'],'25.0375° N, 121.5637° E','台北'],
+  ['p12.jpg','灯火寺庙','4704 × 4000','10.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','28mm','f/2.8','1/30','ISO 1000','2025-12-19 19:52',5,['寺庙','灯火','夜景'],'25.0375° N, 121.5637° E','台北'],
+];
+const ALBUMS = [['大阪之夜',1,64],['加州公路',3,38],['夜市扫街',5,57],['台北庙会',9,36],['欧洲黄昏',4,22],['东京晴空',2,112],['京都红叶',10,73],['冰岛环岛',3,96]];
+const STAR = "<svg class=\"ic\" viewBox=\"0 0 24 24\"><path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"/></svg>";
+const src = i => BASE + P[i][0];
+const $ = id => document.getElementById(id);
+const stars = r => Array.from({ length: 5 }, (_, n) => STAR.replace('class="ic"', 'class="ic' + (n < r ? ' on' : '') + '"')).join('');
+const fmtDate = d => { const [y, m, dd] = d.split(' ')[0].split('-'); return `${y} 年 ${+m} 月 ${+dd} 日`; };
+$('albums').innerHTML = ALBUMS.map(([n, i, c]) => `<div class="it sub"><img class="cv" src="${src(i)}">${n}<i>${c}</i></div>`).join('');
+document.querySelectorAll('#side h3').forEach(h => h.addEventListener('click', () => h.classList.toggle('c')));
+
+/* ── 日期分组网格 ── */
+const ALL = [...Array(3)].flatMap(() => P.map((_, i) => i));   // 36 张 demo
+let list = [], selSet = new Set(), anchor = -1, focus = -1;
+function build() {
+  const groups = new Map();
+  ALL.forEach(i => { const d = P[i][10].slice(0, 10); if (!groups.has(d)) groups.set(d, []); groups.get(d).push(i); });
+  const days = [...groups.keys()].sort().reverse(); list = []; let html = '';
+  days.forEach(d => {
+    const ids = groups.get(d); const places = [...new Set(ids.map(i => P[i][14]))].join(' · ');
+    html += `<div class="sec"><h3>${fmtDate(d)}<span>${places} · ${ids.length} 项</span><a data-day="${d}">选择</a></h3><div class="cells">`;
+    ids.forEach(i => { const k = list.length; list.push(i); html += `<div class="cell${P[i][11] >= 4 ? ' rated' : ''}" data-k="${k}"><img src="${src(i)}" loading="lazy"><div class="st">${stars(P[i][11]).replaceAll('class="ic', 'class="s')}</div></div>`; });
+    html += '</div></div>';
+  });
+  $('secs').innerHTML = html;
+  document.querySelectorAll('.cell').forEach(c => { c.addEventListener('click', e => select(+c.dataset.k, e)); c.addEventListener('dblclick', () => openSingle(+c.dataset.k)); });
+  document.querySelectorAll('.sec h3 a').forEach(a => a.addEventListener('click', () => { const ks = [...a.parentElement.nextElementSibling.querySelectorAll('.cell')].map(c => +c.dataset.k); selSet = new Set(ks); focus = ks[0]; anchor = ks[0]; paint(); }));
+}
+function paint() {
+  document.querySelectorAll('.cell').forEach(c => c.classList.toggle('sel', selSet.has(+c.dataset.k)));
+  document.body.classList.toggle('sel', focus >= 0); document.body.classList.toggle('multi', selSet.size >= 2);
+  $('bCount').textContent = `已选 ${selSet.size} 张`;
+  $('vsub').textContent = selSet.size ? `已选 ${selSet.size} 项 · 共 1,247 张` : '1,247 张照片 · 33 个视频';
+  if (focus >= 0) fillInfo(list[focus]);
+}
+function select(k, e) {
+  if (e && e.metaKey) { selSet.has(k) ? selSet.delete(k) : selSet.add(k); if (!selSet.size) return deselect(); }
+  else if (e && e.shiftKey && anchor >= 0) { selSet = new Set(); for (let j = Math.min(anchor, k); j <= Math.max(anchor, k); j++) selSet.add(j); }
+  else { selSet = new Set([k]); anchor = k; }
+  focus = k; paint();
+}
+function deselect() { selSet = new Set(); focus = -1; anchor = -1; paint(); }
+$('bClear').addEventListener('click', deselect);
+function fillInfo(i) {
+  const p = P[i];
+  $('iTh').src = src(i); $('iName').textContent = p[1] + ' · ' + p[0]; $('iSub').textContent = `${p[10]} · ${p[14]}`; $('iStars').innerHTML = stars(p[11]);
+  $('iCam').textContent = p[4]; $('iLens').textContent = p[5]; $('iExp').innerHTML = [p[9], p[7], p[8], p[6]].map(x => `<span>${x}</span>`).join('');
+  $('iDim').textContent = p[2]; $('iSize').textContent = p[3]; $('iPath').textContent = '…/Export/' + p[0]; $('iGps').textContent = p[13];
+  $('iTags').innerHTML = p[12].map(t => `<span class="tag">${t}</span>`).join('') + '<span class="tag add">+ 添加</span>';
+}
+$('iStars').addEventListener('click', e => { const st = e.target.closest('svg'); if (!st || focus < 0) return; const n = [...$('iStars').children].indexOf(st) + 1; P[list[focus]][11] = n; build(); paint(); });
+$('zr').addEventListener('input', e => document.documentElement.style.setProperty('--cell', e.target.value + 'px'));
+$('aspect').addEventListener('click', () => { document.body.classList.toggle('fit'); $('aspect').classList.toggle('on', document.body.classList.contains('fit')); });
+
+/* ── 单张视图 ── */
+let cur = 0;
+function openSingle(k) { cur = k; document.body.classList.add('single'); $('gZoom').style.display = 'none'; renderStrip(); showCur(); }
+function closeSingle() { document.body.classList.remove('single'); $('gZoom').style.display = ''; $('vtitle').textContent = '全部照片'; paint(); }
+function renderStrip() { $('strip').innerHTML = list.map((i, k) => `<img src="${src(i)}" data-k="${k}">`).join(''); document.querySelectorAll('#strip img').forEach(im => im.addEventListener('click', () => { cur = +im.dataset.k; showCur(); })); }
+function showCur() { const i = list[cur], p = P[i]; $('big').src = src(i); $('vtitle').textContent = p[1] + ' · ' + p[0]; $('vsub').textContent = `${cur + 1} / ${list.length} · ${p[10]}`;
+  document.querySelectorAll('#strip img').forEach((im, k) => im.classList.toggle('on', k === cur)); document.querySelector('#strip img.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  selSet = new Set([cur]); focus = cur; fillInfo(i); document.body.classList.add('sel'); }
+$('back').addEventListener('click', closeSingle);
+
+/* ── 信息窗:⌘I,可拖 ── */
+function toggleInfo() { document.body.classList.toggle('info'); $('infoBtn').classList.toggle('on', document.body.classList.contains('info')); }
+$('infoBtn').addEventListener('click', toggleInfo); $('infoClose').addEventListener('click', toggleInfo);
+(() => { const el = $('info'), h = $('infoDrag'); let sx, sy, ox, oy, drag = false;
+  h.addEventListener('mousedown', e => { if (e.target.closest('button')) return; drag = true; sx = e.clientX; sy = e.clientY; const r = el.getBoundingClientRect(); ox = r.left; oy = r.top; e.preventDefault(); });
+  window.addEventListener('mousemove', e => { if (!drag) return; el.style.left = (ox + e.clientX - sx) + 'px'; el.style.top = (oy + e.clientY - sy) + 'px'; el.style.right = 'auto'; });
+  window.addEventListener('mouseup', () => drag = false); })();
+
+/* ── 键盘 ── */
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input')) return;
+  const single = document.body.classList.contains('single');
+  if (e.metaKey && e.key.toLowerCase() === 'i') { e.preventDefault(); toggleInfo(); }
+  if (e.key === 'Escape') { if (single) closeSingle(); else { closePops(); deselect(); } }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const d = e.key === 'ArrowLeft' ? -1 : 1;
+    if (single) { cur = (cur + d + list.length) % list.length; showCur(); } else if (focus >= 0) select((focus + d + list.length) % list.length); }
+  if (e.key === 'Enter' && focus >= 0 && !single) openSingle(focus);
+  if (e.key === ' ' && focus >= 0 && !single) { e.preventDefault(); openSingle(focus); }
+  if (e.metaKey && e.key === 'a') { e.preventDefault(); selSet = new Set(list.map((_, k) => k)); focus = 0; paint(); }
+});
+
+/* ── 顶栏着色 / 排序 / 更多 / 筛选 / 主题 ── */
+const view = $('view');
+view.addEventListener('scroll', () => $('top').classList.toggle('tint', view.scrollTop > 8), { passive: true });
+const SORTS = ['拍摄时间 ↓','拍摄时间 ↑','导入时间 ↓','导入时间 ↑','评分','名称 A-Z','名称 Z-A'];
+$('sortPop').innerHTML = SORTS.map((s, i) => `<div class="opt${i ? '' : ' on'}">${s}</div>`).join('');
+$('sortPop').querySelectorAll('.opt').forEach(o => o.addEventListener('click', () => { $('sortPop').querySelectorAll('.opt').forEach(x => x.classList.remove('on')); o.classList.add('on'); closePops(); }));
+$('sortBtn').addEventListener('click', e => { e.stopPropagation(); closePops($('sortPop')); $('sortPop').classList.toggle('open'); });
+$('moreBtn').addEventListener('click', e => { e.stopPropagation(); closePops($('morePop')); $('morePop').classList.toggle('open'); });
+function closePops(except) { document.querySelectorAll('.pop').forEach(p => { if (p !== except) p.classList.remove('open'); }); }
+document.addEventListener('click', e => { if (!e.target.closest('.pop')) closePops(); });
+const filBtn = $('filBtn'); filBtn.addEventListener('click', () => { document.body.classList.toggle('fil'); filBtn.classList.toggle('on'); });
+const CHIP_OPTS = { '相机': ['任意相机','Canon EOS R6m2','Canon EOS 6D'], '镜头': ['任意镜头','RF24-70mm F2.8 L','RF100-500mm L','EF24-105mm f/4L'], '标签': ['任意标签','night','street','urban','asia','neon'], '格式': ['任意格式','JPG','PNG','CR3'], '人物': ['任意人物','家人','朋友'], 'ISO': ['任意 ISO','≤ 400','400 - 1600','≥ 1600'], '光圈': ['任意光圈','f/2.8 及更大','f/4 - f/8','f/11 及更小'], '焦距': ['任意焦距','广角 ≤ 35mm','标准 35-85mm','长焦 ≥ 85mm'], '日期': ['任意日期','最近 30 天','2025 年','2018 年'] };
+const chipPop = document.createElement('div'); chipPop.className = 'pop'; chipPop.style.position = 'fixed'; document.body.appendChild(chipPop);
+document.querySelectorAll('#filters .chip[data-menu]').forEach(ch => ch.addEventListener('click', e => {
+  e.stopPropagation(); closePops(); const name = ch.dataset.menu; const chev = ch.querySelector('svg').outerHTML;
+  chipPop.innerHTML = (CHIP_OPTS[name] || []).map((v, i) => `<div class="opt${(i === 0 ? !ch.classList.contains('on') : ch.dataset.val === v) ? ' on' : ''}">${v}</div>`).join('');
+  chipPop.querySelectorAll('.opt').forEach((o, i) => o.addEventListener('click', () => { if (i === 0) { ch.classList.remove('on'); delete ch.dataset.val; ch.innerHTML = name + ' ' + chev; } else { ch.classList.add('on'); ch.dataset.val = o.textContent; ch.innerHTML = o.textContent + ' ' + chev; } chipPop.classList.remove('open'); updFilCnt(); }));
+  const r = ch.getBoundingClientRect(); chipPop.style.left = Math.min(r.left, innerWidth - 200) + 'px'; chipPop.style.top = (r.bottom + 6) + 'px'; chipPop.style.right = 'auto'; chipPop.classList.add('open');
+}));
+document.querySelectorAll('#filters .chip.tgl').forEach(ch => ch.addEventListener('click', () => { ch.classList.toggle('on'); updFilCnt(); }));
+const starEls = [...document.querySelectorAll('#stars b')]; let rating = 0;
+starEls.forEach((s, i) => s.addEventListener('click', () => { rating = rating === i + 1 ? 0 : i + 1; starEls.forEach((x, n) => x.classList.toggle('on', n < rating)); updFilCnt(); }));
+$('filReset').addEventListener('click', () => { document.querySelectorAll('#filters .chip[data-menu]').forEach(ch => { ch.classList.remove('on'); delete ch.dataset.val; ch.innerHTML = ch.dataset.menu + ' ' + ch.querySelector('svg').outerHTML; }); document.querySelectorAll('#filters .chip.tgl').forEach(ch => ch.classList.remove('on')); rating = 0; starEls.forEach(x => x.classList.remove('on')); updFilCnt(); });
+function updFilCnt() { const n = document.querySelectorAll('#filters .chip[data-menu].on, #filters .chip.tgl.on').length + (rating > 0 ? 1 : 0); $('filCnt').textContent = n; $('filCnt').classList.toggle('show', n > 0); }
+const sysMql = matchMedia('(prefers-color-scheme: dark)'); let themePref = 'dark';
+function applyTheme() { const eff = themePref === 'system' ? (sysMql.matches ? 'dark' : 'light') : themePref; document.documentElement.dataset.theme = eff; document.querySelectorAll('[data-theme]').forEach(o => o.classList.toggle('on', o.dataset.theme === themePref)); if (window.lg) window.lg.setTheme(themePref); }
+document.querySelectorAll('#morePop [data-theme]').forEach(o => o.addEventListener('click', () => { themePref = o.dataset.theme; applyTheme(); closePops(); }));
+sysMql.addEventListener('change', () => { if (themePref === 'system') applyTheme(); });
+
+if (window.lg) { document.body.classList.add('electron'); window.lg.setTheme('dark'); window.lg.onFullscreen(fs => document.body.classList.toggle('fs', fs)); }
+build(); paint();
+</script>
+</body>
+</html>

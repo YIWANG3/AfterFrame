@@ -93,7 +93,7 @@ const TOOLBAR_FIELD =
 const TOOLBAR_BUTTON =
   "inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-app px-3 py-0 text-[12px] font-medium text-text transition-colors hover:border-border hover:bg-hover";
 const ACCENT_BUTTON =
-  "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-black transition-colors hover:brightness-110";
+  "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-accentInk transition-colors hover:brightness-110";
 
 function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
@@ -1038,9 +1038,9 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
             className={cx(
               "inline-flex h-8 items-center justify-center rounded-md px-3 py-0 text-[12px] font-medium transition-colors",
               generateStatus.running
-                ? "ai-generating-btn text-black"
+                ? "ai-generating-btn text-accentInk"
                 : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim())
-                  ? "bg-[rgb(var(--accent-color))] text-black hover:brightness-110"
+                  ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
                   : "bg-[rgb(var(--accent-color)/0.18)] text-[rgb(var(--accent-color))]",
             )}
             disabled={generateStatus.running}

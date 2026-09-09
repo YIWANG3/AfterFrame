@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>概念 C · 影院模式</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; }
+  body {
+    background:#050506; color:#f0f0f0; overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    font-size:13px; -webkit-font-smoothing:antialiased;
+  }
+  .glass {
+    background:rgba(18,18,22,.5);
+    backdrop-filter:blur(26px) saturate(1.5);
+    box-shadow:0 16px 44px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.1);
+  }
+  svg.ic { width:16px; height:16px; stroke:currentColor; stroke-width:1.7; fill:none;
+    stroke-linecap:round; stroke-linejoin:round; }
+
+  /* 背景:当前照片的重模糊延展(查看单张的语境下,颜色来自正在看的东西) */
+  #bg { position:fixed; inset:-70px; z-index:0; }
+  #bg img { width:100%; height:100%; object-fit:cover;
+    filter:blur(64px) brightness(.24) saturate(1.25);
+    transition:opacity .4s; }
+
+  /* 主图 */
+  #stagebox {
+    position:fixed; inset:0 0 132px 0; z-index:5;
+    display:flex; align-items:center; justify-content:center; padding:66px 84px 12px;
+  }
+  #hero { max-width:100%; max-height:100%; border-radius:10px;
+    box-shadow:0 40px 110px rgba(0,0,0,.65); transition:opacity .16s; }
+
+  /* 顶部:裸标题 + 玻璃圆钮 */
+  #top { position:fixed; top:0; left:0; right:0; z-index:20; height:64px;
+    display:flex; align-items:center; padding:0 20px; gap:10px; pointer-events:none; }
+  #top > * { pointer-events:auto; }
+  #top .t { text-shadow:0 1px 14px rgba(0,0,0,.9); }
+  #top .t b { font-size:15px; font-weight:600; display:block; }
+  #top .t span { font-size:11.5px; color:rgba(240,240,240,.55); }
+  #top .sp { flex:1; }
+  .orb { width:38px; height:38px; border-radius:50%; border:none; color:rgba(240,240,240,.85);
+    cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .12s; }
+  .orb:hover { transform:scale(1.06); color:#fff; }
+  .orb.on { color:#d2a05a; }
+
+  /* 左右切换 */
+  .navb { position:fixed; top:50%; transform:translateY(-50%); z-index:20;
+    width:42px; height:42px; border-radius:50%; border:none; color:#fff; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  #prev { left:18px; } #next { right:18px; }
+
+  /* 底部胶片带 */
+  #tray {
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:20;
+    max-width:calc(100vw - 48px); border-radius:20px; padding:10px;
+    display:flex; gap:7px; overflow-x:auto; scrollbar-width:none;
+  }
+  #tray::-webkit-scrollbar { display:none; }
+  #tray .th { position:relative; flex:0 0 auto; width:88px; height:60px; border-radius:11px;
+    overflow:hidden; cursor:pointer; opacity:.62; transition:opacity .14s, transform .14s; }
+  #tray .th img { width:100%; height:100%; object-fit:cover; display:block; }
+  #tray .th:hover { opacity:.9; }
+  #tray .th.on { opacity:1; transform:scale(1.04); }
+  #tray .th.on::after { content:""; position:absolute; inset:0; border-radius:inherit;
+    box-shadow:inset 0 0 0 2px #d2a05a; }
+
+  /* 信息列 */
+  #info {
+    position:fixed; top:64px; right:16px; bottom:150px; z-index:22; width:264px;
+    border-radius:18px; padding:18px 20px; overflow-y:auto; scrollbar-width:none;
+    opacity:0; transform:translateX(24px); pointer-events:none;
+    transition:opacity .22s, transform .3s cubic-bezier(.3,1,.35,1);
+  }
+  #info.open { opacity:1; transform:none; pointer-events:auto; }
+  #info::-webkit-scrollbar { display:none; }
+  #info h2 { font-size:14px; font-weight:600; }
+  #info .stars { margin-top:5px; color:#d2a05a; letter-spacing:2px; font-size:12.5px; }
+  #info h4 { font-size:10px; font-weight:600; letter-spacing:.9px; text-transform:uppercase;
+    color:rgba(240,240,240,.38); margin:16px 0 5px; }
+  #info .row { display:flex; justify-content:space-between; gap:12px; padding:3px 0; font-size:12px; }
+  #info .row b { font-weight:400; color:rgba(240,240,240,.45); }
+</style>
+</head>
+<body>
+
+<div id="bg"><img id="bgi" src="" alt=""></div>
+<div id="stagebox"><img id="hero" src="" alt=""></div>
+
+<header id="top">
+  <div class="t"><b id="tname">—</b><span id="tsub">—</span></div>
+  <div class="sp"></div>
+  <button class="orb glass" title="收藏"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20.5 4.5 13a4.8 4.8 0 0 1 0-6.8 4.8 4.8 0 0 1 6.8 0l.7.7.7-.7a4.8 4.8 0 0 1 6.8 6.8Z"/></svg></button>
+  <button class="orb glass" title="编辑"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20l4.5-1L20 7.5a2.1 2.1 0 0 0-3-3L5.5 16Z"/></svg></button>
+  <button class="orb glass" id="infoBtn" title="信息"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>
+  <button class="orb glass" title="返回网格" onclick="location.href='canvas.html'"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></button>
+</header>
+
+<button class="navb glass" id="prev"><svg class="ic" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg></button>
+<button class="navb glass" id="next"><svg class="ic" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg></button>
+
+<aside id="info" class="glass">
+  <h2 id="iname">—</h2>
+  <div class="stars">★★★★★</div>
+  <h4>属性</h4>
+  <div class="row"><b>尺寸</b><span id="idim">—</span></div>
+  <div class="row"><b>大小</b><span id="isize">—</span></div>
+  <h4>相机</h4>
+  <div class="row"><b>机身</b><span id="icam">—</span></div>
+  <div class="row"><b>镜头</b><span id="ilens">—</span></div>
+  <h4>曝光</h4>
+  <div class="row"><b>参数</b><span id="iexp">—</span></div>
+  <h4>日期</h4>
+  <div class="row"><b>拍摄时间</b><span id="idate">—</span></div>
+</aside>
+
+<div id="tray" class="glass"></div>
+
+<script>
+const P = [
+  ['p01.jpg','金色路口','4708 × 3128','8.6 MB','Canon EOS 6D','EF24-105mm f/4L','ISO 100 · f/8 · 55mm','2018-02-18'],
+  ['p02.jpg','道顿堀之夜','5203 × 4000','11.2 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 200 · f/2.8 · 24mm','2025-12-15'],
+  ['p03.jpg','通天阁','5911 × 3949','12.4 MB','Canon EOS R6m2','RF100-500mm L','ISO 100 · f/10 · 186mm','2025-12-16'],
+  ['p04.jpg','加州街角','5918 × 4000','9.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 100 · f/3.5 · 39mm','2026-05-23'],
+  ['p05.jpg','欧洲黄昏','5184 × 4000','10.5 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 125 · f/2.8 · 24mm','2025-07-26'],
+  ['p06.jpg','夜市','5728 × 4000','11.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/4 · 24mm','2025-12-17'],
+  ['p07.jpg','玩具摊','5627 × 3687','10.1 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/5.6 · 70mm','2025-12-17'],
+  ['p08.jpg','市场小巷','5189 × 3815','9.4 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/5 · 35mm','2025-12-17'],
+  ['p09.jpg','宠物街','5150 × 3954','9.9 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/5 · 35mm','2025-12-17'],
+  ['p10.jpg','庙会人潮','6000 × 4000','13.0 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 1000 · f/10 · 24mm','2025-12-19'],
+  ['p11.jpg','龙脊','5394 × 4000','11.5 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 1000 · f/2.8 · 70mm','2025-12-19'],
+  ['p12.jpg','灯火寺庙','4704 × 4000','10.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 1000 · f/2.8 · 28mm','2025-12-19'],
+];
+const tray = document.getElementById('tray');
+let cur = 11;
+P.forEach(([src], i) => {
+  const t = document.createElement('div');
+  t.className = 'th';
+  t.innerHTML = `<img src="../photos/${src}" loading="lazy">`;
+  t.addEventListener('click', () => show(i));
+  tray.appendChild(t);
+});
+function show(i) {
+  cur = (i + P.length) % P.length;
+  const [src, name, dim, size, cam, lens, exp, date] = P[cur];
+  const url = '../photos/' + src;
+  const hero = document.getElementById('hero');
+  hero.style.opacity = 0;
+  const im = new Image();
+  im.onload = () => { hero.src = url; hero.style.opacity = 1; };
+  im.src = url;
+  document.getElementById('bgi').src = url;
+  document.getElementById('tname').textContent = name;
+  document.getElementById('tsub').textContent = `${cur + 1} / ${P.length} · ${dim}`;
+  document.getElementById('iname').textContent = src;
+  document.getElementById('idim').textContent = dim;
+  document.getElementById('isize').textContent = size;
+  document.getElementById('icam').textContent = cam;
+  document.getElementById('ilens').textContent = lens;
+  document.getElementById('iexp').textContent = exp;
+  document.getElementById('idate').textContent = date;
+  [...tray.children].forEach((el, n) => el.classList.toggle('on', n === cur));
+  tray.children[cur].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+}
+document.getElementById('prev').addEventListener('click', () => show(cur - 1));
+document.getElementById('next').addEventListener('click', () => show(cur + 1));
+document.getElementById('infoBtn').addEventListener('click', function () {
+  document.getElementById('info').classList.toggle('open');
+  this.classList.toggle('on');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') show(cur - 1);
+  if (e.key === 'ArrowRight') show(cur + 1);
+  if (e.key === 'Escape') { document.getElementById('info').classList.remove('open'); document.getElementById('infoBtn').classList.remove('on'); }
+});
+show(11);
+</script>
+</body>
+</html>

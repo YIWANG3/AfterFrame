@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>AfterFrame · 音乐 App 风格 demo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+
+  /* ── token:与 gallery demo 同一套(颜色 / 材质 / 圆角三层)── */
+  :root { --g-blur:20px; --g-sat:1.4; --win-r:16px; --pane-inset:8px; --pane-r:calc(var(--win-r) - var(--pane-inset)); }
+  :root[data-theme="dark"] {
+    --stage-a:#101013; --stage-b:#08080a; --well-rgb:13 13 15;
+    --glass-rgb:22 22 26; --g-alpha:.6; --g-alpha-pop:.72;
+    --glass:rgb(var(--glass-rgb) / var(--g-alpha));
+    --glass-edge:rgba(255,255,255,.07); --pop-shadow:0 8px 24px rgba(0,0,0,.35);
+    --pane:rgba(255,255,255,.055); --modal-bg:#1a1a1e;
+    --text:#f2f2f2; --muted:rgba(242,242,242,.62); --muted2:rgba(242,242,242,.46);
+    --accent:#f5f5f5; --accent-ink:#141414; --chk-url:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2523141414%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E");
+    --fill:rgba(255,255,255,.07); --fill-hover:rgba(255,255,255,.11);
+    --seg-thumb:rgba(255,255,255,.14); --seg-thumb-ink:#fff;
+    --scrim:linear-gradient(180deg, rgb(var(--well-rgb) / .55), rgb(var(--well-rgb) / 0) 75%);
+    --scrimB:linear-gradient(0deg, rgb(var(--well-rgb) / .55), rgb(var(--well-rgb) / 0) 75%);
+    --tshadow:0 1px 14px rgba(0,0,0,.6); --chip-solid:#232326; --pop-solid:#242428;
+  }
+  :root[data-theme="light"] {
+    --stage-a:#f4f4f5; --stage-b:#e9e9eb; --well-rgb:246 246 247;
+    --glass-rgb:253 253 254; --g-alpha:.66; --g-alpha-pop:.78;
+    --glass:rgb(var(--glass-rgb) / var(--g-alpha));
+    --glass-edge:rgba(0,0,0,.05); --pop-shadow:0 8px 24px rgba(0,0,0,.12);
+    --pane:rgba(255,255,255,.62); --modal-bg:#fbfbfc;
+    --text:#1d1d1f; --muted:rgba(29,29,31,.66); --muted2:rgba(29,29,31,.5);
+    --accent:#1d1d1f; --accent-ink:#fff; --chk-url:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E");
+    --fill:rgba(29,29,31,.06); --fill-hover:rgba(29,29,31,.1);
+    --seg-thumb:rgba(255,255,255,.95); --seg-thumb-ink:#1d1d1f;
+    --scrim:linear-gradient(180deg, rgb(var(--well-rgb) / .7), rgb(var(--well-rgb) / 0) 75%);
+    --scrimB:linear-gradient(0deg, rgb(var(--well-rgb) / .7), rgb(var(--well-rgb) / 0) 75%);
+    --tshadow:0 0 12px rgba(244,244,245,.9); --chip-solid:#fff; --pop-solid:#fff;
+  }
+  body {
+    color:var(--text); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    font-size:13px; -webkit-font-smoothing:antialiased;
+    background:linear-gradient(180deg, var(--stage-a), var(--stage-b) 70%);
+  }
+  /* Electron 壳:底透明吃 vibrancy,整窗同一层半透材质 */
+  body.electron { background:rgb(var(--well-rgb) / .8); }
+  body.electron.solid { background:rgb(var(--well-rgb)); }
+  body.solid .glass { background:var(--chip-solid) !important; backdrop-filter:none !important; }
+  body.solid .pop { background:var(--pop-solid) !important; backdrop-filter:none !important; }
+
+  svg.ic { width:16px; height:16px; stroke:currentColor; stroke-width:1.75; fill:none;
+    stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .glass { background:var(--glass); backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));
+    box-shadow:inset 0 0 0 1px var(--glass-edge); }
+
+  /* 纤细滚动条:hover 才显 */
+  ::-webkit-scrollbar { width:7px; height:7px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background:transparent; }
+  ::-webkit-scrollbar-thumb { background-color:transparent; border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
+  #view:hover::-webkit-scrollbar-thumb, #side nav:hover::-webkit-scrollbar-thumb { background-color:color-mix(in srgb, var(--text) 22%, transparent); }
+  ::-webkit-scrollbar-thumb:hover { background-color:color-mix(in srgb, var(--text) 40%, transparent); }
+
+  /* 拖拽区:只盖没有控件的地方 */
+  #dragzone, #dragzone2 { display:none; -webkit-app-region:drag; position:fixed; z-index:15; }
+  body.electron #dragzone { display:block; top:0; left:0; width:calc(228px + var(--pane-inset) * 2); height:44px; }
+  body.electron #dragzone2 { display:block; top:0; left:calc(228px + var(--pane-inset) * 2); right:0; height:12px; }
+  body.fs #dragzone, body.fs #dragzone2 { display:none; }
+
+  /* ─────── 侧栏:内缩圆角面板,搜索在顶部(音乐 App 式)─────── */
+  #side { position:fixed; inset:var(--pane-inset) auto var(--pane-inset) var(--pane-inset); width:228px; z-index:40;
+    border-radius:var(--pane-r); background:var(--pane); padding:14px 10px 10px;
+    display:flex; flex-direction:column; overflow:hidden; -webkit-app-region:no-drag; }
+  body.electron #side { padding-top:44px; }
+  body.electron.fs #side { padding-top:14px; }
+  #side .search { display:flex; align-items:center; gap:8px; height:32px; border-radius:10px; padding:0 10px;
+    background:var(--fill); color:var(--muted2); margin:0 2px 12px; }
+  #side .search input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font:inherit; font-size:12.5px; }
+  #side .search input::placeholder { color:var(--muted2); }
+  #side nav { flex:1; overflow-y:auto; }
+  #side h3 { font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted2); padding:18px 12px 8px; }
+  .it { display:flex; align-items:center; gap:11px; padding:7.5px 12px; border-radius:10px; color:var(--muted); cursor:pointer;
+    transition:background .12s, color .12s; font-size:13px; margin-bottom:1px; }
+  .it:hover { background:var(--fill); color:var(--text); }
+  .it.on { background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent); font-weight:550; }
+  .it i { margin-left:auto; font-style:normal; font-size:11px; color:var(--muted2); font-variant-numeric:tabular-nums; }
+  .it.on i { color:var(--accent); }
+  .it .cv { width:26px; height:26px; border-radius:6px; object-fit:cover; flex-shrink:0; margin:-3px 0; }
+
+  /* ─────── 内容区:整体滚动,顶带浮在上面 ─────── */
+  #view { position:fixed; inset:0 0 0 calc(228px + var(--pane-inset) * 2); overflow-y:auto; overflow-x:hidden;
+    padding:72px 24px 110px; container-type:inline-size; container-name:view; }
+  #scrim { position:fixed; top:0; left:0; right:0; height:112px; z-index:20; pointer-events:none;
+    backdrop-filter:blur(18px) saturate(1.15);
+    -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 50%,transparent 100%); mask-image:linear-gradient(180deg,#000 0%,#000 50%,transparent 100%);
+    background:var(--scrim); opacity:0; visibility:hidden; }
+  body.solid #scrim { backdrop-filter:none; mask-image:none; -webkit-mask-image:none;
+    background:linear-gradient(180deg, rgb(var(--well-rgb)) 35%, rgb(var(--well-rgb) / 0)); }
+  #scrimB { position:fixed; bottom:0; left:calc(228px + var(--pane-inset) * 2); right:0; height:120px; z-index:20; pointer-events:none;
+    backdrop-filter:blur(18px) saturate(1.15);
+    -webkit-mask-image:linear-gradient(0deg,#000 0%,#000 30%,transparent 100%); mask-image:linear-gradient(0deg,#000 0%,#000 30%,transparent 100%);
+    background:var(--scrimB); opacity:0; visibility:hidden; }
+  #top { position:fixed; top:0; left:calc(228px + var(--pane-inset) * 2); right:0; height:64px; z-index:30;
+    display:flex; align-items:center; gap:10px; padding:0 24px; pointer-events:none; }
+  #top > * { pointer-events:auto; flex-shrink:0; }
+  #top h1 { font-size:20px; font-weight:680; letter-spacing:-.2px; text-shadow:var(--tshadow); transition:opacity .15s; white-space:nowrap; }
+  #top h1.dim { opacity:0; }
+  #top .title p { font-size:11.5px; color:var(--muted); margin-top:1px; text-shadow:var(--tshadow); white-space:nowrap; }
+  body.folder #top .title p { display:none; }
+  body:not(.folder) #fhead, body:not(.folder) .fctl { display:none; }
+  #filCnt { position:absolute; top:-2px; right:-2px; min-width:14px; height:14px; padding:0 3px; border-radius:7px; background:var(--accent); color:var(--accent-ink);
+    font-size:9px; font-weight:600; font-style:normal; display:none; align-items:center; justify-content:center; pointer-events:none; }
+  #filCnt.show { display:flex; }
+  #filBtn.on { background:var(--seg-thumb); color:var(--seg-thumb-ink); }
+  /* 筛选 chips 行:随筛选按钮展开;chips 区横向滚动 + 两端渐隐,「重置」固定行尾 */
+  #filters { position:fixed; top:58px; left:calc(228px + var(--pane-inset) * 2 + 24px); right:24px; z-index:29; border-radius:999px; min-height:40px; padding:5px 8px;
+    display:flex; align-items:center; gap:4px; overflow:hidden; opacity:0; transform:translateY(-8px); pointer-events:none;
+    transition:opacity .18s, transform .2s cubic-bezier(.3,1,.35,1); -webkit-app-region:no-drag; }
+  #filters .chips { flex:1; min-width:0; display:flex; align-items:center; gap:5px; overflow-x:auto; scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent); mask-image:linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+  #filters .chips::-webkit-scrollbar { display:none; }
+  body.fil #filters { opacity:1; transform:none; pointer-events:auto; }
+  body.fil #view { padding-top:116px; }
+  body.fil #scrim { height:156px; }
+  .chip { height:28px; border:none; border-radius:999px; padding:0 12px; flex-shrink:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer;
+    display:flex; align-items:center; gap:5px; transition:background .12s, color .12s; white-space:nowrap; }
+  .chip .ic { width:12px; height:12px; color:var(--muted2); margin-right:-3px; }
+  .chip:hover { background:var(--fill); color:var(--text); }
+  .chip.on { background:var(--seg-thumb); color:var(--seg-thumb-ink); font-weight:550; }
+  .chip.reset { color:var(--muted2); }
+  .starrow { display:flex; gap:2px; padding:0 8px; flex-shrink:0; cursor:pointer; }
+  .starrow b { display:flex; color:var(--muted2); transition:color .1s; }
+  .starrow b.on { color:var(--text); } .starrow b.on svg { fill:currentColor; }
+  .chipPop { position:fixed; }
+  #top .sp { flex:1; pointer-events:none; }
+  .seg { display:flex; padding:3px; border-radius:999px; height:34px; }
+  .seg button { border:none; background:transparent; color:var(--muted); font:inherit; padding:0 12px; border-radius:999px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; font-size:12.5px; transition:background .15s, color .15s; }
+  .seg button.on { background:var(--seg-thumb); color:var(--seg-thumb-ink); font-weight:550; }
+  .isl { height:34px; border-radius:999px; display:flex; align-items:center; padding:0 4px; }
+  .ib { width:28px; height:28px; border:none; border-radius:999px; background:transparent; color:var(--muted); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; transition:background .12s, color .12s; position:relative; }
+  .ib:hover { background:var(--fill); color:var(--text); }
+  .rel { position:relative; display:flex; }
+  .btn-imp { height:34px; border:none; border-radius:999px; padding:0 14px; cursor:pointer; background:var(--accent); color:var(--accent-ink);
+    font:inherit; font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  .btn-imp:active { transform:scale(.96); }
+  .pop { position:absolute; top:40px; right:0; min-width:170px; z-index:80; border-radius:14px; padding:6px;
+    background:rgb(var(--glass-rgb) / var(--g-alpha-pop)); backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));
+    box-shadow:var(--pop-shadow), inset 0 0 0 1px var(--glass-edge);
+    opacity:0; transform:translateY(-4px); pointer-events:none; transition:opacity .14s, transform .18s cubic-bezier(.3,1,.35,1); }
+  .pop.open { opacity:1; transform:none; pointer-events:auto; }
+  .pop h5 { font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted2); padding:8px 10px 4px; }
+  .pop .opt { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:9px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .pop .opt:hover { background:var(--fill); color:var(--text); }
+  .pop .opt.on { color:var(--text); font-weight:550; }
+  .pop .opt.on::after { content:""; width:12px; height:12px; margin-left:auto; background:currentColor;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E") center/contain no-repeat; }
+  .pop .opt em { font-style:normal; margin-left:auto; padding-left:14px; font-size:11px; color:var(--muted2); }
+
+  /* ─────── 首页:hero + 货架 ─────── */
+  .page { display:none; } .page.on { display:block; }
+  .hero { position:relative; height:320px; border-radius:18px; overflow:hidden; cursor:pointer; }
+  .hero img { width:100%; height:100%; object-fit:cover; display:block; }
+  .hero .ov { position:absolute; inset:0; background:linear-gradient(180deg, transparent 35%, rgba(0,0,0,.72)); }
+  .hero .tx { position:absolute; left:28px; right:28px; bottom:26px; color:#fff; }
+  .hero .eyebrow { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; opacity:.8; }
+  .hero h2 { font-size:34px; font-weight:700; letter-spacing:-.4px; margin:6px 0 4px; }
+  .hero p { font-size:13px; opacity:.85; }
+  .hero .go { position:absolute; right:24px; bottom:24px; height:36px; border:none; border-radius:999px; padding:0 16px;
+    background:rgba(255,255,255,.18); backdrop-filter:blur(12px); color:#fff; font:inherit; font-size:12.5px; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .shelf { margin-top:30px; }
+  .shelf h2 { font-size:17px; font-weight:650; display:flex; align-items:baseline; gap:10px; margin-bottom:12px; }
+  .shelf h2 a { font-size:12px; color:var(--muted2); font-weight:500; cursor:pointer; display:flex; align-items:center; gap:2px; }
+  .shelf h2 a:hover { color:var(--text); }
+  .row { display:flex; gap:14px; overflow-x:auto; scrollbar-width:none; padding:2px 24px 6px; margin:0 -24px;
+    -webkit-mask-image:linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 40px), transparent);
+    mask-image:linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 40px), transparent); }
+  .row::-webkit-scrollbar { display:none; }
+  .card { flex-shrink:0; cursor:pointer; }
+  .card .im { border-radius:12px; overflow:hidden; background:var(--fill); position:relative; }
+  .card img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .22s cubic-bezier(.3,.8,.4,1); }
+  .card:hover img { transform:scale(1.03); }
+  .card .t { margin-top:8px; font-size:12.5px; font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card .m { font-size:11px; color:var(--muted2); margin-top:2px; }
+  .card.l { width:232px; } .card.l .im { height:154px; }
+  .card.s { width:160px; } .card.s .im { height:160px; }
+  .card.w { width:260px; } .card.w .im { height:150px; }
+  .card.m { width:200px; } .card.m .im { height:260px; }
+  .card .lab { position:absolute; left:12px; bottom:10px; color:#fff; font-weight:650; font-size:15px; text-shadow:0 1px 10px rgba(0,0,0,.6); }
+  .card .lab small { display:block; font-size:11px; font-weight:500; opacity:.85; margin-top:1px; }
+  .card .im::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg, transparent 55%, rgba(0,0,0,.5)); opacity:0; }
+  .card.w .im::after, .card.m .im::after { opacity:1; }
+  .card.sel .im { box-shadow:inset 0 0 0 2.5px var(--accent); }
+  .card.sel .im::before { content:""; position:absolute; top:8px; left:8px; z-index:2; width:20px; height:20px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 0 1px rgba(0,0,0,.2); background-image:var(--chk-url); background-size:12px 12px; background-position:center; background-repeat:no-repeat; }
+  .person { flex-shrink:0; width:96px; text-align:center; cursor:pointer; }
+  .person img { width:88px; height:88px; border-radius:50%; object-fit:cover; display:block; margin:0 auto; }
+  .person .t { margin-top:8px; font-size:12.5px; font-weight:550; } .person .m { font-size:11px; color:var(--muted2); margin-top:1px; }
+
+  /* ─────── 文件夹页 = 专辑页 ─────── */
+  .fhead { position:relative; display:flex; gap:26px; align-items:flex-end; padding:8px 0 22px; }
+  .fhead .amb { position:absolute; inset:-80px -24px 0; z-index:-1; overflow:hidden; opacity:0; transition:opacity .3s; pointer-events:none;
+    -webkit-mask-image:linear-gradient(180deg,#000 40%,transparent); mask-image:linear-gradient(180deg,#000 40%,transparent); }
+  .fhead .amb img { width:100%; height:100%; object-fit:cover; filter:blur(70px) saturate(1.2); transform:scale(1.3); opacity:.45; }
+  body.amb .fhead .amb { opacity:1; }
+  .fhead .cover { width:216px; height:216px; border-radius:14px; object-fit:cover; flex-shrink:0; box-shadow:0 0 0 1px var(--glass-edge); }
+  .fhead .eyebrow { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted2); }
+  .fhead h1 { font-size:36px; font-weight:720; letter-spacing:-.5px; margin:4px 0 6px; }
+  .fhead .meta { font-size:13px; color:var(--muted); }
+  .fhead .desc { font-size:12.5px; color:var(--muted2); margin-top:8px; max-width:560px; line-height:1.5; }
+  .fhead .acts { display:flex; gap:8px; margin-top:16px; }
+  .btn-p { height:36px; border:none; border-radius:999px; padding:0 18px; background:var(--accent); color:var(--accent-ink); font:inherit; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; }
+  .btn-p svg { fill:currentColor; stroke:none; width:14px; height:14px; }
+  .btn-s { height:36px; border:none; border-radius:999px; padding:0 16px; background:var(--fill); color:var(--text); font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:7px; }
+  .btn-s:hover { background:var(--fill-hover); }
+  .btn-s.i { width:36px; padding:0; justify-content:center; }
+  .fctl { display:flex; align-items:center; gap:10px; padding:4px 0 14px; }
+  .fctl .cnt { font-size:12px; color:var(--muted2); margin-left:auto; font-variant-numeric:tabular-nums; }
+
+  /* 网格(两端对齐)*/
+  #grid .r { display:flex; gap:8px; margin-bottom:8px; }
+  .tile { position:relative; overflow:hidden; border-radius:10px; cursor:pointer; flex-grow:1; }
+  .tile img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .22s cubic-bezier(.3,.8,.4,1); }
+  .tile:hover img { transform:scale(1.018); }
+  .tile.sel::after { content:""; position:absolute; inset:0; border-radius:inherit; box-shadow:inset 0 0 0 2.5px var(--accent); }
+  .tile.sel::before { content:""; position:absolute; top:8px; left:8px; z-index:2; width:20px; height:20px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 0 1px rgba(0,0,0,.2); background-image:var(--chk-url); background-size:12px 12px; background-position:center; background-repeat:no-repeat; }
+
+  /* 列表 = 曲目表 */
+  #list { display:none; }
+  #list .hd, #list .tr { display:grid; grid-template-columns:36px minmax(0,1fr) 150px 170px 130px 96px 76px; align-items:center; gap:12px; padding:0 12px; }
+  #list .hd { height:32px; font-size:10.5px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:var(--muted2); }
+  #list .tr { height:54px; border-radius:10px; cursor:pointer; font-size:12.5px; color:var(--muted); transition:background .1s; }
+  #list .tr:hover { background:var(--fill); color:var(--text); }
+  #list .tr.sel { background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--text); }
+  #list .tr .n { color:var(--muted2); font-variant-numeric:tabular-nums; font-size:11.5px; }
+  #list .tr .nm { display:flex; align-items:center; gap:12px; min-width:0; color:var(--text); }
+  #list .tr .nm img { width:40px; height:40px; border-radius:6px; object-fit:cover; flex-shrink:0; }
+  #list .tr .nm div { min-width:0; }
+  #list .tr .nm b { display:block; font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #list .tr .nm small { display:block; font-size:11px; color:var(--muted2); margin-top:1px; }
+  #list .tr .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .stars { display:flex; gap:1px; color:var(--muted2); } .stars svg { width:12px; height:12px; } .stars svg.on { fill:currentColor; color:var(--text); }
+  #list .tr.sel .stars svg.on, #list .tr:hover .stars svg.on { color:var(--text); }
+  body.list #grid { display:none; } body.list #list { display:block; }
+
+  /* ─────── 底部「当前选中」条 = 播放条 ─────── */
+  #player { position:fixed; left:calc(228px + var(--pane-inset) * 2 + 24px); right:24px; bottom:16px; z-index:50; max-width:840px; margin:0 auto;
+    height:64px; border-radius:18px; display:flex; align-items:center; gap:14px; padding:0 14px 0 10px;
+    transform:translateY(96px); opacity:0; transition:transform .24s cubic-bezier(.3,1,.35,1), opacity .18s; -webkit-app-region:no-drag; }
+  body.sel #player { transform:none; opacity:1; }
+  #player .th { width:44px; height:44px; border-radius:9px; object-fit:cover; flex-shrink:0; }
+  #player .tx { min-width:0; width:200px; }
+  #player .tx b { display:block; font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #player .tx small { display:block; font-size:11px; color:var(--muted2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #player .stars { margin-left:auto; cursor:pointer; } #player .stars svg { width:14px; height:14px; }
+  #player .pOpen { height:32px; border:none; border-radius:999px; padding:0 14px; background:var(--accent); color:var(--accent-ink); font:inherit; font-size:12.5px; font-weight:600;
+    display:flex; align-items:center; gap:6px; cursor:pointer; margin-left:8px; }
+  #player .pOpen em { font-style:normal; font-size:10px; opacity:.6; margin-left:2px; }
+  #player .acts { display:flex; align-items:center; gap:2px; margin-left:4px; }
+  #player .x { margin-left:2px; }
+
+  /* ─────── 幻灯片(影院)─────── */
+  #lb { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.94); display:none; align-items:center; justify-content:center; }
+  #lb.open { display:flex; }
+  #lb img { max-width:calc(100% - 96px); max-height:calc(100% - 120px); object-fit:contain; border-radius:6px; }
+  #lb .bar { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); height:48px; border-radius:999px; padding:0 8px;
+    display:flex; align-items:center; gap:4px; background:rgba(255,255,255,.12); backdrop-filter:blur(12px); box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); }
+  #lb .bar .ib { width:36px; height:36px; color:#fff; } #lb .bar .ib:hover { background:rgba(255,255,255,.14); }
+  #lb .bar .ib svg { fill:currentColor; stroke:none; width:16px; height:16px; }
+  #lb .bar .ib.x svg { fill:none; stroke:currentColor; }
+  #lb .cap { position:absolute; top:22px; left:0; right:0; text-align:center; color:rgba(255,255,255,.8); font-size:12.5px; }
+
+  @container view (max-width: 900px) { #top h1 { font-size:18px; } .seg button span { display:none; } }
+</style>
+</head>
+<body class="amb">
+<div id="dragzone"></div><div id="dragzone2"></div>
+
+<aside id="side">
+  <div class="search"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><input placeholder="搜索"></div>
+  <nav>
+    <div class="it on" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/></svg>全部素材<i>1,247</i></div>
+    <div class="it" data-view="home"><svg class="ic" viewBox="0 0 24 24"><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/><circle cx="12" cy="12" r="10"/></svg>发现</div>
+    <div class="it" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg>最近添加<i>36</i></div>
+    <div class="it" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>已评分<i>89</i></div>
+    <div class="it" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>人物<i>12</i></div>
+    <div class="it" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>地图</div>
+    <div class="it" data-view="all"><svg class="ic" viewBox="0 0 24 24"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M14 3v4a2 2 0 0 0 2 2h4"/><path d="M8 13h.01"/><path d="M16 13h.01"/><path d="M10 16s.8 1 2 1c1.3 0 2-1 2-1"/></svg>贴纸</div>
+    <h3>文件夹</h3>
+    <div id="folders"></div>
+  </nav>
+</aside>
+
+<div id="scrim"></div>
+<div id="scrimB"></div>
+<header id="top">
+  <div class="title"><h1 id="vtitle">全部素材</h1><p id="vsub">1,247 张照片 · 96.2 GB</p></div>
+  <div class="sp"></div>
+  <div class="seg glass" id="modeSeg">
+    <button class="on" data-m="grid"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg><span>网格</span></button>
+    <button data-m="list"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>列表</span></button>
+  </div>
+  <div class="isl glass">
+    <button class="ib" id="filBtn" title="筛选"><svg class="ic" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg><i id="filCnt"></i></button>
+    <div class="rel"><button class="ib" id="sortBtn" title="排序"><svg class="ic" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button>
+      <div class="pop" id="sortPop"></div></div>
+    <div class="rel"><button class="ib" id="moreBtn" title="更多"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+      <div class="pop" id="morePop">
+        <h5>外观</h5>
+        <div class="opt on" data-theme="dark"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>深色</div>
+        <div class="opt" data-theme="light"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>浅色</div>
+        <div class="opt" data-theme="system"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>跟随系统</div>
+        <h5>材质</h5>
+        <div class="opt on" data-mat="glass">玻璃</div>
+        <div class="opt" data-mat="solid">实色</div>
+        <h5>专辑页封面氛围底</h5>
+        <div class="opt on" data-amb="1">开</div>
+        <div class="opt" data-amb="0">关</div>
+      </div></div>
+  </div>
+  <button class="btn-imp"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M5 12h14"/><path d="M12 5v14"/></svg>导入</button>
+</header>
+<div id="filters" class="glass"><div class="chips">
+  <button class="chip" data-menu="相机">相机 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="镜头">镜头 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="标签">标签 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="格式">格式 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip tgl">含人脸</button>
+  <button class="chip tgl">有 AI 标注</button>
+  <button class="chip" data-menu="人物">人物 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="ISO">ISO <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="光圈">光圈 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="焦距">焦距 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="chip" data-menu="日期">日期 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></button>
+  <span class="starrow" id="stars"><b><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b><b><svg class="ic" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></b></span>
+</div><button class="chip reset" id="filReset">重置</button></div>
+
+<main id="view">
+  <section class="page on" id="home">
+    <div class="hero" id="hero">
+      <img src="" alt=""><div class="ov"></div>
+      <div class="tx"><div class="eyebrow">本周新增 · 台北</div><h2>庙会人潮</h2><p>36 张新照片 · 更新于今天</p></div>
+      <button class="go">查看<svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+    <div class="shelf"><h2>最近添加<a>全部 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></h2><div class="row" id="shRecent"></div></div>
+    <div class="shelf"><h2>文件夹<a>全部 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></h2><div class="row" id="shFolders"></div></div>
+    <div class="shelf"><h2>人物<a>全部 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></h2><div class="row" id="shPeople"></div></div>
+    <div class="shelf"><h2>地点<a>地图 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></h2><div class="row" id="shPlaces"></div></div>
+    <div class="shelf"><h2>按月回顾<a>全部 <svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></h2><div class="row" id="shMonths"></div></div>
+  </section>
+
+  <section class="page on" id="lib">
+    <div class="fhead" id="fhead">
+      <div class="amb"><img id="ambImg" src="" alt=""></div>
+      <img class="cover" id="fCover" src="" alt="">
+      <div>
+        <div class="eyebrow">文件夹</div>
+        <h1 id="fName">—</h1>
+        <div class="meta" id="fMeta">—</div>
+        <div class="desc" id="fDesc"></div>
+        <div class="acts">
+          <button class="btn-s"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>导出</button>
+          <button class="btn-s"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="9" height="7" x="3" y="14" rx="1"/><rect width="5" height="7" x="16" y="14" rx="1"/></svg>拼图</button>
+          <button class="btn-s"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>AI 标注</button>
+          <div class="rel"><button class="btn-s i" id="fMore"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+            <div class="pop" id="fPop" style="top:42px;right:auto;left:0"><div class="opt" id="fSlide"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>幻灯片</div><div class="opt"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>重命名</div><div class="opt"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>在访达中显示</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="fctl"><span class="cnt" id="fCnt"></span></div>
+    <div id="grid"></div>
+    <div id="list"><div class="hd"><span>#</span><span>名称</span><span>相机</span><span>镜头</span><span>拍摄时间</span><span>评分</span><span style="text-align:right">大小</span></div><div id="rows"></div></div>
+  </section>
+</main>
+
+<div id="player" class="glass">
+  <img class="th" id="pTh" src="" alt="">
+  <div class="tx"><b id="pName">—</b><small id="pMeta">—</small></div>
+  <div class="stars" id="pStars"></div>
+  <button class="pOpen" id="pOpen"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/></svg>打开<em>⏎</em></button>
+  <div class="acts">
+    <button class="ib" title="编辑"><svg class="ic" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+    <button class="ib" title="标签"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></button>
+    <button class="ib" title="导出"><svg class="ic" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></button>
+    <button class="ib x" id="pClose" title="取消选择"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
+</div>
+
+<div id="lb">
+  <div class="cap" id="lbCap"></div>
+  <img id="lbImg" src="" alt="">
+  <div class="bar">
+    <button class="ib" id="lbPrev"><svg class="ic" viewBox="0 0 24 24"><path d="M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z"/><path d="M3 20V4"/></svg></button>
+    <button class="ib" id="lbPlay"><svg class="ic" viewBox="0 0 24 24"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg></button>
+    <button class="ib" id="lbNext"><svg class="ic" viewBox="0 0 24 24"><path d="M21 4v16"/><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"/></svg></button>
+    <button class="ib x" id="lbClose"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
+</div>
+
+<script>
+const BASE = location.protocol === 'file:' ? './photos/' : '/lg-photos/';
+const P = [
+  ['p01.jpg',1.506,'金色路口','4708 × 3128','8.6 MB','Canon EOS 6D','EF24-105mm f/4L','ISO 100 · f/8 · 55mm','2018-02-18 14:02',4],
+  ['p02.jpg',1.300,'道顿堀之夜','5203 × 4000','11.2 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 200 · f/2.8 · 24mm','2025-12-15 19:48',5],
+  ['p03.jpg',1.497,'通天阁','5911 × 3949','12.4 MB','Canon EOS R6m2','RF100-500mm L','ISO 100 · f/10 · 186mm','2025-12-16 16:21',5],
+  ['p04.jpg',1.479,'加州街角','5918 × 4000','9.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 100 · f/3.5 · 39mm','2026-05-23 11:35',3],
+  ['p05.jpg',1.295,'欧洲黄昏','5184 × 4000','10.5 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 125 · f/2.8 · 24mm','2025-07-26 19:10',4],
+  ['p06.jpg',1.433,'夜市','5728 × 4000','11.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/4 · 24mm','2025-12-17 20:05',3],
+  ['p07.jpg',1.527,'玩具摊','5627 × 3687','10.1 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/5.6 · 70mm','2025-12-17 20:31',4],
+  ['p08.jpg',1.361,'市场小巷','5189 × 3815','9.4 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/5 · 35mm','2025-12-17 20:44',3],
+  ['p09.jpg',1.302,'宠物街','5150 × 3954','9.9 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 640 · f/5 · 35mm','2025-12-17 21:02',2],
+  ['p10.jpg',1.499,'庙会人潮','6000 × 4000','13.0 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 1000 · f/10 · 24mm','2025-12-19 18:20',5],
+  ['p11.jpg',1.348,'龙脊','5394 × 4000','11.5 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 1000 · f/2.8 · 70mm','2025-12-19 19:15',4],
+  ['p12.jpg',1.176,'灯火寺庙','4704 × 4000','10.8 MB','Canon EOS R6m2','RF24-70mm F2.8 L','ISO 1000 · f/2.8 · 28mm','2025-12-19 19:52',5],
+];
+const F = [
+  { n:'大阪之夜', ids:[1,2,5,6,7,8,1,2,5,6,7,8], cnt:64, when:'2025 年 12 月', size:'1.2 GB', desc:'心斋桥、道顿堀与通天阁,三晚扫街。' },
+  { n:'加州公路', ids:[3,0,3,0,3,0], cnt:38, when:'2026 年 5 月', size:'720 MB', desc:'一号公路自驾,从旧金山到圣塔莫尼卡。' },
+  { n:'夜市扫街', ids:[5,6,7,8,5,6,7,8,5,6], cnt:57, when:'2025 年 12 月', size:'980 MB', desc:'' },
+  { n:'台北庙会', ids:[9,10,11,9,10,11,9,10,11], cnt:36, when:'2025 年 12 月', size:'610 MB', desc:'' },
+  { n:'欧洲黄昏', ids:[4,0,4,0,4], cnt:22, when:'2025 年 7 月', size:'400 MB', desc:'' },
+  { n:'东京晴空', ids:[2,1,2,1,2,1,2], cnt:112, when:'2025 年 10 月', size:'2.4 GB', desc:'' },
+  { n:'京都红叶', ids:[10,11,10,11,10], cnt:73, when:'2025 年 11 月', size:'1.5 GB', desc:'' },
+  { n:'冰岛环岛', ids:[3,4,3,4,3,4], cnt:96, when:'2025 年 8 月', size:'2.1 GB', desc:'' },
+];
+const PEOPLE = [['家人',6,'42 张'],['阿明',5,'18 张'],['小雨',1,'27 张'],['老王',7,'9 张'],['同事',8,'31 张'],['朋友',9,'12 张']];
+const PLACES = [['大阪 · 日本',1,'128 张'],['加州 · 美国',3,'38 张'],['台北 · 台湾',11,'36 张'],['巴黎 · 法国',4,'22 张'],['东京 · 日本',2,'112 张']];
+const MONTHS = [['2025 年 12 月',10,'157 张'],['2025 年 11 月',11,'73 张'],['2025 年 8 月',3,'96 张'],['2025 年 7 月',4,'22 张'],['2026 年 5 月',3,'38 张'],['2018 年 2 月',0,'14 张']];
+const STAR = "<svg class=\"ic\" viewBox=\"0 0 24 24\"><path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"/></svg>";
+const src = i => BASE + P[i][0];
+const $ = id => document.getElementById(id);
+const stars = r => Array.from({ length: 5 }, (_, n) => STAR.replace('class="ic"', 'class="ic' + (n < r ? ' on' : '') + '"')).join('');
+
+/* ── 侧栏文件夹 ── */
+$('folders').innerHTML = F.map((f, i) => `<div class="it fold" data-f="${i}"><img class="cv" src="${src(f.ids[0])}">${f.n}<i>${f.cnt}</i></div>`).join('');
+
+/* ── 首页货架 ── */
+$('hero').querySelector('img').src = src(9);
+$('shRecent').innerHTML = [9,10,11,3,1,2].map(i => `<div class="card l" data-i="${i}"><div class="im"><img src="${src(i)}"></div><div class="t">${P[i][2]} · ${P[i][0]}</div><div class="m">${P[i][8].slice(0,10)} · ${P[i][5]}</div></div>`).join('');
+$('shFolders').innerHTML = F.map((f, i) => `<div class="card s" data-f="${i}"><div class="im"><img src="${src(f.ids[0])}"></div><div class="t">${f.n}</div><div class="m">${f.cnt} 张 · ${f.when}</div></div>`).join('');
+$('shPeople').innerHTML = PEOPLE.map(([n, i, c]) => `<div class="person"><img src="${src(i)}" style="object-position:50% 30%"><div class="t">${n}</div><div class="m">${c}</div></div>`).join('');
+$('shPlaces').innerHTML = PLACES.map(([n, i, c]) => `<div class="card w"><div class="im"><img src="${src(i)}"><div class="lab">${n}<small>${c}</small></div></div></div>`).join('');
+$('shMonths').innerHTML = MONTHS.map(([n, i, c]) => `<div class="card m"><div class="im"><img src="${src(i)}"><div class="lab">${n}<small>${c}</small></div></div></div>`).join('');
+
+/* ── 视图切换 ── */
+const ALL = [...Array(3)].flatMap(() => P.map((_, i) => i));
+let curF = -1, curPage = 'all', curList = ALL, selIdx = -1, mode = 'grid';
+const view = $('view');
+function setSide(sel) { document.querySelectorAll('#side .it').forEach(x => x.classList.remove('on')); document.querySelector(sel)?.classList.add('on'); }
+function showAll() {
+  curF = -1; curPage = 'all'; curList = ALL; document.body.classList.remove('folder');
+  $('home').classList.remove('on'); $('lib').classList.add('on');
+  $('vtitle').textContent = '全部素材'; $('vsub').textContent = '1,247 张照片 · 96.2 GB'; $('vtitle').classList.remove('dim'); $('modeSeg').style.display = 'flex';
+  setSide('#side .it[data-view="all"]'); view.scrollTop = 0; deselect(); renderGrid(); renderList(); updTitle();
+}
+function showHome() {
+  curF = -1; curPage = 'home'; curList = [9,10,11,3,1,2]; document.body.classList.remove('folder');
+  $('home').classList.add('on'); $('lib').classList.remove('on');
+  $('vtitle').textContent = '发现'; $('vsub').textContent = '按时间、地点与人物浏览'; $('vtitle').classList.remove('dim'); $('modeSeg').style.display = 'none';
+  setSide('#side .it[data-view="home"]'); view.scrollTop = 0; deselect(); updTitle();
+}
+function showFolder(i) {
+  curF = i; curPage = 'folder'; const f = F[i]; curList = f.ids; document.body.classList.add('folder');
+  $('home').classList.remove('on'); $('lib').classList.add('on');
+  $('vtitle').textContent = f.n; $('modeSeg').style.display = 'flex';
+  $('fCover').src = src(f.ids[0]); $('ambImg').src = src(f.ids[0]);
+  $('fName').textContent = f.n; $('fMeta').textContent = `${f.cnt} 张照片 · ${f.when} · ${f.size}`;
+  $('fDesc').textContent = f.desc; $('fCnt').textContent = `${f.ids.length} 张(demo)`;
+  setSide(`#side .it[data-f="${i}"]`); view.scrollTop = 0; deselect(); renderGrid(); renderList(); updTitle();
+}
+document.querySelectorAll('#side .it[data-view]').forEach(it => it.addEventListener('click', () => it.dataset.view === 'home' ? showHome() : showAll()));
+document.addEventListener('click', e => { const f = e.target.closest('[data-f]'); if (f) showFolder(+f.dataset.f); });
+$('hero').addEventListener('click', () => showFolder(3));
+
+/* ── 文件夹页:网格 + 列表 ── */
+let rowH = 216;
+function renderGrid() {
+  const g = $('grid'); g.innerHTML = '';
+  const avail = view.clientWidth - 48 - 8; let row = null, acc = 0;
+  curList.forEach((i, k) => {
+    const ar = P[i][1];
+    if (!row || acc + ar > avail / rowH) { row = document.createElement('div'); row.className = 'r'; row.style.height = rowH + 'px'; g.appendChild(row); acc = 0; }
+    const t = document.createElement('div'); t.className = 'tile' + (k === selIdx ? ' sel' : ''); t.style.flexBasis = (ar * rowH) + 'px'; t.style.aspectRatio = ar;
+    t.innerHTML = `<img src="${src(i)}" loading="lazy">`; t.addEventListener('click', () => select(k)); row.appendChild(t); acc += ar;
+  });
+}
+function renderList() {
+  $('rows').innerHTML = curList.map((i, k) => { const p = P[i]; return `<div class="tr${k === selIdx ? ' sel' : ''}" data-k="${k}">
+    <span class="n">${k + 1}</span>
+    <span class="nm"><img src="${src(i)}"><div><b>${p[2]} · ${p[0]}</b><small>${p[3]} · ${p[7]}</small></div></span>
+    <span>${p[5]}</span><span>${p[6]}</span><span>${p[8]}</span>
+    <span class="stars">${stars(p[9])}</span><span class="r">${p[4]}</span></div>`; }).join('');
+  document.querySelectorAll('#rows .tr').forEach(r => r.addEventListener('click', () => select(+r.dataset.k)));
+}
+document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#modeSeg button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  mode = b.dataset.m; document.body.classList.toggle('list', mode === 'list');
+}));
+
+/* ── 选中 → 播放条 ── */
+function select(k) {
+  selIdx = k; const i = curList[k], p = P[i];
+  document.querySelectorAll('.tile, #rows .tr, .card.l').forEach(x => x.classList.remove('sel'));
+  document.querySelectorAll('#grid .tile')[k]?.classList.add('sel');
+  document.querySelectorAll('#rows .tr')[k]?.classList.add('sel');
+  if (curPage === 'home') document.querySelectorAll('.card.l')[k]?.classList.add('sel');
+  $('pTh').src = src(i); $('pName').textContent = p[2] + ' · ' + p[0];
+  $('pMeta').textContent = `${p[5]} · ${p[7]} · ${p[8]}`; $('pStars').innerHTML = stars(p[9]);
+  document.body.classList.add('sel');
+}
+function deselect() { selIdx = -1; document.body.classList.remove('sel'); document.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); }
+document.querySelectorAll('.card.l').forEach((c, k) => c.addEventListener('click', () => select(k)));
+$('pClose').addEventListener('click', deselect);
+document.addEventListener('keydown', e => {
+  const lb = $('lb').classList.contains('open');
+  if (e.key === 'Escape') { if (lb) closeLb(); else { closePops(); deselect(); } }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const d = e.key === 'ArrowLeft' ? -1 : 1;
+    if (lb) { lbK = (lbK + d + curList.length) % curList.length; showLb(); } else if (selIdx >= 0) select((selIdx + d + curList.length) % curList.length); }
+  if (e.key === 'Enter' && selIdx >= 0 && !lb) openLb(selIdx);
+});
+// 评分:点选中条上的星直接打分
+$('pStars').addEventListener('click', e => { const st = e.target.closest('svg'); if (!st) return; const n = [...$('pStars').children].indexOf(st) + 1; P[curList[selIdx]][9] = n; $('pStars').innerHTML = stars(n); renderList(); });
+
+/* ── 幻灯片 ── */
+let lbK = 0, lbTimer = null, playing = false;
+function openLb(k, auto = false) { lbK = k; showLb(); $('lb').classList.add('open'); playing = auto; syncLbPlay(); }
+function showLb() { const i = curList[lbK], p = P[i]; $('lbImg').src = src(i); $('lbCap').textContent = `${lbK + 1} / ${curList.length} · ${p[2]} · ${p[0]}`; }
+function syncLbPlay() { clearInterval(lbTimer); if (playing) lbTimer = setInterval(() => { lbK = (lbK + 1) % curList.length; showLb(); }, 2500); $('lbPlay').innerHTML = playing ? "<svg class=\"ic\" viewBox=\"0 0 24 24\"><rect x=\"14\" y=\"3\" width=\"5\" height=\"18\" rx=\"1\"/><rect x=\"5\" y=\"3\" width=\"5\" height=\"18\" rx=\"1\"/></svg>" : "<svg class=\"ic\" viewBox=\"0 0 24 24\"><path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\"/></svg>"; }
+function closeLb() { playing = false; clearInterval(lbTimer); $('lb').classList.remove('open'); }
+$('pOpen').addEventListener('click', () => openLb(Math.max(selIdx, 0)));
+document.querySelectorAll('.tile, #rows .tr').forEach(() => {});
+$('grid').addEventListener('dblclick', () => { if (selIdx >= 0) openLb(selIdx); });
+$('rows').addEventListener('dblclick', () => { if (selIdx >= 0) openLb(selIdx); });
+$('fMore').addEventListener('click', e => { e.stopPropagation(); closePops($('fPop')); $('fPop').classList.toggle('open'); });
+$('fSlide').addEventListener('click', () => { closePops(); openLb(0, true); });
+document.querySelector('.hero .go').addEventListener('click', e => { e.stopPropagation(); showFolder(3); });
+$('lbPlay').addEventListener('click', () => { playing = !playing; syncLbPlay(); });
+$('lbPrev').addEventListener('click', () => { lbK = (lbK - 1 + curList.length) % curList.length; showLb(); });
+$('lbNext').addEventListener('click', () => { lbK = (lbK + 1) % curList.length; showLb(); });
+$('lbClose').addEventListener('click', closeLb);
+
+/* ── 顶带 + 标题渐显 ── */
+function updTitle() {
+  const t = Math.min(1, view.scrollTop / 90);
+  $('scrim').style.opacity = t; $('scrim').style.visibility = t > 0 ? '' : 'hidden';
+  const rem = view.scrollHeight - view.clientHeight - view.scrollTop;
+  const b = document.body.classList.contains('sel') ? Math.min(1, Math.max(0, rem) / 90) : 0;
+  $('scrimB').style.opacity = b; $('scrimB').style.visibility = b > 0 ? '' : 'hidden';
+  if (curPage === 'folder') $('vtitle').classList.toggle('dim', view.scrollTop < 200);
+}
+view.addEventListener('scroll', updTitle, { passive: true });
+new ResizeObserver(() => { if (curPage !== 'home') renderGrid(); updTitle(); }).observe(view);
+const obs = new MutationObserver(updTitle); obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+/* ── 排序 / 更多 ── */
+const SORTS = ['导入时间 ↓','导入时间 ↑','拍摄时间 ↓','拍摄时间 ↑','评分','名称 A-Z','名称 Z-A'];
+$('sortPop').innerHTML = SORTS.map((s, i) => `<div class="opt${i ? '' : ' on'}">${s}</div>`).join('');
+$('sortPop').querySelectorAll('.opt').forEach(o => o.addEventListener('click', () => { $('sortPop').querySelectorAll('.opt').forEach(x => x.classList.remove('on')); o.classList.add('on'); closePops(); }));
+$('sortBtn').addEventListener('click', e => { e.stopPropagation(); closePops($('sortPop')); $('sortPop').classList.toggle('open'); });
+$('moreBtn').addEventListener('click', e => { e.stopPropagation(); closePops($('morePop')); $('morePop').classList.toggle('open'); });
+function closePops(except) { document.querySelectorAll('.pop').forEach(p => { if (p !== except) p.classList.remove('open'); }); }
+
+/* ── 筛选:按钮 + 计数徽标 + chips 行(与 gallery demo 同一套)── */
+const filBtn = $('filBtn');
+filBtn.addEventListener('click', () => { document.body.classList.toggle('fil'); filBtn.classList.toggle('on'); updTitle(); });
+const CHIP_OPTS = {
+  '相机': ['任意相机','Canon EOS R6m2','Canon EOS 6D'], '镜头': ['任意镜头','RF24-70mm F2.8 L','RF100-500mm L','EF24-105mm f/4L'],
+  '标签': ['任意标签','night','street','urban','asia','neon'], '格式': ['任意格式','JPG','PNG','CR3'], '人物': ['任意人物','家人','朋友'],
+  'ISO': ['任意 ISO','≤ 400','400 - 1600','≥ 1600'], '光圈': ['任意光圈','f/2.8 及更大','f/4 - f/8','f/11 及更小'],
+  '焦距': ['任意焦距','广角 ≤ 35mm','标准 35-85mm','长焦 ≥ 85mm'], '日期': ['任意日期','最近 30 天','2025 年','2018 年'],
+};
+const chipPop = document.createElement('div'); chipPop.className = 'pop chipPop'; document.body.appendChild(chipPop);
+document.querySelectorAll('.chip[data-menu]').forEach(ch => { ch.dataset.label = ch.dataset.menu; ch.addEventListener('click', e => {
+  e.stopPropagation(); closePops(); const name = ch.dataset.menu; const chev = ch.querySelector('svg').outerHTML;
+  chipPop.innerHTML = (CHIP_OPTS[name] || []).map((v, i) => `<div class="opt${(i === 0 ? !ch.classList.contains('on') : ch.dataset.val === v) ? ' on' : ''}">${v}</div>`).join('');
+  chipPop.querySelectorAll('.opt').forEach((o, i) => o.addEventListener('click', () => {
+    if (i === 0) { ch.classList.remove('on'); delete ch.dataset.val; ch.innerHTML = name + ' ' + chev; }
+    else { ch.classList.add('on'); ch.dataset.val = o.textContent; ch.innerHTML = o.textContent + ' ' + chev; }
+    chipPop.classList.remove('open'); updFilCnt();
+  }));
+  const r = ch.getBoundingClientRect(); chipPop.style.left = Math.min(r.left, innerWidth - 190) + 'px'; chipPop.style.top = (r.bottom + 6) + 'px'; chipPop.style.right = 'auto';
+  chipPop.classList.add('open');
+}); });
+document.querySelectorAll('.chip.tgl').forEach(ch => ch.addEventListener('click', () => { ch.classList.toggle('on'); updFilCnt(); }));
+const starEls = [...document.querySelectorAll('#stars b')]; let rating = 0;
+starEls.forEach((s, i) => s.addEventListener('click', () => { rating = rating === i + 1 ? 0 : i + 1; starEls.forEach((x, n) => x.classList.toggle('on', n < rating)); updFilCnt(); }));
+$('filReset').addEventListener('click', () => {
+  document.querySelectorAll('.chip[data-menu]').forEach(ch => { ch.classList.remove('on'); delete ch.dataset.val; ch.innerHTML = ch.dataset.menu + ' ' + ch.querySelector('svg').outerHTML; });
+  document.querySelectorAll('.chip.tgl').forEach(ch => ch.classList.remove('on')); rating = 0; starEls.forEach(x => x.classList.remove('on')); updFilCnt();
+});
+function updFilCnt() { const n = document.querySelectorAll('.chip[data-menu].on, .chip.tgl.on').length + (rating > 0 ? 1 : 0); $('filCnt').textContent = n; $('filCnt').classList.toggle('show', n > 0); }
+document.addEventListener('click', e => { if (!e.target.closest('.pop')) closePops(); });
+
+/* ── 主题 / 材质 / 氛围底 ── */
+const sysMql = matchMedia('(prefers-color-scheme: dark)'); let themePref = 'dark';
+function applyTheme() {
+  const eff = themePref === 'system' ? (sysMql.matches ? 'dark' : 'light') : themePref;
+  document.documentElement.dataset.theme = eff;
+  document.querySelectorAll('[data-theme]').forEach(o => o.classList.toggle('on', o.dataset.theme === themePref));
+  document.querySelectorAll('.glass, .pop, #scrim, #scrimB').forEach(el => { el.style.backdropFilter = 'none'; });
+  requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('.glass, .pop, #scrim, #scrimB').forEach(el => { el.style.backdropFilter = ''; })));
+}
+sysMql.addEventListener('change', () => { if (themePref === 'system') applyTheme(); });
+document.querySelectorAll('#morePop [data-theme]').forEach(o => o.addEventListener('click', () => { themePref = o.dataset.theme; if (window.lg) window.lg.setTheme(themePref); applyTheme(); }));
+document.querySelectorAll('#morePop [data-mat]').forEach(o => o.addEventListener('click', () => { document.querySelectorAll('[data-mat]').forEach(x => x.classList.toggle('on', x === o)); document.body.classList.toggle('solid', o.dataset.mat === 'solid'); }));
+document.querySelectorAll('#morePop [data-amb]').forEach(o => o.addEventListener('click', () => { document.querySelectorAll('[data-amb]').forEach(x => x.classList.toggle('on', x === o)); document.body.classList.toggle('amb', o.dataset.amb === '1'); }));
+
+/* ── Electron 壳 ── */
+if (window.lg) { document.body.classList.add('electron'); window.lg.setTheme(themePref); window.lg.onFullscreen(fs => document.body.classList.toggle('fs', fs)); }
+showAll();
+</script>
+</body>
+</html>
