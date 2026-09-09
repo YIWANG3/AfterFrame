@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, Github, Download, FileText, MessageSquare } from "lucide-react";
-import { Group, SecondaryButton } from "./SettingsPrimitives";
+import { Group } from "./SettingsPrimitives";
 import logo from "../../assets/logo.png";
 
 const REPO_URL = "https://github.com/YIWANG3/AfterFrame";
@@ -58,12 +58,14 @@ export default function AboutSettings() {
                 <Icon className="h-3.5 w-3.5 text-muted2" />
                 {t(`about.${link.labelKey}`)}
               </span>
-              <SecondaryButton onClick={() => openExternal(link.target)}>
-                <span className="inline-flex items-center gap-1.5">
-                  {link.valueKey ? t(`about.${link.valueKey}`) : link.value}
-                  <ExternalLink className="h-3 w-3" />
-                </span>
-              </SecondaryButton>
+              <button
+                type="button"
+                onClick={() => openExternal(link.target)}
+                className="inline-flex items-center gap-1.5 text-[12px] text-muted transition-colors hover:text-text"
+              >
+                {link.valueKey ? t(`about.${link.valueKey}`) : link.value}
+                <ExternalLink className="h-3 w-3" />
+              </button>
             </div>
           );
         })}

@@ -616,6 +616,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .rounded-xl.border.bg-chrome .bg-panel { background: var(--fill); border-radius: 14px; }
 .rounded-xl.border.bg-chrome .border-b.border-border\/50 { border-color: transparent; }
 .fixed.inset-0.bg-app\/80 { background: rgba(0,0,0,.45); }
+/* 设置窗本体不要发丝内环(弹层规则 9 给所有 shadow-overlay 卡都加了一圈 --edge,设置窗是大面板,线在浅色下很显眼) */
+.fixed.inset-0.z-\[3000\] > .rounded-xl.border.bg-chrome { box-shadow: var(--shadow-menu); }
 
 /* ───────── 10b · 设置页控件统一(用户:「统一一下,稍微偏圆一点」):
    之前按钮 rounded(4px)、输入框 rounded-md(10px)、多行框 rounded(4px)混着。统一为 28 高、8px 圆角、无描边、fill 底;
