@@ -368,8 +368,13 @@ select {
 
 /* ───────── 0 · 连续曲率圆角(Apple 的 continuous corners):Chromium 139+ 的 corner-shape,Electron 43 = Chromium 150 可用。
    全局 squircle(超椭圆),box-shadow / outline 跟着走;胶囊(999px)与 rounded-full 保持正圆端,否则两端会变方 ───────── */
-*, ::before, ::after { corner-shape: squircle; }
+* { corner-shape: squircle; }
 .rounded-full, [class*="rounded-full"] { corner-shape: round; }
+/* 伪元素不参与:顶部滚动渐进模糊那个 ::before 是 mask + backdrop-filter,corner-shape 一上去羽化就退化成硬切;只给选中环单独开 */
+[data-gallery-item][data-selected="true"]::after { corner-shape: squircle; }
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { corner-shape: round; }
+/* 内容区面板(overflow hidden + 8px 圆角)必须保持 round:祖先一旦是超椭圆裁切,里面那条 mask + backdrop-filter 的渐进模糊就退化成硬边 */
+.noise-overlay > .grid > section.bg-app { corner-shape: round; }
 
 /* ═══════════ Tahoe 皮肤 · 组件层(只改样式,不动结构;段号对应 docs 二十一)═══════════ */
 
