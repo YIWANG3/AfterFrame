@@ -535,21 +535,10 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
   border-radius: 10px;
   box-shadow: 0 0 0 2px rgb(var(--accent-color));
 }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after {
-  left: -5px; top: -5px; width: calc(100% + 10px); height: calc(var(--img-h, 100%) + 10px); border-radius: 8px;
-}
-/* 瓦片模式:内描边用 outline(inset box-shadow 会被绝对定位的 img 盖住;outline 在绘制顺序最后,压在子元素之上) */
-/* 瓦片模式(无缝):选中格提到最上层并放大 4%,外环压在邻格之上,突出出来 */
-/* 瓦片模式容器四边留 8px 空,放大 4% 加 2.5px 环的溢出才不会被容器边裁掉 */
-/* 瓦片模式:滚动容器留 8px 边(Gallery.jsx 的瓦片布局也按 VIEW_PADDING 扣宽,否则末列溢出被裁);
-   选中格改为固定 5px 外扩(绝对定位负 inset,不再用 scale:scale 的外扩随格子变大,600px 格子要 12px,边留不住),
-   5 + 1.5 环 < 8,任何尺寸都不会被容器裁切 */
+/* 瓦片模式:与其他布局一样只描边,不放大;格子是直角所以环也直角。滚动容器四边留 8px
+   (Gallery.jsx 的瓦片布局按 VIEW_PADDING 扣宽),边缘格子的环才不会被容器裁掉;选中格提到最上层,环压在邻格之上 */
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { border-radius: 0; }
 [data-testid="gallery-scroll"].px-0 { padding-left: 8px !important; padding-right: 8px !important; padding-bottom: 8px !important; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item] > div { position: absolute; inset: 0; height: auto !important; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] { z-index: 10; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"] > div {
-  inset: -5px; border-radius: 8px;   /* 外扩 5 + 细环 1.5 < 8,仍在容器留边之内;光晕是软边,贴边被裁看不出 */
-}
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }
