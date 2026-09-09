@@ -554,6 +554,8 @@ Dribbble 类概念稿不够用,以下按「借什么」分组,均为真实产品
 
 第五次修正:① 瓦片选中格放大后加 8px 圆角,容器四边留 8px 空防裁切;② **渐进模糊的最终做法(与 demo 一致)**:`[data-testid="workspace-split"]::before` 一个伪元素,backdrop-filter + 渐变 mask 羽化 + 压色渐变,滚动驱动。之前两轮硬边的真正原因:**带 mask 的 backdrop-filter 只有在元素独立合成时才正确羽化**(demo 的宿主是 fixed 元素,天然独立合成),普通元素上 mask 退化为二值切断;加 `transform: translateZ(0)` 强制独立合成层后羽化正常。中间试过的「五段递减模糊条」和「map-drawer:empty 宿主」都撤了(后者在用户打开过地图后失效);③ 滚动条改常驻低亮度(16%)细条,hover 加深。
 
+第六次修正:① 滚动条轨道用 `::-webkit-scrollbar-track { margin-top }` 从工具栏 / 筛选行底下开始(之前从窗口顶部起,用户:「滚动起始点在屏幕顶部有点莫名其妙」);② **内容区包一层圆角面板**(同 demo C 的「全部素材」框):`section.bg-app` 四边 8px、圆角 8、底 `--pane`,顶部玻璃与筛选行被 `overflow-hidden` 限制在框内,不再溢出到窗口边;③ **检查器同样包一层面板**(右 / 上 / 下 8px,含未选中空态 aside),三栏于是都是内缩圆角面板、8px 同缝;不做检查器隐藏 / 折叠功能。
+
 用户追加:「header 要改掉,三个圆要融合进来」→ `electron/main.js` createWindow 加 `titleBarStyle:"hiddenInset"` + `trafficLightPosition:{x:18,y:16}`(两行,未 commit,可回退;这是 P3 唯一先做的一项),皮肤里侧栏面板 padding-top 44 让位、拖拽区 = 侧栏头 44px + 内容区顶部 8px 细条(避开控件防光标闪)。
 
 未做(结构相关,留待确认后):工具栏浮到内容之上的滚动边缘效果、图标簇合并为三组、检查器点选滑入、vibrancy / 透明窗(P3 其余)。

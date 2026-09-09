@@ -362,7 +362,7 @@ select {
 
 /* ═══════════ Tahoe 皮肤 · 组件层(只改样式,不动结构;段号对应 docs 二十一)═══════════ */
 
-/* ───────── 4 · 三栏:侧栏 = 内缩圆角面板;内容区 / 检查器贴边透明 ───────── */
+/* ───────── 4 · 三栏:侧栏 / 内容区 / 检查器 = 三块内缩圆角面板,8px 同缝 ───────── */
 .noise-overlay > .grid > aside.border-r {
   height: auto; align-self: stretch; min-width: 0;
   margin: 8px 0 8px 8px; border-radius: 8px;      /* 面板圆角 = 窗口 16 − 内缩 8 */
@@ -371,7 +371,12 @@ select {
 }
 /* 内容区包一层圆角面板(同 demo C):顶部玻璃与筛选行被限制在框内,四边留 8px 与侧栏 / 窗口边同缝 */
 .noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 8px; background: var(--pane); }
-.noise-overlay > .grid > aside.border-l { border: none; background: transparent; }
+/* 检查器同样包一层圆角面板(含"未选中"空态 aside,它没有 border-l),右 / 上 / 下留 8px;不做隐藏折叠 */
+.noise-overlay > .grid > aside:not(.border-r) {
+  height: auto; align-self: stretch; min-width: 0;
+  margin: 8px 8px 8px 0; border-radius: 8px;
+  border: none; background: var(--pane);
+}
 .noise-overlay > .grid > div.bg-chrome { background: transparent; }
 /* 拖拽把手:平时无线,hover 才现细线(既有行为,只换颜色) */
 .cursor-col-resize:hover::before { background: var(--fill-3) !important; }
@@ -489,7 +494,7 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 /* 框选矩形单色 */
 .border-accent\/60.bg-accent\/10 { border-color: rgb(var(--text-color) / 0.4); background: var(--fill); }
 
-/* ───────── 8 · 检查器:贴边透明、无分割线、星级单色 ───────── */
+/* ───────── 8 · 检查器:圆角面板(见 4)、无分割线、星级单色 ───────── */
 aside.border-l .border-t { border-color: transparent; }
 aside.border-l img.object-contain { border-radius: 10px; }
 aside.border-l [class*="fill-\[rgb(225"] { fill: rgb(var(--accent-color)); color: rgb(var(--accent-color)); }
