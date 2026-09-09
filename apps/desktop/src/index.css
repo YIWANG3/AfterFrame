@@ -543,6 +543,11 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 }
 [data-editor-wheel-scope="panel"]:has(> .border-t.px-3.py-2, > :not(.hidden) .border-t.px-3.py-2)
   .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]) { padding-bottom: 52px; }
+/* 面板内小控件圆角按高度定(同心):≤24 高 6px,28 / 30 / 32 高 8px。
+   根因:Tailwind 的 rounded(4px)没跟着皮肤重映射,而 rounded-md 被映射成 10px,同一行里 4 与 10 混用 */
+[data-editor-wheel-scope="panel"] :is(.h-5, .h-6)[class*="rounded"]:not(.rounded-full) { border-radius: 6px; }
+[data-editor-wheel-scope="panel"] :is(.h-7, .h-8, .h-\[30px\])[class*="rounded"]:not(.rounded-full) { border-radius: 8px; }
+[data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
 /* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
 [data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgba(255, 255, 255, 0.22); }
 
