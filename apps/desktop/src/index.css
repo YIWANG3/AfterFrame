@@ -412,6 +412,10 @@ html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z
 section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
 section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
+/* 地图展开时网格不再位于工具栏 / 筛选行之下,顶部让位归零(留 8px 与地图分隔),否则地图下方空出一整块;
+   顶部滚动渐进模糊此时会落在地图上,一并关掉 */
+section.bg-app:has([data-testid="map-drawer"][data-expanded="true"]) [data-testid="gallery-scroll"] { padding-top: 8px !important; }
+[data-testid="workspace-split"]:has(> [data-testid="map-drawer"][data-expanded="true"])::before { display: none; }
 /* 滚动条轨道从工具栏(及筛选行)下方开始,不从窗口顶部起(WebKit 支持给 track 设 margin 缩短轨道两端) */
 section.bg-app [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 56px; margin-bottom: 6px; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 96px; }
