@@ -526,6 +526,9 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
   --sel-y: calc((var(--img-h, 100%) - var(--sel-h)) / 2);
 }
 [data-gallery-item] [class*="ring-2"], [data-gallery-item] .shadow-glow { --tw-ring-color: transparent; box-shadow: none; }
+/* 根因:<button> 会把内容垂直居中,卡片高度 = 图高 + 固定说明高,而说明实际矮几个像素,
+   于是图片被整体下移 2-4px,环(按卡片顶算)就和图片错位。改成 flex 列,内容从顶部开始 */
+[data-gallery-item] { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
 [data-gallery-item][data-selected="true"]::after {
   content: ""; position: absolute; z-index: 2; pointer-events: none;
   left: var(--sel-x); top: var(--sel-y); width: var(--sel-w); height: var(--sel-h);
