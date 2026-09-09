@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AfterFrame</title>
+    <!-- Splash-time rules: index.css only arrives with the JS bundle, and until then the
+         body's default 8px margin plus the 100vh splash overflow the document, which
+         flashes a native scrollbar. -->
+    <style>html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }</style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Chinese only — the latin editor fonts are bundled locally (src/fonts.js).
