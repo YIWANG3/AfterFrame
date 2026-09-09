@@ -548,6 +548,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] :is(.h-5, .h-6)[class*="rounded"]:not(.rounded-full) { border-radius: 6px; }
 [data-editor-wheel-scope="panel"] :is(.h-7, .h-8, .h-\[30px\])[class*="rounded"]:not(.rounded-full) { border-radius: 8px; }
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
+/* 文本 / 数值输入框、下拉、多行框:一律小圆角 5px,不随高度放大(用户:「这种输入框不能用大 radius」) */
+[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]) { border-radius: 5px; }
 /* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
 [data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgba(255, 255, 255, 0.22); }
 
