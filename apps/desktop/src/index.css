@@ -387,11 +387,19 @@ select {
 /* hiddenInset:红绿灯落在侧栏面板内,侧栏头部让位 44px;拖拽区 = 侧栏头 + 内容区顶部 8px 细条(避开控件,防光标闪) */
 html.electron .noise-overlay > .grid > aside.border-r { padding-top: 44px; }
 html.electron.fs .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
-#app-drag1, #app-drag2 { display: none; position: fixed; z-index: 15; -webkit-app-region: drag; }
-html.electron #app-drag1 { display: block; top: 0; left: 0; width: 240px; height: 44px; }
-html.electron #app-drag2 { display: block; top: 0; left: 240px; right: 0; height: 8px; }
-html.electron.fs #app-drag1, html.electron.fs #app-drag2 { display: none; }
+/* 窗口拖拽区(hiddenInset 后没有系统标题栏):
+   · 侧栏面板整块可拖(头部 44px 让位区 + 条目之间的空白),条目本身 no-drag
+   · 内容区的工具栏行整条可拖,胶囊控件 no-drag(拖拽区不能盖住控件,否则光标闪)
+   · 三块面板之间的 8px 缝(grid 底)也可拖
+   拖拽区必须能接收指针事件,所以工具栏这里把 pointer-events 打开 */
+html.electron .noise-overlay > .grid { -webkit-app-region: drag; }
+html.electron .noise-overlay > .grid > * { -webkit-app-region: no-drag; }
+html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag; }
 html.electron .noise-overlay > .grid > aside.border-r > * { -webkit-app-region: no-drag; }
+html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: drag; pointer-events: auto; }
+html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar > * { -webkit-app-region: no-drag; }
+html.electron.fs .noise-overlay > .grid, html.electron.fs .noise-overlay > .grid > aside.border-r,
+html.electron.fs .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: no-drag; }
 /* 侧栏内零分割线(底部折叠钮 / 设置上方的两条线) */
 aside.border-r .border-t, aside.border-r .border-b, aside.border-r [class*="border-t"], aside.border-r [class*="border-b"] { border-color: transparent; }
 /* 侧栏条目:alpha 填充,选中 = 更亮的填充 */
