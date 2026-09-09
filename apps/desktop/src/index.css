@@ -22,14 +22,14 @@
    颜色仍是 RGB 三元组,tailwind 的 <alpha-value> 语法不变。 */
 :root {
   color-scheme: dark;
-  --app-bg: 11 11 13;            /* 舞台:深黑 */
-  --chrome-bg: 19 19 22;         /* 弹层 / Modal 底 */
+  --app-bg: 6 6 7;               /* 舞台:近纯黑(第八轮:用户要更黑) */
+  --chrome-bg: 14 14 16;         /* 弹层 / Modal 底 */
   --sidebar-bg: 19 19 22;
-  --panel-bg: 23 23 26;
-  --panel-bg-2: 28 28 32;
-  --hover-bg: 30 30 34;
-  --selected-bg: 40 40 44;
-  --border-color: 36 36 40;      /* 过渡期:线先几乎不可见,逐组件删除后再收掉 */
+  --panel-bg: 17 17 19;
+  --panel-bg-2: 22 22 25;
+  --hover-bg: 25 25 28;
+  --selected-bg: 35 35 39;
+  --border-color: 30 30 34;      /* 过渡期:线先几乎不可见,逐组件删除后再收掉 */
   --text-color: 242 242 242;
   --muted-text: 178 178 182;
   --muted-text-2: 122 122 128;
@@ -46,9 +46,9 @@
   --sidebar-width: 220px;
   --inspector-width: 280px;
   /* 材质层 */
-  --pane: rgba(255, 255, 255, 0.055);      /* 侧栏面板 */
-  --glass: rgba(16, 16, 20, 0.6);          /* 工具栏胶囊 */
-  --pop: rgba(20, 20, 24, 0.94);           /* 菜单 / 弹层 / JobDock:可读性优先,近实色 */
+  --pane: rgba(255, 255, 255, 0.05);       /* 三栏面板:黑底上约 18 灰 */
+  --glass: rgba(10, 10, 12, 0.6);          /* 工具栏胶囊 */
+  --pop: rgba(15, 15, 18, 0.94);           /* 菜单 / 弹层 / JobDock:可读性优先,近实色 */
   --edge: rgba(255, 255, 255, 0.08);       /* 发丝边 */
   --fill: rgba(255, 255, 255, 0.07);
   --fill-2: rgba(255, 255, 255, 0.11);
