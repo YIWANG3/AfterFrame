@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, FolderInput, FolderPlus } from "lucide-react";
+import { FolderOpen, FolderInput, FolderPlus, Trash2 } from "lucide-react";
 import api from "../../api";
-import { Group, FieldRow, Toggle, SecondaryButton } from "./SettingsPrimitives";
+import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
 
 // Strip the catalog extension for a friendlier display name.
 function catalogName(p) {
@@ -133,7 +133,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
         ) : (
           watched.map((dir) => (
             <FieldRow key={dir} label={baseName(dir)} hint={dir}>
-              <SecondaryButton onClick={() => removeWatchedDir(dir)}>{t("library.remove")}</SecondaryButton>
+              <IconActionButton danger title={t("library.remove")} onClick={() => removeWatchedDir(dir)}><Trash2 /></IconActionButton>
             </FieldRow>
           ))
         )}

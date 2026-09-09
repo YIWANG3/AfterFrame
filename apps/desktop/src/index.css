@@ -68,7 +68,7 @@
   --border-color: 214 214 218;
   --text-color: 29 29 31;
   --muted-text: 110 110 115;
-  --muted-text-2: 158 158 163;
+  --muted-text-2: 112 112 118;      /* 浅色下 158 只有 2.3:1,11px 说明文字读不清;112 约 4.6:1 */
   --accent-color: 29 29 31;
   --accent-ink: 255 255 255;
   --accent-soft: 232 232 235;
@@ -621,15 +621,21 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
    之前按钮 rounded(4px)、输入框 rounded-md(10px)、多行框 rounded(4px)混着。统一为 28 高、8px 圆角、无描边、fill 底;
    主按钮 accent 底同圆角;focus 用 1px 内环 ───────── */
 .fixed.inset-0.z-\[3000\] :is(button.h-7, button.h-8)[class*="rounded"]:not([class*="rounded-full"]) { border-radius: 8px; }
-.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill); color: rgb(var(--text-color)); }
-.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"]:hover { background: var(--fill-2); border-color: transparent; }
+/* 卡片底已经是 --fill,卡内控件要再亮一档(fill-2)才分得出来 */
+.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); color: rgb(var(--text-color)); }
+.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
 .fixed.inset-0.z-\[3000\] button.border-accent.bg-accent { border-color: transparent; color: rgb(var(--accent-ink)); }
 .fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
-  border-radius: 8px; border-color: transparent; background: var(--fill);
+  border-radius: 8px; border-color: transparent; background: var(--fill-2);
 }
 .fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); outline: none; }
 /* 密钥这类「图标 + 输入」的组合框(div.h-8 带边框)同样处理 */
-.fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app { border-radius: 8px; border-color: transparent; background: var(--fill); }
+.fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app { border-radius: 8px; border-color: transparent; background: var(--fill-2); }
+/* 子卡(服务商 / 模型行):深色用 fill,浅色用白底,与灰卡拉开;组件通过 --sub-card 取 */
+:root { --sub-card: var(--fill); }
+:root[data-theme="light"] { --sub-card: rgb(255 255 255 / 0.85); }
+/* 浅色主题遮罩不要黑 45%,叠出来发脏 */
+:root[data-theme="light"] .fixed.inset-0.bg-app\/80 { background: rgba(0, 0, 0, 0.22); }
 .fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */

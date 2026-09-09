@@ -12,7 +12,8 @@ export function Toggle({ on, onChange, disabled }) {
       onClick={() => onChange?.(!on)}
       className={[
         "relative h-[18px] w-[30px] rounded-full transition-colors",
-        on ? "bg-accent" : "bg-hover",
+        // Off track must stay visible on a fill-coloured card: fill-3 + a faint inner ring.
+        on ? "bg-accent" : "bg-[var(--fill-3)] shadow-[inset_0_0_0_0.5px_rgb(var(--text-color)/0.12)]",
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
       ].join(" ")}
     >
@@ -111,13 +112,12 @@ export function Chip({ on, onClick, children }) {
       type="button"
       onClick={onClick}
       className={[
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+        "inline-flex h-7 items-center rounded-full px-3 text-[11px] transition-colors",
         on
-          ? "border-accent bg-accent/15 text-accent"
-          : "border-border bg-app text-muted hover:bg-hover hover:text-text",
+          ? "bg-accent text-accentInk"
+          : "bg-[var(--fill-2)] text-muted hover:bg-[var(--fill-3)] hover:text-text",
       ].join(" ")}
     >
-      {on && <span className="h-[5px] w-[5px] rounded-full bg-accent" />}
       {children}
     </button>
   );

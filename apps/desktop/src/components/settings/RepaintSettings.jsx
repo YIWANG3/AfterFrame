@@ -107,8 +107,8 @@ export default function RepaintSettings() {
               <div
                 key={inst.id}
                 className={[
-                  "flex items-center gap-3 rounded-lg border px-3 py-2.5",
-                  active ? "border-accent/40 bg-accent/5" : "border-border/50 bg-panel2",
+                  "flex items-center gap-3 rounded-[8px] px-3 py-2.5 bg-[var(--sub-card)]",
+                  active ? "shadow-[inset_0_0_0_1.5px_rgb(var(--accent-color))]" : "",
                 ].join(" ")}
               >
                 <ActiveRadio
@@ -120,17 +120,17 @@ export default function RepaintSettings() {
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[12px] font-medium text-text">{inst.name}</span>
                     {active && (
-                      <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-accent">
+                      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
                         {t("providers.active")}
                       </span>
                     )}
                   </div>
-                  <div className="truncate text-[10px] text-muted2">{tmpl?.label || inst.type}</div>
+                  <div className="truncate text-[11px] text-muted2">{tmpl?.label || inst.type}</div>
                 </div>
                 <select
                   value={prefs.selectedModels?.[inst.id] || ""}
                   onChange={(e) => persist({ selectedModels: { ...prefs.selectedModels, [inst.id]: e.target.value } })}
-                  className="h-7 w-[180px] shrink-0 rounded-md border border-border/60 bg-app px-1.5 text-[11px] text-text outline-none hover:border-border focus:border-accent/50"
+                  className="h-7 w-[180px] shrink-0 rounded-md border border-border/60 bg-app px-1.5 text-[12px] text-text outline-none hover:border-border focus:border-accent/50"
                 >
                   {modelOptions(inst).map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>

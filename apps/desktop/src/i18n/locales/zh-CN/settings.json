@@ -2,7 +2,7 @@
   "title": "设置",
   "close": "关闭 (Esc)",
   "scope": {
-    "catalog": "当前 Catalog"
+    "catalog": "当前图库"
   },
   "tabs": {
     "general": "通用",
