@@ -457,9 +457,12 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 .app-toolbar > .relative:not(.min-w-0) > button { height: 28px; min-width: 28px; border-radius: 999px; margin: 0; }
 .app-toolbar > .relative:not(.min-w-0) > button.w-\[100px\] { width: auto; padding: 0 14px; }
 .app-toolbar > .relative.ml-1 { margin-left: 0; }
-.app-toolbar > label { padding: 0; }
+/* 搜索胶囊:label 同时命中上面的 `.relative:not(.min-w-0)`(0,3,0),这里要同等特异度才能真正去掉 3px 内边距;
+   输入框撑满胶囊,focus 环画在胶囊(label)自身上,与外壳同心,四边等距 */
+.app-toolbar > label.relative:not(.min-w-0) { padding: 0; }
 .app-toolbar > label input { background: transparent; border-color: transparent; border-radius: 999px; height: 34px; }
-.app-toolbar > label input:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); }
+.app-toolbar > label input:focus { border-color: transparent; box-shadow: none; }
+.app-toolbar > label:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
 .app-toolbar button[class*="border-border"] { background: transparent; border-color: transparent; border-radius: 999px; }
 .app-toolbar .bg-selected { background: var(--fill-3); }
 /* 单独的图标钮(刷新等)也上胶囊玻璃 */
