@@ -550,6 +550,10 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
 /* 文本 / 数值输入框、下拉、多行框:一律小圆角 5px,不随高度放大(用户:「这种输入框不能用大 radius」) */
 [data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]) { border-radius: 5px; }
+/* 带边框、bg-app 底的按钮(AI 面板的 + / 钥匙 / 新建风格)与旁边的字段同行,圆角跟字段走 5px */
+[data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"] { border-radius: 5px; }
+/* 只靠 padding 撑起来的小图标钮(风格卡片的编辑 / 删除、清空提示词):20-24 高,rounded-md 的 10px 太圆 */
+[data-editor-wheel-scope="panel"] :is(button.p-1, button.p-0\.5, button.py-1).rounded-md { border-radius: 6px; }
 /* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
 [data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgba(255, 255, 255, 0.22); }
 
