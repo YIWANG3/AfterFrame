@@ -34,20 +34,20 @@ export default function AboutSettings() {
 
   return (
     <div>
-      <Group>
-        <div className="flex items-center gap-4 py-4">
-          <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-[14px]" />
-          <div>
-            <div className="text-[18px] font-semibold text-text">AfterFrame</div>
-            <div className="text-[12px] text-muted2">{t("about.tagline")}</div>
-            {version && (
-              <div className="mt-1.5 text-[11px] tabular-nums text-muted">
-                {version} · arm64
-              </div>
-            )}
-          </div>
+      {/* Header sits on the page itself, no card: the icon's own rounded shape
+          fought with a card radius around it. */}
+      <div className="mb-5 flex items-center gap-4 px-1 pb-1 pt-2">
+        <img src={logo} alt="AfterFrame" className="h-16 w-16 rounded-[14px]" />
+        <div>
+          <div className="text-[18px] font-semibold text-text">AfterFrame</div>
+          <div className="text-[12px] text-muted2">{t("about.tagline")}</div>
+          {version && (
+            <div className="mt-1.5 text-[11px] tabular-nums text-muted">
+              {version} · arm64
+            </div>
+          )}
         </div>
-      </Group>
+      </div>
 
       <Group>
         {LINKS.map((link) => {
