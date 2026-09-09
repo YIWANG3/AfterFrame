@@ -327,6 +327,9 @@ const CardContent = memo(function CardContent({
   const { t } = useTranslation("nav");
   const title = fileName(item.image_path) || item.stem;
   const totalHeight = height + captionHeight;
+  const previewSrc = item.preview_path || item.image_path
+    ? localFileUrl(item.preview_path || item.image_path) + (bustToken || item.modified_time ? `?r=${encodeURIComponent(bustToken || item.modified_time)}` : "")
+    : null;
 
   // Video hover-scrub: lazily fetch a keyframe filmstrip on first hover, then
   // map cursor-x → frame so dragging across the card scrubs the clip.
@@ -418,6 +421,9 @@ const CardContent = memo(function CardContent({
         width: `${width}px`,
         height: `${totalHeight}px`,
         minWidth: 0,
+        // Selection glow (index.css): the photo's own colours, blurred, behind the tile.
+        "--img-h": `${height}px`,
+        "--thumb": selected && previewSrc ? `url("${previewSrc.replace(/"/g, '\\"')}")` : "none",
       }}
     >
       <div
@@ -435,7 +441,7 @@ const CardContent = memo(function CardContent({
       >
         {item.preview_path || item.image_path ? (
           <PreviewImage
-            src={localFileUrl(item.preview_path || item.image_path) + (bustToken || item.modified_time ? `?r=${encodeURIComponent(bustToken || item.modified_time)}` : "")}
+            src={previewSrc}
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
