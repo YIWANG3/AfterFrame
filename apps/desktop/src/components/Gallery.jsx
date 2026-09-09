@@ -427,13 +427,11 @@ const CardContent = memo(function CardContent({
         width: `${width}px`,
         height: `${totalHeight}px`,
         minWidth: 0,
-        // Selection glow + frame (index.css): the photo's own colours, blurred,
-        // behind the tile; the frame is sized from --img-w/--img-h/--ar so it
+        // Selection ring (index.css) is sized from --img-w/--img-h/--ar so it
         // follows the drawn photo even when contain-fit leaves a gap.
         "--img-w": `${width}px`,
         "--img-h": `${height}px`,
         "--ar": String(frameAr),
-        "--thumb": selected && previewSrc ? `url("${previewSrc.replace(/"/g, '\\"')}")` : "none",
       }}
     >
       <div
