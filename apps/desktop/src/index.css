@@ -140,7 +140,7 @@ input[type="range"] {
 
 input[type="range"]::-webkit-slider-runnable-track {
   height: 2px;
-  border-radius: 999px; corner-shape: round;
+  border-radius: 999px;
   background: rgb(var(--border-color));
 }
 
@@ -149,7 +149,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 12px;
   height: 12px;
-  border-radius: 999px; corner-shape: round;
+  border-radius: 999px;
   background: rgb(var(--text-color));
   border: none;
   margin-top: -5px;
@@ -286,7 +286,7 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
 /* 滚动条只在滚动时出现(main.jsx 在滚动中的元素上打 data-scrolling,停 700ms 后摘掉),平时隐形,不与圆角面板打架 */
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; corner-shape: round; border: 2px solid transparent; background-clip: padding-box; cursor: pointer; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; cursor: pointer; }
 ::-webkit-scrollbar { cursor: pointer; }
 /* 鼠标在滚动区域内时淡淡地露出拇指(16%),这样停止滚动后仍找得到它;滚动中 30%,按住 / 悬停拇指 45% */
 :hover::-webkit-scrollbar-thumb { background: rgb(var(--text-color) / 0.16); background-clip: padding-box; }
@@ -366,15 +366,11 @@ select {
   .toolbar-modes { display: none; }
 }
 
-/* ───────── 0 · 连续曲率圆角(Apple 的 continuous corners):Chromium 139+ 的 corner-shape,Electron 43 = Chromium 150 可用。
-   全局 squircle(超椭圆),box-shadow / outline 跟着走;胶囊(999px)与 rounded-full 保持正圆端,否则两端会变方 ───────── */
-* { corner-shape: squircle; }
-.rounded-full, [class*="rounded-full"] { corner-shape: round; }
-/* 伪元素不参与:顶部滚动渐进模糊那个 ::before 是 mask + backdrop-filter,corner-shape 一上去羽化就退化成硬切;只给选中环单独开 */
-[data-gallery-item][data-selected="true"]::after { corner-shape: squircle; }
-[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { corner-shape: round; }
-/* 内容区面板(overflow hidden + 8px 圆角)必须保持 round:祖先一旦是超椭圆裁切,里面那条 mask + backdrop-filter 的渐进模糊就退化成硬边 */
-.noise-overlay > .grid > section.bg-app { corner-shape: round; }
+/* ───────── 0 · 连续曲率圆角:已关(用户:「先关闭超椭圆,感觉乱了」)。
+   曾试 `* { corner-shape: squircle }`(Chromium 139+,Electron 43 = Chromium 150 可用),记录两个坑以备再开:
+   ① 胶囊(999px)与 rounded-full 必须保持 round,否则两端变方;
+   ② 带 overflow hidden + 圆角的祖先(内容区面板)不能是超椭圆,里面 mask + backdrop-filter 的渐进模糊会退化成硬边;
+   ③ 5px 一档的小圆角上超椭圆看起来反而生硬 ───────── */
 
 /* ═══════════ Tahoe 皮肤 · 组件层(只改样式,不动结构;段号对应 docs 二十一)═══════════ */
 
@@ -432,14 +428,14 @@ html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-
 .fixed.inset-0.z-\[10200\] > .h-10 > .flex.items-center.gap-2 {                                    /* 拼图:导出 + 关闭 绝对靠右 */
   position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
 }
-.fixed.inset-0.z-\[10100\] > .h-11 button.h-7.w-7, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7.w-7 { border-radius: 999px; corner-shape: round; }
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7.w-7, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7.w-7 { border-radius: 999px; }
 /* 头部主动作(编辑器「保存」/ 拼图「导出」):同一款胶囊,fill-2 底、正文色,不再各自用 accent 10% / 12% */
 .fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7), .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7) {
-  height: 28px; padding: 0 12px; border-radius: 999px; corner-shape: round; background: var(--fill-2); color: rgb(var(--text-color));
+  height: 28px; padding: 0 12px; border-radius: 999px; background: var(--fill-2); color: rgb(var(--text-color));
 }
 .fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7):hover, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7):hover { background: var(--fill-3); }
-.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; corner-shape: round; background: var(--fill); padding: 2px; }
-.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; corner-shape: round; height: 24px; padding: 0 12px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; background: var(--fill); padding: 2px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; height: 24px; padding: 0 12px; }
 .fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button.bg-panel2 { background: var(--fill-3); }
 
 /* ───────── 5 · 工具栏:浮在内容之上,控件各自成玻璃胶囊;网格顶部让位,照片从胶囊底下穿过 ───────── */
@@ -478,49 +474,49 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 .app-toolbar { background: transparent; height: 48px; gap: 6px; padding: 0 12px; }
 .app-toolbar .truncate.font-semibold { font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
 /* 图标钮 / 分组 → 胶囊 */
-.app-toolbar button.rounded-md { border-radius: 999px; corner-shape: round; }
+.app-toolbar button.rounded-md { border-radius: 999px; }
 .app-toolbar > .toolbar-modes,
 .app-toolbar > .toolbar-thumbsize,
 .app-toolbar > label,
 .app-toolbar > .relative:not(.min-w-0) {
-  border-radius: 999px; corner-shape: round; background: var(--glass);
+  border-radius: 999px; background: var(--glass);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
   height: 34px; padding: 0 3px; display: flex; align-items: center;
 }
 .app-toolbar { height: 52px; }
-.app-toolbar button.rounded-md, .app-toolbar button.h-8 { height: 28px; min-width: 28px; border-radius: 999px; corner-shape: round; }
+.app-toolbar button.rounded-md, .app-toolbar button.h-8 { height: 28px; min-width: 28px; border-radius: 999px; }
 .app-toolbar button.w-8 { width: 28px; }
 .app-toolbar > .toolbar-modes button { padding-left: 10px; padding-right: 10px; }
 .app-toolbar > .toolbar-thumbsize { padding: 0 10px; }
 /* 分组胶囊(布局 / 地图):内部按钮 28 高、全圆角,高亮态与外壳同心 */
 .app-toolbar > .toolbar-modes { padding: 0 3px; gap: 2px; }
-.app-toolbar > .toolbar-modes button { height: 28px; min-width: 28px; border-radius: 999px; corner-shape: round; padding-left: 8px; padding-right: 8px; }
+.app-toolbar > .toolbar-modes button { height: 28px; min-width: 28px; border-radius: 999px; padding-left: 8px; padding-right: 8px; }
 .app-toolbar > .toolbar-modes button:hover, .app-toolbar button.rounded-md:hover { background: var(--fill-2); }
 /* 单按钮的胶囊(排序 / 筛选 / 后台活动 / 加号):外壳不留内边距,按钮撑满,发丝边与填充重合 */
 .app-toolbar > .relative:not(.min-w-0) { padding: 0 3px; }
-.app-toolbar > .relative:not(.min-w-0) > button { height: 28px; min-width: 28px; border-radius: 999px; corner-shape: round; margin: 0; }
+.app-toolbar > .relative:not(.min-w-0) > button { height: 28px; min-width: 28px; border-radius: 999px; margin: 0; }
 .app-toolbar > .relative:not(.min-w-0) > button.w-\[100px\] { width: auto; padding: 0 14px; }
 .app-toolbar > .relative.ml-1 { margin-left: 0; }
 /* 搜索胶囊:label 同时命中上面的 `.relative:not(.min-w-0)`(0,3,0),这里要同等特异度才能真正去掉 3px 内边距;
    输入框撑满胶囊,focus 环画在胶囊(label)自身上,与外壳同心,四边等距 */
 .app-toolbar > label.relative:not(.min-w-0) { padding: 0; }
-.app-toolbar > label input { background: transparent; border-color: transparent; border-radius: 999px; corner-shape: round; height: 34px; }
+.app-toolbar > label input { background: transparent; border-color: transparent; border-radius: 999px; height: 34px; }
 .app-toolbar > label input:focus { border-color: transparent; box-shadow: none; }
 .app-toolbar > label:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
-.app-toolbar button[class*="border-border"] { background: transparent; border-color: transparent; border-radius: 999px; corner-shape: round; }
+.app-toolbar button[class*="border-border"] { background: transparent; border-color: transparent; border-radius: 999px; }
 .app-toolbar .bg-selected { background: var(--fill-3); }
 /* 单独的图标钮(刷新等)也上胶囊玻璃 */
-.app-toolbar > button { height: 34px; width: 34px; min-width: 34px; border-radius: 999px; corner-shape: round; background: var(--glass); backdrop-filter: var(--blur); }
+.app-toolbar > button { height: 34px; width: 34px; min-width: 34px; border-radius: 999px; background: var(--glass); backdrop-filter: var(--blur); }
 /* 筛选计数徽标:accent 白底黑字 */
 .app-toolbar .bg-accent.text-black { color: rgb(var(--accent-ink)); }
 
 /* ───────── 6 · 筛选行:透明底、无底线;chip 胶囊无描边 ───────── */
 .flex-wrap.border-b[class*="bg-chrome"] { background: transparent; border-color: transparent; padding: 4px 12px 10px; }
-.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; corner-shape: round; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
+.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
 .flex-wrap.border-b button.rounded-md.border:hover { background: var(--fill-2); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] { background: rgb(var(--accent-color)); color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
-.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; corner-shape: round; }
+.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; }
 .flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
 
 /* ───────── 7 · 网格:缩略图去描边,选中留单色环;网格底透明 ───────── */
@@ -611,7 +607,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="rose-"] { order: 1; margin-right: auto; }
 .shadow-overlay.bg-chrome :is(input, select, textarea)[class*="rounded"],
 .shadow-overlay.bg-chrome div.h-8.rounded-md.border.bg-app { border-radius: 5px; }
-.shadow-overlay.bg-chrome button.p-1.rounded-md { border-radius: 999px; corner-shape: round; }
+.shadow-overlay.bg-chrome button.p-1.rounded-md { border-radius: 999px; }
 .hover\:bg-hover:hover { background: var(--fill); }
 
 /* ───────── 10 · Modal / 设置:实色卡 18px、无边框、无分割线 ───────── */
@@ -622,8 +618,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .fixed.inset-0.bg-app\/80 { background: rgba(0,0,0,.45); }
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
-button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; corner-shape: round; }
-button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); border-radius: 999px; corner-shape: round; }
+button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
+button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); border-radius: 999px; }
 button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border-color: transparent; }
 
 /* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):
