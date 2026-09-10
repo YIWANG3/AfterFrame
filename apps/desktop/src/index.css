@@ -617,6 +617,17 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text));
 }
 
+/* ───────── 8d · 自选颜色色块:一圈 2px 彩虹环(用户:「白色根本看不出可以自选」)。
+   环画在 ::before 上,不碰色块自己的底(有的底是「颜色 + 棋盘格」多层背景);isolation 让 z-index:-1 落在色块之下、面板之上。
+   --swatch-r 由各处按自己的圆角传入(圆点 999px、方块 4px)───────── */
+.swatch-custom { position: relative; isolation: isolate; border-color: transparent !important; }
+.swatch-custom::before {
+  content: ""; position: absolute; inset: -2px; z-index: -1;
+  border-radius: calc(var(--swatch-r, 4px) + 2px);
+  background: conic-gradient(#f43 0deg, #fc3 60deg, #4d4 120deg, #3cf 180deg, #55f 240deg, #f4c 300deg, #f43 360deg);
+}
+.swatch-custom:hover::before { filter: brightness(1.15); }
+
 /* ───────── 9 · 弹层 / 菜单 / JobDock / Toast:玻璃,无边框,微影 ───────── */
 .shadow-overlay.bg-chrome, .shadow-menu.bg-chrome, .shadow-overlay.bg-panel2,
 .shadow-overlay.bg-panel, .shadow-lg.bg-chrome {

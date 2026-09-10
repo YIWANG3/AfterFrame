@@ -502,15 +502,13 @@ export default function HandwritingModal({ onAdd, onClose }) {
               ref={fillSwatchRef}
               type="button"
               onClick={() => setColorPickerOpen((v) => !v)}
-              className={[
-                "h-5 w-5 rounded-full border",
-                fill.mode === "gradient" ? "border-[rgb(var(--accent-color))]" : "border-border/60",
-              ].join(" ")}
+              className="swatch-custom ml-0.5 h-5 w-5 rounded-full border border-border/60"
               style={{
+                "--swatch-r": "999px",
                 background:
                   fill.mode === "gradient"
                     ? `linear-gradient(90deg, ${fill.gradient.from}, ${fill.gradient.to})`
-                    : "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                    : fill.color,
               }}
             />
             {colorPickerOpen && (

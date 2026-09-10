@@ -143,8 +143,8 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           <button
             ref={swatchRef} type="button" title={t("text.editColor")}
             onClick={() => setPickerOpen((v) => !v)}
-            className="h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
-            style={{ background: swatchBg }}
+            className="swatch-custom ml-0.5 h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
+            style={{ background: swatchBg, "--swatch-r": "999px" }}
           />
         </div>
         {pickerOpen && (

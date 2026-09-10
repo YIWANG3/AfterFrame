@@ -443,8 +443,8 @@ function OutlineColorRow({ color, onChange }) {
         ref={swatchRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="h-5 w-5 flex-shrink-0 rounded border border-border/60 transition-shadow hover:border-border-strong"
-        style={{ backgroundColor: color }}
+        className="swatch-custom h-5 w-5 flex-shrink-0 rounded border border-border/60 transition-shadow hover:border-border-strong"
+        style={{ backgroundColor: color, "--swatch-r": "4px" }}
         title={t("sticker.pickColor")}
       />
       <span className="font-mono text-[10px] text-muted2">{color.toUpperCase()}</span>

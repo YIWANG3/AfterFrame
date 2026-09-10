@@ -263,24 +263,14 @@ export function CanvasSection({
             <button
               ref={customColorBtnRef}
               type="button"
-              className={[
-                "h-6 w-6 rounded-full border-2 transition-colors",
-                !BG_PRESETS.some((c) => c.toLowerCase() === bgColor.toLowerCase())
-                  ? "border-[rgb(var(--accent-color))] ring-1 ring-[rgb(var(--accent-color)/0.3)]"
-                  : "border-transparent hover:border-border",
-              ].join(" ")}
+              className="swatch-custom ml-0.5 h-6 w-6 rounded-full border-2 border-transparent transition-colors"
+              style={{ "--swatch-r": "999px" }}
               onClick={() => setShowColorPicker((v) => !v)}
               title={t("customColor")}
             >
               <div
                 className="h-full w-full rounded-full"
-                style={{
-                  backgroundColor: BG_PRESETS.some((c) => c.toLowerCase() === bgColor.toLowerCase()) ? undefined : bgColor,
-                  background: BG_PRESETS.some((c) => c.toLowerCase() === bgColor.toLowerCase())
-                    ? "conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)"
-                    : undefined,
-                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1)",
-                }}
+                style={{ backgroundColor: bgColor, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1)" }}
               />
             </button>
           </div>
