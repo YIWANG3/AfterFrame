@@ -174,15 +174,12 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
   opacity: 1;
 }
 
-/* Hide the native number-input spin buttons (filter range value boxes). */
-.no-spinner::-webkit-outer-spin-button,
-.no-spinner::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.no-spinner {
-  -moz-appearance: textfield;
-}
+/* 数值框一律不显示原生上下箭头:Chromium 的箭头是一块贴着数字的白色方块,和皮肤格格不入;
+   改数值靠输入或拖拽(编辑器的数值框本来就这样)。Tahoe 的做法是独立的 stepper 控件,以后要加再做 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.no-spinner { -moz-appearance: textfield; }
 
 /* Thin scrollbar for in-popover lists, hugging the right edge. */
 .popover-scroll::-webkit-scrollbar {
