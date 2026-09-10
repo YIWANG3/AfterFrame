@@ -591,8 +591,24 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"]:not(.w-full) { border-radius: 5px; }
 /* 只靠 padding 撑起来的小图标钮(风格卡片的编辑 / 删除、清空提示词):20-24 高,rounded-md 的 10px 太圆 */
 [data-editor-wheel-scope="panel"] :is(button.p-1, button.p-0\.5, button.py-1).rounded-md { border-radius: 6px; }
-/* 色板圆点:黑色圆点在深黑面板上要靠一圈可见边才看得见 */
-[data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgba(255, 255, 255, 0.22); }
+/* 色板圆点:黑点在深底、白点在浅底都要靠一圈可见边;用正文色 18% 两套主题通吃 */
+[data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgb(var(--text-color) / 0.18); }
+/* ── 8c · 编辑器面板字段统一(浅色主题下描边全露出来了):输入 / 下拉 / 多行框 / 字体选择钮 / 数值框 一律无描边、fill-2 底,focus 1px 内环 ── */
+[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]),
+[data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border,
+[data-editor-wheel-scope="panel"] div.w-full.rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); }
+[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:focus,
+[data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border:focus-within { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
+/* 分段组(斜体 / 下划线 …):外框去线换 fill 底 */
+[data-editor-wheel-scope="panel"] .h-6.overflow-hidden.rounded-md.border { border-color: transparent; background: var(--fill); }
+/* 风格卡(AI 重绘「我的风格」):与设置页子卡同款,无描边、--sub-card 底、8px,选中 1.5px 内环 */
+[data-editor-wheel-scope="panel"] button.w-full.rounded-lg.border { border-color: transparent; background: var(--sub-card); border-radius: 8px; }
+[data-editor-wheel-scope="panel"] button.w-full.rounded-lg.border:hover { border-color: transparent; background: var(--fill-2); }
+[data-editor-wheel-scope="panel"] button.w-full.rounded-lg.border[class*="accent-color)/0.38"] { background: var(--fill-2); box-shadow: inset 0 0 0 1.5px rgb(var(--accent-color)); }
+/* 分组标题:四个面板统一 11px / 600 / 0.04em(0.14em 的字距在中文上拉得太开);贴纸面板自己那套 9px 也并进来 */
+[data-editor-wheel-scope="panel"] .tracking-\[0\.14em\], [data-editor-wheel-scope="panel"] h4.uppercase, [data-editor-wheel-scope="panel"] h2.uppercase {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text));
+}
 
 /* ───────── 9 · 弹层 / 菜单 / JobDock / Toast:玻璃,无边框,微影 ───────── */
 .shadow-overlay.bg-chrome, .shadow-menu.bg-chrome, .shadow-overlay.bg-panel2,
