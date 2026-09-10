@@ -201,7 +201,7 @@ export default function App() {
 
   const peopleGroups = usePeopleGroups({
     pushToast,
-    enabled: viewMode === "people",
+    enabled: viewMode === "people" || viewMode === "discover",
     catalogKey: workspace.info?.catalogPath || null,
   });
 
@@ -1089,11 +1089,18 @@ export default function App() {
               <DiscoverView
                 summary={workspace.summary}
                 collections={workspace.collections}
-                people={peopleGroups}
+                people={peopleGroups.groups}
                 catalogRevision={workspace.catalogRevision}
                 catalogKey={workspace.info?.catalogPath || null}
-                onSelectItem={selectSingle}
                 onItemsChange={setDiscoverItems}
+                onShowStatus={(status) => {
+                  setViewMode("assets");
+                  setPeopleGroup(null);
+                  const nextFilters = clearPeopleGroupFilter();
+                  workspace.setStatusFilter(status, { facetFilters: nextFilters });
+                }}
+                onOpenMap={() => { setViewMode("assets"); setMapExpanded(true); }}
+                onOpenPeopleView={() => { setViewMode("people"); setPeopleGroup(null); workspace.clearCollection?.({ reload: false }); }}
                 onOpenItem={(assetId) => openLightboxForItem(assetId)}
                 onOpenCollection={(id) => {
                   setViewMode("assets");

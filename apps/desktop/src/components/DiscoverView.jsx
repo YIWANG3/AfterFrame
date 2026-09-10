@@ -1,13 +1,13 @@
-// 发现页 — the "front page" of the library (ported from demo C's 发现):
-// a hero card for what came in most recently, then horizontally scrolling
-// rows: recently added photos, folders (manual collections) and people.
-// Pure presentation over data the app already has; the only fetches are the
-// recent slice and one cover per folder.
+// 发现页 — the library's front page, laid out like Apple Photos' Collections:
+// 回忆 (one big card per month, titled by that month's most-photographed place),
+// 固定 (square entries into recent / rated / RAW / map / people), 相册 (manual
+// folders), 人物 (face circles) and 地点 (small map + place tiles). Nothing here
+// is a single photo, and every tile is backed by a real photo — entries without
+// a cover are hidden rather than drawn as icons.
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Folder } from "lucide-react";
 import api from "../api";
-import { fileName, localFileUrl } from "../utils/format";
+import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import useMapPoints from "./map/useMapPoints";
 
@@ -42,11 +42,16 @@ function groupMonths(items) {
     const d = captureDate(item);
     if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const g = map.get(key) || { key, year: d.getFullYear(), month: d.getMonth() + 1, count: 0, cover: item };
+    const g = map.get(key) || { key, year: d.getFullYear(), month: d.getMonth() + 1, count: 0, cover: item, places: new Map() };
     g.count += 1;
+    const pl = placeOf(item);
+    if (pl) g.places.set(pl.name, (g.places.get(pl.name) || 0) + 1);
     map.set(key, g);
   }
-  return [...map.values()].sort((a, b) => (b.key > a.key ? 1 : -1));
+  // A memory is titled by where most of that month's photos were taken.
+  return [...map.values()]
+    .map((g) => ({ ...g, place: [...g.places.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null }))
+    .sort((a, b) => (b.key > a.key ? 1 : -1));
 }
 
 function groupPlaces(items) {
@@ -59,25 +64,6 @@ function groupPlaces(items) {
     map.set(p.key, g);
   }
   return [...map.values()].sort((a, b) => b.count - a.count);
-}
-
-function itemDate(item) {
-  const meta = item?.image_metadata || {};
-  const v = item?.imported_at || meta.imported_at || meta.modified_time || item?.updated_at;
-  if (!v) return null;
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-}
-
-function shortDate(d) {
-  if (!d) return "";
-  return d.toLocaleDateString([], { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
-}
-
-function cameraOf(item) {
-  const meta = item?.image_metadata || {};
-  return meta.camera_model || meta.camera || null;
 }
 
 function Row({ title, action, onAction, children }) {
@@ -101,7 +87,6 @@ export default function DiscoverView({
   collections,
   people,
   catalogRevision,
-  onSelectItem,
   onOpenItem,
   onOpenCollection,
   onOpenPerson,
@@ -110,10 +95,14 @@ export default function DiscoverView({
   onOpenPlace,
   onItemsChange,
   catalogKey,
+  onShowStatus,
+  onOpenMap,
+  onOpenPeopleView,
 }) {
   const { t } = useTranslation("nav");
   const [recent, setRecent] = useState([]);
   const [slice, setSlice] = useState([]);
+  const [pinnedCovers, setPinnedCovers] = useState({}); // rated / matched → first asset
   const [covers, setCovers] = useState({});
   const manual = (collections || []).filter((c) => c.kind === "manual");
 
@@ -128,6 +117,14 @@ export default function DiscoverView({
         const rows = await api.browseImages({ status: "all", limit: SLICE_LIMIT, offset: 0, sort: "captured-desc" });
         if (!cancelled) setSlice(Array.isArray(rows) ? rows : []);
       } catch { if (!cancelled) setSlice([]); }
+      const next = {};
+      for (const status of ["rated", "matched"]) {
+        try {
+          const rows = await api.browseImages({ status, limit: 1, offset: 0 });
+          next[status] = Array.isArray(rows) ? rows[0] || null : null;
+        } catch { next[status] = null; }
+      }
+      if (!cancelled) setPinnedCovers(next);
     })();
     return () => { cancelled = true; };
   }, [catalogRevision]);
@@ -161,87 +158,71 @@ export default function DiscoverView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverKey]);
 
-  const hero = recent[0] || null;
-  // Hero is big: show the preview at once, then the original on top once it
-  // has decoded (a 30MB JPEG can take a second).
-  const heroPreview = hero ? localFileUrl(hero.preview_path || hero.image_path) : null;
-  // Sharp layer: the 2000px HD preview when the catalog has one (fast), else
-  // the original file itself (a 30MB JPEG decodes in a second or two).
-  const heroFullPath = hero
-    ? (hero.preview_hd_path || hero.image_preview_hd_path || (hero.exists_on_disk === false ? null : hero.image_path) || hero.preview_path)
-    : null;
-  const heroFull = heroFullPath ? localFileUrl(heroFullPath) : null;
-  const [heroFullReady, setHeroFullReady] = useState(false);
-  useEffect(() => { setHeroFullReady(false); }, [heroFull]);
-  // Empty folders have nothing to show on a cover row; the sidebar still lists them.
-  const folderCards = manual.filter((c) => (c.item_count || 0) > 0);
-  const newCount = Number(summary?.recently_added_count ?? recent.length);
-  const heroDate = itemDate(hero);
-  // Title: where the newest photo was taken (AI location annotation), else a neutral label.
-  const heroPlace = placeOf(hero);
+  // Every tile on this page is backed by a real photo: folders without a loaded cover stay out.
+  const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
+
+  const thumb = (item) => (item ? localFileUrl(item.preview_path || item.image_path) : null);
+  const peopleWithFace = (people || []).filter((g) => g.cover_preview_path || g.cover_image_path);
+  const firstPerson = (people || []).find((g) => g.cover_preview_path || g.cover_image_path);
+  const pinned = [
+    { key: "recent", label: t("discover.recentTitle"), cover: thumb(recent[0]), onClick: onShowRecent },
+    Number(summary?.rated_count ?? 0) > 0 ? { key: "rated", label: t("discover.pinRated"), cover: thumb(pinnedCovers.rated), onClick: () => onShowStatus?.("rated") } : null,
+    Number(summary?.raw_assets ?? 0) > 0 ? { key: "raw", label: t("discover.pinRaw"), cover: thumb(pinnedCovers.matched), onClick: () => onShowStatus?.("matched") } : null,
+    { key: "map", label: t("discover.pinMap"), cover: thumb(points.find((pt) => pt.preview_path)), onClick: onOpenMap },
+    firstPerson ? { key: "people", label: t("discover.peopleTitle"), cover: localFileUrl(firstPerson.cover_preview_path || firstPerson.cover_image_path), onClick: onOpenPeopleView } : null,
+  ].filter((tile) => tile && tile.cover);
 
   return (
     <div data-testid="workspace-split" className="relative min-h-0 flex-1 overflow-hidden">
       <div data-testid="gallery-scroll" className="h-full overflow-y-auto px-6 pb-10">
-        {hero ? (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => onSelectItem?.(hero.asset_id)}
-            onDoubleClick={() => onOpenItem?.(hero.asset_id, recent)}
-            onKeyDown={(e) => { if (e.key === "Enter") onOpenItem?.(hero.asset_id, recent); }}
-            className="relative mb-2 h-[min(46vh,420px)] w-full cursor-pointer overflow-hidden rounded-[18px] bg-[var(--fill)]"
-          >
-            <img src={heroPreview} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-            <img
-              src={heroFull}
-              alt=""
-              draggable={false}
-              decoding="async"
-              onLoad={() => setHeroFullReady(true)}
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${heroFullReady ? "opacity-100" : "opacity-0"}`}
-            />
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_35%,rgba(0,0,0,.55)_100%)]" />
-            <div className="pointer-events-none absolute bottom-7 left-8 right-8 text-white">
-              <div className="text-[12px] text-white/70">{newCount > 0 ? t("discover.heroKicker") : t("discover.heroKickerQuiet")}</div>
-              <div className="mt-2 truncate text-[40px] font-bold leading-none tracking-[-0.02em]">{heroPlace?.name || t("discover.recentTitle")}</div>
-              <div className="mt-3 text-[13px] text-white/75">
-                {t("discover.heroMeta", { count: newCount })}{heroDate ? ` · ${t("discover.updated", { date: shortDate(heroDate) })}` : ""}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="mb-2 flex h-[220px] items-center justify-center rounded-[18px] bg-[var(--fill)] text-[13px] text-muted2">
+        {months.length === 0 && recent.length === 0 ? (
+          <div className="flex h-[220px] items-center justify-center rounded-[18px] bg-[var(--fill)] text-[13px] text-muted2">
             {t("discover.empty")}
           </div>
-        )}
+        ) : null}
 
-        {recent.length > 0 && (
-          <Row title={t("discover.recentTitle")} action={t("discover.showAll")} onAction={onShowRecent}>
-            {recent.map((item) => {
-              const d = itemDate(item);
-              const cam = cameraOf(item);
-              return (
-                <button
-                  key={item.asset_id}
-                  type="button"
-                  onClick={() => onSelectItem?.(item.asset_id)}
-                  onDoubleClick={() => onOpenItem?.(item.asset_id, recent)}
-                  className="w-[300px] shrink-0 text-left"
-                >
-                  <div className="h-[200px] w-[300px] overflow-hidden rounded-[14px] bg-[var(--fill)]">
-                    <img src={localFileUrl(item.preview_path || item.image_path)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                  </div>
-                  <div className="mt-3 truncate text-[14px] font-medium text-text">{fileName(item.image_path) || item.stem}</div>
-                  <div className="mt-1 truncate text-[12px] text-muted2">{[d ? shortDate(d) : null, cam].filter(Boolean).join(" · ")}</div>
-                </button>
-              );
-            })}
+        {/* 回忆:按月一张大卡,标题 = 当月照片最多的地点,副标题 = 月份 */}
+        {months.length > 0 && (
+          <Row title={t("discover.memories")}>
+            {months.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                onClick={() => onOpenMonth?.(g.year, g.month)}
+                className="group relative h-[300px] w-[300px] shrink-0 overflow-hidden rounded-[18px] bg-[var(--fill)] text-left"
+              >
+                <img src={thumb(g.cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_45%,rgba(0,0,0,.6)_100%)]" />
+                <div className="pointer-events-none absolute bottom-5 left-5 right-5 text-white">
+                  <div className="truncate text-[26px] font-bold leading-tight tracking-[-0.02em]">{g.place || monthLabel(g)}</div>
+                  <div className="mt-1 text-[12px] font-medium uppercase tracking-[0.04em] text-white/75">{g.place ? monthLabel(g) : t("discover.folderMeta", { count: g.count })}</div>
+                </div>
+              </button>
+            ))}
           </Row>
         )}
 
+        {/* 固定:通往各视图的方块入口 */}
+        {pinned.length > 0 && (
+          <Row title={t("discover.pinned")}>
+            {pinned.map((tile) => (
+              <button
+                key={tile.key}
+                type="button"
+                onClick={() => tile.onClick?.()}
+                className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
+              >
+                <img src={tile.cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
+                <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 truncate text-[13px] font-semibold text-white">{tile.label}</div>
+              </button>
+            ))}
+          </Row>
+        )}
+
+        {/* 相册:文件夹方块,「张数 名称」压在图上 */}
         {folderCards.length > 0 && (
-          <Row title={t("discover.foldersTitle")}>
+          <Row title={t("discover.albums")}>
             {folderCards.map((col) => {
               const cover = covers[col.collection_id]?.path;
               return (
@@ -249,24 +230,22 @@ export default function DiscoverView({
                   key={col.collection_id}
                   type="button"
                   onClick={() => onOpenCollection?.(col.collection_id)}
-                  className="w-[260px] shrink-0 text-left"
+                  className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
                 >
-                  <div className="flex h-[174px] w-[260px] items-center justify-center overflow-hidden rounded-[14px] bg-[var(--fill)]">
-                    {cover
-                      ? <img src={localFileUrl(cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                      : <Folder className="h-7 w-7 stroke-[1.4] text-muted2" />}
+                  <img src={localFileUrl(cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
+                  <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 truncate text-[13px] font-semibold text-white">
+                    <span className="mr-1.5 tabular-nums">{col.item_count || 0}</span>{col.name}
                   </div>
-                  <div className="mt-3 truncate text-[14px] font-medium text-text">{col.name}</div>
-                  <div className="mt-1 text-[12px] text-muted2">{t("discover.folderMeta", { count: col.item_count || 0 })}</div>
                 </button>
               );
             })}
           </Row>
         )}
 
-        {(people || []).length > 0 && (
+        {peopleWithFace.length > 0 && (
           <Row title={t("discover.peopleTitle")}>
-            {(people || []).map((g) => (
+            {peopleWithFace.map((g) => (
               <button
                 key={g.group_id || g.id}
                 type="button"
@@ -274,9 +253,7 @@ export default function DiscoverView({
                 className="w-[112px] shrink-0 text-center"
               >
                 <div className="mx-auto h-[96px] w-[96px] overflow-hidden rounded-full bg-[var(--fill)]">
-                  {(g.cover_preview_path || g.cover_image_path)
-                    ? <FaceCrop src={localFileUrl(g.cover_preview_path || g.cover_image_path)} bbox={g.cover_bbox} size={96} className="h-full w-full" />
-                    : null}
+                  <FaceCrop src={localFileUrl(g.cover_preview_path || g.cover_image_path)} bbox={g.cover_bbox} size={96} className="h-full w-full" />
                 </div>
                 <div className="mt-2 truncate text-[13px] text-text">{g.name?.trim() || t("discover.unnamed")}</div>
                 <div className="mt-0.5 text-[11px] text-muted2">{t("discover.folderMeta", { count: g.face_count || 0 })}</div>
@@ -305,42 +282,24 @@ export default function DiscoverView({
             )}
             {places.length > 0 && (
               <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {places.map((g) => (
-              <button
-                key={g.key}
-                type="button"
-                onClick={() => onOpenPlace?.(g.name)}
-                className="w-[260px] shrink-0 text-left"
-              >
-                <div className="h-[174px] w-[260px] overflow-hidden rounded-[14px] bg-[var(--fill)]">
-                  <img src={localFileUrl(g.cover.preview_path || g.cover.image_path)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                </div>
-                <div className="mt-3 truncate text-[14px] font-medium text-text">{g.name}</div>
-                <div className="mt-1 truncate text-[12px] text-muted2">{[g.sub, t("discover.folderMeta", { count: g.count })].filter(Boolean).join(" · ")}</div>
-              </button>
-            ))}
+                {places.map((g) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    onClick={() => onOpenPlace?.(g.name)}
+                    className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
+                  >
+                    <img src={thumb(g.cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
+                    <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 text-white">
+                      <div className="truncate text-[13px] font-semibold">{g.name}</div>
+                      <div className="truncate text-[11px] text-white/75">{[g.sub, t("discover.folderMeta", { count: g.count })].filter(Boolean).join(" · ")}</div>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
           </section>
-        )}
-
-        {months.length > 0 && (
-          <Row title={t("discover.monthsTitle")}>
-            {months.map((g) => (
-              <button
-                key={g.key}
-                type="button"
-                onClick={() => onOpenMonth?.(g.year, g.month)}
-                className="w-[260px] shrink-0 text-left"
-              >
-                <div className="h-[174px] w-[260px] overflow-hidden rounded-[14px] bg-[var(--fill)]">
-                  <img src={localFileUrl(g.cover.preview_path || g.cover.image_path)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                </div>
-                <div className="mt-3 truncate text-[14px] font-medium text-text">{monthLabel(g)}</div>
-                <div className="mt-1 text-[12px] text-muted2">{t("discover.folderMeta", { count: g.count })}</div>
-              </button>
-            ))}
-          </Row>
         )}
       </div>
     </div>

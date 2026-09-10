@@ -56,6 +56,12 @@
     "folderMeta": "{{count}} items",
     "peopleTitle": "People",
     "placesTitle": "Places",
+    "memories": "Memories",
+    "pinned": "Pinned",
+    "albums": "Albums",
+    "pinRated": "Rated",
+    "pinRaw": "With RAW",
+    "pinMap": "Map",
     "mapMeta": "{{count}} locations",
     "monthsTitle": "By month",
     "unnamed": "Unnamed"
