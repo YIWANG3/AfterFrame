@@ -1,10 +1,10 @@
 // 发现页 — the library's front page, laid out like Apple Photos' Collections.
 // Everything here is a collection the gallery can open as a clean filter:
-//   回忆  one visit to a place (sidecar discover-collections: place + date run)
+//   回忆  the newest visits to places (sidecar discover-collections: place + date run)
 //   固定  fixed entries: recent / rated / RAW
 //   相册  manual folders
 //   人物  face groups
-//   地点  one tile per place
+//   地点  one tile per place with enough photos
 // Every tile is backed by a real photo; entries without a cover are hidden.
 // Clicking never intersects with the previous gallery state — `onOpen` hands
 // App a complete destination (status / filters / collection / map).
@@ -17,6 +17,13 @@ import FaceCrop from "./FaceCrop";
 // Fallback when the catalog has no located photos at all (no GPS, no AI
 // locations, or the web build): memories become plain month groups.
 const SLICE_LIMIT = 400;
+
+// 回忆 and 地点 both group by place; they must not be the same list twice.
+// 回忆 is a feed of what happened lately (the newest visits only), 地点 is the
+// full index (every place worth a tile). A place visited once shows up in
+// 回忆 only while it is recent, and in 地点 for good.
+const MEMORY_LIMIT = 12;
+const PLACE_MIN_PHOTOS = 5;
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -232,8 +239,8 @@ export default function DiscoverView({
   const monthLabel = (g) => new Date(g.year, g.month - 1, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
   const countLabel = (count) => t("discover.folderMeta", { count });
 
-  const memories = discover.memories.filter((m) => m.cover_preview_path);
-  const placeTiles = discover.places.filter((p) => p.cover_preview_path);
+  const memories = discover.memories.filter((m) => m.cover_preview_path).slice(0, MEMORY_LIMIT);
+  const placeTiles = discover.places.filter((p) => p.cover_preview_path && p.count >= PLACE_MIN_PHOTOS);
   const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
   const peopleWithFace = (people || []).filter((g) => g.cover_preview_path || g.cover_image_path);
   const pinned = [
