@@ -113,7 +113,6 @@
   "sticker": {
     "title": "Sticker",
     "inLibrary": "{{count}} stickers",
-    "makeNew": "Cut a subject out of this image",
     "createNew": "Create new",
     "library": "Library",
     "search": "Search stickers…",

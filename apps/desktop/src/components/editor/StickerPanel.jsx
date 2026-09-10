@@ -48,9 +48,9 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
     <div className="flex flex-1 min-h-0 flex-col">
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
         <h2 className="text-[11px] uppercase tracking-wider text-muted2">{t("sticker.title")}</h2>
-        <span className="text-[10px] text-muted3">
-          {tab === "library" ? t("sticker.inLibrary", { count: stickers.length }) : t("sticker.makeNew")}
-        </span>
+        {tab === "library" && (
+          <span className="text-[10px] text-muted3">{t("sticker.inLibrary", { count: stickers.length })}</span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-1 px-3 pb-2">
