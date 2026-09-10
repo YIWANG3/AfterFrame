@@ -719,6 +719,10 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 /* ───────── 10c · 关闭钮统一:凡是只有一个 X 图标的按钮(lucide 给 svg 加了 lucide-x 类),hover 底一律圆形 ───────── */
 /* !important:各作用域(编辑器面板 / 设置 / 对话框)按高度定圆角的规则特异度都比这条高,关闭钮的圆形必须压过它们 */
 button:has(> svg.lucide-x:only-child), button:has(> span:only-child > svg.lucide-x:only-child) { border-radius: 999px !important; }
+/* hover 底色也统一:之前有 bg-hover / bg-white/6 / bg-white/8 三种,深浅主题下明暗各异。统一 fill-2,文字提到正文色。
+   灯箱那种压在照片上的玻璃关闭钮(自带 bg-black)保持原样 */
+button:not([class*="bg-black"]):has(> svg.lucide-x:only-child):hover,
+button:not([class*="bg-black"]):has(> span:only-child > svg.lucide-x:only-child):hover { background: var(--fill-2) !important; color: rgb(var(--text-color)) !important; }
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
 button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
