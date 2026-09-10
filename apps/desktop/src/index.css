@@ -405,6 +405,8 @@ html.electron #root { clip-path: inset(0 round 26px); background: rgb(var(--app-
 html.electron.fs #root { clip-path: none; }
 /* 灯箱打开时根节点底色跟着变黑:灯箱是 90% 黑的浮层,clip-path 圆角边缘的抗锯齿像素会透出根节点的浅色底,浅色主题下顶边就漏出一条白线 */
 html.electron #root:has(.fixed.inset-0.z-\[10050\]) { background: #000; }
+/* 灯箱底改实色黑、去掉 backdrop-blur:在透明窗里,贴着 clip-path 边缘的 backdrop-filter 会在窗口顶边渲染出一条浅色线 */
+html.electron .fixed.inset-0.z-\[10050\][class*="bg-black"] { background: #000; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html.electron .noise-overlay > .grid { -webkit-app-region: drag; }
 html.electron .noise-overlay > .grid > * { -webkit-app-region: no-drag; }
 html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag; }
