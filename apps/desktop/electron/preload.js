@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   setLocale: (lng) => ipcRenderer.invoke("app:set-locale", lng),
   openExternal: (url) => ipcRenderer.invoke("workspace:open-external", url),
   setTheme: (theme) => ipcRenderer.invoke("workspace:set-theme", theme),
+  onFullscreen: (cb) => { const h = (_e, flag) => cb(!!flag); ipcRenderer.on("window:fullscreen", h); return () => ipcRenderer.removeListener("window:fullscreen", h); },
   pickSavePath: (options) => ipcRenderer.invoke("workspace:pick-save-path", options),
   pickDirectory: (options) => ipcRenderer.invoke("workspace:pick-directory", options),
   saveImage: (targetPath, arrayBuffer, sourceMetadataPath) => ipcRenderer.invoke("workspace:save-image", targetPath, arrayBuffer, sourceMetadataPath),

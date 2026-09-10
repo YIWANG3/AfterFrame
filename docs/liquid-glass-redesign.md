@@ -560,6 +560,8 @@ Dribbble 类概念稿不够用,以下按「借什么」分组,均为真实产品
 
 用户追加:「header 要改掉,三个圆要融合进来」→ `electron/main.js` createWindow 加 `titleBarStyle:"hiddenInset"` + `trafficLightPosition:{x:18,y:16}`(两行,未 commit,可回退;这是 P3 唯一先做的一项),皮肤里侧栏面板 padding-top 44 让位、拖拽区 = 侧栏头 44px + 内容区顶部 8px 细条(避开控件防光标闪)。
 
+第八次修正(2026-09-10,窗口圆角):Tahoe 只给带 NSToolbar 的窗口 26pt 大圆角,Electron 造不出 NSToolbar,hiddenInset 窗口拿到的是小圆角。不用原生模块,改成**透明窗 + 自绘圆角**:`transparent:true`、`backgroundColor` 全透明,渲染层 `html.electron #root { clip-path: inset(0 round 26px) }`,fixed 定位的覆盖层(设置 / 编辑器 / 灯箱)也被 clip-path 一并裁到圆角内(overflow:hidden 裁不到 fixed 元素,clip-path 可以);macOS 按 alpha 形状生成阴影;全屏时主进程发 `window:fullscreen`,渲染层加 `html.fs` 去掉圆角。红绿灯仍是系统画的。
+
 未做(结构相关,留待确认后):工具栏浮到内容之上的滚动边缘效果、图标簇合并为三组、检查器点选滑入、vibrancy / 透明窗(P3 其余)。
 
 ## 附:参考

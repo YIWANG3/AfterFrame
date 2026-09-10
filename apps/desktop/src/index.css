@@ -401,6 +401,11 @@ html.electron.fs .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
    · 内容区的工具栏行整条可拖,胶囊控件 no-drag(拖拽区不能盖住控件,否则光标闪)
    · 三块面板之间的 8px 缝(grid 底)也可拖
    拖拽区必须能接收指针事件,所以工具栏这里把 pointer-events 打开 */
+/* 透明窗 + 自绘 26px 圆角(Tahoe 大圆角只给带 NSToolbar 的窗口,Electron 造不出来):
+   #root 用 clip-path 裁成圆角矩形,fixed 定位的覆盖层也一并被裁;全屏时不裁 */
+html.electron, html.electron body { background: transparent; }
+html.electron #root { clip-path: inset(0 round 26px); background: rgb(var(--app-bg)); }
+html.electron.fs #root { clip-path: none; }
 html.electron .noise-overlay > .grid { -webkit-app-region: drag; }
 html.electron .noise-overlay > .grid > * { -webkit-app-region: no-drag; }
 html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag; }

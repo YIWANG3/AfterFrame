@@ -1074,7 +1074,13 @@ function createWindow() {
     // Tahoe 皮肤:去掉系统标题栏,红绿灯落进侧栏面板(P3 第一步;渲染层让位 + 拖拽区在皮肤里)
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 18, y: 16 },
-    backgroundColor: "#000000",
+    // Tahoe gives a titlebar-only window the small (~16pt) corner; the large
+    // 26pt corner is reserved for windows with an NSToolbar, which Electron
+    // cannot create. So the window is transparent and the renderer clips
+    // itself to a 26px rounded rect (index.css, html.electron #root); macOS
+    // derives the shadow from the alpha shape.
+    transparent: true,
+    backgroundColor: "#00000000",
     show: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -1113,7 +1119,10 @@ function createWindow() {
     }
   });
   if (devServerUrl) {
-    window.loadURL(devServerUrl);
+    for (const [evt, flag] of [["enter-full-screen", true], ["leave-full-screen", false]]) {
+    window.on(evt, () => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", flag); });
+  }
+  window.loadURL(devServerUrl);
     return;
   }
   window.loadFile(path.join(__dirname, "..", "dist", "index.html"));
