@@ -666,17 +666,17 @@ button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border
 
 /* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):
    之前四处四个样子(描边 / 无描边、accent 淡底、py 撑高、hover 亮边)。统一:32 高、8px 圆角、无边框、fill 底、正文色;
-   accent 变体(可用 / 已就绪)只是更亮一档的 fill ───────── */
-button.w-full:not(.flex-col)[class*="border-border"][class*="bg-app"], button.w-full:not(.flex-col)[class*="border-accent"],
+   accent 变体(可用 / 已就绪)只是更亮一档的 fill;h-6 的整宽字段(字体选择钮)不算动作钮 ───────── */
+button.w-full:not(.flex-col):not(.h-6)[class*="border-border"][class*="bg-app"], button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"],
 [data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2 {
   height: 32px; padding-top: 0; padding-bottom: 0; border-color: transparent; border-radius: 8px;
   background: var(--fill); color: rgb(var(--text-color)); font-weight: 500;
 }
-button.w-full:not(.flex-col)[class*="border-border"][class*="bg-app"]:hover, button.w-full:not(.flex-col)[class*="border-accent"]:hover,
+button.w-full:not(.flex-col):not(.h-6)[class*="border-border"][class*="bg-app"]:hover, button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"]:hover,
 [data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2:hover { background: var(--fill-2); border-color: transparent; }
-button.w-full:not(.flex-col)[class*="border-accent"] { background: var(--fill-2); }
-button.w-full:not(.flex-col)[class*="border-accent"]:hover { background: var(--fill-3); }
-button.w-full:not(.flex-col)[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
+button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"] { background: var(--fill-2); }
+button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"]:hover { background: var(--fill-3); }
+button.w-full:not(.flex-col):not(.h-6)[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
 /* 文字预设卡(flex-col 的整宽按钮,里面是字样 + 名称):不走上面的 32 高动作钮,只换底色去描边 */
 /* 预设卡的字样多是白色 / 浅色描边效果,浅色主题下会消失:卡底固定深色(不随主题),名称用浅灰,选中环用白 */
 [data-editor-wheel-scope="panel"] button.w-full.flex-col { border-color: transparent; background: rgb(28 28 31); border-radius: 8px; }
