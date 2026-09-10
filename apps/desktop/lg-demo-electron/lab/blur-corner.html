@@ -43,6 +43,10 @@
   /* H:A + 滚动容器自己带顶部圆角 → 照片根本到不了角落,模糊带是方角也无所谓(角落里它压的是均匀底色) */
   .H .pane { overflow: hidden; border-radius: var(--R); }
   .H .scroller { border-radius: var(--R) var(--R) 0 0; }
+  /* I:H + 模糊带自己 clip-path(半径略小,鼓出去盖住弧线) */
+  .I .pane { overflow: hidden; border-radius: var(--R); }
+  .I .scroller { border-radius: var(--R) var(--R) 0 0; }
+  .I .band { clip-path: inset(0 round calc(var(--R) - 2px) calc(var(--R) - 2px) 0 0); }
   /* G:A + split 自己也带同样的圆角 */
   .G .pane { overflow: hidden; border-radius: var(--R); }
   .G .split { border-radius: var(--R); }

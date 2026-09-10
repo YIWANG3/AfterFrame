@@ -488,6 +488,10 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
    (lg-demo-electron/lab/blur-corner.html 里的方案 H) */
 [data-testid="workspace-split"] { position: relative; }
 [data-testid="gallery-scroll"] { border-radius: 18px 18px 0 0; }
+/* 模糊带再用 clip-path 裁掉自己的方角:clip-path 是元素自身的属性,合成器一定执行(祖先的圆角裁切它不认)。
+   半径取 16 比面板的 18 略小:弧线略向外鼓,把滚动容器弧线上那圈半透明像素整个盖住,不留细线;
+   鼓出去的一点落在面板外的缝上,那里离照片 18px 以上,模糊结果就是底色,看不出 */
+[data-testid="workspace-split"]::before { clip-path: inset(0 round 16px 16px 0 0); }
 @keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
 [data-testid="workspace-split"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 150px; z-index: 45; pointer-events: none; opacity: 0;
   transform: translateZ(0); will-change: transform;
