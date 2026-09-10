@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlignJustify,
-  Check,
   ChevronDown,
   Columns2,
   KeyRound,
@@ -11,7 +10,6 @@ import {
   Pencil,
   Plus,
   Rows2,
-  Sparkles,
   StretchHorizontal,
   Trash2,
   X,
@@ -1030,7 +1028,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
             onClick={queueApply}
           >
             <span className="inline-flex items-center gap-1.5">
-              {generateStatus.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim()) ? <Check className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {generateStatus.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {generateStatus.running ? t("repaint.generating") : t("repaint.generate")}
             </span>
           </button>

@@ -1,7 +1,7 @@
 import api from "../../api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Sparkles, Trash2, Star, Loader2, Check, RotateCcw } from "lucide-react";
+import { Search, Sparkles, Trash2, Star, Loader2, RotateCcw } from "lucide-react";
 
 import { SliderRow } from "../../ui";
 import { localFileUrl, fileName, stickerLabel } from "../../utils/format";
@@ -421,7 +421,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             disabled={phase === "saving"}
             className="ml-auto flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-3 text-[11px] font-medium text-[#111] transition-all hover:brightness-110 disabled:opacity-60"
           >
-            {phase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            {phase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {phase === "saving" ? t("sticker.saving") : t("sticker.saveSticker")}
           </button>
         </div>

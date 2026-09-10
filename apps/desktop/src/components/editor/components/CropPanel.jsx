@@ -5,7 +5,7 @@
 // the crop tool matches the <TextPanel>/... shape.
 
 import {
-  RotateCcw, RotateCw, FlipHorizontal2, FlipVertical2, Undo2, Redo2, Check,
+  RotateCcw, RotateCw, FlipHorizontal2, FlipVertical2, Undo2, Redo2,
 } from "lucide-react";
 import { ASPECT_PRESETS, getAspectRatio } from "../cropMath";
 import { MAX_IMAGE_ZOOM } from "../imageMath";
@@ -24,7 +24,7 @@ function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = 
           : "text-muted hover:bg-hover hover:text-text",
       ].join(" ")}
     >
-      <Icon className="h-3.5 w-3.5" />
+      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
       {label ? <span>{label}</span> : null}
     </button>
   );
@@ -165,7 +165,7 @@ export default function CropPanel({
         <FooterButton icon={Undo2} label="" onClick={onUndo} disabled={!canUndo} />
         <FooterButton icon={Redo2} label="" onClick={onRedo} disabled={!canRedo} />
         <div className="flex-1" />
-        <FooterButton icon={Check} label={t("overlay.apply")} onClick={onApply} disabled={!canApply} primary />
+        <FooterButton label={t("overlay.apply")} onClick={onApply} disabled={!canApply} primary />
       </div>
     </>
   );
