@@ -280,16 +280,40 @@ export default function Sidebar({
             {(collections || []).filter((c) => c.kind === "manual").map((col) => {
               const active = activeCollectionId === col.collection_id;
               if (editingId === col.collection_id) {
+                const editor = (
+                  <InlineEdit
+                    initial={col.name}
+                    onConfirm={async (name) => {
+                      await onRenameCollection?.(col.collection_id, name);
+                      setEditingId(null);
+                    }}
+                    onCancel={() => setEditingId(null)}
+                  />
+                );
+                // Covers view: the row keeps its shape (cover, meta line) and
+                // only the name turns into a field, so nothing jumps.
+                if (folderView === "covers") {
+                  return (
+                    <div key={col.collection_id} className={`flex w-full items-center rounded-md px-2.5 py-1.5 ${active ? "bg-selected" : ""}`}>
+                      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                        {covers[col.collection_id]?.path ? (
+                          <img src={localFileUrl(covers[col.collection_id].path)} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-[8px] object-cover" />
+                        ) : (
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-2)]">
+                            <Folder className="h-4 w-4 stroke-[1.6] text-muted2" />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          {editor}
+                          <span className="mt-0.5 block truncate text-[11px] text-muted2">{t("sidebar.folderMeta", { count: col.item_count || 0 })}</span>
+                        </span>
+                      </span>
+                    </div>
+                  );
+                }
                 return (
                   <div key={col.collection_id} className="px-2.5 py-0.5">
-                    <InlineEdit
-                      initial={col.name}
-                      onConfirm={async (name) => {
-                        await onRenameCollection?.(col.collection_id, name);
-                        setEditingId(null);
-                      }}
-                      onCancel={() => setEditingId(null)}
-                    />
+                    {editor}
                   </div>
                 );
               }
