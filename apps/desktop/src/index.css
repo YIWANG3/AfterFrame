@@ -377,16 +377,16 @@ select {
 /* ───────── 4 · 三栏:侧栏 / 内容区 / 检查器 = 三块内缩圆角面板,8px 同缝 ───────── */
 .noise-overlay > .grid > aside.border-r {
   height: auto; align-self: stretch; min-width: 0;
-  margin: 8px 0 8px 8px; border-radius: 8px;      /* 面板圆角 = 窗口 16 − 内缩 8 */
+  margin: 8px 0 8px 8px; border-radius: 18px;     /* 同心:面板圆角 = 窗口 26 − 内缩 8 */
   border: none; background: var(--pane);
   padding-top: 12px;
 }
 /* 内容区包一层圆角面板(同 demo C):顶部玻璃与筛选行被限制在框内,四边留 8px 与侧栏 / 窗口边同缝 */
-.noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 8px; background: var(--pane); }
+.noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 18px; background: var(--pane); }
 /* 检查器同样包一层圆角面板(含"未选中"空态 aside,它没有 border-l),右 / 上 / 下留 8px;不做隐藏折叠 */
 .noise-overlay > .grid > aside:not(.border-r) {
   height: auto; align-self: stretch; min-width: 0;
-  margin: 8px 8px 8px 0; border-radius: 8px;
+  margin: 8px 8px 8px 0; border-radius: 18px;
   border: none; background: var(--pane);
 }
 .noise-overlay > .grid > div.bg-chrome { background: transparent; }
