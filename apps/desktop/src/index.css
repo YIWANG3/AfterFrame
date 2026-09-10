@@ -403,6 +403,8 @@ html.electron.fs .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
 html.electron, html.electron body { background: transparent; }
 html.electron #root { clip-path: inset(0 round 26px); background: rgb(var(--app-bg)); }
 html.electron.fs #root { clip-path: none; }
+/* 灯箱打开时根节点底色跟着变黑:灯箱是 90% 黑的浮层,clip-path 圆角边缘的抗锯齿像素会透出根节点的浅色底,浅色主题下顶边就漏出一条白线 */
+html.electron #root:has(.fixed.inset-0.z-\[10050\]) { background: #000; }
 html.electron .noise-overlay > .grid { -webkit-app-region: drag; }
 html.electron .noise-overlay > .grid > * { -webkit-app-region: no-drag; }
 html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag; }
@@ -415,9 +417,11 @@ html.electron.fs .noise-overlay > .grid > section.bg-app > .app-toolbar { -webki
    给覆盖层整块标 no-drag 把窗口从拖拽区里减掉;覆盖层自己的头部一行给回可拖,控件 no-drag */
 html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
 html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10,
-html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 { -webkit-app-region: drag; }
+html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12,
+html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
 html.electron .fixed.inset-0.z-\[10100\] > .h-11 > *, html.electron .fixed.inset-0.z-\[10200\] > .h-10 > *,
-html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 > * { -webkit-app-region: no-drag; }
+html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 > *,
+html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start > * { -webkit-app-region: no-drag; }
 /* 侧栏内零分割线(底部折叠钮 / 设置上方的两条线) */
 aside.border-r .border-t, aside.border-r .border-b, aside.border-r [class*="border-t"], aside.border-r [class*="border-b"] { border-color: transparent; }
 /* 侧栏条目:alpha 填充,选中 = 更亮的填充 */
