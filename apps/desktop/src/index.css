@@ -596,7 +596,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 /* ── 8c · 编辑器面板字段统一(浅色主题下描边全露出来了):输入 / 下拉 / 多行框 / 字体选择钮 / 数值框 一律无描边、fill-2 底,focus 1px 内环 ── */
 [data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]),
 [data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border,
-[data-editor-wheel-scope="panel"] div.w-full.rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); }
+[data-editor-wheel-scope="panel"] div.w-full.rounded-md.border[class*="bg-app"] { border-color: transparent; background-color: var(--fill-2); }
 [data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:focus,
 [data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border:focus-within { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
 /* 分段组(斜体 / 下划线 …):外框去线换 fill 底 */
@@ -646,7 +646,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .fixed.inset-0.z-\[3000\] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
 .fixed.inset-0.z-\[3000\] button.border-accent.bg-accent { border-color: transparent; color: rgb(var(--accent-ink)); }
 .fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
-  border-radius: 8px; border-color: transparent; background: var(--fill-2);
+  border-radius: 8px; border-color: transparent; background-color: var(--fill-2);
 }
 .fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); outline: none; }
 /* 密钥这类「图标 + 输入」的组合框(div.h-8 带边框)同样处理 */
@@ -658,6 +658,13 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 /* 浅色主题遮罩不要黑 45%,叠出来发脏 */
 :root[data-theme="light"] .fixed.inset-0.bg-app\/80 { background: rgba(0, 0, 0, 0.22); }
 .fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
+
+/* 下拉箭头:字段底色改用 background-color 写,别把自绘箭头抹掉;并给编辑器面板 / 设置 / 小对话框里的 select 统一一枚箭头 */
+[data-editor-wheel-scope="panel"] select, .fixed.inset-0.z-\[3000\] select, .shadow-overlay.bg-chrome select {
+  appearance: none; -webkit-appearance: none; padding-right: 26px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 12px 12px;
+}
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
 button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
