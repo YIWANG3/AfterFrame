@@ -18,6 +18,10 @@ function createWindow() {
     vibrancy: "under-window",
     visualEffectState: "active",
     backgroundColor: "#00000000",
+    // LG_TRANSPARENT=1:和真 app 一样的透明窗(没有系统圆角,圆角由页面自己画)
+    ...(process.env.LG_TRANSPARENT ? { transparent: true, vibrancy: undefined } : {}),
+    // LG_POS="x,y":把窗口开到指定显示器上(排查不同缩放比例下的合成差异)
+    ...(process.env.LG_POS ? (([x, y]) => ({ x, y }))(process.env.LG_POS.split(",").map(Number)) : {}),
     webPreferences: { contextIsolation: true, preload: path.join(__dirname, "preload.js") },
   });
   // Fullscreen hides the traffic lights; tell the page to drop its top gutter.

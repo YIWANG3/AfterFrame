@@ -379,7 +379,9 @@ select {
   padding-top: 12px;
 }
 /* 内容区包一层圆角面板(同 demo C):顶部玻璃与筛选行被限制在框内,四边留 8px 与侧栏 / 窗口边同缝 */
-.noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 18px; background: var(--pane); }
+/* 内容区面板的圆角用 clip-path 裁而不是 overflow + border-radius:clip-path 对合成层(顶部模糊带)也生效,
+   overflow 的圆角裁切在 Electron 里会被合成层忽略(lab/blur-corner.html 方案 D,用户实测最好) */
+.noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 18px; clip-path: inset(0 round 18px); background: var(--pane); }
 /* 检查器同样包一层圆角面板(含"未选中"空态 aside,它没有 border-l),右 / 上 / 下留 8px;不做隐藏折叠 */
 .noise-overlay > .grid > aside:not(.border-r) {
   height: auto; align-self: stretch; min-width: 0;
@@ -482,16 +484,7 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
    Chromium 会把外层的圆角裁切丢掉(和缩略图直角是同一个坑)。split 的顶角与面板顶角重合,照片和模糊层由同一个裁切边缘负责,
    也就不会两套抗锯齿错位 */
 [data-testid="workspace-split"] { position: relative; }
-/* 顶部模糊伪元素是合成层,在 Electron 里既吃不到面板的圆角裁切,自己画圆角又会和面板弧线错位。
-   釜底抽薪:让滚动容器自己带顶部 18px 圆角,照片根本到不了角落那块三角区;模糊带保持方角,它在角落压住的只是
-   均匀的面板底色,模糊后仍是均匀色,和面板外的底色几乎一样,看不出方角。全程只有一条弧线(滚动容器的)在裁照片。
-   (lg-demo-electron/lab/blur-corner.html 里的方案 H) */
 [data-testid="workspace-split"] { position: relative; }
-[data-testid="gallery-scroll"] { border-radius: 18px 18px 0 0; }
-/* 模糊带再用 clip-path 裁掉自己的方角:clip-path 是元素自身的属性,合成器一定执行(祖先的圆角裁切它不认)。
-   半径取 16 比面板的 18 略小:弧线略向外鼓,把滚动容器弧线上那圈半透明像素整个盖住,不留细线;
-   鼓出去的一点落在面板外的缝上,那里离照片 18px 以上,模糊结果就是底色,看不出 */
-[data-testid="workspace-split"]::before { clip-path: inset(0 round 16px 16px 0 0); }
 @keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
 [data-testid="workspace-split"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 150px; z-index: 45; pointer-events: none; opacity: 0;
   transform: translateZ(0); will-change: transform;

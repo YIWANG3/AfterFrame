@@ -2,77 +2,95 @@
 <meta charset="utf-8">
 <title>blur corner lab</title>
 <style>
-  :root { --bg: #f4f4f5; --pane: rgba(29,29,31,.04); --R: 40px; }
+  /* 复刻真 app 的结构:透明窗 → 根节点 clip-path 圆角 → 面板 overflow hidden + 圆角 → split → 滚动容器 + 模糊带。
+     圆角放大到 56px、模糊带放大,让角落的问题一眼可见。所有方案并排,一张截图对比。 */
+  :root { --bg: #f4f4f5; --pane: rgba(29,29,31,.04); --R: 56px; }
   html, body { margin: 0; background: transparent; font: 12px system-ui; color: #222; }
-  /* 和真 app 一样:透明窗 + 根节点 clip-path 圆角 */
-  #host { min-height: 240px; background: var(--bg); clip-path: inset(0 round 26px); padding: 8px; }
-  .plain #host { clip-path: none; }
-  .pane { position: relative; width: 300px; height: 200px; background: var(--pane); }
-
-  /* 共同:和真 app 一样多一层 split(relative + overflow hidden),模糊带挂在 split 上 */
-  .split { position: absolute; inset: 0; overflow: hidden; }
-  .scroller { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
-  .scroller img { display: block; width: 100%; height: 130px; object-fit: cover; margin: 0 0 6px; }
-  .scroller .pad { height: 60px; }
-
-  /* 模糊带:合成层 + mask 羽化(和真 app 一样) */
-  .scroller { scroll-timeline-name: --grid; scroll-timeline-axis: block; }
-  .pane { timeline-scope: --grid; }
+  #root { min-height: 100vh; background: var(--bg); clip-path: inset(0 round 26px); padding: 44px 16px 16px; box-sizing: border-box; }
+  .grid { display: grid; grid-template-columns: repeat(4, 320px); gap: 16px; }
+  .pane { position: relative; width: 320px; height: 220px; background: var(--pane); timeline-scope: --grid; }
+  /* 再贴近真 app:面板是 flex 列;工具栏行绝对定位在顶上(z 50,可拖窗口);split 是 grid 三行;滚动容器顶部让位 60px;滚动条轨道内缩 */
+  .pane { display: flex; flex-direction: column; }
+  .toolbar { position: absolute; top: 0; left: 0; right: 0; height: 52px; z-index: 50; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+    -webkit-app-region: drag; }
+  .toolbar > * { -webkit-app-region: no-drag; }
+  .pill { height: 34px; padding: 0 12px; border-radius: 999px; background: rgba(16,16,20,.08); backdrop-filter: blur(20px) saturate(1.4); display: flex; align-items: center; font-weight: 600; }
+  .split { position: relative; flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-rows: 0px 0px minmax(0, 1fr); }
+  .split > .drawer { min-height: 0; overflow: hidden; }
+  .scroller { min-height: 0; height: 100%; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; padding-top: 60px;
+    scroll-timeline-name: --grid; scroll-timeline-axis: block; }
+  .scroller::-webkit-scrollbar { width: 7px; }
+  .scroller::-webkit-scrollbar-track { margin-top: 56px; background: transparent; }
+  .scroller::-webkit-scrollbar-thumb { background: rgba(0,0,0,.2); border-radius: 999px; }
+  .scroller img { display: block; width: 100%; height: 150px; object-fit: cover; margin: 0 0 6px; }
+  .scroller .pad { height: 80px; }
   @keyframes edge-in { from { opacity: 0; } to { opacity: 1; } }
-  .band { position: absolute; top: 0; left: 0; right: 0; height: 110px; z-index: 5; pointer-events: none;
+  .band { position: absolute; top: 0; left: 0; right: 0; height: 130px; z-index: 5; pointer-events: none;
     transform: translateZ(0); will-change: transform;
     animation: edge-in linear both; animation-timeline: --grid; animation-range: 0 40px;
     backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
     background: linear-gradient(180deg, rgba(244,244,245,.72), rgba(244,244,245,.3) 40%, rgba(244,244,245,0));
     -webkit-mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%);
     mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%); }
+  .label { position: absolute; left: 10px; bottom: 10px; z-index: 9; background: #fff; padding: 3px 8px; border-radius: 6px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 
-  /* A:面板 overflow:hidden + border-radius(真 app 现状,角是方的) */
+  /* A:面板 overflow hidden + 圆角,模糊带不处理(真 app 最初) */
   .A .pane { overflow: hidden; border-radius: var(--R); }
-  /* B:A + 模糊带自带圆角(第二条弧线) */
+  /* B:A + 模糊带 border-radius = R */
   .B .pane { overflow: hidden; border-radius: var(--R); }
   .B .band { border-radius: var(--R) var(--R) 0 0; }
-  /* C:A + 反圆角盖板(合成层) */
-  .C .pane { overflow: hidden; border-radius: var(--R); }
-  .C .cap { position: absolute; top: 0; left: 0; right: 0; height: var(--R); z-index: 6; pointer-events: none; transform: translateZ(0);
-    background:
-      radial-gradient(circle at var(--R) var(--R), transparent calc(var(--R) - .5px), var(--bg) calc(var(--R) + .5px)) left top / var(--R) var(--R) no-repeat,
-      radial-gradient(circle at 0 var(--R), transparent calc(var(--R) - .5px), var(--bg) calc(var(--R) + .5px)) right top / var(--R) var(--R) no-repeat; }
-  /* D:面板用 clip-path 裁圆角(不用 overflow/border-radius) */
-  .D .pane { clip-path: inset(0 round var(--R)); }
-  /* H:A + 滚动容器自己带顶部圆角 → 照片根本到不了角落,模糊带是方角也无所谓(角落里它压的是均匀底色) */
+  /* I:A + 模糊带 clip-path(R − 2) */
+  .I .pane { overflow: hidden; border-radius: var(--R); }
+  .I .band { clip-path: inset(0 round calc(var(--R) - 2px) calc(var(--R) - 2px) 0 0); }
+  /* H:A + 滚动容器自己带顶部圆角 */
   .H .pane { overflow: hidden; border-radius: var(--R); }
   .H .scroller { border-radius: var(--R) var(--R) 0 0; }
-  /* I:H + 模糊带自己 clip-path(半径略小,鼓出去盖住弧线) */
-  .I .pane { overflow: hidden; border-radius: var(--R); }
-  .I .scroller { border-radius: var(--R) var(--R) 0 0; }
-  .I .band { clip-path: inset(0 round calc(var(--R) - 2px) calc(var(--R) - 2px) 0 0); }
-  /* G:A + split 自己也带同样的圆角 */
-  .G .pane { overflow: hidden; border-radius: var(--R); }
-  .G .split { border-radius: var(--R); }
-  /* E:模糊带放进滚动容器内做 sticky,滚动容器自己带圆角 */
-  .E .pane { overflow: hidden; border-radius: var(--R); }
-  .E .scroller { border-radius: var(--R); }
-  .E .band { position: sticky; top: 0; margin-bottom: -110px; }
-  /* F:D + 模糊带不做合成层(看羽化是否还在) */
-  .F .pane { clip-path: inset(0 round var(--R)); }
-  .F .band { transform: none; will-change: auto; }
-
-  .label { position: absolute; left: 8px; bottom: 8px; background: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  /* J:H + I(真 app 现状) */
+  .J .pane { overflow: hidden; border-radius: var(--R); }
+  .J .scroller { border-radius: var(--R) var(--R) 0 0; }
+  .J .band { clip-path: inset(0 round calc(var(--R) - 2px) calc(var(--R) - 2px) 0 0); }
+  /* D:面板用 clip-path 裁(不用 overflow + border-radius) */
+  .D .pane { clip-path: inset(0 round var(--R)); }
+  /* K:A + 模糊带的 mask 里叠一层圆角形状 */
+  .K .pane { overflow: hidden; border-radius: var(--R); }
+  .K .band {
+    -webkit-mask-image:
+      linear-gradient(180deg, #000 0, #000 34%, transparent 100%),
+      radial-gradient(circle at var(--R) var(--R), #000 calc(var(--R) - .5px), transparent calc(var(--R) + .5px)),
+      radial-gradient(circle at calc(100% - var(--R)) var(--R), #000 calc(var(--R) - .5px), transparent calc(var(--R) + .5px)),
+      linear-gradient(#000, #000),
+      linear-gradient(#000, #000);
+    -webkit-mask-size: 100% 100%, var(--R) var(--R), var(--R) var(--R), calc(100% - 2 * var(--R)) var(--R), 100% calc(100% - var(--R));
+    -webkit-mask-position: 0 0, left top, right top, var(--R) 0, 0 var(--R);
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-composite: source-in, source-over, source-over, source-over;
+    mask-image:
+      linear-gradient(180deg, #000 0, #000 34%, transparent 100%),
+      radial-gradient(circle at var(--R) var(--R), #000 calc(var(--R) - .5px), transparent calc(var(--R) + .5px)),
+      radial-gradient(circle at calc(100% - var(--R)) var(--R), #000 calc(var(--R) - .5px), transparent calc(var(--R) + .5px)),
+      linear-gradient(#000, #000),
+      linear-gradient(#000, #000);
+    mask-size: 100% 100%, var(--R) var(--R), var(--R) var(--R), calc(100% - 2 * var(--R)) var(--R), 100% calc(100% - var(--R));
+    mask-position: 0 0, left top, right top, var(--R) 0, 0 var(--R);
+    mask-repeat: no-repeat;
+    mask-composite: intersect, add, add, add; }
+  /* L:A + 模糊带不做合成层 + border-radius(看羽化是否还在) */
+  .L .pane { overflow: hidden; border-radius: var(--R); }
+  .L .band { transform: none; will-change: auto; border-radius: var(--R) var(--R) 0 0; }
 </style>
-<div id="host"></div>
+<div id="root"><div class="grid" id="grid"></div></div>
 <script>
-  const v = new URLSearchParams(location.search).get('v') || 'A';
-  const host = document.getElementById('host');
-  host.className = v; if (new URLSearchParams(location.search).get('plain')) document.documentElement.classList.add('plain');
-  const imgs = ['p06','p02','p03','p06'].map((n) => `<img src="/lg-demo-electron/photos/${n}.jpg">`).join('');
-  const bandInside = v === 'E';
-  host.innerHTML = `<div class="pane"><div class="split">
-      <div class="scroller">${bandInside ? '<div class="band"></div>' : ''}${imgs}<div class="pad"></div></div>
-      ${bandInside ? '' : '<div class="band"></div>'}
-      ${v === 'C' ? '<div class="cap"></div>' : ''}
-      <div class="label">${v}</div>
-    </div></div>`;
-  // 滚到照片压在模糊带底下
-  requestAnimationFrame(() => { host.querySelector('.scroller').scrollTop = 70; });
+  const variants = ['A', 'B', 'I', 'H', 'J', 'D', 'K', 'L'];
+  const imgs = ['p06', 'p02', 'p03', 'p06'].map((n) => `<img src="../photos/${n}.jpg">`).join('');
+  document.getElementById('grid').innerHTML = variants.map((v) => `
+    <div class="${v}"><div class="pane">
+      <div class="toolbar"><div class="pill">+</div><div class="pill">All Assets</div></div>
+      <div class="split">
+        <div class="drawer"></div><div aria-hidden="true"></div>
+        <div class="scroller">${imgs}<div class="pad"></div></div>
+        <div class="band"></div>
+        <div class="label">${v}</div>
+      </div>
+    </div></div>`).join('');
+  requestAnimationFrame(() => document.querySelectorAll('.scroller').forEach((s) => { s.scrollTop = 90; }));
 </script>
