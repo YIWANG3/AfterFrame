@@ -482,6 +482,15 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
    Chromium 会把外层的圆角裁切丢掉(和缩略图直角是同一个坑)。split 的顶角与面板顶角重合,照片和模糊层由同一个裁切边缘负责,
    也就不会两套抗锯齿错位 */
 [data-testid="workspace-split"] { position: relative; border-radius: 18px 18px 0 0; }
+/* 合成层的模糊伪元素在 Chromium 里吃不到圆角裁切(矩形裁切吃得到),所以它的角是方的。
+   不再让它自己画圆角(任何第二条弧线都会和面板弧线错位露出照片),而是在它上面盖一层「反圆角」:
+   顶部 18px 高的一条,两端各一个圆形挖空,弧线外填根节点底色,弧线内透明。照片、模糊层、这层盖板都由 split 的同一条弧线裁切 */
+[data-testid="workspace-split"]::after {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 18px; z-index: 46; pointer-events: none;
+  background:
+    radial-gradient(circle at 18px 18px, transparent 17.5px, rgb(var(--app-bg)) 18.5px) left top / 18px 18px no-repeat,
+    radial-gradient(circle at 0 18px, transparent 17.5px, rgb(var(--app-bg)) 18.5px) right top / 18px 18px no-repeat;
+}
 @keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
 [data-testid="workspace-split"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 150px; z-index: 45; pointer-events: none; opacity: 0;
   transform: translateZ(0); will-change: transform;
