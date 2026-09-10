@@ -667,6 +667,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
    字段与带边框按钮 5px,底栏按钮 8px,关闭钮圆形 */
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 { border-color: transparent; padding-top: 4px; justify-content: flex-end; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { order: 2; border-radius: 8px; }
+/* 手写弹窗是从文字面板里渲染出来的,DOM 上仍在编辑器面板作用域内,面板的字段 / 按钮圆角规则会把它的底栏按钮拆成 5 和 8 两档;这里压回统一的 8 */
+[data-editor-wheel-scope="panel"] .shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { border-radius: 8px; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="accent-color"] { order: 3; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="rose-"] { order: 1; margin-right: auto; }
 .shadow-overlay.bg-chrome :is(input, select, textarea)[class*="rounded"],
@@ -676,7 +678,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 
 /* ───────── 10 · Modal / 设置:实色卡 18px、无边框、无分割线 ───────── */
 /* 内部浮窗圆角:窗口 26 → 设置这种大浮窗同 26(它就是窗中窗);新建风格 / 服务商 / 拼图选图这类小对话框 20;菜单 / 弹层仍 14 */
-.rounded-xl.border.bg-chrome { border-color: transparent; background: rgb(var(--chrome-bg)); border-radius: 20px; }
+.rounded-xl.border.bg-chrome, .rounded-xl.border.bg-panel { border-color: transparent; background: rgb(var(--chrome-bg)); border-radius: 20px; }
 .fixed.inset-0.z-\[3000\] > .rounded-xl.border.bg-chrome { border-radius: 26px; }
 .rounded-xl.border.bg-chrome .border-b, .rounded-xl.border.bg-chrome .border-r { border-color: transparent; }
 .rounded-xl.border.bg-chrome .bg-panel { background: var(--fill); border-radius: 14px; }
@@ -713,6 +715,10 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
   background-repeat: no-repeat; background-position: right 8px center; background-size: 12px 12px;
 }
+
+/* ───────── 10c · 关闭钮统一:凡是只有一个 X 图标的按钮(lucide 给 svg 加了 lucide-x 类),hover 底一律圆形 ───────── */
+/* !important:各作用域(编辑器面板 / 设置 / 对话框)按高度定圆角的规则特异度都比这条高,关闭钮的圆形必须压过它们 */
+button:has(> svg.lucide-x:only-child), button:has(> span:only-child > svg.lucide-x:only-child) { border-radius: 999px !important; }
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
 button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
