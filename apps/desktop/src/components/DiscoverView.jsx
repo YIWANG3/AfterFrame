@@ -1,9 +1,13 @@
-// 发现页 — the library's front page, laid out like Apple Photos' Collections:
-// 回忆 (one big card per month, titled by that month's most-photographed place),
-// 固定 (square entries into recent / rated / RAW / map / people), 相册 (manual
-// folders), 人物 (face circles) and 地点 (small map + place tiles). Nothing here
-// is a single photo, and every tile is backed by a real photo — entries without
-// a cover are hidden rather than drawn as icons.
+// 发现页 — the library's front page, laid out like Apple Photos' Collections.
+// Everything here is a collection the gallery can open as a clean filter:
+//   回忆  one visit to a place (sidecar discover-collections: place + date run)
+//   固定  fixed entries: recent / rated / RAW / map / people
+//   相册  manual folders
+//   人物  face groups
+//   地点  small map + one tile per place
+// Every tile is backed by a real photo; entries without a cover are hidden.
+// Clicking never intersects with the previous gallery state — `onOpen` hands
+// App a complete destination (status / filters / collection / map).
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
@@ -11,29 +15,19 @@ import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import useMapPoints from "./map/useMapPoints";
 
-// Same lazy chunk as the gallery's map drawer, so the base map is only parsed once.
 const PhotoMap = lazy(() => import("./map/PhotoMap.jsx"));
 
-const RECENT_LIMIT = 16;
-// One slice of the newest captures feeds both 按月回顾 and 地点: enough for a
-// year or two of shooting without pulling a 5000-photo catalog into memory.
+// Fallback when the catalog has no located photos at all (no GPS, no AI
+// locations, or the web build): memories become plain month groups.
 const SLICE_LIMIT = 400;
 
+const pad2 = (n) => String(n).padStart(2, "0");
+
 function captureDate(item) {
-  const meta = item?.image_metadata || {};
-  const v = meta.capture_time || item?.imported_at || meta.imported_at || meta.modified_time;
+  const v = item?.image_metadata?.capture_time || item?.capture_time || item?.created_at;
   if (!v) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function placeOf(item) {
-  const loc = item?.annotation?.location;
-  if (!loc) return null;
-  const name = loc.locality || loc.admin1 || loc.region || loc.landmark || loc.country;
-  if (!name) return null;
-  const sub = loc.country && loc.country !== name ? loc.country : null;
-  return { key: `${name}|${sub || ""}`, name, sub };
 }
 
 function groupMonths(items) {
@@ -41,47 +35,28 @@ function groupMonths(items) {
   for (const item of items) {
     const d = captureDate(item);
     if (!d) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const g = map.get(key) || { key, year: d.getFullYear(), month: d.getMonth() + 1, count: 0, items: [], places: new Map() };
+    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    const g = map.get(key) || { key, year: d.getFullYear(), month: d.getMonth() + 1, count: 0, cover: item };
     g.count += 1;
-    g.items.push(item);
-    const pl = placeOf(item);
-    if (pl) g.places.set(pl.name, (g.places.get(pl.name) || 0) + 1);
+    if ((item.app_rating || 0) > (g.cover.app_rating || 0)) g.cover = item;
     map.set(key, g);
   }
-  // A memory is titled by where most of that month's photos were taken, and its
-  // cover comes from that same place (best rated, then newest) so title and
-  // picture agree. Months without any located photo fall back to the newest shot.
-  return [...map.values()]
-    .map((g) => {
-      const place = [...g.places.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-      const pool = place ? g.items.filter((it) => placeOf(it)?.name === place) : g.items;
-      const cover = [...pool].sort((a, b) => (b.app_rating || b.rating || 0) - (a.app_rating || a.rating || 0))[0] || g.items[0];
-      return { key: g.key, year: g.year, month: g.month, count: g.count, place, cover };
-    })
-    .sort((a, b) => (b.key > a.key ? 1 : -1));
+  return [...map.values()].sort((a, b) => (b.key > a.key ? 1 : -1));
 }
 
-function groupPlaces(items) {
-  const map = new Map();
-  for (const item of items) {
-    const p = placeOf(item);
-    if (!p) continue;
-    const g = map.get(p.key) || { ...p, count: 0, cover: item };
-    g.count += 1;
-    map.set(p.key, g);
-  }
-  return [...map.values()].sort((a, b) => b.count - a.count);
+// Gallery filter for one place/memory: the sidecar's padded bounds, at the
+// same precision floor the map draws, labelled so the filter chip reads
+// "Sausalito" instead of "map area" and survives the map drawer closing.
+function geoFilterFor(entry, label) {
+  return { mode: "bounds", ...entry.bounds, min_precision: "locality", label };
 }
 
-function Row({ title, action, onAction, children }) {
+function Row({ title, meta, children }) {
   return (
     <section className="mt-9 first:mt-0">
       <div className="mb-4 flex items-end justify-between px-1">
         <h2 className="text-[22px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
-        {action && onAction ? (
-          <button type="button" onClick={onAction} className="text-[12px] text-muted transition-colors hover:text-text">{action}</button>
-        ) : null}
+        {meta ? <span className="text-[12px] text-muted2">{meta}</span> : null}
       </div>
       <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {children}
@@ -90,43 +65,83 @@ function Row({ title, action, onAction, children }) {
   );
 }
 
+// Square tile with the label on a dark gradient — pinned entries, albums, places.
+function Tile({ cover, title, subtitle, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
+    >
+      <img src={cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
+      <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 text-white">
+        <div className="truncate text-[13px] font-semibold">{title}</div>
+        {subtitle ? <div className="truncate text-[11px] text-white/75">{subtitle}</div> : null}
+      </div>
+    </button>
+  );
+}
+
+// Big memory card: place (or month) as the title, date range below.
+function MemoryCard({ cover, title, subtitle, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative h-[300px] w-[300px] shrink-0 overflow-hidden rounded-[18px] bg-[var(--fill)] text-left"
+    >
+      <img src={cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_45%,rgba(0,0,0,.6)_100%)]" />
+      <div className="pointer-events-none absolute bottom-5 left-5 right-5 text-white">
+        <div className="truncate text-[26px] font-bold leading-tight tracking-[-0.02em]">{title}</div>
+        <div className="mt-1 truncate text-[12px] font-medium uppercase tracking-[0.04em] text-white/75">{subtitle}</div>
+      </div>
+    </button>
+  );
+}
+
 export default function DiscoverView({
-  summary,
   collections,
   people,
   catalogRevision,
-  onOpenItem,
-  onOpenCollection,
-  onOpenPerson,
-  onShowRecent,
-  onOpenMonth,
-  onOpenPlace,
-  onItemsChange,
   catalogKey,
-  onShowStatus,
-  onOpenMap,
+  onOpen,
+  onOpenPerson,
   onOpenPeopleView,
 }) {
-  const { t } = useTranslation("nav");
-  const [recent, setRecent] = useState([]);
-  const [slice, setSlice] = useState([]);
-  const [pinnedCovers, setPinnedCovers] = useState({}); // rated / matched → first asset
-  const [covers, setCovers] = useState({});
+  const { t, i18n } = useTranslation("nav");
+  const locale = i18n.language || undefined;
+  const zh = (i18n.language || "").toLowerCase().startsWith("zh");
+  const nameOf = (entry) => (zh ? entry.name_zh : entry.name_en) || entry.name_en || entry.name_zh;
+  const countryOf = (entry) => (zh ? entry.country_zh : entry.country_en) || entry.country_en || entry.country_zh || null;
+
+  const [discover, setDiscover] = useState({ places: [], memories: [], loaded: false });
+  const [months, setMonths] = useState([]);
+  const [pinnedCovers, setPinnedCovers] = useState({}); // status → first asset
+  const [covers, setCovers] = useState({}); // collection_id → { path, count }
   const manual = (collections || []).filter((c) => c.kind === "manual");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let out = { places: [], memories: [] };
       try {
-        const rows = await api.browseImages({ status: "recent", limit: RECENT_LIMIT, offset: 0 });
-        if (!cancelled) setRecent(Array.isArray(rows) ? rows : []);
-      } catch { if (!cancelled) setRecent([]); }
-      try {
-        const rows = await api.browseImages({ status: "all", limit: SLICE_LIMIT, offset: 0, sort: "captured-desc" });
-        if (!cancelled) setSlice(Array.isArray(rows) ? rows : []);
-      } catch { if (!cancelled) setSlice([]); }
+        const res = await api.discoverCollections();
+        if (res && typeof res === "object") out = { places: res.places || [], memories: res.memories || [] };
+      } catch { /* sidecar without gazetteer: empty */ }
+      if (cancelled) return;
+      setDiscover({ ...out, loaded: true });
+      if (!out.memories.length) {
+        try {
+          const rows = await api.browseImages({ status: "all", limit: SLICE_LIMIT, offset: 0, sort: "captured-desc" });
+          if (!cancelled) setMonths(groupMonths(Array.isArray(rows) ? rows : []));
+        } catch { if (!cancelled) setMonths([]); }
+      } else {
+        setMonths([]);
+      }
       const next = {};
-      for (const status of ["rated", "matched"]) {
+      for (const status of ["recent", "rated", "matched"]) {
         try {
           const rows = await api.browseImages({ status, limit: 1, offset: 0 });
           next[status] = Array.isArray(rows) ? rows[0] || null : null;
@@ -136,15 +151,9 @@ export default function DiscoverView({
     })();
     return () => { cancelled = true; };
   }, [catalogRevision]);
-  // Keep the app's ordered item list in step with this page, so selecting a
-  // card here does not read as "asset not on screen" and trigger a reveal
-  // (which would yank the view back to the gallery).
-  useEffect(() => { onItemsChange?.(recent); }, [recent, onItemsChange]);
-  const months = groupMonths(slice);
-  const places = groupPlaces(slice);
+
   // The little map from the gallery drawer, scoped to the whole catalog.
   const { points } = useMapPoints({ enabled: true, status: "all", collectionId: null, search: "", filters: null, catalogKey, refreshToken: catalogRevision });
-  const monthLabel = (g) => new Date(g.year, g.month - 1, 1).toLocaleDateString([], { year: "numeric", month: "long" });
 
   const coverKey = manual.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
   useEffect(() => {
@@ -166,111 +175,107 @@ export default function DiscoverView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverKey]);
 
-  // Every tile on this page is backed by a real photo: folders without a loaded cover stay out.
-  const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
-
   const thumb = (item) => (item ? localFileUrl(item.preview_path || item.image_path) : null);
+  const fmt = (iso, opts) => new Date(`${iso}T12:00:00`).toLocaleDateString(locale, opts);
+  const rangeLabel = (from, to) => {
+    const year = from.slice(0, 4) === String(new Date().getFullYear()) ? {} : { year: "numeric" };
+    if (from === to) return fmt(from, { month: "short", day: "numeric", ...year });
+    if (from.slice(0, 7) === to.slice(0, 7)) return `${fmt(from, { month: "short", day: "numeric" })} – ${fmt(to, { day: "numeric", ...year })}`;
+    return `${fmt(from, { month: "short", day: "numeric", ...year })} – ${fmt(to, { month: "short", day: "numeric", ...year })}`;
+  };
+  const monthLabel = (g) => new Date(g.year, g.month - 1, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
+  const countLabel = (count) => t("discover.folderMeta", { count });
+
+  const memories = discover.memories.filter((m) => m.cover_preview_path);
+  const placeTiles = discover.places.filter((p) => p.cover_preview_path);
+  const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
   const peopleWithFace = (people || []).filter((g) => g.cover_preview_path || g.cover_image_path);
-  const firstPerson = (people || []).find((g) => g.cover_preview_path || g.cover_image_path);
+  const mapCover = points.find((pt) => pt.preview_path);
+
   const pinned = [
-    { key: "recent", label: t("discover.recentTitle"), cover: thumb(recent[0]), onClick: onShowRecent },
-    Number(summary?.rated_count ?? 0) > 0 ? { key: "rated", label: t("discover.pinRated"), cover: thumb(pinnedCovers.rated), onClick: () => onShowStatus?.("rated") } : null,
-    Number(summary?.raw_assets ?? 0) > 0 ? { key: "raw", label: t("discover.pinRaw"), cover: thumb(pinnedCovers.matched), onClick: () => onShowStatus?.("matched") } : null,
-    { key: "map", label: t("discover.pinMap"), cover: thumb(points.find((pt) => pt.preview_path)), onClick: onOpenMap },
-    firstPerson ? { key: "people", label: t("discover.peopleTitle"), cover: localFileUrl(firstPerson.cover_preview_path || firstPerson.cover_image_path), onClick: onOpenPeopleView } : null,
+    { key: "recent", label: t("discover.recentTitle"), cover: thumb(pinnedCovers.recent), onClick: () => onOpen?.({ status: "recent" }) },
+    { key: "rated", label: t("discover.pinRated"), cover: thumb(pinnedCovers.rated), onClick: () => onOpen?.({ status: "rated" }) },
+    { key: "raw", label: t("discover.pinRaw"), cover: thumb(pinnedCovers.matched), onClick: () => onOpen?.({ status: "matched" }) },
+    { key: "map", label: t("discover.pinMap"), cover: mapCover ? localFileUrl(mapCover.preview_path) : null, onClick: () => onOpen?.({ map: {} }) },
+    peopleWithFace[0]
+      ? { key: "people", label: t("discover.peopleTitle"), cover: localFileUrl(peopleWithFace[0].cover_preview_path || peopleWithFace[0].cover_image_path), onClick: onOpenPeopleView }
+      : null,
   ].filter((tile) => tile && tile.cover);
+
+  const openMemory = (m) => onOpen?.({ filters: { date_from: m.date_from, date_to: m.date_to, geo: geoFilterFor(m, nameOf(m)) } });
+  const openMonth = (g) => {
+    const last = new Date(g.year, g.month, 0).getDate();
+    onOpen?.({ filters: { date_from: `${g.year}-${pad2(g.month)}-01`, date_to: `${g.year}-${pad2(g.month)}-${pad2(last)}` } });
+  };
+  const openPlace = (p) => onOpen?.({ filters: { geo: geoFilterFor(p, nameOf(p)) } });
+  // A marker on the overview map opens the gallery with its drawer flown there.
+  const openMapAsset = (assetId) => {
+    const pt = points.find((x) => x.asset_id === assetId);
+    onOpen?.({ map: pt ? { flyTo: { lat: pt.latitude, lon: pt.longitude, zoom: 12 } } : {} });
+  };
+
+  const empty = discover.loaded && memories.length === 0 && months.length === 0 && pinned.length === 0 && folderCards.length === 0;
 
   return (
     <div data-testid="workspace-split" className="relative min-h-0 flex-1 overflow-hidden">
       <div data-testid="gallery-scroll" className="h-full overflow-y-auto px-6 pb-10">
-        {months.length === 0 && recent.length === 0 ? (
+        {empty ? (
           <div className="flex h-[220px] items-center justify-center rounded-[18px] bg-[var(--fill)] text-[13px] text-muted2">
             {t("discover.empty")}
           </div>
         ) : null}
 
-        {/* 回忆:按月一张大卡,标题 = 当月照片最多的地点,副标题 = 月份 */}
-        {months.length > 0 && (
+        {(memories.length > 0 || months.length > 0) && (
           <Row title={t("discover.memories")}>
+            {memories.map((m) => (
+              <MemoryCard
+                key={m.key}
+                cover={localFileUrl(m.cover_preview_path)}
+                title={nameOf(m)}
+                subtitle={`${rangeLabel(m.date_from, m.date_to)} · ${countLabel(m.count)}`}
+                onClick={() => openMemory(m)}
+              />
+            ))}
             {months.map((g) => (
-              <button
-                key={g.key}
-                type="button"
-                onClick={() => onOpenMonth?.(g.year, g.month)}
-                className="group relative h-[300px] w-[300px] shrink-0 overflow-hidden rounded-[18px] bg-[var(--fill)] text-left"
-              >
-                <img src={thumb(g.cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_45%,rgba(0,0,0,.6)_100%)]" />
-                <div className="pointer-events-none absolute bottom-5 left-5 right-5 text-white">
-                  <div className="truncate text-[26px] font-bold leading-tight tracking-[-0.02em]">{g.place || monthLabel(g)}</div>
-                  <div className="mt-1 text-[12px] font-medium uppercase tracking-[0.04em] text-white/75">{g.place ? monthLabel(g) : t("discover.folderMeta", { count: g.count })}</div>
-                </div>
-              </button>
+              <MemoryCard key={g.key} cover={thumb(g.cover)} title={monthLabel(g)} subtitle={countLabel(g.count)} onClick={() => openMonth(g)} />
             ))}
           </Row>
         )}
 
-        {/* 固定:通往各视图的方块入口 */}
         {pinned.length > 0 && (
           <Row title={t("discover.pinned")}>
-            {pinned.map((tile) => (
-              <button
-                key={tile.key}
-                type="button"
-                onClick={() => tile.onClick?.()}
-                className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
-              >
-                <img src={tile.cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
-                <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 truncate text-[13px] font-semibold text-white">{tile.label}</div>
-              </button>
-            ))}
+            {pinned.map((tile) => <Tile key={tile.key} cover={tile.cover} title={tile.label} onClick={tile.onClick} />)}
           </Row>
         )}
 
-        {/* 相册:文件夹方块,「张数 名称」压在图上 */}
         {folderCards.length > 0 && (
           <Row title={t("discover.albums")}>
-            {folderCards.map((col) => {
-              const cover = covers[col.collection_id]?.path;
-              return (
-                <button
-                  key={col.collection_id}
-                  type="button"
-                  onClick={() => onOpenCollection?.(col.collection_id)}
-                  className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
-                >
-                  <img src={localFileUrl(cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
-                  <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 truncate text-[13px] font-semibold text-white">
-                    <span className="mr-1.5 tabular-nums">{col.item_count || 0}</span>{col.name}
-                  </div>
-                </button>
-              );
-            })}
+            {folderCards.map((col) => (
+              <Tile
+                key={col.collection_id}
+                cover={localFileUrl(covers[col.collection_id].path)}
+                title={<><span className="mr-1.5 tabular-nums">{col.item_count || 0}</span>{col.name}</>}
+                onClick={() => onOpen?.({ collectionId: col.collection_id })}
+              />
+            ))}
           </Row>
         )}
 
         {peopleWithFace.length > 0 && (
           <Row title={t("discover.peopleTitle")}>
             {peopleWithFace.map((g) => (
-              <button
-                key={g.group_id || g.id}
-                type="button"
-                onClick={() => onOpenPerson?.(g)}
-                className="w-[112px] shrink-0 text-center"
-              >
+              <button key={g.group_id || g.id} type="button" onClick={() => onOpenPerson?.(g)} className="w-[112px] shrink-0 text-center">
                 <div className="mx-auto h-[96px] w-[96px] overflow-hidden rounded-full bg-[var(--fill)]">
                   <FaceCrop src={localFileUrl(g.cover_preview_path || g.cover_image_path)} bbox={g.cover_bbox} size={96} className="h-full w-full" />
                 </div>
                 <div className="mt-2 truncate text-[13px] text-text">{g.name?.trim() || t("discover.unnamed")}</div>
-                <div className="mt-0.5 text-[11px] text-muted2">{t("discover.folderMeta", { count: g.face_count || 0 })}</div>
+                <div className="mt-0.5 text-[11px] text-muted2">{countLabel(g.face_count || 0)}</div>
               </button>
             ))}
           </Row>
         )}
 
-        {(places.length > 0 || points.length > 0) && (
+        {(placeTiles.length > 0 || points.length > 0) && (
           <section className="mt-9">
             <div className="mb-4 flex items-end justify-between px-1">
               <h2 className="text-[22px] font-semibold tracking-[-0.01em] text-text">{t("discover.placesTitle")}</h2>
@@ -282,28 +287,23 @@ export default function DiscoverView({
                   <PhotoMap
                     points={points}
                     visible
-                    onSelectAsset={(assetId) => onOpenItem?.(assetId)}
+                    scrollZoom={false}
+                    onSelectAsset={openMapAsset}
                     levelLabels={{ world: t("map.level.world"), region: t("map.level.region"), city: t("map.level.city") }}
                   />
                 </Suspense>
               </div>
             )}
-            {places.length > 0 && (
+            {placeTiles.length > 0 && (
               <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {places.map((g) => (
-                  <button
-                    key={g.key}
-                    type="button"
-                    onClick={() => onOpenPlace?.(g.name)}
-                    className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
-                  >
-                    <img src={thumb(g.cover)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
-                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
-                    <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 text-white">
-                      <div className="truncate text-[13px] font-semibold">{g.name}</div>
-                      <div className="truncate text-[11px] text-white/75">{[g.sub, t("discover.folderMeta", { count: g.count })].filter(Boolean).join(" · ")}</div>
-                    </div>
-                  </button>
+                {placeTiles.map((p) => (
+                  <Tile
+                    key={p.key}
+                    cover={localFileUrl(p.cover_preview_path)}
+                    title={nameOf(p)}
+                    subtitle={[countryOf(p), countLabel(p.count)].filter(Boolean).join(" · ")}
+                    onClick={() => openPlace(p)}
+                  />
                 ))}
               </div>
             )}

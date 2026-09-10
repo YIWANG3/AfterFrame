@@ -296,6 +296,10 @@ def build_parser() -> argparse.ArgumentParser:
     # inline at save time; this covers the pre-existing ones.
     subparsers.add_parser("resolve-ai-locations", parents=[common])
 
+    # Discover page: located assets grouped into places (nearest gazetteer
+    # locality) and memories (one visit to a place). Read-only.
+    subparsers.add_parser("discover-collections", parents=[common])
+
     # Effective location of one image asset (RAW-first, no precision floor) —
     # powers the Inspector's "click a location → jump the map there".
     asset_location_p = subparsers.add_parser("get-asset-location", parents=[common])
@@ -1540,6 +1544,27 @@ def _cmd_set_asset_location(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_discover_collections(args, connection, catalog, parser):
+    from .db.locations import list_map_points
+    from .discover import build_discover_collections, load_reverse_geocoder
+
+    points = []
+    for row in list_map_points(connection, status="all", min_precision="locality"):
+        preview_path = None
+        if row["preview_relative_path"]:
+            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
+        points.append({
+            "asset_id": row["asset_id"],
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+            "app_rating": row["app_rating"],
+            "capture_time": row["capture_time"],
+            "preview_path": preview_path,
+        })
+    print(json.dumps(build_discover_collections(points, load_reverse_geocoder()), ensure_ascii=False))
+    return 0
+
+
 def _cmd_resolve_ai_locations(args, connection, catalog, parser):
     from .db.locations import delete_asset_location, upsert_ai_asset_location
     from .geo_resolver import RESOLVER_VERSION, load_gazetteer, resolve_location
@@ -2082,6 +2107,7 @@ COMMAND_HANDLERS = {
     "browse-images": _cmd_browse_images,
     "browse-map-points": _cmd_browse_map_points,
     "resolve-ai-locations": _cmd_resolve_ai_locations,
+    "discover-collections": _cmd_discover_collections,
     "get-asset-location": _cmd_get_asset_location,
     "set-asset-location": _cmd_set_asset_location,
     "clear-ai-location": _cmd_clear_ai_location,

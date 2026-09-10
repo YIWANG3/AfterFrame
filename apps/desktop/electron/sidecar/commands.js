@@ -46,6 +46,12 @@ function createSidecarCommands(callJson) {
       return callJson(["clear-ai-location", "--asset-id", String(assetId)]);
     },
 
+    // Discover page collections: located assets grouped into places and
+    // memories (one visit to a place). Read-only, computed from map points.
+    discoverCollections() {
+      return callJson(["discover-collections"]).then((out) => out || { places: [], memories: [] });
+    },
+
     // One-shot backfill: resolve existing AI annotations' location guesses
     // into asset_locations (offline gazetteer). New annotations resolve at
     // save time in the sidecar; this covers pre-existing ones.

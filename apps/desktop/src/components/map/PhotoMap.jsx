@@ -58,7 +58,7 @@ const LEVEL_ZOOMS = { world: 1.35, region: 4, city: 7 };
 // The interactive offline map. Owns one MapLibre instance for its lifetime —
 // MapDrawer keeps this component mounted after the first open, so re-opening
 // the drawer never re-parses the 22 MB base-map data.
-export default function PhotoMap({ points, onViewportChange, onSelectAsset, visible, levelLabels, flyTo }) {
+export default function PhotoMap({ points, onViewportChange, onSelectAsset, visible, levelLabels, flyTo, scrollZoom = true }) {
   const stageRef = useRef(null);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -69,6 +69,14 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
   const stateRef = useRef({ points: [], destroyed: false, maplibre: null });
   const callbacksRef = useRef({});
   callbacksRef.current = { onViewportChange, onSelectAsset };
+  const scrollZoomRef = useRef(scrollZoom);
+  scrollZoomRef.current = scrollZoom;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (scrollZoom) map.scrollZoom.enable();
+    else map.scrollZoom.disable();
+  }, [scrollZoom]);
   stateRef.current.points = points;
 
   // One-time map construction.
@@ -98,6 +106,9 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
         },
       });
       mapRef.current = map;
+      // Embedded in a scrolling page (Discover) the wheel must keep scrolling
+      // the page, not zoom the map — the +/− control and drag still work.
+      if (!scrollZoomRef.current) map.scrollZoom.disable();
       if (pendingFlyToRef.current) {
         const request = pendingFlyToRef.current;
         pendingFlyToRef.current = null;

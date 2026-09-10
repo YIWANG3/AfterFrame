@@ -534,6 +534,26 @@ export default function useWorkspace({ pushToast } = {}) {
     });
   }
 
+  // Open the gallery as a fresh destination: collection, status, query and
+  // facets are all replaced, never intersected with whatever the previous
+  // gallery had (the Discover page's entries would otherwise inherit a stale
+  // person/date/map filter and open "empty"). One explicit browse, like
+  // filterByPerson.
+  function browseTo({ status: nextStatus = "all", filters: nextFilters = {}, collectionId = null, query: nextQuery = "" } = {}) {
+    const facetFilters = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
+    setActiveCollectionId(collectionId);
+    setStatus(nextStatus);
+    setQuery(nextQuery);
+    setFilters(facetFilters);
+    void loadBrowser({
+      nextStatus,
+      collectionId,
+      search: nextQuery.trim() || null,
+      facetFilters,
+      force: true,
+    });
+  }
+
   // Filter controls need an immediate browse as well as a state update. The
   // effect remains as a safety net for programmatic callers, but relying on it
   // alone can leave the rendered chips ahead of the gallery during rapid view
@@ -879,6 +899,7 @@ export default function useWorkspace({ pushToast } = {}) {
     selectCollection,
     clearCollection,
     filterByPerson,
+    browseTo,
     setStatusFilter,
     createCollection,
     renameCollection,

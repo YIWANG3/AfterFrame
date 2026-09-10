@@ -473,7 +473,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           title={t("filter.mapAreaRemove")}
         >
           <MapIcon className="h-3 w-3" />
-          {f.geo.mode === "place" && f.geo.place_id ? f.geo.place_id : t("filter.mapArea")}
+          {f.geo.label || (f.geo.mode === "place" && f.geo.place_id ? f.geo.place_id : t("filter.mapArea"))}
           <X className="h-2.5 w-2.5 text-muted" />
         </button>
       )}

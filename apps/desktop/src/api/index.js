@@ -55,6 +55,7 @@ const api = {
   browseImages: (...args) => invoke("browseImages", ...args),
   browseMapPoints: (...args) => invoke("browseMapPoints", ...args),
   resolveAiLocations: (...args) => invoke("resolveAiLocations", ...args),
+  discoverCollections: (...args) => invoke("discoverCollections", ...args),
   getAssetLocation: (...args) => invoke("getAssetLocation", ...args),
   clearAiLocation: (...args) => invoke("clearAiLocation", ...args),
   getFacetValues: (...args) => invoke("getFacetValues", ...args),

@@ -45,14 +45,8 @@
     "displayMode": "Layout"
   },
   "discover": {
-    "heroKicker": "New this week",
-    "heroKickerQuiet": "Recent",
     "recentTitle": "Recently Added",
-    "heroMeta": "{{count}} new photos",
-    "updated": "updated {{date}}",
     "empty": "No photos yet. Import some and the latest will show up here.",
-    "showAll": "Show all",
-    "foldersTitle": "Folders",
     "folderMeta": "{{count}} items",
     "peopleTitle": "People",
     "placesTitle": "Places",
@@ -63,7 +57,6 @@
     "pinRaw": "With RAW",
     "pinMap": "Map",
     "mapMeta": "{{count}} locations",
-    "monthsTitle": "By month",
     "unnamed": "Unnamed"
   },
   "sidebar": {

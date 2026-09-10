@@ -45,14 +45,8 @@
     "displayMode": "布局"
   },
   "discover": {
-    "heroKicker": "本周新增",
-    "heroKickerQuiet": "最近",
     "recentTitle": "最近添加",
-    "heroMeta": "{{count}} 张新照片",
-    "updated": "更新于 {{date}}",
     "empty": "还没有照片,导入后这里会出现最近的内容。",
-    "showAll": "显示全部",
-    "foldersTitle": "文件夹",
     "folderMeta": "{{count}} 张",
     "peopleTitle": "人物",
     "placesTitle": "地点",
@@ -63,7 +57,6 @@
     "pinRaw": "含 RAW",
     "pinMap": "地图",
     "mapMeta": "{{count}} 个位置",
-    "monthsTitle": "按月回顾",
     "unnamed": "未命名"
   },
   "sidebar": {

@@ -859,6 +859,9 @@ export const browserBridge = {
     else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported desc
     return sorted.slice(offset, offset + limit);
   },
+  // The web catalog has no gazetteer; the Discover page falls back to
+  // month groups when both lists are empty.
+  discoverCollections: async () => ({ places: [], memories: [] }),
   // Location points for the map drawer, scoped like the gallery. Same row
   // shape as the sidecar's browse-map-points; all web points are EXIF-exact.
   browseMapPoints: async ({ status = "all", collectionId, search, filters } = {}) => {

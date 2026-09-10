@@ -164,7 +164,9 @@ export default function App() {
   useEffect(() => {
     if (mapExpanded) return;
     const current = workspaceRef.current.filters;
-    if (!current?.geo) return;
+    // A labelled geo filter (a Discover place/memory) has its own chip and
+    // never came from the viewport — it stays put with the map closed.
+    if (!current?.geo || current.geo.label) return;
     const { geo: _geo, ...rest } = current;
     workspaceRef.current.applyFilters(rest);
   }, [mapExpanded]);
@@ -204,6 +206,18 @@ export default function App() {
     enabled: viewMode === "people" || viewMode === "discover",
     catalogKey: workspace.info?.catalogPath || null,
   });
+
+  // Discover entries open the gallery as a clean destination: no inherited
+  // collection/status/query/facets, filter bar shown when there is something
+  // to show, map drawer opened (and flown) only for map-shaped entries.
+  const openDiscoverTarget = ({ status = "all", filters = {}, collectionId = null, map = null } = {}) => {
+    setViewMode("assets");
+    setPeopleGroup(null);
+    workspace.browseTo({ status, filters, collectionId });
+    setShowFilters(Object.keys(filters).length > 0);
+    setMapExpanded(!!map);
+    if (map?.flyTo) setMapFlyTo({ ...map.flyTo, nonce: Date.now() });
+  };
 
   const openPersonGroup = (group) => {
     if (!group?.group_id) return;
@@ -287,12 +301,6 @@ export default function App() {
   const resizeSidebar = usePaneResize(workspace.setSidebarWidth, 200, 360);
   const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -420, -240);
   const currentItems = workspace.filteredItems;
-  // 发现页自己的条目列表:灯箱在发现页里按这个列表翻页,而不是按图库当前的筛选结果
-  const [discoverItems, setDiscoverItems] = useState([]);
-  const discoverIndex = useMemo(
-    () => discoverItems.findIndex((item) => item.asset_id === workspace.selectedAssetId),
-    [discoverItems, workspace.selectedAssetId],
-  );
   const orderedIds = useMemo(() => currentItems.map((item) => item.asset_id), [currentItems]);
   const itemById = useMemo(
     () => new Map(currentItems.map((item) => [item.asset_id, item])),
@@ -1092,42 +1100,9 @@ export default function App() {
                 people={peopleGroups.groups}
                 catalogRevision={workspace.catalogRevision}
                 catalogKey={workspace.info?.catalogPath || null}
-                onItemsChange={setDiscoverItems}
-                onShowStatus={(status) => {
-                  setViewMode("assets");
-                  setPeopleGroup(null);
-                  const nextFilters = clearPeopleGroupFilter();
-                  workspace.setStatusFilter(status, { facetFilters: nextFilters });
-                }}
-                onOpenMap={() => { setViewMode("assets"); setMapExpanded(true); }}
-                onOpenPeopleView={() => { setViewMode("people"); setPeopleGroup(null); workspace.clearCollection?.({ reload: false }); }}
-                onOpenItem={(assetId) => openLightboxForItem(assetId)}
-                onOpenCollection={(id) => {
-                  setViewMode("assets");
-                  setPeopleGroup(null);
-                  clearPeopleGroupFilter();
-                  workspace.selectCollection(id);
-                }}
+                onOpen={openDiscoverTarget}
                 onOpenPerson={openPersonGroup}
-                onShowRecent={() => {
-                  setViewMode("assets");
-                  setPeopleGroup(null);
-                  const nextFilters = clearPeopleGroupFilter();
-                  workspace.setStatusFilter("recent", { facetFilters: nextFilters });
-                }}
-                onOpenMonth={(year, month) => {
-                  const pad = (n) => String(n).padStart(2, "0");
-                  const last = new Date(year, month, 0).getDate();
-                  setViewMode("assets");
-                  workspace.clearCollection?.({ reload: false });
-                  workspace.applyFilters({ ...(workspace.filters || {}), date_from: `${year}-${pad(month)}-01`, date_to: `${year}-${pad(month)}-${pad(last)}` });
-                  setShowFilters(true);
-                }}
-                onOpenPlace={(name) => {
-                  setViewMode("assets");
-                  workspace.clearCollection?.({ reload: false });
-                  workspace.setQuery(name);
-                }}
+                onOpenPeopleView={() => { setViewMode("people"); setPeopleGroup(null); workspace.clearCollection?.({ reload: false }); }}
               />
             </>
           ) : (
@@ -1323,8 +1298,8 @@ export default function App() {
       </div>
       <Lightbox
         open={lightboxOpen}
-        items={viewMode === "stickers" ? stickerItemsForLightbox : viewMode === "discover" ? discoverItems : currentItems}
-        currentIndex={viewMode === "stickers" ? stickerLightboxIndex : viewMode === "discover" ? Math.max(discoverIndex, 0) : Math.max(selectedIndex, 0)}
+        items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
+        currentIndex={viewMode === "stickers" ? stickerLightboxIndex : Math.max(selectedIndex, 0)}
         proofMode={viewMode === "stickers" ? false : proofMode}
         onToggleProof={viewMode === "stickers" ? undefined : (() => setProofMode((current) => !current))}
         onEdit={viewMode === "stickers" ? undefined : openEditor}
@@ -1338,9 +1313,7 @@ export default function App() {
               const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
               if (sticker) stickerView.setSelected(sticker);
             }
-          : viewMode === "discover"
-            ? (idx) => { const item = discoverItems[idx]; if (item) selectSingle(item.asset_id); }
-            : selectByIndex
+          : selectByIndex
         }
       />
       <SettingsOverlay
