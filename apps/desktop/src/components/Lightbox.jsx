@@ -58,6 +58,53 @@ function formatPercent(scale) {
   return `${Math.round(scale * 100)}%`;
 }
 
+// Bottom filmstrip (ported from the Photos-style demo D): a horizontal row of
+// 50px thumbnails, the current one fully lit with a white ring, the rest at 55%.
+// Only a window of ±STRIP_WINDOW items around the current index is rendered so
+// a 5000-photo catalog does not mount 5000 <img>s; arrows / clicks move the window.
+const STRIP_WINDOW = 40;
+function Filmstrip({ items, index, onPick, hidden }) {
+  const ref = useRef(null);
+  const start = Math.max(0, index - STRIP_WINDOW);
+  const end = Math.min(items.length, index + STRIP_WINDOW + 1);
+  useEffect(() => {
+    const el = ref.current?.querySelector('[data-on="true"]');
+    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [index, start]);
+  if (!items.length) return null;
+  return (
+    <div
+      ref={ref}
+      className={[
+        "pointer-events-auto flex h-16 shrink-0 items-center gap-[3px] overflow-x-auto px-4 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        hidden ? "invisible" : "",
+      ].join(" ")}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {items.slice(start, end).map((item, offset) => {
+        const i = start + offset;
+        const src = item.preview_path || item.image_path;
+        const on = i === index;
+        return (
+          <button
+            key={item.asset_id || i}
+            type="button"
+            data-on={on ? "true" : "false"}
+            onClick={() => onPick?.(i)}
+            className={[
+              "h-[50px] w-[50px] shrink-0 overflow-hidden rounded-[6px] bg-white/5 transition-opacity",
+              on ? "opacity-100 shadow-[0_0_0_2px_#fff]" : "opacity-55 hover:opacity-85",
+            ].join(" ")}
+            title={fileName(item.image_path) || item.stem}
+          >
+            {src ? <img src={localFileUrl(src)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Lightbox({
   open,
   items,
@@ -724,6 +771,7 @@ export default function Lightbox({
           </button>
         </div>
       )}
+      <Filmstrip items={items || []} index={clampedIndex} onPick={(i) => onIndexChange?.(i)} hidden={!!proofMode} />
     </div>
   );
 }
