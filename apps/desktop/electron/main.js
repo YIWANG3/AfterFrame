@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -1541,6 +1541,14 @@ if (devServerUrl) {
 ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });
 
 ipcMain.handle("workspace:info", () => workspaceInfo());
+// The renderer owns the theme (dark / light / system). Mirror it into the
+// window's native appearance so macOS draws the traffic lights — and their
+// inactive grey state — for the right background; otherwise a light UI gets
+// the dark-appearance lights, which are near-white when the window is inactive.
+ipcMain.handle("workspace:set-theme", (_event, theme) => {
+  nativeTheme.themeSource = theme === "light" || theme === "dark" ? theme : "system";
+  return nativeTheme.themeSource;
+});
 
 // --- Collections ---
 

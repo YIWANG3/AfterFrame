@@ -100,6 +100,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getInitialLocale: () => { try { return ipcRenderer.sendSync("app:get-locale"); } catch { return "en"; } },
   setLocale: (lng) => ipcRenderer.invoke("app:set-locale", lng),
   openExternal: (url) => ipcRenderer.invoke("workspace:open-external", url),
+  setTheme: (theme) => ipcRenderer.invoke("workspace:set-theme", theme),
   pickSavePath: (options) => ipcRenderer.invoke("workspace:pick-save-path", options),
   pickDirectory: (options) => ipcRenderer.invoke("workspace:pick-directory", options),
   saveImage: (targetPath, arrayBuffer, sourceMetadataPath) => ipcRenderer.invoke("workspace:save-image", targetPath, arrayBuffer, sourceMetadataPath),

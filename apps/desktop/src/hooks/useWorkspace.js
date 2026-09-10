@@ -104,6 +104,8 @@ export default function useWorkspace({ pushToast } = {}) {
     const apply = () => {
       const effective = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = effective;
+      // Desktop: keep the native window appearance in step (traffic-light colours).
+      api.setTheme?.(theme);
     };
     apply();
     if (theme !== "system") return undefined;

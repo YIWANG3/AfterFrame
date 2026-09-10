@@ -20,6 +20,7 @@ const api = {
   // ── files & external ──
   getPathForFile: (...args) => invoke("getPathForFile", ...args),
   revealPath: (...args) => invoke("revealPath", ...args),
+  setTheme: (...args) => invoke("setTheme", ...args),
   copyText: (...args) => invoke("copyText", ...args),
   videoProxy: (...args) => invoke("videoProxy", ...args),
   videoKeyframes: (...args) => invoke("videoKeyframes", ...args),
