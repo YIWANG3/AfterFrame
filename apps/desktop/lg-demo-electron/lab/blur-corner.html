@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>blur corner lab</title>
+<style>
+  :root { --bg: #f4f4f5; --pane: rgba(29,29,31,.04); --R: 40px; }
+  html, body { margin: 0; background: transparent; font: 12px system-ui; color: #222; }
+  /* 和真 app 一样:透明窗 + 根节点 clip-path 圆角 */
+  #host { min-height: 240px; background: var(--bg); clip-path: inset(0 round 26px); padding: 8px; }
+  .plain #host { clip-path: none; }
+  .pane { position: relative; width: 300px; height: 200px; background: var(--pane); }
+
+  /* 共同:和真 app 一样多一层 split(relative + overflow hidden),模糊带挂在 split 上 */
+  .split { position: absolute; inset: 0; overflow: hidden; }
+  .scroller { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
+  .scroller img { display: block; width: 100%; height: 130px; object-fit: cover; margin: 0 0 6px; }
+  .scroller .pad { height: 60px; }
+
+  /* 模糊带:合成层 + mask 羽化(和真 app 一样) */
+  .scroller { scroll-timeline-name: --grid; scroll-timeline-axis: block; }
+  .pane { timeline-scope: --grid; }
+  @keyframes edge-in { from { opacity: 0; } to { opacity: 1; } }
+  .band { position: absolute; top: 0; left: 0; right: 0; height: 110px; z-index: 5; pointer-events: none;
+    transform: translateZ(0); will-change: transform;
+    animation: edge-in linear both; animation-timeline: --grid; animation-range: 0 40px;
+    backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    background: linear-gradient(180deg, rgba(244,244,245,.72), rgba(244,244,245,.3) 40%, rgba(244,244,245,0));
+    -webkit-mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%); }
+
+  /* A:面板 overflow:hidden + border-radius(真 app 现状,角是方的) */
+  .A .pane { overflow: hidden; border-radius: var(--R); }
+  /* B:A + 模糊带自带圆角(第二条弧线) */
+  .B .pane { overflow: hidden; border-radius: var(--R); }
+  .B .band { border-radius: var(--R) var(--R) 0 0; }
+  /* C:A + 反圆角盖板(合成层) */
+  .C .pane { overflow: hidden; border-radius: var(--R); }
+  .C .cap { position: absolute; top: 0; left: 0; right: 0; height: var(--R); z-index: 6; pointer-events: none; transform: translateZ(0);
+    background:
+      radial-gradient(circle at var(--R) var(--R), transparent calc(var(--R) - .5px), var(--bg) calc(var(--R) + .5px)) left top / var(--R) var(--R) no-repeat,
+      radial-gradient(circle at 0 var(--R), transparent calc(var(--R) - .5px), var(--bg) calc(var(--R) + .5px)) right top / var(--R) var(--R) no-repeat; }
+  /* D:面板用 clip-path 裁圆角(不用 overflow/border-radius) */
+  .D .pane { clip-path: inset(0 round var(--R)); }
+  /* H:A + 滚动容器自己带顶部圆角 → 照片根本到不了角落,模糊带是方角也无所谓(角落里它压的是均匀底色) */
+  .H .pane { overflow: hidden; border-radius: var(--R); }
+  .H .scroller { border-radius: var(--R) var(--R) 0 0; }
+  /* G:A + split 自己也带同样的圆角 */
+  .G .pane { overflow: hidden; border-radius: var(--R); }
+  .G .split { border-radius: var(--R); }
+  /* E:模糊带放进滚动容器内做 sticky,滚动容器自己带圆角 */
+  .E .pane { overflow: hidden; border-radius: var(--R); }
+  .E .scroller { border-radius: var(--R); }
+  .E .band { position: sticky; top: 0; margin-bottom: -110px; }
+  /* F:D + 模糊带不做合成层(看羽化是否还在) */
+  .F .pane { clip-path: inset(0 round var(--R)); }
+  .F .band { transform: none; will-change: auto; }
+
+  .label { position: absolute; left: 8px; bottom: 8px; background: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+</style>
+<div id="host"></div>
+<script>
+  const v = new URLSearchParams(location.search).get('v') || 'A';
+  const host = document.getElementById('host');
+  host.className = v; if (new URLSearchParams(location.search).get('plain')) document.documentElement.classList.add('plain');
+  const imgs = ['p06','p02','p03','p06'].map((n) => `<img src="/lg-demo-electron/photos/${n}.jpg">`).join('');
+  const bandInside = v === 'E';
+  host.innerHTML = `<div class="pane"><div class="split">
+      <div class="scroller">${bandInside ? '<div class="band"></div>' : ''}${imgs}<div class="pad"></div></div>
+      ${bandInside ? '' : '<div class="band"></div>'}
+      ${v === 'C' ? '<div class="cap"></div>' : ''}
+      <div class="label">${v}</div>
+    </div></div>`;
+  // 滚到照片压在模糊带底下
+  requestAnimationFrame(() => { host.querySelector('.scroller').scrollTop = 70; });
+</script>
