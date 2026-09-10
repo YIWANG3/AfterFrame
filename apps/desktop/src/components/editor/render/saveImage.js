@@ -5,7 +5,7 @@
 import api from "../../../api";
 import {
   getSourceDimensions,
-  buildTransformedCanvas,
+  buildTransformedCanvas, cutRotatedCrop,
   buildDepthAlphaMask,
   angledLinearGradient,
   drawScrim,
@@ -38,7 +38,6 @@ export async function saveEditedImage(ctx) {
     sourcePath,
     sourceImage,
     transformedPreview,
-    rotationDeg,
     quarterTurns,
     freeAngle,
     flipX,
@@ -89,8 +88,11 @@ export async function saveEditedImage(ctx) {
   }
 
   const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
+  // Quarter turns + flips only: that is the basis the preview, the crop rect and
+  // the layers are expressed in. The free angle is applied when the crop is cut
+  // (photo turns under the axis-aligned crop box, about the box's centre).
   const transformedFull = buildTransformedCanvas(
-    sourceImage, sourceWidth, sourceHeight, rotationDeg, flipX, flipY,
+    sourceImage, sourceWidth, sourceHeight, quarterTurns * 90, flipX, flipY,
   );
 
   const fullW = transformedFull.width;
@@ -108,6 +110,7 @@ export async function saveEditedImage(ctx) {
         height: Math.max(1, Math.round(normalizedCrop.height * fullH)),
       }
     : { x: 0, y: 0, width: fullW, height: fullH };
+  const content = cutRotatedCrop(transformedFull, contentSrc, freeAngle);
 
   // Two output shapes:
   //  • pad active → output = cropped photo + margins (bg-filled)
@@ -136,8 +139,8 @@ export async function saveEditedImage(ctx) {
     outCtx.fillStyle = bgFillStyle(outCtx, canvasBg, compW, compH);
     outCtx.fillRect(0, 0, compW, compH);
     outCtx.drawImage(
-      transformedFull,
-      contentSrc.x, contentSrc.y, contentSrc.width, contentSrc.height,
+      content,
+      0, 0, content.width, content.height,
       contentRect.x, contentRect.y, contentRect.width, contentRect.height,
     );
   } else {
@@ -149,7 +152,7 @@ export async function saveEditedImage(ctx) {
     outCtx = outputCanvas.getContext("2d");
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.drawImage(transformedFull, contentSrc.x, contentSrc.y, compW, compH, 0, 0, compW, compH);
+    outCtx.drawImage(content, 0, 0, content.width, content.height, 0, 0, compW, compH);
   }
 
   // Project a full-photo-coord layer into the output canvas: the photo content
@@ -207,11 +210,18 @@ export async function saveEditedImage(ctx) {
     mCtx.imageSmoothingQuality = "high";
     const kx = alpha.width / fullW;
     const ky = alpha.height / fullH;
-    mCtx.drawImage(
+    // The depth field belongs to the photo pixels, so it turns with them.
+    const alphaCut = cutRotatedCrop(
       alpha,
-      contentSrc.x * kx, contentSrc.y * ky, contentSrc.width * kx, contentSrc.height * ky,
+      { x: contentSrc.x * kx, y: contentSrc.y * ky, width: contentSrc.width * kx, height: contentSrc.height * ky },
+      freeAngle,
+    );
+    mCtx.drawImage(
+      alphaCut,
+      0, 0, alphaCut.width, alphaCut.height,
       contentRect.x, contentRect.y, contentRect.width, contentRect.height,
     );
+    releaseCanvasImage(alphaCut);
     releaseCanvasImage(alpha);
     return mask;
   };

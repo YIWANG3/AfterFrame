@@ -409,6 +409,13 @@ html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-a
 html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar > * { -webkit-app-region: no-drag; }
 html.electron.fs .noise-overlay > .grid, html.electron.fs .noise-overlay > .grid > aside.border-r,
 html.electron.fs .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: no-drag; }
+/* 全屏覆盖层(灯箱 / 编辑器 / 拼图 / 设置 / 对话框)打开时,底下的拖拽区仍然生效:Electron 算拖拽区只看元素矩形,不看层叠顺序。
+   给覆盖层整块标 no-drag 把窗口从拖拽区里减掉;覆盖层自己的头部一行给回可拖,控件 no-drag */
+html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
+html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10,
+html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 { -webkit-app-region: drag; }
+html.electron .fixed.inset-0.z-\[10100\] > .h-11 > *, html.electron .fixed.inset-0.z-\[10200\] > .h-10 > *,
+html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 > * { -webkit-app-region: no-drag; }
 /* 侧栏内零分割线(底部折叠钮 / 设置上方的两条线) */
 aside.border-r .border-t, aside.border-r .border-b, aside.border-r [class*="border-t"], aside.border-r [class*="border-b"] { border-color: transparent; }
 /* 侧栏条目:alpha 填充,选中 = 更亮的填充 */
@@ -551,6 +558,9 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 [data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { border-radius: 0; }
 [data-testid="gallery-scroll"].px-0 { padding-left: 8px !important; padding-right: 8px !important; padding-bottom: 8px !important; }
 [data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
+/* hover 时 img 被 scale + filter 提到合成层,中间那层无圆角的 overflow 容器会让 Chromium 丢掉外层圆角裁切 → 直角。
+   让中间层继承圆角,裁切就落在它自己身上 */
+[data-gallery-item] > div > .overflow-hidden { border-radius: inherit; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }
 /* 框选矩形单色 */
@@ -718,6 +728,18 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 [data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] > span:last-child { color: rgb(255 255 255 / 0.92); }
 /* 选择器类(模型文件、字体来源):左对齐、28 高、字段圆角 5px */
 [data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
+
+/* ───────── 11c · 拼图(z 10200):右侧面板与编辑器面板同一套;页面卡去掉发丝环 ───────── */
+.fixed.inset-0.z-\[10200\] .border-b.border-border\/60, .fixed.inset-0.z-\[10200\] .border-t.border-border\/60,
+.fixed.inset-0.z-\[10200\] .border-l.border-border\/60 { border-color: transparent; }
+.fixed.inset-0.z-\[10200\] .border-b.border-border\/60.px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
+.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border { border-color: transparent; background-color: var(--fill-2); border-radius: 5px; height: 28px; }
+.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border:focus { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
+.fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed { border-style: solid; border-color: transparent; background: var(--fill); border-radius: 8px; }
+.fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed:hover { background: var(--fill-2); border-color: transparent; }
+.fixed.inset-0.z-\[10200\] .tracking-\[0\.14em\], .fixed.inset-0.z-\[10200\] .tracking-\[0\.12em\] { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text)); }
+/* 页面卡:平时无环(那圈 ring-border 在浅色下从页面顶上露出来),只有拖拽目标态保留 accent 环 */
+.fixed.inset-0.z-\[10200\] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
 
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
 .bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }

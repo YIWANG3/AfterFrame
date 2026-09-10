@@ -157,11 +157,35 @@ export function fitViewTransformToStage(outputRect, viewportSize, placement) {
   };
 }
 
-export function getMinZoomForCrop(cropRect, transformedPreview, placement) {
+// The photo turns under the axis-aligned crop box about the box's centre, so
+// the box, seen from the photo, is a rectangle rotated by -angle. Its bounding
+// box (same centre) is what must stay inside the photo — otherwise a corner of
+// the crop pokes past the photo's edge and exports transparent. Angle 0 → the
+// box itself.
+export function cropExtentForAngle(cropRect, freeAngle = 0) {
+  if (!cropRect) return null;
+  if (!freeAngle) return cropRect;
+  const rad = (freeAngle * Math.PI) / 180;
+  const c = Math.abs(Math.cos(rad));
+  const s = Math.abs(Math.sin(rad));
+  // +2px: with the extent touching the photo edge exactly, the two touching
+  // corners sample half-outside and export a transparent pixel or two.
+  const width = cropRect.width * c + cropRect.height * s + 2;
+  const height = cropRect.width * s + cropRect.height * c + 2;
+  return {
+    x: cropRect.x + cropRect.width / 2 - width / 2,
+    y: cropRect.y + cropRect.height / 2 - height / 2,
+    width,
+    height,
+  };
+}
+
+export function getMinZoomForCrop(cropRect, transformedPreview, placement, freeAngle = 0) {
   if (!cropRect || !transformedPreview || !placement) return 0;
+  const extent = cropExtentForAngle(cropRect, freeAngle);
   return Math.max(
-    cropRect.width / (transformedPreview.width * placement.fitScale),
-    cropRect.height / (transformedPreview.height * placement.fitScale),
+    extent.width / (transformedPreview.width * placement.fitScale),
+    extent.height / (transformedPreview.height * placement.fitScale),
   );
 }
 
@@ -301,14 +325,16 @@ export function getImageRect(state, transformedPreview, placement) {
 
 export function clampImagePlacement(state, transformedPreview, placement) {
   if (!state.cropRect || !transformedPreview || !placement) return state;
-  const minZoom = getMinZoomForCrop(state.cropRect, transformedPreview, placement);
+  const minZoom = getMinZoomForCrop(state.cropRect, transformedPreview, placement, state.freeAngle);
   const imageZoom = clamp(state.imageZoom, minZoom, MAX_IMAGE_ZOOM);
   const width = transformedPreview.width * placement.fitScale * imageZoom;
   const height = transformedPreview.height * placement.fitScale * imageZoom;
-  const minOffsetX = state.cropRect.x + state.cropRect.width - (placement.centerX + width / 2);
-  const maxOffsetX = state.cropRect.x - (placement.centerX - width / 2);
-  const minOffsetY = state.cropRect.y + state.cropRect.height - (placement.centerY + height / 2);
-  const maxOffsetY = state.cropRect.y - (placement.centerY - height / 2);
+  // Clamp the photo's offset against the rotated box's extent, not the box.
+  const box = cropExtentForAngle(state.cropRect, state.freeAngle);
+  const minOffsetX = box.x + box.width - (placement.centerX + width / 2);
+  const maxOffsetX = box.x - (placement.centerX - width / 2);
+  const minOffsetY = box.y + box.height - (placement.centerY + height / 2);
+  const maxOffsetY = box.y - (placement.centerY - height / 2);
   return {
     ...state,
     imageZoom,

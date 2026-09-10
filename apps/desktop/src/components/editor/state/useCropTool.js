@@ -57,7 +57,7 @@ export function useCropTool({
       previewSource,
       previewSource.width,
       previewSource.height,
-      candidate.quarterTurns * 90 + candidate.freeAngle,
+      candidate.quarterTurns * 90, // free angle is a CSS rotation about the crop centre, not part of the basis
       candidate.flipX,
       candidate.flipY,
     );
@@ -141,10 +141,12 @@ export function useCropTool({
       };
       const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
       const deltaDegrees = ((currentAngle - active.startAngle) * 180) / Math.PI;
-      apply({
+      // Re-clamp: the crop box's rotated extent must stay inside the photo,
+      // so a steeper angle zooms the photo in (Photos-style straighten).
+      apply(clampImagePlacement({
         ...active.startState,
         freeAngle: clamp(active.startState.freeAngle + deltaDegrees, MIN_FREE_ANGLE, MAX_FREE_ANGLE),
-      });
+      }, transformedPreview, placement));
       return;
     }
 
@@ -161,7 +163,7 @@ export function useCropTool({
     const h0 = active.startState.cropRect.height;
 
     // Check if the new crop forces the image to zoom in
-    const minZ = getMinZoomForCrop(nextCrop, transformedPreview, placement);
+    const minZ = getMinZoomForCrop(nextCrop, transformedPreview, placement, editorStateRef.current.freeAngle);
     const nextZ = clamp(Math.max(active.startState.imageZoom, minZ), MIN_IMAGE_ZOOM, MAX_IMAGE_ZOOM);
     const factor = nextZ / active.startState.imageZoom;
 
@@ -251,10 +253,10 @@ export function useCropTool({
   }
 
   function updateAngle(nextAngle) {
-    apply({
+    apply(clampImagePlacement({
       ...editorStateRef.current,
       freeAngle: clamp(nextAngle, MIN_FREE_ANGLE, MAX_FREE_ANGLE),
-    });
+    }, transformedPreview, placement));
   }
 
   function endAngleDrag() {
