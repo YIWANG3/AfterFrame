@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { PROVIDER_TYPES, getProviderType, generateInstanceId, generateInstanceName, ProviderModal } from "../ai/providers";
+import { SliderRow } from "../../ui";
 
 /* ── Provider type templates (not instances) ── */
 
@@ -733,34 +734,16 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
         </CollapsibleSection>
 
         <CollapsibleSection label={t("repaint.parameters")} collapsed={collapsedSections.has("parameters")} onToggle={() => toggleSection("parameters")}>
+          {/* Same slider-with-scrub-value control as the text panel. */}
           <div className={cx(isUpscaleModel && "opacity-40 pointer-events-none")}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[12px] text-text">{t("repaint.temperature")}</div>
-              <input
-                type="number"
-                min="0"
-                max="1"
-                step="0.1"
-                value={temperature}
-                disabled={isUpscaleModel}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (Number.isNaN(next)) return;
-                  setTemperature(Math.max(0, Math.min(1, next)));
-                }}
-                className="h-8 w-16 rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50"
-              />
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
+            <SliderRow
+              label={t("repaint.temperature")}
+              min={0}
+              max={1}
+              step={0.1}
               value={temperature}
-              disabled={isUpscaleModel}
-              onChange={(event) => setTemperature(Number(event.target.value))}
-              className="mt-3 w-full"
-              aria-label={t("repaint.temperature")}
+              onChange={(next) => setTemperature(Math.max(0, Math.min(1, Math.round(next * 10) / 10)))}
+              compact
             />
           </div>
 
