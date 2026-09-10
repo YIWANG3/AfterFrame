@@ -790,8 +790,7 @@ function StackedColorField({ label, color, onChange, opacity, onOpacityChange, p
         ref={swatchRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="swatch-custom h-6 w-6 cursor-pointer rounded p-px outline-none bg-transparent"
-        style={{ "--swatch-r": "4px" }}
+        className="h-6 w-6 cursor-pointer rounded p-px outline-none bg-transparent"
         title={t("text.editColor")}
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: fill }} />
@@ -1153,8 +1152,7 @@ function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpacityChan
         ref={swatchRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="swatch-custom h-6 w-6 flex-shrink-0 cursor-pointer rounded p-px outline-none bg-transparent"
-        style={{ "--swatch-r": "4px" }}
+        className="h-6 w-6 flex-shrink-0 cursor-pointer rounded p-px outline-none bg-transparent"
         title={isGrad ? t("text.editGradient") : t("text.editColor")}
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: swatchBg }} />
@@ -1257,8 +1255,8 @@ function ColorDot({ label, color, onChange, opacity, onOpacityChange, presets })
       {label && <span className="text-[10px] text-muted2">{label}</span>}
       <div
         ref={ref}
-        className="swatch-custom h-5 w-5 cursor-pointer rounded border border-border/60"
-        style={{ "--swatch-r": "4px", background: hasAlpha ? `linear-gradient(${hexToRgba(color, opacity)}, ${hexToRgba(color, opacity)}), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 6px 6px` : color }}
+        className="h-5 w-5 cursor-pointer rounded border border-border/60"
+        style={{ background: hasAlpha ? `linear-gradient(${hexToRgba(color, opacity)}, ${hexToRgba(color, opacity)}), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 6px 6px` : color }}
         onClick={() => onChange && setOpen(!open)}
       />
       {open && onChange && (

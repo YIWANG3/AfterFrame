@@ -617,7 +617,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text));
 }
 
-/* ───────── 8d · 自选颜色色块:一圈 2px 彩虹环(用户:「白色根本看不出可以自选」)。
+/* ───────── 8d · 自选颜色色块:一圈 2px 彩虹环(用户:「白色根本看不出可以自选」)。只用在「自选」与「预设」并排的地方
+   (边框底色 / 手写填充 / 拼图背景);单独一个色块的字段(文字填充 / 描边 / 阴影、贴纸描边)本身就是取色器,不加环。
    环画在 ::before 上,不碰色块自己的底(有的底是「颜色 + 棋盘格」多层背景);isolation 让 z-index:-1 落在色块之下、面板之上。
    --swatch-r 由各处按自己的圆角传入(圆点 999px、方块 4px)───────── */
 .swatch-custom { position: relative; isolation: isolate; border-color: transparent !important; }
