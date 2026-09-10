@@ -8,7 +8,7 @@
 // Every tile is backed by a real photo; entries without a cover are hidden.
 // Clicking never intersects with the previous gallery state — `onOpen` hands
 // App a complete destination (status / filters / collection / map).
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
@@ -22,6 +22,60 @@ const PhotoMap = lazy(() => import("./map/PhotoMap.jsx"));
 const SLICE_LIMIT = 400;
 
 const pad2 = (n) => String(n).padStart(2, "0");
+
+// ── Page data cache ──
+// The view is unmounted on every switch away, so without this each visit
+// re-ran the sidecar's place clustering (~1s), three cover queries and one
+// browse per folder. Keyed by catalog + revision: the same library state
+// yields the same page, so re-entering is instant and a catalog change (import,
+// rating, annotation) invalidates everything at once. App calls
+// prefetchDiscover once the catalog is ready so even the first open is warm.
+const pageCache = new Map(); // key → { data, promise }
+const folderCoverCache = new Map(); // collection_id → { path, count }
+
+function pageKey(catalogKey, catalogRevision) {
+  return `${catalogKey || ""}#${catalogRevision || 0}`;
+}
+
+async function loadPageData() {
+  let discover = { places: [], memories: [] };
+  try {
+    const res = await api.discoverCollections();
+    if (res && typeof res === "object") discover = { places: res.places || [], memories: res.memories || [] };
+  } catch { /* sidecar without gazetteer: empty */ }
+  let months = [];
+  if (!discover.memories.length) {
+    try {
+      const rows = await api.browseImages({ status: "all", limit: SLICE_LIMIT, offset: 0, sort: "captured-desc" });
+      months = groupMonths(Array.isArray(rows) ? rows : []);
+    } catch { months = []; }
+  }
+  // Pinned covers: newest import for 最近添加 / 含 RAW, the best-rated photo
+  // for 已评分 — the tile should show the library's favourite, not the last one.
+  const pinnedCovers = {};
+  for (const [status, sort] of [["recent", undefined], ["rated", "rating-desc"], ["matched", undefined]]) {
+    try {
+      const rows = await api.browseImages({ status, limit: 1, offset: 0, sort });
+      pinnedCovers[status] = Array.isArray(rows) ? rows[0] || null : null;
+    } catch { pinnedCovers[status] = null; }
+  }
+  return { discover, months, pinnedCovers };
+}
+
+export function prefetchDiscover({ catalogKey, catalogRevision }) {
+  const key = pageKey(catalogKey, catalogRevision);
+  const hit = pageCache.get(key);
+  if (hit) return hit.promise;
+  const entry = { data: null, promise: null };
+  entry.promise = loadPageData().then((data) => {
+    entry.data = data;
+    return data;
+  });
+  // Keep the last two revisions only; older ones can never be asked for again.
+  pageCache.set(key, entry);
+  while (pageCache.size > 2) pageCache.delete(pageCache.keys().next().value);
+  return entry.promise;
+}
 
 function captureDate(item) {
   const v = item?.image_metadata?.capture_time || item?.capture_time || item?.created_at;
@@ -66,14 +120,16 @@ function Row({ title, meta, children }) {
 }
 
 // Square tile with the label on a dark gradient — pinned entries, albums, places.
-function Tile({ cover, title, subtitle, onClick }) {
+function Tile({ cover, face, title, subtitle, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
     >
-      <img src={cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
+      {face
+        ? <FaceCrop src={localFileUrl(face.cover_preview_path || face.cover_image_path)} bbox={face.cover_bbox} size={180} padding={1.1} className="h-full w-full" />
+        : <img src={cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
       <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 text-white">
         <div className="truncate text-[13px] font-semibold">{title}</div>
@@ -119,41 +175,29 @@ export default function DiscoverView({
   const nameOf = (entry) => entry.name_en || entry.name_zh;
   const countryOf = (entry) => entry.country_en || entry.country_zh || null;
 
-  const [discover, setDiscover] = useState({ places: [], memories: [], loaded: false });
-  const [months, setMonths] = useState([]);
-  const [pinnedCovers, setPinnedCovers] = useState({}); // status → first asset
-  const [covers, setCovers] = useState({}); // collection_id → { path, count }
+  const key = pageKey(catalogKey, catalogRevision);
+  // Synchronous cache hit → the page paints complete on the first frame. While
+  // a newer revision loads, the previous revision's data stays on screen
+  // rather than flashing empty.
+  const [page, setPage] = useState(() => pageCache.get(key)?.data || null);
+  const [covers, setCovers] = useState(() => Object.fromEntries(folderCoverCache));
   const manual = (collections || []).filter((c) => c.kind === "manual");
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      let out = { places: [], memories: [] };
-      try {
-        const res = await api.discoverCollections();
-        if (res && typeof res === "object") out = { places: res.places || [], memories: res.memories || [] };
-      } catch { /* sidecar without gazetteer: empty */ }
-      if (cancelled) return;
-      setDiscover({ ...out, loaded: true });
-      if (!out.memories.length) {
-        try {
-          const rows = await api.browseImages({ status: "all", limit: SLICE_LIMIT, offset: 0, sort: "captured-desc" });
-          if (!cancelled) setMonths(groupMonths(Array.isArray(rows) ? rows : []));
-        } catch { if (!cancelled) setMonths([]); }
-      } else {
-        setMonths([]);
-      }
-      const next = {};
-      for (const status of ["recent", "rated", "matched"]) {
-        try {
-          const rows = await api.browseImages({ status, limit: 1, offset: 0 });
-          next[status] = Array.isArray(rows) ? rows[0] || null : null;
-        } catch { next[status] = null; }
-      }
-      if (!cancelled) setPinnedCovers(next);
-    })();
+    const hit = pageCache.get(key)?.data;
+    if (hit) {
+      setPage(hit);
+      return undefined;
+    }
+    prefetchDiscover({ catalogKey, catalogRevision }).then((data) => {
+      if (!cancelled) setPage(data);
+    });
     return () => { cancelled = true; };
-  }, [catalogRevision]);
+  }, [key, catalogKey, catalogRevision]);
+  const discover = page?.discover || { places: [], memories: [] };
+  const months = page?.months || [];
+  const pinnedCovers = page?.pinnedCovers || {};
 
   // The little map from the gallery drawer, scoped to the whole catalog.
   const { points } = useMapPoints({ enabled: true, status: "all", collectionId: null, search: "", filters: null, catalogKey, refreshToken: catalogRevision });
@@ -172,11 +216,28 @@ export default function DiscoverView({
           next[c.collection_id] = { path: first?.preview_path || first?.image_path || null, count: c.item_count || 0 };
         } catch { next[c.collection_id] = { path: null, count: c.item_count || 0 }; }
       }));
-      if (!cancelled) setCovers((prev) => ({ ...prev, ...next }));
+      if (cancelled) return;
+      for (const [id, entry] of Object.entries(next)) folderCoverCache.set(id, entry);
+      setCovers((prev) => ({ ...prev, ...next }));
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverKey]);
+
+  // The overview map is the heaviest thing on the page (MapLibre + base map
+  // data) and sits at the bottom — mount it only once 地点 scrolls into view,
+  // so opening the page paints the cards immediately.
+  const mapHostRef = useRef(null);
+  const [mapWanted, setMapWanted] = useState(false);
+  useEffect(() => {
+    const host = mapHostRef.current;
+    if (!host || mapWanted) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setMapWanted(true);
+    }, { root: host.closest('[data-testid="gallery-scroll"]'), rootMargin: "200px" });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [mapWanted, points.length]);
 
   const thumb = (item) => (item ? localFileUrl(item.preview_path || item.image_path) : null);
   const fmt = (iso, opts) => new Date(`${iso}T12:00:00`).toLocaleDateString(locale, opts);
@@ -193,17 +254,18 @@ export default function DiscoverView({
   const placeTiles = discover.places.filter((p) => p.cover_preview_path);
   const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
   const peopleWithFace = (people || []).filter((g) => g.cover_preview_path || g.cover_image_path);
-  const mapCover = points.find((pt) => pt.preview_path);
+  // People tile: the face of whoever appears most (groups arrive sorted by
+  // face_count), cropped like the circles below rather than the whole frame.
+  const topPerson = [...peopleWithFace].sort((a, b) => (b.face_count || 0) - (a.face_count || 0))[0] || null;
 
   const pinned = [
     { key: "recent", label: t("discover.recentTitle"), cover: thumb(pinnedCovers.recent), onClick: () => onOpen?.({ status: "recent" }) },
     { key: "rated", label: t("discover.pinRated"), cover: thumb(pinnedCovers.rated), onClick: () => onOpen?.({ status: "rated" }) },
     { key: "raw", label: t("discover.pinRaw"), cover: thumb(pinnedCovers.matched), onClick: () => onOpen?.({ status: "matched" }) },
-    { key: "map", label: t("discover.pinMap"), cover: mapCover ? localFileUrl(mapCover.preview_path) : null, onClick: () => onOpen?.({ map: {} }) },
-    peopleWithFace[0]
-      ? { key: "people", label: t("discover.peopleTitle"), cover: localFileUrl(peopleWithFace[0].cover_preview_path || peopleWithFace[0].cover_image_path), onClick: onOpenPeopleView }
+    topPerson
+      ? { key: "people", label: t("discover.peopleTitle"), face: topPerson, onClick: onOpenPeopleView }
       : null,
-  ].filter((tile) => tile && tile.cover);
+  ].filter((tile) => tile && (tile.cover || tile.face));
 
   const openMemory = (m) => onOpen?.({ filters: { date_from: m.date_from, date_to: m.date_to, geo: geoFilterFor(m, nameOf(m)) } });
   const openMonth = (g) => {
@@ -217,7 +279,7 @@ export default function DiscoverView({
     onOpen?.({ map: pt ? { flyTo: { lat: pt.latitude, lon: pt.longitude, zoom: 12 } } : {} });
   };
 
-  const empty = discover.loaded && memories.length === 0 && months.length === 0 && pinned.length === 0 && folderCards.length === 0;
+  const empty = !!page && memories.length === 0 && months.length === 0 && pinned.length === 0 && folderCards.length === 0;
 
   return (
     <div data-testid="workspace-split" className="relative min-h-0 flex-1 overflow-hidden">
@@ -247,7 +309,7 @@ export default function DiscoverView({
 
         {pinned.length > 0 && (
           <Row title={t("discover.pinned")}>
-            {pinned.map((tile) => <Tile key={tile.key} cover={tile.cover} title={tile.label} onClick={tile.onClick} />)}
+            {pinned.map((tile) => <Tile key={tile.key} cover={tile.cover} face={tile.face} title={tile.label} onClick={tile.onClick} />)}
           </Row>
         )}
 
@@ -285,16 +347,18 @@ export default function DiscoverView({
               <span className="text-[12px] text-muted2">{t("discover.mapMeta", { count: points.length })}</span>
             </div>
             {points.length > 0 && (
-              <div className="mb-4 h-[280px] w-full overflow-hidden rounded-[14px] bg-[var(--fill)]">
-                <Suspense fallback={<div className="flex h-full items-center justify-center text-[12px] text-muted2">{t("map.loading")}</div>}>
-                  <PhotoMap
-                    points={points}
-                    visible
-                    scrollZoom={false}
-                    onSelectAsset={openMapAsset}
-                    levelLabels={{ world: t("map.level.world"), region: t("map.level.region"), city: t("map.level.city") }}
-                  />
-                </Suspense>
+              <div ref={mapHostRef} className="mb-4 h-[280px] w-full overflow-hidden rounded-[14px] bg-[var(--fill)]">
+                {mapWanted && (
+                  <Suspense fallback={<div className="flex h-full items-center justify-center text-[12px] text-muted2">{t("map.loading")}</div>}>
+                    <PhotoMap
+                      points={points}
+                      visible
+                      scrollZoom={false}
+                      onSelectAsset={openMapAsset}
+                      levelLabels={{ world: t("map.level.world"), region: t("map.level.region"), city: t("map.level.city") }}
+                    />
+                  </Suspense>
+                )}
               </div>
             )}
             {placeTiles.length > 0 && (

@@ -25,7 +25,7 @@ import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
-import DiscoverView from "./components/DiscoverView";
+import DiscoverView, { prefetchDiscover } from "./components/DiscoverView";
 import FilterBar from "./components/FilterBar";
 import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
@@ -206,6 +206,18 @@ export default function App() {
     enabled: viewMode === "people" || viewMode === "discover",
     catalogKey: workspace.info?.catalogPath || null,
   });
+
+  // Warm the Discover page in the background: its data depends only on the
+  // catalog state, so once the library is ready (and after every revision
+  // bump) fetch it during idle time instead of on first click.
+  const discoverCatalogKey = workspace.info?.catalogPath || null;
+  useEffect(() => {
+    if (!discoverCatalogKey || !workspace.browserReady) return undefined;
+    const timer = setTimeout(() => {
+      void prefetchDiscover({ catalogKey: discoverCatalogKey, catalogRevision: workspace.catalogRevision });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [discoverCatalogKey, workspace.catalogRevision, workspace.browserReady]);
 
   // Discover entries open the gallery as a clean destination: no inherited
   // collection/status/query/facets, filter bar shown when there is something
