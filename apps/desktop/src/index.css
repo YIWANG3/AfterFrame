@@ -561,6 +561,8 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 /* hover 时 img 被 scale + filter 提到合成层,中间那层无圆角的 overflow 容器会让 Chromium 丢掉外层圆角裁切 → 直角。
    让中间层继承圆角,裁切就落在它自己身上 */
 [data-gallery-item] > div > .overflow-hidden { border-radius: inherit; }
+/* 再保险一层:img 自己也带圆角,合成层丢裁切时四角仍是圆的 */
+[data-gallery-item] > div > .overflow-hidden > img { border-radius: inherit; }
 [data-gallery-item] img { transition: filter .15s; }
 [data-gallery-item]:hover img { filter: brightness(1.06); }
 /* 框选矩形单色 */
