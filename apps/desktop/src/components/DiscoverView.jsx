@@ -112,9 +112,12 @@ export default function DiscoverView({
 }) {
   const { t, i18n } = useTranslation("nav");
   const locale = i18n.language || undefined;
-  const zh = (i18n.language || "").toLowerCase().startsWith("zh");
-  const nameOf = (entry) => (zh ? entry.name_zh : entry.name_en) || entry.name_en || entry.name_zh;
-  const countryOf = (entry) => (zh ? entry.country_zh : entry.country_en) || entry.country_en || entry.country_zh || null;
+  // Place names are shown in English in every locale: the gazetteer's Chinese
+  // labels come from Wikidata's generic `zh` label, which mixes Traditional
+  // and Simplified (舊金山 next to 纽约), and the user preferred English over
+  // a conversion table.
+  const nameOf = (entry) => entry.name_en || entry.name_zh;
+  const countryOf = (entry) => entry.country_en || entry.country_zh || null;
 
   const [discover, setDiscover] = useState({ places: [], memories: [], loaded: false });
   const [months, setMonths] = useState([]);
