@@ -1091,6 +1091,7 @@ export default function App() {
                 collections={workspace.collections}
                 people={peopleGroups}
                 catalogRevision={workspace.catalogRevision}
+                catalogKey={workspace.info?.catalogPath || null}
                 onSelectItem={selectSingle}
                 onItemsChange={setDiscoverItems}
                 onOpenItem={(assetId) => openLightboxForItem(assetId)}

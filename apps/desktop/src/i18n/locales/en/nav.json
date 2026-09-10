@@ -56,6 +56,7 @@
     "folderMeta": "{{count}} items",
     "peopleTitle": "People",
     "placesTitle": "Places",
+    "mapMeta": "{{count}} locations",
     "monthsTitle": "By month",
     "unnamed": "Unnamed"
   },

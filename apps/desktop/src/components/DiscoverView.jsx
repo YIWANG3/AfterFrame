@@ -3,12 +3,16 @@
 // rows: recently added photos, folders (manual collections) and people.
 // Pure presentation over data the app already has; the only fetches are the
 // recent slice and one cover per folder.
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Folder } from "lucide-react";
 import api from "../api";
 import { fileName, localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
+import useMapPoints from "./map/useMapPoints";
+
+// Same lazy chunk as the gallery's map drawer, so the base map is only parsed once.
+const PhotoMap = lazy(() => import("./map/PhotoMap.jsx"));
 
 const RECENT_LIMIT = 16;
 // One slice of the newest captures feeds both 按月回顾 and 地点: enough for a
@@ -105,6 +109,7 @@ export default function DiscoverView({
   onOpenMonth,
   onOpenPlace,
   onItemsChange,
+  catalogKey,
 }) {
   const { t } = useTranslation("nav");
   const [recent, setRecent] = useState([]);
@@ -132,6 +137,8 @@ export default function DiscoverView({
   useEffect(() => { onItemsChange?.(recent); }, [recent, onItemsChange]);
   const months = groupMonths(slice);
   const places = groupPlaces(slice);
+  // The little map from the gallery drawer, scoped to the whole catalog.
+  const { points } = useMapPoints({ enabled: true, status: "all", collectionId: null, search: "", filters: null, catalogKey, refreshToken: catalogRevision });
   const monthLabel = (g) => new Date(g.year, g.month - 1, 1).toLocaleDateString([], { year: "numeric", month: "long" });
 
   const coverKey = manual.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
@@ -272,8 +279,26 @@ export default function DiscoverView({
           </Row>
         )}
 
-        {places.length > 0 && (
-          <Row title={t("discover.placesTitle")}>
+        {(places.length > 0 || points.length > 0) && (
+          <section className="mt-9">
+            <div className="mb-4 flex items-end justify-between px-1">
+              <h2 className="text-[22px] font-semibold tracking-[-0.01em] text-text">{t("discover.placesTitle")}</h2>
+              <span className="text-[12px] text-muted2">{t("discover.mapMeta", { count: points.length })}</span>
+            </div>
+            {points.length > 0 && (
+              <div className="mb-4 h-[280px] w-full overflow-hidden rounded-[14px] bg-[var(--fill)]">
+                <Suspense fallback={<div className="flex h-full items-center justify-center text-[12px] text-muted2">{t("map.loading")}</div>}>
+                  <PhotoMap
+                    points={points}
+                    visible
+                    onSelectAsset={(assetId) => onOpenItem?.(assetId)}
+                    levelLabels={{ world: t("map.level.world"), region: t("map.level.region"), city: t("map.level.city") }}
+                  />
+                </Suspense>
+              </div>
+            )}
+            {places.length > 0 && (
+              <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {places.map((g) => (
               <button
                 key={g.key}
@@ -288,7 +313,9 @@ export default function DiscoverView({
                 <div className="mt-1 truncate text-[12px] text-muted2">{[g.sub, t("discover.folderMeta", { count: g.count })].filter(Boolean).join(" · ")}</div>
               </button>
             ))}
-          </Row>
+              </div>
+            )}
+          </section>
         )}
 
         {months.length > 0 && (

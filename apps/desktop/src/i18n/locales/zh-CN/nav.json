@@ -56,6 +56,7 @@
     "folderMeta": "{{count}} 张",
     "peopleTitle": "人物",
     "placesTitle": "地点",
+    "mapMeta": "{{count}} 个位置",
     "monthsTitle": "按月回顾",
     "unnamed": "未命名"
   },
