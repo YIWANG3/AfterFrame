@@ -659,9 +659,12 @@ button.w-full:not(.flex-col)[class*="border-accent"] { background: var(--fill-2)
 button.w-full:not(.flex-col)[class*="border-accent"]:hover { background: var(--fill-3); }
 button.w-full:not(.flex-col)[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
 /* 文字预设卡(flex-col 的整宽按钮,里面是字样 + 名称):不走上面的 32 高动作钮,只换底色去描边 */
-[data-editor-wheel-scope="panel"] button.w-full.flex-col { border-color: transparent; background: var(--fill); border-radius: 8px; }
-[data-editor-wheel-scope="panel"] button.w-full.flex-col:hover { background: var(--fill-2); border-color: transparent; }
-[data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] { background: var(--fill-2); box-shadow: inset 0 0 0 1.5px rgb(var(--accent-color)); }
+/* 预设卡的字样多是白色 / 浅色描边效果,浅色主题下会消失:卡底固定深色(不随主题),名称用浅灰,选中环用白 */
+[data-editor-wheel-scope="panel"] button.w-full.flex-col { border-color: transparent; background: rgb(28 28 31); border-radius: 8px; }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col:hover { background: rgb(38 38 42); border-color: transparent; }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col > span:last-child { color: rgb(255 255 255 / 0.55); }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] { background: rgb(38 38 42); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.9); }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] > span:last-child { color: rgb(255 255 255 / 0.92); }
 /* 选择器类(模型文件、字体来源):左对齐、28 高、字段圆角 5px */
 [data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
 
