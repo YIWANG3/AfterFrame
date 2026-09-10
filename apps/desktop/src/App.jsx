@@ -25,6 +25,7 @@ import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
+import DiscoverView from "./components/DiscoverView";
 import FilterBar from "./components/FilterBar";
 import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
@@ -286,6 +287,12 @@ export default function App() {
   const resizeSidebar = usePaneResize(workspace.setSidebarWidth, 200, 360);
   const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -420, -240);
   const currentItems = workspace.filteredItems;
+  // 发现页自己的条目列表:灯箱在发现页里按这个列表翻页,而不是按图库当前的筛选结果
+  const [discoverItems, setDiscoverItems] = useState([]);
+  const discoverIndex = useMemo(
+    () => discoverItems.findIndex((item) => item.asset_id === workspace.selectedAssetId),
+    [discoverItems, workspace.selectedAssetId],
+  );
   const orderedIds = useMemo(() => currentItems.map((item) => item.asset_id), [currentItems]);
   const itemById = useMemo(
     () => new Map(currentItems.map((item) => [item.asset_id, item])),
@@ -1010,6 +1017,11 @@ export default function App() {
           onAddToCollection={workspace.addToCollection}
           stickerMode={viewMode === "stickers"}
           peopleMode={viewMode === "people"}
+          discoverMode={viewMode === "discover"}
+          onOpenDiscover={() => {
+            workspace.clearCollection?.({ reload: false });
+            setViewMode("discover");
+          }}
           onOpenStickerBrowser={() => {
             setViewMode("stickers");
             setPeopleGroup(null);
@@ -1069,6 +1081,47 @@ export default function App() {
               onOpenGroup={openPersonGroup}
               onOpenSettings={() => setSettingsOpen(true)}
             />
+          ) : viewMode === "discover" ? (
+            <>
+              <div className="app-toolbar flex h-12 shrink-0 items-center gap-2 px-3">
+                <span className="truncate text-[13px] font-semibold text-text">{tNav("sidebar.discover")}</span>
+              </div>
+              <DiscoverView
+                summary={workspace.summary}
+                collections={workspace.collections}
+                people={peopleGroups}
+                catalogRevision={workspace.catalogRevision}
+                onSelectItem={selectSingle}
+                onItemsChange={setDiscoverItems}
+                onOpenItem={(assetId) => openLightboxForItem(assetId)}
+                onOpenCollection={(id) => {
+                  setViewMode("assets");
+                  setPeopleGroup(null);
+                  clearPeopleGroupFilter();
+                  workspace.selectCollection(id);
+                }}
+                onOpenPerson={openPersonGroup}
+                onShowRecent={() => {
+                  setViewMode("assets");
+                  setPeopleGroup(null);
+                  const nextFilters = clearPeopleGroupFilter();
+                  workspace.setStatusFilter("recent", { facetFilters: nextFilters });
+                }}
+                onOpenMonth={(year, month) => {
+                  const pad = (n) => String(n).padStart(2, "0");
+                  const last = new Date(year, month, 0).getDate();
+                  setViewMode("assets");
+                  workspace.clearCollection?.({ reload: false });
+                  workspace.applyFilters({ ...(workspace.filters || {}), date_from: `${year}-${pad(month)}-01`, date_to: `${year}-${pad(month)}-${pad(last)}` });
+                  setShowFilters(true);
+                }}
+                onOpenPlace={(name) => {
+                  setViewMode("assets");
+                  workspace.clearCollection?.({ reload: false });
+                  workspace.setQuery(name);
+                }}
+              />
+            </>
           ) : (
             <>
               <Toolbar
@@ -1262,8 +1315,8 @@ export default function App() {
       </div>
       <Lightbox
         open={lightboxOpen}
-        items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
-        currentIndex={viewMode === "stickers" ? stickerLightboxIndex : Math.max(selectedIndex, 0)}
+        items={viewMode === "stickers" ? stickerItemsForLightbox : viewMode === "discover" ? discoverItems : currentItems}
+        currentIndex={viewMode === "stickers" ? stickerLightboxIndex : viewMode === "discover" ? Math.max(discoverIndex, 0) : Math.max(selectedIndex, 0)}
         proofMode={viewMode === "stickers" ? false : proofMode}
         onToggleProof={viewMode === "stickers" ? undefined : (() => setProofMode((current) => !current))}
         onEdit={viewMode === "stickers" ? undefined : openEditor}
@@ -1277,7 +1330,9 @@ export default function App() {
               const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
               if (sticker) stickerView.setSelected(sticker);
             }
-          : selectByIndex
+          : viewMode === "discover"
+            ? (idx) => { const item = discoverItems[idx]; if (item) selectSingle(item.asset_id); }
+            : selectByIndex
         }
       />
       <SettingsOverlay

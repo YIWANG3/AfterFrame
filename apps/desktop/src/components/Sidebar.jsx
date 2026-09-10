@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles, UsersRound, Image as ImageIcon, List } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
 import { DesktopHint } from "./DesktopOnly";
 import { baseName, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 
@@ -58,9 +58,11 @@ export default function Sidebar({
   onAddToCollection,
   onOpenStickerBrowser,
   onOpenPeople,
+  onOpenDiscover,
   onOpenSettings,
   stickerMode = false,
   peopleMode = false,
+  discoverMode = false,
 }) {
   const { t } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -156,12 +158,28 @@ export default function Sidebar({
 
       <nav className="flex-1 space-y-4">
         <div className="space-y-1">
-          {browse.map((item) => {
+          {browse.map((item, idx) => {
             const Icon = ICON_MAP[item.icon];
-            const active = !activeCollectionId && !stickerMode && !peopleMode && item.key === status;
-            return (
+            const discoverButton = idx === 0 && onOpenDiscover ? (
               <button
-                key={item.key}
+                key="discover"
+                type="button"
+                onClick={() => onOpenDiscover()}
+                className={[
+                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
+                  discoverMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
+                ].join(" ")}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Compass className={`h-4 w-4 stroke-[1.6] ${discoverMode ? "text-accent" : ""}`} />
+                  <span className="text-[13px]">{t("sidebar.discover")}</span>
+                </span>
+              </button>
+            ) : null;
+            const active = !activeCollectionId && !stickerMode && !peopleMode && !discoverMode && item.key === status;
+            return (
+              <Fragment key={item.key}>
+              <button
                 type="button"
                 onClick={() => {
                   onClearCollection?.({ reload: false });
@@ -180,6 +198,8 @@ export default function Sidebar({
                 </span>
                 <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{item.count}</span>
               </button>
+              {discoverButton}
+              </Fragment>
             );
           })}
           <button
