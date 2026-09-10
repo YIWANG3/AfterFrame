@@ -601,10 +601,17 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border:focus-within { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
 /* 分段组(斜体 / 下划线 …):外框去线换 fill 底 */
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden.rounded-md.border { border-color: transparent; background: var(--fill); }
-/* 风格卡(AI 重绘「我的风格」):与设置页子卡同款,无描边、--sub-card 底、8px,选中 1.5px 内环 */
-[data-editor-wheel-scope="panel"] button.w-full.rounded-lg.border { border-color: transparent; background: var(--sub-card); border-radius: 8px; }
-[data-editor-wheel-scope="panel"] button.w-full.rounded-lg.border:hover { border-color: transparent; background: var(--fill-2); }
-[data-editor-wheel-scope="panel"] button.w-full.rounded-lg.border[class*="accent-color)/0.38"] { background: var(--fill-2); box-shadow: inset 0 0 0 1.5px rgb(var(--accent-color)); }
+/* 风格列表(AI 重绘「我的风格」,展开视图):不再是一张张描边卡,改成和紧凑视图同一种「行」:
+   无边框、8px 圆角、hover fill、选中 fill-2;标题 + 一行说明,编辑 / 删除钮 hover 才现 */
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border { border-color: transparent; background: transparent; border-radius: 8px; padding: 8px 10px; }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:hover { border-color: transparent; background: var(--fill); }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border[class*="accent-color)/0.38"] { background: var(--fill-2); }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border .ml-2.flex.shrink-0 { opacity: 0; transition: opacity .12s; }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:hover .ml-2.flex.shrink-0,
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:focus-within .ml-2.flex.shrink-0 { opacity: 1; }
+[data-editor-wheel-scope="panel"] .space-y-2 > [role="button"] + [role="button"] { margin-top: 2px; }
+/* 紧凑视图的行同样 8px */
+[data-editor-wheel-scope="panel"] [role="button"].rounded-md.px-2\.5.py-1\.5, [data-editor-wheel-scope="panel"] button.rounded-md.px-2\.5.py-1\.5 { border-radius: 8px; }
 /* 分组标题:四个面板统一 11px / 600 / 0.04em(0.14em 的字距在中文上拉得太开);贴纸面板自己那套 9px 也并进来 */
 [data-editor-wheel-scope="panel"] .tracking-\[0\.14em\], [data-editor-wheel-scope="panel"] h4.uppercase, [data-editor-wheel-scope="panel"] h2.uppercase {
   font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text));

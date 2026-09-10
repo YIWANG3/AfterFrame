@@ -1006,7 +1006,8 @@ function FontSelect({ value, onChange }) {
         }}
         onKeyDown={handleButtonKeyDown}
       >
-        <span className="flex-1 truncate text-left text-[11px] text-text" style={{ fontFamily: value }}>{value}</span>
+        {/* Name in the UI font: rendering it in the chosen font shifts the baseline with each font's metrics; the "Aa" sample carries the preview. */}
+        <span className="flex-1 truncate text-left text-[11px] leading-none text-text">{value}</span>
         <span className="text-[11px] text-muted" style={{ fontFamily: value }}>Aa</span>
         <ChevronDown className="h-3.5 w-3.5 text-muted2 flex-shrink-0" />
       </button>
