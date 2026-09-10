@@ -165,14 +165,20 @@ export default function DiscoverView({
   // Hero is big: show the preview at once, then the original on top once it
   // has decoded (a 30MB JPEG can take a second).
   const heroPreview = hero ? localFileUrl(hero.preview_path || hero.image_path) : null;
-  const heroFull = hero ? localFileUrl(hero.image_path || hero.preview_path) : null;
+  // Sharp layer: the 2000px HD preview when the catalog has one (fast), else
+  // the original file itself (a 30MB JPEG decodes in a second or two).
+  const heroFullPath = hero
+    ? (hero.preview_hd_path || hero.image_preview_hd_path || (hero.exists_on_disk === false ? null : hero.image_path) || hero.preview_path)
+    : null;
+  const heroFull = heroFullPath ? localFileUrl(heroFullPath) : null;
   const [heroFullReady, setHeroFullReady] = useState(false);
   useEffect(() => { setHeroFullReady(false); }, [heroFull]);
   // Empty folders have nothing to show on a cover row; the sidebar still lists them.
   const folderCards = manual.filter((c) => (c.item_count || 0) > 0);
   const newCount = Number(summary?.recently_added_count ?? recent.length);
   const heroDate = itemDate(hero);
-  const heroFolder = manual.length ? manual[manual.length - 1] : null;
+  // Title: where the newest photo was taken (AI location annotation), else a neutral label.
+  const heroPlace = placeOf(hero);
 
   return (
     <div data-testid="workspace-split" className="relative min-h-0 flex-1 overflow-hidden">
@@ -198,7 +204,7 @@ export default function DiscoverView({
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_35%,rgba(0,0,0,.55)_100%)]" />
             <div className="pointer-events-none absolute bottom-7 left-8 right-8 text-white">
               <div className="text-[12px] text-white/70">{newCount > 0 ? t("discover.heroKicker") : t("discover.heroKickerQuiet")}</div>
-              <div className="mt-2 truncate text-[40px] font-bold leading-none tracking-[-0.02em]">{heroFolder?.name || t("discover.recentTitle")}</div>
+              <div className="mt-2 truncate text-[40px] font-bold leading-none tracking-[-0.02em]">{heroPlace?.name || t("discover.recentTitle")}</div>
               <div className="mt-3 text-[13px] text-white/75">
                 {t("discover.heroMeta", { count: newCount })}{heroDate ? ` · ${t("discover.updated", { date: shortDate(heroDate) })}` : ""}
               </div>
