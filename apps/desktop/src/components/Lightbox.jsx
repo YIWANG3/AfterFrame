@@ -76,7 +76,10 @@ function Filmstrip({ items, index, onPick, hidden }) {
     <div
       ref={ref}
       className={[
-        "pointer-events-auto flex h-16 shrink-0 items-center gap-[3px] overflow-x-auto px-4 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        // Film look: sits 12px off the bottom edge, both ends fade to black so the
+        // strip reads as a reel running under the frame rather than a hard row.
+        "pointer-events-auto mb-3 flex h-16 shrink-0 items-center gap-[3px] overflow-x-auto px-12 [justify-content:safe_center] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "[-webkit-mask-image:linear-gradient(90deg,transparent,#000_56px,#000_calc(100%-56px),transparent)] [mask-image:linear-gradient(90deg,transparent,#000_56px,#000_calc(100%-56px),transparent)]",
         hidden ? "invisible" : "",
       ].join(" ")}
       onClick={(event) => event.stopPropagation()}
