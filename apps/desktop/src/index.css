@@ -542,7 +542,9 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
   content: ""; position: absolute; z-index: 2; pointer-events: none;
   left: var(--sel-x); top: var(--sel-y); width: var(--sel-w); height: var(--sel-h);
   border-radius: 10px;
-  box-shadow: 0 0 0 2px rgb(var(--accent-color));
+  /* 环与照片之间留 1.5px 底色缝(Apple Photos 的做法):缝把亚像素的圆角错位吃掉,环也不再压在照片边上;
+     浅色主题 accent 是近黑,纯黑 2px 太重,降到 55% */
+  box-shadow: 0 0 0 1.5px rgb(var(--app-bg)), 0 0 0 3.5px rgb(var(--accent-color) / var(--sel-ring-alpha, 1));
 }
 /* 瓦片模式:与其他布局一样只描边,不放大;格子是直角所以环也直角。滚动容器四边留 8px
    (Gallery.jsx 的瓦片布局按 VIEW_PADDING 扣宽),边缘格子的环才不会被容器裁掉;选中格提到最上层,环压在邻格之上 */
@@ -636,6 +638,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 /* 子卡(服务商 / 模型行):深色用 fill,浅色用白底,与灰卡拉开;组件通过 --sub-card 取 */
 :root { --sub-card: var(--fill); }
 :root[data-theme="light"] { --sub-card: rgb(255 255 255 / 0.85); }
+:root[data-theme="light"] { --sel-ring-alpha: 0.55; }
 /* 浅色主题遮罩不要黑 45%,叠出来发脏 */
 :root[data-theme="light"] .fixed.inset-0.bg-app\/80 { background: rgba(0, 0, 0, 0.22); }
 .fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
