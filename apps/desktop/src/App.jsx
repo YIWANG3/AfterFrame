@@ -215,7 +215,7 @@ export default function App() {
     if (!discoverCatalogKey || !workspace.browserReady) return undefined;
     const timer = setTimeout(() => {
       void prefetchDiscover({ catalogKey: discoverCatalogKey, catalogRevision: workspace.catalogRevision });
-    }, 1500);
+    }, 300);
     return () => clearTimeout(timer);
   }, [discoverCatalogKey, workspace.catalogRevision, workspace.browserReady]);
 
@@ -1103,9 +1103,8 @@ export default function App() {
             />
           ) : viewMode === "discover" ? (
             <>
-              <div className="app-toolbar flex h-12 shrink-0 items-center gap-2 px-3">
-                <span className="truncate text-[13px] font-semibold text-text">{tNav("sidebar.discover")}</span>
-              </div>
+              {/* Title-less toolbar: keeps the window drag strip; the page starts at 回忆. */}
+              <div className="app-toolbar flex h-12 shrink-0 items-center gap-2 px-3" />
               <DiscoverView
                 summary={workspace.summary}
                 collections={workspace.collections}
@@ -1114,7 +1113,6 @@ export default function App() {
                 catalogKey={workspace.info?.catalogPath || null}
                 onOpen={openDiscoverTarget}
                 onOpenPerson={openPersonGroup}
-                onOpenPeopleView={() => { setViewMode("people"); setPeopleGroup(null); workspace.clearCollection?.({ reload: false }); }}
               />
             </>
           ) : (

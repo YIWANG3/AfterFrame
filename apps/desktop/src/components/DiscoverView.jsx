@@ -1,21 +1,18 @@
 // 发现页 — the library's front page, laid out like Apple Photos' Collections.
 // Everything here is a collection the gallery can open as a clean filter:
 //   回忆  one visit to a place (sidecar discover-collections: place + date run)
-//   固定  fixed entries: recent / rated / RAW / map / people
+//   固定  fixed entries: recent / rated / RAW
 //   相册  manual folders
 //   人物  face groups
-//   地点  small map + one tile per place
+//   地点  one tile per place
 // Every tile is backed by a real photo; entries without a cover are hidden.
 // Clicking never intersects with the previous gallery state — `onOpen` hands
 // App a complete destination (status / filters / collection / map).
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
-import useMapPoints from "./map/useMapPoints";
-
-const PhotoMap = lazy(() => import("./map/PhotoMap.jsx"));
 
 // Fallback when the catalog has no located photos at all (no GPS, no AI
 // locations, or the web build): memories become plain month groups.
@@ -38,11 +35,20 @@ function pageKey(catalogKey, catalogRevision) {
 }
 
 async function loadPageData() {
-  let discover = { places: [], memories: [] };
-  try {
-    const res = await api.discoverCollections();
-    if (res && typeof res === "object") discover = { places: res.places || [], memories: res.memories || [] };
-  } catch { /* sidecar without gazetteer: empty */ }
+  // Everything in parallel: the sidecar clustering (~1s) must not queue
+  // behind the cover queries or vice versa.
+  const [discover, pinnedCovers] = await Promise.all([
+    api.discoverCollections()
+      .then((res) => (res && typeof res === "object" ? { places: res.places || [], memories: res.memories || [] } : { places: [], memories: [] }))
+      .catch(() => ({ places: [], memories: [] })),
+    // Pinned covers: newest import for 最近添加 / 含 RAW, the best-rated photo
+    // for 已评分 — the tile should show the library's favourite, not the last one.
+    Promise.all([["recent", undefined], ["rated", "rating-desc"], ["matched", undefined]].map(([status, sort]) =>
+      api.browseImages({ status, limit: 1, offset: 0, sort })
+        .then((rows) => [status, Array.isArray(rows) ? rows[0] || null : null])
+        .catch(() => [status, null]),
+    )).then(Object.fromEntries),
+  ]);
   let months = [];
   if (!discover.memories.length) {
     try {
@@ -50,17 +56,13 @@ async function loadPageData() {
       months = groupMonths(Array.isArray(rows) ? rows : []);
     } catch { months = []; }
   }
-  // Pinned covers: newest import for 最近添加 / 含 RAW, the best-rated photo
-  // for 已评分 — the tile should show the library's favourite, not the last one.
-  const pinnedCovers = {};
-  for (const [status, sort] of [["recent", undefined], ["rated", "rating-desc"], ["matched", undefined]]) {
-    try {
-      const rows = await api.browseImages({ status, limit: 1, offset: 0, sort });
-      pinnedCovers[status] = Array.isArray(rows) ? rows[0] || null : null;
-    } catch { pinnedCovers[status] = null; }
-  }
   return { discover, months, pinnedCovers };
 }
+
+// Last complete page per catalog, whatever its revision: shown immediately
+// while the current revision loads, so a rating or an import never blanks
+// the memories row on the next visit.
+const latestByCatalog = new Map();
 
 export function prefetchDiscover({ catalogKey, catalogRevision }) {
   const key = pageKey(catalogKey, catalogRevision);
@@ -69,6 +71,7 @@ export function prefetchDiscover({ catalogKey, catalogRevision }) {
   const entry = { data: null, promise: null };
   entry.promise = loadPageData().then((data) => {
     entry.data = data;
+    latestByCatalog.set(catalogKey || "", data);
     return data;
   });
   // Keep the last two revisions only; older ones can never be asked for again.
@@ -120,16 +123,14 @@ function Row({ title, meta, children }) {
 }
 
 // Square tile with the label on a dark gradient — pinned entries, albums, places.
-function Tile({ cover, face, title, subtitle, onClick }) {
+function Tile({ cover, title, subtitle, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="relative h-[180px] w-[180px] shrink-0 overflow-hidden rounded-[14px] bg-[var(--fill-2)] text-left"
     >
-      {face
-        ? <FaceCrop src={localFileUrl(face.cover_preview_path || face.cover_image_path)} bbox={face.cover_bbox} size={180} padding={1.1} className="h-full w-full" />
-        : <img src={cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />}
+      <img src={cover} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,.55)_100%)]" />
       <div className="pointer-events-none absolute bottom-3 left-3.5 right-3.5 text-white">
         <div className="truncate text-[13px] font-semibold">{title}</div>
@@ -164,7 +165,6 @@ export default function DiscoverView({
   catalogKey,
   onOpen,
   onOpenPerson,
-  onOpenPeopleView,
 }) {
   const { t, i18n } = useTranslation("nav");
   const locale = i18n.language || undefined;
@@ -176,10 +176,10 @@ export default function DiscoverView({
   const countryOf = (entry) => entry.country_en || entry.country_zh || null;
 
   const key = pageKey(catalogKey, catalogRevision);
-  // Synchronous cache hit → the page paints complete on the first frame. While
-  // a newer revision loads, the previous revision's data stays on screen
-  // rather than flashing empty.
-  const [page, setPage] = useState(() => pageCache.get(key)?.data || null);
+  // Synchronous cache hit → the page paints complete on the first frame. On a
+  // revision miss the catalog's previous page stays on screen while the new
+  // one loads, rather than flashing empty.
+  const [page, setPage] = useState(() => pageCache.get(key)?.data || latestByCatalog.get(catalogKey || "") || null);
   const [covers, setCovers] = useState(() => Object.fromEntries(folderCoverCache));
   const manual = (collections || []).filter((c) => c.kind === "manual");
 
@@ -198,9 +198,6 @@ export default function DiscoverView({
   const discover = page?.discover || { places: [], memories: [] };
   const months = page?.months || [];
   const pinnedCovers = page?.pinnedCovers || {};
-
-  // The little map from the gallery drawer, scoped to the whole catalog.
-  const { points } = useMapPoints({ enabled: true, status: "all", collectionId: null, search: "", filters: null, catalogKey, refreshToken: catalogRevision });
 
   const coverKey = manual.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
   useEffect(() => {
@@ -224,21 +221,6 @@ export default function DiscoverView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverKey]);
 
-  // The overview map is the heaviest thing on the page (MapLibre + base map
-  // data) and sits at the bottom — mount it only once 地点 scrolls into view,
-  // so opening the page paints the cards immediately.
-  const mapHostRef = useRef(null);
-  const [mapWanted, setMapWanted] = useState(false);
-  useEffect(() => {
-    const host = mapHostRef.current;
-    if (!host || mapWanted) return undefined;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) setMapWanted(true);
-    }, { root: host.closest('[data-testid="gallery-scroll"]'), rootMargin: "200px" });
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, [mapWanted, points.length]);
-
   const thumb = (item) => (item ? localFileUrl(item.preview_path || item.image_path) : null);
   const fmt = (iso, opts) => new Date(`${iso}T12:00:00`).toLocaleDateString(locale, opts);
   const rangeLabel = (from, to) => {
@@ -254,18 +236,11 @@ export default function DiscoverView({
   const placeTiles = discover.places.filter((p) => p.cover_preview_path);
   const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
   const peopleWithFace = (people || []).filter((g) => g.cover_preview_path || g.cover_image_path);
-  // People tile: the face of whoever appears most (groups arrive sorted by
-  // face_count), cropped like the circles below rather than the whole frame.
-  const topPerson = [...peopleWithFace].sort((a, b) => (b.face_count || 0) - (a.face_count || 0))[0] || null;
-
   const pinned = [
     { key: "recent", label: t("discover.recentTitle"), cover: thumb(pinnedCovers.recent), onClick: () => onOpen?.({ status: "recent" }) },
     { key: "rated", label: t("discover.pinRated"), cover: thumb(pinnedCovers.rated), onClick: () => onOpen?.({ status: "rated" }) },
     { key: "raw", label: t("discover.pinRaw"), cover: thumb(pinnedCovers.matched), onClick: () => onOpen?.({ status: "matched" }) },
-    topPerson
-      ? { key: "people", label: t("discover.peopleTitle"), face: topPerson, onClick: onOpenPeopleView }
-      : null,
-  ].filter((tile) => tile && (tile.cover || tile.face));
+  ].filter((tile) => tile.cover);
 
   const openMemory = (m) => onOpen?.({ filters: { date_from: m.date_from, date_to: m.date_to, geo: geoFilterFor(m, nameOf(m)) } });
   const openMonth = (g) => {
@@ -273,12 +248,6 @@ export default function DiscoverView({
     onOpen?.({ filters: { date_from: `${g.year}-${pad2(g.month)}-01`, date_to: `${g.year}-${pad2(g.month)}-${pad2(last)}` } });
   };
   const openPlace = (p) => onOpen?.({ filters: { geo: geoFilterFor(p, nameOf(p)) } });
-  // A marker on the overview map opens the gallery with its drawer flown there.
-  const openMapAsset = (assetId) => {
-    const pt = points.find((x) => x.asset_id === assetId);
-    onOpen?.({ map: pt ? { flyTo: { lat: pt.latitude, lon: pt.longitude, zoom: 12 } } : {} });
-  };
-
   const empty = !!page && memories.length === 0 && months.length === 0 && pinned.length === 0 && folderCards.length === 0;
 
   return (
@@ -309,7 +278,7 @@ export default function DiscoverView({
 
         {pinned.length > 0 && (
           <Row title={t("discover.pinned")}>
-            {pinned.map((tile) => <Tile key={tile.key} cover={tile.cover} face={tile.face} title={tile.label} onClick={tile.onClick} />)}
+            {pinned.map((tile) => <Tile key={tile.key} cover={tile.cover} title={tile.label} onClick={tile.onClick} />)}
           </Row>
         )}
 
@@ -340,41 +309,18 @@ export default function DiscoverView({
           </Row>
         )}
 
-        {(placeTiles.length > 0 || points.length > 0) && (
-          <section className="mt-9">
-            <div className="mb-4 flex items-end justify-between px-1">
-              <h2 className="text-[22px] font-semibold tracking-[-0.01em] text-text">{t("discover.placesTitle")}</h2>
-              <span className="text-[12px] text-muted2">{t("discover.mapMeta", { count: points.length })}</span>
-            </div>
-            {points.length > 0 && (
-              <div ref={mapHostRef} className="mb-4 h-[280px] w-full overflow-hidden rounded-[14px] bg-[var(--fill)]">
-                {mapWanted && (
-                  <Suspense fallback={<div className="flex h-full items-center justify-center text-[12px] text-muted2">{t("map.loading")}</div>}>
-                    <PhotoMap
-                      points={points}
-                      visible
-                      scrollZoom={false}
-                      onSelectAsset={openMapAsset}
-                      levelLabels={{ world: t("map.level.world"), region: t("map.level.region"), city: t("map.level.city") }}
-                    />
-                  </Suspense>
-                )}
-              </div>
-            )}
-            {placeTiles.length > 0 && (
-              <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {placeTiles.map((p) => (
-                  <Tile
-                    key={p.key}
-                    cover={localFileUrl(p.cover_preview_path)}
-                    title={nameOf(p)}
-                    subtitle={[countryOf(p), countLabel(p.count)].filter(Boolean).join(" · ")}
-                    onClick={() => openPlace(p)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
+        {placeTiles.length > 0 && (
+          <Row title={t("discover.placesTitle")}>
+            {placeTiles.map((p) => (
+              <Tile
+                key={p.key}
+                cover={localFileUrl(p.cover_preview_path)}
+                title={nameOf(p)}
+                subtitle={[countryOf(p), countLabel(p.count)].filter(Boolean).join(" · ")}
+                onClick={() => openPlace(p)}
+              />
+            ))}
+          </Row>
         )}
       </div>
     </div>
