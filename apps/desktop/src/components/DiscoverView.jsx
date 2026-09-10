@@ -42,15 +42,23 @@ function groupMonths(items) {
     const d = captureDate(item);
     if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const g = map.get(key) || { key, year: d.getFullYear(), month: d.getMonth() + 1, count: 0, cover: item, places: new Map() };
+    const g = map.get(key) || { key, year: d.getFullYear(), month: d.getMonth() + 1, count: 0, items: [], places: new Map() };
     g.count += 1;
+    g.items.push(item);
     const pl = placeOf(item);
     if (pl) g.places.set(pl.name, (g.places.get(pl.name) || 0) + 1);
     map.set(key, g);
   }
-  // A memory is titled by where most of that month's photos were taken.
+  // A memory is titled by where most of that month's photos were taken, and its
+  // cover comes from that same place (best rated, then newest) so title and
+  // picture agree. Months without any located photo fall back to the newest shot.
   return [...map.values()]
-    .map((g) => ({ ...g, place: [...g.places.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null }))
+    .map((g) => {
+      const place = [...g.places.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      const pool = place ? g.items.filter((it) => placeOf(it)?.name === place) : g.items;
+      const cover = [...pool].sort((a, b) => (b.app_rating || b.rating || 0) - (a.app_rating || a.rating || 0))[0] || g.items[0];
+      return { key: g.key, year: g.year, month: g.month, count: g.count, place, cover };
+    })
     .sort((a, b) => (b.key > a.key ? 1 : -1));
 }
 
