@@ -770,6 +770,23 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 /* 页面卡:平时无环(那圈 ring-border 在浅色下从页面顶上露出来),只有拖拽目标态保留 accent 环 */
 .fixed.inset-0.z-\[10200\] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
 
+/* ───────── 12a · 灯箱上下栏玻璃化:头部与底部(缩放行 + 胶片条)不再是两条实黑,改成压在照片之上的 Clear 玻璃。
+   舞台(照片区)保留在两栏之间做适配,所以 fit 状态下照片不被遮;放大 / 拖动时照片从玻璃底下穿过。
+   玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
+.fixed.inset-0.z-\[10050\] { position: fixed; }
+.fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0.z-\[10050\] > .h-16 { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0.z-\[10050\] > .relative.min-h-0.flex-1 { margin: 84px 0 140px; overflow: visible; z-index: 1; }
+.fixed.inset-0.z-\[10050\]::before, .fixed.inset-0.z-\[10050\]::after {
+  content: ""; position: absolute; left: 0; right: 0; z-index: 10; pointer-events: none;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
+}
+.fixed.inset-0.z-\[10050\]::before { top: -40px; height: 124px; }
+.fixed.inset-0.z-\[10050\]::after { bottom: -40px; height: 180px; }
+.fixed.inset-0.z-\[10050\].bg-white::before, .fixed.inset-0.z-\[10050\].bg-white::after { display: none; }
+
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
 .bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }
 
