@@ -545,6 +545,13 @@ export default function useWorkspace({ pushToast } = {}) {
     setStatus(nextStatus);
     setQuery(nextQuery);
     setFilters(facetFilters);
+    // Drop the previous gallery right away: the grid must not paint the old
+    // result set (and the inspector the old selection) for the frames until
+    // the new browse resolves — that flash reads as "wrong photos, then fixed".
+    setItems([]);
+    setBrowserOffset(0);
+    setBrowserHasMore(true);
+    setSelectedAssetId(null);
     void loadBrowser({
       nextStatus,
       collectionId,
