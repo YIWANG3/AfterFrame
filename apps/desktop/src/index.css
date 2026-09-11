@@ -462,6 +462,17 @@ html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-
 .noise-overlay > .grid > section.bg-app > .app-toolbar > * { pointer-events: auto; }
 /* 筛选行也浮在工具栏之下一行 */
 .noise-overlay > .grid > section.bg-app > .flex-wrap.border-b { position: absolute; top: 52px; left: 0; right: 0; z-index: 49; }
+/* One row, always: on a narrow window the bar scrolls sideways instead of
+   wrapping over the photos (the gallery's top padding assumes one row).
+   Popovers are portaled to <body>, so the scroll container clips nothing
+   that matters. Scrollbar hidden; the right edge fades as the scroll hint. */
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b::-webkit-scrollbar { display: none; }
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b > * { flex-shrink: 0; }
 /* 滚动容器让位:仅工具栏 48;开着筛选行再加 40 */
 section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }

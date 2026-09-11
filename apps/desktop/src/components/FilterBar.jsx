@@ -368,7 +368,17 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const activeCount = Object.keys(f).length;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5">
+    <div
+      className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"
+      // The skin lays the bar out as one sideways-scrolling row. Trackpads
+      // scroll it natively; a mouse wheel only has a vertical axis, so map
+      // that onto the row when it overflows.
+      onWheel={(event) => {
+        const el = event.currentTarget;
+        if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
+        el.scrollLeft += event.deltaY;
+      }}
+    >
       {cameras.length > 0 && (
         <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
       )}
