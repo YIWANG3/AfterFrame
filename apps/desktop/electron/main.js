@@ -1573,6 +1573,22 @@ collectionsIpc.register({
 // chat apps treat them as uploads. startDrag initiates the OS session but its
 // return is not a drag-finished signal; the renderer clears its source marker
 // from real input/window lifecycle events.
+// Electron starts one NSDraggingItem per file, every one carrying the same
+// icon at the same frame. macOS draws them all, so a 68-file drag stacks 68
+// copies of one opaque thumbnail — the pile goes black and grows a heavy
+// shadow halo. Pre-fade the icon so the N stacked copies composite back to
+// one normal-looking image: per-copy alpha a with 1 − (1 − a)^N ≈ 0.92.
+// Bitmap data round-trips premultiplied, so every channel scales together.
+// The 192px source is re-wrapped at scaleFactor 2 → a sharp 96pt icon.
+function pileSafeDragIcon(icon, count) {
+  const size = icon.getSize();
+  if (!size.width || !size.height) return icon;
+  const alpha = count > 1 ? 1 - Math.pow(1 - 0.92, 1 / count) : 1;
+  const bitmap = Buffer.from(icon.toBitmap());
+  if (alpha < 1) for (let i = 0; i < bitmap.length; i++) bitmap[i] = Math.round(bitmap[i] * alpha);
+  return nativeImage.createFromBitmap(bitmap, { width: size.width, height: size.height, scaleFactor: 2 });
+}
+
 ipcMain.handle("workspace:native-drag", (event, payload) => {
   const files = (Array.isArray(payload?.files) ? payload.files : [])
     .filter((p) => typeof p === "string" && p && fs.existsSync(p));
@@ -1587,7 +1603,7 @@ ipcMain.handle("workspace:native-drag", (event, payload) => {
     if (!icon.isEmpty()) break;
   }
   if (!icon.isEmpty()) {
-    icon = icon.resize({ width: 96 });
+    icon = pileSafeDragIcon(icon.resize({ width: 192 }), files.length);
   } else {
     // 1x1 transparent px — startDrag rejects an empty image on macOS.
     icon = nativeImage.createFromDataURL(
