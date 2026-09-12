@@ -38,7 +38,14 @@ export function loadMaplibre() {
     maplibrePromise = Promise.all([
       import("maplibre-gl"),
       import("maplibre-gl/dist/maplibre-gl.css"),
-    ]).then(([module]) => module.default).catch((error) => {
+      import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"),
+    ]).then(([module, , worker]) => {
+      const maplibre = module.default || module;
+      // V6 ships the worker separately. Let Vite bundle its dependencies and
+      // resolve it against the page for both file:// and hosted subpaths.
+      maplibre.setWorkerUrl(new URL(worker.default, document.baseURI).href);
+      return maplibre;
+    }).catch((error) => {
       maplibrePromise = null;
       throw error;
     });

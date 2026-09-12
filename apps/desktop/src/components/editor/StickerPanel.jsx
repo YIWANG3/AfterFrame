@@ -348,7 +348,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
         {phase !== "idle" && phase !== "detecting" && instances.length > 0 && (
           <>
             <Section label={t("sticker.detected", { count: instances.length })}>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div data-testid="detected-sticker-grid" className="grid grid-cols-4 gap-1.5">
                 {instances.map((inst, i) => (
                   <button
                     key={inst.index}
