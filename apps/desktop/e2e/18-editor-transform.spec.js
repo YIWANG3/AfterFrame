@@ -92,20 +92,30 @@ test.describe("Golden: crop + transform", () => {
 
   test("resizing the window after rotation preserves the full photo", async () => {
     const originalSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
+    const originalMinimum = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getMinimumSize());
     await window.getByRole("button", { name: /90° L/ }).click();
     await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
     const before = (await state(window)).imageRect;
     try {
-      // CI may already start at the minimum 1080×720. Always change height,
-      // which constrains the rotated portrait, rather than requesting a no-op.
-      const targetHeight = originalSize[1] <= 760 ? 820 : 720;
-      await app.evaluate(({ BrowserWindow }, height) => BrowserWindow.getAllWindows()[0].setSize(1080, height), targetHeight);
+      // The CI display can clamp growth to its work area. Shrink instead,
+      // temporarily lowering the minimum for this isolated test window.
+      const targetHeight = originalSize[1] - 120;
+      await app.evaluate(({ BrowserWindow }, size) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        win.setMinimumSize(800, 480);
+        win.setSize(...size);
+      }, [originalSize[0], targetHeight]);
+      await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize()[1])).toBe(targetHeight);
       await expect.poll(async () => (await state(window)).imageRect.width).not.toBe(before.width);
       await save(window, out("rot-resize.jpg"));
       const resized = await sharp(out("rot-resize.jpg")).metadata();
       expect([resized.width, resized.height]).toEqual([srcH, srcW]);
     } finally {
-      await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size), originalSize);
+      await app.evaluate(({ BrowserWindow }, { size, minimum }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        win.setMinimumSize(...minimum);
+        win.setSize(...size);
+      }, { size: originalSize, minimum: originalMinimum });
       // Native window/compositor rounding can differ by a subpixel on restore.
       // The exported pixel dimensions above remain an exact assertion.
       await expect.poll(async () => Math.abs((await state(window)).imageRect.width - before.width)).toBeLessThan(1);
