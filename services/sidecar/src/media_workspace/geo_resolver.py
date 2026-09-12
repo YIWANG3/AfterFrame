@@ -80,6 +80,9 @@ class ResolvedLocation:
 
 class Gazetteer:
     def __init__(self, payload: dict[str, Any]):
+        # Kept for consumers that index the same data differently (discover.py
+        # reverse-geocodes by proximity rather than by name).
+        self.payload = payload
         self.countries_by_qid: dict[str, dict] = {}
         self.country_index: dict[str, dict] = {}
         for country in payload.get("countries", []):

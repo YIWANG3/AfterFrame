@@ -20,6 +20,7 @@ const api = {
   // ── files & external ──
   getPathForFile: (...args) => invoke("getPathForFile", ...args),
   revealPath: (...args) => invoke("revealPath", ...args),
+  setTheme: (...args) => invoke("setTheme", ...args),
   copyText: (...args) => invoke("copyText", ...args),
   videoProxy: (...args) => invoke("videoProxy", ...args),
   videoKeyframes: (...args) => invoke("videoKeyframes", ...args),
@@ -54,6 +55,7 @@ const api = {
   browseImages: (...args) => invoke("browseImages", ...args),
   browseMapPoints: (...args) => invoke("browseMapPoints", ...args),
   resolveAiLocations: (...args) => invoke("resolveAiLocations", ...args),
+  discoverCollections: (...args) => invoke("discoverCollections", ...args),
   getAssetLocation: (...args) => invoke("getAssetLocation", ...args),
   clearAiLocation: (...args) => invoke("clearAiLocation", ...args),
   getFacetValues: (...args) => invoke("getFacetValues", ...args),

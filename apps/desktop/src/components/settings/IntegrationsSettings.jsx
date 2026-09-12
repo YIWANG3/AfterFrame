@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import api from "../../api";
-import { Group, FieldRow } from "./SettingsPrimitives";
+import { Group, FieldRow, SecondaryButton } from "./SettingsPrimitives";
 
 // Integrations that belong to this app installation. Catalog-specific watched
 // directories live in Library so their ownership is visible at the point of use.
@@ -22,7 +22,12 @@ export default function IntegrationsSettings() {
         ) : (
           editors.map((e) => (
             <FieldRow key={e.appPath} label={e.label} hint={e.appPath}>
-              <ExternalLink className="h-3.5 w-3.5 text-muted2" />
+              <SecondaryButton onClick={() => api.revealPath?.(e.appPath)}>
+                <span className="inline-flex items-center gap-1.5">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  {t("library.revealInFinder")}
+                </span>
+              </SecondaryButton>
             </FieldRow>
           ))
         )}

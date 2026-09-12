@@ -502,15 +502,13 @@ export default function HandwritingModal({ onAdd, onClose }) {
               ref={fillSwatchRef}
               type="button"
               onClick={() => setColorPickerOpen((v) => !v)}
-              className={[
-                "h-5 w-5 rounded-full border",
-                fill.mode === "gradient" ? "border-[rgb(var(--accent-color))]" : "border-border/60",
-              ].join(" ")}
+              className="swatch-custom ml-0.5 h-5 w-5 rounded-full border border-border/60"
               style={{
+                "--swatch-r": "999px",
                 background:
                   fill.mode === "gradient"
                     ? `linear-gradient(90deg, ${fill.gradient.from}, ${fill.gradient.to})`
-                    : "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                    : fill.color,
               }}
             />
             {colorPickerOpen && (
@@ -548,7 +546,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
           type="button"
           onClick={addToCanvas}
           disabled={!candidate || generating}
-          className="flex h-8 items-center rounded-md bg-[rgb(var(--accent-color))] px-3 text-[12px] font-medium text-black transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-8 items-center rounded-md bg-[rgb(var(--accent-color))] px-3 text-[12px] font-medium text-accentInk transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
           data-testid="handwriting-add"
         >
           {t("handwriting.add")}

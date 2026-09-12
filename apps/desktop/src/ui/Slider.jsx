@@ -3,24 +3,30 @@ import cx from "./cx";
 
 // Drag-to-scrub number input (click to type). Promoted from TextPanel where
 // it lived as a private NumInput; StickerPanel had a static value box copy.
-export function NumberDragInput({ value, min, max, onChange, onCommit, className = "w-11" }) {
+export function NumberDragInput({ value, min, max, step = 1, onChange, onCommit, className = "w-11" }) {
   const ref = useRef(null);
   const focusValueRef = useRef(null);
   const DRAG_THRESHOLD = 3;
+  // Layer sizes get rescaled by float ratios when the crop/margin basis
+  // changes (fontSize, shadow, stroke...), so the model can hold 17.999999.
+  // Show and scrub from a 2-decimal rounding; the model keeps its precision.
+  const shown = Number.isFinite(value) ? Math.round(value * 100) / 100 : value;
 
   const handleMouseDown = (e) => {
     // If already focused (editing), let native input handle it
     if (document.activeElement === ref.current) return;
     e.preventDefault();
     const startX = e.clientX;
-    const startVal = value;
+    const startVal = shown;
     let dragging = false;
 
     const onMove = (ev) => {
       const dx = ev.clientX - startX;
       if (!dragging && Math.abs(dx) < DRAG_THRESHOLD) return;
       dragging = true;
-      const next = Math.min(max, Math.max(min, startVal + Math.round(dx)));
+      // One px of drag = one step; keep the result on the step grid.
+      const raw = startVal + Math.round(dx) * step;
+      const next = Math.min(max, Math.max(min, Math.round(raw / step) * step));
       onChange(next);
     };
     const onUp = () => {
@@ -41,7 +47,7 @@ export function NumberDragInput({ value, min, max, onChange, onCommit, className
   return (
     <input
       ref={ref}
-      type="number" min={min} max={max} value={value}
+      type="number" min={min} max={max} step={step} value={shown}
       onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
       onFocus={(e) => { focusValueRef.current = value; e.target.select(); }}
       // Commit only when the value actually changed while focused — an idle
@@ -59,18 +65,18 @@ export function NumberDragInput({ value, min, max, onChange, onCommit, className
 
 // Label + range + scrubable value. The single SliderRow — TextPanel and
 // StickerPanel previously each had their own.
-export function SliderRow({ label, min, max, value, onChange, suffix, compact, className, resetValue }) {
+export function SliderRow({ label, min, max, step = 1, value, onChange, suffix, compact, className, resetValue }) {
   return (
     <div className={cx("flex items-center gap-2", compact ? "" : "mt-2", className)}>
       {label && <label className="min-w-[48px] text-[10px] text-muted2">{label}</label>}
       <input
-        type="range" min={min} max={max} value={value}
+        type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         // Opt-in: double-click the track to snap back to a default value.
         onDoubleClick={resetValue != null ? () => onChange(resetValue) : undefined}
         className="slider flex-1"
       />
-      <NumberDragInput value={value} min={min} max={max} onChange={onChange} />
+      <NumberDragInput value={value} min={min} max={max} step={step} onChange={onChange} />
       {suffix && <span className="text-[10px] text-muted2">{suffix}</span>}
     </div>
   );

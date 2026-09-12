@@ -1,7 +1,7 @@
 import api from "../../api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Sparkles, Trash2, Star, Loader2, Check, RotateCcw } from "lucide-react";
+import { Search, Sparkles, Trash2, Star, Loader2, RotateCcw } from "lucide-react";
 
 import { SliderRow } from "../../ui";
 import { localFileUrl, fileName, stickerLabel } from "../../utils/format";
@@ -17,7 +17,6 @@ import ColorPickerPopover from "../collage/ColorPickerPopover";
 
 export default function StickerPanel({ sourcePath, sourceLabel, pushToast, region, onClearRegion }) {
   const { t } = useTranslation("editor");
-  const [tab, setTab] = useState("create"); // "library" | "create"
   const [stickers, setStickers] = useState([]);
   const [highlightId, setHighlightId] = useState(null);
 
@@ -35,7 +34,6 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
   function handleSaved(entry) {
     setStickers((prev) => [entry, ...prev.filter((s) => s.id !== entry.id)]);
     setHighlightId(entry.id);
-    setTab("library");
     pushToast?.({
       title: t("sticker.savedTitle"),
       message: entry.sourceLabel || t("sticker.savedMsg"),
@@ -44,28 +42,12 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
     setTimeout(() => setHighlightId((id) => (id === entry.id ? null : id)), 2000);
   }
 
+  // One scrolling column: make-a-sticker on top, the library underneath.
+  // (Was two tabs; the tab switch hid the library while detecting and hid
+  // the detect button while browsing.)
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      <div className="flex items-center justify-between px-3 pt-3 pb-2">
-        <h2 className="text-[11px] uppercase tracking-wider text-muted2">{t("sticker.title")}</h2>
-        <span className="text-[10px] text-muted3">
-          {tab === "library" ? t("sticker.inLibrary", { count: stickers.length }) : t("sticker.makeNew")}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-1 px-3 pb-2">
-        <SegBtn active={tab === "create"} onClick={() => setTab("create")}>{t("sticker.createNew")}</SegBtn>
-        <SegBtn active={tab === "library"} onClick={() => setTab("library")}>{t("sticker.library")}</SegBtn>
-      </div>
-
-      {tab === "library" ? (
-        <Library
-          stickers={stickers}
-          highlightId={highlightId}
-          onChanged={refresh}
-          onCreate={() => setTab("create")}
-        />
-      ) : (
+      <div className="flex-1 overflow-y-auto pt-3">
         <CreateNew
           sourcePath={sourcePath}
           sourceLabel={sourceLabel}
@@ -74,14 +56,19 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
           region={region}
           onClearRegion={onClearRegion}
         />
-      )}
+        <Library
+          stickers={stickers}
+          highlightId={highlightId}
+          onChanged={refresh}
+        />
+      </div>
     </div>
   );
 }
 
 /* ─── Library tab ─────────────────────────────────────────────── */
 
-function Library({ stickers, highlightId, onChanged, onCreate }) {
+function Library({ stickers, highlightId, onChanged }) {
   const { t } = useTranslation("editor");
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
@@ -101,8 +88,12 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
   }
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col">
-      <div className="px-3 pb-3">
+    <div className="px-3 pb-3">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-[9px] uppercase tracking-wider text-muted3">{t("sticker.library")}</h4>
+        <span className="text-[10px] text-muted3">{t("sticker.inLibrary", { count: stickers.length })}</span>
+      </div>
+      <div className="pb-2">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted3" />
           <input
@@ -114,9 +105,9 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-1">
+      <div className="pt-1">
         {stickers.length === 0 ? (
-          <EmptyState onCreate={onCreate} />
+          <EmptyState />
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
             {filtered.map((s) => (
@@ -135,21 +126,12 @@ function Library({ stickers, highlightId, onChanged, onCreate }) {
   );
 }
 
-function EmptyState({ onCreate }) {
+function EmptyState() {
   const { t } = useTranslation("editor");
   return (
-    <div className="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 px-4 py-8 text-center">
-      <div className="text-[13px] text-text">{t("sticker.noStickers")}</div>
-      <div className="text-[11px] leading-relaxed text-muted2">
-        {t("sticker.emptyHint")}
-      </div>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="rounded-md bg-[rgb(var(--accent-color))] px-3 py-1.5 text-[11px] font-medium text-[#111] transition-colors hover:brightness-110"
-      >
-        {t("sticker.createSticker")}
-      </button>
+    <div className="mt-2 flex flex-col items-center gap-1.5 rounded-lg bg-[var(--fill)] px-4 py-6 text-center">
+      <div className="text-[12px] text-text">{t("sticker.noStickers")}</div>
+      <div className="text-[11px] leading-relaxed text-muted2">{t("sticker.emptyHint")}</div>
     </div>
   );
 }
@@ -323,37 +305,9 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
   const activeInst = instances[activeIdx];
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col">
-      <div className="flex-1 overflow-y-auto px-3 pb-3">
-        <Section label={t("sticker.source")}>
-          <div className="mb-2 truncate rounded-md border border-border/60 bg-app px-2 py-1.5 text-[11px] text-text">
-            {sourceLabel || fileName(sourcePath) || "—"}
-          </div>
-
-          {/* Region indicator: tells user whether detection runs full-image or just inside the marquee */}
-          <div className="mb-2 flex items-center gap-2 rounded-md border border-border/60 bg-app px-2 py-1.5 text-[10px]">
-            {region ? (
-              <>
-                <span className="h-2 w-2 rounded-full bg-[rgb(var(--accent-color))]" />
-                <span className="text-text">{t("sticker.limitedToSelection")}</span>
-                <span className="text-muted2">({Math.round(region.w * 100)}% × {Math.round(region.h * 100)}%)</span>
-                <button
-                  type="button"
-                  onClick={onClearRegion}
-                  className="ml-auto text-muted2 hover:text-text"
-                  title={t("sticker.clearSelection")}
-                >
-                  {t("sticker.clear")}
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="h-2 w-2 rounded-full bg-muted3" />
-                <span className="text-muted2">{t("sticker.detectsFull")}</span>
-              </>
-            )}
-          </div>
-
+    <div>
+      <div className="px-3 pb-3">
+        <div className="mb-3">
           {phase === "idle" && (
             <button
               type="button"
@@ -369,7 +323,21 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("sticker.detecting")}
             </div>
           )}
-        </Section>
+
+          {/* Plain caption, no box: full-image by default, or the marquee the user drew on the canvas. */}
+          {region ? (
+            <div className="mt-2 flex items-center gap-1.5 px-0.5 text-[10px] text-muted2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-color))]" />
+              <span>{t("sticker.limitedToSelection")}</span>
+              <span className="text-muted3">{Math.round(region.w * 100)}% × {Math.round(region.h * 100)}%</span>
+              <button type="button" onClick={onClearRegion} className="ml-auto hover:text-text" title={t("sticker.clearSelection")}>
+                {t("sticker.clear")}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 px-0.5 text-[10px] leading-4 text-muted3">{t("sticker.detectsFull")}</div>
+          )}
+        </div>
 
         {error && (
           <div className="mb-3 rounded-md bg-[rgb(var(--error-color)/0.08)] px-2 py-1.5 text-[10px] text-[rgb(var(--error-color))]">
@@ -453,7 +421,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             disabled={phase === "saving"}
             className="ml-auto flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-3 text-[11px] font-medium text-[#111] transition-all hover:brightness-110 disabled:opacity-60"
           >
-            {phase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            {phase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {phase === "saving" ? t("sticker.saving") : t("sticker.saveSticker")}
           </button>
         </div>
@@ -495,20 +463,6 @@ function OutlineColorRow({ color, onChange }) {
 
 /* ─── Helper components ──────────────────────────────────────── */
 
-function SegBtn({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "h-7 rounded-md text-[11px] transition-colors",
-        active ? "bg-hover text-text" : "text-muted2 hover:text-muted",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
 
 function Section({ label, children }) {
   return (

@@ -18,54 +18,74 @@
 @font-face { font-family: "Outfit"; font-weight: 800; font-style: normal; font-display: swap;
   src: url("./assets/fonts/outfit/outfit-latin-800-normal.woff2") format("woff2"); }
 
+/* Tahoe 深黑皮肤 · token 三层(颜色 / 材质 / 圆角),见 docs/liquid-glass-redesign.md 七、二十一
+   颜色仍是 RGB 三元组,tailwind 的 <alpha-value> 语法不变。 */
 :root {
   color-scheme: dark;
-  --app-bg: 12 12 12;
-  --chrome-bg: 18 18 18;
-  --sidebar-bg: 18 18 18;
-  --panel-bg: 24 24 24;
-  --panel-bg-2: 32 32 32;
-  --hover-bg: 40 40 40;
-  --selected-bg: 30 27 22;
-  --border-color: 32 32 32;
-  --text-color: 240 240 240;
-  --muted-text: 160 160 160;
-  --muted-text-2: 100 100 100;
-  --accent-color: 210 160 90;
-  --accent-soft: 50 40 24;
-  --glow-accent: 210 160 90;
-  --success-color: 142 187 139;
-  --warn-color: 216 188 135;
-  --error-color: 201 126 104;
-  --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.12);
-  --shadow-menu: 0 14px 32px rgba(0, 0, 0, 0.26), 0 3px 10px rgba(0, 0, 0, 0.16);
+  --app-bg: 6 6 7;               /* 舞台:近纯黑(第八轮:用户要更黑) */
+  --chrome-bg: 14 14 16;         /* 弹层 / Modal 底 */
+  --sidebar-bg: 19 19 22;
+  --panel-bg: 17 17 19;
+  --panel-bg-2: 22 22 25;
+  --hover-bg: 25 25 28;
+  --selected-bg: 35 35 39;
+  --border-color: 30 30 34;      /* 过渡期:线先几乎不可见,逐组件删除后再收掉 */
+  --text-color: 242 242 242;
+  --muted-text: 178 178 182;
+  --muted-text-2: 122 122 128;
+  --accent-color: 245 245 245;   /* 单色:accent = 白,颜色只来自照片 */
+  --accent-ink: 20 20 20;        /* accent 上的文字 */
+  --accent-soft: 40 40 44;
+  --glow-accent: 245 245 245;
+  --success-color: 128 172 132;
+  --warn-color: 212 186 128;
+  --error-color: 206 132 118;
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.45);
   --crop-scrim: rgba(0, 0, 0, 0.65);
   --sidebar-width: 220px;
   --inspector-width: 280px;
+  /* 材质层 */
+  --pane: rgba(255, 255, 255, 0.035);      /* 三栏面板:黑底上约 15 灰 */
+  --glass: rgba(10, 10, 12, 0.6);          /* 工具栏胶囊 */
+  --pop: rgba(15, 15, 18, 0.94);           /* 菜单 / 弹层 / JobDock:可读性优先,近实色 */
+  --edge: rgba(255, 255, 255, 0.08);       /* 发丝边 */
+  --fill: rgba(255, 255, 255, 0.07);
+  --fill-2: rgba(255, 255, 255, 0.11);
+  --fill-3: rgba(255, 255, 255, 0.16);
+  --blur: blur(20px) saturate(1.4);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --app-bg: 245 243 240;
-  --chrome-bg: 238 235 230;
-  --sidebar-bg: 238 235 230;
-  --panel-bg: 250 248 244;
-  --panel-bg-2: 255 253 249;
-  --hover-bg: 230 226 218;
-  --selected-bg: 225 218 208;
-  --border-color: 218 212 202;
-  --text-color: 24 24 24;
-  --muted-text: 90 86 78;
-  --muted-text-2: 140 134 124;
-  --accent-color: 180 128 58;
-  --accent-soft: 240 230 216;
-  --glow-accent: 180 128 58;
-  --success-color: 85 122 82;
-  --warn-color: 154 122 62;
-  --error-color: 161 93 73;
-  --shadow-overlay: 0 10px 28px rgba(74, 65, 52, 0.12), 0 2px 8px rgba(74, 65, 52, 0.06);
-  --shadow-menu: 0 8px 18px rgba(74, 65, 52, 0.12), 0 2px 6px rgba(74, 65, 52, 0.06);
-  --crop-scrim: rgba(74, 65, 52, 0.16);
+  --app-bg: 244 244 245;
+  --chrome-bg: 250 250 251;
+  --sidebar-bg: 250 250 251;
+  --panel-bg: 255 255 255;
+  --panel-bg-2: 255 255 255;
+  --hover-bg: 236 236 238;
+  --selected-bg: 226 226 229;
+  --border-color: 214 214 218;
+  --text-color: 29 29 31;
+  --muted-text: 110 110 115;
+  --muted-text-2: 112 112 118;      /* 浅色下 158 只有 2.3:1,11px 说明文字读不清;112 约 4.6:1 */
+  --accent-color: 29 29 31;
+  --accent-ink: 255 255 255;
+  --accent-soft: 232 232 235;
+  --glow-accent: 29 29 31;
+  --success-color: 82 130 88;
+  --warn-color: 160 124 52;
+  --error-color: 178 82 70;
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --crop-scrim: rgba(60, 60, 64, 0.18);
+  --pane: rgba(255, 255, 255, 0.62);
+  --glass: rgba(253, 253, 254, 0.66);
+  --pop: rgba(251, 251, 253, 0.95);
+  --edge: rgba(0, 0, 0, 0.05);
+  --fill: rgba(29, 29, 31, 0.06);
+  --fill-2: rgba(29, 29, 31, 0.1);
+  --fill-3: rgba(29, 29, 31, 0.15);
 }
 
 html,
@@ -79,7 +99,7 @@ body {
   overflow: hidden;
   background: rgb(var(--app-bg));
   color: rgb(var(--text-color));
-  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
   font-size: 13px;
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
@@ -154,15 +174,12 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
   opacity: 1;
 }
 
-/* Hide the native number-input spin buttons (filter range value boxes). */
-.no-spinner::-webkit-outer-spin-button,
-.no-spinner::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.no-spinner {
-  -moz-appearance: textfield;
-}
+/* 数值框一律不显示原生上下箭头:Chromium 的箭头是一块贴着数字的白色方块,和皮肤格格不入;
+   改数值靠输入或拖拽(编辑器的数值框本来就这样)。Tahoe 的做法是独立的 stepper 控件,以后要加再做 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.no-spinner { -moz-appearance: textfield; }
 
 /* Thin scrollbar for in-popover lists, hugging the right edge. */
 .popover-scroll::-webkit-scrollbar {
@@ -262,48 +279,19 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
   opacity: 0.35;
 }
 
-::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgb(var(--muted-text-2) / 0.32);
-  border-radius: 999px;
-  border: 4px solid transparent;
-  background-clip: padding-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--muted-text) / 0.45);
-  background-clip: padding-box;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* === Atmosphere === */
-.noise-overlay::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.018;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 256px 256px;
-}
-
-:root[data-theme="light"] .noise-overlay::after {
-  opacity: 0.03;
-}
-
-.accent-line {
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgb(var(--accent-color) / 0.4) 50%, transparent 100%);
-}
+/* 纤细滚动条:7px 槽、3px 拇指,滚动容器 hover 时才显(接鼠标时系统条是常驻粗条,不能依赖 overlay) */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+/* 滚动条只在滚动时出现(main.jsx 在滚动中的元素上打 data-scrolling,停 700ms 后摘掉),平时隐形,不与圆角面板打架 */
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; cursor: pointer; }
+::-webkit-scrollbar { cursor: pointer; }
+/* 鼠标在滚动区域内时淡淡地露出拇指(16%),这样停止滚动后仍找得到它;滚动中 30%,按住 / 悬停拇指 45% */
+:hover::-webkit-scrollbar-thumb { background: rgb(var(--text-color) / 0.16); background-clip: padding-box; }
+[data-scrolling]::-webkit-scrollbar-thumb { background: rgb(var(--text-color) / 0.3); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: rgb(var(--text-color) / 0.45); background-clip: padding-box; }
+/* 圆角面板内的轨道两端内缩,拇指不伸进圆角 */
+.noise-overlay > .grid > aside ::-webkit-scrollbar-track, .noise-overlay > .grid > aside::-webkit-scrollbar-track { margin: 10px 0; }
+[data-editor-wheel-scope="panel"] ::-webkit-scrollbar-track { margin: 12px 0 48px; }
 
 select {
   cursor: pointer;
@@ -321,9 +309,9 @@ select {
   background-image: linear-gradient(
     90deg,
     rgb(var(--accent-color)) 0%,
-    rgb(240 200 130) 25%,
+    rgb(var(--accent-color) / 0.72) 25%,
     rgb(var(--accent-color)) 50%,
-    rgb(240 200 130) 75%,
+    rgb(var(--accent-color) / 0.72) 75%,
     rgb(var(--accent-color)) 100%
   );
   animation: ai-shimmer 2s linear infinite;
@@ -374,3 +362,499 @@ select {
 @container toolbar (max-width: 640px) {
   .toolbar-modes { display: none; }
 }
+
+/* ───────── 0 · 连续曲率圆角:已关(用户:「先关闭超椭圆,感觉乱了」)。
+   曾试 `* { corner-shape: squircle }`(Chromium 139+,Electron 43 = Chromium 150 可用),记录两个坑以备再开:
+   ① 胶囊(999px)与 rounded-full 必须保持 round,否则两端变方;
+   ② 带 overflow hidden + 圆角的祖先(内容区面板)不能是超椭圆,里面 mask + backdrop-filter 的渐进模糊会退化成硬边;
+   ③ 5px 一档的小圆角上超椭圆看起来反而生硬 ───────── */
+
+/* ═══════════ Tahoe 皮肤 · 组件层(只改样式,不动结构;段号对应 docs 二十一)═══════════ */
+
+/* ───────── 4 · 三栏:侧栏 / 内容区 / 检查器 = 三块内缩圆角面板,8px 同缝 ───────── */
+.noise-overlay > .grid > aside.border-r {
+  height: auto; align-self: stretch; min-width: 0;
+  margin: 8px 0 8px 8px; border-radius: 18px; clip-path: inset(0 round 18px); /* Clip composited content as well as the pane background. */
+  border: none; background: var(--pane);
+  padding-top: 12px;
+}
+/* 内容区包一层圆角面板(同 demo C):顶部玻璃与筛选行被限制在框内,四边留 8px 与侧栏 / 窗口边同缝 */
+/* 内容区面板的圆角用 clip-path 裁而不是 overflow + border-radius:clip-path 对合成层(顶部模糊带)也生效,
+   overflow 的圆角裁切在 Electron 里会被合成层忽略(lab/blur-corner.html 方案 D,用户实测最好) */
+.noise-overlay > .grid > section.bg-app { margin: 8px; border-radius: 18px; clip-path: inset(0 round 18px); background: var(--pane); }
+/* 检查器同样包一层圆角面板(含"未选中"空态 aside,它没有 border-l),右 / 上 / 下留 8px;不做隐藏折叠 */
+.noise-overlay > .grid > aside:not(.border-r) {
+  height: auto; align-self: stretch; min-width: 0;
+  margin: 8px 8px 8px 0; border-radius: 18px;
+  border: none; background: var(--pane);
+}
+.noise-overlay > .grid > div.bg-chrome { background: transparent; }
+/* Keep the full-height hit area, revealing the divider only during resizing. */
+.pane-resize-handle { -webkit-app-region: no-drag; }
+.pane-resize-handle::before {
+  content: ""; position: absolute; left: 50%; top: 24px; bottom: 24px;
+  width: 2px; transform: translateX(-50%); border-radius: 999px;
+  background: rgb(var(--text-color) / .3); opacity: 0;
+  transition: opacity .12s ease;
+}
+.pane-resize-handle[data-dragging="true"]::before { opacity: 1; }
+
+/* hiddenInset:红绿灯落在侧栏面板内,侧栏头部让位 44px;拖拽区 = 侧栏头 + 内容区顶部 8px 细条(避开控件,防光标闪) */
+html.electron .noise-overlay > .grid > aside.border-r { padding-top: 44px; }
+html.electron.fs .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
+/* 窗口拖拽区(hiddenInset 后没有系统标题栏):
+   · 侧栏面板整块可拖(头部 44px 让位区 + 条目之间的空白),条目本身 no-drag
+   · 内容区的工具栏行整条可拖,胶囊控件 no-drag(拖拽区不能盖住控件,否则光标闪)
+   · 三块面板之间的 8px 缝(grid 底)也可拖
+   拖拽区必须能接收指针事件,所以工具栏这里把 pointer-events 打开 */
+/* 透明窗 + 自绘 26px 圆角(Tahoe 大圆角只给带 NSToolbar 的窗口,Electron 造不出来):
+   #root 用 clip-path 裁成圆角矩形,fixed 定位的覆盖层也一并被裁;全屏时不裁 */
+html.electron, html.electron body { background: transparent; }
+html.electron #root { clip-path: inset(0 round 26px); background: rgb(var(--app-bg)); }
+html.electron.fs #root { clip-path: none; }
+/* 灯箱打开时根节点底色跟着变黑:灯箱是 90% 黑的浮层,clip-path 圆角边缘的抗锯齿像素会透出根节点的浅色底,浅色主题下顶边就漏出一条白线 */
+html.electron #root:has(.fixed.inset-0.z-\[10050\]),
+html.electron #root:has(.fixed.inset-0.z-\[10050\]) .noise-overlay { background: #000; }   /* 灯箱底下那层 bg-app 也要黑:合成层与普通层各自沿 clip-path 抗锯齿,边缘会错开 1px 露出下层浅色 */
+/* 灯箱底改实色黑、去掉 backdrop-blur:在透明窗里,贴着 clip-path 边缘的 backdrop-filter 会在窗口顶边渲染出一条浅色线 */
+html.electron .fixed.inset-0.z-\[10050\][class*="bg-black"] { background: #000; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.electron .noise-overlay > .grid { -webkit-app-region: drag; }
+html.electron .noise-overlay > .grid > * { -webkit-app-region: no-drag; }
+html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag; }
+html.electron .noise-overlay > .grid > aside.border-r > * { -webkit-app-region: no-drag; }
+html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: drag; pointer-events: auto; }
+html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar > * { -webkit-app-region: no-drag; }
+html.electron.fs .noise-overlay > .grid, html.electron.fs .noise-overlay > .grid > aside.border-r,
+html.electron.fs .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: no-drag; }
+/* 全屏覆盖层(灯箱 / 编辑器 / 拼图 / 设置 / 对话框)打开时,底下的拖拽区仍然生效:Electron 算拖拽区只看元素矩形,不看层叠顺序。
+   给覆盖层整块标 no-drag 把窗口从拖拽区里减掉;覆盖层自己的头部一行给回可拖,控件 no-drag */
+html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
+html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10,
+html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12,
+html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
+html.electron .fixed.inset-0.z-\[10100\] > .h-11 > *, html.electron .fixed.inset-0.z-\[10200\] > .h-10 > *,
+html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 > *,
+html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start > * { -webkit-app-region: no-drag; }
+/* 侧栏内零分割线(底部折叠钮 / 设置上方的两条线) */
+aside.border-r .border-t, aside.border-r .border-b, aside.border-r [class*="border-t"], aside.border-r [class*="border-b"] { border-color: transparent; }
+/* 侧栏条目:alpha 填充,选中 = 更亮的填充 */
+aside.border-r .bg-selected { background: var(--fill-2); }
+aside.border-r [class*="hover:bg-hover"]:hover { background: var(--fill); }
+aside.border-r .text-accent { color: rgb(var(--text-color)); }
+
+/* ───────── 4b · 红绿灯安全区:盖住侧栏区域的全屏层,左上角让出 88px(灯占 18 至 70)───────── */
+html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-left: 88px; }            /* 灯箱头部 */
+/* 编辑器 / 拼图头部不再靠左让位:标题改居中(见 4c),左上角天然空出来给红绿灯 */
+
+/* ───────── 4c · 覆盖层头部(编辑器 / 拼图):统一 44 高(红绿灯中心 22)、标题居中、动作靠右、关闭钮圆形 ───────── */
+.fixed.inset-0.z-\[10100\] > .h-11, .fixed.inset-0.z-\[10200\] > .h-10 {
+  position: relative; height: 44px; justify-content: center; border-color: transparent; padding: 0 12px;
+}
+.fixed.inset-0.z-\[10100\] > .h-11 > .absolute.left-3 { position: static; }                        /* 编辑器:文件名 · 尺寸 居中 */
+.fixed.inset-0.z-\[10200\] > .h-10 > .flex.items-center.gap-2 {                                    /* 拼图:导出 + 关闭 绝对靠右 */
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+}
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7.w-7, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7.w-7 { border-radius: 999px; }
+/* 头部主动作(编辑器「保存」/ 拼图「导出」):同一款胶囊,fill-2 底、正文色,不再各自用 accent 10% / 12% */
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7), .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7) {
+  height: 28px; padding: 0 12px; border-radius: 999px; background: var(--fill-2); color: rgb(var(--text-color));
+}
+.fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7):hover, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7):hover { background: var(--fill-3); }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; background: var(--fill); padding: 2px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; height: 24px; padding: 0 12px; }
+.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button.bg-panel2 { background: var(--fill-3); }
+
+/* ───────── 5 · 工具栏:浮在内容之上,控件各自成玻璃胶囊;网格顶部让位,照片从胶囊底下穿过 ───────── */
+.noise-overlay > .grid > section.bg-app { position: relative; }
+.noise-overlay > .grid > section.bg-app > .app-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 50; pointer-events: none; }
+.noise-overlay > .grid > section.bg-app > .app-toolbar > * { pointer-events: auto; }
+/* 筛选行也浮在工具栏之下一行 */
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b { position: absolute; top: 52px; left: 0; right: 0; z-index: 49; }
+/* One row, always: on a narrow window the bar scrolls sideways instead of
+   wrapping over the photos (the gallery's top padding assumes one row).
+   Popovers are portaled to <body>, so the scroll container clips nothing
+   that matters. Scrollbar hidden; the right edge fades as the scroll hint. */
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b::-webkit-scrollbar { display: none; }
+.noise-overlay > .grid > section.bg-app > .flex-wrap.border-b > * { flex-shrink: 0; }
+/* 滚动容器让位:仅工具栏 48;开着筛选行再加 40 */
+section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
+section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
+section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"][data-expanded="true"] { padding-top: 48px; }
+/* 地图展开时网格不再位于工具栏 / 筛选行之下,顶部让位归零(留 8px 与地图分隔),否则地图下方空出一整块;
+   顶部滚动渐进模糊此时会落在地图上,一并关掉 */
+section.bg-app:has([data-testid="map-drawer"][data-expanded="true"]) [data-testid="gallery-scroll"] { padding-top: 8px !important; }
+[data-testid="workspace-split"]:has(> [data-testid="map-drawer"][data-expanded="true"])::before { display: none; }
+/* 滚动条轨道从工具栏(及筛选行)下方开始,不从窗口顶部起(WebKit 支持给 track 设 margin 缩短轨道两端) */
+section.bg-app [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 56px; margin-bottom: 6px; }
+section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 96px; }
+/* 顶部软边渐进模糊(Apple 的 scroll edge effect):静止时舞台均匀,带子不可见;照片滚到顶部时被渐进模糊压暗 */
+/* 滚动边缘效果(Apple scroll edge effect),做法与 demo 一致:
+   split 容器的 ::before(始终存在)挂 backdrop-filter + 渐变 mask 羽化 + 压色渐变;
+   关键:带 mask 的 backdrop-filter 只有在元素独立合成时才正确羽化(demo 的宿主是 fixed 元素),这里用 translateZ(0) 强制独立合成层。
+   滚动驱动:静止时不出现,滚过 80px 内淡入。 */
+[data-testid="gallery-scroll"] { scroll-timeline-name: --grid; scroll-timeline-axis: block; }
+.noise-overlay > .grid > section.bg-app { timeline-scope: --grid; }
+/* 模糊伪元素是合成层。裁圆角的必须是它的直接父级(split),而不是再往上的面板:中间隔着一层矩形 overflow 裁切时,
+   Chromium 会把外层的圆角裁切丢掉(和缩略图直角是同一个坑)。split 的顶角与面板顶角重合,照片和模糊层由同一个裁切边缘负责,
+   也就不会两套抗锯齿错位 */
+[data-testid="workspace-split"] { position: relative; }
+[data-testid="workspace-split"] { position: relative; }
+@keyframes app-edge-in { from { opacity: 0; } to { opacity: 1; } }
+[data-testid="workspace-split"]::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 150px; z-index: 45; pointer-events: none; opacity: 0;
+  transform: translateZ(0); will-change: transform;
+  backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  background: linear-gradient(180deg, rgb(var(--app-bg) / 0.72), rgb(var(--app-bg) / 0.3) 40%, rgb(var(--app-bg) / 0));
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%); mask-image: linear-gradient(180deg, #000 0, #000 34%, transparent 100%);
+  animation: app-edge-in linear both; animation-timeline: --grid; animation-range: 0 80px; }
+
+.app-toolbar { background: transparent; height: 48px; gap: 6px; padding: 0 12px; }
+.app-toolbar .truncate.font-semibold { font-size: 15px; font-weight: 680; letter-spacing: -.2px; }
+/* 图标钮 / 分组 → 胶囊 */
+.app-toolbar button.rounded-md { border-radius: 999px; }
+.app-toolbar > .toolbar-modes,
+.app-toolbar > .toolbar-thumbsize,
+.app-toolbar > label,
+.app-toolbar > .relative:not(.min-w-0) {
+  border-radius: 999px; background: var(--glass);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  height: 34px; padding: 0 3px; align-items: center;
+}
+/* Keep display on the layout groups under the container queries' control. */
+.app-toolbar > label, .app-toolbar > .relative:not(.min-w-0) { display: flex; }
+.app-toolbar { height: 52px; }
+.app-toolbar button.rounded-md, .app-toolbar button.h-8 { height: 28px; min-width: 28px; border-radius: 999px; }
+.app-toolbar button.w-8 { width: 28px; }
+.app-toolbar > .toolbar-modes button { padding-left: 10px; padding-right: 10px; }
+.app-toolbar > .toolbar-thumbsize { padding: 0 10px; }
+/* 分组胶囊(布局 / 地图):内部按钮 28 高、全圆角,高亮态与外壳同心 */
+.app-toolbar > .toolbar-modes { padding: 0 3px; gap: 2px; }
+.app-toolbar > .toolbar-modes button { height: 28px; min-width: 28px; border-radius: 999px; padding-left: 8px; padding-right: 8px; }
+.app-toolbar > .toolbar-modes button:hover, .app-toolbar button.rounded-md:hover { background: var(--fill-2); }
+/* 单按钮的胶囊(排序 / 筛选 / 后台活动 / 加号):外壳不留内边距,按钮撑满,发丝边与填充重合 */
+.app-toolbar > .relative:not(.min-w-0) { padding: 0 3px; }
+.app-toolbar > .relative:not(.min-w-0) > button { height: 28px; min-width: 28px; border-radius: 999px; margin: 0; }
+.app-toolbar > .relative:not(.min-w-0) > button.w-\[100px\] { width: auto; padding: 0 14px; }
+.app-toolbar > .relative.ml-1 { margin-left: 0; }
+/* 搜索胶囊:label 同时命中上面的 `.relative:not(.min-w-0)`(0,3,0),这里要同等特异度才能真正去掉 3px 内边距;
+   输入框撑满胶囊,focus 环画在胶囊(label)自身上,与外壳同心,四边等距 */
+.app-toolbar > label.relative:not(.min-w-0) { padding: 0; }
+.app-toolbar > label input { background: transparent; border-color: transparent; border-radius: 999px; height: 34px; }
+.app-toolbar > label input:focus { border-color: transparent; box-shadow: none; }
+.app-toolbar > label:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
+.app-toolbar button[class*="border-border"] { background: transparent; border-color: transparent; border-radius: 999px; }
+.app-toolbar .bg-selected { background: var(--fill-3); }
+/* 单独的图标钮(刷新等)也上胶囊玻璃 */
+.app-toolbar > button { height: 34px; width: 34px; min-width: 34px; border-radius: 999px; background: var(--glass); backdrop-filter: var(--blur); }
+/* 筛选计数徽标:accent 白底黑字 */
+.app-toolbar .bg-accent.text-black { color: rgb(var(--accent-ink)); }
+
+/* ───────── 6 · 筛选行:透明底、无底线;chip 胶囊无描边 ───────── */
+.flex-wrap.border-b[class*="bg-chrome"] { background: transparent; border-color: transparent; padding: 4px 12px 10px; }
+.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
+.flex-wrap.border-b button.rounded-md.border:hover { background: linear-gradient(var(--fill-2), var(--fill-2)), var(--glass); }
+.flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] { background: rgb(var(--accent-color)); color: rgb(var(--accent-ink)); }
+.flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
+.flex-wrap.border-b button.rounded-md.border[class*="bg-accent"]:hover { background: linear-gradient(rgb(var(--accent-ink) / 0.1), rgb(var(--accent-ink) / 0.1)), rgb(var(--accent-color)); }
+.flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; }
+.flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
+
+/* ───────── 7 · 网格:缩略图去描边,选中留单色环;网格底透明 ───────── */
+[data-testid="gallery-scroll"] { background: transparent; }
+[data-gallery-item] [class*="ring-1"] { --tw-ring-color: transparent; box-shadow: none; }
+[data-gallery-item]:hover [class*="ring-1"] { box-shadow: none; --tw-ring-color: transparent; }
+/* 选中态 = 一道简单描边(2px 单色环),画在 ::after 上并按 contain 规则贴着照片实际绘制的矩形:
+   Gallery.jsx 在选中卡片上给出 --img-w / --img-h(格子尺寸)、--ar(照片真实宽高比),
+   justified 模式下照片比格子小时环仍贴照片;cover 模式 ar = 格子比,矩形就是整格。
+   (试过照片色彩光晕 + 玻璃高光,用户定为不要,回到简单描边) */
+[data-gallery-item][data-selected="true"] {
+  z-index: 10;
+  --sel-w: min(var(--img-w, 100%), calc(var(--img-h, 100%) * var(--ar, 1)));
+  --sel-h: min(var(--img-h, 100%), calc(var(--img-w, 100%) / var(--ar, 1)));
+  --sel-x: calc((var(--img-w, 100%) - var(--sel-w)) / 2);
+  --sel-y: calc((var(--img-h, 100%) - var(--sel-h)) / 2);
+}
+[data-gallery-item] [class*="ring-2"], [data-gallery-item] .shadow-glow { --tw-ring-color: transparent; box-shadow: none; }
+/* 根因:<button> 会把内容垂直居中,卡片高度 = 图高 + 固定说明高,而说明实际矮几个像素,
+   于是图片被整体下移 2-4px,环(按卡片顶算)就和图片错位。改成 flex 列,内容从顶部开始 */
+[data-gallery-item] { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
+[data-gallery-item][data-selected="true"]::after {
+  content: ""; position: absolute; z-index: 2; pointer-events: none;
+  left: var(--sel-x); top: var(--sel-y); width: var(--sel-w); height: var(--sel-h);
+  border-radius: 10px;
+  /* 环与照片之间留 1.5px 底色缝(Apple Photos 的做法):缝把亚像素的圆角错位吃掉,环也不再压在照片边上;
+     浅色主题 accent 是近黑,纯黑 2px 太重,降到 55% */
+  box-shadow: 0 0 0 1.5px rgb(var(--app-bg)), 0 0 0 3.5px rgb(var(--accent-color) / var(--sel-ring-alpha, 1));
+}
+/* 瓦片模式:与其他布局一样只描边,不放大;格子是直角所以环也直角。滚动容器四边留 8px
+   (Gallery.jsx 的瓦片布局按 VIEW_PADDING 扣宽),边缘格子的环才不会被容器裁掉;选中格提到最上层,环压在邻格之上 */
+[data-testid="gallery-scroll"].px-0 [data-gallery-item][data-selected="true"]::after { border-radius: 0; }
+[data-testid="gallery-scroll"].px-0 { padding-left: 8px !important; padding-right: 8px !important; padding-bottom: 8px !important; }
+[data-gallery-item] .group-hover\:shadow-card-hover { box-shadow: none; }
+/* hover 时 img 被 scale + filter 提到合成层,中间那层无圆角的 overflow 容器会让 Chromium 丢掉外层圆角裁切 → 直角。
+   让中间层继承圆角,裁切就落在它自己身上 */
+[data-gallery-item] > div > .overflow-hidden { border-radius: inherit; }
+/* 再保险一层:img 自己也带圆角,合成层丢裁切时四角仍是圆的 */
+[data-gallery-item] > div > .overflow-hidden > img { border-radius: inherit; }
+[data-gallery-item] img { transition: filter .15s; }
+[data-gallery-item]:hover img { filter: brightness(1.06); }
+/* 框选矩形单色 */
+.border-accent\/60.bg-accent\/10 { border-color: rgb(var(--text-color) / 0.4); background: var(--fill); }
+
+/* ───────── 8 · 检查器:圆角面板(见 4)、无分割线、星级单色 ───────── */
+aside.border-l .border-t { border-color: transparent; }
+aside.border-l img.object-contain { border-radius: 10px; }
+aside.border-l [class*="fill-\[rgb(225"] { fill: rgb(var(--accent-color)); color: rgb(var(--accent-color)); }
+aside.border-l .bg-hover { background: var(--fill); }
+aside.border-l .border-accent\/50 { border-color: transparent; }
+
+/* ───────── 8b · 编辑器面板 / 工具栏:零分割线,用留白分组(Apple 侧栏做法),分组标题略提亮承担分组职责 ───────── */
+[data-editor-wheel-scope="panel"] .border-b, [data-editor-wheel-scope="panel"] .border-t,
+[data-editor-wheel-scope="panel"] .border-l, [data-editor-wheel-scope="panel"] .border-r { border-color: transparent; }
+[data-editor-wheel-scope="panel"] .px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
+[data-editor-wheel-scope="panel"] .border-t.px-3.py-2, [data-editor-wheel-scope="panel"] .border-t.px-4.py-3 { padding-top: 6px; }
+[data-editor-wheel-scope="panel"] .tracking-\[0\.14em\].text-muted2 { color: rgb(var(--muted-text)); }
+[data-editor-wheel-scope="panel"], .fixed.inset-0.z-\[10100\] .rounded-xl.border.bg-chrome\/95 { border-color: transparent; background: var(--pop); }
+/* 面板底栏(重置 / 撤销 / 重做 / Apply):浮在面板底部的玻璃条,内容从它底下滚过;滚动区底部让位 52px。
+   四个面板的底栏都是 `.border-t.px-3.py-2`;AI 面板未激活时整块 .hidden,其底栏不算数 */
+[data-editor-wheel-scope="panel"] { position: relative; }
+[data-editor-wheel-scope="panel"] .border-t.px-3.py-2 {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: 8px 12px 10px; border-color: transparent;
+  background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+}
+[data-editor-wheel-scope="panel"]:has(> .border-t.px-3.py-2, > :not(.hidden) .border-t.px-3.py-2)
+  .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]) { padding-bottom: 52px; }
+/* 面板内小控件圆角按高度定(同心):≤24 高 6px,28 / 30 / 32 高 8px。
+   根因:Tailwind 的 rounded(4px)没跟着皮肤重映射,而 rounded-md 被映射成 10px,同一行里 4 与 10 混用 */
+[data-editor-wheel-scope="panel"] :is(.h-5, .h-6)[class*="rounded"]:not(.rounded-full) { border-radius: 6px; }
+[data-editor-wheel-scope="panel"] :is(.h-7, .h-8, .h-\[30px\])[class*="rounded"]:not(.rounded-full) { border-radius: 8px; }
+[data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
+/* 文本 / 数值输入框、下拉、多行框:一律小圆角 5px,不随高度放大(用户:「这种输入框不能用大 radius」) */
+[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]) { border-radius: 5px; }
+/* 带边框、bg-app 底的按钮(AI 面板的 + / 钥匙 / 新建风格)与旁边的字段同行,圆角跟字段走 5px */
+[data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"]:not(.w-full) { border-radius: 5px; }
+/* 只靠 padding 撑起来的小图标钮(风格卡片的编辑 / 删除、清空提示词):20-24 高,rounded-md 的 10px 太圆 */
+[data-editor-wheel-scope="panel"] :is(button.p-1, button.p-0\.5, button.py-1).rounded-md { border-radius: 6px; }
+/* 色板圆点:黑点在深底、白点在浅底都要靠一圈可见边;用正文色 18% 两套主题通吃 */
+[data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgb(var(--text-color) / 0.18); }
+/* ── 8c · 编辑器面板字段统一(浅色主题下描边全露出来了):输入 / 下拉 / 多行框 / 字体选择钮 / 数值框 一律无描边、fill-2 底,focus 1px 内环 ── */
+[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]),
+[data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border,
+[data-editor-wheel-scope="panel"] div.w-full.rounded-md.border[class*="bg-app"] { border-color: transparent; background-color: var(--fill-2); }
+[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:focus,
+[data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border:focus-within { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
+/* 分段组(斜体 / 下划线 …):外框去线换 fill 底 */
+[data-editor-wheel-scope="panel"] .h-6.overflow-hidden.rounded-md.border { border-color: transparent; background: var(--fill); }
+/* 风格列表(AI 重绘「我的风格」,展开视图):不再是一张张描边卡,改成和紧凑视图同一种「行」:
+   无边框、8px 圆角、hover fill、选中 fill-2;标题 + 一行说明,编辑 / 删除钮 hover 才现 */
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border { border-color: transparent; background: transparent; border-radius: 8px; padding: 8px 10px; }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:hover { border-color: transparent; background: var(--fill); }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border[class*="accent-color)/0.38"] { background: var(--fill-2); }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border .ml-2.flex.shrink-0 { opacity: 0; transition: opacity .12s; }
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:hover .ml-2.flex.shrink-0,
+[data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:focus-within .ml-2.flex.shrink-0 { opacity: 1; }
+[data-editor-wheel-scope="panel"] .space-y-2 > [role="button"] + [role="button"] { margin-top: 2px; }
+/* 紧凑视图的行同样 8px */
+[data-editor-wheel-scope="panel"] [role="button"].rounded-md.px-2\.5.py-1\.5, [data-editor-wheel-scope="panel"] button.rounded-md.px-2\.5.py-1\.5 { border-radius: 8px; }
+/* 分组标题:四个面板统一 11px / 600 / 0.04em(0.14em 的字距在中文上拉得太开);贴纸面板自己那套 9px 也并进来 */
+[data-editor-wheel-scope="panel"] .tracking-\[0\.14em\], [data-editor-wheel-scope="panel"] h4.uppercase, [data-editor-wheel-scope="panel"] h2.uppercase {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text));
+}
+
+/* ───────── 8d · 自选颜色色块:一圈 2px 彩虹环(用户:「白色根本看不出可以自选」)。只用在「自选」与「预设」并排的地方
+   (边框底色 / 手写填充 / 拼图背景);单独一个色块的字段(文字填充 / 描边 / 阴影、贴纸描边)本身就是取色器,不加环。
+   环画在 ::before 上,不碰色块自己的底(有的底是「颜色 + 棋盘格」多层背景);isolation 让 z-index:-1 落在色块之下、面板之上。
+   --swatch-r 由各处按自己的圆角传入(圆点 999px、方块 4px)───────── */
+.swatch-custom { position: relative; isolation: isolate; border-color: transparent !important; }
+.swatch-custom::before {
+  content: ""; position: absolute; inset: -2px; z-index: -1;
+  border-radius: calc(var(--swatch-r, 4px) + 2px);
+  background: conic-gradient(#f43 0deg, #fc3 60deg, #4d4 120deg, #3cf 180deg, #55f 240deg, #f4c 300deg, #f43 360deg);
+}
+.swatch-custom:hover::before { filter: brightness(1.15); }
+
+/* ───────── 9 · 弹层 / 菜单 / JobDock / Toast:玻璃,无边框,微影 ───────── */
+.shadow-overlay.bg-chrome, .shadow-menu.bg-chrome, .shadow-overlay.bg-panel2,
+.shadow-overlay.bg-panel, .shadow-lg.bg-chrome {
+  background: var(--pop); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  border-width: 0; border-radius: 14px; box-shadow: var(--shadow-menu);
+}
+.shadow-overlay .border-t, .shadow-menu .border-t { border-color: var(--edge); }
+/* 小对话框(新建风格 / 服务商 / 标注服务 / 手写):底栏无线、按钮靠右、主按钮最右、删除类按钮靠左(Apple 顺序);
+   字段与带边框按钮 5px,底栏按钮 8px,关闭钮圆形 */
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 { border-color: transparent; padding-top: 4px; justify-content: flex-end; }
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { order: 2; border-radius: 8px; }
+/* 手写弹窗是从文字面板里渲染出来的,DOM 上仍在编辑器面板作用域内,面板的字段 / 按钮圆角规则会把它的底栏按钮拆成 5 和 8 两档;这里压回统一的 8 */
+[data-editor-wheel-scope="panel"] .shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { border-radius: 8px; }
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="accent-color"] { order: 3; }
+.shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="rose-"] { order: 1; margin-right: auto; }
+.shadow-overlay.bg-chrome :is(input, select, textarea)[class*="rounded"],
+.shadow-overlay.bg-chrome div.h-8.rounded-md.border.bg-app { border-radius: 5px; }
+.shadow-overlay.bg-chrome button.p-1.rounded-md { border-radius: 999px; }
+.hover\:bg-hover:hover { background: var(--fill); }
+
+/* ───────── 10 · Modal / 设置:实色卡 18px、无边框、无分割线 ───────── */
+/* 内部浮窗圆角:窗口 26 → 设置这种大浮窗同 26(它就是窗中窗);新建风格 / 服务商 / 拼图选图这类小对话框 20;菜单 / 弹层仍 14 */
+.rounded-xl.border.bg-chrome, .rounded-xl.border.bg-panel { border-color: transparent; background: rgb(var(--chrome-bg)); border-radius: 20px; }
+.fixed.inset-0.z-\[3000\] > .rounded-xl.border.bg-chrome { border-radius: 26px; }
+.rounded-xl.border.bg-chrome .border-b, .rounded-xl.border.bg-chrome .border-r { border-color: transparent; }
+.rounded-xl.border.bg-chrome .bg-panel { background: var(--fill); border-radius: 14px; }
+.rounded-xl.border.bg-chrome .border-b.border-border\/50 { border-color: transparent; }
+.fixed.inset-0.bg-app\/80 { background: rgba(0,0,0,.45); }
+/* ───────── 10b · 设置页控件统一(用户:「统一一下,稍微偏圆一点」):
+   之前按钮 rounded(4px)、输入框 rounded-md(10px)、多行框 rounded(4px)混着。统一为 28 高、8px 圆角、无描边、fill 底;
+   主按钮 accent 底同圆角;focus 用 1px 内环 ───────── */
+.fixed.inset-0.z-\[3000\] :is(button.h-7, button.h-8)[class*="rounded"]:not([class*="rounded-full"]) { border-radius: 8px; }
+/* 卡片底已经是 --fill,卡内控件要再亮一档(fill-2)才分得出来 */
+.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); color: rgb(var(--text-color)); }
+.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
+.fixed.inset-0.z-\[3000\] button.border-accent.bg-accent { border-color: transparent; color: rgb(var(--accent-ink)); }
+.fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
+  border-radius: 8px; border-color: transparent; background-color: var(--fill-2);
+}
+.fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); outline: none; }
+/* 密钥这类「图标 + 输入」的组合框(div.h-8 带边框)同样处理 */
+.fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app { border-radius: 8px; border-color: transparent; background: var(--fill-2); }
+/* 子卡(服务商 / 模型行):深色用 fill,浅色用白底,与灰卡拉开;组件通过 --sub-card 取 */
+:root { --sub-card: var(--fill); }
+:root[data-theme="light"] { --sub-card: rgb(255 255 255 / 0.85); }
+:root[data-theme="light"] { --sel-ring-alpha: 0.55; }
+/* 浅色主题遮罩不要黑 45%,叠出来发脏 */
+:root[data-theme="light"] .fixed.inset-0.bg-app\/80 { background: rgba(0, 0, 0, 0.22); }
+.fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
+
+/* 下拉箭头:字段底色改用 background-color 写,别把自绘箭头抹掉;并给编辑器面板 / 设置 / 小对话框里的 select 统一一枚箭头 */
+[data-editor-wheel-scope="panel"] select, .fixed.inset-0.z-\[3000\] select, .shadow-overlay.bg-chrome select {
+  appearance: none; -webkit-appearance: none; padding-right: 26px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 12px 12px;
+}
+
+/* ───────── 10c · 关闭钮统一:凡是只有一个 X 图标的按钮(lucide 给 svg 加了 lucide-x 类),hover 底一律圆形 ───────── */
+/* !important:各作用域(编辑器面板 / 设置 / 对话框)按高度定圆角的规则特异度都比这条高,关闭钮的圆形必须压过它们 */
+button:has(> svg.lucide-x:only-child), button:has(> span:only-child > svg.lucide-x:only-child) { border-radius: 999px !important; }
+/* hover 底色也统一:之前有 bg-hover / bg-white/6 / bg-white/8 三种,深浅主题下明暗各异。统一 fill-2,文字提到正文色。
+   灯箱那种压在照片上的玻璃关闭钮(自带 bg-black)保持原样 */
+button:not([class*="bg-black"]):has(> svg.lucide-x:only-child):hover,
+button:not([class*="bg-black"]):has(> span:only-child > svg.lucide-x:only-child):hover { background: var(--fill-2) !important; color: rgb(var(--text-color)) !important; }
+
+/* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
+button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
+button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); border-radius: 999px; }
+button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border-color: transparent; }
+
+/* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):
+   之前四处四个样子(描边 / 无描边、accent 淡底、py 撑高、hover 亮边)。统一:32 高、8px 圆角、无边框、fill 底、正文色;
+   accent 变体(可用 / 已就绪)只是更亮一档的 fill;h-6 的整宽字段(字体选择钮)不算动作钮 ───────── */
+button.w-full:not(.flex-col):not(.h-6)[class*="border-border"][class*="bg-app"], button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"],
+[data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2 {
+  height: 32px; padding-top: 0; padding-bottom: 0; border-color: transparent; border-radius: 8px;
+  background: var(--fill); color: rgb(var(--text-color)); font-weight: 500;
+}
+button.w-full:not(.flex-col):not(.h-6)[class*="border-border"][class*="bg-app"]:hover, button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"]:hover,
+[data-editor-wheel-scope="panel"] button.rounded-md.bg-app.px-3.py-2:hover { background: var(--fill-2); border-color: transparent; }
+button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"] { background: var(--fill-2); }
+button.w-full:not(.flex-col):not(.h-6)[class*="border-accent"]:hover { background: var(--fill-3); }
+button.w-full:not(.flex-col):not(.h-6)[class*="cursor-not-allowed"] { color: rgb(var(--muted-text-2)); }
+/* 文字预设卡(flex-col 的整宽按钮,里面是字样 + 名称):不走上面的 32 高动作钮,只换底色去描边 */
+/* 手写风格预设卡(HandwritingModal):缩略图是白色手写体,同样固定深底 */
+button.flex-col.rounded-md.border:has(> span > img) { border-color: transparent; background: rgb(28 28 31); }
+button.flex-col.rounded-md.border:has(> span > img):hover { border-color: transparent; background: rgb(38 38 42); }
+button.flex-col.rounded-md.border:has(> span > img) > span:last-child { color: rgb(255 255 255 / 0.55); }
+button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:has(> span > img) { background: rgb(38 38 42); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.9); }
+button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:has(> span > img) > span:last-child { color: rgb(255 255 255 / 0.92); }
+/* 预设卡的字样多是白色 / 浅色描边效果,浅色主题下会消失:卡底固定深色(不随主题),名称用浅灰,选中环用白 */
+[data-editor-wheel-scope="panel"] button.w-full.flex-col { border-color: transparent; background: rgb(28 28 31); border-radius: 8px; }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col:hover { background: rgb(38 38 42); border-color: transparent; }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col > span:last-child { color: rgb(255 255 255 / 0.55); }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] { background: rgb(38 38 42); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.9); }
+[data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] > span:last-child { color: rgb(255 255 255 / 0.92); }
+/* 选择器类(模型文件、字体来源):左对齐、28 高、字段圆角 5px */
+[data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
+
+/* ───────── 11c · 拼图(z 10200):右侧面板与编辑器面板同一套;页面卡去掉发丝环 ───────── */
+.fixed.inset-0.z-\[10200\] .border-b.border-border\/60, .fixed.inset-0.z-\[10200\] .border-t.border-border\/60,
+.fixed.inset-0.z-\[10200\] .border-l.border-border\/60 { border-color: transparent; }
+.fixed.inset-0.z-\[10200\] .border-b.border-border\/60.px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
+.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border { border-color: transparent; background-color: var(--fill-2); border-radius: 5px; height: 28px; }
+.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border:focus { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
+.fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed { border-style: solid; border-color: transparent; background: var(--fill); border-radius: 8px; }
+.fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed:hover { background: var(--fill-2); border-color: transparent; }
+.fixed.inset-0.z-\[10200\] .tracking-\[0\.14em\], .fixed.inset-0.z-\[10200\] .tracking-\[0\.12em\] { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text)); }
+/* 页面卡:平时无环(那圈 ring-border 在浅色下从页面顶上露出来),只有拖拽目标态保留 accent 环 */
+.fixed.inset-0.z-\[10200\] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
+
+/* ───────── 12a · 灯箱上下栏玻璃化:头部与底部(缩放行 + 胶片条)不再是两条实黑,改成压在照片之上的 Clear 玻璃。
+   舞台(照片区)保留在两栏之间做适配,所以 fit 状态下照片不被遮;放大 / 拖动时照片从玻璃底下穿过。
+   玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
+.fixed.inset-0.z-\[10050\] { position: fixed; }
+.fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0.z-\[10050\] > .h-16 { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0.z-\[10050\] > .relative.min-h-0.flex-1 { margin: 84px 0 140px; overflow: visible; z-index: 1; }
+.fixed.inset-0.z-\[10050\]::before, .fixed.inset-0.z-\[10050\]::after {
+  content: ""; position: absolute; left: 0; right: 0; z-index: 10; pointer-events: none;
+  /* 渐进模糊,没有清晰边缘:mask 从栏内实到栏外全透,压色也同步渐变;masked backdrop-filter 要独立合成层才会羽化 */
+  transform: translateZ(0); will-change: transform;
+  backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
+}
+.fixed.inset-0.z-\[10050\]::before { top: -40px; height: 160px;
+  background: linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, #000 0, #000 50%, transparent 100%); }
+.fixed.inset-0.z-\[10050\]::after { bottom: -40px; height: 220px;
+  background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
+  -webkit-mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); }
+.fixed.inset-0.z-\[10050\].bg-white::before, .fixed.inset-0.z-\[10050\].bg-white::after { display: none; }
+
+/* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
+.bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }
+
+/* Catalog actions: the welcome page and sample prompt share one button family. */
+.catalog-actions .catalog-action {
+  height: 32px; gap: 6px; border: 0; border-radius: 10px;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.welcome-actions .catalog-action { height: 40px; gap: 8px; border-radius: 12px; font-size: 13px; }
+.catalog-actions .catalog-action:focus-visible { outline: 2px solid rgb(var(--text-color) / 0.55); outline-offset: 3px; }
+.catalog-actions .catalog-action:disabled { cursor: default; opacity: 0.6; }
+/* Glass belongs over the photos; the welcome page uses quiet, flat fills. */
+.sample-catalog-dock { container: sample-banner / inline-size; }
+.sample-catalog-banner {
+  background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-overlay);
+}
+@container sample-banner (max-width: 760px) {
+  .sample-catalog-banner { flex-direction: column; align-items: stretch; gap: 8px; width: 100%; max-width: 500px; }
+}
+
+/* Discover shares the gallery toolbar's top inset and floating material. */
+.discover-navigation {
+  position: absolute; top: 10px; left: 20px; right: 20px; z-index: 50;
+  display: flex; gap: 4px; width: max-content; max-width: calc(100% - 40px);
+  padding: 4px; overflow-x: auto; border-radius: 16px;
+  background: transparent; box-shadow: none; scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+.discover-navigation::-webkit-scrollbar { display: none; }
+.discover-navigation button {
+  flex-shrink: 0; height: 32px; padding: 0 14px; border: 0; border-radius: 12px;
+  font-size: 13px; font-weight: 500; color: rgb(var(--muted-text));
+  background: var(--glass); transition: background .15s, color .15s;
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  -webkit-app-region: no-drag;
+}
+.discover-navigation button:hover { background: var(--fill-2); color: rgb(var(--text-color)); }
+.discover-navigation button[aria-current="location"] { background: var(--fill-3); color: rgb(var(--text-color)); }
+section.bg-app .discover-view [data-testid="gallery-scroll"] { padding-top: 72px !important; }
+.discover-view [data-discover-section] { scroll-margin-top: 72px; }
+
+.discover-drag-region { position: absolute; inset: 0 0 auto; height: 48px; z-index: 40; pointer-events: none; }
+html.electron .discover-drag-region { pointer-events: auto; -webkit-app-region: drag; }
+
+.collage-ratio-input { height: 24px; border: 0; border-radius: 999px; background: var(--fill); outline: none; box-shadow: none; transition: background .15s; }
+.collage-ratio-input:hover { background: var(--fill-2); }
+.collage-ratio-input:focus-visible { background: var(--fill-2); outline: 2px solid rgb(var(--text-color) / .35); outline-offset: 2px; }

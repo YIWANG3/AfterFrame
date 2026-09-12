@@ -44,12 +44,30 @@
     },
     "displayMode": "Layout"
   },
+  "discover": {
+    "recentTitle": "Recently Added",
+    "empty": "No photos yet. Import some and the latest will show up here.",
+    "folderMeta": "{{count}} items",
+    "peopleTitle": "People",
+    "placesTitle": "Places",
+    "memories": "Memories",
+    "pinned": "Pinned",
+    "albums": "Albums",
+    "pinRated": "Rated",
+    "pinRaw": "With RAW",
+    "unnamed": "Unnamed",
+    "navigation": "Discover sections"
+  },
   "sidebar": {
+    "discover": "Discover",
     "people": "People",
     "stickers": "Stickers",
     "folders": "Folders",
     "newFolder": "New folder",
     "noFolders": "No folders yet",
+    "viewCovers": "Show covers",
+    "viewList": "Show as list",
+    "folderMeta": "{{count}} items",
     "settings": "Settings",
     "settingsTip": "Settings (⌘,)",
     "rename": "Rename",
@@ -60,7 +78,9 @@
     "noAssets": "No indexed assets yet",
     "assetsCount_one": "{{count}} asset",
     "assetsCount_other": "{{count}} assets",
-    "updated": "updated {{time}}"
+    "updated": "updated {{time}}",
+    "webLibrary": "Browser Library",
+    "webWelcomeHint": "Browse sample photos or drag in your own"
   },
   "people": {
     "title": "People",

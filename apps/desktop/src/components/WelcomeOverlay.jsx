@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { FolderPlus, FolderOpen, Images, Loader2 } from "lucide-react";
 import logo from "../assets/logo.png";
+import Button from "../ui/Button";
 
 /* First-run / no-catalog state. In packaged mode there is no default catalog,
    so a fresh install has none open — browsing is silently empty and importing
@@ -9,45 +10,50 @@ import logo from "../assets/logo.png";
    open an existing one, or browse the bundled sample library (created on
    first click — see openSampleCatalog in main). App renders it when
    info.catalogPath is empty. */
-export default function WelcomeOverlay({ onCreate, onOpen, onSample, sampleBusy = false }) {
+export default function WelcomeOverlay({ onCreate, onOpen, onSample, sampleBusy = false, web = false }) {
   const { t } = useTranslation("app");
 
   return (
     <div className="flex h-full w-full items-center justify-center px-6">
-      <div className="flex w-[460px] max-w-[90vw] flex-col items-center text-center">
+      <div className="flex w-[440px] max-w-full flex-col items-center text-center">
         <img src={logo} alt="AfterFrame" className="h-20 w-20 rounded-2xl" />
         <h1 className="mt-5 text-[20px] font-semibold text-text">{t("welcome.title")}</h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">{t("welcome.subtitle")}</p>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">{t(web ? "welcome.webSubtitle" : "welcome.subtitle")}</p>
 
-        <div className="mt-7 flex w-full flex-col gap-2.5">
-          <button
+        <div className="catalog-actions welcome-actions mt-7 flex w-full max-w-[360px] flex-col gap-2.5">
+          {!web && <>
+          <Button
             type="button"
             onClick={onCreate}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-accent bg-accent text-[13px] font-semibold text-app transition-colors hover:bg-accent/90 focus:outline-none"
+            variant="primary"
+            className="catalog-action w-full"
           >
             <FolderPlus className="h-4 w-4" />
             {t("welcome.create")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onOpen}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-panel text-[13px] text-text transition-colors hover:bg-hover focus:outline-none"
+            variant="soft"
+            className="catalog-action w-full"
           >
             <FolderOpen className="h-4 w-4" />
             {t("welcome.open")}
-          </button>
-          <button
+          </Button>
+          </>}
+          <Button
             type="button"
             onClick={onSample}
             disabled={sampleBusy}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-panel text-[13px] text-text transition-colors hover:bg-hover focus:outline-none disabled:cursor-default disabled:opacity-60"
+            variant={web ? "primary" : "soft"}
+            className="catalog-action w-full"
           >
             {sampleBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />}
             {sampleBusy ? t("welcome.sampleLoading") : t("welcome.sample")}
-          </button>
+          </Button>
         </div>
 
-        <p className="mt-6 text-[11px] leading-relaxed text-muted2">{t("welcome.explainer")}</p>
+        <p className="mt-6 text-[11px] leading-relaxed text-muted2">{t(web ? "welcome.webExplainer" : "welcome.explainer")}</p>
       </div>
     </div>
   );

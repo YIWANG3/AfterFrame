@@ -1,0 +1,58 @@
+{
+  "sample-01.jpg": {
+    "width": 2400,
+    "height": 1594
+  },
+  "sample-02.jpg": {
+    "width": 1920,
+    "height": 2400
+  },
+  "sample-03.jpg": {
+    "width": 2400,
+    "height": 1594
+  },
+  "sample-04.jpg": {
+    "width": 2400,
+    "height": 1594
+  },
+  "sample-05.jpg": {
+    "width": 2400,
+    "height": 1575
+  },
+  "sample-06.jpg": {
+    "width": 2400,
+    "height": 1800
+  },
+  "sample-07.jpg": {
+    "width": 2400,
+    "height": 1628
+  },
+  "sample-08.jpg": {
+    "width": 2400,
+    "height": 1875
+  },
+  "sample-09.jpg": {
+    "width": 2400,
+    "height": 1800
+  },
+  "sample-10.jpg": {
+    "width": 2400,
+    "height": 1600
+  },
+  "sample-11.jpg": {
+    "width": 2399,
+    "height": 2400
+  },
+  "sample-12.jpg": {
+    "width": 2400,
+    "height": 2083
+  },
+  "sample-13.jpg": {
+    "width": 2400,
+    "height": 1586
+  },
+  "sample-14.jpg": {
+    "width": 2400,
+    "height": 1600
+  }
+}

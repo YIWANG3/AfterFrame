@@ -25,6 +25,7 @@ import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
 import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
+import DiscoverView, { prefetchDiscover } from "./components/DiscoverView";
 import FilterBar from "./components/FilterBar";
 import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
@@ -163,7 +164,9 @@ export default function App() {
   useEffect(() => {
     if (mapExpanded) return;
     const current = workspaceRef.current.filters;
-    if (!current?.geo) return;
+    // A labelled geo filter (a Discover place/memory) has its own chip and
+    // never came from the viewport — it stays put with the map closed.
+    if (!current?.geo || current.geo.label) return;
     const { geo: _geo, ...rest } = current;
     workspaceRef.current.applyFilters(rest);
   }, [mapExpanded]);
@@ -200,9 +203,33 @@ export default function App() {
 
   const peopleGroups = usePeopleGroups({
     pushToast,
-    enabled: viewMode === "people",
+    enabled: viewMode === "people" || viewMode === "discover",
     catalogKey: workspace.info?.catalogPath || null,
   });
+
+  // Warm the Discover page in the background: its data depends only on the
+  // catalog state, so once the library is ready (and after every revision
+  // bump) fetch it during idle time instead of on first click.
+  const discoverCatalogKey = workspace.info?.catalogPath || null;
+  useEffect(() => {
+    if (!discoverCatalogKey || !workspace.browserReady) return undefined;
+    const timer = setTimeout(() => {
+      void prefetchDiscover({ catalogKey: discoverCatalogKey, catalogRevision: workspace.catalogRevision });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [discoverCatalogKey, workspace.catalogRevision, workspace.browserReady]);
+
+  // Discover entries open the gallery as a clean destination: no inherited
+  // collection/status/query/facets, filter bar shown when there is something
+  // to show, map drawer opened (and flown) only for map-shaped entries.
+  const openDiscoverTarget = ({ status = "all", filters = {}, collectionId = null, map = null } = {}) => {
+    setViewMode("assets");
+    setPeopleGroup(null);
+    workspace.browseTo({ status, filters, collectionId });
+    setShowFilters(Object.keys(filters).length > 0);
+    setMapExpanded(!!map);
+    if (map?.flyTo) setMapFlyTo({ ...map.flyTo, nonce: Date.now() });
+  };
 
   const openPersonGroup = (group) => {
     if (!group?.group_id) return;
@@ -1010,6 +1037,11 @@ export default function App() {
           onAddToCollection={workspace.addToCollection}
           stickerMode={viewMode === "stickers"}
           peopleMode={viewMode === "people"}
+          discoverMode={viewMode === "discover"}
+          onOpenDiscover={() => {
+            workspace.clearCollection?.({ reload: false });
+            setViewMode("discover");
+          }}
           onOpenStickerBrowser={() => {
             setViewMode("stickers");
             setPeopleGroup(null);
@@ -1021,7 +1053,6 @@ export default function App() {
             setPeopleGroup(null);
             workspace.clearCollection?.({ reload: false });
           }}
-          onOpenSettings={() => setSettingsOpen(true)}
         /> : <div className="bg-chrome" />}
 
         <section
@@ -1040,6 +1071,7 @@ export default function App() {
           ) : null}
           {noCatalog ? (
             <WelcomeOverlay
+              web={!!api.capabilities.web}
               onCreate={handleCreateCatalog}
               onOpen={handleOpenCatalog}
               onSample={handleOpenSampleCatalog}
@@ -1069,6 +1101,18 @@ export default function App() {
               onOpenGroup={openPersonGroup}
               onOpenSettings={() => setSettingsOpen(true)}
             />
+          ) : viewMode === "discover" ? (
+            <>
+              <DiscoverView
+                summary={workspace.summary}
+                collections={workspace.collections}
+                people={peopleGroups.groups}
+                catalogRevision={workspace.catalogRevision}
+                catalogKey={workspace.info?.catalogPath || null}
+                onOpen={openDiscoverTarget}
+                onOpenPerson={openPersonGroup}
+              />
+            </>
           ) : (
             <>
               <Toolbar
@@ -1239,7 +1283,7 @@ export default function App() {
           <div
             data-value={workspace.sidebarWidth}
             onMouseDown={resizeSidebar}
-            className="absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize transition-colors before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent hover:before:bg-border"
+            className="pane-resize-handle absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize"
             style={{ left: `${workspace.sidebarWidth}px` }}
           />
         ) : null}
@@ -1248,7 +1292,7 @@ export default function App() {
           <div
             data-value={-workspace.inspectorWidth}
             onMouseDown={resizeInspector}
-            className="absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize transition-colors before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent hover:before:bg-border"
+            className="pane-resize-handle absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize"
             style={{ right: `${workspace.inspectorWidth}px` }}
           />
         ) : null}

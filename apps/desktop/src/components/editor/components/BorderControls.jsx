@@ -46,7 +46,7 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
         key={tpl.id} type="button" title={tpl.name}
         onClick={() => onApplyPreset?.(tpl)}
         style={{ aspectRatio: String(cellAspect || 0.8) }}
-        className="grid shrink-0 place-items-center overflow-hidden rounded-md p-1 transition hover:bg-hover"
+        className="grid shrink-0 place-items-center overflow-hidden p-1 transition hover:bg-hover"
       >
         {thumb
           ? <img src={thumb} alt="" className="max-h-full max-w-full object-contain" />
@@ -143,8 +143,8 @@ export default function BorderControls({ templates = [], thumbs, cellAspect, onA
           <button
             ref={swatchRef} type="button" title={t("text.editColor")}
             onClick={() => setPickerOpen((v) => !v)}
-            className="h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
-            style={{ background: swatchBg }}
+            className="swatch-custom ml-0.5 h-[18px] w-[18px] cursor-pointer rounded-full border border-border/70"
+            style={{ background: swatchBg, "--swatch-r": "999px" }}
           />
         </div>
         {pickerOpen && (

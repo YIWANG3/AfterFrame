@@ -323,6 +323,29 @@ export function buildTransformedCanvas(source, width, height, rotationDeg, flipX
   return canvas;
 }
 
+// Cut `rect` (pixels, in `source` space) out of `source` with the photo rotated
+// by `angleDeg` about the rect's centre — the editor's free-rotation model: the
+// crop box stays axis-aligned while the photo turns underneath it around the
+// box's centre. angle 0 is an exact integer blit (no resampling).
+export function cutRotatedCrop(source, rect, angleDeg = 0) {
+  const w = Math.max(1, Math.round(rect.width));
+  const h = Math.max(1, Math.round(rect.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  if (!angleDeg) {
+    ctx.drawImage(source, Math.round(rect.x), Math.round(rect.y), w, h, 0, 0, w, h);
+    return canvas;
+  }
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((angleDeg * Math.PI) / 180);
+  ctx.drawImage(source, -(rect.x + rect.width / 2), -(rect.y + rect.height / 2));
+  return canvas;
+}
+
 export function deriveEditedFileName(sourcePath, preferredExt = null) {
   const originalName = fileName(sourcePath || "image.jpg");
   const dotIndex = originalName.lastIndexOf(".");

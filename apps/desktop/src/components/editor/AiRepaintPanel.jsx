@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlignJustify,
-  Check,
   ChevronDown,
   Columns2,
   KeyRound,
@@ -11,13 +10,13 @@ import {
   Pencil,
   Plus,
   Rows2,
-  Sparkles,
   StretchHorizontal,
   Trash2,
   X,
 } from "lucide-react";
 
 import { PROVIDER_TYPES, getProviderType, generateInstanceId, generateInstanceName, ProviderModal } from "../ai/providers";
+import { SliderRow } from "../../ui";
 
 /* ── Provider type templates (not instances) ── */
 
@@ -93,7 +92,7 @@ const TOOLBAR_FIELD =
 const TOOLBAR_BUTTON =
   "inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-app px-3 py-0 text-[12px] font-medium text-text transition-colors hover:border-border hover:bg-hover";
 const ACCENT_BUTTON =
-  "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-black transition-colors hover:brightness-110";
+  "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-accentInk transition-colors hover:brightness-110";
 
 function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
@@ -733,34 +732,16 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
         </CollapsibleSection>
 
         <CollapsibleSection label={t("repaint.parameters")} collapsed={collapsedSections.has("parameters")} onToggle={() => toggleSection("parameters")}>
+          {/* Same slider-with-scrub-value control as the text panel. */}
           <div className={cx(isUpscaleModel && "opacity-40 pointer-events-none")}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[12px] text-text">{t("repaint.temperature")}</div>
-              <input
-                type="number"
-                min="0"
-                max="1"
-                step="0.1"
-                value={temperature}
-                disabled={isUpscaleModel}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (Number.isNaN(next)) return;
-                  setTemperature(Math.max(0, Math.min(1, next)));
-                }}
-                className="h-8 w-16 rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50"
-              />
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
+            <SliderRow
+              label={t("repaint.temperature")}
+              min={0}
+              max={1}
+              step={0.1}
               value={temperature}
-              disabled={isUpscaleModel}
-              onChange={(event) => setTemperature(Number(event.target.value))}
-              className="mt-3 w-full"
-              aria-label={t("repaint.temperature")}
+              onChange={(next) => setTemperature(Math.max(0, Math.min(1, Math.round(next * 10) / 10)))}
+              compact
             />
           </div>
 
@@ -1038,16 +1019,16 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
             className={cx(
               "inline-flex h-8 items-center justify-center rounded-md px-3 py-0 text-[12px] font-medium transition-colors",
               generateStatus.running
-                ? "ai-generating-btn text-black"
+                ? "ai-generating-btn text-accentInk"
                 : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim())
-                  ? "bg-[rgb(var(--accent-color))] text-black hover:brightness-110"
+                  ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
                   : "bg-[rgb(var(--accent-color)/0.18)] text-[rgb(var(--accent-color))]",
             )}
             disabled={generateStatus.running}
             onClick={queueApply}
           >
             <span className="inline-flex items-center gap-1.5">
-              {generateStatus.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim()) ? <Check className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {generateStatus.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {generateStatus.running ? t("repaint.generating") : t("repaint.generate")}
             </span>
           </button>

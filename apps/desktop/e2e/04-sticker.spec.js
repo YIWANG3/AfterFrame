@@ -28,21 +28,19 @@ test.describe("Sticker tool", () => {
     await closeApp(app, userDataDir);
   });
 
-  test("Create new tab is the default; Source filename shown", async () => {
-    // Create new tab is highlighted by default
-    await expect(window.getByRole("button", { name: /Create new/i })).toBeVisible();
-    // Source filename = fixture filename
+  test("detection is immediately available for the open image", async () => {
+    // The source is identified by the editor header; creation has no tab.
     await expect(window.getByText(/test-image\.jpg/i).first()).toBeVisible();
     // Detect subjects button is reachable
     await expect(window.getByRole("button", { name: /Detect subjects/i })).toBeVisible();
   });
 
   test("region helper text shows when no marquee drawn", async () => {
-    await expect(window.getByText(/Detects in full image · drag on canvas to limit/i)).toBeVisible();
+    await expect(window.getByText("Detects the whole image. Drag a box on the canvas to limit it.")).toBeVisible();
   });
 
-  test("Library tab is reachable and empty initially", async () => {
-    await window.getByRole("button", { name: /^Library$/i }).click();
+  test("library appears below detection and is empty initially", async () => {
+    await expect(window.getByRole("heading", { name: /^Library$/i })).toBeVisible();
     // Empty state shows because we're in a fresh userData
     await expect(window.getByText(/No stickers yet/i)).toBeVisible();
   });
@@ -50,8 +48,6 @@ test.describe("Sticker tool", () => {
   test("Detect subjects → either instance found or 'No subject' toast", async ({ }, testInfo) => {
     test.skip(!isMacOSWithXcode(), "Sticker extraction needs macOS 14+ with Xcode toolchain");
 
-    // Back to Create new tab
-    await window.getByRole("button", { name: /Create new/i }).click();
     await window.getByRole("button", { name: /Detect subjects/i }).click();
 
     // Wait up to 30s for either:

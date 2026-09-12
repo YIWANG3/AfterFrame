@@ -104,6 +104,8 @@ export default function useWorkspace({ pushToast } = {}) {
     const apply = () => {
       const effective = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
       document.documentElement.dataset.theme = effective;
+      // Desktop: keep the native window appearance in step (traffic-light colours).
+      api.setTheme?.(theme);
     };
     apply();
     if (theme !== "system") return undefined;
@@ -532,6 +534,33 @@ export default function useWorkspace({ pushToast } = {}) {
     });
   }
 
+  // Open the gallery as a fresh destination: collection, status, query and
+  // facets are all replaced, never intersected with whatever the previous
+  // gallery had (the Discover page's entries would otherwise inherit a stale
+  // person/date/map filter and open "empty"). One explicit browse, like
+  // filterByPerson.
+  function browseTo({ status: nextStatus = "all", filters: nextFilters = {}, collectionId = null, query: nextQuery = "" } = {}) {
+    const facetFilters = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
+    setActiveCollectionId(collectionId);
+    setStatus(nextStatus);
+    setQuery(nextQuery);
+    setFilters(facetFilters);
+    // Drop the previous gallery right away: the grid must not paint the old
+    // result set (and the inspector the old selection) for the frames until
+    // the new browse resolves — that flash reads as "wrong photos, then fixed".
+    setItems([]);
+    setBrowserOffset(0);
+    setBrowserHasMore(true);
+    setSelectedAssetId(null);
+    void loadBrowser({
+      nextStatus,
+      collectionId,
+      search: nextQuery.trim() || null,
+      facetFilters,
+      force: true,
+    });
+  }
+
   // Filter controls need an immediate browse as well as a state update. The
   // effect remains as a safety net for programmatic callers, but relying on it
   // alone can leave the rendered chips ahead of the gallery during rapid view
@@ -597,12 +626,18 @@ export default function useWorkspace({ pushToast } = {}) {
     if (modeNeedsSources && !resolvedRawDirs.length) return;
     if (modeNeedsProcessed && !resolvedImageDirs.length) return;
 
-    const task = await api.startImport({
-      rawDirs: resolvedRawDirs,
-      imageDirs: resolvedImageDirs,
-      mode,
-      auto,
-    });
+    let task;
+    try {
+      task = await api.startImport({
+        rawDirs: resolvedRawDirs,
+        imageDirs: resolvedImageDirs,
+        mode,
+        auto,
+      });
+    } catch (error) {
+      pushToast?.({ title: String(error?.message || error), tone: "error", ttl: 6000 });
+      return;
+    }
     setImportTask(task);
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
   }
@@ -611,7 +646,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // guard every import entry (toolbar, drop, Finder open-with) with a clear
   // toast instead of a silent sidecar failure against a null catalog.
   function requireCatalog() {
-    if (info?.catalogPath) return true;
+    if (info?.catalogPath || api.capabilities.web) return true;
     pushToast?.({ title: t("noCatalogTitle"), message: t("noCatalogMsg"), tone: "error", ttl: 5000 });
     return false;
   }
@@ -877,6 +912,7 @@ export default function useWorkspace({ pushToast } = {}) {
     selectCollection,
     clearCollection,
     filterByPerson,
+    browseTo,
     setStatusFilter,
     createCollection,
     renameCollection,

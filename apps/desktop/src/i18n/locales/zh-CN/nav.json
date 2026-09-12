@@ -44,12 +44,30 @@
     },
     "displayMode": "布局"
   },
+  "discover": {
+    "recentTitle": "最近添加",
+    "empty": "还没有照片,导入后这里会出现最近的内容。",
+    "folderMeta": "{{count}} 张",
+    "peopleTitle": "人物",
+    "placesTitle": "地点",
+    "memories": "回忆",
+    "pinned": "固定",
+    "albums": "相册",
+    "pinRated": "已评分",
+    "pinRaw": "含 RAW",
+    "unnamed": "未命名",
+    "navigation": "发现页导航"
+  },
   "sidebar": {
+    "discover": "发现",
     "people": "人物",
     "stickers": "贴纸",
     "folders": "文件夹",
     "newFolder": "新建文件夹",
     "noFolders": "暂无文件夹",
+    "viewCovers": "切换为缩略图视图",
+    "viewList": "切换为文字视图",
+    "folderMeta": "{{count}} 张",
     "settings": "设置",
     "settingsTip": "设置 (⌘,)",
     "rename": "重命名",
@@ -59,7 +77,9 @@
     "noCatalogHint": "新建或打开一个图库开始",
     "noAssets": "尚未索引任何素材",
     "assetsCount_other": "{{count}} 个素材",
-    "updated": "更新于 {{time}}"
+    "updated": "更新于 {{time}}",
+    "webLibrary": "浏览器图库",
+    "webWelcomeHint": "浏览示例照片，或拖入自己的照片"
   },
   "people": {
     "title": "人物",

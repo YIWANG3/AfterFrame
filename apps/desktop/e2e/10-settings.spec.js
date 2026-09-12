@@ -15,8 +15,8 @@ test.afterAll(async () => {
   if (ctx) await closeApp(ctx.app, ctx.userDataDir);
 });
 
-test("opens from the sidebar and shows the AI Annotation tab by default", async () => {
-  await ctx.window.getByRole("button", { name: "Settings" }).click();
+test("opens with the settings shortcut and shows the AI Annotation tab by default", async () => {
+  await ctx.window.keyboard.press("Meta+,");
   await expect(ctx.window.getByText("Auto-annotation providers")).toBeVisible({ timeout: 5_000 });
   await ctx.window.getByRole("button", { name: "Add new provider" }).click();
   await expect(ctx.window.getByText("New Provider", { exact: true })).toBeVisible();
@@ -52,7 +52,7 @@ test("People tab renders local-model onboarding", async () => {
   // This test also runs independently via --grep, where the earlier test that
   // opens the shared Settings overlay is intentionally skipped.
   if (!await ctx.window.getByRole("button", { name: "General" }).isVisible()) {
-    await ctx.window.getByRole("button", { name: "Settings" }).click();
+    await ctx.window.keyboard.press("Meta+,");
   }
   // Scope to the settings tab list — the app sidebar also has a "People" button.
   await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People" }).click();

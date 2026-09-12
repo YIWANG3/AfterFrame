@@ -13,10 +13,20 @@ import api from "../../api";
 // next expand re-runs the effect with the then-current key.
 const FETCH_DEBOUNCE_MS = 250;
 
+// Module-level, so a remount (the Discover page is unmounted on every view
+// switch, the drawer is created lazily) reuses the last point sets instead of
+// re-running a 100k-row query. A handful of keys is plenty: whole-catalog,
+// current gallery scope, a collection or two.
+const POINT_CACHE_MAX = 6;
+const pointCache = new Map();
+function cachePut(key, points) {
+  pointCache.delete(key);
+  pointCache.set(key, points);
+  while (pointCache.size > POINT_CACHE_MAX) pointCache.delete(pointCache.keys().next().value);
+}
+
 export default function useMapPoints({ enabled, status, collectionId, search, filters, catalogKey, refreshToken }) {
-  const [points, setPoints] = useState([]);
   const requestIdRef = useRef(0);
-  const cacheRef = useRef({ key: null, points: null });
 
   const nonGeoFilters = { ...(filters || {}) };
   delete nonGeoFilters.geo;
@@ -31,10 +41,13 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
     refreshToken: refreshToken || 0,
   });
 
+  const [points, setPoints] = useState(() => (enabled && pointCache.get(cacheKey)) || []);
+
   useEffect(() => {
     if (!enabled) return undefined;
-    if (cacheRef.current.key === cacheKey && cacheRef.current.points) {
-      setPoints(cacheRef.current.points);
+    const cached = pointCache.get(cacheKey);
+    if (cached) {
+      setPoints(cached);
       return undefined;
     }
     let cancelled = false;
@@ -51,7 +64,7 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
           });
           if (cancelled || requestIdRef.current !== requestId) return;
           const next = rows || [];
-          cacheRef.current = { key: cacheKey, points: next };
+          cachePut(cacheKey, next);
           setPoints(next);
         } catch {
           if (!cancelled && requestIdRef.current === requestId) setPoints([]);

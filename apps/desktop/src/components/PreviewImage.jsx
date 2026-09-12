@@ -8,6 +8,7 @@ export default function PreviewImage({
   fit = "cover",
   placeholderLabel = "No preview",
   onLoadError,
+  onNaturalSize,
 }) {
   const [container, setContainer] = useState(null);
   const [shouldLoad, setShouldLoad] = useState(false);
@@ -49,7 +50,7 @@ export default function PreviewImage({
         <img
           // A cached/instant source (blob:, warm cache) can finish before
           // React attaches onLoad — the ref catches that missed event.
-          ref={(el) => { if (el && el.complete && el.naturalWidth > 0) setLoaded(true); }}
+          ref={(el) => { if (el && el.complete && el.naturalWidth > 0) { setLoaded(true); onNaturalSize?.(el.naturalWidth, el.naturalHeight); } }}
           src={src}
           alt={alt}
           loading="lazy"
@@ -60,7 +61,7 @@ export default function PreviewImage({
             fit === "contain" ? "object-contain" : "object-cover",
             className || "",
           ].join(" ")}
-          onLoad={() => setLoaded(true)}
+          onLoad={(e) => { setLoaded(true); onNaturalSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight); }}
           onError={() => { setErrored(true); onLoadError?.(); }}
         />
       ) : null}

@@ -97,39 +97,50 @@ function register({
     // XOR: EXIF flop and user flipX are both horizontal mirrors.
     const effectiveFlipX = exif.flop !== flipX;
 
-    const totalAngle = combinedDiscreteAngle + freeAngle;
-    if (totalAngle !== 0) {
-      if (freeAngle === 0) {
-        pipeline = pipeline.rotate(combinedDiscreteAngle);
-      } else {
-        pipeline = pipeline.rotate(totalAngle, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
-      }
-    } else {
-      // 0° but still need to suppress EXIF auto-orient
-      pipeline = pipeline.rotate(0);
-    }
-
+    // Stage 1 — orientation + user quarter turns + flips. This is the basis the
+    // editor's crop rect and free angle are expressed in (transformedPreview).
+    // 0° still needs an explicit rotate(0) to suppress sharp's EXIF auto-orient.
+    pipeline = pipeline.rotate(combinedDiscreteAngle);
     if (effectiveFlipX) pipeline = pipeline.flop();
     if (flipY) pipeline = pipeline.flip();
 
-    // Track post-orient + post-discrete-rotation dimensions
+    // Post-orient + post-discrete-rotation dimensions
     let w = srcW;
     let h = srcH;
     if (discreteAngle === 90 || discreteAngle === 270) [w, h] = [h, w];
 
-    // Free-angle dimension expansion
     if (freeAngle !== 0) {
+      // Stage 2 — the free angle. The editor turns the photo under an
+      // axis-aligned crop box about the box's centre; rotating about the
+      // photo centre instead only shifts the box, so: rotate about the centre
+      // into the bounding box, then extract the box at its rotated centre.
+      // sharp allows one rotate per pipeline, hence the raw round-trip.
+      const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true });
+      const w0 = info.width;
+      const h0 = info.height;
       const rad = (freeAngle * Math.PI) / 180;
-      const c = Math.abs(Math.cos(rad));
-      const s = Math.abs(Math.sin(rad));
-      const newW = w * c + h * s;
-      const newH = w * s + h * c;
-      w = newW;
-      h = newH;
-    }
-
-    // Normalized crop → pixel rect
-    if (crop) {
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      pipeline = sharp(data, { raw: { width: w0, height: h0, channels: info.channels }, limitInputPixels: false })
+        .rotate(freeAngle, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
+      const rotMeta = await pipeline.clone().metadata();
+      const bw = rotMeta.width;
+      const bh = rotMeta.height;
+      // Crop box in the stage-1 basis (default: the whole photo, corners cut).
+      const box = crop
+        ? { x: crop.x * w0, y: crop.y * h0, width: crop.width * w0, height: crop.height * h0 }
+        : { x: 0, y: 0, width: w0, height: h0 };
+      const dx = box.x + box.width / 2 - w0 / 2;
+      const dy = box.y + box.height / 2 - h0 / 2;
+      const cx = bw / 2 + dx * cos - dy * sin;
+      const cy = bh / 2 + dx * sin + dy * cos;
+      const cw = Math.max(1, Math.round(box.width));
+      const ch = Math.max(1, Math.round(box.height));
+      const left = Math.max(0, Math.min(bw - cw, Math.round(cx - cw / 2)));
+      const top = Math.max(0, Math.min(bh - ch, Math.round(cy - ch / 2)));
+      pipeline = pipeline.extract({ left, top, width: Math.min(cw, bw - left), height: Math.min(ch, bh - top) });
+    } else if (crop) {
+      // Normalized crop → pixel rect
       const left = Math.max(0, Math.round(crop.x * w));
       const top = Math.max(0, Math.round(crop.y * h));
       const cw = Math.min(Math.round(w) - left, Math.max(1, Math.round(crop.width * w)));

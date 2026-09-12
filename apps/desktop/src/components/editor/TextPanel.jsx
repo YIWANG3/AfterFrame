@@ -15,7 +15,7 @@ import {
   Plus, Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Check, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X, Brush, Blend,
+  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X, Brush, Blend,
   PanelTop, PanelBottom, PanelLeft, PanelRight,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
@@ -561,7 +561,7 @@ export default function TextPanel({
           className="ml-auto flex h-[30px] items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-4 text-[11px] font-semibold text-[#111] transition-all hover:brightness-110"
           onClick={onApply}
         >
-          <Check className="h-3.5 w-3.5" /> Apply
+          {t("overlay.apply")}
         </button>
       </div>
     </>
@@ -1006,7 +1006,8 @@ function FontSelect({ value, onChange }) {
         }}
         onKeyDown={handleButtonKeyDown}
       >
-        <span className="flex-1 truncate text-left text-[11px] text-text" style={{ fontFamily: value }}>{value}</span>
+        {/* Name in the UI font: rendering it in the chosen font shifts the baseline with each font's metrics; the "Aa" sample carries the preview. */}
+        <span className="flex-1 truncate text-left text-[11px] leading-none text-text">{value}</span>
         <span className="text-[11px] text-muted" style={{ fontFamily: value }}>Aa</span>
         <ChevronDown className="h-3.5 w-3.5 text-muted2 flex-shrink-0" />
       </button>

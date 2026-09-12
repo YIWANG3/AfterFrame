@@ -74,14 +74,39 @@ test.describe("Golden: crop + transform", () => {
     await window.evaluate(() => window.__afterframeTest.undo());
     await window.waitForTimeout(300);
     expect((await state(window)).quarterTurns).toBe(0);
+    await save(window, out("rot-undo.jpg"));
+    const undone = await sharp(out("rot-undo.jpg")).metadata();
+    expect([undone.width, undone.height]).toEqual([srcW, srcH]);
     await window.evaluate(() => window.__afterframeTest.redo());
     await window.waitForTimeout(300);
     expect((await state(window)).quarterTurns).not.toBe(0);
+    await save(window, out("rot-redo.jpg"));
+    const redone = await sharp(out("rot-redo.jpg")).metadata();
+    expect([redone.width, redone.height]).toEqual([srcH, srcW]);
 
     // leave clean for the next test
     await window.evaluate(() => window.__afterframeTest.undo());
     await window.waitForTimeout(300);
     expect((await state(window)).quarterTurns).toBe(0);
+  });
+
+  test("resizing the window after rotation preserves the full photo", async () => {
+    const originalSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
+    await window.getByRole("button", { name: /90° L/ }).click();
+    await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
+    const before = (await state(window)).imageRect;
+    try {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1080, 720));
+      await expect.poll(async () => (await state(window)).imageRect.width).not.toBe(before.width);
+      await save(window, out("rot-resize.jpg"));
+      const resized = await sharp(out("rot-resize.jpg")).metadata();
+      expect([resized.width, resized.height]).toEqual([srcH, srcW]);
+    } finally {
+      await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size), originalSize);
+      await expect.poll(async () => (await state(window)).imageRect.width).toBeCloseTo(before.width, 4);
+      await window.evaluate(() => window.__afterframeTest.undo());
+      await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
+    }
   });
 
   test("flip H → flipX toggles, dimensions unchanged", async () => {

@@ -10,7 +10,9 @@
     "create": "New Catalog",
     "open": "Open Existing…",
     "sample": "Browse Sample Library",
-    "sampleLoading": "Preparing sample library…"
+    "sampleLoading": "Preparing sample library…",
+    "webSubtitle": "Explore AfterFrame with a sample photo library. No download needed.",
+    "webExplainer": "Try up to 30 of your own photos (200 MB). Originals are read from the files you select, without saving a library copy. Photos and edits reset when you refresh; download anything you want to keep."
   },
   "sample": {
     "banner": "You're browsing the sample library. Feel free to rate, edit, and create collections.",

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -1071,7 +1071,16 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 720,
-    backgroundColor: "#000000",
+    // Tahoe 皮肤:去掉系统标题栏,红绿灯落进侧栏面板(P3 第一步;渲染层让位 + 拖拽区在皮肤里)
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 18, y: 16 },
+    // Tahoe gives a titlebar-only window the small (~16pt) corner; the large
+    // 26pt corner is reserved for windows with an NSToolbar, which Electron
+    // cannot create. So the window is transparent and the renderer clips
+    // itself to a 26px rounded rect (index.css, html.electron #root); macOS
+    // derives the shadow from the alpha shape.
+    transparent: true,
+    backgroundColor: "#00000000",
     show: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -1109,6 +1118,9 @@ function createWindow() {
       `).catch(() => {});
     }
   });
+  for (const [evt, flag] of [["enter-full-screen", true], ["leave-full-screen", false]]) {
+    window.on(evt, () => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", flag); });
+  }
   if (devServerUrl) {
     window.loadURL(devServerUrl);
     return;
@@ -1538,6 +1550,14 @@ if (devServerUrl) {
 ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });
 
 ipcMain.handle("workspace:info", () => workspaceInfo());
+// The renderer owns the theme (dark / light / system). Mirror it into the
+// window's native appearance so macOS draws the traffic lights — and their
+// inactive grey state — for the right background; otherwise a light UI gets
+// the dark-appearance lights, which are near-white when the window is inactive.
+ipcMain.handle("workspace:set-theme", (_event, theme) => {
+  nativeTheme.themeSource = theme === "light" || theme === "dark" ? theme : "system";
+  return nativeTheme.themeSource;
+});
 
 // --- Collections ---
 
@@ -1553,6 +1573,22 @@ collectionsIpc.register({
 // chat apps treat them as uploads. startDrag initiates the OS session but its
 // return is not a drag-finished signal; the renderer clears its source marker
 // from real input/window lifecycle events.
+// Electron starts one NSDraggingItem per file, every one carrying the same
+// icon at the same frame. macOS draws them all, so a 68-file drag stacks 68
+// copies of one opaque thumbnail — the pile goes black and grows a heavy
+// shadow halo. Pre-fade the icon so the N stacked copies composite back to
+// one normal-looking image: per-copy alpha a with 1 − (1 − a)^N ≈ 0.92.
+// Bitmap data round-trips premultiplied, so every channel scales together.
+// The 192px source is re-wrapped at scaleFactor 2 → a sharp 96pt icon.
+function pileSafeDragIcon(icon, count) {
+  const size = icon.getSize();
+  if (!size.width || !size.height) return icon;
+  const alpha = count > 1 ? 1 - Math.pow(1 - 0.92, 1 / count) : 1;
+  const bitmap = Buffer.from(icon.toBitmap());
+  if (alpha < 1) for (let i = 0; i < bitmap.length; i++) bitmap[i] = Math.round(bitmap[i] * alpha);
+  return nativeImage.createFromBitmap(bitmap, { width: size.width, height: size.height, scaleFactor: 2 });
+}
+
 ipcMain.handle("workspace:native-drag", (event, payload) => {
   const files = (Array.isArray(payload?.files) ? payload.files : [])
     .filter((p) => typeof p === "string" && p && fs.existsSync(p));
@@ -1567,7 +1603,7 @@ ipcMain.handle("workspace:native-drag", (event, payload) => {
     if (!icon.isEmpty()) break;
   }
   if (!icon.isEmpty()) {
-    icon = icon.resize({ width: 96 });
+    icon = pileSafeDragIcon(icon.resize({ width: 192 }), files.length);
   } else {
     // 1x1 transparent px — startDrag rejects an empty image on macOS.
     icon = nativeImage.createFromDataURL(

@@ -19,8 +19,8 @@ function ModelRow({ model, active, busy, onActivate, onRemove, t }) {
   return (
     <div className="flex items-center gap-3 border-b border-border/50 py-3 last:border-b-0">
       <div className={[
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
-        active ? "border-accent/40 bg-accent/10 text-accent" : "border-border bg-app text-muted2",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]",
+        active ? "bg-[var(--fill-3)] text-text" : "bg-[var(--fill-2)] text-muted2",
       ].join(" ")}
       >
         <Cpu className="h-4 w-4" />
@@ -31,7 +31,7 @@ function ModelRow({ model, active, busy, onActivate, onRemove, t }) {
           {active && <Check className="h-3.5 w-3.5 shrink-0 text-accent" aria-label={t("people.active")} />}
           {!model.available && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-400" aria-label={t("people.modelMissing")} />}
         </div>
-        <div className="mt-0.5 truncate text-[10px] text-muted2">
+        <div className="mt-0.5 truncate text-[11px] text-muted2">
           {t("people.modelMeta", { version: model.version || "—", size: formatSize(model.sizeBytes), dimensions: model.embeddingDimensions || "—" })}
         </div>
         {unverified && <div className="mt-0.5 text-[10px] text-warn">{t("people.unverified")}</div>}
@@ -109,12 +109,12 @@ export default function PeopleSettings() {
       <Group title={t("people.modelTitle")} subtitle={t("people.modelSubtitle")} badge="Local">
         {model ? (
           <div className="flex items-center gap-3 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-accent/40 bg-accent/10 text-accent">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-3)] text-text">
               <UsersRound className="h-[18px] w-[18px]" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] font-medium text-text">{model.name}</div>
-              <div className="mt-0.5 text-[10px] text-muted2">{t("people.activeModelHint", { size: formatSize(model.sizeBytes) })}</div>
+              <div className="mt-0.5 text-[11px] text-muted2">{t("people.activeModelHint", { size: formatSize(model.sizeBytes) })}</div>
             </div>
             <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">{t("people.ready")}</span>
           </div>
@@ -130,12 +130,12 @@ export default function PeopleSettings() {
               </span>
             </PrimaryButton>
           )}
-          <PrimaryButton disabled={!!busy} onClick={() => perform("install", () => api.pickPeopleModel())}>
+          <SecondaryButton disabled={!!busy} onClick={() => perform("install", () => api.pickPeopleModel())}>
             <span className="inline-flex items-center gap-1.5">
               {busy === "install" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
               {busy === "install" ? t("people.validating") : t("people.chooseModel")}
             </span>
-          </PrimaryButton>
+          </SecondaryButton>
         </FieldRow>
         <FieldRow label={t("people.automaticDownload")} hint={t("people.automaticDownloadHint")}>
           <Toggle on={settings.automaticDownloads} disabled={!settings.download?.available} onChange={(value) => perform("updates", () => api.setPeopleAutomaticDownloads(value))} />

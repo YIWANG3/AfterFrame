@@ -333,8 +333,8 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
   return (
     <div
       className={[
-        "mb-1.5 flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors last:mb-0",
-        active ? "border-accent/40 bg-accent/5" : "border-border/50 bg-panel2 hover:bg-hover/40",
+        "mb-1.5 flex items-center gap-3 rounded-[8px] px-3 py-2.5 transition-colors last:mb-0 bg-[var(--sub-card)]",
+        active ? "shadow-[inset_0_0_0_1.5px_rgb(var(--accent-color))]" : "",
       ].join(" ")}
     >
       <ActiveRadio
@@ -348,12 +348,12 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
             {provider.name || PROVIDER_TYPE_LABEL[provider.type] || provider.type}
           </span>
           {active && (
-            <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-accent">
+            <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
               {t("providers.active")}
             </span>
           )}
         </div>
-        <div className="mt-0.5 truncate text-[10px] text-muted2">
+        <div className="mt-0.5 truncate text-[11px] text-muted2">
           {PROVIDER_TYPE_LABEL[provider.type] || provider.type}
           {provider.model ? ` · ${provider.model}` : ""}
           {provider.baseUrl ? ` · ${provider.baseUrl}` : ""}

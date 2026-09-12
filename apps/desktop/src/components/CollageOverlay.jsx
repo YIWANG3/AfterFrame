@@ -440,7 +440,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                     )}
                     <span
                       className={[
-                        "absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border text-black shadow-sm transition",
+                        "absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border text-accentInk shadow-sm transition",
                         used || selected
                           ? "border-[rgb(var(--accent-color))] bg-[rgb(var(--accent-color))] opacity-100"
                           : "border-text/55 bg-app/70 opacity-75 group-hover:opacity-100",
@@ -465,7 +465,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
             className={[
               "inline-flex h-8 items-center justify-center rounded-md px-3 text-[12px] font-medium transition-colors",
               selectedItems.length
-                ? "bg-[rgb(var(--accent-color))] text-black hover:brightness-110"
+                ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
                 : "cursor-default bg-app text-muted2",
             ].join(" ")}
             disabled={!selectedItems.length}
@@ -851,7 +851,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {exporting
               ? (exportProgress ? t("exportingProgress", exportProgress) : t("exporting"))
-              : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("image"))}
+              : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("export"))}
           </button>
           <button
             type="button"

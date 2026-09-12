@@ -14,7 +14,7 @@ import {
   releaseCanvasImage,
   buildPreviewSource,
   buildDepthMaskCanvas,
-  buildTransformedCanvas,
+  buildTransformedCanvas, cutRotatedCrop,
   inferMimeType,
   canvasToBlob,
   bgToCss,
@@ -329,15 +329,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const discreteRotationDeg = quarterTurns * 90;
   const rotationDeg = discreteRotationDeg + freeAngle;
   const showCropUi = tool === "crop";
-  const panelMeta = tool === "crop"
-    ? { title: t("overlay.tools.crop"), badge: null }
-    : tool === "ai"
-      ? { title: t("overlay.tools.repaint"), badge: null }
-      : tool === "text"
-        ? { title: t("overlay.tools.text"), badge: null }
-        : tool === "sticker"
-          ? { title: t("overlay.tools.sticker"), badge: null }
-          : { title: "", badge: null };
 
   // Soft reset (panel "Reset"): clear layers as an undoable step.
   function layerReset() {
@@ -872,29 +863,32 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
     // Promote the applied crop into the working source so subsequent saves use the edited base.
     const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
+    // Quarter turns + flips give the basis imageRect / cropRect live in; the
+    // free angle turns the photo under the axis-aligned crop box about the
+    // box's centre, which is exactly what the crop UI shows (CSS rotate about
+    // cropCenter). Fractions are taken unclamped: with a free angle the box
+    // may legitimately reach past the unrotated photo's bounding box.
     const transformed = buildTransformedCanvas(
       sourceImage,
       sourceWidth,
       sourceHeight,
-      rotationDeg,
+      discreteRotationDeg,
       flipX,
       flipY,
     );
-
-    const cx = Math.round(normalized.x * transformed.width);
-    const cy = Math.round(normalized.y * transformed.height);
-    const cw = Math.max(1, Math.round(normalized.width * transformed.width));
-    const ch = Math.max(1, Math.round(normalized.height * transformed.height));
-
-    const cropped = document.createElement("canvas");
-    cropped.width = cw;
-    cropped.height = ch;
+    const sx = transformed.width / imageRect.width;
+    const sy = transformed.height / imageRect.height;
+    const cropPx = {
+      x: (cropRect.x - imageRect.x) * sx,
+      y: (cropRect.y - imageRect.y) * sy,
+      width: cropRect.width * sx,
+      height: cropRect.height * sy,
+    };
+    const cropped = cutRotatedCrop(transformed, cropPx, freeAngle);
+    const cw = cropped.width;
+    const ch = cropped.height;
     cropped.naturalWidth = cw;
     cropped.naturalHeight = ch;
-    const ctx = cropped.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(transformed, cx, cy, cw, ch, 0, 0, cw, ch);
 
     const nextPreview = buildPreviewSource(cropped);
     const previousSource = sourceImageRef.current;
@@ -982,7 +976,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const edited = !stateEquals(editorState, baseSnapshotRef.current || BASE_STATE);
   const dimsLabel = (() => {
     if (!sourceImage || !imageRect) return null;
-    const radians = (rotationDeg * Math.PI) / 180;
+    // Scale between screen and source pixels: quarter turns only — the free
+    // angle is a rotation about the crop centre and does not change scale.
+    const radians = (discreteRotationDeg * Math.PI) / 180;
     const absCos = Math.abs(Math.cos(radians));
     const absSin = Math.abs(Math.sin(radians));
     const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
@@ -1174,7 +1170,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
 
         <div className="pointer-events-none absolute right-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3">
-          <PanelChrome panelMeta={panelMeta} width={PANEL_WIDTH}>
+          <PanelChrome width={PANEL_WIDTH}>
             {tool === "crop" ? (
               <CropPanel
                 t={t}
@@ -1185,7 +1181,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 flipY={flipY}
                 onCommitTransform={commitTransform}
                 imageZoom={imageZoom}
-                minZoom={getMinZoomForCrop(cropRect, transformedPreview, placement)}
+                minZoom={getMinZoomForCrop(cropRect, transformedPreview, placement, freeAngle)}
                 onZoomChange={(value) => {
                   if (!transformedPreview || !placement) return;
                   const next = clampImagePlacement(

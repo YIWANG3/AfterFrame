@@ -19,6 +19,17 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
+  ipcMain.handle("workspace:discover-collections", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return { places: [], memories: [] };
+    try {
+      return await commands.discoverCollections();
+    } catch (err) {
+      console.warn("[workspace:discover-collections] sidecar error:", err.message);
+      return { places: [], memories: [] };
+    }
+  });
+
   ipcMain.handle("workspace:get-asset-location", async (_event, assetId) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb() || !assetId) return null;

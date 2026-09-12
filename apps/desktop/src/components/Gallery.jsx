@@ -327,11 +327,20 @@ const CardContent = memo(function CardContent({
   const { t } = useTranslation("nav");
   const title = fileName(item.image_path) || item.stem;
   const totalHeight = height + captionHeight;
+  const previewSrc = item.preview_path || item.image_path
+    ? localFileUrl(item.preview_path || item.image_path) + (bustToken || item.modified_time ? `?r=${encodeURIComponent(bustToken || item.modified_time)}` : "")
+    : null;
 
   // Video hover-scrub: lazily fetch a keyframe filmstrip on first hover, then
   // map cursor-x → frame so dragging across the card scrubs the clip.
   const isVideo = item.asset_type === "video";
   const [hoverFrames, setHoverFrames] = useState(null);
+  // Natural aspect of the loaded preview: in contain mode (justified) the
+  // drawn photo can be smaller than the cell, and the selection frame must
+  // hug the photo, not the cell.
+  const [naturalAr, setNaturalAr] = useState(null);
+  const onNaturalSize = useCallback((w, h) => { if (w > 0 && h > 0) setNaturalAr(w / h); }, []);
+  const frameAr = fit === "contain" && naturalAr ? naturalAr : width / height;
   const [hoverIdx, setHoverIdx] = useState(-1);
   const onVideoEnter = useCallback(() => {
     if (!isVideo || hoverFrames) return;
@@ -418,6 +427,11 @@ const CardContent = memo(function CardContent({
         width: `${width}px`,
         height: `${totalHeight}px`,
         minWidth: 0,
+        // Selection ring (index.css) is sized from --img-w/--img-h/--ar so it
+        // follows the drawn photo even when contain-fit leaves a gap.
+        "--img-w": `${width}px`,
+        "--img-h": `${height}px`,
+        "--ar": String(frameAr),
       }}
     >
       <div
@@ -435,12 +449,13 @@ const CardContent = memo(function CardContent({
       >
         {item.preview_path || item.image_path ? (
           <PreviewImage
-            src={localFileUrl(item.preview_path || item.image_path) + (bustToken || item.modified_time ? `?r=${encodeURIComponent(bustToken || item.modified_time)}` : "")}
+            src={previewSrc}
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
             className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
             onLoadError={item.exists_on_disk === false ? undefined : () => onPreviewError?.(item)}
+            onNaturalSize={onNaturalSize}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[11px] text-muted">{t("gallery.noPreview")}</div>
@@ -695,7 +710,9 @@ export default function Gallery({
   }, [containerWidth, items, thumbSize]);
 
   const tileLayout = useMemo(() => {
-    return buildGridLayout(items, containerWidth, thumbSize, TILE_GAP, TILE_ASPECT_RATIO, 0, 0);
+    // Tile mode keeps an 8px gutter (index.css pads the scroller) so a
+    // selected tile can pop out without being clipped at the pane edge.
+    return buildGridLayout(items, containerWidth, thumbSize, TILE_GAP, TILE_ASPECT_RATIO, 0, VIEW_PADDING);
   }, [containerWidth, items, thumbSize]);
 
   const justifiedLayoutData = useMemo(() => {

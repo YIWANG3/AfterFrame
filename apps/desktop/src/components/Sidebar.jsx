@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles, UsersRound } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
 import { DesktopHint } from "./DesktopOnly";
-import { baseName, formatTimestamp, navItems } from "../utils/format";
+import { baseName, formatTimestamp, navItems, localFileUrl } from "../utils/format";
+
+const FOLDER_VIEW_KEY = "sidebar.folderView"; // "list" | "covers"
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
 
@@ -56,9 +58,10 @@ export default function Sidebar({
   onAddToCollection,
   onOpenStickerBrowser,
   onOpenPeople,
-  onOpenSettings,
+  onOpenDiscover,
   stickerMode = false,
   peopleMode = false,
+  discoverMode = false,
 }) {
   const { t } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -68,6 +71,46 @@ export default function Sidebar({
   if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at) }));
 
   const [creatingFolder, setCreatingFolder] = useState(false);
+  // Folder list view: plain rows, or rows with a cover thumbnail (demo C's library list).
+  const [folderView, setFolderView] = useState(() => {
+    try { return localStorage.getItem(FOLDER_VIEW_KEY) === "covers" ? "covers" : "list"; } catch { return "list"; }
+  });
+  const toggleFolderView = () => {
+    setFolderView((v) => {
+      const next = v === "covers" ? "list" : "covers";
+      try { localStorage.setItem(FOLDER_VIEW_KEY, next); } catch { /* private mode */ }
+      return next;
+    });
+  };
+  // Covers: the sidecar's collection rows carry no cover, so fetch each
+  // folder's first asset lazily (only in covers view), keyed by id + count so
+  // a folder that gains/loses photos refreshes its cover.
+  const [covers, setCovers] = useState({});
+  const manualCollections = (collections || []).filter((c) => c.kind === "manual");
+  const coverKey = manualCollections.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
+  useEffect(() => {
+    if (folderView !== "covers") return undefined;
+    let cancelled = false;
+    const stale = manualCollections.filter((c) => covers[c.collection_id]?.count !== (c.item_count || 0));
+    if (!stale.length) return undefined;
+    (async () => {
+      const next = {};
+      await Promise.all(stale.map(async (c) => {
+        let path = null;
+        if ((c.item_count || 0) > 0) {
+          try {
+            const rows = await api.browseCollection(c.collection_id, { limit: 1, offset: 0 });
+            const first = Array.isArray(rows) ? rows[0] : rows?.items?.[0];
+            path = first?.preview_path || first?.image_path || null;
+          } catch { path = null; }
+        }
+        next[c.collection_id] = { path, count: c.item_count || 0 };
+      }));
+      if (!cancelled) setCovers((prev) => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderView, coverKey]);
   const [editingId, setEditingId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
 
@@ -100,26 +143,44 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="flex h-full flex-col overflow-y-auto border-r border-border/40 bg-chrome px-3 py-3">
-      <div className="mb-5 px-1">
+    <aside
+      className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border/40 bg-chrome px-3 py-3"
+    >
+      <div className="mb-5 shrink-0 px-1">
         <div className="text-[13px] font-semibold tracking-[0.01em] text-text">
-          {info?.catalogPath ? baseName(info.catalogPath) : t("sidebar.noCatalog")}
+          {api.capabilities.web ? t("sidebar.webLibrary") : info?.catalogPath ? baseName(info.catalogPath) : t("sidebar.noCatalog")}
         </div>
         <div className="mt-1 text-[11px] text-muted2">
           {!info?.catalogPath
-            ? t("sidebar.noCatalogHint")
+            ? t(api.capabilities.web ? "sidebar.webWelcomeHint" : "sidebar.noCatalogHint")
             : rootSummary.length ? rootSummary.join(" · ") : t("sidebar.noAssets")}
         </div>
       </div>
 
-      <nav className="flex-1 space-y-4">
-        <div className="space-y-1">
-          {browse.map((item) => {
+      <nav className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="shrink-0 space-y-1">
+          {browse.map((item, idx) => {
             const Icon = ICON_MAP[item.icon];
-            const active = !activeCollectionId && !stickerMode && !peopleMode && item.key === status;
-            return (
+            const discoverButton = idx === 0 && onOpenDiscover ? (
               <button
-                key={item.key}
+                key="discover"
+                type="button"
+                onClick={() => onOpenDiscover()}
+                className={[
+                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
+                  discoverMode ? "bg-selected text-text" : "text-muted hover:bg-hover/70 hover:text-text",
+                ].join(" ")}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Compass className={`h-4 w-4 stroke-[1.6] ${discoverMode ? "text-accent" : ""}`} />
+                  <span className="text-[13px]">{t("sidebar.discover")}</span>
+                </span>
+              </button>
+            ) : null;
+            const active = !activeCollectionId && !stickerMode && !peopleMode && !discoverMode && item.key === status;
+            return (
+              <Fragment key={item.key}>
+              <button
                 type="button"
                 onClick={() => {
                   onClearCollection?.({ reload: false });
@@ -138,6 +199,8 @@ export default function Sidebar({
                 </span>
                 <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{item.count}</span>
               </button>
+              {discoverButton}
+              </Fragment>
             );
           })}
           <button
@@ -178,20 +241,33 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between px-2.5 pb-1.5">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between px-2.5 pb-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sidebar.folders")}</span>
-            <button
-              type="button"
-              className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
-              title={t("sidebar.newFolder")}
-              onClick={() => setCreatingFolder(true)}
-            >
-              <FolderPlus className="h-3.5 w-3.5" />
-            </button>
+            <span className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                title={folderView === "covers" ? t("sidebar.viewList") : t("sidebar.viewCovers")}
+                onClick={toggleFolderView}
+              >
+                {folderView === "covers" ? <List className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                title={t("sidebar.newFolder")}
+                onClick={() => setCreatingFolder(true)}
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+              </button>
+            </span>
           </div>
 
-          <div className="space-y-0.5">
+          <div
+            data-testid="sidebar-folder-scroll"
+            className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-2"
+          >
             {creatingFolder && (
               <div className="px-2.5 py-0.5">
                 <InlineEdit
@@ -208,16 +284,40 @@ export default function Sidebar({
             {(collections || []).filter((c) => c.kind === "manual").map((col) => {
               const active = activeCollectionId === col.collection_id;
               if (editingId === col.collection_id) {
+                const editor = (
+                  <InlineEdit
+                    initial={col.name}
+                    onConfirm={async (name) => {
+                      await onRenameCollection?.(col.collection_id, name);
+                      setEditingId(null);
+                    }}
+                    onCancel={() => setEditingId(null)}
+                  />
+                );
+                // Covers view: the row keeps its shape (cover, meta line) and
+                // only the name turns into a field, so nothing jumps.
+                if (folderView === "covers") {
+                  return (
+                    <div key={col.collection_id} className={`flex w-full items-center rounded-md px-2.5 py-1.5 ${active ? "bg-selected" : ""}`}>
+                      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                        {covers[col.collection_id]?.path ? (
+                          <img src={localFileUrl(covers[col.collection_id].path)} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-[8px] object-cover" />
+                        ) : (
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-2)]">
+                            <Folder className="h-4 w-4 stroke-[1.6] text-muted2" />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          {editor}
+                          <span className="mt-0.5 block truncate text-[11px] text-muted2">{t("sidebar.folderMeta", { count: col.item_count || 0 })}</span>
+                        </span>
+                      </span>
+                    </div>
+                  );
+                }
                 return (
                   <div key={col.collection_id} className="px-2.5 py-0.5">
-                    <InlineEdit
-                      initial={col.name}
-                      onConfirm={async (name) => {
-                        await onRenameCollection?.(col.collection_id, name);
-                        setEditingId(null);
-                      }}
-                      onCancel={() => setEditingId(null)}
-                    />
+                    {editor}
                   </div>
                 );
               }
@@ -265,14 +365,37 @@ export default function Sidebar({
                       : "text-muted hover:bg-hover/70 hover:text-text",
                   ].join(" ")}
                 >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <Folder className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""}`} />
-                    <span className="min-w-0 truncate text-[13px]">{col.name}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1">
-                    <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>
-                      {col.item_count || 0}
+                  {folderView === "covers" ? (
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      {covers[col.collection_id]?.path ? (
+                        <img
+                          src={localFileUrl(covers[col.collection_id].path)}
+                          alt=""
+                          draggable={false}
+                          className="h-10 w-10 shrink-0 rounded-[8px] object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-2)]">
+                          <Folder className="h-4 w-4 stroke-[1.6] text-muted2" />
+                        </span>
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px]">{col.name}</span>
+                        <span className="mt-0.5 block truncate text-[11px] text-muted2">{t("sidebar.folderMeta", { count: col.item_count || 0 })}</span>
+                      </span>
                     </span>
+                  ) : (
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <Folder className={`h-4 w-4 shrink-0 stroke-[1.6] ${active ? "text-accent" : ""}`} />
+                      <span className="min-w-0 truncate text-[13px]">{col.name}</span>
+                    </span>
+                  )}
+                  <span className="flex shrink-0 items-center gap-1">
+                    {folderView !== "covers" && (
+                      <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>
+                        {col.item_count || 0}
+                      </span>
+                    )}
                     <span className="hidden gap-0.5 group-hover:flex">
                       <button
                         type="button"
@@ -311,19 +434,7 @@ export default function Sidebar({
         </div>
       </nav>
 
-      {/* Bottom: Settings — global, always accessible */}
-      <div className="mt-2 border-t border-border/40 pt-2">
-        <DesktopHint />
-        <button
-          type="button"
-          onClick={() => onOpenSettings?.()}
-          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-muted transition-colors hover:bg-hover/70 hover:text-text"
-          title={t("sidebar.settingsTip")}
-        >
-          <SettingsIcon className="h-4 w-4 stroke-[1.6]" />
-          <span className="text-[13px]">{t("sidebar.settings")}</span>
-        </button>
-      </div>
+      {api.capabilities.web && <div className="shrink-0 pt-2"><DesktopHint /></div>}
     </aside>
   );
 }

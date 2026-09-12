@@ -5,6 +5,15 @@ import "./i18n";
 import "./index.css";
 import "./fonts";
 
+// Tahoe 皮肤:桌面版去掉了系统标题栏(hiddenInset),侧栏让位与拖拽区只在 Electron 里生效
+if (/Electron/i.test(navigator.userAgent)) {
+  document.documentElement.classList.add("electron");
+  // Fullscreen: the window fills the screen, so the self-drawn 26px corner and
+  // the traffic-light gutters go away (html.fs).
+  window.mediaWorkspace?.onFullscreen?.((flag) => document.documentElement.classList.toggle("fs", flag));
+}
+import "./ui/scrollFlag";
+
 // vibepin annotation overlay (dev only) — Alt+A to mark up the live UI, the
 // daemon on :7331 collects feedback and Claude Code picks it up. Stripped in
 // production builds (import.meta.env.DEV is false there).

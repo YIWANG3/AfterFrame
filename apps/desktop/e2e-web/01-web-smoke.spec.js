@@ -20,7 +20,7 @@ async function dropFiles(page, urls, { names } = {}) {
       dt.items.add(new File([blob], name, { type }));
     }
     const empty = Array.from(document.querySelectorAll("div")).find((d) => d.textContent === "No assets in this view");
-    const target = empty?.parentElement || document.querySelector("img")?.closest("button")?.parentElement;
+    const target = empty?.parentElement || document.querySelector("img")?.closest("button")?.parentElement || document.querySelector('img[alt="AfterFrame"]')?.closest("section");
     if (!target) throw new Error("no gallery drop target");
     for (const type of ["dragenter", "dragover", "drop"]) {
       target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
@@ -34,11 +34,11 @@ function card(page, stem) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/web.html");
-  await expect(page.getByText("No assets in this view")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Browse Sample Library" })).toBeVisible();
 });
 
-test("boots into an empty catalog with locked desktop entries", async ({ page }) => {
-  await expect(page.getByText("web.afcatalog")).toBeVisible();
+test("boots into a browser welcome page with locked desktop entries", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "New Catalog", exact: true })).toHaveCount(0);
   // Locked sidebar entries render but are inert (tooltip carries the hint).
   const stickers = page.getByRole("button", { name: /Stickers/ });
   await expect(stickers).toHaveAttribute("title", /desktop app/);
@@ -56,13 +56,13 @@ test("imports via drag-drop and reads EXIF into the Inspector", async ({ page })
   await expect(page.getByText("ISO 3200")).toBeVisible();
 });
 
-test("catalog survives a reload (IndexedDB persistence)", async ({ page }) => {
+test("imported photos stay session-only and reset on reload", async ({ page }) => {
   await dropFiles(page, [FIXTURE]);
   await expect(card(page, "IMG_0695-Enhanced-NR-3")).toBeVisible({ timeout: 15_000 });
+  expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
   await page.reload();
-  await expect(card(page, "IMG_0695-Enhanced-NR-3")).toBeVisible({ timeout: 15_000 });
-  await card(page, "IMG_0695-Enhanced-NR-3").click();
-  await expect(page.getByText("Canon EOS 6D")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Browse Sample Library" })).toBeVisible();
+  await expect(card(page, "IMG_0695-Enhanced-NR-3")).toHaveCount(0);
 });
 
 test("editor opens, applies a text preset, saves as a browser download", async ({ page }) => {
@@ -95,12 +95,47 @@ test("two selected photos open the collage and export a download", async ({ page
   // Both source images listed by their real filenames.
   await expect(page.getByTestId("collage-image-list").getByText("IMG_0695-Enhanced-NR-3.jpg")).toBeVisible();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /image/i }).first().click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/collage.*\.jpg$/i);
 });
 
 test("videos are rejected with a toast instead of silently dropped", async ({ page }) => {
   await dropFiles(page, [FIXTURE], { names: ["clip.mp4"] });
   await expect(page.getByText(/videos and RAW need the desktop app/)).toBeVisible();
-  await expect(page.getByText("No assets in this view")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Browse Sample Library" })).toBeVisible();
+});
+
+
+test("sample library uses hosted previews without database storage", async ({ page }) => {
+  await page.getByRole("button", { name: "Browse Sample Library" }).click();
+  await expect(card(page, "sample-01")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole("button", { name: "New Catalog", exact: true })).toHaveCount(0);
+  await expect.poll(() => card(page, "sample-01").evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+  expect(await card(page, "sample-01").getAttribute("src")).toMatch(/^http/);
+  expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Browse Sample Library" })).toBeVisible();
+  await page.getByRole("button", { name: "Browse Sample Library" }).click();
+  await expect(card(page, "sample-01")).toBeVisible();
+});
+
+
+test("oversized import batches are rejected before any image is added", async ({ page }) => {
+  await dropFiles(page, Array(31).fill(FIXTURE));
+  await expect(page.getByText(/up to 30 imported photos/)).toBeVisible();
+  await expect(card(page, "IMG_0695-Enhanced-NR-3")).toHaveCount(0);
+  expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+});
+
+
+test("byte limit rejects a batch without decoding originals", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const file = new File(["test"], "large.jpg", { type: "image/jpeg" });
+    Object.defineProperty(file, "size", { value: 201 * 1024 * 1024 });
+    const key = window.mediaWorkspace.getPathForFile(file);
+    try { await window.mediaWorkspace.startImport({ imageDirs: [key] }); }
+    catch (error) { return error.message; }
+  });
+  expect(result).toContain("200 MB");
+  expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
 });

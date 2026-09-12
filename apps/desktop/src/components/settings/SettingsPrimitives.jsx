@@ -12,17 +12,17 @@ export function Group({ title, subtitle, badge, scope, children }) {
       {(title || subtitle) && (
         <header className="px-4 pb-2 pt-3.5">
           {title && (
-            <div className="flex items-center justify-between gap-3 text-[12px] font-semibold text-text">
+            <div className="flex items-center justify-between gap-3 text-[13px] font-semibold text-text">
               <span className="flex min-w-0 items-center gap-2">
                 <span>{title}</span>
                 {badge && (
-                  <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-accent">
+                  <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
                     {badge}
                   </span>
                 )}
               </span>
               {scope && (
-                <span className="shrink-0 rounded-full border border-border/70 bg-app/60 px-2 py-0.5 text-[9px] font-medium tracking-wide text-muted2">
+                <span className="shrink-0 rounded-full bg-[var(--fill-2)] px-2 py-0.5 text-[10px] font-medium text-muted">
                   {scope}
                 </span>
               )}
@@ -91,7 +91,7 @@ export function IconActionButton({ onClick, title, children, danger = false, dis
       aria-label={title}
       disabled={disabled}
       className={[
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted2 transition-colors",
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted transition-colors [&>svg]:h-3.5 [&>svg]:w-3.5",
         danger ? "hover:bg-error/15 hover:text-error" : "hover:bg-hover hover:text-text",
         disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
@@ -130,7 +130,7 @@ export function SecondaryButton({ onClick, children, disabled, className = "" })
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-7 items-center justify-center rounded border border-border bg-app px-3 text-[11px] leading-none text-muted",
+        "inline-flex h-7 items-center justify-center rounded border border-border bg-app px-3 text-[11px] leading-none text-text",
         "transition-colors hover:bg-hover hover:text-text",
         disabled ? "cursor-not-allowed opacity-50" : "",
         className,
@@ -142,12 +142,11 @@ export function SecondaryButton({ onClick, children, disabled, className = "" })
 }
 
 export function Callout({ children, tone = "info" }) {
-  const toneClass = tone === "info"
-    ? "border-l-accent bg-accent/10 text-text"
-    : "border-l-warn bg-warn/10 text-text";
+  // Plain card for both tones (the coloured left bar read as a warning even for info).
+  const toneClass = tone === "info" ? "bg-[var(--fill)] text-text" : "bg-warn/10 text-text";
   return (
     <div className={[
-      "rounded-r-md border-l-2 px-3 py-2.5 text-[11px] leading-relaxed",
+      "rounded-[8px] px-3 py-2.5 text-[11px] leading-relaxed",
       toneClass,
     ].join(" ")}>
       {children}
