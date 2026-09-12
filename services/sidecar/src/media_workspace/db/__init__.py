@@ -9,7 +9,7 @@ from .browse import list_version_siblings, _browse_order_clause, _facet_clauses,
 from .locations import upsert_asset_location_from_metadata, upsert_ai_asset_location, delete_asset_location, list_map_points, set_manual_asset_location, get_asset_location
 from .jobs import _job_id, _decode_job_row, create_job, update_job, get_job, get_latest_job, list_jobs, list_active_jobs, request_job_cancel, is_cancel_requested, request_job_pause, request_job_resume, is_pause_requested
 from .people import upsert_face_model, get_people_asset_index, upsert_people_asset_index, replace_asset_faces, list_asset_faces, list_people_index_candidates, rebuild_candidate_groups, list_person_groups, list_similar_person_groups, get_asset_people, get_person_group_detail, set_person_group_name, set_person_group_cover, set_person_group_state, set_person_groups_state, merge_person_groups, remove_face_from_group, assign_face_to_group, remove_faces_from_group, assign_faces_to_group
-from .collections import _collection_id, list_collections, create_collection, update_collection, delete_collection, add_collection_items, remove_collection_items
+from .collections import _collection_id, list_collections, reorder_collections, create_collection, update_collection, delete_collection, add_collection_items, remove_collection_items
 from .maintenance import cleanup_orphan_image_assets, delete_image_asset_from_catalog, summary, verify_assets, relink_asset
 from .jobs import _UNSET  # sentinel shared with update_job callers
 from .core import _file_id, RESOLVER_VERSION

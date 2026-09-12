@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .config import DEFAULT_IMAGE_EXTENSIONS, Thresholds
 from .reverse_lookup import resolve_image
+from .file_types import is_macos_metadata
 
 
 class ImageWatcher:
@@ -27,7 +28,7 @@ class ImageWatcher:
             if not image_dir.exists():
                 continue
             for path in sorted(image_dir.rglob("*")):
-                if not path.is_file() or path.suffix.lower() not in DEFAULT_IMAGE_EXTENSIONS:
+                if is_macos_metadata(path) or not path.is_file() or path.suffix.lower() not in DEFAULT_IMAGE_EXTENSIONS:
                     continue
                 stat = path.stat()
                 key = str(path.resolve())

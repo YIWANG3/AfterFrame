@@ -14,6 +14,10 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
+  ipcMain.handle("workspace:reorder-collections", async (_event, collectionIds) => {
+    return await commands.reorderCollections(collectionIds);
+  });
+
   ipcMain.handle("workspace:create-collection", async (_event, name, kind) => {
     return await commands.createCollection(name, kind || "manual");
   });

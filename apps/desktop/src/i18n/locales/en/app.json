@@ -1,4 +1,5 @@
 {
+  "folderOrderFailed": "Could not save folder order",
   "drop": {
     "title": "Drop to import",
     "subtitle": "Files and folders will be added to the catalog"

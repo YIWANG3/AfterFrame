@@ -52,6 +52,8 @@ export default function Sidebar({
   onSelectCollection,
   onClearCollection,
   onCreateCollection,
+  onReorderCollections,
+  reorderingCollections = false,
   onRenameCollection,
   onDeleteCollection,
   onAnnotateCollection,
@@ -113,6 +115,41 @@ export default function Sidebar({
   }, [folderView, coverKey]);
   const [editingId, setEditingId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
+  const [draggingFolderId, setDraggingFolderId] = useState(null);
+  const [folderInsertion, setFolderInsertion] = useState(null);
+  const folderScrollRef = useRef(null);
+  const folderScrollSpeed = useRef(0);
+  useEffect(() => {
+    if (!draggingFolderId) return undefined;
+    let frame;
+    const scroll = () => {
+      if (folderScrollRef.current) folderScrollRef.current.scrollTop += folderScrollSpeed.current;
+      frame = requestAnimationFrame(scroll);
+    };
+    frame = requestAnimationFrame(scroll);
+    return () => { cancelAnimationFrame(frame); folderScrollSpeed.current = 0; };
+  }, [draggingFolderId]);
+
+  function endFolderDrag() {
+    setDraggingFolderId(null);
+    setFolderInsertion(null);
+    folderScrollSpeed.current = 0;
+  }
+
+  function folderDestination(event, id) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { id, after: event.clientY >= rect.top + rect.height / 2 };
+  }
+
+  function moveFolder(sourceId, targetId, after) {
+    if (sourceId === targetId || reorderingCollections) return;
+    const original = manualCollections.map((c) => c.collection_id);
+    if (!original.includes(sourceId) || !original.includes(targetId)) return;
+    const ordered = original.filter((id) => id !== sourceId);
+    ordered.splice(ordered.indexOf(targetId) + (after ? 1 : 0), 0, sourceId);
+    if (ordered.some((id, index) => id !== original[index])) void onReorderCollections?.(ordered);
+  }
+
 
   function readDraggedAssetIds(event) {
     const raw = event.dataTransfer.getData("application/x-media-workspace-asset");
@@ -265,7 +302,20 @@ export default function Sidebar({
           </div>
 
           <div
+            ref={folderScrollRef}
             data-testid="sidebar-folder-scroll"
+            onDragOver={(event) => {
+              if (!draggingFolderId) return;
+              event.preventDefault();
+              const rect = event.currentTarget.getBoundingClientRect();
+              folderScrollSpeed.current = event.clientY < rect.top + 32 ? -7 : event.clientY > rect.bottom - 32 ? 7 : 0;
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                folderScrollSpeed.current = 0;
+                setFolderInsertion(null);
+              }
+            }}
             className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-2"
           >
             {creatingFolder && (
@@ -281,7 +331,7 @@ export default function Sidebar({
               </div>
             )}
 
-            {(collections || []).filter((c) => c.kind === "manual").map((col) => {
+            {manualCollections.map((col) => {
               const active = activeCollectionId === col.collection_id;
               if (editingId === col.collection_id) {
                 const editor = (
@@ -326,9 +376,40 @@ export default function Sidebar({
                   key={col.collection_id}
                   role="button"
                   tabIndex={0}
+                  data-collection-id={col.collection_id}
+                  data-folder-insertion={folderInsertion?.id === col.collection_id ? (folderInsertion.after ? "after" : "before") : undefined}
+                  draggable={!reorderingCollections}
+                  title={t("sidebar.reorderHint")}
+                  onDragStart={(event) => {
+                    if (event.target.closest("button, input") || reorderingCollections) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.dataTransfer.setData("application/x-afterframe-folder", col.collection_id);
+                    event.dataTransfer.effectAllowed = "move";
+                    setDropTargetId(null);
+                    setDraggingFolderId(col.collection_id);
+                  }}
+                  onDragEnd={endFolderDrag}
                   onClick={() => onSelectCollection?.(col.collection_id)}
-                  onKeyDown={(e) => { if (e.key === "Enter") onSelectCollection?.(col.collection_id); }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter") onSelectCollection?.(col.collection_id);
+                    if (event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+                      event.preventDefault();
+                      const index = manualCollections.findIndex((c) => c.collection_id === col.collection_id);
+                      const after = event.key === "ArrowDown";
+                      const neighbor = manualCollections[index + (after ? 1 : -1)];
+                      if (neighbor) moveFolder(col.collection_id, neighbor.collection_id, after);
+                    }
+                  }}
                   onDragOver={(event) => {
+                    if (draggingFolderId) {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setFolderInsertion(draggingFolderId === col.collection_id ? null : folderDestination(event, col.collection_id));
+                      return;
+                    }
                     if (!readDraggedAssetIds(event).length) return;
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "copy";
@@ -337,16 +418,26 @@ export default function Sidebar({
                     }
                   }}
                   onDragEnter={(event) => {
+                    if (draggingFolderId) { event.preventDefault(); return; }
                     if (!readDraggedAssetIds(event).length) return;
                     event.preventDefault();
                     setDropTargetId(col.collection_id);
                   }}
                   onDragLeave={(event) => {
                     if (!event.currentTarget.contains(event.relatedTarget)) {
+                      setFolderInsertion((current) => current?.id === col.collection_id ? null : current);
                       setDropTargetId((current) => (current === col.collection_id ? null : current));
                     }
                   }}
                   onDrop={async (event) => {
+                    if (draggingFolderId) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const destination = folderDestination(event, col.collection_id);
+                      moveFolder(draggingFolderId, destination.id, destination.after);
+                      endFolderDrag();
+                      return;
+                    }
                     const assetIds = readDraggedAssetIds(event);
                     event.preventDefault();
                     setDropTargetId(null);
@@ -356,9 +447,10 @@ export default function Sidebar({
                     await onAddToCollection?.(col.collection_id, assetIds);
                   }}
                   className={[
-                    "group flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
+                    "sidebar-folder-row group relative flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
+                    draggingFolderId === col.collection_id ? "opacity-50" : "",
                     dropTargetId === col.collection_id && !active
-                      ? "bg-hover text-text ring-1 ring-accent/45"
+                      ? "bg-hover text-text ring-1 ring-inset ring-accent/45"
                       : "",
                     active
                       ? "bg-selected text-text"

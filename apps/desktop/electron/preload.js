@@ -144,6 +144,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   listRepaintHistory: (assetPath) => ipcRenderer.invoke("workspace:list-repaint-history", assetPath),
   getAiStyles: () => ipcRenderer.invoke("workspace:get-ai-styles"),
   saveAiStyles: (styles) => ipcRenderer.invoke("workspace:save-ai-styles", styles),
+  reorderCollections: (collectionIds) => ipcRenderer.invoke("workspace:reorder-collections", collectionIds),
   listCollections: () => ipcRenderer.invoke("workspace:list-collections"),
   createCollection: (name, kind) => ipcRenderer.invoke("workspace:create-collection", name, kind),
   updateCollection: (collectionId, updates) => ipcRenderer.invoke("workspace:update-collection", collectionId, updates),

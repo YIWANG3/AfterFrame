@@ -395,6 +395,28 @@ export default function useWorkspace({ pushToast } = {}) {
     return col;
   }
 
+  const reorderingCollectionsRef = useRef(false);
+  const [reorderingCollections, setReorderingCollections] = useState(false);
+  async function reorderCollections(collectionIds) {
+    if (reorderingCollectionsRef.current) return;
+    reorderingCollectionsRef.current = true;
+    setReorderingCollections(true);
+    const byId = new Map(collections.map((c) => [c.collection_id, c]));
+    setCollections([
+      ...collectionIds.map((id, sort_order) => ({ ...byId.get(id), sort_order })),
+      ...collections.filter((c) => c.kind !== "manual"),
+    ]);
+    try {
+      await api.reorderCollections(collectionIds);
+    } catch (error) {
+      pushToast?.({ title: t("folderOrderFailed"), message: String(error?.message || error), tone: "error" });
+    } finally {
+      await loadCollections();
+      reorderingCollectionsRef.current = false;
+      setReorderingCollections(false);
+    }
+  }
+
   async function renameCollection(collectionId, name) {
     await api.updateCollection(collectionId, { name });
     await loadCollections();
@@ -915,6 +937,8 @@ export default function useWorkspace({ pushToast } = {}) {
     browseTo,
     setStatusFilter,
     createCollection,
+    reorderCollections,
+    reorderingCollections,
     renameCollection,
     deleteCollection,
     addToCollection,

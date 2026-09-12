@@ -80,3 +80,4 @@ jobs:
           e2e/19-editor-layers.spec.js
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
+          e2e/29-folder-order.spec.js

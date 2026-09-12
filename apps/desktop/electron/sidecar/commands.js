@@ -214,6 +214,10 @@ function createSidecarCommands(callJson) {
       return callJson(["list-collections"]).then((rows) => rows || []);
     },
 
+    reorderCollections(collectionIds) {
+      return callJson(["reorder-collections", ...collectionIds.flatMap((id) => ["--collection-id", String(id)])]);
+    },
+
     createCollection(name, kind = "manual") {
       return callJson(["create-collection", "--name", String(name), "--kind", String(kind)]);
     },

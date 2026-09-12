@@ -23,6 +23,11 @@ RAW_EXTENSION_FORMATS = {
 }
 
 
+def is_macos_metadata(path: Path) -> bool:
+    """AppleDouble companions keep the original extension but contain no image."""
+    return path.name.startswith("._") or "__MACOSX" in path.parts
+
+
 def _read_signature(path: Path, limit: int = RAW_SIGNATURE_SAMPLE_BYTES) -> bytes:
     with path.open("rb") as handle:
         return handle.read(limit)
@@ -69,6 +74,8 @@ def _detect_tiff_raw_format(data: bytes) -> str | None:
 
 
 def detect_raw_format(path: Path) -> str | None:
+    if is_macos_metadata(path):
+        return None
     extension = path.suffix.lower()
     if extension in DEFAULT_RAW_EXTENSIONS:
         return RAW_EXTENSION_FORMATS.get(extension, extension.lstrip("."))
@@ -82,4 +89,4 @@ def is_raw_file(path: Path) -> bool:
 
 
 def is_source_file(path: Path) -> bool:
-    return is_raw_file(path) or path.suffix.lower() in DEFAULT_IMAGE_EXTENSIONS
+    return not is_macos_metadata(path) and (is_raw_file(path) or path.suffix.lower() in DEFAULT_IMAGE_EXTENSIONS)

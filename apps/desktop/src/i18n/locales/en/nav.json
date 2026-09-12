@@ -59,6 +59,7 @@
     "navigation": "Discover sections"
   },
   "sidebar": {
+    "reorderHint": "Drag to reorder · Option/Alt + ↑/↓",
     "discover": "Discover",
     "people": "People",
     "stickers": "Stickers",

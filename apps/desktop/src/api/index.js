@@ -90,6 +90,7 @@ const api = {
   startNativeDrag: (...args) => invoke("startNativeDrag", ...args),
 
   // ── collections ──
+  reorderCollections: (...args) => invoke("reorderCollections", ...args),
   listCollections: (...args) => invoke("listCollections", ...args),
   createCollection: (...args) => invoke("createCollection", ...args),
   updateCollection: (...args) => invoke("updateCollection", ...args),
