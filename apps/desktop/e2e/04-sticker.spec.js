@@ -98,12 +98,11 @@ test.describe("Sticker detection (real swift run)", () => {
 
       // THE assertion that was missing: every cutout thumbnail must decode.
       // A 403 from the media allowlist leaves naturalWidth === 0.
-      const widths = await window.evaluate(() => {
-        const grid = document.querySelectorAll(".grid img");
-        return [...grid].map((img) => img.naturalWidth);
-      });
-      expect(widths.length).toBeGreaterThan(0);
-      for (const w of widths) expect(w).toBeGreaterThan(0);
+      const cutouts = window.getByTestId("detected-sticker-grid").locator("img");
+      await expect(cutouts).toHaveCount(count);
+      await expect.poll(async () => cutouts.evaluateAll(images =>
+        images.every(img => img.complete && img.naturalWidth > 0),
+      ), { timeout: 15000 }).toBe(true);
 
       fs.rmSync(subjectPath, { force: true });
     } finally {

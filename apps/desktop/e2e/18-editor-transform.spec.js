@@ -96,14 +96,19 @@ test.describe("Golden: crop + transform", () => {
     await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
     const before = (await state(window)).imageRect;
     try {
-      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1080, 720));
+      // CI may already start at the minimum 1080×720. Always change height,
+      // which constrains the rotated portrait, rather than requesting a no-op.
+      const targetHeight = originalSize[1] <= 760 ? 820 : 720;
+      await app.evaluate(({ BrowserWindow }, height) => BrowserWindow.getAllWindows()[0].setSize(1080, height), targetHeight);
       await expect.poll(async () => (await state(window)).imageRect.width).not.toBe(before.width);
       await save(window, out("rot-resize.jpg"));
       const resized = await sharp(out("rot-resize.jpg")).metadata();
       expect([resized.width, resized.height]).toEqual([srcH, srcW]);
     } finally {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size), originalSize);
-      await expect.poll(async () => (await state(window)).imageRect.width).toBeCloseTo(before.width, 4);
+      // Native window/compositor rounding can differ by a subpixel on restore.
+      // The exported pixel dimensions above remain an exact assertion.
+      await expect.poll(async () => Math.abs((await state(window)).imageRect.width - before.width)).toBeLessThan(1);
       await window.evaluate(() => window.__afterframeTest.undo());
       await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
     }
