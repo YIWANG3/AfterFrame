@@ -202,7 +202,7 @@ async function ingestFile(file, source = "generated") {
 }
 
 function stageFiles(files) {
-  const images = Array.from(files || []).filter((f) => f.type.startsWith("image/"));
+  const images = Array.from(files || []).filter((f) => f.type.startsWith("image/") && !f.name.startsWith("._") && !(f.webkitRelativePath || "").split("/").includes("__MACOSX"));
   if (!images.length) return null;
   const key = `/web-import/${nextPathId++}`;
   pendingFiles.set(key, images);
@@ -833,7 +833,18 @@ export const browserBridge = {
     return (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean).slice(offset, offset + limit);
   },
   listCollections: async () => {
-    return collections.map(publicCollection);
+    return [...collections].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)).map(publicCollection);
+  },
+  reorderCollections: async (collectionIds) => {
+    const manual = collections.filter((c) => c.kind === "manual");
+    if (collectionIds.length !== manual.length || new Set(collectionIds).size !== manual.length ||
+        manual.some((c) => !collectionIds.includes(c.collection_id))) {
+      throw new Error("Folder list changed; reload and try again");
+    }
+    const order = new Map(collectionIds.map((id, index) => [id, index]));
+    for (const row of manual) row.sort_order = order.get(row.collection_id);
+    emitCollectionsChanged();
+    return { ok: true };
   },
   createCollection: async (name, kind = "manual") => {
     const now = new Date().toISOString();
@@ -843,7 +854,7 @@ export const browserBridge = {
       kind: kind || "manual",
       parent_collection_id: null,
       rules_json: null,
-      sort_order: collections.length,
+      sort_order: Math.max(-1, ...collections.map((c) => c.sort_order || 0)) + 1,
       created_at: now,
       updated_at: now,
       asset_ids: [],
@@ -857,6 +868,7 @@ export const browserBridge = {
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return null;
     if (typeof updates.name === "string" && updates.name.trim()) row.name = updates.name.trim();
+    if (Number.isInteger(updates.sortOrder)) row.sort_order = updates.sortOrder;
     row.updated_at = new Date().toISOString();
 
     emitCollectionsChanged();

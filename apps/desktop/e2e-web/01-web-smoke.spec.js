@@ -139,3 +139,11 @@ test("byte limit rejects a batch without decoding originals", async ({ page }) =
   expect(result).toContain("200 MB");
   expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
 });
+
+
+test("ignores macOS metadata companions during browser import", async ({ page }) => {
+  await dropFiles(page, [FIXTURE, FIXTURE], { names: ["portrait.jpg", "._portrait.jpg"] });
+  await expect(card(page, "portrait")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-gallery-item="true"]')).toHaveCount(1);
+  await expect(card(page, "._portrait")).toHaveCount(0);
+});

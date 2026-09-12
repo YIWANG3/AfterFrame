@@ -1031,6 +1031,8 @@ export default function App() {
           }}
           onClearCollection={workspace.clearCollection}
           onCreateCollection={workspace.createCollection}
+          onReorderCollections={workspace.reorderCollections}
+          reorderingCollections={workspace.reorderingCollections}
           onRenameCollection={workspace.renameCollection}
           onDeleteCollection={workspace.deleteCollection}
           onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}

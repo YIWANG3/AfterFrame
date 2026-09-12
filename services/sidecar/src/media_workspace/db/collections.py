@@ -35,8 +35,8 @@ def create_collection(
     collection_id = _collection_id()
     connection.execute(
         """
-        INSERT INTO collections (collection_id, name, kind, rules_json)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO collections (collection_id, name, kind, rules_json, sort_order)
+        VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collections))
         """,
         (collection_id, name, kind, rules_json),
     )
@@ -74,6 +74,21 @@ def update_collection(
     )
     if commit:
         connection.commit()
+
+
+def reorder_collections(connection: sqlite3.Connection, collection_ids: list[str]) -> None:
+    """Save the complete manual-folder order atomically; reject stale lists."""
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        current = {r[0] for r in connection.execute(
+            "SELECT collection_id FROM collections WHERE kind = 'manual'"
+        )}
+        if len(collection_ids) != len(current) or set(collection_ids) != current:
+            raise ValueError("Folder list changed; reload and try again")
+        connection.executemany(
+            "UPDATE collections SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE collection_id = ?",
+            [(index, collection_id) for index, collection_id in enumerate(collection_ids)],
+        )
 
 
 def delete_collection(connection: sqlite3.Connection, collection_id: str, commit: bool = True) -> None:

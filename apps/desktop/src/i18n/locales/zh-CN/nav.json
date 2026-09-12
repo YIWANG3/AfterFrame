@@ -59,6 +59,7 @@
     "navigation": "发现页导航"
   },
   "sidebar": {
+    "reorderHint": "拖拽排序 · Option/Alt + ↑/↓",
     "discover": "发现",
     "people": "人物",
     "stickers": "贴纸",

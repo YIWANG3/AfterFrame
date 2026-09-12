@@ -858,3 +858,17 @@ html.electron .discover-drag-region { pointer-events: auto; -webkit-app-region: 
 .collage-ratio-input { height: 24px; border: 0; border-radius: 999px; background: var(--fill); outline: none; box-shadow: none; transition: background .15s; }
 .collage-ratio-input:hover { background: var(--fill-2); }
 .collage-ratio-input:focus-visible { background: var(--fill-2); outline: 2px solid rgb(var(--text-color) / .35); outline-offset: 2px; }
+
+/* Inset insertion markers remain visible inside the folder scroll viewport. */
+.sidebar-folder-row[data-folder-insertion]::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgb(var(--accent-color) / .8);
+  pointer-events: none;
+}
+.sidebar-folder-row[data-folder-insertion="before"]::after { top: 0; }
+.sidebar-folder-row[data-folder-insertion="after"]::after { bottom: 0; }

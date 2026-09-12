@@ -1,4 +1,5 @@
 {
+  "folderOrderFailed": "无法保存文件夹顺序",
   "drop": {
     "title": "拖放以导入",
     "subtitle": "文件和文件夹将被添加到图库"

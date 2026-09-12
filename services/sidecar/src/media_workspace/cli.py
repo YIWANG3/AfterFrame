@@ -54,6 +54,7 @@ from .db import (
     summary,
     upsert_catalog_root,
     list_collections,
+    reorder_collections,
     create_collection,
     update_collection,
     delete_collection,
@@ -332,6 +333,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Collections
     subparsers.add_parser("list-collections", parents=[common])
+
+    reorder_col = subparsers.add_parser("reorder-collections", parents=[common])
+    reorder_col.add_argument("--collection-id", action="append", required=True)
 
     create_col = subparsers.add_parser("create-collection", parents=[common])
     create_col.add_argument("--name", required=True)
@@ -1965,6 +1969,12 @@ def _cmd_list_collections(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_reorder_collections(args, connection, catalog, parser):
+    reorder_collections(connection, args.collection_id)
+    print(json.dumps({"ok": True}))
+    return 0
+
+
 def _cmd_create_collection(args, connection, catalog, parser):
     col = create_collection(connection, args.name, args.kind, args.rules_json)
     print(json.dumps(col, indent=2))
@@ -2129,6 +2139,7 @@ COMMAND_HANDLERS = {
     "summary": _cmd_summary,
     "scan-new-media": _cmd_scan_new_media,
     "list-collections": _cmd_list_collections,
+    "reorder-collections": _cmd_reorder_collections,
     "create-collection": _cmd_create_collection,
     "update-collection": _cmd_update_collection,
     "delete-collection": _cmd_delete_collection,
