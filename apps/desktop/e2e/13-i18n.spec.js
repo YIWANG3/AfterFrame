@@ -16,7 +16,7 @@ test.afterAll(async () => {
 });
 
 test("defaults to English; menu is English", async () => {
-  await ctx.window.getByRole("button", { name: "Settings" }).click();
+  await ctx.window.keyboard.press("Meta+,");
   await ctx.window.getByRole("button", { name: "General" }).click();
   await expect(ctx.window.getByText("Interface language. Takes effect immediately.")).toBeVisible({ timeout: 5_000 });
 

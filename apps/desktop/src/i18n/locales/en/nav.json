@@ -55,7 +55,8 @@
     "albums": "Albums",
     "pinRated": "Rated",
     "pinRaw": "With RAW",
-    "unnamed": "Unnamed"
+    "unnamed": "Unnamed",
+    "navigation": "Discover sections"
   },
   "sidebar": {
     "discover": "Discover",
@@ -77,7 +78,9 @@
     "noAssets": "No indexed assets yet",
     "assetsCount_one": "{{count}} asset",
     "assetsCount_other": "{{count}} assets",
-    "updated": "updated {{time}}"
+    "updated": "updated {{time}}",
+    "webLibrary": "Browser Library",
+    "webWelcomeHint": "Browse sample photos or drag in your own"
   },
   "people": {
     "title": "People",

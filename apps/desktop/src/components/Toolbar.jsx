@@ -227,6 +227,22 @@ export default function Toolbar({
   const { t } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!menuRef.current?.contains(event.target)) setMenuOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
   const actionMap = {
     processed: onAddProcessed,
     sources: onAddSources,
@@ -239,13 +255,12 @@ export default function Toolbar({
 
   return (
     <div className="app-toolbar relative z-50 flex h-11 items-center gap-1 bg-chrome px-2.5">
-      <div className="relative">
+      <div ref={menuRef} className="relative">
         <IconButton onClick={() => setMenuOpen((c) => !c)}>
           <Plus className="h-4 w-4 stroke-[1.8]" />
         </IconButton>
         {menuOpen ? (
           <>
-            <div className="fixed inset-0 z-[100]" onClick={() => setMenuOpen(false)} />
             <div className="absolute top-full z-[101] mt-2.5 w-[248px] rounded-lg border border-border/60 bg-chrome p-1.5 shadow-overlay">
               {MENU_SECTIONS.map((section, sectionIndex) => (
                 <div key={section.key} className={sectionIndex > 0 ? "mt-1 border-t border-border/80 pt-1.5" : ""}>

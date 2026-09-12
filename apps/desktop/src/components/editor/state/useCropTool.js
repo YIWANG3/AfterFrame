@@ -217,15 +217,19 @@ export function useCropTool({
   // Crop geometry lives in stage pixels, so a placement change (window resize,
   // late first measurement) must REMAP it — scale crop + pan offsets around the
   // old/new stage centers — before the usual clamp. Without this the photo
-  // refits but the crop veil stays at its old pixels.
-  const prevPlacementRef = useRef(placement);
+  // refits but the crop veil stays at its old pixels. A transformed preview
+  // change is different: commitTransform (or undo/redo) already supplies the
+  // crop in that preview's coordinate space. Remapping it again crops away
+  // part of the image on a quarter turn.
+  const prevGeometryRef = useRef({ placement, preview: transformedPreview });
   useEffect(() => {
-    const prev = prevPlacementRef.current;
-    prevPlacementRef.current = placement;
+    const { placement: prev, preview: prevPreview } = prevGeometryRef.current;
+    prevGeometryRef.current = { placement, preview: transformedPreview };
     if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
     let state = editorStateRef.current;
     if (
-      prev && prev !== placement && prev.fitScale > 0 && Number.isFinite(placement.fitScale)
+      prevPreview === transformedPreview && prev && prev !== placement
+      && prev.fitScale > 0 && Number.isFinite(placement.fitScale)
       && (prev.fitScale !== placement.fitScale || prev.centerX !== placement.centerX || prev.centerY !== placement.centerY)
     ) {
       const s = placement.fitScale / prev.fitScale;

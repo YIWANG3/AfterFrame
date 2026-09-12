@@ -211,7 +211,7 @@ export function CanvasSection({
                 const h = Number(customRatioH);
                 if (w > 0 && h > 0) onCanvasRatioChange(w / h);
               }}
-              className="w-16 rounded-md bg-app px-2 py-1 text-center text-[11px] text-text outline-none border border-border/40 focus:border-[rgb(var(--accent-color)/0.5)]"
+              className="collage-ratio-input w-16 px-2 text-center text-[11px] text-text"
             />
             <span className="text-[11px] text-muted2">:</span>
             <input
@@ -225,7 +225,7 @@ export function CanvasSection({
                 const h = Number(e.target.value);
                 if (w > 0 && h > 0) onCanvasRatioChange(w / h);
               }}
-              className="w-16 rounded-md bg-app px-2 py-1 text-center text-[11px] text-text outline-none border border-border/40 focus:border-[rgb(var(--accent-color)/0.5)]"
+              className="collage-ratio-input w-16 px-2 text-center text-[11px] text-text"
             />
           </div>
         </div>

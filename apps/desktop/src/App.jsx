@@ -1053,7 +1053,6 @@ export default function App() {
             setPeopleGroup(null);
             workspace.clearCollection?.({ reload: false });
           }}
-          onOpenSettings={() => setSettingsOpen(true)}
         /> : <div className="bg-chrome" />}
 
         <section
@@ -1072,6 +1071,7 @@ export default function App() {
           ) : null}
           {noCatalog ? (
             <WelcomeOverlay
+              web={!!api.capabilities.web}
               onCreate={handleCreateCatalog}
               onOpen={handleOpenCatalog}
               onSample={handleOpenSampleCatalog}
@@ -1103,8 +1103,6 @@ export default function App() {
             />
           ) : viewMode === "discover" ? (
             <>
-              {/* Title-less toolbar: keeps the window drag strip; the page starts at 回忆. */}
-              <div className="app-toolbar flex h-12 shrink-0 items-center gap-2 px-3" />
               <DiscoverView
                 summary={workspace.summary}
                 collections={workspace.collections}
@@ -1285,7 +1283,7 @@ export default function App() {
           <div
             data-value={workspace.sidebarWidth}
             onMouseDown={resizeSidebar}
-            className="absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize transition-colors before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent hover:before:bg-border"
+            className="pane-resize-handle absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize"
             style={{ left: `${workspace.sidebarWidth}px` }}
           />
         ) : null}
@@ -1294,7 +1292,7 @@ export default function App() {
           <div
             data-value={-workspace.inspectorWidth}
             onMouseDown={resizeInspector}
-            className="absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize transition-colors before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-transparent hover:before:bg-border"
+            className="pane-resize-handle absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize"
             style={{ right: `${workspace.inspectorWidth}px` }}
           />
         ) : null}

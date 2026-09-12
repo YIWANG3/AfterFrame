@@ -1118,11 +1118,11 @@ function createWindow() {
       `).catch(() => {});
     }
   });
-  if (devServerUrl) {
-    for (const [evt, flag] of [["enter-full-screen", true], ["leave-full-screen", false]]) {
+  for (const [evt, flag] of [["enter-full-screen", true], ["leave-full-screen", false]]) {
     window.on(evt, () => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", flag); });
   }
-  window.loadURL(devServerUrl);
+  if (devServerUrl) {
+    window.loadURL(devServerUrl);
     return;
   }
   window.loadFile(path.join(__dirname, "..", "dist", "index.html"));

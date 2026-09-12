@@ -626,12 +626,18 @@ export default function useWorkspace({ pushToast } = {}) {
     if (modeNeedsSources && !resolvedRawDirs.length) return;
     if (modeNeedsProcessed && !resolvedImageDirs.length) return;
 
-    const task = await api.startImport({
-      rawDirs: resolvedRawDirs,
-      imageDirs: resolvedImageDirs,
-      mode,
-      auto,
-    });
+    let task;
+    try {
+      task = await api.startImport({
+        rawDirs: resolvedRawDirs,
+        imageDirs: resolvedImageDirs,
+        mode,
+        auto,
+      });
+    } catch (error) {
+      pushToast?.({ title: String(error?.message || error), tone: "error", ttl: 6000 });
+      return;
+    }
     setImportTask(task);
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
   }
@@ -640,7 +646,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // guard every import entry (toolbar, drop, Finder open-with) with a clear
   // toast instead of a silent sidecar failure against a null catalog.
   function requireCatalog() {
-    if (info?.catalogPath) return true;
+    if (info?.catalogPath || api.capabilities.web) return true;
     pushToast?.({ title: t("noCatalogTitle"), message: t("noCatalogMsg"), tone: "error", ttl: 5000 });
     return false;
   }

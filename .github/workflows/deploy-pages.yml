@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "apps/desktop/**"
       - "docs/assets/**"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
@@ -29,11 +30,22 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Build browser experience
+        working-directory: apps/desktop
+        run: |
+          npm ci --ignore-scripts
+          npm run build:web
       - name: Assemble static site
         run: |
           mkdir _site
-          cp site/index.html site/guide.html site/guide-zh.html site/privacy.html site/privacy-zh.html site/workspace-zh.html site/workspace.css site/workspace-zh.css site/workspace-guide.css site/workspace-guide-zh.css site/brand.css site/footer.css _site/
+          cp site/*.html site/*.css site/*.js _site/
           cp -R docs/assets _site/assets
+          cp -R apps/desktop/dist-web _site/try
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

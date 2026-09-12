@@ -10,7 +10,9 @@
     "create": "新建图库",
     "open": "打开已有…",
     "sample": "浏览示例图库",
-    "sampleLoading": "正在准备示例图库…"
+    "sampleLoading": "正在准备示例图库…",
+    "webSubtitle": "从示例照片开始体验 AfterFrame，无需下载安装。",
+    "webExplainer": "可拖入最多 30 张自己的照片（合计 200 MB）。直接读取所选文件，不保存图库副本。刷新后照片和编辑会重置，请下载需要保留的作品。"
   },
   "sample": {
     "banner": "你正在浏览示例图库，可以自由评分、编辑和创建合集。",

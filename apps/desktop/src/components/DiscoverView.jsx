@@ -8,7 +8,7 @@
 // Every tile is backed by a real photo; entries without a cover are hidden.
 // Clicking never intersects with the previous gallery state — `onOpen` hands
 // App a complete destination (status / filters / collection / map).
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
@@ -115,11 +115,11 @@ function geoFilterFor(entry, label) {
   return { mode: "bounds", ...entry.bounds, min_precision: "locality", label };
 }
 
-function Row({ title, meta, children }) {
+function Row({ id, title, meta, children }) {
   return (
-    <section className="mt-9 first:mt-0">
+    <section id={`discover-${id}`} data-discover-section={id} className="mt-9 first:mt-0">
       <div className="mb-4 flex items-end justify-between px-1">
-        <h2 className="text-[22px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
+        <h2 tabIndex={-1} className="text-[22px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
         {meta ? <span className="text-[12px] text-muted2">{meta}</span> : null}
       </div>
       <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -175,6 +175,8 @@ export default function DiscoverView({
 }) {
   const { t, i18n } = useTranslation("nav");
   const locale = i18n.language || undefined;
+  const scrollRef = useRef(null);
+  const [activeSection, setActiveSection] = useState(null);
   // Place names are shown in English in every locale: the gazetteer's Chinese
   // labels come from Wikidata's generic `zh` label, which mixes Traditional
   // and Simplified (舊金山 next to 纽约), and the user preferred English over
@@ -255,11 +257,51 @@ export default function DiscoverView({
     onOpen?.({ filters: { date_from: `${g.year}-${pad2(g.month)}-01`, date_to: `${g.year}-${pad2(g.month)}-${pad2(last)}` } });
   };
   const openPlace = (p) => onOpen?.({ filters: { geo: geoFilterFor(p, nameOf(p)) } });
-  const empty = !!page && memories.length === 0 && months.length === 0 && pinned.length === 0 && folderCards.length === 0;
+  const sections = [
+    { id: "memories", label: t("discover.memories"), visible: memories.length || months.length },
+    { id: "pinned", label: t("discover.pinned"), visible: pinned.length },
+    { id: "albums", label: t("discover.albums"), visible: folderCards.length },
+    { id: "people", label: t("discover.peopleTitle"), visible: peopleWithFace.length },
+    { id: "places", label: t("discover.placesTitle"), visible: placeTiles.length },
+  ].filter(section => section.visible);
+  const empty = !!page && !sections.length;
+  const currentSection = sections.some(section => section.id === activeSection) ? activeSection : sections[0]?.id;
+  const updateSection = () => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const rows = [...scroller.querySelectorAll("[data-discover-section]")];
+    const top = scroller.getBoundingClientRect().top + 90;
+    const atBottom = scroller.scrollTop > 0 && scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+    const row = atBottom ? rows.at(-1) : rows.filter(el => el.getBoundingClientRect().top <= top).at(-1) || rows[0];
+    if (row) setActiveSection(row.dataset.discoverSection);
+  };
+  const jumpToSection = (id) => {
+    const scroller = scrollRef.current;
+    const row = scroller?.querySelector(`[data-discover-section="${id}"]`);
+    if (!row) return;
+    row.querySelector("h2")?.focus({ preventScroll: true });
+    scroller.scrollTo({
+      top: scroller.scrollTop + row.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 72,
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    });
+    setActiveSection(id);
+  };
 
   return (
-    <div data-testid="workspace-split" className="relative min-h-0 flex-1 overflow-hidden">
-      <div data-testid="gallery-scroll" className="h-full overflow-y-auto px-6 pb-10">
+    <div data-testid="workspace-split" className="discover-view relative min-h-0 flex-1 overflow-hidden">
+      <div className="discover-drag-region" aria-hidden="true" />
+      {sections.length > 0 && (
+        <nav className="discover-navigation" aria-label={t("discover.navigation")}>
+          {sections.map(section => (
+            <button key={section.id} type="button" aria-controls={`discover-${section.id}`}
+              aria-current={currentSection === section.id ? "location" : undefined}
+              onClick={() => jumpToSection(section.id)}>
+              {section.label}
+            </button>
+          ))}
+        </nav>
+      )}
+      <div ref={scrollRef} onScroll={updateSection} data-testid="gallery-scroll" className="h-full overflow-y-auto px-6 pb-10">
         {empty ? (
           <div className="flex h-[220px] items-center justify-center rounded-[18px] bg-[var(--fill)] text-[13px] text-muted2">
             {t("discover.empty")}
@@ -267,7 +309,7 @@ export default function DiscoverView({
         ) : null}
 
         {(memories.length > 0 || months.length > 0) && (
-          <Row title={t("discover.memories")}>
+          <Row id="memories" title={t("discover.memories")}>
             {memories.map((m) => (
               <MemoryCard
                 key={m.key}
@@ -284,13 +326,13 @@ export default function DiscoverView({
         )}
 
         {pinned.length > 0 && (
-          <Row title={t("discover.pinned")}>
+          <Row id="pinned" title={t("discover.pinned")}>
             {pinned.map((tile) => <Tile key={tile.key} cover={tile.cover} title={tile.label} onClick={tile.onClick} />)}
           </Row>
         )}
 
         {folderCards.length > 0 && (
-          <Row title={t("discover.albums")}>
+          <Row id="albums" title={t("discover.albums")}>
             {folderCards.map((col) => (
               <Tile
                 key={col.collection_id}
@@ -303,7 +345,7 @@ export default function DiscoverView({
         )}
 
         {peopleWithFace.length > 0 && (
-          <Row title={t("discover.peopleTitle")}>
+          <Row id="people" title={t("discover.peopleTitle")}>
             {peopleWithFace.map((g) => (
               <button key={g.group_id || g.id} type="button" onClick={() => onOpenPerson?.(g)} className="w-[112px] shrink-0 text-center">
                 <div className="mx-auto h-[96px] w-[96px] overflow-hidden rounded-full bg-[var(--fill)]">
@@ -317,7 +359,7 @@ export default function DiscoverView({
         )}
 
         {placeTiles.length > 0 && (
-          <Row title={t("discover.placesTitle")}>
+          <Row id="places" title={t("discover.placesTitle")}>
             {placeTiles.map((p) => (
               <Tile
                 key={p.key}

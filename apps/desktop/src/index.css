@@ -374,7 +374,7 @@ select {
 /* ───────── 4 · 三栏:侧栏 / 内容区 / 检查器 = 三块内缩圆角面板,8px 同缝 ───────── */
 .noise-overlay > .grid > aside.border-r {
   height: auto; align-self: stretch; min-width: 0;
-  margin: 8px 0 8px 8px; border-radius: 18px;     /* 同心:面板圆角 = 窗口 26 − 内缩 8 */
+  margin: 8px 0 8px 8px; border-radius: 18px; clip-path: inset(0 round 18px); /* Clip composited content as well as the pane background. */
   border: none; background: var(--pane);
   padding-top: 12px;
 }
@@ -389,8 +389,15 @@ select {
   border: none; background: var(--pane);
 }
 .noise-overlay > .grid > div.bg-chrome { background: transparent; }
-/* 拖拽把手:平时无线,hover 才现细线(既有行为,只换颜色) */
-.cursor-col-resize:hover::before { background: var(--fill-3) !important; }
+/* Keep the full-height hit area, revealing the divider only during resizing. */
+.pane-resize-handle { -webkit-app-region: no-drag; }
+.pane-resize-handle::before {
+  content: ""; position: absolute; left: 50%; top: 24px; bottom: 24px;
+  width: 2px; transform: translateX(-50%); border-radius: 999px;
+  background: rgb(var(--text-color) / .3); opacity: 0;
+  transition: opacity .12s ease;
+}
+.pane-resize-handle[data-dragging="true"]::before { opacity: 1; }
 
 /* hiddenInset:红绿灯落在侧栏面板内,侧栏头部让位 44px;拖拽区 = 侧栏头 + 内容区顶部 8px 细条(避开控件,防光标闪) */
 html.electron .noise-overlay > .grid > aside.border-r { padding-top: 44px; }
@@ -476,7 +483,7 @@ html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-
 /* 滚动容器让位:仅工具栏 48;开着筛选行再加 40 */
 section.bg-app [data-testid="gallery-scroll"] { padding-top: 60px !important; }
 section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
-section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"] { padding-top: 48px; }
+section.bg-app:has(> .app-toolbar) [data-testid="map-drawer"][data-expanded="true"] { padding-top: 48px; }
 /* 地图展开时网格不再位于工具栏 / 筛选行之下,顶部让位归零(留 8px 与地图分隔),否则地图下方空出一整块;
    顶部滚动渐进模糊此时会落在地图上,一并关掉 */
 section.bg-app:has([data-testid="map-drawer"][data-expanded="true"]) [data-testid="gallery-scroll"] { padding-top: 8px !important; }
@@ -514,8 +521,10 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 .app-toolbar > .relative:not(.min-w-0) {
   border-radius: 999px; background: var(--glass);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-  height: 34px; padding: 0 3px; display: flex; align-items: center;
+  height: 34px; padding: 0 3px; align-items: center;
 }
+/* Keep display on the layout groups under the container queries' control. */
+.app-toolbar > label, .app-toolbar > .relative:not(.min-w-0) { display: flex; }
 .app-toolbar { height: 52px; }
 .app-toolbar button.rounded-md, .app-toolbar button.h-8 { height: 28px; min-width: 28px; border-radius: 999px; }
 .app-toolbar button.w-8 { width: 28px; }
@@ -546,9 +555,10 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 /* ───────── 6 · 筛选行:透明底、无底线;chip 胶囊无描边 ───────── */
 .flex-wrap.border-b[class*="bg-chrome"] { background: transparent; border-color: transparent; padding: 4px 12px 10px; }
 .flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
-.flex-wrap.border-b button.rounded-md.border:hover { background: var(--fill-2); }
+.flex-wrap.border-b button.rounded-md.border:hover { background: linear-gradient(var(--fill-2), var(--fill-2)), var(--glass); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] { background: rgb(var(--accent-color)); color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
+.flex-wrap.border-b button.rounded-md.border[class*="bg-accent"]:hover { background: linear-gradient(rgb(var(--accent-ink) / 0.1), rgb(var(--accent-ink) / 0.1)), rgb(var(--accent-color)); }
 .flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; }
 .flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
 
@@ -671,7 +681,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .shadow-overlay.bg-chrome, .shadow-menu.bg-chrome, .shadow-overlay.bg-panel2,
 .shadow-overlay.bg-panel, .shadow-lg.bg-chrome {
   background: var(--pop); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-  border-color: transparent; border-radius: 14px; box-shadow: var(--shadow-menu), inset 0 0 0 1px var(--edge);
+  border-width: 0; border-radius: 14px; box-shadow: var(--shadow-menu);
 }
 .shadow-overlay .border-t, .shadow-menu .border-t { border-color: var(--edge); }
 /* 小对话框(新建风格 / 服务商 / 标注服务 / 手写):底栏无线、按钮靠右、主按钮最右、删除类按钮靠左(Apple 顺序);
@@ -695,9 +705,6 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .rounded-xl.border.bg-chrome .bg-panel { background: var(--fill); border-radius: 14px; }
 .rounded-xl.border.bg-chrome .border-b.border-border\/50 { border-color: transparent; }
 .fixed.inset-0.bg-app\/80 { background: rgba(0,0,0,.45); }
-/* 设置窗本体不要发丝内环(弹层规则 9 给所有 shadow-overlay 卡都加了一圈 --edge,设置窗是大面板,线在浅色下很显眼) */
-.fixed.inset-0.z-\[3000\] > .rounded-xl.border.bg-chrome { box-shadow: var(--shadow-menu); }
-
 /* ───────── 10b · 设置页控件统一(用户:「统一一下,稍微偏圆一点」):
    之前按钮 rounded(4px)、输入框 rounded-md(10px)、多行框 rounded(4px)混着。统一为 28 高、8px 圆角、无描边、fill 底;
    主按钮 accent 底同圆角;focus 用 1px 内环 ───────── */
@@ -806,3 +813,48 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
 .bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }
 
+/* Catalog actions: the welcome page and sample prompt share one button family. */
+.catalog-actions .catalog-action {
+  height: 32px; gap: 6px; border: 0; border-radius: 10px;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.welcome-actions .catalog-action { height: 40px; gap: 8px; border-radius: 12px; font-size: 13px; }
+.catalog-actions .catalog-action:focus-visible { outline: 2px solid rgb(var(--text-color) / 0.55); outline-offset: 3px; }
+.catalog-actions .catalog-action:disabled { cursor: default; opacity: 0.6; }
+/* Glass belongs over the photos; the welcome page uses quiet, flat fills. */
+.sample-catalog-dock { container: sample-banner / inline-size; }
+.sample-catalog-banner {
+  background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-overlay);
+}
+@container sample-banner (max-width: 760px) {
+  .sample-catalog-banner { flex-direction: column; align-items: stretch; gap: 8px; width: 100%; max-width: 500px; }
+}
+
+/* Discover shares the gallery toolbar's top inset and floating material. */
+.discover-navigation {
+  position: absolute; top: 10px; left: 20px; right: 20px; z-index: 50;
+  display: flex; gap: 4px; width: max-content; max-width: calc(100% - 40px);
+  padding: 4px; overflow-x: auto; border-radius: 16px;
+  background: transparent; box-shadow: none; scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+.discover-navigation::-webkit-scrollbar { display: none; }
+.discover-navigation button {
+  flex-shrink: 0; height: 32px; padding: 0 14px; border: 0; border-radius: 12px;
+  font-size: 13px; font-weight: 500; color: rgb(var(--muted-text));
+  background: var(--glass); transition: background .15s, color .15s;
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  -webkit-app-region: no-drag;
+}
+.discover-navigation button:hover { background: var(--fill-2); color: rgb(var(--text-color)); }
+.discover-navigation button[aria-current="location"] { background: var(--fill-3); color: rgb(var(--text-color)); }
+section.bg-app .discover-view [data-testid="gallery-scroll"] { padding-top: 72px !important; }
+.discover-view [data-discover-section] { scroll-margin-top: 72px; }
+
+.discover-drag-region { position: absolute; inset: 0 0 auto; height: 48px; z-index: 40; pointer-events: none; }
+html.electron .discover-drag-region { pointer-events: auto; -webkit-app-region: drag; }
+
+.collage-ratio-input { height: 24px; border: 0; border-radius: 999px; background: var(--fill); outline: none; box-shadow: none; transition: background .15s; }
+.collage-ratio-input:hover { background: var(--fill-2); }
+.collage-ratio-input:focus-visible { background: var(--fill-2); outline: 2px solid rgb(var(--text-color) / .35); outline-offset: 2px; }

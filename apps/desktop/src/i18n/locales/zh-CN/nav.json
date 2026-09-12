@@ -55,7 +55,8 @@
     "albums": "相册",
     "pinRated": "已评分",
     "pinRaw": "含 RAW",
-    "unnamed": "未命名"
+    "unnamed": "未命名",
+    "navigation": "发现页导航"
   },
   "sidebar": {
     "discover": "发现",
@@ -76,7 +77,9 @@
     "noCatalogHint": "新建或打开一个图库开始",
     "noAssets": "尚未索引任何素材",
     "assetsCount_other": "{{count}} 个素材",
-    "updated": "更新于 {{time}}"
+    "updated": "更新于 {{time}}",
+    "webLibrary": "浏览器图库",
+    "webWelcomeHint": "浏览示例照片，或拖入自己的照片"
   },
   "people": {
     "title": "人物",

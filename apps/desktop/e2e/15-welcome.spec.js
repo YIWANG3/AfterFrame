@@ -25,11 +25,10 @@ test.describe("First run (no catalog)", () => {
     await expect(window.getByRole("button", { name: "Browse Sample Library" })).toBeVisible();
   });
 
-  test("is inline — sidebar (and Settings) stay reachable", async () => {
-    // The guide fills the gallery pane, NOT a full-screen overlay, so the
-    // sidebar Settings button is still clickable (needed to change language
-    // before any catalog exists).
-    await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
+  test("settings shortcut remains available before opening a catalog", async () => {
+    await window.keyboard.press("Meta+,");
+    await expect(window.getByRole("button", { name: "General", exact: true })).toBeVisible();
+    await window.keyboard.press("Escape");
   });
 
   test("no gallery cards render without a catalog", async () => {

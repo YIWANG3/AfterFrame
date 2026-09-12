@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Settings as SettingsIcon, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
 import { DesktopHint } from "./DesktopOnly";
 import { baseName, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 
@@ -59,7 +59,6 @@ export default function Sidebar({
   onOpenStickerBrowser,
   onOpenPeople,
   onOpenDiscover,
-  onOpenSettings,
   stickerMode = false,
   peopleMode = false,
   discoverMode = false,
@@ -144,20 +143,22 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="flex h-full flex-col overflow-y-auto border-r border-border/40 bg-chrome px-3 py-3">
-      <div className="mb-5 px-1">
+    <aside
+      className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border/40 bg-chrome px-3 py-3"
+    >
+      <div className="mb-5 shrink-0 px-1">
         <div className="text-[13px] font-semibold tracking-[0.01em] text-text">
-          {info?.catalogPath ? baseName(info.catalogPath) : t("sidebar.noCatalog")}
+          {api.capabilities.web ? t("sidebar.webLibrary") : info?.catalogPath ? baseName(info.catalogPath) : t("sidebar.noCatalog")}
         </div>
         <div className="mt-1 text-[11px] text-muted2">
           {!info?.catalogPath
-            ? t("sidebar.noCatalogHint")
+            ? t(api.capabilities.web ? "sidebar.webWelcomeHint" : "sidebar.noCatalogHint")
             : rootSummary.length ? rootSummary.join(" · ") : t("sidebar.noAssets")}
         </div>
       </div>
 
-      <nav className="flex-1 space-y-4">
-        <div className="space-y-1">
+      <nav className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="shrink-0 space-y-1">
           {browse.map((item, idx) => {
             const Icon = ICON_MAP[item.icon];
             const discoverButton = idx === 0 && onOpenDiscover ? (
@@ -240,8 +241,8 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between px-2.5 pb-1.5">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between px-2.5 pb-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sidebar.folders")}</span>
             <span className="flex items-center gap-0.5">
               <button
@@ -263,7 +264,10 @@ export default function Sidebar({
             </span>
           </div>
 
-          <div className="space-y-0.5">
+          <div
+            data-testid="sidebar-folder-scroll"
+            className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pb-2"
+          >
             {creatingFolder && (
               <div className="px-2.5 py-0.5">
                 <InlineEdit
@@ -430,19 +434,7 @@ export default function Sidebar({
         </div>
       </nav>
 
-      {/* Bottom: Settings — global, always accessible */}
-      <div className="mt-2 border-t border-border/40 pt-2">
-        <DesktopHint />
-        <button
-          type="button"
-          onClick={() => onOpenSettings?.()}
-          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-muted transition-colors hover:bg-hover/70 hover:text-text"
-          title={t("sidebar.settingsTip")}
-        >
-          <SettingsIcon className="h-4 w-4 stroke-[1.6]" />
-          <span className="text-[13px]">{t("sidebar.settings")}</span>
-        </button>
-      </div>
+      {api.capabilities.web && <div className="shrink-0 pt-2"><DesktopHint /></div>}
     </aside>
   );
 }

@@ -6,6 +6,7 @@ import cx from "./cx";
 //
 //  primary    accent-filled call to action
 //  secondary  bordered neutral
+//  soft       neutral fill, no border
 //  ghost      borderless, hover reveals
 //  icon       square h-8 w-8 icon-only (toolbar style)
 //  danger     destructive bordered (delete)
@@ -14,6 +15,8 @@ const VARIANTS = {
     "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-accentInk transition-colors hover:brightness-110",
   secondary:
     "inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-app px-3 py-0 text-[12px] font-medium text-text transition-colors hover:border-border hover:bg-hover",
+  soft:
+    "inline-flex h-8 items-center justify-center rounded-md bg-[var(--fill-2)] px-3 py-0 text-[12px] font-medium text-text transition-colors hover:bg-[var(--fill-3)]",
   ghost:
     "inline-flex h-8 items-center justify-center rounded-md px-2 py-0 text-[12px] text-muted2 transition-colors hover:bg-hover hover:text-text",
   icon:

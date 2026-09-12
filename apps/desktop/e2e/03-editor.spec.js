@@ -43,10 +43,10 @@ test.describe("Editor functional", () => {
     await expect(window.getByText(/LAYERS/i).first()).toBeVisible();
   });
 
-  test("can switch to Sticker tool — Sticker panel renders with Create/Library tabs", async () => {
+  test("can switch to Sticker tool — detection and library render together", async () => {
     await window.getByRole("button", { name: /^Sticker$/i }).first().click();
-    await expect(window.getByRole("button", { name: /Create new/i })).toBeVisible();
-    await expect(window.getByRole("button", { name: /^Library$/i })).toBeVisible();
+    await expect(window.getByRole("button", { name: /Detect subjects/i })).toBeVisible();
+    await expect(window.getByRole("heading", { name: /^Library$/i })).toBeVisible();
   });
 
   test("can switch to AI Repaint tool — panel renders without errors", async () => {

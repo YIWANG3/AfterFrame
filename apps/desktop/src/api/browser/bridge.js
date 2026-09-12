@@ -13,6 +13,7 @@
 // (electron/ipc/frameLogos.js), bundled at build time the way frame-lab.js
 // does. Keys mirror the desktop shape: file paths relative to frame-logos/.
 import exifr from "exifr";
+import sampleManifest from "../../../sample-photos/manifest.json";
 import frameLogoManifest from "/frame-logos/logos.json";
 const frameLogoGlob = import.meta.glob("/frame-logos/**/*.svg", { query: "?raw", import: "default", eager: true });
 const frameLogoSvgs = Object.fromEntries(
@@ -20,6 +21,9 @@ const frameLogoSvgs = Object.fromEntries(
 );
 
 // ── in-memory catalog state ──
+const samplePhotos = import.meta.glob("../../../sample-photos/*.jpg", { query: "?url", import: "default", eager: true });
+const sampleThumbs = import.meta.glob("../../../sample-photos/previews/*.jpg", { query: "?url", import: "default", eager: true });
+let sampleLoad = null;
 const assets = []; // insertion order = import order
 let nextId = 1;
 let nextPathId = 1;
@@ -67,61 +71,8 @@ async function makePreviewBlob(bmp, maxDim) {
   return await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
 }
 
-// ── persistence (IndexedDB) ──
-// One row per asset: the catalog record plus original/thumb/hd blobs. The
-// catalog restores lazily — every catalog-facing method awaits ensureRestored
-// before answering, so components need no boot coordination.
-const DB_NAME = "afterframe-web";
-let dbPromise = null;
-function openDb() {
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 2);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("assets")) db.createObjectStore("assets", { keyPath: "asset_id" });
-        if (!db.objectStoreNames.contains("collections")) db.createObjectStore("collections", { keyPath: "collection_id" });
-        if (!db.objectStoreNames.contains("repaints")) db.createObjectStore("repaints", { keyPath: "repaint_id" });
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  return dbPromise;
-}
-
-async function idbRun(store, mode, fn) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, mode);
-    fn(tx.objectStore(store));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-}
-
-async function idbGetAll(store) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction(store).objectStore(store).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-// URL fields are session-scoped (object URLs) — persist everything else.
-const URL_FIELDS = ["_objectUrls", "image_path", "preview_path", "image_preview_path", "image_preview_hd_path", "preview_hd_path"];
-
-async function persistAsset(asset, blobs) {
-  const row = { ...asset, _blobs: blobs };
-  for (const f of URL_FIELDS) delete row[f];
-  try {
-    await idbRun("assets", "readwrite", (os) => os.put(row));
-  } catch (err) {
-    console.warn("[web] persist failed (session-only asset):", err);
-  }
-}
+// Photo data is session-only. Object URLs reference selected Files; no database copies.
+const repaintHistory = [];
 
 function hydrateAsset(record, blobs) {
   const url = URL.createObjectURL(blobs.original);
@@ -139,42 +90,11 @@ function hydrateAsset(record, blobs) {
   };
 }
 
-let restorePromise = null;
-function ensureRestored() {
-  if (!restorePromise) {
-    restorePromise = (async () => {
-      try { void navigator.storage?.persist?.(); } catch { /* best effort */ }
-      let rows;
-      try { rows = await idbGetAll("assets"); } catch { return; }
-      const numId = (row) => Number(String(row.asset_id).replace("web-", "")) || 0;
-      rows.sort((a, b) => (a.imported_at || "").localeCompare(b.imported_at || "") || numId(a) - numId(b));
-      for (const row of rows) {
-        const { _blobs, ...record } = row;
-        if (!_blobs?.original) continue;
-        // Migration: early web imports stored EXIF Make as `make`.
-        const meta = record.image_metadata;
-        if (meta?.make && !meta.camera_make) meta.camera_make = meta.make;
-        assets.push(hydrateAsset(record, _blobs));
-        if (numId(row) >= nextId) nextId = numId(row) + 1;
-      }
-      try {
-        const cols = await idbGetAll("collections");
-        cols.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-        collections.push(...cols);
-      } catch { /* collections stay empty */ }
-    })().catch(() => {});
-  }
-  return restorePromise;
-}
-
 // ── collections (manual albums, sidecar row shape) ──
 const collections = []; // rows carry asset_ids; item_count derives from it
 const publicCollection = ({ asset_ids, ...row }) => ({ ...row, item_count: asset_ids?.length ?? 0 });
 let nextCollectionId = 1;
 
-async function persistCollection(row) {
-  try { await idbRun("collections", "readwrite", (os) => os.put(row)); } catch { /* session-only */ }
-}
 function emitCollectionsChanged() {
   for (const cb of listeners.catalogChanged) cb({ scope: "collections" });
 }
@@ -239,7 +159,7 @@ async function encodeImageForLlm(blob) {
   return await blobToBase64(jpeg);
 }
 
-async function ingestFile(file) {
+async function ingestFile(file, source = "generated") {
   // Real dimensions matter: Gallery treats missing width/height as a broken
   // asset and queues repair loops (Gallery.jsx queueAssetRepair).
   let bmp;
@@ -248,7 +168,7 @@ async function ingestFile(file) {
   } catch { /* undecodable file — keep it out of the catalog */ return; }
   const { width, height } = bmp;
   const thumbBlob = await makePreviewBlob(bmp, 512);
-  const hdBlob = await makePreviewBlob(bmp, 2000);
+  // Keep only a small thumbnail; editing/export reads the original File.
   bmp.close();
   const exifMeta = await readExifMetadata(file);
   // The filename rides in a URL fragment (see hydrateAsset): blob resolution
@@ -256,6 +176,7 @@ async function ingestFile(file) {
   // Gallery's `?r=` cache-bust lands harmlessly inside it.
   const record = {
     asset_id: `web-${nextId++}`,
+    source,
     asset_type: "image",
     stem: file.name.replace(/\.[^.]+$/, ""),
     file_name: file.name,
@@ -273,12 +194,10 @@ async function ingestFile(file) {
       ...exifMeta,
     },
   };
-  // 2000px tier, same as the desktop's HD previews — collage exports from
-  // this; the editor loads image_path (the original) directly.
-  const blobs = { original: file, thumb: thumbBlob, hd: hdBlob };
+  // The original File remains the source for editor and collage exports.
+  const blobs = { original: file, thumb: thumbBlob, hd: null };
   const hydrated = hydrateAsset(record, blobs);
   assets.push(hydrated);
-  await persistAsset(record, blobs);
   return hydrated;
 }
 
@@ -459,7 +378,7 @@ async function runRepaint(opts) {
     resolution: opts.resolution || null,
     created_at: createdAt,
   };
-  try { await idbRun("repaints", "readwrite", (os) => os.put(row)); } catch { /* history is session-only */ }
+  repaintHistory.push(row);
   return { outputAsset, row };
 }
 
@@ -490,14 +409,6 @@ function aggregateTags(limit = 50, needle = "") {
 async function setAssetAnnotation(assetId, annotation) {
   const a = assets.find((x) => x.asset_id === assetId);
   if (a) a.annotation = annotation;
-  try {
-    await idbRun("assets", "readwrite", (os) => {
-      const req = os.get(assetId);
-      req.onsuccess = () => {
-        if (req.result) { req.result.annotation = annotation; os.put(req.result); }
-      };
-    });
-  } catch { /* session-only */ }
   return annotation;
 }
 
@@ -765,16 +676,39 @@ export const browserBridge = {
   },
 
   // ── workspace / catalog ──
-  getInfo: async () => ({
+  getInfo: async () => {
+    return ({
     rootDir: "/",
-    catalogPath: "/web.afcatalog",
+    catalogPath: assets.length ? "/web.afcatalog" : null,
     scratchCatalogPath: null,
     reviewCatalogPath: null,
     sidecarSrc: null,
     isSampleCatalog: false,
-  }),
+  });
+  },
+  openSampleCatalog: () => {
+    if (sampleLoad) return sampleLoad;
+    sampleLoad = (async () => {
+      for (const [path, url] of Object.entries(samplePhotos).sort()) {
+        const name = path.split("/").pop();
+        if (assets.some(asset => asset.source === "sample" && asset.file_name === name)) continue;
+        const original = new URL(url, document.baseURI).href + `#/${name}`;
+        const thumb = new URL(sampleThumbs[path.replace("/sample-photos/", "/sample-photos/previews/")], document.baseURI).href + `#/${name}`;
+        assets.push({
+          asset_id: `web-${nextId++}`, source: "sample", asset_type: "image",
+          file_name: name, stem: name.replace(/\.[^.]+$/, ""),
+          exists_on_disk: true, app_rating: 0, annotation: null, has_face: false,
+          imported_at: new Date().toISOString(), image_metadata: sampleManifest[name],
+          image_path: original, preview_path: thumb, image_preview_path: thumb,
+          image_preview_hd_path: original, preview_hd_path: original, _objectUrls: [],
+        });
+      }
+      return { path: "/web.afcatalog" };
+    })().finally(() => { sampleLoad = null; });
+    return sampleLoad;
+  },
+  switchCatalog: async () => {},
   getSummary: async () => {
-    await ensureRestored();
     return {
       image_assets: assets.length,
       raw_assets: 0,
@@ -791,7 +725,6 @@ export const browserBridge = {
   // Facets aggregate over the in-memory catalog, mirroring the sidecar's
   // get_facet_values keys (db/browse.py).
   getFacetValues: async () => {
-    await ensureRestored();
     const metas = assets.map((a) => a.image_metadata || {});
     const counts = (values) => {
       const m = new Map();
@@ -818,7 +751,6 @@ export const browserBridge = {
     };
   },
   searchFacet: async ({ field, q = "", limit = 50 } = {}) => {
-    await ensureRestored();
     const needle = String(q).toLowerCase();
     const pick = (get) => {
       const m = new Map();
@@ -840,7 +772,6 @@ export const browserBridge = {
 
   // ── browse ──
   browseImages: async ({ status = "all", limit = 180, offset = 0, search, sort, filters } = {}) => {
-    await ensureRestored();
     let list = assets;
     if (status === "rated") list = list.filter((a) => a.app_rating > 0);
     else if (status === "matched") list = [];
@@ -865,7 +796,6 @@ export const browserBridge = {
   // Location points for the map drawer, scoped like the gallery. Same row
   // shape as the sidecar's browse-map-points; all web points are EXIF-exact.
   browseMapPoints: async ({ status = "all", collectionId, search, filters } = {}) => {
-    await ensureRestored();
     let list = assets;
     if (collectionId) {
       const row = collections.find((c) => c.collection_id === collectionId);
@@ -897,18 +827,15 @@ export const browserBridge = {
       }));
   },
   browseCollection: async (collectionId, { limit = 180, offset = 0 } = {}) => {
-    await ensureRestored();
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return [];
     const byId = new Map(assets.map((a) => [a.asset_id, a]));
     return (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean).slice(offset, offset + limit);
   },
   listCollections: async () => {
-    await ensureRestored();
     return collections.map(publicCollection);
   },
   createCollection: async (name, kind = "manual") => {
-    await ensureRestored();
     const now = new Date().toISOString();
     const row = {
       collection_id: `webcol-${Date.now()}-${nextCollectionId++}`,
@@ -922,30 +849,26 @@ export const browserBridge = {
       asset_ids: [],
     };
     collections.push(row);
-    await persistCollection(row);
+
     emitCollectionsChanged();
     return publicCollection(row);
   },
   updateCollection: async (collectionId, updates = {}) => {
-    await ensureRestored();
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return null;
     if (typeof updates.name === "string" && updates.name.trim()) row.name = updates.name.trim();
     row.updated_at = new Date().toISOString();
-    await persistCollection(row);
+
     emitCollectionsChanged();
     return publicCollection(row);
   },
   deleteCollection: async (collectionId) => {
-    await ensureRestored();
     const idx = collections.findIndex((c) => c.collection_id === collectionId);
     if (idx >= 0) collections.splice(idx, 1);
-    try { await idbRun("collections", "readwrite", (os) => os.delete(collectionId)); } catch { /* row lingers */ }
     emitCollectionsChanged();
     return { ok: true };
   },
   collectionAddItems: async (collectionId, assetIds) => {
-    await ensureRestored();
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return { added: 0 };
     const have = new Set(row.asset_ids);
@@ -956,13 +879,11 @@ export const browserBridge = {
     }
     if (added) {
       row.updated_at = new Date().toISOString();
-      await persistCollection(row);
       emitCollectionsChanged();
     }
     return { added };
   },
   collectionRemoveItems: async (collectionId, assetIds) => {
-    await ensureRestored();
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return { removed: 0 };
     const drop = new Set(assetIds || []);
@@ -971,32 +892,20 @@ export const browserBridge = {
     const removed = before - row.asset_ids.length;
     if (removed) {
       row.updated_at = new Date().toISOString();
-      await persistCollection(row);
       emitCollectionsChanged();
     }
     return { removed };
   },
   getAssetDetailById: async (assetId) => {
-    await ensureRestored();
     return assets.find((a) => a.asset_id === assetId) || null;
   },
   ensureHdPreviews: async () => {},
   setAssetRating: async (assetId, rating) => {
-    await ensureRestored();
     const a = assets.find((x) => x.asset_id === assetId);
     if (a) a.app_rating = rating;
-    try {
-      await idbRun("assets", "readwrite", (os) => {
-        const req = os.get(assetId);
-        req.onsuccess = () => {
-          if (req.result) { req.result.app_rating = rating; os.put(req.result); }
-        };
-      });
-    } catch { /* rating stays session-only */ }
     return { ok: true };
   },
   deleteImageAssets: async (assetIds) => {
-    await ensureRestored();
     const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
     for (let i = assets.length - 1; i >= 0; i--) {
       if (ids.has(assets[i].asset_id)) {
@@ -1004,14 +913,9 @@ export const browserBridge = {
         assets.splice(i, 1);
       }
     }
-    try {
-      await idbRun("assets", "readwrite", (os) => { for (const id of ids) os.delete(id); });
-    } catch { /* records linger; harmless */ }
     // Keep collections consistent with the deleted assets.
     for (const row of collections) {
-      const before = row.asset_ids.length;
       row.asset_ids = row.asset_ids.filter((id) => !ids.has(id));
-      if (row.asset_ids.length !== before) await persistCollection(row);
     }
     return { removed: ids.size };
   },
@@ -1029,7 +933,16 @@ export const browserBridge = {
     return key || undefined;
   },
   startImport: async ({ imageDirs = [], rawDirs = [] } = {}) => {
-    await ensureRestored(); // ids must resume after restored assets
+    if (importJob?.running) throw new Error("Please wait for the current import to finish.");
+    const incoming = [...imageDirs, ...rawDirs].flatMap(d => pendingFiles.get(d) || []);
+    const existing = assets.filter(a => a.source === "user");
+    if (existing.length + incoming.length > 30 ||
+        existing.reduce((n, a) => n + (a.image_metadata.file_size || 0), 0) + incoming.reduce((n, f) => n + f.size, 0) > 200 * 1024 * 1024) {
+      for (const d of [...imageDirs, ...rawDirs]) pendingFiles.delete(d);
+      throw new Error(browserBridge.getInitialLocale().startsWith("zh")
+        ? "在线体验最多导入 30 张照片、合计 200 MB，示例图片不计入限制。"
+        : "The browser demo supports up to 30 imported photos and 200 MB per session. Sample photos do not count toward this limit.");
+    }
     const dirs = [...imageDirs, ...rawDirs];
     const files = dirs.flatMap((d) => {
       const staged = pendingFiles.get(d) || [];
@@ -1044,7 +957,7 @@ export const browserBridge = {
     };
     void (async () => {
       for (const file of files) {
-        await ingestFile(file);
+        await ingestFile(file, "user");
         importJob.done += 1;
         importJob.progress = importJob.total ? importJob.done / importJob.total : 1;
       }
@@ -1151,7 +1064,6 @@ export const browserBridge = {
 
   // ── AI repaint job (singleton, ai_repaint.py semantics) ──
   startAiRepaint: async (opts = {}) => {
-    await ensureRestored();
     if (repaintJob?.running) return repaintStatus(); // mirror desktop: one at a time
     repaintJob = { running: true, active: true, status: "running", kind: "ai_repaint", error: null, result: null, startedAt: Date.now() };
     void (async () => {
@@ -1175,11 +1087,9 @@ export const browserBridge = {
   },
   getAiRepaintStatus: async () => repaintStatus(),
   listRepaintHistory: async (sourcePath) => {
-    await ensureRestored();
     const source = assets.find((a) => a.image_path === sourcePath);
     if (!source) return [];
-    let rows;
-    try { rows = await idbGetAll("repaints"); } catch { return []; }
+    const rows = repaintHistory;
     const byId = new Map(assets.map((a) => [a.asset_id, a]));
     return rows
       .filter((r) => r.source_asset_id === source.asset_id && byId.has(r.output_asset_id))
@@ -1206,15 +1116,12 @@ export const browserBridge = {
   setAnnotationKey: async (id, token) => { sessionTokens.set(`annotation:${id}`, { token }); persistTokens(); return { token }; },
   deleteAnnotationKey: async (id) => { sessionTokens.delete(`annotation:${id}`); persistTokens(); },
   annotateAsset: async (opts = {}) => {
-    await ensureRestored();
     return await annotateOne(opts);
   },
   getAnnotation: async (assetId) => {
-    await ensureRestored();
     return assets.find((a) => a.asset_id === assetId)?.annotation || null;
   },
   addAssetTag: async (assetId, tag) => {
-    await ensureRestored();
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset) return null;
     const t = normalizeTag(tag);
@@ -1226,7 +1133,6 @@ export const browserBridge = {
     return await setAssetAnnotation(assetId, ann);
   },
   removeAssetTag: async (assetId, tag) => {
-    await ensureRestored();
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset?.annotation) return asset?.annotation || null;
     const t = normalizeTag(tag);
@@ -1234,21 +1140,17 @@ export const browserBridge = {
     return await setAssetAnnotation(assetId, ann);
   },
   listTags: async (limit = 50) => {
-    await ensureRestored();
     return aggregateTags(limit).map((t) => t.value);
   },
   clearAiLocation: async (assetId) => {
-    await ensureRestored();
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset?.annotation) return asset?.annotation || null;
     return await setAssetAnnotation(assetId, { ...asset.annotation, location: null, updated_at: new Date().toISOString() });
   },
   countAnnotationTargets: async (opts = {}) => {
-    await ensureRestored();
     return { count: resolveAnnotationTargets(opts).length };
   },
   startAnnotationJob: async (opts = {}) => {
-    await ensureRestored();
     if (annotationJob?.running) return jobStatus(annotationJob);
     const targets = resolveAnnotationTargets(opts);
     const shared = annotationOptsFromSettings(readAnnotationSettings()); // throws when unconfigured
