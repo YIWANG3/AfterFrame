@@ -78,3 +78,6 @@ apps/desktop/e2e/fixtures/big-frame-*.jpg
 *.egg-info/
 dist-web/
 e2e-web/.artifacts/
+
+# Local-only UI experiments and their photo assets
+/apps/desktop/lg-demo-electron/
