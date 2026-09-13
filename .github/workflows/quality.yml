@@ -81,3 +81,11 @@ jobs:
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
           e2e/29-folder-order.spec.js
+      - name: Upload E2E failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-e2e-failure
+          path: apps/desktop/e2e/.artifacts/
+          include-hidden-files: true
+          retention-days: 7

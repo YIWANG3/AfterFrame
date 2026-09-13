@@ -367,8 +367,8 @@ function dirHasCatalogDb(dirPath) {
 async function openSampleCatalog({ reset = false } = {}) {
   const samplePath = getSampleCatalogPath();
   if (reset && fs.existsSync(samplePath)) {
-    stopResidentSidecar(); // release sqlite handles before deleting
-    fs.rmSync(samplePath, { recursive: true, force: true });
+    await sidecarTransport.withCatalogPaused(samplePath, () =>
+      fs.promises.rm(samplePath, { recursive: true, force: true }));
   }
   // No DB yet means the catalog was never populated (or was reset / deleted
   // externally) — copy the bundled photos and import them. Both steps are
