@@ -92,10 +92,19 @@ test("view photos filters the gallery to that person", async () => {
 });
 
 test("the resident person filter in the gallery filter bar works", async () => {
+  const browseRequests = [];
+  const recordBrowse = (message) => {
+    if (message.text().includes("[browse] person filter request")) browseRequests.push(message.text());
+  };
+  ctx.window.on("console", recordBrowse);
   // Still in the assets view from the previous test, filter bar visible.
   await ctx.window.locator("div.flex-wrap").getByRole("button", { name: /^Person$/ }).click();
   await ctx.window.locator("div.fixed").getByRole("button", { name: /Chen Mo/ }).click();
   await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(4, { timeout: 10_000 });
+  ctx.window.off("console", recordBrowse);
+  // The immediate UI action and the filter effect used to queue the same
+  // person query twice, doubling the wait on the single resident sidecar.
+  expect(browseRequests).toHaveLength(1);
   await ctx.window.getByRole("button", { name: /Clear 1/ }).click();
 });
 

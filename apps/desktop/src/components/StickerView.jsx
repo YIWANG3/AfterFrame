@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Search, Star, Trash2, FolderOpen, ChevronRight, Cannabis, Eye } from "lucide-react";
+import { Star, Trash2, FolderOpen, ChevronRight, Cannabis, Eye } from "lucide-react";
 import { localFileUrl, fileName, stickerLabel } from "../utils/format";
+import LibraryToolbar from "./LibraryToolbar";
 
 // Sticker view that slots into the main App layout (replacing Toolbar+Gallery
 // in the center pane and the Inspector on the right when active). Same chrome
@@ -17,22 +18,14 @@ const GAP = 12;
 export function StickerToolbar({ count, query, setQuery }) {
   const { t } = useTranslation("stickerView");
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/40 bg-chrome px-3 text-[12px]">
-      <div className="flex items-center gap-2 text-muted2">
-        <Cannabis className="h-4 w-4" />
-        <span className="text-text">{t("title")}</span>
-        <span className="text-muted3">· {count}</span>
-      </div>
-      <div className="relative w-[280px]">
-        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted3" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("search")}
-          className="h-7 w-full rounded-md border border-border/60 bg-app pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
-        />
-      </div>
-    </div>
+    <LibraryToolbar
+      icon={Cannabis}
+      title={t("title")}
+      count={count}
+      query={query}
+      onQueryChange={setQuery}
+      searchPlaceholder={t("search")}
+    />
   );
 }
 
@@ -58,7 +51,7 @@ export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4">
+    <div data-testid="gallery-scroll" className="h-full overflow-y-auto p-4">
       <div
         className="grid"
         data-sticker-grid="true"

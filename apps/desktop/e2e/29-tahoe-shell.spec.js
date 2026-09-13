@@ -45,11 +45,22 @@ test.describe("Tahoe window and toolbar", () => {
     const page = ctx.window;
     expect(page.url()).toMatch(/^file:/);
     try {
-      await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setFullScreen(true));
+      await ctx.app.evaluate(({ BrowserWindow, Menu }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        const item = Menu.getApplicationMenu().getMenuItemById("toggle-fullscreen");
+        item.click(item, window, {});
+      });
       await expect(page.locator("html")).toHaveClass(/\bfs\b/, { timeout: 15000 });
       await expect(page.locator("#root")).toHaveCSS("clip-path", "none");
     } finally {
-      await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setFullScreen(false));
+      await ctx.app.evaluate(({ BrowserWindow, Menu }) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        const isFullScreen = process.platform === "darwin" ? window.isSimpleFullScreen() : window.isFullScreen();
+        if (isFullScreen) {
+          const item = Menu.getApplicationMenu().getMenuItemById("toggle-fullscreen");
+          item.click(item, window, {});
+        }
+      });
     }
     await expect(page.locator("html")).not.toHaveClass(/\bfs\b/, { timeout: 15000 });
     await expect(page.locator("#root")).not.toHaveCSS("clip-path", "none");

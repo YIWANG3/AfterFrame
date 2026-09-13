@@ -6,6 +6,7 @@
 // full gallery, and collapsing the map keeps the filter.
 
 const { test, expect } = require("@playwright/test");
+const sharp = require("sharp");
 const { launchApp, closeApp } = require("./helpers/app");
 
 test.describe("Map drawer", () => {
@@ -19,6 +20,16 @@ test.describe("Map drawer", () => {
   });
 
   test("map toggle expands the drawer and keeps the gallery DOM", async () => {
+    // Inspect the resource used by this running app, not the workspace dist:
+    // the installed .app may still contain an older build.
+    expect(await app.evaluate(({ app }) => {
+      const fs = process.getBuiltinModule("fs");
+      const path = process.getBuiltinModule("path");
+      return fs.existsSync(path.join(app.getAppPath(), "dist", "maplibre-worker.cjs"));
+    })).toBe(true);
+    const pageErrors = [];
+    const recordPageError = (error) => pageErrors.push(error.message);
+    window.on("pageerror", recordPageError);
     await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
     // Tag the gallery scroll container so we can prove the same DOM node
     // survives the toggle (items are virtualized, so tiles may re-mount when
@@ -36,6 +47,24 @@ test.describe("Map drawer", () => {
       .toBeGreaterThan(200);
     await expect(window.locator(".photo-map-stage[data-map-ready='true']")).toBeVisible({ timeout: 30_000 });
 
+    // Ready means a real WebGL frame, not merely that the HTML controls have
+    // mounted over a black/zero-sized canvas.
+    const canvas = window.locator("[data-testid='photo-map'] canvas");
+    const canvasSize = await canvas.evaluate((element) => ({
+      cssWidth: element.getBoundingClientRect().width,
+      cssHeight: element.getBoundingClientRect().height,
+      width: element.width,
+      height: element.height,
+    }));
+    expect(canvasSize.cssWidth).toBeGreaterThan(400);
+    expect(canvasSize.cssHeight).toBeGreaterThan(200);
+    expect(canvasSize.width).toBeGreaterThan(400);
+    expect(canvasSize.height).toBeGreaterThan(200);
+    const pixels = await sharp(await canvas.screenshot()).stats();
+    expect(Math.max(...pixels.channels.slice(0, 3).map((channel) => channel.stdev))).toBeGreaterThan(1);
+    expect(pageErrors.filter((message) => message.includes("Cannot use import statement outside a module"))).toEqual([]);
+    window.off("pageerror", recordPageError);
+
     // Same gallery instance, not a copy: the sentinel container is still there
     // with tiles inside it.
     await expect(window.locator("[data-testid='gallery-scroll'][data-map-spec-sentinel='1']")).toHaveCount(1);
@@ -43,6 +72,9 @@ test.describe("Map drawer", () => {
 
     // Two far-apart GPS points → photo markers appear on the world view.
     await expect(window.locator(".photo-map-marker").first()).toBeVisible({ timeout: 15_000 });
+    const screenshotPath = test.info().outputPath("rendered-map.png");
+    await drawer.screenshot({ path: screenshotPath });
+    await test.info().attach("rendered-map", { path: screenshotPath, contentType: "image/png" });
   });
 
   test("panning the map engages the viewport filter and narrows the gallery", async () => {

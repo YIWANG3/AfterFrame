@@ -321,7 +321,7 @@ export default function App() {
   const {
     selectedIds, setSelectedIds, setAnchorId: setSelectionAnchorId,
     selectedIdSet, selectedIndex,
-    selectSingle, handleItemSelect, selectByIndex,
+    selectSingle, selectRelatedAsset, handleItemSelect, selectByIndex,
     handleContextSelect, handleSelectionGroup, clearSelection,
     prepareDragSelection, moveSelection, selectByDirection,
   } = useSelection({
@@ -332,6 +332,7 @@ export default function App() {
     displayMode,
     primaryId: workspace.selectedAssetId,
     setPrimaryId: workspace.setSelectedAssetId,
+    setRelatedPrimaryId: workspace.setRelatedAssetId,
   });
   const selectedAssetIds = selectedIds;
 
@@ -1086,7 +1087,7 @@ export default function App() {
                 query={stickerView.query}
                 setQuery={stickerView.setQuery}
               />
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div data-testid="workspace-split" className="min-h-0 flex-1 overflow-hidden">
                 <StickerGallery
                   stickers={stickerView.stickers}
                   query={stickerView.query}
@@ -1265,7 +1266,7 @@ export default function App() {
             <Inspector
               detail={workspace.detail}
               onRatingChange={applyRating}
-              onSelectAsset={selectSingle}
+              onSelectAsset={selectRelatedAsset}
               onRelinked={() => workspace.refreshAll({ force: true })}
               onOpenPersonGroup={openPersonGroup}
               onPeopleChanged={() => workspace.reloadDetail?.()}

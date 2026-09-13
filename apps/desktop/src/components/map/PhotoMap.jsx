@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { loadMapData, loadMaplibre } from "./mapData";
+import { useEffect, useRef, useState } from "react";
+import { loadMapCoreData, loadMapDetailData, loadMaplibre } from "./mapData";
 import { createMarkerElement, updateMarkerElement, sortPointsForCover } from "./PhotoClusterMarker";
 import "./map.css";
 
@@ -55,10 +55,73 @@ function markerMode(zoom) {
 // Representative zoom for each detail level (matching the markerMode bands).
 const LEVEL_ZOOMS = { world: 1.35, region: 4, city: 7 };
 
+function addDetailLayers(map, mapData, palette) {
+  if (map.getSource("admin1-lines")) return;
+  map.addSource("admin1-lines", { type: "geojson", data: mapData.admin1Lines });
+  map.addSource("context-cities", { type: "geojson", data: mapData.cities });
+
+  const adminBands = [
+    ["admin1-major", 2, ["<=", ["get", "min_zoom"], 3]],
+    ["admin1-regional", 4.1, ["all", [">", ["get", "min_zoom"], 3], ["<=", ["get", "min_zoom"], 5]]],
+    ["admin1-local", 5.5, ["all", [">", ["get", "min_zoom"], 5], ["<=", ["get", "min_zoom"], 7]]],
+    ["admin1-fine", 7.4, ["all", [">", ["get", "min_zoom"], 7], ["<=", ["get", "min_zoom"], 8]]],
+    ["admin1-z9", 8.35, ["all", [">", ["get", "min_zoom"], 8], ["<=", ["get", "min_zoom"], 9]]],
+    ["admin1-z10", 9.35, ["all", [">", ["get", "min_zoom"], 9], ["<=", ["get", "min_zoom"], 10]]],
+    ["admin1-z11", 10.35, [">", ["get", "min_zoom"], 10]],
+  ];
+  for (const [id, minzoom, filter] of adminBands) {
+    const upperStop = Math.max(8, minzoom + 1);
+    map.addLayer({
+      id,
+      type: "line",
+      source: "admin1-lines",
+      minzoom,
+      filter,
+      paint: {
+        "line-color": palette.admin1Line,
+        "line-width": ["interpolate", ["linear"], ["zoom"], minzoom, 0.65, upperStop, 1.35],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], minzoom, 0.38, upperStop, 0.78],
+      },
+    });
+  }
+
+  const cityBands = [
+    ["major-cities", 2.5, 4.4, [">=", ["get", "population"], 1000000], 2.5],
+    ["regional-cities", 4, 6.4, [">=", ["get", "population"], 150000], 2.1],
+    ["local-cities", 6, 24, [">=", ["get", "population"], 0], 1.8],
+  ];
+  for (const [id, minzoom, maxzoom, filter, radius] of cityBands) {
+    map.addLayer({
+      id,
+      type: "circle",
+      source: "context-cities",
+      minzoom,
+      maxzoom,
+      filter,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], minzoom, radius, 8, radius + 1.4],
+        "circle-color": palette.cityDot,
+        "circle-opacity": 0.7,
+        "circle-stroke-color": palette.cityStroke,
+        "circle-stroke-width": 1,
+      },
+    });
+  }
+}
+
 // The interactive offline map. Owns one MapLibre instance for its lifetime —
 // MapDrawer keeps this component mounted after the first open, so re-opening
-// the drawer never re-parses the 22 MB base-map data.
-export default function PhotoMap({ points, onViewportChange, onSelectAsset, visible, levelLabels, flyTo, scrollZoom = true }) {
+// the drawer never re-parses the offline base-map data.
+export default function PhotoMap({
+  points,
+  onViewportChange,
+  onSelectAsset,
+  visible,
+  levelLabels,
+  statusLabels,
+  flyTo,
+  scrollZoom = true,
+}) {
   const stageRef = useRef(null);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -68,6 +131,8 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
   const markersRef = useRef(new Map());
   const stateRef = useRef({ points: [], destroyed: false, maplibre: null });
   const callbacksRef = useRef({});
+  const [loadState, setLoadState] = useState("loading");
+  const [retryKey, setRetryKey] = useState(0);
   callbacksRef.current = { onViewportChange, onSelectAsset };
   const scrollZoomRef = useRef(scrollZoom);
   scrollZoomRef.current = scrollZoom;
@@ -83,29 +148,58 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
   useEffect(() => {
     const state = stateRef.current;
     state.destroyed = false;
+    state.baseReady = false;
     let cancelled = false;
+    let resizeObserver = null;
+
+    stageRef.current?.removeAttribute("data-map-ready");
+    stageRef.current?.setAttribute("data-map-state", "loading");
+    setLoadState("loading");
+
+    const failMap = (error) => {
+      if (cancelled || state.destroyed) return;
+      console.error("[photo-map] failed to initialize", error);
+      stageRef.current?.setAttribute("data-map-state", "error");
+      setLoadState("error");
+    };
 
     (async () => {
-      const [maplibregl, mapData] = await Promise.all([loadMaplibre(), loadMapData()]);
-      if (cancelled || !containerRef.current) return;
-      state.maplibre = maplibregl;
-      const palette = currentPalette();
+      try {
+        const [maplibregl, mapData] = await Promise.all([loadMaplibre(), loadMapCoreData()]);
+        if (cancelled || !containerRef.current) return;
+        state.maplibre = maplibregl;
+        const palette = currentPalette();
 
-      const map = new maplibregl.Map({
-        container: containerRef.current,
-        center: [8, 18],
-        zoom: 1.35,
-        minZoom: 0.75,
-        maxZoom: 14,
-        attributionControl: false,
-        renderWorldCopies: false,
-        style: {
-          version: 8,
-          sources: {},
-          layers: [{ id: "ocean", type: "background", paint: { "background-color": palette.ocean } }],
-        },
-      });
-      mapRef.current = map;
+        const map = new maplibregl.Map({
+          container: containerRef.current,
+          center: [8, 18],
+          zoom: 1.35,
+          minZoom: 0.75,
+          maxZoom: 14,
+          attributionControl: false,
+          renderWorldCopies: false,
+          style: {
+            version: 8,
+            sources: {},
+            layers: [{ id: "ocean", type: "background", paint: { "background-color": palette.ocean } }],
+          },
+        });
+        mapRef.current = map;
+        // The drawer animates from zero height. Observe the actual container
+        // instead of relying on the `visible` effect, which can run before the
+        // asynchronous map instance exists on first open.
+        if (typeof ResizeObserver !== "undefined") {
+          resizeObserver = new ResizeObserver(() => {
+            if (!state.destroyed && containerRef.current?.clientWidth && containerRef.current?.clientHeight) {
+              map.resize();
+            }
+          });
+          resizeObserver.observe(containerRef.current);
+        }
+        map.on("error", (event) => {
+          if (!state.baseReady) failMap(event?.error || event);
+          else console.error("[photo-map] render error", event?.error || event);
+        });
       // Embedded in a scrolling page (Discover) the wheel must keep scrolling
       // the page, not zoom the map — the +/− control and drag still work.
       if (!scrollZoomRef.current) map.scrollZoom.disable();
@@ -119,12 +213,11 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
         "bottom-right",
       );
 
-      map.on("load", () => {
-        if (state.destroyed) return;
+        map.on("load", () => {
+          if (state.destroyed) return;
+          try {
         map.addSource("land", { type: "geojson", data: mapData.land });
         map.addSource("country-boundaries", { type: "geojson", data: mapData.countryBoundaries });
-        map.addSource("admin1-lines", { type: "geojson", data: mapData.admin1Lines });
-        map.addSource("context-cities", { type: "geojson", data: mapData.cities });
         map.addSource("photo-locations", {
           type: "geojson",
           data: pointsToGeoJSON(state.points),
@@ -169,71 +262,39 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
             "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.52, 5, 0.8],
           },
         });
-        // Admin-1 boundaries appear progressively: each band's min_zoom property
-        // (precomputed in the data) gates when its lines join in.
-        const adminBands = [
-          ["admin1-major", 2, ["<=", ["get", "min_zoom"], 3]],
-          ["admin1-regional", 4.1, ["all", [">", ["get", "min_zoom"], 3], ["<=", ["get", "min_zoom"], 5]]],
-          ["admin1-local", 5.5, ["all", [">", ["get", "min_zoom"], 5], ["<=", ["get", "min_zoom"], 7]]],
-          ["admin1-fine", 7.4, ["all", [">", ["get", "min_zoom"], 7], ["<=", ["get", "min_zoom"], 8]]],
-          ["admin1-z9", 8.35, ["all", [">", ["get", "min_zoom"], 8], ["<=", ["get", "min_zoom"], 9]]],
-          ["admin1-z10", 9.35, ["all", [">", ["get", "min_zoom"], 9], ["<=", ["get", "min_zoom"], 10]]],
-          ["admin1-z11", 10.35, [">", ["get", "min_zoom"], 10]],
-        ];
-        for (const [id, minzoom, filter] of adminBands) {
-          // Interpolate stops must strictly ascend — for the high-zoom bands
-          // the original 8 upper stop would sit below minzoom.
-          const upperStop = Math.max(8, minzoom + 1);
-          map.addLayer({
-            id,
-            type: "line",
-            source: "admin1-lines",
-            minzoom,
-            filter,
-            paint: {
-              "line-color": palette.admin1Line,
-              "line-width": ["interpolate", ["linear"], ["zoom"], minzoom, 0.65, upperStop, 1.35],
-              "line-opacity": ["interpolate", ["linear"], ["zoom"], minzoom, 0.38, upperStop, 0.78],
-            },
-          });
-        }
-        const cityBands = [
-          ["major-cities", 2.5, 4.4, [">=", ["get", "population"], 1000000], 2.5],
-          ["regional-cities", 4, 6.4, [">=", ["get", "population"], 150000], 2.1],
-          ["local-cities", 6, 24, [">=", ["get", "population"], 0], 1.8],
-        ];
-        for (const [id, minzoom, maxzoom, filter, radius] of cityBands) {
-          map.addLayer({
-            id,
-            type: "circle",
-            source: "context-cities",
-            minzoom,
-            maxzoom,
-            filter,
-            paint: {
-              "circle-radius": ["interpolate", ["linear"], ["zoom"], minzoom, radius, 8, radius + 1.4],
-              "circle-color": palette.cityDot,
-              "circle-opacity": 0.7,
-              "circle-stroke-color": palette.cityStroke,
-              "circle-stroke-width": 1,
-            },
-          });
-        }
-
-        state.labelData = {
-          regions: [...mapData.admin1Labels.features].sort(
-            (a, b) => (a.properties.minZoom || 20) - (b.properties.minZoom || 20),
-          ),
-          cities: [...mapData.cities.features].sort(
-            (a, b) => (b.properties.population || 0) - (a.properties.population || 0),
-          ),
-        };
-
-        stageRef.current?.setAttribute("data-map-ready", "true");
-        updateMarkers();
-        updateLabels();
-        emitViewport();
-      });
+            const markReady = () => {
+              if (state.destroyed || state.baseReady) return;
+              if (!map.isSourceLoaded("land") || !map.isSourceLoaded("country-boundaries")) return;
+              state.baseReady = true;
+              stageRef.current?.setAttribute("data-map-ready", "true");
+              stageRef.current?.setAttribute("data-map-state", "ready");
+              setLoadState("ready");
+              updateMarkers();
+              emitViewport();
+              // Detailed regional boundaries and city context are large. Load
+              // them only after the useful world map is already on screen.
+              loadMapDetailData()
+                .then((detailData) => {
+                  if (cancelled || state.destroyed || mapRef.current !== map) return;
+                  addDetailLayers(map, detailData, currentPalette());
+                  state.labelData = {
+                    regions: [...detailData.admin1Labels.features].sort(
+                      (a, b) => (a.properties.minZoom || 20) - (b.properties.minZoom || 20),
+                    ),
+                    cities: [...detailData.cities.features].sort(
+                      (a, b) => (b.properties.population || 0) - (a.properties.population || 0),
+                    ),
+                  };
+                  updateLabels();
+                })
+                .catch((error) => console.warn("[photo-map] detail layers unavailable", error));
+            };
+            map.on("sourcedata", markReady);
+            markReady();
+          } catch (error) {
+            failMap(error);
+          }
+        });
 
       const scheduleLabels = () => {
         if (state.labelFrame) return;
@@ -273,7 +334,7 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
       // Test backdoor (same pattern as window.__afterframeTest): deterministic
       // camera moves for E2E — real pointer drags through the WebGL canvas are
       // timing-sensitive under automation. jumpTo counts as user interaction.
-      window.__afterframeMapTest = {
+        window.__afterframeMapTest = {
         jumpTo(center, zoom) {
           state.interacted = true;
           map.jumpTo({ center, zoom });
@@ -286,7 +347,10 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
             markerCount: markersRef.current.size,
           };
         },
-      };
+        };
+      } catch (error) {
+        failMap(error);
+      }
     })();
 
     function emitViewport() {
@@ -459,6 +523,7 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
     return () => {
       cancelled = true;
       state.destroyed = true;
+      resizeObserver?.disconnect();
       if (state.labelFrame) cancelAnimationFrame(state.labelFrame);
       for (const marker of markers.values()) marker.remove();
       markers.clear();
@@ -466,7 +531,7 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [retryKey]);
 
   // External fly-to (Inspector location click). App sends a fresh object per
   // click, so repeated jumps to the same place still animate. If the map is
@@ -507,9 +572,10 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
       ]);
       map.setPaintProperty("country-outline", "line-color", palette.countryLine);
       for (const id of ["admin1-major", "admin1-regional", "admin1-local", "admin1-fine", "admin1-z9", "admin1-z10", "admin1-z11"]) {
-        map.setPaintProperty(id, "line-color", palette.admin1Line);
+        if (map.getLayer(id)) map.setPaintProperty(id, "line-color", palette.admin1Line);
       }
       for (const id of ["major-cities", "regional-cities", "local-cities"]) {
+        if (!map.getLayer(id)) continue;
         map.setPaintProperty(id, "circle-color", palette.cityDot);
         map.setPaintProperty(id, "circle-stroke-color", palette.cityStroke);
       }
@@ -525,7 +591,7 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
   }, [visible]);
 
   return (
-    <div ref={stageRef} className="photo-map-stage" data-marker-mode="compact">
+    <div ref={stageRef} className="photo-map-stage" data-marker-mode="compact" data-map-state={loadState}>
       <div ref={containerRef} className="photo-map-canvas" data-testid="photo-map" />
       <div data-map-region-labels className="photo-map-label-layer" aria-hidden="true" />
       <div data-map-city-labels className="photo-map-label-layer" aria-hidden="true" />
@@ -549,6 +615,23 @@ export default function PhotoMap({ points, onViewportChange, onSelectAsset, visi
               {levelLabels[level]}
             </button>
           ))}
+        </div>
+      ) : null}
+      {loadState !== "ready" ? (
+        <div className="photo-map-status" data-testid="map-status" role={loadState === "error" ? "alert" : "status"}>
+          {loadState === "error" ? (
+            <>
+              <span>{statusLabels?.error || "Map couldn't load"}</span>
+              <button type="button" onClick={() => setRetryKey((value) => value + 1)}>
+                {statusLabels?.retry || "Retry"}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="photo-map-status__spinner" aria-hidden="true" />
+              <span>{statusLabels?.loading || "Loading map…"}</span>
+            </>
+          )}
         </div>
       ) : null}
     </div>

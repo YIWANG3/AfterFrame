@@ -34,5 +34,6 @@
   "view": "视图",
   "refresh": "刷新",
   "toggleTheme": "切换主题",
+  "toggleFullscreen": "切换全屏",
   "window": "窗口"
 }

@@ -423,8 +423,11 @@ html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag
 html.electron .noise-overlay > .grid > aside.border-r > * { -webkit-app-region: no-drag; }
 html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: drag; pointer-events: auto; }
 html.electron .noise-overlay > .grid > section.bg-app > .app-toolbar > * { -webkit-app-region: no-drag; }
+html.electron .noise-overlay > .grid > section.bg-app .library-view > .app-toolbar { -webkit-app-region: drag; pointer-events: auto; }
+html.electron .noise-overlay > .grid > section.bg-app .library-view > .app-toolbar > * { -webkit-app-region: no-drag; }
 html.electron.fs .noise-overlay > .grid, html.electron.fs .noise-overlay > .grid > aside.border-r,
-html.electron.fs .noise-overlay > .grid > section.bg-app > .app-toolbar { -webkit-app-region: no-drag; }
+html.electron.fs .noise-overlay > .grid > section.bg-app > .app-toolbar,
+html.electron.fs .noise-overlay > .grid > section.bg-app .library-view > .app-toolbar { -webkit-app-region: no-drag; }
 /* 全屏覆盖层(灯箱 / 编辑器 / 拼图 / 设置 / 对话框)打开时,底下的拖拽区仍然生效:Electron 算拖拽区只看元素矩形,不看层叠顺序。
    给覆盖层整块标 no-drag 把窗口从拖拽区里减掉;覆盖层自己的头部一行给回可拖,控件 no-drag */
 html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
@@ -467,6 +470,10 @@ html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-
 .noise-overlay > .grid > section.bg-app { position: relative; }
 .noise-overlay > .grid > section.bg-app > .app-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 50; pointer-events: none; }
 .noise-overlay > .grid > section.bg-app > .app-toolbar > * { pointer-events: auto; }
+/* People owns its toolbar inside the view because its selection and scan state
+   are local. Keep it on the exact same floating plane as direct toolbars. */
+.noise-overlay > .grid > section.bg-app .library-view > .app-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 50; pointer-events: none; }
+.noise-overlay > .grid > section.bg-app .library-view > .app-toolbar > * { pointer-events: auto; }
 /* 筛选行也浮在工具栏之下一行 */
 .noise-overlay > .grid > section.bg-app > .flex-wrap.border-b { position: absolute; top: 52px; left: 0; right: 0; z-index: 49; }
 /* One row, always: on a narrow window the bar scrolls sideways instead of

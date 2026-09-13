@@ -246,13 +246,16 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     elif filters.get("annotated") == "without":
         add("NOT EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
     if filters.get("person_group"):
+        # Build this person's asset set once. A correlated EXISTS lets SQLite
+        # choose group_id first for *every* gallery row, repeatedly walking all
+        # faces in a large group (library size × group size). IN also dedupes
+        # multiple faces in one photo without changing pagination semantics.
         add(
-            """EXISTS (
-                SELECT 1
-                FROM asset_faces AS face
-                JOIN person_group_faces AS membership ON membership.face_id = face.face_id
-                WHERE face.asset_id = assets.asset_id
-                  AND membership.group_id = ?
+            """assets.asset_id IN (
+                SELECT face.asset_id
+                FROM person_group_faces AS membership
+                JOIN asset_faces AS face ON face.face_id = membership.face_id
+                WHERE membership.group_id = ?
                   AND membership.membership_state != 'rejected'
             )""",
             filters["person_group"],

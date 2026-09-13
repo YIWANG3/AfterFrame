@@ -198,6 +198,16 @@ npm run dist:mac:release  # also notarize — set APPLE_ID / APPLE_APP_SPECIFIC_
 
 The `.dmg` will be in `apps/desktop/release/`. Requires `pyinstaller` (`pip3 install pyinstaller`) for the sidecar step. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
 
+`npm run build` updates the workspace renderer only; it does not update an
+installed `/Applications/AfterFrame.app`. To verify the actual packaged app
+(including ASAR resources and the map Worker), run from `apps/desktop`:
+
+```bash
+AFTERFRAME_E2E_EXECUTABLE="/Applications/AfterFrame.app/Contents/MacOS/AfterFrame" npx playwright test e2e/23-map.spec.js
+```
+
+This uses a temporary test catalog and settings, leaving the personal library untouched.
+
 ## Project Structure
 
 ```

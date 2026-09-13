@@ -19,6 +19,50 @@
   inset: 0;
 }
 
+.photo-map-status {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgb(var(--chrome-bg) / 0.94);
+  color: rgb(var(--text-color) / 0.58);
+  font-size: 12px;
+}
+
+.photo-map-status button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgb(var(--border-color));
+  border-radius: 999px;
+  background: rgb(var(--text-color) / 0.08);
+  color: rgb(var(--text-color));
+  cursor: pointer;
+}
+
+.photo-map-status button:hover {
+  background: rgb(var(--text-color) / 0.13);
+}
+
+.photo-map-status__spinner {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid rgb(var(--text-color) / 0.2);
+  border-top-color: rgb(var(--text-color) / 0.72);
+  border-radius: 50%;
+  animation: photo-map-spin 700ms linear infinite;
+}
+
+@keyframes photo-map-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-map-status__spinner { animation-duration: 1.6s; }
+}
+
 /* Zoom control: frosted pill matching the app chrome instead of MapLibre's
    white default. Icons are MapLibre's background-image SVGs — recolored via
    filter for dark theme. */

@@ -224,6 +224,8 @@
   },
   "map": {
     "loading": "正在加载地图…",
+    "error": "地图加载失败",
+    "retry": "重试",
     "resize": "调整地图高度",
     "level": {
       "world": "世界",

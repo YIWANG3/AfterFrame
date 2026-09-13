@@ -8,7 +8,48 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 
-function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath, getCatalogPath }) {
+function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath, getCatalogPath, spawnProcess = spawn }) {
+  const processes = new Set();
+  const pausedCatalogs = new Set();
+  const catalogGenerations = new Map();
+  const generationOf = (catalogPath) => catalogGenerations.get(catalogPath) || 0;
+
+  function trackProcess(child, catalogPath, detached = false) {
+    const state = { child, catalogPath, detached };
+    state.closed = new Promise((resolve) => child.once("close", () => {
+      processes.delete(state);
+      resolve();
+    }));
+    processes.add(state);
+    return child;
+  }
+
+  // Resetting a catalog is different from switching away: no process may keep
+  // writing to this path, and pre-reset requests must not retry into its new DB.
+  async function withCatalogPaused(catalogPath, action) {
+    if (pausedCatalogs.has(catalogPath)) throw new Error("catalog reset already in progress");
+    pausedCatalogs.add(catalogPath);
+    catalogGenerations.set(catalogPath, generationOf(catalogPath) + 1);
+    try {
+      const active = [...processes].filter((state) => state.catalogPath === catalogPath);
+      if (residentSidecar?.catalogPath === catalogPath) stopResidentSidecar();
+      await Promise.all(active.map(async (state) => {
+        const kill = (signal) => {
+          try {
+            // Detached jobs can own preview helpers; terminate their group too.
+            if (state.detached && process.platform !== "win32") process.kill(-state.child.pid, signal);
+            else state.child.kill(signal);
+          } catch (_) { /* already exited */ }
+        };
+        kill("SIGTERM");
+        const timer = setTimeout(() => kill("SIGKILL"), 2000);
+        try { await state.closed; } finally { clearTimeout(timer); }
+      }));
+      return await action();
+    } finally {
+      pausedCatalogs.delete(catalogPath);
+    }
+  }
   // Secrets must never ride on argv — `ps` shows it to every local process and
   // our transport logs would print it. The transport strips `--api-key <value>`
   // here and hands it to the child via env instead; the sidecar falls back to
@@ -61,7 +102,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     let spawned;
     try {
       const { cmd, args, env } = sidecarCommand(["serve"]);
-      spawned = spawn(cmd, args, { cwd: rootDir, env });
+      spawned = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env }), getCatalogPath());
     } catch (err) {
       console.warn("[sidecar:resident] failed to start:", err.message);
       return null;
@@ -150,24 +191,31 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     // mid-flight rejects resident requests, and retrying via one-shot would
     // silently rebuild --catalog against the NEW path — wrong-library writes.
     const issuedCatalogPath = getCatalogPath();
+    const issuedGeneration = generationOf(issuedCatalogPath);
+    const assertCurrentCatalog = () => {
+      if (getCatalogPath() !== issuedCatalogPath || generationOf(issuedCatalogPath) !== issuedGeneration) {
+        throw new Error(`catalog switched or reset while command was in flight: ${command[0]}`);
+      }
+    };
+    if (pausedCatalogs.has(issuedCatalogPath)) throw new Error("catalog reset in progress");
     const residentPromise = callSidecarResident(command, timeoutMs);
     if (residentPromise) {
       try {
-        return await residentPromise;
+        const result = await residentPromise;
+        assertCurrentCatalog();
+        return result;
       } catch (err) {
         // Genuine timeouts propagate (the command itself hung); transport-level
         // failures (process died, stopped) retry once via one-shot spawn.
         if (/timed out after/.test(err.message)) throw err;
-        if (getCatalogPath() !== issuedCatalogPath) {
-          throw new Error(`catalog switched while command was in flight: ${command[0]}`, { cause: err });
-        }
+        assertCurrentCatalog();
         console.warn("[sidecar:resident] falling back to one-shot:", err.message);
       }
     }
-    if (getCatalogPath() !== issuedCatalogPath) {
-      throw new Error(`catalog switched while command was in flight: ${command[0]}`);
-    }
-    return callSidecarOneShot(command, timeoutMs);
+    assertCurrentCatalog();
+    const result = await callSidecarOneShot(command, timeoutMs);
+    assertCurrentCatalog();
+    return result;
   }
 
   function callSidecarOneShot(command, timeoutMs = 30000) {
@@ -178,7 +226,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       const { cmd, args, env } = sidecarCommand(sanitized);
       console.log("[sidecar:async]", cmd, args.join(" "));
       const t0 = Date.now();
-      const child = spawn(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv } });
+      const child = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv } }), getCatalogPath());
 
       const timer = setTimeout(() => {
         console.error("[sidecar:async] TIMEOUT after", timeoutMs, "ms — killing child");
@@ -230,6 +278,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     : path.join(rootDir, "apps", "desktop", "native", "bin", "people-worker");
 
   function sidecarCommand(command) {
+    if (pausedCatalogs.has(getCatalogPath())) throw new Error("catalog reset in progress");
     if (!getCatalogPath()) {
       console.error("[sidecarCommand] No catalog is open! command:", command);
       throw new Error("No catalog is open");
@@ -252,10 +301,12 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   function spawnDetachedSidecar(command) {
     const { sanitized, secretEnv } = extractSecretEnv(command);
     const { cmd, args, env } = sidecarCommand(sanitized);
-    return spawn(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore" });
+    return trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore" }), getCatalogPath(), true);
   }
 
   function launchSidecarJob(command) {
+    const catalogPath = getCatalogPath();
+    const generation = generationOf(catalogPath);
     const child = spawnDetachedSidecar(command);
     // A runner that dies before its first update_job (spawn failure, argparse
     // rejection) would leave the row 'queued' until the heartbeat reaper —
@@ -264,15 +315,18 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     // a nonzero exit AFTER completion can't clobber a real outcome.
     const jobIdIdx = command.indexOf("--job-id");
     const jobId = jobIdIdx >= 0 ? command[jobIdIdx + 1] : null;
+    const canReportFailure = () => getCatalogPath() === catalogPath
+      && generationOf(catalogPath) === generation && !pausedCatalogs.has(catalogPath);
     if (jobId) {
       child.on("exit", (code) => {
-        if (code === 0 || code == null) return;
+        if (code === 0 || code == null || !canReportFailure()) return;
         callSidecarJsonAsync([
           "fail-job", "--job-id", jobId,
           "--error", `sidecar job process exited with code ${code} before reporting status`,
         ]).catch(() => {});
       });
       child.on("error", () => {
+        if (!canReportFailure()) return;
         callSidecarJsonAsync([
           "fail-job", "--job-id", jobId,
           "--error", "sidecar job process failed to start",
@@ -287,6 +341,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     callJsonAsync: callSidecarJsonAsync,
     launchJob: launchSidecarJob,
     stopResident: stopResidentSidecar,
+    withCatalogPaused,
   };
 }
 
