@@ -233,6 +233,8 @@
   },
   "map": {
     "loading": "Loading map…",
+    "error": "Map couldn't load",
+    "retry": "Retry",
     "resize": "Resize map",
     "level": {
       "world": "World",

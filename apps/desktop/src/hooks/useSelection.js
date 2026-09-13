@@ -13,6 +13,7 @@ export default function useSelection({
   displayMode,
   primaryId,
   setPrimaryId,
+  setRelatedPrimaryId = setPrimaryId,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [anchorId, setAnchorId] = useState(null);
@@ -47,6 +48,20 @@ export default function useSelection({
 
   function selectSingle(id) {
     commitSelection(id ? [id] : [], id, id);
+  }
+
+  // Inspector relationships can point to an asset outside the currently
+  // loaded page (or hidden by the active search/filter). It still needs to
+  // become the primary asset so its detail can load; keeping the old visible
+  // multi-selection would make subsequent actions target the wrong photos.
+  function selectRelatedAsset(id) {
+    if (!id || itemById.has(id)) {
+      selectSingle(id);
+      return;
+    }
+    setSelectedIds([]);
+    setAnchorId(null);
+    setRelatedPrimaryId(id);
   }
 
   function toggleSelection(id) {
@@ -265,6 +280,7 @@ export default function useSelection({
     selectedIndex,
     commitSelection,
     selectSingle,
+    selectRelatedAsset,
     toggleSelection,
     selectRange,
     handleItemSelect,

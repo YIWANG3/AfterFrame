@@ -44,6 +44,8 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
     AFTERFRAME_MCP_PORT: String(mcpPort),
     NODE_ENV: "test",
   };
+  // Production tests must not accidentally attach to an inherited Vite URL.
+  delete env.VITE_DEV_SERVER_URL;
 
   // Simulate packaged first-run (no default catalog) — exercises the
   // no-catalog welcome state, which dev's scratch catalog would otherwise hide.
@@ -61,7 +63,11 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
   }
 
   const app = await electron.launch({
-    args: [REPO_DESKTOP_DIR],
+    // Exercise the actual .app / ASAR when requested, including packaged
+    // Worker URLs and sidecar resources rather than only dist on disk.
+    ...(process.env.AFTERFRAME_E2E_EXECUTABLE
+      ? { executablePath: path.resolve(process.env.AFTERFRAME_E2E_EXECUTABLE), args: [] }
+      : { args: [REPO_DESKTOP_DIR] }),
     cwd: REPO_DESKTOP_DIR,
     env,
   });

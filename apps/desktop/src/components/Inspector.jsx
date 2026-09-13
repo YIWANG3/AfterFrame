@@ -64,7 +64,7 @@ function formatGPS(lat, lon) {
   return `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lon).toFixed(4)}° ${lonDir}`;
 }
 
-function ThumbnailStrip({ items, icon: Icon, onSelect }) {
+function ThumbnailStrip({ items, icon: Icon, onSelect, testId }) {
   if (!items?.length) return null;
   return (
     <div className="mt-1.5 flex flex-wrap gap-1">
@@ -72,6 +72,8 @@ function ThumbnailStrip({ items, icon: Icon, onSelect }) {
         <button
           key={item.asset_id}
           type="button"
+          data-testid={testId}
+          data-asset-id={item.asset_id}
           className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-black transition-all hover:ring-2 hover:ring-accent/50"
           onClick={() => onSelect?.(item.asset_id)}
           title={item.stem}
@@ -238,7 +240,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
         </div>
 
         <div className="px-0.5">
-          <h2 className="text-[13px] font-medium leading-tight text-text">{imageName || detail.stem}</h2>
+          <h2 className="text-[13px] font-medium leading-tight text-text" data-testid="inspector-asset-title">{imageName || detail.stem}</h2>
 
           {missing ? (
             <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[rgba(239,159,39,0.42)] bg-[rgba(120,70,8,0.18)] px-2.5 py-2">
@@ -264,14 +266,14 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           {detail.collage_sources?.length > 0 ? (
             <div className="mt-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.sourceImages")}</div>
-              <ThumbnailStrip items={detail.collage_sources} onSelect={onSelectAsset} />
+              <ThumbnailStrip items={detail.collage_sources} onSelect={onSelectAsset} testId="collage-source" />
             </div>
           ) : null}
 
           {detail.version_siblings?.length > 0 ? (
             <div className="mt-2">
               <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.otherVersions")}</div>
-              <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} />
+              <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} testId="version-sibling" />
             </div>
           ) : null}
 

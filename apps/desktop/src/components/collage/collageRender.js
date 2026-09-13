@@ -32,6 +32,39 @@ export function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// Canvas strokes are centred on their path. Drawing a CSS-pixel stroke around
+// fractional cell bounds can therefore put each edge on a different device-
+// pixel phase, making an otherwise equal-width ring look uneven. Convert the
+// bounds to device pixels first, then inset the path by half an integer-width
+// stroke so all four outer edges land exactly on device-pixel boundaries.
+export function getPixelAlignedStrokeRect(rect, scaleX, scaleY, cssLineWidth) {
+  const sx = Math.max(Number.EPSILON, scaleX);
+  const sy = Math.max(Number.EPSILON, scaleY);
+  const lineWidth = Math.max(1, Math.round(cssLineWidth * Math.min(sx, sy)));
+  const left = Math.round(rect.x * sx);
+  const top = Math.round(rect.y * sy);
+  const right = Math.round((rect.x + rect.w) * sx);
+  const bottom = Math.round((rect.y + rect.h) * sy);
+  const inset = lineWidth / 2;
+
+  return {
+    outer: {
+      x: left,
+      y: top,
+      w: Math.max(0, right - left),
+      h: Math.max(0, bottom - top),
+    },
+    stroke: {
+      x: left + inset,
+      y: top + inset,
+      w: Math.max(0, right - left - lineWidth),
+      h: Math.max(0, bottom - top - lineWidth),
+    },
+    lineWidth,
+    radiusScale: Math.min(sx, sy),
+  };
+}
+
 export function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
   const { x, y, w, h } = cellRect;
   ctx.save();

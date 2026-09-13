@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Download, LoaderCircle, RefreshCw, ScanFace, Search, Settings2, Trash2, UsersRound } from "lucide-react";
+import { Check, Download, LoaderCircle, RefreshCw, ScanFace, Settings2, Trash2, UsersRound } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
+import LibraryToolbar from "./LibraryToolbar";
 import NamePersonPopover from "./NamePersonPopover";
 import { confirm } from "./confirm";
 
@@ -246,57 +247,58 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   }, [visible, ordered, selectedId, naming, select, onOpenGroup]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/40 bg-chrome px-3 text-[12px]">
-        <div className="flex min-w-0 items-center gap-2 text-muted2">
-          <UsersRound className="h-4 w-4" />
-          <h1 className="text-[12px] font-normal text-text">{t("people.title")}</h1>
-          <span className="text-muted3">· {groups.length}</span>
-          {selectedIds.size > 1 && (
-            <span className="ml-1 rounded-full bg-accent/12 px-2 py-0.5 text-[10px] text-accent">
-              {t("people.selectedGroups", { count: selectedIds.size })}
-            </span>
-          )}
-          {scanning && (
-            <span className="ml-2 flex items-center gap-1.5 truncate text-[11px] text-muted">
-              <LoaderCircle className="h-3 w-3 animate-spin" />
-              {t("people.scanning", { percent: scanPercent })}
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => void requestScan()}
-            disabled={scanBusy}
-            title={modelMissing ? t("people.downloadAndScanHint") : t("people.scanHint")}
-            className="flex h-7 items-center gap-1.5 rounded-md border border-border/60 px-2.5 text-[11px] text-muted transition hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-50"
-          >
-            <ScanIcon className={scanIconClass} />
-            {scanLabel}
-          </button>
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            title={t("people.refresh")}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-border/60 text-muted transition hover:bg-hover hover:text-text disabled:cursor-wait disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          </button>
-          <div className="relative w-[240px]">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted3" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("people.searchPlaceholder")}
-              className="h-7 w-full rounded-md border border-border/60 bg-app pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
-            />
-          </div>
-        </div>
-      </div>
+    <div data-testid="workspace-split" className="library-view relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <LibraryToolbar
+        icon={UsersRound}
+        title={t("people.title")}
+        count={groups.length}
+        query={query}
+        onQueryChange={setQuery}
+        searchPlaceholder={t("people.searchPlaceholder")}
+        meta={(
+          <>
+            {selectedIds.size > 1 && (
+              <span className="ml-1 rounded-full bg-accent/12 px-2 py-0.5 text-[10px] text-accent">
+                {t("people.selectedGroups", { count: selectedIds.size })}
+              </span>
+            )}
+            {scanning && (
+              <span className="ml-2 flex items-center gap-1.5 truncate text-[11px] text-muted">
+                <LoaderCircle className="h-3 w-3 animate-spin" />
+                {t("people.scanning", { percent: scanPercent })}
+              </span>
+            )}
+          </>
+        )}
+        actions={(
+          <>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => void requestScan()}
+                disabled={scanBusy}
+                title={modelMissing ? t("people.downloadAndScanHint") : t("people.scanHint")}
+                className="flex h-8 items-center gap-1.5 rounded-md border border-border/60 px-2.5 text-[11px] text-muted transition hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-50"
+              >
+                <ScanIcon className={scanIconClass} />
+                {scanLabel}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              title={t("people.refresh")}
+              aria-label={t("people.refresh")}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-hover hover:text-text disabled:cursor-wait disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            </button>
+          </>
+        )}
+      />
 
-      <main ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-6">
+      <main ref={scrollRef} data-testid="gallery-scroll" className="min-h-0 flex-1 overflow-y-auto p-6">
         {loading && !groups.length ? (
           <div className="flex h-full min-h-48 flex-col items-center justify-center gap-3 text-muted2">
             <LoaderCircle className="h-5 w-5 animate-spin" />

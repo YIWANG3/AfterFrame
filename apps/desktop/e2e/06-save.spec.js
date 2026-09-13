@@ -111,6 +111,36 @@ test.describe("Save pipeline", () => {
     // ORIGINAL → NEW: the original's version stack now includes the new image.
     const originAfter = await window.evaluate((id) => window.mediaWorkspace.getAssetDetailById(id), originId);
     expect((originAfter.version_siblings || []).map((s) => s.asset_id)).toContain(newDetail.asset_id);
+
+    // A related version may be outside the loaded gallery because of search,
+    // filtering or pagination. Clicking its inspector thumbnail must still
+    // load that asset instead of clearing the inspector to "Select an asset".
+    await window.evaluate(() => window.__afterframeTest.closeEditor?.());
+    const originName = path.basename(originBefore.image_path);
+    const versionName = path.basename(newDetail.image_path);
+    // Move off the original first so selecting it after the search performs a
+    // fresh detail load (the editor-save test intentionally left it selected).
+    await window.locator("[data-gallery-item='true']").nth(1).click();
+    await window.getByPlaceholder("Search").fill(originName);
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1);
+    await window.locator("[data-gallery-item='true']").first().click();
+
+    const linkedVersion = window.getByRole("button", { name: newDetail.stem, exact: true });
+    await expect(linkedVersion).toBeVisible();
+    await linkedVersion.click();
+    await expect(window.getByTestId("inspector-asset-title")).toHaveText(versionName);
+    await expect(window.getByText("Select an asset", { exact: true })).toHaveCount(0);
+
+    // Switching back to the visible original uses the normal gallery-backed
+    // selection path, so both directions of the version stack remain usable.
+    const linkedOriginal = window.getByRole("button", { name: originBefore.stem, exact: true });
+    await expect(linkedOriginal).toBeVisible();
+    // The inspector replaces this exact node as soon as selection changes;
+    // dispatch the pointer's click event directly so Playwright does not wait
+    // for a node that is intentionally about to detach.
+    await linkedOriginal.dispatchEvent("click");
+    await expect(window.getByTestId("inspector-asset-title")).toHaveText(originName);
+    await window.getByPlaceholder("Search").fill("");
   });
 
   test("rotate save: 90° turn writes swapped dimensions", async () => {

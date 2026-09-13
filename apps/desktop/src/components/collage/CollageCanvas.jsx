@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { localFileUrl } from "../../utils/format";
-import { computeCellRects, drawCellImage, roundRectPath } from "./collageRender";
+import { computeCellRects, drawCellImage, getPixelAlignedStrokeRect, roundRectPath } from "./collageRender";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
@@ -135,7 +135,9 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       canvas.width = needW;
       canvas.height = needH;
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const pixelScaleX = needW / displayW;
+    const pixelScaleY = needH / displayH;
+    ctx.setTransform(pixelScaleX, 0, 0, pixelScaleY, 0, 0);
 
     ctx.fillStyle = bg || "#000000";
     ctx.fillRect(0, 0, displayW, displayH);
@@ -167,13 +169,24 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       if (i === hl) {
         ctx.save();
         const accentRaw = getComputedStyle(canvas).getPropertyValue("--accent-color").trim() || "210 160 90";
-        ctx.strokeStyle = `rgb(${accentRaw.replace(/\s+/g, ",")})`;
-        ctx.lineWidth = 3;
-        if (displayBr > 0) roundRectPath(ctx, rect.x + 1.5, rect.y + 1.5, rect.w - 3, rect.h - 3, Math.max(0, displayBr - 1.5));
-        else { ctx.beginPath(); ctx.rect(rect.x + 1.5, rect.y + 1.5, rect.w - 3, rect.h - 3); }
-        ctx.stroke();
-        ctx.fillStyle = `rgba(${accentRaw.replace(/\s+/g, ",")},0.18)`;
+        const accent = accentRaw.replace(/\s+/g, ",");
+        const ring = getPixelAlignedStrokeRect(rect, pixelScaleX, pixelScaleY, 3);
+        const outerRadius = displayBr * ring.radiusScale;
+        const strokeRadius = Math.max(0, outerRadius - ring.lineWidth / 2);
+
+        // Draw drag feedback in backing-store pixels. This keeps every edge
+        // the same physical thickness, including at fractional UI scales.
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = `rgba(${accent},0.18)`;
+        if (outerRadius > 0) roundRectPath(ctx, ring.outer.x, ring.outer.y, ring.outer.w, ring.outer.h, outerRadius);
+        else { ctx.beginPath(); ctx.rect(ring.outer.x, ring.outer.y, ring.outer.w, ring.outer.h); }
         ctx.fill();
+
+        ctx.strokeStyle = `rgb(${accent})`;
+        ctx.lineWidth = ring.lineWidth;
+        if (strokeRadius > 0) roundRectPath(ctx, ring.stroke.x, ring.stroke.y, ring.stroke.w, ring.stroke.h, strokeRadius);
+        else { ctx.beginPath(); ctx.rect(ring.stroke.x, ring.stroke.y, ring.stroke.w, ring.stroke.h); }
+        ctx.stroke();
         ctx.restore();
       }
     }

@@ -64,6 +64,11 @@ export default function MapDrawer({
             region: t("map.level.region"),
             city: t("map.level.city"),
           }}
+          statusLabels={{
+            loading: t("map.loading"),
+            error: t("map.error"),
+            retry: t("map.retry"),
+          }}
         />
       </Suspense>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
@@ -27,7 +27,26 @@ export default function useWorkspace({ pushToast } = {}) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({}); // structured facet filters
   const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
-  const [selectedAssetId, setSelectedAssetId] = useState(null);
+  const [selectedAssetId, setSelectedAssetIdState] = useState(null);
+  const selectedAssetIdRef = useRef(null);
+  // Inspector relationships may point outside the active search/filter page.
+  // Keep that explicit selection authoritative while background browse
+  // requests settle; otherwise a late response replaces it with the first
+  // visible gallery item and briefly clears the inspector.
+  const relatedSelectionRef = useRef(false);
+  const setSelectedAssetId = useCallback((value) => {
+    relatedSelectionRef.current = false;
+    setSelectedAssetIdState((current) => {
+      const next = typeof value === "function" ? value(current) : value;
+      selectedAssetIdRef.current = next;
+      return next;
+    });
+  }, []);
+  const setRelatedAssetId = useCallback((assetId) => {
+    relatedSelectionRef.current = Boolean(assetId);
+    selectedAssetIdRef.current = assetId || null;
+    setSelectedAssetIdState(assetId || null);
+  }, []);
   const [browserLoading, setBrowserLoading] = useState(false);
   const [browserReady, setBrowserReady] = useState(false);
   const [browserLoadingMore, setBrowserLoadingMore] = useState(false);
@@ -48,6 +67,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const [catalogRevision, setCatalogRevision] = useState(0);
   const bumpCatalogRevision = () => setCatalogRevision((revision) => revision + 1);
   const browserRequestIdRef = useRef(0);
+  const explicitlyLoadedFiltersRef = useRef(null);
   // While an agent-driven reveal resets query/filters/status, the reload
   // effects below must not fire — the reveal does one imperative load itself.
   const suppressAutoReloadUntilRef = useRef(0);
@@ -171,6 +191,12 @@ export default function useWorkspace({ pushToast } = {}) {
 
   // Reload when structured facet filters change
   useEffect(() => {
+    // UI actions already send the browse with their new filters immediately.
+    // Do not enqueue the same expensive query again on the serial sidecar.
+    if (explicitlyLoadedFiltersRef.current === filters) {
+      explicitlyLoadedFiltersRef.current = null;
+      return;
+    }
     if (!browserReady) {
       console.warn("[filters-effect] skipped: browser not ready", JSON.stringify(filters));
       return;
@@ -255,11 +281,21 @@ export default function useWorkspace({ pushToast } = {}) {
       } else {
         setItems(payload);
         const firstId = payload[0]?.asset_id || null;
-        const selectionStillValid = selectedAssetId && payload.some((item) => item.asset_id === selectedAssetId);
+        const activeSelectedId = selectedAssetIdRef.current;
+        const selectionStillValid = activeSelectedId && payload.some((item) => item.asset_id === activeSelectedId);
         // preserveView never steals selection by jumping to the first item;
         // it only clears when the selected asset truly disappeared.
-        const nextSelectedId = selectionStillValid ? selectedAssetId : preserveView ? null : firstId;
-        if (nextSelectedId !== selectedAssetId) {
+        // A version selected from the inspector is also preserved even when it
+        // is outside this filtered page. The next ordinary gallery selection
+        // clears that relationship pin through setSelectedAssetId above.
+        const nextSelectedId = relatedSelectionRef.current && activeSelectedId
+          ? activeSelectedId
+          : selectionStillValid
+            ? activeSelectedId
+            : preserveView
+              ? null
+              : firstId;
+        if (nextSelectedId !== activeSelectedId) {
           setSelectedAssetId(nextSelectedId);
           await loadDetail(nextSelectedId || null);
         }
@@ -544,6 +580,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setActiveCollectionId(null);
     setStatus("all");
     setQuery("");
+    explicitlyLoadedFiltersRef.current = nextFilters;
     setFilters(nextFilters);
     void loadBrowser({
       nextStatus: "all",
@@ -566,6 +603,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setActiveCollectionId(collectionId);
     setStatus(nextStatus);
     setQuery(nextQuery);
+    explicitlyLoadedFiltersRef.current = facetFilters;
     setFilters(facetFilters);
     // Drop the previous gallery right away: the grid must not paint the old
     // result set (and the inspector the old selection) for the frames until
@@ -589,6 +627,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // transitions (most visibly when clearing a person filter).
   function applyFilters(nextFilters) {
     const next = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
+    explicitlyLoadedFiltersRef.current = next;
     setFilters(next);
     void loadBrowser({ force: true, facetFilters: next });
   }
@@ -893,6 +932,7 @@ export default function useWorkspace({ pushToast } = {}) {
     reloadDetail: () => loadDetail(selectedAssetId),
     selectedAssetId,
     setSelectedAssetId,
+    setRelatedAssetId,
     status,
     setStatus,
     sort,

@@ -122,21 +122,24 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout, onCl
   return (
     <div className="fixed inset-0 z-[10200] flex flex-col bg-[rgb(8,8,8)]">
       {/* Header */}
-      <div className="flex h-10 shrink-0 items-center justify-between bg-[rgb(14,14,14)] px-4">
-        <div />
-        <div className="flex items-center gap-1">
+      <div
+        className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-[rgb(14,14,14)] px-4"
+        data-testid="compare-header"
+      >
+        <div aria-hidden="true" />
+        <div className="flex items-center gap-1" data-testid="compare-layout-controls">
           <ToolbarBtn active={layout === "side"} icon={Columns2} label={t("compare.sideBySide")} onClick={() => onLayoutChange?.("side")} />
           <ToolbarBtn active={layout === "stack"} icon={Rows2} label={t("compare.topBottom")} onClick={() => onLayoutChange?.("stack")} />
-          <div className="mx-1.5 h-4 w-px bg-white/8" />
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/8 hover:text-white/70"
-            onClick={onClose}
-            title={t("compare.close")}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
         </div>
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-white/40 transition-colors hover:bg-white/8 hover:text-white/70"
+          data-testid="compare-close"
+          onClick={onClose}
+          title={t("compare.close")}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Compare area */}

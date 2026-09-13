@@ -34,5 +34,6 @@
   "view": "View",
   "refresh": "Refresh",
   "toggleTheme": "Toggle Theme",
+  "toggleFullscreen": "Toggle Full Screen",
   "window": "Window"
 }

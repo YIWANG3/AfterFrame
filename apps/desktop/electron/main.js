@@ -1136,6 +1136,20 @@ function sendMenuAction(action) {
   window.webContents.send("workspace:menu-action", action);
 }
 
+function toggleAppFullscreen(browserWindow) {
+  const window = browserWindow || BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  if (!window || window.isDestroyed()) return;
+  // Native macOS fullscreen immediately bounces a transparent BrowserWindow
+  // back to windowed mode. Simple fullscreen is the supported equivalent for
+  // our transparent Tahoe shell; other platforms keep the native behavior.
+  const next = process.platform === "darwin"
+    ? !window.isSimpleFullScreen()
+    : !window.isFullScreen();
+  if (process.platform === "darwin") window.setSimpleFullScreen(next);
+  else window.setFullScreen(next);
+  window.webContents.send("window:fullscreen", next);
+}
+
 function buildAppMenu() {
   // We give every `role` item an explicit translated `label` so the whole menu
   // follows the app language, not the OS language. (macOS still auto-injects a
@@ -1210,8 +1224,12 @@ function buildAppMenu() {
         { type: "separator" },
         { label: t("menu.devTools"), role: "toggleDevTools", accelerator: "Alt+CommandOrControl+I" },
         { type: "separator" },
-        // Left as a role so macOS keeps the dynamic Enter/Exit Full Screen label.
-        { role: "togglefullscreen" },
+        {
+          id: "toggle-fullscreen",
+          label: t("menu.toggleFullscreen"),
+          accelerator: process.platform === "darwin" ? "Ctrl+Command+F" : "F11",
+          click: (_item, browserWindow) => toggleAppFullscreen(browserWindow),
+        },
       ],
     },
     {
