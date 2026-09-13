@@ -6,6 +6,22 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp } = require("./helpers/app");
+const sampleManifest = require("../sample-photos/manifest.json");
+const sampleNames = Object.keys(sampleManifest).sort();
+
+async function expectSampleOriginals(window, userDataDir) {
+  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus()), {
+    timeout: 30_000,
+  }).toMatchObject({ status: "succeeded" });
+  const rows = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }));
+  expect(rows).toHaveLength(14);
+  expect(rows.map((row) => path.basename(row.image_path)).sort()).toEqual(sampleNames);
+  for (const row of rows) {
+    expect(row.image_path).toBe(fs.realpathSync(path.join(userDataDir, "afterframe", "sample.afcatalog", "photos", path.basename(row.image_path))));
+    expect(row.image_metadata).toMatchObject(sampleManifest[path.basename(row.image_path)]);
+  }
+  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getSummary())).toMatchObject({ image_assets: 14 });
+}
 
 test.describe("First run (no catalog)", () => {
   let app, window, userDataDir;
@@ -52,16 +68,20 @@ test.describe("First run (no catalog)", () => {
     await expect(window.getByRole("button", { name: "Reset Sample Library" })).toBeVisible();
     // The bundled photos import in the background and land in the gallery.
     await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 120_000 });
+    await expectSampleOriginals(window, userDataDir);
   });
 
   test("sample library: reset wipes and rebuilds it in place", async () => {
-    // Reset as soon as the first card appears; do NOT wait for the background
-    // import to finish. This used to race ongoing writes and fail ENOTEMPTY.
+    // Start another import and reset without waiting for it to finish. This
+    // used to race ongoing writes and fail ENOTEMPTY.
     // A sentinel proves the old directory was wiped without relying on
     // filesystem birthtime precision or accepting stale pre-reset gallery cards.
     const dbPath = path.join(userDataDir, "afterframe", "sample.afcatalog", "catalog.sqlite3");
     const sentinel = path.join(path.dirname(dbPath), "reset-sentinel");
     fs.mkdirSync(sentinel);
+    await window.evaluate((photosDir) => window.mediaWorkspace.startImport({
+      mode: "processed_only", imageDirs: [photosDir],
+    }), path.join(path.dirname(dbPath), "photos"));
     const previousJob = await window.evaluate(() => window.mediaWorkspace.getImportStatus());
     const logStart = mainLogs.length;
 
@@ -81,5 +101,33 @@ test.describe("First run (no catalog)", () => {
     await expect(window.getByText(/browsing the sample library/i)).toBeVisible({ timeout: 30_000 });
     await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 120_000 });
     expect(mainLogs.slice(logStart).join("")).not.toContain("Error occurred in handler for 'workspace:reset-sample-catalog'");
+    await expectSampleOriginals(window, userDataDir);
+  });
+
+  test("legacy sample previews are removed on app restart without losing original ratings", async () => {
+    const catalogPath = path.join(userDataDir, "afterframe", "sample.afcatalog");
+    const photosDir = path.join(catalogPath, "photos");
+    // Recreate the old shipping layout, including all 14 web-demo thumbnails.
+    fs.cpSync(path.join(__dirname, "..", "sample-photos", "previews"), path.join(photosDir, "previews"), { recursive: true });
+    await window.evaluate((dir) => window.mediaWorkspace.startImport({ mode: "processed_only", imageDirs: [dir] }), photosDir);
+    await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus()), { timeout: 30_000 })
+      .toMatchObject({ status: "succeeded" });
+    const before = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }));
+    expect(before).toHaveLength(28);
+    const original = before.find((row) => row.image_path === fs.realpathSync(path.join(photosDir, "sample-01.jpg")));
+    await window.evaluate((id) => window.mediaWorkspace.setAssetRating([id], 5), original.asset_id);
+
+    await app.close();
+    ({ app, window } = await launchApp({ withCatalog: false, reuseUserDataDir: userDataDir }));
+    app.process().stdout.on("data", (data) => mainLogs.push(String(data)));
+    app.process().stderr.on("data", (data) => mainLogs.push(String(data)));
+    await expectSampleOriginals(window, userDataDir);
+    const after = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }));
+    expect(after.find((row) => row.asset_id === original.asset_id)?.app_rating).toBe(5);
+    expect(fs.readdirSync(path.join(catalogPath, "legacy-sample-previews")).sort()).toEqual(sampleNames);
+    expect(fs.readdirSync(path.join(photosDir, "previews"))).toHaveLength(0);
+    // Reopening again is idempotent: no reset or duplicate re-import.
+    await window.evaluate((dir) => window.mediaWorkspace.switchCatalog(dir), catalogPath);
+    await expectSampleOriginals(window, userDataDir);
   });
 });

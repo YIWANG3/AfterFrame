@@ -26,6 +26,8 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
  *   the private working copy before Electron starts — for specs that need the
  *   fixture in a specific state (e.g. HD previews stripped so lazy generation
  *   is exercised).
+ * @param {string} [opts.reuseUserDataDir] - reuse an isolated E2E directory to
+ *   exercise app restart and saved-catalog migrations; use withCatalog: false.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
 // Each launch gets its own MCP port: the dev app holds the default 41706, and
@@ -33,9 +35,13 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
 // which would make MCP-dependent specs flake in confusing ways.
 let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir } = {}) {
   // Fresh userData so each run starts from a clean slate
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
+  if (reuseUserDataDir && (!path.basename(reuseUserDataDir).startsWith("afterframe-e2e-")
+    || fs.realpathSync(path.dirname(reuseUserDataDir)) !== fs.realpathSync(os.tmpdir()))) {
+    throw new Error("Only an isolated E2E userData directory can be reused");
+  }
+  const userDataDir = reuseUserDataDir || fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${testName}-`));
   const mcpPort = nextMcpPort++;
 
   const env = {
@@ -46,6 +52,10 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
   };
   // Production tests must not accidentally attach to an inherited Vite URL.
   delete env.VITE_DEV_SERVER_URL;
+  if (reuseUserDataDir) {
+    delete env.MEDIA_WORKSPACE_CATALOG;
+    delete env.AFTERFRAME_NO_DEFAULT_CATALOG;
+  }
 
   // Simulate packaged first-run (no default catalog) — exercises the
   // no-catalog welcome state, which dev's scratch catalog would otherwise hide.

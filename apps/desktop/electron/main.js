@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { sampleOriginalNames, copySampleOriginals, repairLegacySamplePreviews } = require("./sampleCatalog");
 const http = require("node:http");
 const { pathToFileURL } = require("node:url");
 
@@ -309,6 +310,22 @@ async function prepareCatalogPath() {
   }
   try { await callSidecarAsync(["split-shared-assets"]); } catch (_) { /* best-effort */ }
   try { await callSidecarAsync(["repair-resource-sets"]); } catch (_) { /* best-effort */ }
+  if (currentCatalogPath === getSampleCatalogPath()) {
+    const repaired = await repairLegacySamplePreviews({
+      catalogPath: currentCatalogPath, source: samplePhotosSource,
+      transport: sidecarTransport, commands: sidecarCommands,
+      getCatalogPath: () => currentCatalogPath,
+    });
+    if (repaired) {
+      const originals = sampleOriginalNames(samplePhotosSource)
+        .map((name) => path.join(getSampleCatalogPath(), "photos", name)).filter((file) => fs.existsSync(file));
+      if (originals.length) {
+        // Resume an interrupted sample import without resurrecting originals
+        // the user deliberately removed from this catalog.
+        await startImportTask({ mode: "processed_only", imageDirs: originals, auto: true });
+      }
+    }
+  }
 }
 
 function workspaceInfo() {
@@ -375,14 +392,15 @@ async function openSampleCatalog({ reset = false } = {}) {
   // idempotent, so an interrupted first open self-heals on the next one.
   const fresh = !dirHasCatalogDb(samplePath);
   const photosDir = path.join(samplePath, "photos");
+  let originals = [];
   if (fresh) {
     fs.mkdirSync(samplePath, { recursive: true });
-    fs.cpSync(samplePhotosSource, photosDir, { recursive: true });
+    originals = copySampleOriginals(samplePhotosSource, photosDir);
   }
   await switchCatalogTo(samplePath);
   if (fresh) {
     await registerRoots("image", [photosDir]);
-    await startImportTask({ mode: "processed_only", imageDirs: [photosDir] });
+    await startImportTask({ mode: "processed_only", imageDirs: originals });
   }
   return { path: samplePath, fresh };
 }
@@ -1702,7 +1720,7 @@ app.on("open-file", (event, filePath) => {
   queueExternalImport(filePath);
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Chromium cannot decode HEIC/HEIF, so when the original is requested directly
   // (lightbox, editor, depth) we transcode it to a full-res JPEG on the fly with
   // macOS `sips` and cache the result on disk, keyed by path + mtime + size.
@@ -1764,12 +1782,17 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(resolved).toString());
   });
 
-  prepareCatalogPath().finally(() => {
+  const catalogPreparation = prepareCatalogPath().finally(() => {
     // A paused task remains paused; only queued durable people tasks are
     // resumed after an app restart. The runner uses its cursor and model path
     // stored in the task payload, so it cannot silently switch model spaces.
     void peopleApi?.recoverQueuedPeopleJobs?.();
   });
+  // A saved sample catalog can be reopened without the welcome action. Finish
+  // its targeted migration before the first gallery query sees legacy previews.
+  if (currentCatalogPath === getSampleCatalogPath()) {
+    await catalogPreparation.catch((err) => console.warn("[sample] repair failed:", err.message));
+  }
   Menu.setApplicationMenu(buildAppMenu());
   createWindow();
   try { watcherApi.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
