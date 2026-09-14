@@ -249,7 +249,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     editorState, editorStateRef,
     layers, layersRef,
     history, historyIndex, historyRef, historyIndexRef, baseSnapshotRef,
-    syncHistory, apply: applyState, applyLayers, record: recordState, commitCurrent,
+    syncHistory, rebaseHistory, apply: applyState, applyLayers, record: recordState, commitCurrent,
     commitLayers, commitLayersCoalesced, flushLayerCommit,
     undo: rawHandleUndo, redo: rawHandleRedo,
   } = useEditorHistory();
@@ -555,6 +555,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   // snapshot (also the "Reset" target). Stays here — it records into history.
   useEffect(() => {
     if (!transformedPreview || !placement || baseSnapshotRef.current) return;
+    // Do not put the zero-size placeholder stage into undo/Reset history.
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) return;
     const initial = createInitialSnapshot(viewportSize, transformedPreview);
     baseSnapshotRef.current = cloneState(initial);
     recordState(initial);
@@ -594,7 +596,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   } = useCropTool({
     open, previewSource, transformedPreview, viewportSize, placement, imageRect,
     viewportRef, editorState, editorStateRef, pointFromClient,
-    apply: applyState, record: recordState, commitCurrent,
+    apply: applyState, record: recordState, commitCurrent, rebaseHistory,
   });
 
   // The text tool with an active border renders the COMPOSED view (cropped

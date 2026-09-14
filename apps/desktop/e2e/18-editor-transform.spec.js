@@ -33,10 +33,36 @@ test.describe("Golden: crop + transform", () => {
     srcW = m.width; srcH = m.height;
     ({ app, window, userDataDir } = await launchApp({ testName: "golden-tf" }));
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
+    // Deterministically exercise the CI ordering: image decoding completes
+    // before the editor receives its first viewport measurement.
+    await window.evaluate(() => {
+      const NativeObserver = window.ResizeObserver;
+      const pending = new Map();
+      let released = false;
+      window.ResizeObserver = class extends NativeObserver {
+        constructor(callback) {
+          super((entries, observer) => {
+            if (released) callback(entries, observer);
+            else pending.set(observer, () => callback(entries, observer));
+          });
+        }
+        disconnect() { pending.delete(this); super.disconnect(); }
+      };
+      window.releaseEditorMeasurements = () => {
+        released = true;
+        for (const deliver of pending.values()) deliver();
+        pending.clear();
+        window.ResizeObserver = NativeObserver;
+      };
+    });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await window.evaluate(() => window.__afterframeTest.setTool("crop"));
     await waitPreview(window);
+    await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await window.evaluate(() => window.releaseEditorMeasurements());
+    await expect.poll(async () => (await state(window)).hasCrop).toBe(true);
+    await expect.poll(async () => (await state(window)).stageBounds.width).toBeGreaterThan(200);
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);
@@ -110,18 +136,30 @@ test.describe("Golden: crop + transform", () => {
       await save(window, out("rot-resize.jpg"));
       const resized = await sharp(out("rot-resize.jpg")).metadata();
       expect([resized.width, resized.height]).toEqual([srcH, srcW]);
+      // History must use the NEW viewport too, not the stage pixels captured
+      // before resize (including a late initial ResizeObserver measurement).
+      await window.evaluate(() => window.__afterframeTest.undo());
+      await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
+      await save(window, out("resize-undo.jpg"));
+      const undone = await sharp(out("resize-undo.jpg")).metadata();
+      expect([undone.width, undone.height]).toEqual([srcW, srcH]);
+      await window.evaluate(() => window.__afterframeTest.redo());
+      await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
+      await save(window, out("resize-redo.jpg"));
+      const redone = await sharp(out("resize-redo.jpg")).metadata();
+      expect([redone.width, redone.height]).toEqual([srcH, srcW]);
     } finally {
       await app.evaluate(({ BrowserWindow }, { size, minimum }) => {
         const win = BrowserWindow.getAllWindows()[0];
         win.setMinimumSize(...minimum);
         win.setSize(...size);
       }, { size: originalSize, minimum: originalMinimum });
-      // Native window/compositor rounding can differ by a subpixel on restore.
-      // The exported pixel dimensions above remain an exact assertion.
-      await expect.poll(async () => Math.abs((await state(window)).imageRect.width - before.width)).toBeLessThan(1);
-      await window.evaluate(() => window.__afterframeTest.undo());
-      await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
     }
+    // Native window/compositor rounding can differ by a subpixel on restore.
+    // The exported pixel dimensions above remain an exact assertion.
+    await expect.poll(async () => Math.abs((await state(window)).imageRect.width - before.width)).toBeLessThan(1);
+    await window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
   });
 
   test("flip H → flipX toggles, dimensions unchanged", async () => {
