@@ -46,7 +46,8 @@ h1 { font-size: clamp(44px, 5.5vw, 80px); }
 h2 { font-size: clamp(34px, 3.7vw, 56px); }
 p { text-wrap: pretty; }
 figure { margin: 0; }
-.screen, .layout figure { border: 0; border-radius: 24px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+/* UI screenshots already contain the app's own corners. Do not mask them again. */
+.screen, .layout figure { border: 0; border-radius: 0; overflow: visible; background: var(--surface); box-shadow: var(--shadow); }
 figure img { display: block; width: 100%; height: auto; }
 .screen-note, figure figcaption { padding: 14px 20px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .command, pre { padding: 20px; border: 0; border-radius: 16px; background: var(--surface-raised); color: var(--text); font: 12px/1.8 var(--mono); overflow: auto; }
@@ -72,7 +73,6 @@ html[lang="zh-CN"] h1, html[lang="zh-CN"] h2 { letter-spacing: 0; line-height: 1
   .brand img { width: 26px; height: 26px; }
   .language { margin-left: auto; padding: 0 10px; }
   .download { padding: 0 12px; }
-  .screen, .layout figure { border-radius: 16px; }
   .site-footer__inner { justify-content: flex-start; gap: 8px 22px; }
 }
 @media (max-width: 360px) { header { inset-inline: 8px; } .brand { font-size: 15px; } .download { font-size: 12px; padding: 0 10px; } }

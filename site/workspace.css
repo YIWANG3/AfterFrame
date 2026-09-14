@@ -5,7 +5,7 @@
 .hero h1 { font-size: clamp(42px, 5.2vw, 72px); }
 .hero-copy > p:not(.eyebrow) { max-width: 590px; margin: 22px auto 0; font-size: 17px; line-height: 1.65; color: var(--muted); }
 .hero .actions { justify-content: center; }
-.hero-screen { max-width: 1180px; margin: 54px auto 0; border-radius: 26px 26px 0 0; max-height: 580px; overflow: hidden; }
+.hero-screen { max-width: 1180px; margin: 54px auto 0; }
 .hero dl { display: none; }
 .strip { padding: 28px 24px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .strip p { margin: 0; }
@@ -24,7 +24,7 @@
 @media (max-width: 800px) {
   .hero { padding: 112px 20px 0; }
   .hero-copy > p:not(.eyebrow) { font-size: 15px; }
-  .hero-screen { margin-top: 36px; border-radius: 16px 16px 0 0; }
+  .hero-screen { margin-top: 36px; }
   .feature, .feature:has(> figure:first-child) { grid-template-columns: minmax(0, 1fr); padding: 60px 24px; gap: 32px; }
   .feature.reverse { width: calc(100% - 24px); padding-inline: 20px; border-radius: 24px; }
   .feature > figure { order: 2; }
