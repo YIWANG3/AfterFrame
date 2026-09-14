@@ -18,7 +18,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 > 仅支持 macOS（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
 
-![AfterFrame — 浏览与检查](docs/assets/browse-zh.png)
+![AfterFrame — 浏览与检查](docs/assets/cn/library.webp)
 
 ## 目录
 
@@ -51,7 +51,7 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 中英双语界面（English / 简体中文）—— 在 设置 → 通用 中实时切换
 - 本地优先：文件始终保留在你的硬盘上，不会上传
 
-![浏览与检查面板](docs/assets/browse-inspector.png)
+![图库导入与标注操作](docs/assets/cn/library-actions.webp)
 
 ### 浏览与整理
 - 网格、瓦片、对齐、瀑布流四种布局模式
@@ -61,7 +61,7 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 星级评分（自动导入 Lightroom XMP 评分）
 - 虚拟滚动画廊，流畅处理 10,000+ 张图片
 
-![灯箱浏览](docs/assets/lightbox.png)
+![灯箱浏览](docs/assets/cn/lightbox.webp)
 
 ### 搜索与筛选
 - 全文搜索：跨 文件名、相机/镜头、以及 AI 标注（描述、识别文字/OCR、标签）—— 按照片"内容"找图
@@ -74,22 +74,22 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 多选后可批量删除错误人物组；被删除的组在后续重扫时不会再次出现
 - 从人物页直接查看全部相关照片，也可以在图库中按人物筛选
 
-![人物识别](docs/assets/face-cn.png)
+![人物识别](docs/assets/cn/people.webp)
 
 *演示人物图像由 AI 生成，不对应真实人物。*
 
 ### 编辑
 - **裁剪**：预设比例、旋转、翻转
 
-![裁剪编辑器](docs/assets/editor-crop.png)
+![裁剪编辑器](docs/assets/cn/editor-crop.webp)
 
 - **文字叠加**：系统字体、纯色/渐变填充、描边、阴影、外发光、背景、透明度、自动吸附居中线
 
-![文字编辑器](docs/assets/editor-text.png)
+![文字编辑器](docs/assets/cn/editor-text.webp)
 
 - **AI 手写字（BYOK）**：生成任何字体都给不了的手写书法标题。内置 17 个风格预设（毛笔、钢笔签名、粉笔、马克笔、英文手写等，每个预设自带一张自产参考图），也可上传任意手写样例作为风格参考。完整 prompt 可见可改，长句按标点自动换行；结果在本地抠成透明贴纸，随时换纯色/渐变填充，无需重新生成。支持 Gemini、GPT Image、Seedream（火山方舟）、即梦
 
-![AI 手写字](docs/assets/editor-handwriting.png)
+![AI 手写字（英文界面）](docs/assets/en/editor-handwriting.webp)
 
 ![四张使用 AI 手写字完成的夜景摄影作品（AfterFrame 制作）](docs/assets/editor-handwriting-gallery.jpg)
 
@@ -97,23 +97,19 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 
 - **深度感知文字**：本地 CoreML 深度推理（Depth Anything V2），让文字像 iPhone 锁屏壁纸一样落在主体后面。支持选择自定义模型，偏好设置自动持久化
 
-![深度感知文字](docs/assets/editor-text-depth.png)
+![深度感知文字（英文界面）](docs/assets/en/editor-text-depth.webp)
 
 - **贴纸**：一键从任意照片中抠出主体（macOS 14+ 使用 VisionKit），存入按 catalog 隔离的贴纸库，可选描边与阴影；再把贴纸作为图层放到其他照片上，深度、不透明度、旋转、描边（含透明度）、阴影、外发光控件与文字图层共用一套
 
-![贴纸库](docs/assets/sticker-library.png)
-
 - **拼图**：8 种布局模板，可调间距/内边距/圆角，自定义背景色，支持高分辨率导出。每个格子可独立平移与缩放，提供居中吸附辅助线、精细缩放滑条以及触控板捏合联动 —— 拖动调整构图，将一张图拖到另一格上即可交换两图
 
-![拼图](docs/assets/collage.png)
+![拼图](docs/assets/cn/collage-batch.webp)
 
 - **相框**：由 EXIF 驱动的品牌相机水印相框。提供 20+ 预设（底栏、双 logo、竖排侧边条），以哈苏、索尼、佳能、尼康、徕卡、富士、松下 Lumix、理光的真实品牌 logo 与配色渲染，另有一套简洁通用版。自适应明暗对比、logo 颜色选择（原色 / 黑 / 白 / 灰 / 金）、文字与留白缩放，并可按原图分辨率导出
 
-![相框 · 哈苏字标](docs/assets/frame-hasselblad.png)
+![相框 · 哈苏字标（英文界面）](docs/assets/en/frame-hasselblad-louvre.webp)
 
-![相框 · 索尼底栏](docs/assets/frame-sony.png)
-
-![相框 · 品牌预设](docs/assets/frame-presets.png)
+![相框 · 佳能底栏（英文界面）](docs/assets/en/frame-canon.webp)
 
 ### 视频
 - 视频与照片一同索引 —— 导入时探测时长、分辨率与编码，并自动生成封面帧
@@ -129,7 +125,7 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 并排和上下对比的前后效果预览
 - 每次重绘的版本历史记录
 
-![AI 重绘 — 前后对比](docs/assets/ai-repaint-compare.png)
+![AI 重绘 — 前后对比](docs/assets/cn/ai-repaint-compare.webp)
 
 ### AI 自动标注（BYOK）
 用你自己的 LLM 服务（Anthropic、OpenAI,或任意 OpenAI 兼容端点）为照片生成描述、标签和地点推测。与 AI 重绘一样,请求从你的电脑直连 API。
@@ -164,7 +160,7 @@ codex mcp add afterframe --url http://127.0.0.1:41706/mcp
 
 然后直接说：*「找几张加州的照片，在 App 里给我看看」*
 
-![Agent 驱动的工作流](docs/assets/agent-claude-code.png)
+![Agent 驱动的工作流（英文界面）](docs/assets/en/agent-mcp.webp)
 
 ## 快速开始
 
