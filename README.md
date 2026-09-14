@@ -18,7 +18,7 @@ Download the latest `.dmg` from [Releases](../../releases).
 
 > macOS only (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
 
-![AfterFrame — Browse & Inspect](docs/assets/browse-grid.png)
+![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
 
 ## Table of Contents
 
@@ -51,7 +51,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
 - Local-first: your files stay on your drives, nothing is uploaded
 
-![Browse with Inspector](docs/assets/browse-inspector.png)
+![Library import and annotation actions](docs/assets/en/library-actions.webp)
 
 ### Browse & Organize
 - Grid, tiles, justified, and waterfall layout modes
@@ -61,7 +61,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Star rating system (imports Lightroom XMP ratings)
 - Virtual-scroll gallery that handles 10,000+ images smoothly
 
-![Lightbox](docs/assets/lightbox.png)
+![Lightbox](docs/assets/en/lightbox.webp)
 
 ### Search & Filter
 - Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
@@ -74,22 +74,22 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Select and delete multiple incorrect groups at once; deleted groups stay excluded from later rescans
 - Filter the gallery by person or open every matching photo directly from the People view
 
-![People recognition](docs/assets/face-en.png)
+![People recognition](docs/assets/en/people.webp)
 
 *Demo portraits are AI-generated and do not depict real people.*
 
 ### Edit
 - **Crop** with preset aspect ratios, rotation, and flip
 
-![Crop Editor](docs/assets/editor-crop.png)
+![Crop Editor](docs/assets/en/editor-crop.webp)
 
 - **Text Overlay** with system fonts, solid/gradient fill, stroke, shadow, outer glow, background, opacity, and snap-to-center guides
 
-![Text Editor](docs/assets/editor-text.png)
+![Text Editor](docs/assets/en/editor-text.webp)
 
 - **AI Handwriting (BYOK)** — generate handwritten-calligraphy titles no font could give you. 17 built-in style presets (brush, pen signature, chalk, marker, English scripts — every preset ships its own reference image, all self-generated), or upload any handwriting sample as a style reference. The full prompt is visible and editable, long sentences auto-break at punctuation, and the result is matted locally into an alpha sticker you can recolor (solid or gradient) at any time — no re-generation needed. Works with Gemini, GPT Image, Seedream (Volcengine Ark), or Jimeng
 
-![AI Handwriting](docs/assets/editor-handwriting.png)
+![AI Handwriting](docs/assets/en/editor-handwriting.webp)
 
 ![Four night photography pieces with AI handwriting — made with AfterFrame](docs/assets/editor-handwriting-gallery.jpg)
 
@@ -97,23 +97,21 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 - **Depth-aware Text** — on-device CoreML depth inference (Depth Anything V2) lets text sit behind subjects in the scene, iPhone-wallpaper style. Bring your own model via the model picker; preference is persisted
 
-![Depth-aware Text](docs/assets/editor-text-depth.png)
+![Depth-aware Text](docs/assets/en/editor-text-depth.webp)
 
 - **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, rotation, outline (with opacity), shadow, and outer-glow controls as text layers
 
-![Sticker Library](docs/assets/sticker-library.png)
-
 - **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
 
-![Collage](docs/assets/collage.png)
+![Batch collage](docs/assets/en/collage-batch.webp)
+
+![Single collage editor](docs/assets/en/collage.webp)
 
 - **Frame** — brand-aware camera watermark frames driven by EXIF. Pick from 20+ presets (bottom bars, dual-logo, and vertical side-strip layouts), rendered with real brand logos and colors for Hasselblad, Sony, Canon, Nikon, Leica, Fujifilm, Lumix, and Ricoh, plus a clean generic set. Adaptive light/dark contrast, a logo color picker (original / black / white / grey / gold), text and margin scaling, and export at the original resolution
 
-![Frame — Hasselblad wordmark](docs/assets/frame-hasselblad.png)
+![Frame — Hasselblad wordmark](docs/assets/en/frame-hasselblad.webp)
 
-![Frame — Sony bottom bar](docs/assets/frame-sony.png)
-
-![Frame — brand-aware presets](docs/assets/frame-presets.png)
+![Frame — Canon bottom bar](docs/assets/en/frame-canon.webp)
 
 ### Video
 - Index video files alongside photos — each clip is probed for duration, dimensions, and codec on import, and a poster frame is generated automatically
@@ -129,7 +127,7 @@ Bring your own API key. AfterFrame does not bundle or proxy any AI service — y
 - Side-by-side and stacked before/after comparison
 - Version history for every repaint
 
-![AI Repaint — Before & After](docs/assets/ai-repaint-compare.png)
+![AI Repaint — Before & After](docs/assets/en/ai-repaint-compare.webp)
 
 ### AI Auto-Annotation (BYOK)
 Generate a caption, tags, and a location guess for your photos with your own LLM provider (Anthropic, OpenAI, or any OpenAI-compatible endpoint). As with AI Repaint, requests go directly from your machine to the API.
@@ -164,11 +162,11 @@ Working inside this repo? Nothing to do — the bundled `.mcp.json` connects Cla
 
 Then just ask: *"Find my photos of California and show them in the app."*
 
-![Agent-driven workflow](docs/assets/agent-claude-code.png)
+![Agent-driven workflow](docs/assets/en/agent-mcp.webp)
 
 The full interface in 简体中文 (switch live in Settings → General):
 
-![AfterFrame in Simplified Chinese](docs/assets/browse-zh.png)
+![AfterFrame in Simplified Chinese](docs/assets/cn/library.webp)
 
 ## Getting Started
 
