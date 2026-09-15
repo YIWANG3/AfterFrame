@@ -5,6 +5,7 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 from __future__ import annotations
 
 import sqlite3
+from functools import wraps
 from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
@@ -81,6 +82,28 @@ def add_asset_to_resource_set(
         connection.commit()
 
 
+def _atomic_resource_set_write(operation):
+    @wraps(operation)
+    def wrapped(connection, *args, commit=True, **kwargs):
+        # Import and startup repair use separate connections. Lock BEFORE the
+        # membership lookup, or both can observe no set and create different
+        # sets for the same photo, multiplying gallery rows through the JOIN.
+        owns_transaction = not connection.in_transaction
+        if owns_transaction:
+            connection.execute("BEGIN IMMEDIATE")
+        try:
+            result = operation(connection, *args, commit=False, **kwargs)
+            if commit:
+                connection.commit()
+            return result
+        except Exception:
+            if owns_transaction:
+                connection.rollback()
+            raise
+    return wrapped
+
+
+@_atomic_resource_set_write
 def create_resource_set(
     connection: sqlite3.Connection,
     primary_asset_id: str,
@@ -105,6 +128,7 @@ def create_resource_set(
     return set_id
 
 
+@_atomic_resource_set_write
 def attach_asset_to_resource_set(
     connection: sqlite3.Connection,
     asset_id: str,

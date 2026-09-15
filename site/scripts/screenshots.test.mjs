@@ -8,6 +8,20 @@ const root = new URL('../../', import.meta.url);
 const require = createRequire(new URL('apps/desktop/package.json', root));
 const sharp = require('sharp');
 
+test('UI screenshots preserve their own app corners and full height', async () => {
+  const theme = await readFile(new URL('site/theme.css', root), 'utf8');
+  const workspace = await readFile(new URL('site/workspace.css', root), 'utf8');
+  const rules = [...`${theme}\n${workspace}`.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => /\.screen\b|\.hero-screen\b|\.layout figure/.test(selector));
+  assert.ok(rules.length >= 3);
+  for (const [, selector, body] of rules) {
+    assert.doesNotMatch(body, /overflow\s*:\s*(hidden|clip)/, selector);
+    assert.doesNotMatch(body, /max-height\s*:/, selector);
+    const radius = body.match(/border-radius\s*:\s*([^;]+)/)?.[1];
+    if (radius) assert.equal(radius.trim(), '0', selector);
+  }
+});
+
 for (const file of ['README.md', 'README.zh-CN.md']) {
   test(`${file}: all documentation images exist`, async () => {
     const text = await readFile(new URL(file, root), 'utf8');

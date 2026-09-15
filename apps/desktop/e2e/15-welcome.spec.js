@@ -14,7 +14,8 @@ async function expectSampleOriginals(window, userDataDir) {
     timeout: 30_000,
   }).toMatchObject({ status: "succeeded" });
   const rows = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 100 }));
-  expect(rows).toHaveLength(14);
+  expect(rows.map((row) => ({ id: row.asset_id, path: row.image_path, set: row.resource_set_id }))).toHaveLength(sampleNames.length);
+  expect(new Set(rows.map((row) => row.asset_id)).size).toBe(sampleNames.length);
   expect(rows.map((row) => path.basename(row.image_path)).sort()).toEqual(sampleNames);
   for (const row of rows) {
     expect(row.image_path).toBe(fs.realpathSync(path.join(userDataDir, "afterframe", "sample.afcatalog", "photos", path.basename(row.image_path))));
@@ -27,19 +28,25 @@ test.describe("First run (no catalog)", () => {
   let app, window, userDataDir;
   const mainLogs = [];
 
-  test.beforeAll(async () => {
+  test.beforeEach(async ({}, testInfo) => {
+    mainLogs.length = 0;
     ({ app, window, userDataDir } = await launchApp({ testName: "welcome", noCatalog: true }));
     app.process().stdout.on("data", (data) => mainLogs.push(String(data)));
     app.process().stderr.on("data", (data) => mainLogs.push(String(data)));
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
-  });
-  test.afterAll(async () => {
-    await closeApp(app, userDataDir);
+    // Reset and migration are standalone scenarios, not continuations of the
+    // previous test. A worker restart after failure must not cause a false
+    // "No catalog is open" failure in the next test.
+    if (testInfo.title.startsWith("sample library: reset") || testInfo.title.startsWith("legacy sample previews")) {
+      await window.getByRole("button", { name: "Browse Sample Library" }).click();
+      await expectSampleOriginals(window, userDataDir);
+    }
   });
   test.afterEach(async ({}, testInfo) => {
     if (testInfo.status !== testInfo.expectedStatus) {
       await testInfo.attach("electron-main.log", { body: mainLogs.join(""), contentType: "text/plain" });
     }
+    await closeApp(app, userDataDir);
   });
 
   test("shows the welcome guide with create/open/sample actions", async () => {
@@ -59,7 +66,6 @@ test.describe("First run (no catalog)", () => {
     await expect(window.locator("[data-gallery-item='true']")).toHaveCount(0);
   });
 
-  // Runs last: it leaves the app inside the sample catalog.
   test("sample library: one click creates it, opens it, and shows the banner", async () => {
     await window.getByRole("button", { name: "Browse Sample Library" }).click();
     // Switching in shows the persistent sample banner with its two exits.

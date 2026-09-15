@@ -54,6 +54,15 @@ export function useEditorHistory() {
     setHistoryIndex(nextIndex);
   }
 
+  // A layout change is not an edit and must not consume an undo step. Keep
+  // both past and future entries, plus Reset's baseline, in the new stage.
+  function rebaseHistory(mapState) {
+    syncHistory(historyRef.current.map((entry) => ({
+      ...entry, state: mapState(entry.state),
+    })), historyIndexRef.current);
+    if (baseSnapshotRef.current) baseSnapshotRef.current = mapState(baseSnapshotRef.current);
+  }
+
   // Live transform update — no history entry (used per-frame during drags).
   function apply(nextState) {
     const snapshot = cloneState(nextState);
@@ -178,7 +187,7 @@ export function useEditorHistory() {
     layers, layersRef,
     history, historyIndex, historyRef, historyIndexRef,
     baseSnapshotRef,
-    syncHistory, apply, applyLayers,
+    syncHistory, rebaseHistory, apply, applyLayers,
     record, commitLayers, commitLayersCoalesced, flushLayerCommit, commitCurrent,
     undo, redo,
   };

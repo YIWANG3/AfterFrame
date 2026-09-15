@@ -17,13 +17,14 @@ import {
 import { buildTransformedCanvas } from "../render/canvasHelpers";
 import { cloneState, stateEquals } from "./editorStateModel";
 import { useViewportWheel } from "./useViewportWheel";
+import { rebaseViewport } from "./rebaseViewport";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function useCropTool({
   open, previewSource, transformedPreview, viewportSize, placement, imageRect,
   viewportRef, editorState, editorStateRef, pointFromClient,
-  apply, record, commitCurrent,
+  apply, record, commitCurrent, rebaseHistory,
 }) {
   const pointerStateRef = useRef(null);
   const angleDragStartRef = useRef(null);
@@ -221,14 +222,19 @@ export function useCropTool({
   // change is different: commitTransform (or undo/redo) already supplies the
   // crop in that preview's coordinate space. Remapping it again crops away
   // part of the image on a quarter turn.
-  const prevGeometryRef = useRef({ placement, preview: transformedPreview });
+  const prevGeometryRef = useRef({ placement, preview: transformedPreview, viewport: viewportSize });
   useEffect(() => {
-    const { placement: prev, preview: prevPreview } = prevGeometryRef.current;
-    prevGeometryRef.current = { placement, preview: transformedPreview };
+    const { placement: prev, preview: prevPreview, viewport: prevViewport } = prevGeometryRef.current;
+    prevGeometryRef.current = { placement, preview: transformedPreview, viewport: viewportSize };
     if (!transformedPreview || !placement || !editorStateRef.current.cropRect) return;
+    if (prevViewport.width > 0 && prevViewport.height > 0
+      && (prevViewport.width !== viewportSize.width || prevViewport.height !== viewportSize.height)) {
+      rebaseHistory((snapshot) => rebaseViewport(snapshot, previewSource, prevViewport, viewportSize));
+    }
     let state = editorStateRef.current;
     if (
       prevPreview === transformedPreview && prev && prev !== placement
+      && prevViewport.width > 0 && prevViewport.height > 0
       && prev.fitScale > 0 && Number.isFinite(placement.fitScale)
       && (prev.fitScale !== placement.fitScale || prev.centerX !== placement.centerX || prev.centerY !== placement.centerY)
     ) {
