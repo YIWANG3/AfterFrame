@@ -23,8 +23,31 @@
       "transform": "变换",
       "text": "文字",
       "sticker": "贴纸",
-      "repaint": "AI 重绘"
+      "repaint": "AI 重绘",
+      "split": "切图"
     }
+  },
+  "split": {
+    "title": "无缝切图",
+    "count": "片数",
+    "fewer": "减少片数",
+    "more": "增加片数",
+    "auto": "自动",
+    "coverage": "覆盖",
+    "region": "区域",
+    "panelOutput": "每片输出",
+    "resetRegion": "重置为全高",
+    "preview": "预览",
+    "output": "输出",
+    "chooseFolder": "选择文件夹…",
+    "layersBlocked": "请先应用或删除文字、贴纸和边框图层，再进行切图。",
+    "exportN": "导出 {{count}} 张",
+    "exporting": "正在导出 {{done}} / {{total}}…",
+    "done": "已导出 {{count}} 张",
+    "failed": "切图导出失败",
+    "reveal": "在 Finder 中显示",
+    "subfolder": "创建子目录",
+    "webDownloads": "{{count}} 张会逐张下载到浏览器。"
   },
   "text": {
     "presets": "预设",
@@ -34,7 +57,12 @@
     "overlaySettings": "蒙层填充",
     "coverage": "覆盖范围",
     "coverageEdge": "起始边",
-    "coverageEdges": { "bottom": "从底部", "top": "从顶部", "left": "从左侧", "right": "从右侧" },
+    "coverageEdges": {
+      "bottom": "从底部",
+      "top": "从顶部",
+      "left": "从左侧",
+      "right": "从右侧"
+    },
     "addTextLayer": "添加文字图层",
     "addStickerLayer": "添加贴纸图层",
     "hideStickerPicker": "隐藏贴纸选择器",

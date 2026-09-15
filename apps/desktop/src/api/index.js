@@ -87,6 +87,7 @@ const api = {
   setAssetRating: (...args) => invoke("setAssetRating", ...args),
   saveImage: (...args) => invoke("saveImage", ...args),
   processAndSave: (...args) => invoke("processAndSave", ...args),
+  processAndSavePanels: (...args) => invoke("processAndSavePanels", ...args),
   listSystemFonts: (...args) => invoke("listSystemFonts", ...args),
   startNativeDrag: (...args) => invoke("startNativeDrag", ...args),
 

@@ -23,8 +23,31 @@
       "transform": "Transform",
       "text": "Text",
       "sticker": "Sticker",
-      "repaint": "AI Repaint"
+      "repaint": "AI Repaint",
+      "split": "Split"
     }
+  },
+  "split": {
+    "title": "Seamless Split",
+    "count": "Panels",
+    "fewer": "Fewer panels",
+    "more": "More panels",
+    "auto": "Auto",
+    "coverage": "Coverage",
+    "region": "Region",
+    "panelOutput": "Each panel",
+    "resetRegion": "Reset to full height",
+    "preview": "Preview",
+    "output": "Output",
+    "chooseFolder": "Choose folder…",
+    "layersBlocked": "Apply or remove text, sticker and border layers before splitting.",
+    "exportN": "Export {{count}} panels",
+    "exporting": "Exporting {{done}} / {{total}}…",
+    "done": "Exported {{count}} panels",
+    "failed": "Split export failed",
+    "reveal": "Show in Finder",
+    "subfolder": "Create a subfolder for the panels",
+    "webDownloads": "The {{count}} panels download one by one."
   },
   "text": {
     "presets": "Presets",
@@ -34,7 +57,12 @@
     "overlaySettings": "Overlay fill",
     "coverage": "Coverage",
     "coverageEdge": "From edge",
-    "coverageEdges": { "bottom": "From bottom", "top": "From top", "left": "From left", "right": "From right" },
+    "coverageEdges": {
+      "bottom": "From bottom",
+      "top": "From top",
+      "left": "From left",
+      "right": "From right"
+    },
     "addTextLayer": "Add text layer",
     "addStickerLayer": "Add sticker layer",
     "hideStickerPicker": "Hide sticker picker",
