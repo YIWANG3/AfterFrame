@@ -13,7 +13,7 @@ export default function SampleCatalogBanner({ onCreateOwn, onReset, busy = false
 
   return (
     <div className="sample-catalog-dock pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4">
-      <div className="sample-catalog-banner pointer-events-auto flex max-w-full items-center gap-3 rounded-[18px] p-2.5">
+      <div className="floating-status-card sample-catalog-banner pointer-events-auto flex max-w-full items-center gap-3 p-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-2.5 px-1">
           <Info className="h-4 w-4 shrink-0 text-muted" />
           <p className="text-[12px] leading-5 text-text">{t("sample.banner")}</p>

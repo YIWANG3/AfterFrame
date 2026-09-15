@@ -53,6 +53,7 @@ const api = {
 
   // ── browse & assets ──
   browseImages: (...args) => invoke("browseImages", ...args),
+  locateImageAsset: (...args) => invoke("locateImageAsset", ...args),
   browseMapPoints: (...args) => invoke("browseMapPoints", ...args),
   resolveAiLocations: (...args) => invoke("resolveAiLocations", ...args),
   discoverCollections: (...args) => invoke("discoverCollections", ...args),

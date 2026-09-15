@@ -25,6 +25,7 @@
   "noProviderError": "No provider configured. Open Settings → AI to add one.",
   "loadFailed": "Failed to load annotation",
   "loc": {
+    "gpsNearby": "GPS takes priority. Place names below are nearby offline matches, not a verified address.",
     "country": "Country",
     "region": "Region",
     "landmark": "Landmark",

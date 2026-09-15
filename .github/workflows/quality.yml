@@ -81,6 +81,8 @@ jobs:
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
           e2e/29-folder-order.spec.js
+          e2e/31-version-navigation.spec.js
+          e2e/32-gps-location-menu.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

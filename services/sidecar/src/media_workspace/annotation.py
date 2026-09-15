@@ -33,6 +33,7 @@ import urllib.request
 import urllib.error
 
 from . import video
+from .annotation_location import asset_gps_location, effective_location
 
 try:
     from PIL import Image  # noqa: F401 — needed for image preprocessing
@@ -318,6 +319,7 @@ def annotate(
     existing_tags: Optional[list[str]] = None,
     is_video: bool = False,
     location_hint: Optional[str] = None,
+    location_context: Optional[dict[str, Any]] = None,
 ) -> AnnotationResult:
     """Annotate one asset from one or more frames. Pure: no DB writes.
 
@@ -353,6 +355,15 @@ def annotate(
             "and reconsider the caption and tags accordingly."
         )
 
+    if location_context:
+        system += (
+            "\n\nThis asset has EXIF GPS. The supplied coordinates take priority over visual "
+            "guesses and conflicting location hints. Nearby gazetteer names are approximate, "
+            "not verified boundaries or landmarks. Keep caption and tags consistent with GPS; "
+            "do not invent a specific landmark. Return location: null (the app supplies GPS location)."
+        )
+        prompt_text += "\n\nEXIF GPS context:\n" + json.dumps(location_context, ensure_ascii=False)
+
     if provider == "anthropic":
         if not api_key:
             raise RuntimeError("Anthropic provider requires an API key")
@@ -374,6 +385,12 @@ def annotate(
     location = parsed.get("location")
     if not isinstance(location, dict):
         location = None
+    else:
+        # Provenance and coordinates are application-owned, never model output.
+        location = {key: value for key, value in location.items()
+                    if key in {"country", "admin1", "locality", "region", "landmark", "confidence"}}
+    if location_context:
+        location = dict(location_context)  # Never trust model compliance for location fields.
 
     detected_text = parsed.get("detected_text")
     if not isinstance(detected_text, str):
@@ -396,6 +413,7 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
     """Write annotation + tags. Replaces any existing annotation for the asset."""
     now = datetime.now(timezone.utc).isoformat()
     merged_tags = merge_with_existing_tags(connection, result.tags)
+    location = asset_gps_location(connection, asset_id) or result.location
 
     connection.execute(
         """
@@ -421,7 +439,7 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
             ANNOTATION_SCHEMA_VERSION,
             result.caption,
             json.dumps(merged_tags, ensure_ascii=False),
-            json.dumps(result.location, ensure_ascii=False) if result.location else None,
+            json.dumps(location, ensure_ascii=False) if location else None,
             result.detected_text,
             result.raw_response,
             now,
@@ -442,7 +460,8 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
     # needed for new annotations. Resolver problems must never break the
     # annotation write itself.
     try:
-        _sync_ai_location(connection, asset_id, result.location)
+        if not location or location.get("source") != "exif":
+            _sync_ai_location(connection, asset_id, location)
     except Exception:  # noqa: BLE001 — best-effort by design
         pass
     connection.commit()
@@ -522,6 +541,8 @@ def annotate_batch(
     errors: list[dict[str, str]] = []
     # Fetch the tag-reuse hint once and share it across all workers.
     existing_tags = list_top_tags(connection)
+    # Resolve before worker threads start: SQLite stays on the caller thread.
+    gps_contexts = {str(row["asset_id"]): asset_gps_location(connection, str(row["asset_id"])) for row in assets}
 
     def report() -> None:
         if progress_callback:
@@ -565,6 +586,7 @@ def annotate_batch(
                 custom_instructions=custom_instructions,
                 existing_tags=existing_tags,
                 is_video=is_video,
+                location_context=gps_contexts[str(row["asset_id"])],
             )
         finally:
             if tmp_dir:
@@ -599,7 +621,8 @@ def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[di
     row = connection.execute(
         """
         SELECT asset_id, provider, model, schema_version, caption, tags_json,
-               location_json, detected_text, created_at, updated_at
+               location_json, detected_text, created_at, updated_at,
+               (SELECT metadata_json FROM assets WHERE assets.asset_id = asset_ai_annotations.asset_id) AS metadata_json
         FROM asset_ai_annotations
         WHERE asset_id = ?
         """,
@@ -614,7 +637,7 @@ def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[di
         "schema_version": row["schema_version"],
         "caption": row["caption"],
         "tags": json.loads(row["tags_json"] or "[]"),
-        "location": json.loads(row["location_json"]) if row["location_json"] else None,
+        "location": effective_location(row["metadata_json"], json.loads(row["location_json"]) if row["location_json"] else None),
         "detected_text": row["detected_text"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],

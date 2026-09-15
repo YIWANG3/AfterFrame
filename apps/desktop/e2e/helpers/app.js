@@ -48,6 +48,7 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
     ...process.env,
     AFTERFRAME_USER_DATA: userDataDir,
     AFTERFRAME_MCP_PORT: String(mcpPort),
+    AFTERFRAME_SIDECAR_TRACE: "1",
     NODE_ENV: "test",
   };
   // Production tests must not accidentally attach to an inherited Vite URL.
@@ -82,7 +83,32 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
     env,
   });
   const window = await app.firstWindow();
+  captureAppLogs(app, window, testName);
   return { app, window, userDataDir, catalogDir: workCatalog, mcpPort };
+}
+
+// Main-process stdout/stderr and renderer console lines go to
+// e2e/.artifacts/app-logs/ so a CI failure ships the sidecar/browse timeline
+// alongside Playwright's own screenshot and trace (which never see either).
+const APP_LOG_DIR = path.resolve(__dirname, "..", ".artifacts", "app-logs");
+function captureAppLogs(app, window, testName) {
+  let stream = null;
+  const startedAt = Date.now();
+  const write = (source, text) => {
+    if (!stream) {
+      fs.mkdirSync(APP_LOG_DIR, { recursive: true });
+      stream = fs.createWriteStream(path.join(APP_LOG_DIR, `${testName}-${process.pid}-${startedAt}.log`), { flags: "a" });
+    }
+    const stamp = String(Date.now() - startedAt).padStart(7);
+    for (const line of String(text).split("\n")) {
+      if (line.trim()) stream.write(`${stamp} [${source}] ${line}\n`);
+    }
+  };
+  app.process().stdout?.on("data", (chunk) => write("main", chunk));
+  app.process().stderr?.on("data", (chunk) => write("main:err", chunk));
+  window.on("console", (message) => write(`renderer:${message.type()}`, message.text()));
+  window.on("pageerror", (error) => write("renderer:pageerror", error.stack || error.message));
+  app.once("close", () => stream?.end());
 }
 
 /**

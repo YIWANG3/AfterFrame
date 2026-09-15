@@ -1,4 +1,9 @@
 {
+  "relatedAsset": {
+    "missing": "This asset is no longer in the catalog.",
+    "failed": "Could not locate this version",
+    "showingAll": "Switched to All Assets to show this version"
+  },
   "folderOrderFailed": "Could not save folder order",
   "drop": {
     "title": "Drop to import",

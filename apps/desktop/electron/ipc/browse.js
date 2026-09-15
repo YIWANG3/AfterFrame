@@ -2,6 +2,11 @@
 // All wrap the Python sidecar; return empty results when no catalog loaded.
 
 function register({ ipcMain, commands, getCatalogState }) {
+  ipcMain.handle("workspace:locate-image-asset", async (_event, options) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return { index: null };
+    return commands.locateImageAsset(options);
+  });
   ipcMain.handle("workspace:browse", async (_event, options) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];

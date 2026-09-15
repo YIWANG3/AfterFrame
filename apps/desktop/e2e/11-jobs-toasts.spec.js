@@ -70,12 +70,33 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
     // The jobs-poke broadcast wakes the poll loop → dock card appears
     // The card title carries phase progress while running: "Import · 1/4"
     await expect(ctx.window.getByText(/^Import( ·|$)/)).toBeVisible({ timeout: 15_000 });
+    const dock = ctx.window.getByTestId("job-dock-card").first();
+    await expect(dock).toHaveCSS("border-top-width", "0px");
+    await expect(dock).toHaveCSS("background-color", "rgb(24, 24, 27)");
+    const surface = await dock.evaluate((el) => {
+      const css = getComputedStyle(el);
+      return { background: css.backgroundColor, radius: css.borderRadius, shadow: css.boxShadow };
+    });
 
     const result = await importPromise;
     expect(result.status).toBe("succeeded");
 
     // Dock self-dismisses once nothing is running
     await expect(ctx.window.getByText(/^Import( ·|$)/)).toHaveCount(0, { timeout: 15_000 });
+    // Real agent notification uses exactly the same surface as progress.
+    const assetId = await ctx.window.locator("[data-gallery-item='true']").first().getAttribute("data-asset-id");
+    await callTool("show_in_app", { asset_ids: [assetId] });
+    const toast = ctx.window.getByTestId("toast-card").filter({ hasText: "Selected 1 photo" }).first();
+    await expect(toast).toBeVisible();
+    await expect(toast).toHaveCSS("border-top-width", "0px");
+    expect(await toast.evaluate((el) => {
+      const css = getComputedStyle(el);
+      return { background: css.backgroundColor, radius: css.borderRadius, shadow: css.boxShadow };
+    })).toEqual(surface);
+    await ctx.window.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    await expect(toast).toHaveCSS("background-color", "rgb(247, 247, 250)");
+    await expect(toast).toHaveCSS("border-top-width", "0px");
+    await ctx.window.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

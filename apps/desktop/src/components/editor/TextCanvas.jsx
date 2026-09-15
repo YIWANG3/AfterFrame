@@ -338,6 +338,11 @@ export default function TextCanvas({
         const maskUrl = getMaskUrl(layer.zPosition);
         const wrapperStyle = {
           position: "absolute",
+          // Every layer owns an equal-level stacking context. A CSS depth
+          // mask otherwise creates an auto/0 context below overlays (z=1),
+          // and an unmasked selected child (z=2) can jump above later layers.
+          // Equal outer z-indices make DOM/array order the only paint order.
+          zIndex: 1,
           left: `${imageRect.x}px`,
           top: `${imageRect.y}px`,
           width: `${imageRect.width}px`,
@@ -372,7 +377,7 @@ export default function TextCanvas({
         };
 
         return (
-          <div key={layer.id} style={wrapperStyle}>
+          <div key={layer.id} data-editor-layer-wrapper={layer.id} style={wrapperStyle}>
             {layer.type === "sticker" ? (
               <StickerLayerEl
                 layer={layer}
@@ -405,10 +410,10 @@ export default function TextCanvas({
       })}
       {/* Alignment guide lines — at the snapped fraction (element edge/center or canvas). */}
       {guides.x != null && (
-        <div style={{ position: "absolute", left: imageRect.x + imageRect.width * guides.x, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", zIndex: 2, left: imageRect.x + imageRect.width * guides.x, top: imageRect.y, width: 1, height: imageRect.height, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
       {guides.y != null && (
-        <div style={{ position: "absolute", left: imageRect.x, top: imageRect.y + imageRect.height * guides.y, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", zIndex: 2, left: imageRect.x, top: imageRect.y + imageRect.height * guides.y, width: imageRect.width, height: 1, backgroundColor: ACCENT, opacity: 0.7, pointerEvents: "none" }} />
       )}
     </div>
   );
@@ -430,9 +435,8 @@ function OverlayLayerEl({ layer, rect }) {
         height: `${r.height}px`,
         opacity: (layer.opacity ?? 100) / 100,
         background: scrimToCss(layer),
-        // Text/sticker elements carry zIndex 1 (2 while selected). Match them
-        // so sibling DOM order — i.e. the layer array order — decides who
-        // paints on top, same as the export path.
+        // Match the text/sticker OUTER wrappers, not their selected children.
+        // Sibling DOM order is the layer array's bottom-to-top paint order.
         zIndex: 1,
       }}
     />

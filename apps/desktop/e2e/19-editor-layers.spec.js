@@ -10,6 +10,95 @@ const state = (window) => window.evaluate(() => window.__afterframeTest.getState
 const layerCount = (window) => window.evaluate(() => window.__afterframeTest.getLayerCount());
 const firstId = (window) => window.evaluate(() => window.__afterframeTest.getState().layers[0]?.id);
 
+test.describe("Depth-mask layer stacking", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const sharp = require("sharp");
+  let app, window, userDataDir, temp, textLayer;
+  const overlay = { id: "stack-overlay", type: "overlay", mode: "solid", color: "#000000", opacity: 100, coverage: 1 };
+
+  test.beforeAll(async () => {
+    temp = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-stack-"));
+    // Deterministic depth: left is far, right is near. No ML/model dependency.
+    const depthPath = path.join(temp, "depth.png");
+    await sharp({ create: { width: 64, height: 64, channels: 3, background: "#000000" } })
+      .composite([{ input: await sharp({ create: { width: 32, height: 64, channels: 3, background: "#ffffff" } }).png().toBuffer(), left: 32, top: 0 }])
+      .png().toFile(depthPath);
+    ({ app, window, userDataDir } = await launchApp({ testName: "depth-stack" }));
+    await window.waitForFunction(() => !!window.__afterframeTest);
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), await ensureFixture());
+    await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible();
+    await expect.poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.())).toBe(true);
+    await window.evaluate(() => window.__afterframeTest.setTool("text"));
+    textLayer = await window.evaluate(() => window.__afterframeTest.addTextLayer("MMMM"));
+    await window.evaluate((p) => window.__afterframeTest.loadTestDepth(p), "data:image/png;base64," + fs.readFileSync(depthPath).toString("base64"));
+  });
+  test.afterAll(async () => {
+    await closeApp(app, userDataDir);
+    if (temp) fs.rmSync(temp, { recursive: true, force: true });
+  });
+
+  async function redPixels(buffer) {
+    const { data, info } = await sharp(buffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const count = { left: 0, right: 0 };
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width; x++) {
+        const i = (y * info.width + x) * info.channels;
+        // Ignore a small band at the feathered depth boundary.
+        if (data[i] > 180 && data[i + 1] < 40 && data[i + 2] < 40) {
+          if (x < info.width * 0.47) count.left++;
+          if (x > info.width * 0.53) count.right++;
+        }
+      }
+    }
+    return count;
+  }
+
+  for (const kind of ["text", "sticker"]) {
+    test(`${kind}: preview and export obey stack order with depth on/off and selection`, async () => {
+      const stickerPath = "data:image/png;base64," + (await sharp({ create: { width: 64, height: 64, channels: 4, background: "#ff0000" } }).png().toBuffer()).toString("base64");
+      const layer = kind === "text"
+        ? { ...textLayer, id: "stack-text", type: "text", text: "MMMM", x: 0.5, y: 0.5,
+            fillMode: "solid", fillColor: "#ff0000", fillOpacity: 100, opacity: 100,
+            fontSize: 300, fontFamily: "Plus Jakarta Sans", fontWeight: 400, align: "center", rotation: 0 }
+        : { id: "stack-sticker", type: "sticker", stickerPath, naturalWidth: 64, naturalHeight: 64, scale: 0.3, x: 0.5, y: 0.5, rotation: 0, opacity: 100 };
+      for (const zPosition of [0.5, 1]) {
+        await window.evaluate(({ overlay, layer, zPosition }) => {
+          window.__afterframeTest.setTestLayers([overlay, { ...layer, zPosition }]);
+          window.__afterframeTest.selectLayers([]);
+        }, { overlay, layer, zPosition });
+        const wrapper = window.locator(`[data-editor-layer-wrapper='${layer.id}']`);
+        await expect(wrapper).toBeVisible();
+        if (zPosition < 1) await expect(wrapper).not.toHaveCSS("mask-image", "none");
+        else await expect(wrapper).toHaveCSS("mask-image", "none");
+        await expect.poll(async () => (await redPixels(await wrapper.screenshot())).left).toBeGreaterThan(100);
+        const shown = await redPixels(await wrapper.screenshot());
+        if (zPosition < 1) expect(shown.right).toBe(0);
+        else expect(shown.right).toBeGreaterThan(100);
+
+        // Selecting must not lift a LOWER layer above the black overlay.
+        await window.evaluate((id) => {
+          window.__afterframeTest.moveLayer(id, -1);
+          window.__afterframeTest.selectLayers([id]);
+        }, layer.id);
+        await expect.poll(async () => (await redPixels(await wrapper.screenshot())).left).toBe(0);
+        await window.evaluate((id) => window.__afterframeTest.moveLayer(id, 1), layer.id);
+        await expect.poll(async () => (await redPixels(await wrapper.screenshot())).left).toBeGreaterThan(100);
+      }
+      // Compare to the real export pipeline, with the depth mask active.
+      await window.evaluate(({ overlay, layer }) => window.__afterframeTest.setTestLayers([overlay, { ...layer, zPosition: 0.5 }]), { overlay, layer });
+      await expect(window.locator(`[data-editor-layer-wrapper='${layer.id}']`)).not.toHaveCSS("mask-image", "none");
+      const exportPath = path.join(temp, `${kind}.png`);
+      await window.evaluate((p) => window.__afterframeTest.saveAs(p), exportPath);
+      await expect.poll(() => fs.existsSync(exportPath)).toBe(true);
+      const exported = await redPixels(fs.readFileSync(exportPath));
+      expect(exported.left).toBeGreaterThan(100);
+      expect(exported.right).toBe(0);
+    });
+  }
+});
+
 test.describe("Golden: text layers", () => {
   let app, window, userDataDir;
 

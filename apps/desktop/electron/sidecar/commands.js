@@ -9,6 +9,14 @@
 function createSidecarCommands(callJson) {
   return {
     // ── Browse / read ────────────────────────────────────────────────────
+    locateImageAsset({ assetId, status = "all", collectionId, search, sort, filters } = {}) {
+      const argv = ["locate-image-asset", "--asset-id", String(assetId), "--status", String(status)];
+      if (collectionId) argv.push("--collection-id", String(collectionId));
+      if (search) argv.push("--search", String(search));
+      if (sort) argv.push("--sort", String(sort));
+      if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      return callJson(argv);
+    },
     browseImages({ status = "all", limit = 120, offset = 0, search, sort, filters } = {}) {
       const argv = [
         "browse-images",

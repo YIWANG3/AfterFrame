@@ -9,6 +9,9 @@ const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
+const browseScopeKey = ({ status, collectionId, search, sort, filters }) => JSON.stringify({
+  status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {},
+});
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
@@ -29,12 +32,16 @@ export default function useWorkspace({ pushToast } = {}) {
   const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
   const [selectedAssetId, setSelectedAssetIdState] = useState(null);
   const selectedAssetIdRef = useRef(null);
+  const relatedNavigationRef = useRef(0);
+  const detailRequestRef = useRef(0);
+  const [revealAssetRequest, setRevealAssetRequest] = useState(null);
   // Inspector relationships may point outside the active search/filter page.
   // Keep that explicit selection authoritative while background browse
   // requests settle; otherwise a late response replaces it with the first
   // visible gallery item and briefly clears the inspector.
   const relatedSelectionRef = useRef(false);
   const setSelectedAssetId = useCallback((value) => {
+    relatedNavigationRef.current += 1;
     relatedSelectionRef.current = false;
     setSelectedAssetIdState((current) => {
       const next = typeof value === "function" ? value(current) : value;
@@ -67,6 +74,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const [catalogRevision, setCatalogRevision] = useState(0);
   const bumpCatalogRevision = () => setCatalogRevision((revision) => revision + 1);
   const browserRequestIdRef = useRef(0);
+  const loadedBrowserScopeRef = useRef(null);
   const explicitlyLoadedFiltersRef = useRef(null);
   // While an agent-driven reveal resets query/filters/status, the reload
   // effects below must not fire — the reveal does one imperative load itself.
@@ -223,12 +231,15 @@ export default function useWorkspace({ pushToast } = {}) {
   }, [pendingImport]);
 
   async function loadDetail(assetId) {
+    const requestId = ++detailRequestRef.current;
     if (!assetId) {
       setDetail(null);
       return;
     }
+    const startedAt = Date.now();
     const payload = await api.getAssetDetailById(assetId);
-    setDetail(payload);
+    if (Date.now() - startedAt > 1000) console.warn(`[detail] ${assetId} took ${Date.now() - startedAt}ms`);
+    if (requestId === detailRequestRef.current) setDetail(payload);
   }
 
   async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort, facetFilters = filters, preserveView = false } = {}) {
@@ -241,6 +252,7 @@ export default function useWorkspace({ pushToast } = {}) {
       setBrowserLoadingMore(true);
     } else {
       setBrowserLoading(true);
+      setBrowserLoadingMore(false);
     }
     try {
       const nextOffset = append ? browserOffset : 0;
@@ -273,6 +285,7 @@ export default function useWorkspace({ pushToast } = {}) {
           browserRequestIdRef.current === requestId ? "(current)" : "(SUPERSEDED — discarded)");
       }
       if (browserRequestIdRef.current !== requestId) return;
+      loadedBrowserScopeRef.current = browseScopeKey({ status: nextStatus, collectionId, search, sort: sortKey, filters: facetFilters });
       seedAnnotations(payload);
       setBrowserOffset(nextOffset + payload.length);
       setBrowserHasMore(payload.length === (append ? PAGE_SIZE : pageLimit));
@@ -307,10 +320,9 @@ export default function useWorkspace({ pushToast } = {}) {
       console.error("[browse] FAILED", error?.message || error);
       pushToast?.({ title: "Browse failed", message: error?.message || String(error), ttl: 6000, tone: "error" });
     } finally {
-      if (append) {
-        setBrowserLoadingMore(false);
-      } else {
-        setBrowserLoading(false);
+      if (browserRequestIdRef.current === requestId) {
+        if (append) setBrowserLoadingMore(false);
+        else setBrowserLoading(false);
       }
     }
   }
@@ -354,6 +366,83 @@ export default function useWorkspace({ pushToast } = {}) {
   useEffect(() => {
     return api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));
   }, []);
+
+  // Related versions are genuine gallery destinations, including later pages.
+  // Locate using the same scope/order as browse, then fetch only the missing
+  // prefix needed by the virtual layout. Do not scan pages or stat the entire
+  // library just to discover the target's position.
+  async function revealRelatedAsset(assetId) {
+    if (!assetId) return;
+    const navigationId = ++relatedNavigationRef.current;
+    const startedAt = Date.now();
+    const log = (step, extra = "") => console.log(`[reveal] #${navigationId} ${step} +${Date.now() - startedAt}ms ${extra}`);
+    log("start", assetId);
+    setRelatedAssetId(assetId);
+    clearTimeout(searchTimerRef.current);
+    const requestId = ++browserRequestIdRef.current;
+    const initialContext = JSON.stringify(jobsBridgeRef.browseContext);
+    const isCurrent = () => navigationId === relatedNavigationRef.current
+      && requestId === browserRequestIdRef.current
+      && initialContext === JSON.stringify(jobsBridgeRef.browseContext);
+    setBrowserLoading(true);
+    setBrowserLoadingMore(false);
+    try {
+      let scope = { status, collectionId: activeCollectionId, search: query.trim() || undefined, sort, filters };
+      const sameLoadedScope = loadedBrowserScopeRef.current === browseScopeKey(scope);
+      if (sameLoadedScope && filteredItems.some((item) => item.asset_id === assetId)) {
+        log("already loaded");
+        setRevealAssetRequest({ assetId, navigationId });
+        return;
+      }
+      let location = await api.locateImageAsset({ assetId, ...scope });
+      log("located", JSON.stringify(location));
+      if (!isCurrent()) { log("superseded after locate"); return; }
+      let resetScope = location.index == null;
+      // The local text projection may hide a server-side annotation match.
+      if (query.trim() && items.some((item) => item.asset_id === assetId)
+        && !filteredItems.some((item) => item.asset_id === assetId)) resetScope = true;
+      if (resetScope) {
+        scope = { status: "all", sort };
+        location = await api.locateImageAsset({ assetId, ...scope });
+        log("located in all", JSON.stringify(location));
+        if (!isCurrent()) { log("superseded after relocate"); return; }
+      }
+      if (location.index == null) throw new Error(t("relatedAsset.missing"));
+      const limit = Math.ceil((location.index + 1) / PAGE_SIZE) * PAGE_SIZE;
+      const offset = resetScope || !sameLoadedScope ? 0 : browserOffset;
+      const count = Math.max(0, limit - offset);
+      const payload = count === 0 ? [] : scope.collectionId
+        ? await api.browseCollection(scope.collectionId, { limit: count, offset })
+        : await api.browseImages({ ...scope, limit: count, offset });
+      log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
+      if (!isCurrent()) { log("superseded after page"); return; }
+      const nextItems = offset === 0 ? payload : [...items, ...payload];
+      if (!nextItems.some((item) => item.asset_id === assetId)) throw new Error(t("relatedAsset.missing"));
+      if (resetScope) {
+        // The explicit result below owns this scope change, not the reload effects.
+        suppressAutoReloadUntilRef.current = Date.now() + 1500;
+        clearTimeout(searchTimerRef.current);
+        setActiveCollectionId(null);
+        setQuery("");
+        setFilters({});
+        setStatus("all");
+        pushToast?.({ title: t("relatedAsset.showingAll"), ttl: 4000 });
+      }
+      seedAnnotations(payload);
+      loadedBrowserScopeRef.current = browseScopeKey(scope);
+      setItems(nextItems);
+      setRevealAssetRequest({ assetId, navigationId });
+      setBrowserOffset(nextItems.length);
+      if (count > 0) setBrowserHasMore(payload.length === count);
+      setBrowserReady(true);
+      log("done", `items=${nextItems.length}`);
+    } catch (error) {
+      log("failed", error?.message || String(error));
+      if (isCurrent()) pushToast?.({ title: t("relatedAsset.failed"), message: error.message, tone: "error", ttl: 6000 });
+    } finally {
+      if (requestId === browserRequestIdRef.current) setBrowserLoading(false);
+    }
+  }
 
   // Agent-driven reveal (MCP show_in_app): reset to the unfiltered library,
   // page through until the requested ids are loaded (bounded scan), then
@@ -933,6 +1022,8 @@ export default function useWorkspace({ pushToast } = {}) {
     selectedAssetId,
     setSelectedAssetId,
     setRelatedAssetId,
+    revealRelatedAsset,
+    revealAssetRequest,
     status,
     setStatus,
     sort,

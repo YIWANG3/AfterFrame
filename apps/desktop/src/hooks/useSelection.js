@@ -55,12 +55,12 @@ export default function useSelection({
   // become the primary asset so its detail can load; keeping the old visible
   // multi-selection would make subsequent actions target the wrong photos.
   function selectRelatedAsset(id) {
-    if (!id || itemById.has(id)) {
+    if (!id) {
       selectSingle(id);
       return;
     }
-    setSelectedIds([]);
-    setAnchorId(null);
+    setSelectedIds(itemById.has(id) ? [id] : []);
+    setAnchorId(itemById.has(id) ? id : null);
     setRelatedPrimaryId(id);
   }
 
