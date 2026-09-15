@@ -32,6 +32,7 @@ export default function ToolRail({ tool, onSelect, t }) {
       data-editor-wheel-scope="toolbar"
     >
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
+      <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
       {api.can("stickerExtract") ? (
         <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => onSelect("sticker")} />
@@ -55,7 +56,6 @@ export default function ToolRail({ tool, onSelect, t }) {
           <Sparkles className="h-4 w-4" />
         </button>
       )}
-      <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
     </div>
   );
 }
