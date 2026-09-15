@@ -2,6 +2,7 @@
 import os
 import sqlite3
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 catalog = Path(sys.argv[1])
@@ -22,10 +23,16 @@ for i in range(400):
     stem = f"nav-{i:04}"
     image_path = image_dir / f"{stem}.jpg"
     os.link(source, image_path)
+    stat = image_path.stat()
     row = {k: original[k] for k in columns}
+    # Size and mtime must match the file on disk exactly (same format as the
+    # sidecar's iso_mtime). Otherwise browse flags every row as source_changed
+    # and the gallery queues a 400-file refresh-assets on the serial sidecar,
+    # which stalls navigation for seconds on CI runners.
     row.update(asset_id=asset_id, stem=stem, normalized_stem=stem, stem_key=stem,
                canonical_path=str(image_path), fingerprint=asset_id, app_rating=5 if i == 0 else 0,
-               file_size=image_path.stat().st_size,
+               file_size=stat.st_size,
+               modified_time=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
                created_at="2030-01-01 00:00:00", updated_at="2030-01-01 00:00:00")
     db.execute(f"INSERT INTO assets ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
                [row[k] for k in columns])
