@@ -146,14 +146,14 @@ export default function SplitPanel({
             <span>{t("split.region")}</span><span className="text-right text-text tabular-nums">{coverage}</span>
             <span>{t("split.panelOutput")}</span><span className="text-right text-text tabular-nums" data-testid="split-panel-size">{panelSize}</span>
           </div>
-          <button type="button" className="mt-2 text-[11px] text-accent hover:underline" onClick={onResetRegion}>
+          <button type="button" className="mt-1 text-[11px] text-accent hover:underline" onClick={onResetRegion}>
             {t("split.resetRegion")}
           </button>
         </div>
 
         <div className="border-b border-border/60 px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("split.preview")}</div>
-          <div className="mt-3 flex h-24 gap-1.5" data-testid="split-preview-strip">
+          <div className="mt-2 flex h-16 gap-1.5" data-testid="split-preview-strip">
             {previewPanels.map((panel, i) => (
               <PanelThumb key={i} source={previewSource} panel={panel} index={i} />
             ))}
