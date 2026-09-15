@@ -29,7 +29,6 @@
   },
   "split": {
     "title": "Seamless Split",
-    "panelAspect": "Panel ratio",
     "count": "Panels",
     "fewer": "Fewer panels",
     "more": "More panels",
@@ -47,9 +46,6 @@
     "done": "Exported {{count}} panels",
     "failed": "Split export failed",
     "reveal": "Show in Finder",
-    "custom": "Custom",
-    "customWidth": "Custom ratio width",
-    "customHeight": "Custom ratio height",
     "subfolder": "Create a subfolder for the panels",
     "webDownloads": "The {{count}} panels download one by one."
   },

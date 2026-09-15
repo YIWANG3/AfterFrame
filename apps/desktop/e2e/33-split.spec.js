@@ -114,20 +114,31 @@ test.describe("Seamless split", () => {
     await expect(window.getByTestId("split-panel-size")).toHaveText("600 × 800");
   });
 
-  test("custom W:H typed into the ratio inputs drives the panel shape", async () => {
-    await window.getByTestId("split-custom-width").fill("2");
-    await window.getByTestId("split-custom-height").fill("1");
-    await window.getByTestId("split-custom-height").press("Enter");
+  test("the ratio list is the crop tool's: Free unlocks the region, Original matches the photo", async () => {
+    await window.getByRole("button", { name: "Free" }).click();
     let s = await splitState(window);
-    expect(s.aspectKey).toBe("custom");
-    expect(s.custom).toEqual({ width: 2, height: 1 });
-    // 3 panels of 2:1 at full height would be 4800px wide: the width wins, so
-    // the region is the full 2400px and each panel is 800 × 400.
-    await expect(window.getByTestId("split-panel-size")).toHaveText("800 × 400");
-    await window.getByRole("button", { name: "3:4" }).click();
+    expect(s.aspectKey).toBe("free");
+    expect(s.freeAspect).toBe(true);
+    await expect(window.getByTestId("split-handle-e")).toBeVisible();
+    // Drag the east edge inward: free aspect keeps the height, only the width changes.
+    const region = await window.getByTestId("split-region").boundingBox();
+    const e = await window.getByTestId("split-handle-e").boundingBox();
+    await window.mouse.move(e.x + e.width / 2, e.y + e.height / 2);
+    await window.mouse.down();
+    await window.mouse.move(e.x + e.width / 2 - region.width / 4, e.y + e.height / 2, { steps: 6 });
+    await window.mouse.up();
     s = await splitState(window);
-    expect(s.aspectKey).toBe("3:4");
-    expect(s.custom).toEqual({ width: 2, height: 1 }); // remembered for next time
+    expect(s.rect.height).toBeCloseTo(1, 2);
+    expect(s.rect.width).toBeLessThan(0.99);
+
+    await window.getByRole("button", { name: "Original" }).click();
+    s = await splitState(window);
+    expect(s.aspectKey).toBe("original");
+    await expect(window.getByTestId("split-handle-e")).toHaveCount(0);
+    // 3 panels shaped like the 3:1 photo, full height → 3 × 2400 wide: width wins.
+    await expect(window.getByTestId("split-panel-size")).toHaveText("800 × 267");
+
+    await window.getByRole("button", { name: "3:4" }).click();
     await expect(window.getByTestId("split-panel-size")).toHaveText("600 × 800");
   });
 

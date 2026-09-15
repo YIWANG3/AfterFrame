@@ -3,13 +3,10 @@
 // export button. Presentational — EditorOverlay owns the state and passes the
 // commit handlers (mirrors CropPanel).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Minus, Plus, Undo2, Redo2, RotateCcw, FolderOpen } from "lucide-react";
 import { ASPECT_PRESETS } from "../cropMath";
-import {
-  SPLIT_ASPECT_KEYS, CUSTOM_SPLIT_ASPECT_KEY, MIN_SPLIT_COUNT, MAX_SPLIT_COUNT,
-  MIN_CUSTOM_ASPECT_SIDE, MAX_CUSTOM_ASPECT_SIDE, isValidCustomAspect, splitRectToPanels,
-} from "../splitMath";
+import { MIN_SPLIT_COUNT, MAX_SPLIT_COUNT, splitRectToPanels } from "../splitMath";
 import { AspectButton } from "./CropPanel";
 import api from "../../../api";
 
@@ -19,44 +16,6 @@ function middleEllipsis(text, max = 40) {
   const tail = Math.floor(max * 0.55);
   const head = max - tail - 1;
   return `${text.slice(0, head)}…${text.slice(-tail)}`;
-}
-
-// W:H inputs for the custom panel ratio. Local draft so half-typed values
-// don't reshape the region; commits on blur / Enter when both sides are valid.
-function CustomAspectInputs({ t, value, active, onCommit }) {
-  const [draft, setDraft] = useState({ width: String(value.width), height: String(value.height) });
-  useEffect(() => { setDraft({ width: String(value.width), height: String(value.height) }); }, [value.width, value.height]);
-  const commit = () => {
-    const next = { width: Number(draft.width), height: Number(draft.height) };
-    if (!isValidCustomAspect(next)) { setDraft({ width: String(value.width), height: String(value.height) }); return; }
-    if (active && next.width === value.width && next.height === value.height) return;
-    onCommit(next);
-  };
-  const field = (key, label) => (
-    <input
-      type="number"
-      min={MIN_CUSTOM_ASPECT_SIDE}
-      max={MAX_CUSTOM_ASPECT_SIDE}
-      step="any"
-      value={draft[key]}
-      aria-label={label}
-      data-testid={`split-custom-${key}`}
-      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
-      className="h-7 w-full min-w-0 rounded-md bg-app px-2 text-center text-[11px] tabular-nums text-text outline-none focus:ring-1 focus:ring-[rgb(var(--accent-color))]"
-    />
-  );
-  return (
-    <div className={["mt-1.5 flex items-center gap-1.5 rounded-md px-2.5 py-1.5", active ? "bg-selected" : ""].join(" ")}>
-      <span className="text-[11px] text-muted">{t("split.custom")}</span>
-      <div className="ml-auto flex w-[120px] items-center gap-1">
-        {field("width", t("split.customWidth"))}
-        <span className="text-[11px] text-muted2">:</span>
-        {field("height", t("split.customHeight"))}
-      </div>
-    </div>
-  );
 }
 
 function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false, testId }) {
@@ -105,7 +64,7 @@ function PanelThumb({ source, panel, index }) {
 
 export default function SplitPanel({
   t,
-  aspectKey, customAspect, onCommitAspect,
+  aspectKey, onCommitAspect,
   count, isAutoCount, onCommitCount,
   rect, previewSource, sourceDims,
   onResetRegion,
@@ -114,7 +73,6 @@ export default function SplitPanel({
   exporting, progress, onExport,
   onUndo, canUndo, onRedo, canRedo,
 }) {
-  const presets = SPLIT_ASPECT_KEYS.map((key) => ASPECT_PRESETS.find((p) => p.key === key)).filter(Boolean);
   const previewPanels = rect && previewSource
     ? splitRectToPanels(rect, count, previewSource.width, previewSource.height)
     : [];
@@ -131,9 +89,10 @@ export default function SplitPanel({
     <>
       <div className="max-h-[calc(100vh-10rem)] overflow-y-auto">
         <div className="border-b border-border/60 px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("split.panelAspect")}</div>
+          {/* Same presets, heading and buttons as the crop tool's Aspect Ratio. */}
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.aspectRatio")}</div>
           <div className="mt-3 grid grid-cols-2 gap-1.5">
-            {presets.map((preset) => (
+            {ASPECT_PRESETS.map((preset) => (
               <AspectButton
                 key={preset.key}
                 preset={preset}
@@ -142,12 +101,6 @@ export default function SplitPanel({
               />
             ))}
           </div>
-          <CustomAspectInputs
-            t={t}
-            value={customAspect}
-            active={aspectKey === CUSTOM_SPLIT_ASPECT_KEY}
-            onCommit={(next) => onCommitAspect(CUSTOM_SPLIT_ASPECT_KEY, next)}
-          />
         </div>
 
         <div className="border-b border-border/60 px-4 py-3">

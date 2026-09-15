@@ -899,13 +899,13 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         return {
           aspectKey: st.aspectKey, count: st.count, isAutoCount: st.isAutoCount,
           rect: st.rect, rectPx: st.rectPx, splitImageRect: st.splitImageRect,
-          custom: st.custom,
+          freeAspect: st.freeAspect,
           outputDir: splitDestRef.current.outputDir, subfolder: splitDestRef.current.subfolder,
           resolvedOutputDir: resolveSplitOutputDir(saveBasePath, splitDestRef.current.outputDir, splitDestRef.current.subfolder),
           exporting: splitExportingRef.current,
         };
       },
-      setSplitAspect: (key, custom) => splitToolRef.current.commitAspect(key, custom),
+      setSplitAspect: (key) => splitToolRef.current.commitAspect(key),
       setSplitSubfolder: (on) => setSplitSubfolder(!!on),
       setSplitCount: (n) => splitToolRef.current.commitCount(n),
       resetSplitRegion: () => splitToolRef.current.resetRegion(),
@@ -1266,6 +1266,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               <SplitOverlay
                 rect={splitTool.rectPx}
                 count={splitTool.count}
+                freeAspect={splitTool.freeAspect}
                 viewportSize={viewportSize}
                 onBeginResize={splitTool.beginResize}
                 onBeginMove={splitTool.beginMove}
@@ -1355,7 +1356,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               <SplitPanel
                 t={t}
                 aspectKey={splitTool.aspectKey}
-                customAspect={splitTool.custom}
                 onCommitAspect={splitTool.commitAspect}
                 count={splitTool.count}
                 isAutoCount={splitTool.isAutoCount}

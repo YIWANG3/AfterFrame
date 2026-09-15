@@ -11,39 +11,27 @@
 import { getAspectRatio, resizeCropRect } from "./cropMath";
 import { cropExtentForAngle } from "./imageMath";
 
-export const SPLIT_ASPECT_KEYS = ["3:4", "4:5", "1:1", "9:16", "2:3"];
 export const DEFAULT_SPLIT_ASPECT_KEY = "3:4";
 export const MIN_SPLIT_COUNT = 2;
 export const MAX_SPLIT_COUNT = 10;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-export const CUSTOM_SPLIT_ASPECT_KEY = "custom";
-export const MIN_CUSTOM_ASPECT_SIDE = 1;
-export const MAX_CUSTOM_ASPECT_SIDE = 100;
-
-export function isValidCustomAspect(custom) {
-  return !!custom && Number.isFinite(custom.width) && Number.isFinite(custom.height)
-    && custom.width >= MIN_CUSTOM_ASPECT_SIDE && custom.height >= MIN_CUSTOM_ASPECT_SIDE
-    && custom.width <= MAX_CUSTOM_ASPECT_SIDE && custom.height <= MAX_CUSTOM_ASPECT_SIDE;
-}
-
-// `custom` = { width, height } used when aspectKey is "custom" (any W:H the
-// user types, like a manual crop ratio). Falls back to the default preset.
-export function getSplitPanelAspect(aspectKey, custom) {
-  if (aspectKey === CUSTOM_SPLIT_ASPECT_KEY) {
-    return isValidCustomAspect(custom) ? custom.width / custom.height : getAspectRatio(DEFAULT_SPLIT_ASPECT_KEY, 1);
-  }
-  return getAspectRatio(aspectKey, 1) || getAspectRatio(DEFAULT_SPLIT_ASPECT_KEY, 1);
+// The panel ratio uses the crop tool's preset list verbatim: null = Free (the
+// region keeps whatever shape it is dragged to), "original" = the photo's own
+// aspect (`sourceAspect`), else the preset's ratio.
+export function getSplitPanelAspect(aspectKey, sourceAspect) {
+  return getAspectRatio(aspectKey, sourceAspect || null);
 }
 
 // Automatic panel count: as many panels of `panelAspect` as fit across the
 // photo at full height, clamped to the supported range. A user-chosen count is
-// clamped the same way.
+// clamped the same way. Free panels count as the default preset.
 export function resolveSplitCount(imageWidth, imageHeight, panelAspect, count) {
   if (Number.isInteger(count)) return clamp(count, MIN_SPLIT_COUNT, MAX_SPLIT_COUNT);
-  if (!imageWidth || !imageHeight || !panelAspect) return MIN_SPLIT_COUNT;
-  return clamp(Math.floor(imageWidth / (imageHeight * panelAspect)), MIN_SPLIT_COUNT, MAX_SPLIT_COUNT);
+  if (!imageWidth || !imageHeight) return MIN_SPLIT_COUNT;
+  const aspect = panelAspect || getAspectRatio(DEFAULT_SPLIT_ASPECT_KEY, 1);
+  return clamp(Math.floor(imageWidth / (imageHeight * aspect)), MIN_SPLIT_COUNT, MAX_SPLIT_COUNT);
 }
 
 function scaleAboutCenter(rect, factor) {
@@ -76,10 +64,11 @@ export function fitSplitRect(rect, bounds, freeAngle = 0) {
 }
 
 // Default region: full photo height, N panels wide, centred. When that is
-// wider than the photo the width wins and the height shrinks to match.
+// wider than the photo the width wins and the height shrinks to match. A free
+// (null) aspect covers the whole photo.
 export function createDefaultSplitRect(bounds, regionAspect, freeAngle = 0) {
   let height = bounds.height;
-  let width = height * regionAspect;
+  let width = regionAspect ? height * regionAspect : bounds.width;
   if (width > bounds.width) {
     width = bounds.width;
     height = width / regionAspect;
@@ -98,6 +87,7 @@ export function createDefaultSplitRect(bounds, regionAspect, freeAngle = 0) {
 // tool's aspect change), then fit.
 export function reshapeSplitRect(rect, bounds, regionAspect, freeAngle = 0) {
   if (!rect) return createDefaultSplitRect(bounds, regionAspect, freeAngle);
+  if (!regionAspect) return fitSplitRect(rect, bounds, freeAngle); // free: keep the shape
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
   let height = bounds.height;
@@ -113,9 +103,9 @@ export function moveSplitRect(rect, bounds, deltaX, deltaY, freeAngle = 0) {
   return fitSplitRect({ ...rect, x: rect.x + deltaX, y: rect.y + deltaY }, bounds, freeAngle);
 }
 
-// Corner drag with the aspect locked. cropMath's fixed-aspect resize already
-// anchors the opposite corner and clamps to a {width,height} box, so run it in
-// bounds-local coordinates and translate back.
+// Handle drag. cropMath's resize (free with a null aspect, locked otherwise)
+// already anchors the opposite side and clamps to a {width,height} box, so run
+// it in bounds-local coordinates and translate back.
 export function resizeSplitRect(rect, handle, point, bounds, regionAspect, freeAngle = 0) {
   const local = { x: rect.x - bounds.x, y: rect.y - bounds.y, width: rect.width, height: rect.height };
   const localPoint = { x: point.x - bounds.x, y: point.y - bounds.y };
