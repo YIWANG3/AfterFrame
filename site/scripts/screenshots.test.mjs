@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -7,6 +7,14 @@ import test from 'node:test';
 const root = new URL('../../', import.meta.url);
 const require = createRequire(new URL('apps/desktop/package.json', root));
 const sharp = require('sharp');
+
+test('asset root contains only the shared logo and handwriting artwork', async () => {
+  const entries = await readdir(new URL('docs/assets/', root), { withFileTypes: true });
+  const images = entries.filter((entry) => entry.isFile() && /\.(png|jpe?g|webp|gif|avif|svg)$/i.test(entry.name));
+  assert.deepEqual(images.map((entry) => entry.name).sort(), [
+    'editor-handwriting-gallery.jpg', 'logo.png',
+  ]);
+});
 
 test('UI screenshots preserve their own app corners and full height', async () => {
   const theme = await readFile(new URL('site/theme.css', root), 'utf8');

@@ -771,6 +771,13 @@ export const browserBridge = {
   savePreviewSettings: async () => {},
 
   // ── browse ──
+  locateImageAsset: async ({ assetId, collectionId, ...scope } = {}) => {
+    const rows = collectionId
+      ? await browserBridge.browseCollection(collectionId, { limit: Number.MAX_SAFE_INTEGER })
+      : await browserBridge.browseImages({ ...scope, limit: Number.MAX_SAFE_INTEGER });
+    const index = rows.findIndex((row) => row.asset_id === assetId);
+    return { index: index < 0 ? null : index };
+  },
   browseImages: async ({ status = "all", limit = 180, offset = 0, search, sort, filters } = {}) => {
     let list = assets;
     if (status === "rated") list = list.filter((a) => a.app_rating > 0);

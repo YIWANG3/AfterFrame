@@ -37,6 +37,7 @@ from .db import (
     list_jobs,
     list_catalog_roots,
     list_image_assets,
+    locate_image_asset,
     list_map_points,
     list_assets_for_preview,
     list_pending,
@@ -172,6 +173,7 @@ def _annotation_from_row(row) -> dict | None:
     """
     if row["anno_provider"] is None:
         return None
+    from .annotation_location import effective_location
     return {
         "asset_id": row["asset_id"],
         "provider": row["anno_provider"],
@@ -179,7 +181,7 @@ def _annotation_from_row(row) -> dict | None:
         "schema_version": row["anno_schema_version"],
         "caption": row["anno_caption"],
         "tags": json.loads(row["anno_tags_json"] or "[]"),
-        "location": json.loads(row["anno_location_json"]) if row["anno_location_json"] else None,
+        "location": effective_location(row["image_metadata_json"], json.loads(row["anno_location_json"]) if row["anno_location_json"] else None),
         "detected_text": row["anno_detected_text"],
         "created_at": row["anno_created_at"],
         "updated_at": row["anno_updated_at"],
@@ -278,6 +280,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Structured facet filters (all optional, AND-combined). Passed as a single
     # JSON object to keep the surface small and forward-compatible.
     browse.add_argument("--filters", default=None, help="JSON object of facet filters")
+
+    locate = subparsers.add_parser("locate-image-asset", parents=[common])
+    locate.add_argument("--asset-id", required=True)
+    locate.add_argument("--status", default="all")
+    locate.add_argument("--collection-id", default=None)
+    locate.add_argument("--search", default=None)
+    locate.add_argument("--sort", default=None)
+    locate.add_argument("--filters", default=None)
 
     # Lightweight location points for the map. Mirrors the gallery scope
     # (status/collection/search/facets) but ignores filters.geo — the map needs
@@ -990,6 +1000,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
             existing_tags=existing,
             is_video=is_video,
             location_hint=args.hint,
+            location_context=_annotation.asset_gps_location(connection, args.asset_id),
         )
     finally:
         if tmp_dir:
@@ -1451,6 +1462,15 @@ def _live_source_state(row) -> tuple[bool, bool]:
         or iso_mtime(path, stat) != str(row["modified_time"] or "")
     )
     return True, source_changed
+
+
+def _cmd_locate_image_asset(args, connection, catalog, parser):
+    position = locate_image_asset(connection, args.asset_id, status=args.status,
+                                  search=args.search, sort=args.sort,
+                                  filters=json.loads(args.filters) if args.filters else None,
+                                  collection_id=args.collection_id)
+    print(json.dumps({"index": position}))
+    return 0
 
 
 def _cmd_browse_images(args, connection, catalog, parser):
@@ -2115,6 +2135,7 @@ COMMAND_HANDLERS = {
     "facet-values": _cmd_facet_values,
     "search-facet": _cmd_search_facet,
     "browse-images": _cmd_browse_images,
+    "locate-image-asset": _cmd_locate_image_asset,
     "browse-map-points": _cmd_browse_map_points,
     "resolve-ai-locations": _cmd_resolve_ai_locations,
     "discover-collections": _cmd_discover_collections,

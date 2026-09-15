@@ -515,6 +515,7 @@ const CardContent = memo(function CardContent({
 export default function Gallery({
   items,
   selectedAssetId,
+  revealAssetRequest,
   selectedAssetIds,
   onSelect,
   onOpen,
@@ -785,20 +786,32 @@ export default function Gallery({
     onLayoutItemsChange?.(layoutItems);
   }, [layoutItems, onLayoutItemsChange]);
 
-  const prevSelectedRef = useRef(selectedAssetId);
+  const prevSelectedRef = useRef(null);
+  const handledRevealRef = useRef(null);
   useEffect(() => {
-    if (prevSelectedRef.current === selectedAssetId) return;
-    prevSelectedRef.current = selectedAssetId;
-    if (!selectedAssetId || !containerRef.current) return;
+    const explicitReveal = revealAssetRequest?.assetId === selectedAssetId
+      && handledRevealRef.current !== revealAssetRequest;
+    if (prevSelectedRef.current === selectedAssetId && !explicitReveal) {
+      if (layoutItems.some((item) => item.assetId === selectedAssetId)) return;
+      prevSelectedRef.current = null;
+    }
+    if (!selectedAssetId) { prevSelectedRef.current = null; return; }
+    if (!containerRef.current) return;
     const escaped = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(selectedAssetId) : selectedAssetId;
     const element = containerRef.current.querySelector(`[data-asset-id="${escaped}"]`);
     if (element instanceof HTMLElement) {
+      prevSelectedRef.current = selectedAssetId;
+      handledRevealRef.current = revealAssetRequest;
       element.scrollIntoView({ block: "nearest", inline: "nearest" });
       return;
     }
 
     const target = layoutItems.find((item) => item.assetId === selectedAssetId);
     if (!target) return;
+    // Mark handled only once the target exists. Selecting an unloaded version
+    // comes before its page/layout; retry when that layout arrives.
+    prevSelectedRef.current = selectedAssetId;
+    handledRevealRef.current = revealAssetRequest;
 
     const viewportTop = containerRef.current.scrollTop;
     const viewportBottom = viewportTop + containerRef.current.clientHeight;
@@ -808,7 +821,7 @@ export default function Gallery({
 
     const nextScrollTop = Math.max(0, targetTop - Math.max(24, (containerRef.current.clientHeight - target.height) / 2));
     containerRef.current.scrollTo({ top: nextScrollTop, behavior: "smooth" });
-  }, [selectedAssetId, layoutItems]);
+  }, [selectedAssetId, layoutItems, revealAssetRequest]);
 
   const gridMetrics = useMemo(() => {
     if (displayMode !== "grid" || !gridLayout) return null;

@@ -73,6 +73,11 @@ _BROWSE_SHARED_JOINS = """\
 
 
 def _browse_order_clause(sort: str | None) -> str:
+    # Stable ties matter when locating a version and then fetching its page.
+    return _browse_sort_clause(sort) + ", assets.asset_id"
+
+
+def _browse_sort_clause(sort: str | None) -> str:
     if sort == "name-desc":
         return "assets.stem DESC, registry.image_path"
     if sort == "imported-desc":
@@ -333,6 +338,35 @@ def list_image_assets(
         """,
         params,
     ).fetchall()
+
+
+def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
+                       status: str = "all", search: str | None = None,
+                       sort: str | None = None, filters: dict | None = None,
+                       collection_id: str | None = None) -> int | None:
+    """Zero-based gallery position, without hydrating metadata or statting files."""
+    if collection_id:
+        joins = "JOIN collection_items ci ON ci.asset_id = assets.asset_id"
+        where = "ci.collection_id = ? AND assets.asset_type IN ('image', 'video', 'raw')"
+        params = [collection_id]
+        order = "ci.added_at DESC, assets.stem, assets.asset_id"
+    else:
+        joins = "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
+        search_clause, params = _search_clause(search)
+        facet_clause, facet_params = _facet_clauses(filters)
+        params.extend(facet_params)
+        where = f"{_status_clause(status)} {search_clause} {facet_clause}"
+        order = _browse_order_clause(sort)
+    row = connection.execute(f"""
+        SELECT position FROM (
+            SELECT assets.asset_id, ROW_NUMBER() OVER (ORDER BY {order}) - 1 AS position
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            {joins}
+            WHERE {where}
+        ) WHERE asset_id = ?
+    """, [*params, asset_id]).fetchone()
+    return row[0] if row else None
 
 
 def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
@@ -602,7 +636,7 @@ def browse_collection(
 {_BROWSE_SHARED_JOINS}
         WHERE ci.collection_id = ?
           AND assets.asset_type IN ('image', 'video', 'raw')
-        ORDER BY ci.added_at DESC, assets.stem
+        ORDER BY ci.added_at DESC, assets.stem, assets.asset_id
         LIMIT ? OFFSET ?
         """,
         (collection_id, limit, offset),

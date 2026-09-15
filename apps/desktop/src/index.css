@@ -691,6 +691,19 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   border-width: 0; border-radius: 14px; box-shadow: var(--shadow-menu);
 }
 .shadow-overlay .border-t, .shadow-menu .border-t { border-color: var(--edge); }
+/* Shared bottom floating surface: jobs, all toast tones/actions and the
+   sample-library notice. Borderless, with separation supplied by shadow. */
+.floating-status-card {
+  border: 0;
+  border-radius: 14px;
+  background: rgb(24, 24, 27);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .48), 0 2px 8px rgba(0, 0, 0, .24);
+}
+.job-dock-track { background: rgb(var(--text-color) / .14); }
+:root[data-theme="light"] .floating-status-card {
+  background: rgb(247, 247, 250);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .14), 0 2px 8px rgba(0, 0, 0, .07);
+}
 /* 小对话框(新建风格 / 服务商 / 标注服务 / 手写):底栏无线、按钮靠右、主按钮最右、删除类按钮靠左(Apple 顺序);
    字段与带边框按钮 5px,底栏按钮 8px,关闭钮圆形 */
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 { border-color: transparent; padding-top: 4px; justify-content: flex-end; }
@@ -809,9 +822,14 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   transform: translateZ(0); will-change: transform;
   backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
 }
-.fixed.inset-0.z-\[10050\]::before { top: -40px; height: 160px;
-  background: linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
-  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, #000 0, #000 50%, transparent 100%); }
+.fixed.inset-0.z-\[10050\]::before {
+  top: -40px; height: 240px;
+  /* 保留标题后的压色,用长尾缓出代替短距离线性退场,避免玻璃在照片上形成横向分界。 */
+  --lightbox-header-fade: linear-gradient(180deg, #000 0%, #000 20%, rgba(0,0,0,.92) 35%, rgba(0,0,0,.64) 50%, rgba(0,0,0,.32) 65%, rgba(0,0,0,.1) 80%, rgba(0,0,0,.02) 90%, transparent 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,.5) 30%, rgba(0,0,0,.28) 50%, rgba(0,0,0,.08) 70%, transparent 100%);
+  backdrop-filter: blur(18px) saturate(1.08); -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-mask-image: var(--lightbox-header-fade); mask-image: var(--lightbox-header-fade);
+}
 .fixed.inset-0.z-\[10050\]::after { bottom: -40px; height: 220px;
   background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
   -webkit-mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); }
@@ -828,12 +846,8 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 .welcome-actions .catalog-action { height: 40px; gap: 8px; border-radius: 12px; font-size: 13px; }
 .catalog-actions .catalog-action:focus-visible { outline: 2px solid rgb(var(--text-color) / 0.55); outline-offset: 3px; }
 .catalog-actions .catalog-action:disabled { cursor: default; opacity: 0.6; }
-/* Glass belongs over the photos; the welcome page uses quiet, flat fills. */
+/* The sample notice shares the bottom status surface; only layout is local. */
 .sample-catalog-dock { container: sample-banner / inline-size; }
-.sample-catalog-banner {
-  background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-  box-shadow: var(--shadow-overlay);
-}
 @container sample-banner (max-width: 760px) {
   .sample-catalog-banner { flex-direction: column; align-items: stretch; gap: 8px; width: 100%; max-width: 500px; }
 }

@@ -130,6 +130,8 @@ test.describe("Save pipeline", () => {
     await linkedVersion.click();
     await expect(window.getByTestId("inspector-asset-title")).toHaveText(versionName);
     await expect(window.getByText("Select an asset", { exact: true })).toHaveCount(0);
+    await expect(window.getByPlaceholder("Search")).toHaveValue("");
+    await expect(window.locator(`[data-gallery-item='true'][data-asset-id='${newDetail.asset_id}']`)).toBeInViewport();
 
     // Switching back to the visible original uses the normal gallery-backed
     // selection path, so both directions of the version stack remain usable.

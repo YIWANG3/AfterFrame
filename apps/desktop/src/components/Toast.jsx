@@ -55,25 +55,24 @@ function ToastItem({ toast, onDismiss }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Visual language matches the JobDock progress cards (panel2 + soft border)
-  // so the bottom-right column reads as one consistent surface. Tone shows in
-  // the border tint: red for errors, neutral otherwise.
+  // One shared surface for progress, actionable prompts and notifications.
+  // Errors use title color, not a separate border/material.
   return (
     <div
       ref={ref}
+      data-testid="toast-card"
       className={[
-        "pointer-events-auto relative w-[340px] overflow-hidden rounded-lg border bg-panel2 p-3 shadow-overlay transition-all duration-200",
-        toast.tone === "error" ? "border-red-400/50" : "border-border/60",
+        "floating-status-card pointer-events-auto relative w-[340px] overflow-hidden p-3 transition-all duration-200",
         entered ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
       ].join(" ")}
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           {toast.title && (
-            <div className="text-[12px] font-medium text-text">{toast.title}</div>
+            <div className={`text-[12px] font-medium ${toast.tone === "error" ? "text-error" : "text-text"}`}>{toast.title}</div>
           )}
           {toast.message && (
-            <div className="mt-0.5 truncate text-[11px] text-muted2" title={toast.message}>
+            <div className="mt-0.5 truncate text-[11px] text-muted" title={toast.message}>
               {toast.message}
             </div>
           )}

@@ -332,7 +332,8 @@ export default function AnnotationsSection({
   }
 
   const loc = annotation.location || null;
-  const hasLoc = loc && (loc.country || loc.region || loc.landmark);
+  const gpsLocation = loc?.source === "exif";
+  const hasLoc = loc && (gpsLocation || loc.country || loc.admin1 || loc.locality || loc.region || loc.landmark);
 
   return (
     <>
@@ -407,9 +408,9 @@ export default function AnnotationsSection({
         return (
           <Section
             title={t("section.location")}
-            badge={t("badge.guess")}
+            badge={gpsLocation ? "GPS · EXIF" : t("badge.guess")}
             collapsible
-            action={
+            action={!gpsLocation && (
               <div className="relative flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
@@ -462,8 +463,14 @@ export default function AnnotationsSection({
                   </div>
                 )}
               </div>
-            }
+            )}
           >
+            {gpsLocation && (
+              <div className="mb-2 text-[10px] leading-snug text-muted2" data-testid="annotation-gps-location">
+                {t("loc.gpsNearby")}
+                <div className="mt-1 text-text">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</div>
+              </div>
+            )}
             {loc.country && (
               <div className="flex items-start gap-2 text-[11px]">
                 <span className="min-w-[50px] text-muted2">{t("loc.country")}</span>

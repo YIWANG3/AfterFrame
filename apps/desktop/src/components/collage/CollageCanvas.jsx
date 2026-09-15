@@ -593,6 +593,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   return (
     <div className="relative h-full w-full">
       <canvas
+        data-testid="collage-canvas"
         ref={canvasRef}
         className={className}
         style={{ cursor: "grab", touchAction: "none" }}
@@ -600,7 +601,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
 
       {ctxMenu && (
         <div
-          className="fixed z-[100] min-w-[120px] rounded-lg border border-border/60 bg-chrome py-1 shadow-menu"
+          data-testid="collage-cell-menu"
+          className="fixed z-[100] min-w-[120px] overflow-hidden rounded-lg border border-border/60 bg-chrome py-1 shadow-menu"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onPointerDown={(e) => e.stopPropagation()}
         >

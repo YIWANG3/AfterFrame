@@ -332,7 +332,7 @@ export default function App() {
     displayMode,
     primaryId: workspace.selectedAssetId,
     setPrimaryId: workspace.setSelectedAssetId,
-    setRelatedPrimaryId: workspace.setRelatedAssetId,
+    setRelatedPrimaryId: workspace.revealRelatedAsset,
   });
   const selectedAssetIds = selectedIds;
 
@@ -1203,6 +1203,7 @@ export default function App() {
                 <Gallery
                   items={currentItems}
                   selectedAssetId={workspace.selectedAssetId}
+                  revealAssetRequest={workspace.revealAssetRequest}
                   selectedAssetIds={selectedAssetIds}
                   onSelect={handleItemSelect}
                   onOpen={openLightboxForItem}

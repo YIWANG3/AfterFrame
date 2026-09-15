@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   resumeJob: (jobId) => ipcRenderer.invoke("workspace:resume-job", jobId),
   getPending: () => ipcRenderer.invoke("workspace:pending"),
   browseImages: (options) => ipcRenderer.invoke("workspace:browse", options),
+  locateImageAsset: (options) => ipcRenderer.invoke("workspace:locate-image-asset", options),
   browseMapPoints: (options) => ipcRenderer.invoke("workspace:browse-map-points", options),
   resolveAiLocations: () => ipcRenderer.invoke("workspace:resolve-ai-locations"),
   discoverCollections: () => ipcRenderer.invoke("workspace:discover-collections"),

@@ -1,4 +1,9 @@
 {
+  "relatedAsset": {
+    "missing": "这张照片已不在图库中。",
+    "failed": "无法定位此版本",
+    "showingAll": "已切换到全部资源以显示此版本"
+  },
   "folderOrderFailed": "无法保存文件夹顺序",
   "drop": {
     "title": "拖放以导入",

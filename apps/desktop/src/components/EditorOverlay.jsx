@@ -770,6 +770,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         return [...sample.getContext("2d").getImageData(0, 0, 1, 1).data];
       },
       addTextLayer: (text) => addTextLayer(text),
+      setTestLayers: (next) => commitLayers(next),
+      loadTestDepth: (path) => loadDepthFromPath(path),
       getLayerCount: () => layers.length,
       getTool: () => tool,
       setTool: (t) => setTool(t),
@@ -844,6 +846,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
           "selectLayers", "undo", "redo", "setPad", "applyFramePreset", "clearFramePreset",
           "sampleSourcePixel",
+          "setTestLayers", "loadTestDepth",
         ]) delete window.__afterframeTest[k];
       }
     };
