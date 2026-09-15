@@ -42,7 +42,7 @@ function getAspectPreviewBox(aspectKey) {
   return { width: Math.max(6, Math.round(max * aspect)), height: max, dashed: false };
 }
 
-function AspectButton({ preset, active, onClick }) {
+export function AspectButton({ preset, active, onClick }) {
   const preview = getAspectPreviewBox(preset.key);
 
   return (

@@ -108,6 +108,7 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   pickDirectory: (options) => ipcRenderer.invoke("workspace:pick-directory", options),
   saveImage: (targetPath, arrayBuffer, sourceMetadataPath) => ipcRenderer.invoke("workspace:save-image", targetPath, arrayBuffer, sourceMetadataPath),
   processAndSave: (options) => ipcRenderer.invoke("workspace:process-and-save", options),
+  processAndSavePanels: (options) => ipcRenderer.invoke("workspace:process-and-save-panels", options),
   quickRegister: (imagePath, originPath, collageSourceIds) => ipcRenderer.invoke("workspace:quick-register", imagePath, originPath, collageSourceIds),
   getCollageSources: (assetId) => ipcRenderer.invoke("workspace:collage-sources", assetId),
   scanNewMedia: (dirs) => ipcRenderer.invoke("workspace:scan-new-media", dirs),

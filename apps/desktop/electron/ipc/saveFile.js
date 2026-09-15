@@ -43,26 +43,19 @@ function register({
     return await writeImageWithSourceMetadata(targetPath, output, sourceMetadataPath);
   });
 
-  // Sharp-based "fast path" — bypasses canvas entirely and works at the
-  // source's native resolution. Used by the editor when there are no overlay
-  // layers (just rotate/flip/crop on the original image), and by the MCP
-  // crop_assets tool's rect/rotate mode (hence the named function).
-  async function processAndSave(options) {
+  // Orientation + user transforms + crop, as one sharp pipeline positioned at
+  // the requested region (the whole photo when `crop` is absent). Shared by the
+  // single-image fast path and the split-panel export so both cut pixels from
+  // exactly the same basis. Returns the pipeline plus the region's pixel size.
+  async function buildRegionPipeline(options) {
     const {
       sourcePath,
-      savePath,
       quarterTurns = 0,
       freeAngle = 0,
       flipX = false,
       flipY = false,
       crop,
-      quality = 92,
     } = options || {};
-
-    if (!sourcePath || !savePath) throw new Error("Missing source or save path");
-
-    const t0 = Date.now();
-    console.log("[process-and-save] source:", sourcePath);
 
     // Read metadata (fast — no pixel decode)
     const meta = await sharp(sourcePath, { limitInputPixels: false }).metadata();
@@ -138,16 +131,35 @@ function register({
       const ch = Math.max(1, Math.round(box.height));
       const left = Math.max(0, Math.min(bw - cw, Math.round(cx - cw / 2)));
       const top = Math.max(0, Math.min(bh - ch, Math.round(cy - ch / 2)));
-      pipeline = pipeline.extract({ left, top, width: Math.min(cw, bw - left), height: Math.min(ch, bh - top) });
-    } else if (crop) {
+      const width = Math.min(cw, bw - left);
+      const height = Math.min(ch, bh - top);
+      pipeline = pipeline.extract({ left, top, width, height });
+      return { pipeline, width, height };
+    }
+    if (crop) {
       // Normalized crop → pixel rect
       const left = Math.max(0, Math.round(crop.x * w));
       const top = Math.max(0, Math.round(crop.y * h));
       const cw = Math.min(Math.round(w) - left, Math.max(1, Math.round(crop.width * w)));
       const ch = Math.min(Math.round(h) - top, Math.max(1, Math.round(crop.height * h)));
       pipeline = pipeline.extract({ left, top, width: cw, height: ch });
+      return { pipeline, width: cw, height: ch };
     }
+    return { pipeline, width: Math.round(w), height: Math.round(h) };
+  }
 
+  // Sharp-based "fast path" — bypasses canvas entirely and works at the
+  // source's native resolution. Used by the editor when there are no overlay
+  // layers (just rotate/flip/crop on the original image), and by the MCP
+  // crop_assets tool's rect/rotate mode (hence the named function).
+  async function processAndSave(options) {
+    const { sourcePath, savePath, quality = 92 } = options || {};
+    if (!sourcePath || !savePath) throw new Error("Missing source or save path");
+
+    const t0 = Date.now();
+    console.log("[process-and-save] source:", sourcePath);
+
+    let { pipeline } = await buildRegionPipeline(options);
     pipeline = pipeline.keepMetadata();
 
     const ext = path.extname(savePath).toLowerCase();
@@ -162,9 +174,56 @@ function register({
     return { path: savePath, width: result.width, height: result.height };
   }
 
-  ipcMain.handle("workspace:process-and-save", (_event, options) => processAndSave(options));
+  // Seamless-split boundaries: cumulative rounding, so adjacent panels share
+  // an edge pixel-exactly (no gap, no overlap); widths differ by at most 1px.
+  function panelBoundaries(width, count) {
+    const bounds = [];
+    for (let i = 0; i <= count; i++) bounds.push(Math.round((i * width) / count));
+    return bounds;
+  }
 
-  return { processAndSave };
+  // Split export: cut `region` (normalized, stage-1 basis) out of the oriented
+  // photo ONCE, then slice that single raster into savePaths.length vertical
+  // panels. Decoding once and slicing one buffer is what keeps the panels
+  // seamless even with a free angle — per-panel crops would each rotate about
+  // their own centre and drift apart.
+  async function processAndSavePanels(options) {
+    const { sourcePath, savePaths, region, quality = 92 } = options || {};
+    if (!sourcePath) throw new Error("Missing source path");
+    if (!Array.isArray(savePaths) || savePaths.length < 1) throw new Error("Missing panel save paths");
+    if (!region) throw new Error("Missing split region");
+
+    const t0 = Date.now();
+    const count = savePaths.length;
+    const { pipeline } = await buildRegionPipeline({ ...options, crop: region });
+    const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true });
+    const W = info.width;
+    const H = info.height;
+    if (W < count) throw new Error(`Region is only ${W}px wide; cannot split into ${count} panels`);
+    const bounds = panelBoundaries(W, count);
+
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      const left = bounds[i];
+      const width = bounds[i + 1] - left;
+      const savePath = savePaths[i];
+      const panel = await sharp(data, { raw: { width: W, height: H, channels: info.channels }, limitInputPixels: false })
+        .extract({ left, top: 0, width, height: H })
+        .png()
+        .toBuffer();
+      addAllowedMediaDir?.(path.dirname(savePath));
+      await writeImageWithSourceMetadata(savePath, panel, sourcePath, { quality });
+      results.push({ path: savePath, width, height: H, index: i });
+    }
+
+    console.log(`[process-and-save-panels] ${count} × ~${Math.round(W / count)}×${H} from ${W}×${H} in ${Date.now() - t0}ms`);
+    return results;
+  }
+
+  ipcMain.handle("workspace:process-and-save", (_event, options) => processAndSave(options));
+  ipcMain.handle("workspace:process-and-save-panels", (_event, options) => processAndSavePanels(options));
+
+  return { processAndSave, processAndSavePanels, panelBoundaries };
 }
 
 module.exports = { register };

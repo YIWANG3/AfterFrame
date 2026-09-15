@@ -3,7 +3,7 @@
 // handler (which also resets the depth-map overlay for non-text tools).
 // Extracted from EditorOverlay (Phase 4).
 
-import { Crop, Type, Cannabis, Sparkles } from "lucide-react";
+import { Crop, Type, Cannabis, Sparkles, Columns3 } from "lucide-react";
 import api from "../../../api";
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
@@ -55,6 +55,7 @@ export default function ToolRail({ tool, onSelect, t }) {
           <Sparkles className="h-4 w-4" />
         </button>
       )}
+      <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
     </div>
   );
 }
