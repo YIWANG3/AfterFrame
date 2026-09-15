@@ -236,7 +236,9 @@ export default function useWorkspace({ pushToast } = {}) {
       setDetail(null);
       return;
     }
+    const startedAt = Date.now();
     const payload = await api.getAssetDetailById(assetId);
+    if (Date.now() - startedAt > 1000) console.warn(`[detail] ${assetId} took ${Date.now() - startedAt}ms`);
     if (requestId === detailRequestRef.current) setDetail(payload);
   }
 
@@ -372,6 +374,9 @@ export default function useWorkspace({ pushToast } = {}) {
   async function revealRelatedAsset(assetId) {
     if (!assetId) return;
     const navigationId = ++relatedNavigationRef.current;
+    const startedAt = Date.now();
+    const log = (step, extra = "") => console.log(`[reveal] #${navigationId} ${step} +${Date.now() - startedAt}ms ${extra}`);
+    log("start", assetId);
     setRelatedAssetId(assetId);
     clearTimeout(searchTimerRef.current);
     const requestId = ++browserRequestIdRef.current;
@@ -385,11 +390,13 @@ export default function useWorkspace({ pushToast } = {}) {
       let scope = { status, collectionId: activeCollectionId, search: query.trim() || undefined, sort, filters };
       const sameLoadedScope = loadedBrowserScopeRef.current === browseScopeKey(scope);
       if (sameLoadedScope && filteredItems.some((item) => item.asset_id === assetId)) {
+        log("already loaded");
         setRevealAssetRequest({ assetId, navigationId });
         return;
       }
       let location = await api.locateImageAsset({ assetId, ...scope });
-      if (!isCurrent()) return;
+      log("located", JSON.stringify(location));
+      if (!isCurrent()) { log("superseded after locate"); return; }
       let resetScope = location.index == null;
       // The local text projection may hide a server-side annotation match.
       if (query.trim() && items.some((item) => item.asset_id === assetId)
@@ -397,7 +404,8 @@ export default function useWorkspace({ pushToast } = {}) {
       if (resetScope) {
         scope = { status: "all", sort };
         location = await api.locateImageAsset({ assetId, ...scope });
-        if (!isCurrent()) return;
+        log("located in all", JSON.stringify(location));
+        if (!isCurrent()) { log("superseded after relocate"); return; }
       }
       if (location.index == null) throw new Error(t("relatedAsset.missing"));
       const limit = Math.ceil((location.index + 1) / PAGE_SIZE) * PAGE_SIZE;
@@ -406,7 +414,8 @@ export default function useWorkspace({ pushToast } = {}) {
       const payload = count === 0 ? [] : scope.collectionId
         ? await api.browseCollection(scope.collectionId, { limit: count, offset })
         : await api.browseImages({ ...scope, limit: count, offset });
-      if (!isCurrent()) return;
+      log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
+      if (!isCurrent()) { log("superseded after page"); return; }
       const nextItems = offset === 0 ? payload : [...items, ...payload];
       if (!nextItems.some((item) => item.asset_id === assetId)) throw new Error(t("relatedAsset.missing"));
       if (resetScope) {
@@ -426,7 +435,9 @@ export default function useWorkspace({ pushToast } = {}) {
       setBrowserOffset(nextItems.length);
       if (count > 0) setBrowserHasMore(payload.length === count);
       setBrowserReady(true);
+      log("done", `items=${nextItems.length}`);
     } catch (error) {
+      log("failed", error?.message || String(error));
       if (isCurrent()) pushToast?.({ title: t("relatedAsset.failed"), message: error.message, tone: "error", ttl: 6000 });
     } finally {
       if (requestId === browserRequestIdRef.current) setBrowserLoading(false);

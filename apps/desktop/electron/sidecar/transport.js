@@ -121,6 +121,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       state.pending.delete(msg.id);
       clearTimeout(entry.timer);
       state.consecutiveTimeouts = 0; // any completed response proves the server is alive
+      entry.trace?.(msg.code !== 0 ? "FAILED" : "done");
       if (msg.code !== 0) {
         entry.reject(new Error(msg.error || msg.stdout || "sidecar command failed"));
       } else {
@@ -161,8 +162,15 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     if (!state) return null;
     return new Promise((resolve, reject) => {
       const id = state.nextId++;
+      const startedAt = Date.now();
+      // Opt-in per-command trace (E2E runs set it): the resident server is
+      // strictly serial, so one slow command silently delays every caller.
+      const trace = process.env.AFTERFRAME_SIDECAR_TRACE === "1"
+        ? (outcome) => console.log(`[sidecar:resident] ${outcome} ${command[0]} in ${Date.now() - startedAt}ms (queued: ${state.pending.size})`)
+        : () => {};
       const timer = setTimeout(() => {
         state.pending.delete(id);
+        trace("TIMEOUT");
         console.error("[sidecar:resident] timeout after", timeoutMs, "ms");
         // One slow command shouldn't nuke every other in-flight request — only
         // restart the resident process after consecutive timeouts (it's likely
@@ -174,7 +182,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
         }
         reject(new Error(`sidecar timed out after ${timeoutMs}ms: ${redactCommand(command)}`));
       }, timeoutMs);
-      state.pending.set(id, { resolve, reject, timer });
+      state.pending.set(id, { resolve, reject, timer, trace });
       try {
         state.child.stdin.write(JSON.stringify({ id, argv: command.map(String) }) + "\n");
       } catch (err) {
