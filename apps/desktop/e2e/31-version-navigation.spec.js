@@ -58,11 +58,15 @@ test.describe("Related version gallery navigation", () => {
   });
 
   test("reveals a version excluded by the Rated view", async () => {
+    // The previous test ends with the same toast (4s TTL); on slow CI runners
+    // it can still be on screen here and make the assertion below ambiguous.
+    const switchedToast = window.getByText("Switched to All Assets to show this version");
+    await expect(switchedToast).toHaveCount(0, { timeout: 10000 });
     await window.getByRole("button", { name: /^Rated/ }).click();
     await expect(card("navigation-0000")).toBeVisible();
     await card("navigation-0000").click();
     await link("navigation-0399").click();
     await expectRevealed("navigation-0399", "nav-0399.jpg");
-    await expect(window.getByText("Switched to All Assets to show this version")).toBeVisible();
+    await expect(switchedToast).toBeVisible();
   });
 });
