@@ -22,22 +22,27 @@ const pad2 = (n) => String(n).padStart(2, "0");
 function splitPath(filePath) {
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
   const dir = slash >= 0 ? filePath.slice(0, slash) : "";
-  const name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+  let name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+  // Web bridge assets carry their file name URL-encoded after "#/".
+  try { name = decodeURIComponent(name); } catch { /* keep as-is */ }
   const dot = name.lastIndexOf(".");
   const stem = dot > 0 ? name.slice(0, dot) : name;
   const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
   return { dir, stem, ext: ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg" };
 }
 
-export function defaultSplitOutputDir(saveBasePath) {
+// Where the panels land: the chosen target directory (default: the
+// original's folder), plus a <stem>_split subfolder when `subfolder` is on.
+export function resolveSplitOutputDir(saveBasePath, outputDir, subfolder = true) {
   if (!saveBasePath) return null;
   const { dir, stem } = splitPath(saveBasePath);
-  return `${dir}/${stem}_split`;
+  const base = outputDir || dir;
+  return subfolder ? `${base}/${stem}_split` : base;
 }
 
-export function splitPanelPaths(saveBasePath, outputDir, count) {
+export function splitPanelPaths(saveBasePath, outputDir, subfolder, count) {
   const { stem, ext } = splitPath(saveBasePath);
-  const dir = outputDir || defaultSplitOutputDir(saveBasePath);
+  const dir = resolveSplitOutputDir(saveBasePath, outputDir, subfolder);
   return Array.from({ length: count }, (_, i) => `${dir}/${stem}_split_${pad2(i + 1)}.${ext}`);
 }
 
@@ -82,13 +87,13 @@ export function useSplitExport({
   }
 
   // Resolves to the saved panel descriptors, or null when nothing was exported.
-  async function exportSplit({ outputDir } = {}) {
+  async function exportSplit({ outputDir, subfolder = true } = {}) {
     if (exportingRef.current) return null;
     const s = editorStateRef.current;
     const region = s.split?.rect;
     const count = getCount();
     if (!region || !count || !saveBasePath) return null;
-    const savePaths = splitPanelPaths(saveBasePath, outputDir, count);
+    const savePaths = splitPanelPaths(saveBasePath, outputDir, subfolder, count);
     exportingRef.current = true;
     setExporting(true);
     setProgress({ done: 0, total: count });

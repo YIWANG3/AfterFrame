@@ -80,7 +80,8 @@ test.describe("Seamless split", () => {
     await expect(window.getByTestId("split-count")).toHaveText("4");
     await expect(window.getByTestId("split-panel-size")).toHaveText("600 × 800");
     await expect(window.getByTestId("split-overlay")).toBeVisible();
-    await expect(window.getByTestId("split-output-dir")).toHaveText(outDir);
+    await expect(window.getByTestId("split-output-dir")).toHaveAttribute("data-path", outDir);
+    await expect(window.getByTestId("split-subfolder")).toBeChecked();
   });
 
   test("count stepper reshapes the region, keeps 3:4 panels, and is undoable", async () => {
@@ -110,6 +111,23 @@ test.describe("Seamless split", () => {
     expect(s.rect.width).toBeCloseTo(1, 2);
     await expect(window.getByTestId("split-panel-size")).toHaveText("800 × 800");
     await window.getByRole("button", { name: "3:4" }).click();
+    await expect(window.getByTestId("split-panel-size")).toHaveText("600 × 800");
+  });
+
+  test("custom W:H typed into the ratio inputs drives the panel shape", async () => {
+    await window.getByTestId("split-custom-width").fill("2");
+    await window.getByTestId("split-custom-height").fill("1");
+    await window.getByTestId("split-custom-height").press("Enter");
+    let s = await splitState(window);
+    expect(s.aspectKey).toBe("custom");
+    expect(s.custom).toEqual({ width: 2, height: 1 });
+    // 3 panels of 2:1 at full height would be 4800px wide: the width wins, so
+    // the region is the full 2400px and each panel is 800 × 400.
+    await expect(window.getByTestId("split-panel-size")).toHaveText("800 × 400");
+    await window.getByRole("button", { name: "3:4" }).click();
+    s = await splitState(window);
+    expect(s.aspectKey).toBe("3:4");
+    expect(s.custom).toEqual({ width: 2, height: 1 }); // remembered for next time
     await expect(window.getByTestId("split-panel-size")).toHaveText("600 × 800");
   });
 
@@ -153,6 +171,22 @@ test.describe("Seamless split", () => {
     }
     const originAfter = await window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), fixturePath);
     expect((originAfter.version_siblings || []).length).toBeGreaterThanOrEqual(3);
+  });
+
+  test("without the subfolder option the panels land directly in the target folder", async () => {
+    const flatDir = path.join(tmp, "flat");
+    fs.mkdirSync(flatDir);
+    await window.getByTestId("split-subfolder").uncheck();
+    await expect(window.getByTestId("split-output-dir")).toHaveAttribute("data-path", tmp);
+    const results = await window.evaluate((dir) => window.__afterframeTest.exportSplit(dir), flatDir);
+    expect(results.map((r) => path.basename(r.path)).sort()).toEqual([
+      "pano-fixture_split_01.jpg", "pano-fixture_split_02.jpg", "pano-fixture_split_03.jpg",
+    ]);
+    expect(fs.readdirSync(flatDir).sort()).toEqual([
+      "pano-fixture_split_01.jpg", "pano-fixture_split_02.jpg", "pano-fixture_split_03.jpg",
+    ]);
+    await window.getByTestId("split-subfolder").check();
+    await expect(window.getByTestId("split-output-dir")).toHaveAttribute("data-path", outDir);
   });
 
   test("a straightened photo still splits seamlessly", async () => {

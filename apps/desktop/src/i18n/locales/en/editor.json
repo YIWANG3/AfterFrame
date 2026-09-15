@@ -40,16 +40,18 @@
     "resetRegion": "Reset to full height",
     "preview": "Preview",
     "output": "Output",
-    "subfolderHint": "Next to the original, in {{folder}}",
-    "customFolder": "Custom folder",
     "chooseFolder": "Choose folder…",
-    "useDefaultFolder": "Use default",
     "layersBlocked": "Apply or remove text, sticker and border layers before splitting.",
     "exportN": "Export {{count}} panels",
     "exporting": "Exporting {{done}} / {{total}}…",
     "done": "Exported {{count}} panels",
     "failed": "Split export failed",
-    "reveal": "Show in Finder"
+    "reveal": "Show in Finder",
+    "custom": "Custom",
+    "customWidth": "Custom ratio width",
+    "customHeight": "Custom ratio height",
+    "subfolder": "Create a subfolder for the panels",
+    "webDownloads": "The {{count}} panels download one by one."
   },
   "text": {
     "presets": "Presets",

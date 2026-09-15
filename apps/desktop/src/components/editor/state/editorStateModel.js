@@ -24,7 +24,8 @@ export const BASE_STATE = {
   // FRACTIONS of the transformed photo, so it survives viewport resizes.
   // `basis` remembers the preview size the region was made for; a quarter
   // turn changes it and the tool regenerates the default region.
-  split: { aspectKey: "3:4", count: null, rect: null, basis: null },
+  // `custom` is the W:H pair used when aspectKey === "custom".
+  split: { aspectKey: "3:4", custom: { width: 3, height: 4 }, count: null, rect: null, basis: null },
 };
 
 export function rectEquals(a, b) {
@@ -92,6 +93,7 @@ function cloneSplit(split) {
   const s = split || BASE_STATE.split;
   return {
     aspectKey: s.aspectKey,
+    custom: s.custom ? { ...s.custom } : { ...BASE_STATE.split.custom },
     count: s.count ?? null,
     rect: s.rect ? { ...s.rect } : null,
     basis: s.basis ? { ...s.basis } : null,
@@ -101,7 +103,10 @@ function cloneSplit(split) {
 export function splitEquals(a, b) {
   const sa = a || BASE_STATE.split;
   const sb = b || BASE_STATE.split;
-  return sa.aspectKey === sb.aspectKey && (sa.count ?? null) === (sb.count ?? null) && rectEquals(sa.rect, sb.rect);
+  const ca = sa.custom || BASE_STATE.split.custom;
+  const cb = sb.custom || BASE_STATE.split.custom;
+  return sa.aspectKey === sb.aspectKey && ca.width === cb.width && ca.height === cb.height
+    && (sa.count ?? null) === (sb.count ?? null) && rectEquals(sa.rect, sb.rect);
 }
 
 export function cloneState(state) {

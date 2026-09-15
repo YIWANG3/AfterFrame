@@ -39,13 +39,17 @@ describe("splitMath", () => {
     expect(rect.y).toBeCloseTo(50 + 120);
   });
 
-  it("keeps the centre and height when the aspect changes", () => {
+  it("keeps the centre and takes the largest fitting size when the aspect changes", () => {
     const rect = { x: 400, y: 100, width: 300, height: 300 };
     const next = reshapeSplitRect(rect, bounds, 2);
-    expect(next.height).toBeCloseTo(300);
-    expect(next.width).toBeCloseTo(600);
+    expect(next.height).toBeCloseTo(400);
+    expect(next.width).toBeCloseTo(800);
     expect(next.x + next.width / 2).toBeCloseTo(550);
     expect(next.y + next.height / 2).toBeCloseTo(250);
+    // A wider aspect than the photo allows: width wins, still centred.
+    const wide = reshapeSplitRect(rect, bounds, 10);
+    expect(wide.width).toBeCloseTo(1200);
+    expect(wide.height).toBeCloseTo(120);
   });
 
   it("clamps moves to the photo", () => {
@@ -95,5 +99,16 @@ describe("splitMath", () => {
     expect(total).toBe(Math.round(0.8 * 4001));
     const widths = panels.map((p) => p.width);
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("splitMath custom aspect", () => {
+  it("uses the custom W:H when selected and falls back to 3:4 when invalid", async () => {
+    const { getSplitPanelAspect, isValidCustomAspect } = await import("./splitMath");
+    expect(getSplitPanelAspect("custom", { width: 2, height: 1 })).toBeCloseTo(2);
+    expect(getSplitPanelAspect("custom", { width: 0, height: 1 })).toBeCloseTo(3 / 4);
+    expect(getSplitPanelAspect("9:16")).toBeCloseTo(9 / 16);
+    expect(isValidCustomAspect({ width: 4, height: 5 })).toBe(true);
+    expect(isValidCustomAspect({ width: 101, height: 5 })).toBe(false);
   });
 });

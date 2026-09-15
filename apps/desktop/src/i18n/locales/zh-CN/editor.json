@@ -40,16 +40,18 @@
     "resetRegion": "重置为全高",
     "preview": "预览",
     "output": "输出",
-    "subfolderHint": "原图旁的 {{folder}} 文件夹",
-    "customFolder": "自定义文件夹",
     "chooseFolder": "选择文件夹…",
-    "useDefaultFolder": "恢复默认",
     "layersBlocked": "请先应用或删除文字、贴纸和边框图层，再进行切图。",
     "exportN": "导出 {{count}} 张",
     "exporting": "正在导出 {{done}} / {{total}}…",
     "done": "已导出 {{count}} 张",
     "failed": "切图导出失败",
-    "reveal": "在 Finder 中显示"
+    "reveal": "在 Finder 中显示",
+    "custom": "自定义",
+    "customWidth": "自定义比例宽",
+    "customHeight": "自定义比例高",
+    "subfolder": "创建子目录",
+    "webDownloads": "{{count}} 张会逐张下载到浏览器。"
   },
   "text": {
     "presets": "预设",

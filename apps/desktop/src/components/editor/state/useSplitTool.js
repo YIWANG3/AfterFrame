@@ -51,7 +51,7 @@ export function useSplitTool({
 
   const split = editorState.split || BASE_STATE.split;
   const freeAngle = editorState.freeAngle || 0;
-  const panelAspect = getSplitPanelAspect(split.aspectKey);
+  const panelAspect = getSplitPanelAspect(split.aspectKey, split.custom);
   const count = resolveSplitCount(sourceDims?.width || transformedPreview?.width, sourceDims?.height || transformedPreview?.height, panelAspect, split.count);
   const regionAspect = panelAspect * count;
   const rectPx = useMemo(
@@ -92,13 +92,16 @@ export function useSplitTool({
     return { ...s, split: { ...(s.split || BASE_STATE.split), ...nextSplit, rect: normalizeSplitRect(nextPx, bounds), basis } };
   }
 
-  function commitAspect(aspectKey) {
+  // `custom` (optional { width, height }) is stored alongside; passing it with
+  // aspectKey "custom" is how the panel's W:H inputs commit.
+  function commitAspect(aspectKey, custom) {
     if (!bounds) return;
     const s = editorStateRef.current;
-    const nextAspect = getSplitPanelAspect(aspectKey);
+    const nextCustom = custom || s.split?.custom || BASE_STATE.split.custom;
+    const nextAspect = getSplitPanelAspect(aspectKey, nextCustom);
     const nextCount = countFor(nextAspect, s.split?.count);
     const px = reshapeSplitRect(rectPx, bounds, nextAspect * nextCount, s.freeAngle || 0);
-    record(withRegion({ aspectKey }, px));
+    record(withRegion({ aspectKey, custom: nextCustom }, px));
   }
 
   // `nextCount` null = back to automatic.
@@ -180,6 +183,7 @@ export function useSplitTool({
     rect: split.rect,
     rectPx,
     aspectKey: split.aspectKey,
+    custom: split.custom || BASE_STATE.split.custom,
     panelAspect,
     count,
     isAutoCount: split.count == null,

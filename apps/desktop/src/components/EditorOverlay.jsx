@@ -36,7 +36,7 @@ import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
 import { useCropTool } from "./editor/state/useCropTool";
 import { useSplitTool } from "./editor/state/useSplitTool";
-import { useSplitExport, defaultSplitOutputDir } from "./editor/state/useSplitExport";
+import { useSplitExport, resolveSplitOutputDir } from "./editor/state/useSplitExport";
 import { useTextTool } from "./editor/state/useTextTool";
 import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -264,9 +264,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   viewTransformRef.current = viewTransform;
   const [tool, setTool] = useState("crop");
   const [message, setMessage] = useState("");
-  // Split export folder override (null = <stem>_split next to the original).
-  // Not part of the undo history — it's a destination, not an edit.
+  // Split export destination: target folder (null = the original's folder)
+  // and whether to create a <stem>_split subfolder inside it. Not part of the
+  // undo history — a destination, not an edit.
   const [splitOutputDir, setSplitOutputDir] = useState(null);
+  const [splitSubfolder, setSplitSubfolder] = useState(true);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
   // Text tool — selection + clipboard + layer CRUD (commits into the shared
   // history via commitLayers).
@@ -526,6 +528,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setMessage("");
     setCompareState(null);
     setSplitOutputDir(null);
+    setSplitSubfolder(true);
     setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
@@ -728,11 +731,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     onSaveComplete: () => onSaveComplete?.(),
   });
   const splitExportRef = useRef(null);
-  splitExportRef.current = (outputDir = splitOutputDir) => splitExport.exportSplit({ outputDir });
+  splitExportRef.current = (outputDir = splitOutputDir, subfolder = splitSubfolder) => splitExport.exportSplit({ outputDir, subfolder });
   const splitExportingRef = useRef(false);
   splitExportingRef.current = splitExport.exporting;
+  // Destination as of the latest render, for the e2e backdoor (its effect
+  // does not re-run on destination changes).
+  const splitDestRef = useRef(null);
+  splitDestRef.current = { outputDir: splitOutputDir, subfolder: splitSubfolder };
   async function chooseSplitFolder() {
-    const dir = await api.pickDirectory({ defaultPath: defaultSplitOutputDir(saveBasePath) || undefined });
+    const dir = await api.pickDirectory({ defaultPath: resolveSplitOutputDir(saveBasePath, splitOutputDir, false) || undefined });
     if (dir) setSplitOutputDir(dir);
   }
 
@@ -892,14 +899,19 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         return {
           aspectKey: st.aspectKey, count: st.count, isAutoCount: st.isAutoCount,
           rect: st.rect, rectPx: st.rectPx, splitImageRect: st.splitImageRect,
-          outputDir: splitOutputDir, defaultOutputDir: defaultSplitOutputDir(saveBasePath),
+          custom: st.custom,
+          outputDir: splitDestRef.current.outputDir, subfolder: splitDestRef.current.subfolder,
+          resolvedOutputDir: resolveSplitOutputDir(saveBasePath, splitDestRef.current.outputDir, splitDestRef.current.subfolder),
           exporting: splitExportingRef.current,
         };
       },
-      setSplitAspect: (key) => splitToolRef.current.commitAspect(key),
+      setSplitAspect: (key, custom) => splitToolRef.current.commitAspect(key, custom),
+      setSplitSubfolder: (on) => setSplitSubfolder(!!on),
       setSplitCount: (n) => splitToolRef.current.commitCount(n),
       resetSplitRegion: () => splitToolRef.current.resetRegion(),
-      exportSplit: (dir) => splitExportRef.current?.(dir ?? splitOutputDir),
+      exportSplit: (dir, subfolder) => splitExportRef.current?.(
+        dir ?? splitDestRef.current.outputDir, subfolder ?? splitDestRef.current.subfolder,
+      ),
     };
     return () => {
       if (window.__afterframeTest) {
@@ -909,7 +921,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           "selectLayers", "undo", "redo", "setPad", "applyFramePreset", "clearFramePreset",
           "sampleSourcePixel",
           "setTestLayers", "loadTestDepth",
-          "getSplitState", "setSplitAspect", "setSplitCount", "resetSplitRegion", "exportSplit",
+          "getSplitState", "setSplitAspect", "setSplitCount", "resetSplitRegion", "exportSplit", "setSplitSubfolder",
         ]) delete window.__afterframeTest[k];
       }
     };
@@ -1343,6 +1355,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               <SplitPanel
                 t={t}
                 aspectKey={splitTool.aspectKey}
+                customAspect={splitTool.custom}
                 onCommitAspect={splitTool.commitAspect}
                 count={splitTool.count}
                 isAutoCount={splitTool.isAutoCount}
@@ -1351,10 +1364,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 previewSource={transformedPreview}
                 sourceDims={splitSourceDims}
                 onResetRegion={splitTool.resetRegion}
-                outputDir={splitOutputDir}
-                defaultOutputDir={defaultSplitOutputDir(saveBasePath)}
+                outputDir={resolveSplitOutputDir(saveBasePath, splitOutputDir, splitSubfolder)}
+                subfolder={splitSubfolder}
+                onSubfolderChange={setSplitSubfolder}
                 onChooseFolder={chooseSplitFolder}
-                onUseDefaultFolder={() => setSplitOutputDir(null)}
                 blockedReason={splitBlockedReason}
                 exporting={splitExport.exporting}
                 progress={splitExport.progress}

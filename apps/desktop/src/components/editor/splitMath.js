@@ -18,7 +18,22 @@ export const MAX_SPLIT_COUNT = 10;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-export function getSplitPanelAspect(aspectKey) {
+export const CUSTOM_SPLIT_ASPECT_KEY = "custom";
+export const MIN_CUSTOM_ASPECT_SIDE = 1;
+export const MAX_CUSTOM_ASPECT_SIDE = 100;
+
+export function isValidCustomAspect(custom) {
+  return !!custom && Number.isFinite(custom.width) && Number.isFinite(custom.height)
+    && custom.width >= MIN_CUSTOM_ASPECT_SIDE && custom.height >= MIN_CUSTOM_ASPECT_SIDE
+    && custom.width <= MAX_CUSTOM_ASPECT_SIDE && custom.height <= MAX_CUSTOM_ASPECT_SIDE;
+}
+
+// `custom` = { width, height } used when aspectKey is "custom" (any W:H the
+// user types, like a manual crop ratio). Falls back to the default preset.
+export function getSplitPanelAspect(aspectKey, custom) {
+  if (aspectKey === CUSTOM_SPLIT_ASPECT_KEY) {
+    return isValidCustomAspect(custom) ? custom.width / custom.height : getAspectRatio(DEFAULT_SPLIT_ASPECT_KEY, 1);
+  }
   return getAspectRatio(aspectKey, 1) || getAspectRatio(DEFAULT_SPLIT_ASPECT_KEY, 1);
 }
 
@@ -79,12 +94,13 @@ export function createDefaultSplitRect(bounds, regionAspect, freeAngle = 0) {
 }
 
 // Re-aim an existing region at a new aspect (panel ratio or count changed):
-// keep its centre and height, recompute the width, then fit.
+// keep its centre, take the largest size that fits the photo (like the crop
+// tool's aspect change), then fit.
 export function reshapeSplitRect(rect, bounds, regionAspect, freeAngle = 0) {
   if (!rect) return createDefaultSplitRect(bounds, regionAspect, freeAngle);
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
-  let height = rect.height;
+  let height = bounds.height;
   let width = height * regionAspect;
   if (width > bounds.width) {
     width = bounds.width;
