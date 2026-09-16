@@ -51,12 +51,9 @@ export function useSplitTool({
 
   const split = editorState.split || BASE_STATE.split;
   const freeAngle = editorState.freeAngle || 0;
-  const sourceAspect = sourceDims?.width && sourceDims?.height
-    ? sourceDims.width / sourceDims.height
-    : transformedPreview ? transformedPreview.width / transformedPreview.height : null;
-  const panelAspect = getSplitPanelAspect(split.aspectKey, sourceAspect);
+  const panelAspect = getSplitPanelAspect(split.aspectKey, split.custom);
   const count = resolveSplitCount(sourceDims?.width || transformedPreview?.width, sourceDims?.height || transformedPreview?.height, panelAspect, split.count);
-  const regionAspect = panelAspect ? panelAspect * count : null; // null = free
+  const regionAspect = panelAspect * count;
   const rectPx = useMemo(
     () => (split.rect && bounds ? denormalizeSplitRect(split.rect, bounds) : null),
     [split.rect, bounds],
@@ -95,13 +92,16 @@ export function useSplitTool({
     return { ...s, split: { ...(s.split || BASE_STATE.split), ...nextSplit, rect: normalizeSplitRect(nextPx, bounds), basis } };
   }
 
-  function commitAspect(aspectKey) {
+  // `custom` (optional { width, height }) is stored alongside; passing it with
+  // aspectKey "custom" is how the panel's W:H inputs commit.
+  function commitAspect(aspectKey, custom) {
     if (!bounds) return;
     const s = editorStateRef.current;
-    const nextAspect = getSplitPanelAspect(aspectKey, sourceAspect);
+    const nextCustom = custom || s.split?.custom || BASE_STATE.split.custom;
+    const nextAspect = getSplitPanelAspect(aspectKey, nextCustom);
     const nextCount = countFor(nextAspect, s.split?.count);
-    const px = reshapeSplitRect(rectPx, bounds, nextAspect ? nextAspect * nextCount : null, s.freeAngle || 0);
-    record(withRegion({ aspectKey }, px));
+    const px = reshapeSplitRect(rectPx, bounds, nextAspect * nextCount, s.freeAngle || 0);
+    record(withRegion({ aspectKey, custom: nextCustom }, px));
   }
 
   // `nextCount` null = back to automatic.
@@ -109,7 +109,7 @@ export function useSplitTool({
     if (!bounds) return;
     const s = editorStateRef.current;
     const resolved = countFor(panelAspect, nextCount);
-    const px = reshapeSplitRect(rectPx, bounds, panelAspect ? panelAspect * resolved : null, s.freeAngle || 0);
+    const px = reshapeSplitRect(rectPx, bounds, panelAspect * resolved, s.freeAngle || 0);
     record(withRegion({ count: nextCount == null ? null : resolved }, px));
   }
 
@@ -183,8 +183,8 @@ export function useSplitTool({
     rect: split.rect,
     rectPx,
     aspectKey: split.aspectKey,
+    custom: split.custom || BASE_STATE.split.custom,
     panelAspect,
-    freeAspect: !panelAspect,
     count,
     isAutoCount: split.count == null,
     activeInteraction,

@@ -102,17 +102,13 @@ describe("splitMath", () => {
   });
 });
 
-describe("splitMath panel aspect", () => {
-  it("follows the crop presets: Free is unlocked, Original is the photo's aspect", async () => {
-    const { getSplitPanelAspect, createDefaultSplitRect, reshapeSplitRect } = await import("./splitMath");
-    expect(getSplitPanelAspect("free", 3)).toBeNull();
-    expect(getSplitPanelAspect("original", 3)).toBe(3);
-    expect(getSplitPanelAspect("9:16", 3)).toBeCloseTo(9 / 16);
-    expect(getSplitPanelAspect("2.35:1", 3)).toBeCloseTo(2.35);
-    // Free: the default region is the whole photo and reshaping keeps the shape.
-    expect(createDefaultSplitRect(bounds, null)).toEqual(bounds);
-    const shape = { x: 300, y: 100, width: 400, height: 150 };
-    expect(reshapeSplitRect(shape, bounds, null)).toEqual(shape);
-    expect(resolveSplitCount(3000, 1000, null, null)).toBe(4);
+describe("splitMath custom aspect", () => {
+  it("uses the custom W:H when selected and falls back to 3:4 when invalid", async () => {
+    const { getSplitPanelAspect, isValidCustomAspect } = await import("./splitMath");
+    expect(getSplitPanelAspect("custom", { width: 2, height: 1 })).toBeCloseTo(2);
+    expect(getSplitPanelAspect("custom", { width: 0, height: 1 })).toBeCloseTo(3 / 4);
+    expect(getSplitPanelAspect("9:16")).toBeCloseTo(9 / 16);
+    expect(isValidCustomAspect({ width: 4, height: 5 })).toBe(true);
+    expect(isValidCustomAspect({ width: 101, height: 5 })).toBe(false);
   });
 });

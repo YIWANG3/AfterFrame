@@ -46,8 +46,12 @@
     "done": "已导出 {{count}} 张",
     "failed": "切图导出失败",
     "reveal": "在 Finder 中显示",
+    "custom": "自定义",
+    "customWidth": "自定义比例宽",
+    "customHeight": "自定义比例高",
     "subfolder": "创建子目录",
-    "webDownloads": "{{count}} 张会逐张下载到浏览器。"
+    "webDownloads": "{{count}} 张会逐张下载到浏览器。",
+    "customRatio": "宽 : 高"
   },
   "text": {
     "presets": "预设",

@@ -3,10 +3,13 @@
 // export button. Presentational — EditorOverlay owns the state and passes the
 // commit handlers (mirrors CropPanel).
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, Undo2, Redo2, RotateCcw, FolderOpen } from "lucide-react";
 import { ASPECT_PRESETS } from "../cropMath";
-import { MIN_SPLIT_COUNT, MAX_SPLIT_COUNT, splitRectToPanels } from "../splitMath";
+import {
+  SPLIT_ASPECT_KEYS, CUSTOM_SPLIT_ASPECT_KEY, MIN_SPLIT_COUNT, MAX_SPLIT_COUNT,
+  MIN_CUSTOM_ASPECT_SIDE, MAX_CUSTOM_ASPECT_SIDE, isValidCustomAspect, splitRectToPanels,
+} from "../splitMath";
 import { AspectButton } from "./CropPanel";
 import api from "../../../api";
 
@@ -16,6 +19,74 @@ function middleEllipsis(text, max = 40) {
   const tail = Math.floor(max * 0.55);
   const head = max - tail - 1;
   return `${text.slice(0, head)}…${text.slice(-tail)}`;
+}
+
+// "Custom" tile — same shape as the crop tool's AspectButton (dashed preview
+// box like Free), so the grid reads as one set of presets.
+function CustomAspectTile({ label, active, custom, onClick }) {
+  const aspect = isValidCustomAspect(custom) ? custom.width / custom.height : 3 / 4;
+  const max = 14;
+  const box = aspect >= 1
+    ? { width: max, height: Math.max(6, Math.round(max / aspect)) }
+    : { width: Math.max(6, Math.round(max * aspect)), height: max };
+  return (
+    <button
+      type="button"
+      className={[
+        "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] transition-colors",
+        active ? "bg-selected text-accent" : "text-muted hover:bg-hover hover:text-text",
+      ].join(" ")}
+      onClick={onClick}
+      data-testid="split-aspect-custom"
+    >
+      <span className="flex h-4 w-4 items-center justify-center shrink-0">
+        <span
+          className="block border border-current opacity-70"
+          style={{ width: `${box.width}px`, height: `${box.height}px`, borderStyle: "dashed", borderRadius: "1.5px" }}
+        />
+      </span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// W:H inputs for the custom panel ratio, shown while the Custom tile is
+// active. Local draft so half-typed values don't reshape the region; commits
+// on blur / Enter when both sides are valid.
+function CustomAspectInputs({ t, value, onCommit }) {
+  const [draft, setDraft] = useState({ width: String(value.width), height: String(value.height) });
+  useEffect(() => { setDraft({ width: String(value.width), height: String(value.height) }); }, [value.width, value.height]);
+  const commit = () => {
+    const next = { width: Number(draft.width), height: Number(draft.height) };
+    if (!isValidCustomAspect(next)) { setDraft({ width: String(value.width), height: String(value.height) }); return; }
+    if (next.width === value.width && next.height === value.height) return;
+    onCommit(next);
+  };
+  const field = (key, label) => (
+    <input
+      type="number"
+      min={MIN_CUSTOM_ASPECT_SIDE}
+      max={MAX_CUSTOM_ASPECT_SIDE}
+      step="any"
+      value={draft[key]}
+      aria-label={label}
+      data-testid={`split-custom-${key}`}
+      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+      className="h-7 w-14 rounded-md bg-app px-2 text-center text-[11px] tabular-nums text-text outline-none focus:ring-1 focus:ring-[rgb(var(--accent-color))]"
+    />
+  );
+  return (
+    <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
+      <span>{t("split.customRatio")}</span>
+      <div className="flex items-center gap-1.5">
+        {field("width", t("split.customWidth"))}
+        <span className="text-muted2">:</span>
+        {field("height", t("split.customHeight"))}
+      </div>
+    </div>
+  );
 }
 
 function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false, testId }) {
@@ -64,7 +135,7 @@ function PanelThumb({ source, panel, index }) {
 
 export default function SplitPanel({
   t,
-  aspectKey, onCommitAspect,
+  aspectKey, customAspect, onCommitAspect,
   count, isAutoCount, onCommitCount,
   rect, previewSource, sourceDims,
   onResetRegion,
@@ -73,6 +144,7 @@ export default function SplitPanel({
   exporting, progress, onExport,
   onUndo, canUndo, onRedo, canRedo,
 }) {
+  const presets = SPLIT_ASPECT_KEYS.map((key) => ASPECT_PRESETS.find((p) => p.key === key)).filter(Boolean);
   const previewPanels = rect && previewSource
     ? splitRectToPanels(rect, count, previewSource.width, previewSource.height)
     : [];
@@ -89,10 +161,11 @@ export default function SplitPanel({
     <>
       <div className="max-h-[calc(100vh-10rem)] overflow-y-auto">
         <div className="border-b border-border/60 px-4 py-3">
-          {/* Same presets, heading and buttons as the crop tool's Aspect Ratio. */}
+          {/* Same heading and tile style as the crop tool's Aspect Ratio; the
+              ratios here are PER PANEL and vertical-only, plus a Custom tile. */}
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.aspectRatio")}</div>
           <div className="mt-3 grid grid-cols-2 gap-1.5">
-            {ASPECT_PRESETS.map((preset) => (
+            {presets.map((preset) => (
               <AspectButton
                 key={preset.key}
                 preset={preset}
@@ -100,7 +173,20 @@ export default function SplitPanel({
                 onClick={() => onCommitAspect(preset.key)}
               />
             ))}
+            <CustomAspectTile
+              label={t("split.custom")}
+              active={aspectKey === CUSTOM_SPLIT_ASPECT_KEY}
+              custom={customAspect}
+              onClick={() => onCommitAspect(CUSTOM_SPLIT_ASPECT_KEY)}
+            />
           </div>
+          {aspectKey === CUSTOM_SPLIT_ASPECT_KEY ? (
+            <CustomAspectInputs
+              t={t}
+              value={customAspect}
+              onCommit={(next) => onCommitAspect(CUSTOM_SPLIT_ASPECT_KEY, next)}
+            />
+          ) : null}
         </div>
 
         <div className="border-b border-border/60 px-4 py-3">
