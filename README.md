@@ -80,6 +80,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 ### Edit
 - **Crop** with preset aspect ratios, rotation, and flip
+- **Split** a wide photo into N seamless panels for social-media carousels — per-panel aspect presets (3:4, 4:5, 1:1, 9:16, 2:3 or custom), automatic or manual panel count, a draggable covered region that honours the straighten angle, and full-resolution export into a `<name>_split` folder with every panel registered as a version of the original
 
 ![Crop Editor](docs/assets/en/editor-crop.webp)
 
