@@ -16,7 +16,6 @@ import {
   Play,
   Sparkles,
   Images,
-  ArrowUpDown,
   Check,
   Tags,
   SlidersHorizontal,

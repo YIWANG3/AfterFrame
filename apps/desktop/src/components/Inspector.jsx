@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Star, Copy, Layers, AlertTriangle, Link2, ScanFace, UserRoundX, UserRoundPen, Images } from "lucide-react";
+import { ChevronRight, Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images } from "lucide-react";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
 import FaceCrop from "./FaceCrop";
@@ -173,7 +173,6 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const imageMeta = detail.image_metadata || {};
   const rawMeta = detail.raw_metadata || {};
   const imageName = fileName(detail.image_path);
-  const rawName = fileName(detail.raw_path || "");
   const formatValue = (detail.image_path || "").split(".").pop()?.toUpperCase() || t("unknown");
   const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : t("unknown");
   const fileSize = formatBytes(imageMeta.file_size || imageMeta.size_bytes) || t("unknown");

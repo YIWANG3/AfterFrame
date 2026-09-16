@@ -322,7 +322,6 @@ const CardContent = memo(function CardContent({
   compact = false,
   bustToken,
   onPreviewError,
-  showVersionBadge = false, // deprecated — kept for compat
 }) {
   const { t } = useTranslation("nav");
   const title = fileName(item.image_path) || item.stem;
@@ -531,7 +530,6 @@ export default function Gallery({
   onLoadMore,
   displayMode,
   thumbSize,
-  totalCount,
   collections,
   activeCollectionId,
   onAddToCollection,

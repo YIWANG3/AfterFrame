@@ -435,7 +435,6 @@ export default function ColorPickerPopover({
     }
   }
 
-  const currentHex = hsvToHex(hsv.h, hsv.s, hsv.v);
   const { r: cr, g: cg, b: cb } = hsvToRgb(hsv.h, hsv.s, hsv.v);
 
   const pickFromScreen = useCallback(async () => {

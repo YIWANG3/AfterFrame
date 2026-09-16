@@ -8,6 +8,9 @@ const sharedRules = {
     argsIgnorePattern: "^_",
     caughtErrorsIgnorePattern: "^_",
     varsIgnorePattern: "^_",
+    // `const { drop, ...rest } = obj` is how you omit a key; the named binding
+    // is the point, not an oversight.
+    ignoreRestSiblings: true,
   }],
   "no-useless-assignment": "error",
   "no-empty": ["error", { allowEmptyCatch: true }],

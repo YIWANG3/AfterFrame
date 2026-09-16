@@ -11,7 +11,7 @@
 import api from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, Brain, X } from "lucide-react";
+import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button, Modal } from "../../ui";
 import {
   Group, FieldRow, Toggle, TextInput, NumberInput, Select,
