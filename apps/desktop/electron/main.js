@@ -77,6 +77,7 @@ const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
 const { createSettingsStore } = require("./settingsStore");
+const { createCatalogState } = require("./catalog");
 const { createImageMetadataWriter } = require("./imageMetadata");
 const { createTaskStarters } = require("./tasks");
 
@@ -143,15 +144,6 @@ const sidecarSrc = isPackaged
   ? path.join(process.resourcesPath, "sidecar", "src")
   : path.join(rootDir, "services", "sidecar", "src");
 
-// In dev mode, use default catalog paths from the monorepo data/ dir.
-// In packaged mode, there is no default — user must create or open a catalog.
-const scratchCatalogPath = isPackaged
-  ? null
-  : path.join(rootDir, "data", "ui-import-scratch.afcatalog");
-const reviewCatalogPath = isPackaged
-  ? null
-  : path.join(rootDir, "data", "review-2026.afcatalog");
-
 function getAppSettingsPath() {
   return path.join(app.getPath("userData"), "afterframe", "settings.json");
 }
@@ -166,25 +158,18 @@ function updateAppSettings(mutateFn) {
   return settingsStore.updateAppSettings(mutateFn);
 }
 
-function resolveCatalogPath() {
-  // Simulate packaged first-run (no default catalog) in dev / e2e, where a
-  // scratch catalog would otherwise always be present. Lets you exercise the
-  // WelcomeOverlay locally: AFTERFRAME_NO_DEFAULT_CATALOG=1 npm run dev
-  if (process.env.AFTERFRAME_NO_DEFAULT_CATALOG) return null;
-  if (configuredCatalogPath) {
-    return path.isAbsolute(configuredCatalogPath)
-      ? configuredCatalogPath
-      : path.resolve(rootDir, configuredCatalogPath);
-  }
-  // Restore last opened catalog (works in both dev and packaged mode)
-  const settings = readAppSettings();
-  const last = settings.lastCatalogPath;
-  if (last && fs.existsSync(last)) return last;
-  // Fallback: dev mode uses scratch catalog, packaged mode has no default
-  return scratchCatalogPath;
-}
-
-let currentCatalogPath = resolveCatalogPath();
+// The one mutable "which catalog is open" value, plus the path rules around
+// it — see ./catalog.js. Read it through catalog.path() / catalog.state();
+// switching happens in switchCatalogTo below.
+const catalog = createCatalogState({
+  rootDir,
+  sidecarSrc,
+  isPackaged,
+  configuredCatalogPath,
+  getUserDataDir: () => app.getPath("userData"),
+  readAppSettings,
+});
+const { scratchCatalogPath } = catalog;
 
 // Locale: the main process owns it (persisted in settings.json) so the menu and
 // the renderer never disagree. The renderer reads it synchronously at startup
@@ -196,11 +181,11 @@ function getLocale() {
 }
 let currentLocale = getLocale();
 
-function readCatalogSettings(catalogPath = currentCatalogPath) {
+function readCatalogSettings(catalogPath = catalog.path()) {
   return settingsStore.readCatalogSettings(catalogPath);
 }
 
-function updateCatalogSettings(mutateFn, catalogPath = currentCatalogPath) {
+function updateCatalogSettings(mutateFn, catalogPath = catalog.path()) {
   return settingsStore.updateCatalogSettings(catalogPath, mutateFn);
 }
 
@@ -290,38 +275,25 @@ async function getStoredProviderConfigWithMigration(provider) {
   return existing || null;
 }
 
-function catalogHasDb() {
-  if (!currentCatalogPath) return false;
-  try {
-    const entries = fs.readdirSync(currentCatalogPath);
-    const has = entries.some((e) => e.endsWith(".sqlite3") || e === "catalog.db");
-    console.log("[catalogHasDb]", currentCatalogPath, "entries:", entries.length, "hasDb:", has);
-    return has;
-  } catch (err) {
-    console.warn("[catalogHasDb] error reading dir:", err.message);
-    return false;
-  }
-}
-
 async function prepareCatalogPath() {
-  console.log("[prepareCatalogPath] currentCatalogPath:", currentCatalogPath);
-  if (!currentCatalogPath) return;
-  fs.mkdirSync(currentCatalogPath, { recursive: true });
-  if (!catalogHasDb()) {
+  console.log("[prepareCatalogPath] catalog:", catalog.path());
+  if (!catalog.path()) return;
+  fs.mkdirSync(catalog.path(), { recursive: true });
+  if (!catalog.hasDb()) {
     console.log("[prepareCatalogPath] empty catalog, skipping sidecar migration");
     return;
   }
   try { await sidecarCommands.splitSharedAssets(); } catch (_) { /* best-effort */ }
   try { await sidecarCommands.repairResourceSets(); } catch (_) { /* best-effort */ }
-  if (currentCatalogPath === getSampleCatalogPath()) {
+  if (catalog.isSample()) {
     const repaired = await repairLegacySamplePreviews({
-      catalogPath: currentCatalogPath, source: samplePhotosSource,
+      catalogPath: catalog.path(), source: samplePhotosSource,
       transport: sidecarTransport, commands: sidecarCommands,
-      getCatalogPath: () => currentCatalogPath,
+      getCatalogPath: catalog.path,
     });
     if (repaired) {
       const originals = sampleOriginalNames(samplePhotosSource)
-        .map((name) => path.join(getSampleCatalogPath(), "photos", name)).filter((file) => fs.existsSync(file));
+        .map((name) => path.join(catalog.samplePath(), "photos", name)).filter((file) => fs.existsSync(file));
       if (originals.length) {
         // Resume an interrupted sample import without resurrecting originals
         // the user deliberately removed from this catalog.
@@ -329,36 +301,6 @@ async function prepareCatalogPath() {
       }
     }
   }
-}
-
-function workspaceInfo() {
-  return {
-    rootDir,
-    catalogPath: currentCatalogPath,
-    scratchCatalogPath,
-    reviewCatalogPath,
-    sidecarSrc,
-    isSampleCatalog: !!currentCatalogPath && currentCatalogPath === getSampleCatalogPath(),
-  };
-}
-
-function normalizeCatalogPath(targetPath) {
-  if (!targetPath) {
-    return null;
-  }
-  const resolved = path.isAbsolute(targetPath) ? targetPath : path.resolve(rootDir, targetPath);
-  if (resolved.endsWith(".afcatalog")) return resolved;
-  if (resolved.endsWith(".mwcatalog")) return resolved.replace(/\.mwcatalog$/, ".afcatalog");
-  return `${resolved}.afcatalog`;
-}
-
-function createCatalogAt(targetPath) {
-  const normalizedPath = normalizeCatalogPath(targetPath);
-  if (!normalizedPath) {
-    return null;
-  }
-  fs.mkdirSync(normalizedPath, { recursive: true });
-  return normalizedPath;
 }
 
 // ── Sample catalog ──────────────────────────────────────────────────────────
@@ -372,20 +314,8 @@ const samplePhotosSource = isPackaged
   ? path.join(process.resourcesPath, "sample-photos")
   : path.join(__dirname, "..", "sample-photos");
 
-function getSampleCatalogPath() {
-  return path.join(app.getPath("userData"), "afterframe", "sample.afcatalog");
-}
-
-function dirHasCatalogDb(dirPath) {
-  try {
-    return fs.readdirSync(dirPath).some((e) => e.endsWith(".sqlite3") || e === "catalog.db");
-  } catch {
-    return false;
-  }
-}
-
 async function openSampleCatalog({ reset = false } = {}) {
-  const samplePath = getSampleCatalogPath();
+  const samplePath = catalog.samplePath();
   if (reset && fs.existsSync(samplePath)) {
     await sidecarTransport.withCatalogPaused(samplePath, () =>
       fs.promises.rm(samplePath, { recursive: true, force: true }));
@@ -393,7 +323,7 @@ async function openSampleCatalog({ reset = false } = {}) {
   // No DB yet means the catalog was never populated (or was reset / deleted
   // externally) — copy the bundled photos and import them. Both steps are
   // idempotent, so an interrupted first open self-heals on the next one.
-  const fresh = !dirHasCatalogDb(samplePath);
+  const fresh = !catalog.hasDbAt(samplePath);
   const photosDir = path.join(samplePath, "photos");
   let originals = [];
   if (fresh) {
@@ -416,7 +346,7 @@ const sidecarTransport = createSidecarTransport({
   sidecarSrc,
   isPackaged,
   resourcesPath: process.resourcesPath,
-  getCatalogPath: () => currentCatalogPath,
+  getCatalogPath: catalog.path,
 });
 // Only the JSON entry point is bound here, and only to feed the verb layer
 // below — nothing in main.js or the ipc/mcp modules assembles sidecar argv by
@@ -426,11 +356,9 @@ const callSidecarJsonAsync = sidecarTransport.callJsonAsync;
 const launchSidecarJob = sidecarTransport.launchJob;
 const stopResidentSidecar = sidecarTransport.stopResident;
 
-
 // Domain-verb command layer — the only place argv is assembled. IPC handlers
 // and MCP tools both receive this instead of building commands by hand.
 const sidecarCommands = createSidecarCommands(callSidecarJsonAsync);
-
 
 // Image write-back with the original's EXIF/XMP, and the background-task
 // starters — both lived here until review 2026-09-16 §2. See ./imageMetadata.js
@@ -491,7 +419,7 @@ function resetMediaAllowlist() {
 function ensureMediaRootsLoaded() {
   if (!mediaRootsLoaded) {
     mediaRootsLoaded = (async () => {
-      if (!currentCatalogPath || !catalogHasDb()) return;
+      if (!catalog.path() || !catalog.hasDb()) return;
       try {
         const roots = await sidecarCommands.catalogRoots();
         for (const root of roots) {
@@ -519,8 +447,8 @@ function ensureMediaRootsLoaded() {
 
 function isAllowedMediaPath(requestedPath) {
   const resolved = canonicalizeMediaPath(requestedPath);
-  if (currentCatalogPath) {
-    const catalogCanonical = canonicalizeMediaPath(currentCatalogPath);
+  if (catalog.path()) {
+    const catalogCanonical = canonicalizeMediaPath(catalog.path());
     if (resolved === catalogCanonical || resolved.startsWith(catalogCanonical + path.sep)) return true;
   }
   for (const dir of allowedMediaDirs) {
@@ -762,8 +690,8 @@ function buildAppMenu() {
 }
 
 ipcMain.handle("workspace:summary", async () => {
-  console.log("[ipc:summary] catalogPath:", currentCatalogPath, "hasDb:", catalogHasDb());
-  if (!currentCatalogPath || !catalogHasDb()) {
+  console.log("[ipc:summary] catalogPath:", catalog.path(), "hasDb:", catalog.hasDb());
+  if (!catalog.path() || !catalog.hasDb()) {
     return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   }
   try {
@@ -775,7 +703,7 @@ ipcMain.handle("workspace:summary", async () => {
 });
 
 ipcMain.handle("workspace:roots", async () => {
-  if (!currentCatalogPath || !catalogHasDb()) return [];
+  if (!catalog.path() || !catalog.hasDb()) return [];
   try {
     return await sidecarCommands.catalogRoots();
   } catch (err) {
@@ -835,21 +763,21 @@ ipcMain.handle("workspace:create-catalog", async () => {
   if (result.canceled || !result.filePath) {
     return null;
   }
-  return createCatalogAt(result.filePath);
+  return catalog.createAt(result.filePath);
 });
 
 async function switchCatalogTo(nextCatalogPath) {
   console.log("[ipc:switch-catalog] nextCatalogPath:", nextCatalogPath, "scratchCatalogPath:", scratchCatalogPath);
   if (!nextCatalogPath && !scratchCatalogPath) {
-    currentCatalogPath = null;
+    catalog.set(null);
     watcherApi?.rebuild?.();
-    console.log("[ipc:switch-catalog] cleared currentCatalogPath (packaged mode, no path)");
+    console.log("[ipc:switch-catalog] cleared catalog (packaged mode, no path)");
     stopResidentSidecar();
     return true;
   }
-  currentCatalogPath = normalizeCatalogPath(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath;
+  catalog.set(catalog.normalize(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath);
   watcherApi?.rebuild?.();
-  console.log("[ipc:switch-catalog] currentCatalogPath set to:", currentCatalogPath);
+  console.log("[ipc:switch-catalog] catalog set to:", catalog.path());
   stopResidentSidecar(); // next sidecar call restarts it bound to the new catalog
   // Per-catalog caches must not leak across libraries: media allowlist roots,
   // the agent-facing selection mirror, and the MCP preview-path cache.
@@ -861,8 +789,8 @@ async function switchCatalogTo(nextCatalogPath) {
   await prepareCatalogPath();
   void peopleApi?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch
-  if (currentCatalogPath) {
-    await updateAppSettings((s) => ({ ...s, lastCatalogPath: currentCatalogPath }));
+  if (catalog.path()) {
+    await updateAppSettings((s) => ({ ...s, lastCatalogPath: catalog.path() }));
   }
   return true;
 }
@@ -878,7 +806,7 @@ editorsIpc.register({ ipcMain });
 const watcherApi = watcherModule.register({
   ipcMain,
   getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
-  getCatalogPath: () => currentCatalogPath,
+  getCatalogPath: catalog.path,
   readCatalogSettings,
   updateCatalogSettings,
 });
@@ -887,7 +815,7 @@ let peopleApi = null;
 
 jobsIpc.register({
   ipcMain,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
   formatJobStatus, latestJobStatus,
   startImportTask, startEnrichmentTask, startPreviewTask,
   commands: sidecarCommands,
@@ -897,7 +825,7 @@ jobsIpc.register({
 aiIpc.register({
   app, ipcMain,
   commands: sidecarCommands,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
   startAiRepaintTask, startTextImageTask, latestJobStatus, formatJobStatus,
@@ -906,7 +834,7 @@ aiIpc.register({
 const annotationApi = annotationIpc.register({
   ipcMain,
   commands: sidecarCommands,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
   createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
@@ -917,7 +845,7 @@ peopleApi = peopleIpc.register({
   isPackaged,
   resourcesPath: process.resourcesPath,
   readAppSettings, updateAppSettings,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
   createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
   commands: sidecarCommands,
 });
@@ -925,13 +853,13 @@ peopleApi = peopleIpc.register({
 browseIpc.register({
   ipcMain,
   commands: sidecarCommands,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
 });
 
 assetsIpc.register({
   ipcMain, shell, dialog, BrowserWindow,
   commands: sidecarCommands, addAllowedMediaDir,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
   t: () => makeT(currentLocale),
 });
 
@@ -1090,10 +1018,9 @@ if (devServerUrl) {
 // quick-register / collage-sources / delete-image-assets are in ipc/assets.js
 // (registered above), so the inline handlers for those are removed here.
 
-
 ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });
 
-ipcMain.handle("workspace:info", () => workspaceInfo());
+ipcMain.handle("workspace:info", () => catalog.info());
 // The renderer owns the theme (dark / light / system). Mirror it into the
 // window's native appearance so macOS draws the traffic lights — and their
 // inactive grey state — for the right background; otherwise a light UI gets
@@ -1108,7 +1035,7 @@ ipcMain.handle("workspace:set-theme", (_event, theme) => {
 collectionsIpc.register({
   ipcMain,
   commands: sidecarCommands,
-  getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+  getCatalogState: catalog.state,
 });
 
 // Native OS drag-out: the renderer preventDefault()s the HTML5 dragstart and
@@ -1298,7 +1225,7 @@ app.whenReady().then(async () => {
   });
   // A saved sample catalog can be reopened without the welcome action. Finish
   // its targeted migration before the first gallery query sees legacy previews.
-  if (currentCatalogPath === getSampleCatalogPath()) {
+  if (catalog.isSample()) {
     await catalogPreparation.catch((err) => console.warn("[sample] repair failed:", err.message));
   }
   Menu.setApplicationMenu(buildAppMenu());
@@ -1308,7 +1235,7 @@ app.whenReady().then(async () => {
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
   // through this while it runs. Failures must never affect the app itself.
   mcpServerApi = createMcpServer({
-    getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
+    getCatalogState: catalog.state,
     startImportTask,
     formatJobStatus,
     registerRoots,
