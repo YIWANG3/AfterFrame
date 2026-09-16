@@ -53,7 +53,11 @@ ignore = [
 "src/media_workspace/db/__init__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12, not the runtime floor of 3.11: mypy parses third-party stubs with this
+# grammar, and numpy's .pyi already uses the PEP 695 `type` statement — under
+# 3.11 that is a syntax error that aborts the whole run ("errors prevented
+# further checking"). CI runs 3.12 too.
+python_version = "3.12"
 files = ["src"]
 # Starting posture: catch the mistakes a reader can't see — calling something
 # that isn't there, passing the wrong kwarg, forgetting to call a function.
