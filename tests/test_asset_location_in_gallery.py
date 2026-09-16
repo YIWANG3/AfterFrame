@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from media_workspace.db import connect, init_db, list_image_assets, locate_image_asset, browse_collection
+from media_workspace.db import browse_collection, connect, init_db, list_image_assets, locate_image_asset
 
 
 class GalleryPositionTest(unittest.TestCase):

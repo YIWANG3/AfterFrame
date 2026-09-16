@@ -3,8 +3,8 @@
 The bundled gazetteer contains points, not administrative boundary polygons.
 Never present a nearest town/state as a verified address or infer a landmark.
 """
-from functools import lru_cache
 import json
+from functools import lru_cache
 
 from .db.locations import _valid_coordinates
 

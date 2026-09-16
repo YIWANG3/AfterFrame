@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping
 from uuid import uuid4
+
+from .core import _json
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()
 
-from .core import _json
 
 def _job_id(job_type: str) -> str:
     return f"job_{job_type}_{uuid4().hex[:20]}"
@@ -42,13 +44,13 @@ def _decode_job_row(row: sqlite3.Row | None) -> dict[str, object] | None:
 def create_job(
     connection: sqlite3.Connection,
     job_type: str,
-    payload: dict[str, object] | None = None,
+    payload: Mapping[str, object] | None = None,
     *,
     status: str = "queued",
     progress: float = 0.0,
-    result: dict[str, object] | None = None,
+    result: Mapping[str, object] | None = None,
     priority: int = 50,
-    resume_cursor: dict[str, object] | None = None,
+    resume_cursor: Mapping[str, object] | None = None,
     commit: bool = True,
 ) -> dict[str, object]:
     job_id = _job_id(job_type)
@@ -69,12 +71,12 @@ def update_job(
     job_id: str,
     *,
     status: str | None = None,
-    payload: dict[str, object] | None = None,
-    result: dict[str, object] | None = None,
+    payload: Mapping[str, object] | None = None,
+    result: Mapping[str, object] | None = None,
     progress: float | None = None,
     priority: int | None = None,
     pause_requested: bool | None = None,
-    resume_cursor: dict[str, object] | None = None,
+    resume_cursor: Mapping[str, object] | None = None,
     increment_attempt: bool = False,
     error_text: object = _UNSET,
     commit: bool = True,
@@ -182,7 +184,8 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
             """,
             (limit,),
         ).fetchall()
-    return [_decode_job_row(row) for row in rows if row is not None]
+    decoded = (_decode_job_row(row) for row in rows)
+    return [job for job in decoded if job is not None]
 
 
 # How long a job may go without touching updated_at before we call it dead.
@@ -258,7 +261,8 @@ def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
         ORDER BY priority DESC, created_at ASC
         """
     ).fetchall()
-    return [_decode_job_row(row) for row in rows if row is not None]
+    decoded = (_decode_job_row(row) for row in rows)
+    return [job for job in decoded if job is not None]
 
 
 def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:

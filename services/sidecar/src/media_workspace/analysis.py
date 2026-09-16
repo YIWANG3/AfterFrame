@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from .config import DEFAULT_IMAGE_EXTENSIONS, DEFAULT_RAW_EXTENSIONS
 from .metadata import extract_image_candidate, extract_raw_metadata
@@ -32,7 +34,8 @@ def _iter_files(directory: Path, extensions: set[str]):
         yield path
 
 
-def _analyze_group(directory: Path, kind: str) -> dict[str, object]:
+def _analyze_group(directory: Path, kind: str) -> dict[str, Any]:
+    extractor: Callable[..., Any]
     if kind == "raw":
         extractor = extract_raw_metadata
         extensions = DEFAULT_RAW_EXTENSIONS
@@ -48,8 +51,8 @@ def _analyze_group(directory: Path, kind: str) -> dict[str, object]:
     total = 0
     errors = 0
     extension_counts: Counter[str] = Counter()
-    coverage_counts = {field: 0 for field in fields}
-    coverage_samples = {field: [] for field in fields}
+    coverage_counts = dict.fromkeys(fields, 0)
+    coverage_samples: dict[str, list[Any]] = {field: [] for field in fields}
     camera_models: Counter[str] = Counter()
     lens_models: Counter[str] = Counter()
 
@@ -98,7 +101,7 @@ def _analyze_group(directory: Path, kind: str) -> dict[str, object]:
     }
 
 
-def analyze_metadata_coverage(raw_dirs: list[Path], image_dirs: list[Path]) -> dict[str, object]:
+def analyze_metadata_coverage(raw_dirs: list[Path], image_dirs: list[Path]) -> dict[str, Any]:
     raw_reports = [_analyze_group(directory.resolve(), "raw") for directory in raw_dirs]
     image_reports = [_analyze_group(directory.resolve(), "image") for directory in image_dirs]
     return {

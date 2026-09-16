@@ -1,82 +1,85 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import json
 import os
+from dataclasses import asdict
 from pathlib import Path
-from uuid import uuid4
 
+from .ai_repaint import (
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    OPENAI_PROVIDER,
+    list_provider_models,
+    run_mock_repaint,
+    run_nanobanana_repaint,
+    run_openai_repaint,
+)
+from .analysis import analyze_metadata_coverage
 from .benchmark import benchmark_dataset
 from .catalog import ensure_catalog
 from .config import Thresholds
-from .analysis import analyze_metadata_coverage
-from .ai_repaint import DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, OPENAI_PROVIDER, list_provider_models, run_mock_repaint, run_nanobanana_repaint, run_openai_repaint
 from .db import (
+    add_collection_items,
+    assign_faces_to_group,
     attach_asset_to_resource_set,
+    browse_collection,
     cleanup_orphan_image_assets,
     confirm_match,
     connect,
-    verify_assets,
-    relink_asset,
+    create_collection,
     create_job,
     delete_app_setting,
+    delete_collection,
     delete_image_asset_from_catalog,
     find_image_asset_ids_by_stem,
+    get_app_setting,
     get_duplicate_assets,
     get_image_asset_detail,
-    remove_raw_from_resource_sets,
-    split_shared_asset_ids,
     get_image_asset_detail_by_path,
-    get_app_setting,
     get_job,
     get_latest_job,
+    get_person_group_detail,
     init_db,
-    list_singleton_primary_resource_sets,
+    list_assets_for_preview,
+    list_catalog_roots,
+    list_collections,
+    list_image_assets,
     list_image_assets_missing_resource_set,
     list_jobs,
-    list_catalog_roots,
-    list_image_assets,
-    locate_image_asset,
     list_map_points,
-    list_assets_for_preview,
     list_pending,
-    assign_faces_to_group,
-    get_person_group_detail,
     list_person_groups,
     list_similar_person_groups,
-    remove_faces_from_group,
+    list_singleton_primary_resource_sets,
+    locate_image_asset,
     merge_person_groups,
-    set_person_group_name,
-    set_person_group_cover,
-    set_person_group_state,
-    set_person_groups_state,
-    set_catalog_path,
-    summary,
-    upsert_catalog_root,
-    list_collections,
-    reorder_collections,
-    create_collection,
-    update_collection,
-    delete_collection,
-    add_collection_items,
-    attach_asset_to_resource_set,
-    remove_collection_items,
     reassign_asset_to_resource_set,
-    browse_collection,
-    set_asset_rating,
-    set_app_setting,
+    relink_asset,
+    remove_collection_items,
+    remove_faces_from_group,
+    remove_raw_from_resource_sets,
+    reorder_collections,
     request_job_pause,
     request_job_resume,
-    upsert_image_asset,
-    upsert_registry,
+    set_app_setting,
+    set_asset_rating,
+    set_catalog_path,
+    set_person_group_cover,
+    set_person_group_name,
+    set_person_group_state,
+    set_person_groups_state,
+    split_shared_asset_ids,
+    summary,
+    update_collection,
+    upsert_catalog_root,
+    verify_assets,
 )
 from .evaluation import evaluate_ground_truth
 from .ground_truth import export_ground_truth
 from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_people_index_job, run_preview_job
+from .metadata import iso_mtime
 from .preview_service import PreviewService
-from .metadata import extract_image_candidate, iso_mtime
-from .models import MatchDecision
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 from .watcher import ImageWatcher
@@ -773,7 +776,6 @@ def _cmd_delete_provider_token(args, connection, catalog, parser):
 
 
 def _cmd_repair_resource_sets(args, connection, catalog, parser):
-    from .db import list_incorrectly_merged_resource_sets
 
     # Phase 0: Split assets sharing the same asset_id (old format without path)
     shared_split_count = split_shared_asset_ids(connection)
@@ -967,6 +969,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
     import shutil
     import tempfile
     from pathlib import Path as _Path
+
     from . import annotation as _annotation
     from . import video as _video
 

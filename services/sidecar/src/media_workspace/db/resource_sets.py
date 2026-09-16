@@ -10,11 +10,11 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from .core import _file_id
-from .core import _json
+from .core import _file_id, _json
+
 
 def _link_id(parent_asset_id: str, child_asset_id: str, relation_type: str) -> str:
-    digest = sha1(f"{parent_asset_id}:{child_asset_id}:{relation_type}".encode("utf-8")).hexdigest()[:20]
+    digest = sha1(f"{parent_asset_id}:{child_asset_id}:{relation_type}".encode()).hexdigest()[:20]
     return f"link_{digest}"
 
 

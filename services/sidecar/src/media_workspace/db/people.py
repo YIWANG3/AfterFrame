@@ -10,7 +10,8 @@ import json
 import math
 import sqlite3
 import struct
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 from uuid import uuid4
 
 import numpy as np
@@ -453,7 +454,7 @@ def rebuild_candidate_groups(
                 index = parent[index]
             return index
 
-        for edge_index, (similarity, left, right) in enumerate(edges):
+        for edge_index, (_similarity, left, right) in enumerate(edges):
             if edge_index % 256 == 0:
                 checkpoint()
             root_left, root_right = find(left), find(right)
@@ -698,7 +699,7 @@ def get_person_group_detail(
     group_id: str,
     face_limit: int = 40,
     face_offset: int = 0,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Group summary plus one page of member faces for the inspector.
 
     Faces are ordered by detection confidence; page through with
@@ -1144,7 +1145,11 @@ def _validate_face(face: dict[str, Any]) -> dict[str, Any]:
     quality = str(face.get("quality") or "")
     if quality not in _QUALITY_VALUES:
         raise ValueError(f"unsupported face quality: {quality!r}")
-    confidence = float(face.get("confidence"))
+    raw_confidence = face.get("confidence")
+    try:
+        confidence = float(raw_confidence)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise ValueError("face confidence must be finite and between 0 and 1") from None
     if not math.isfinite(confidence) or confidence < 0 or confidence > 1:
         raise ValueError("face confidence must be finite and between 0 and 1")
     length = math.sqrt(sum(value * value for value in embedding))

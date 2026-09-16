@@ -7,6 +7,7 @@ from __future__ import annotations
 import sqlite3
 from uuid import uuid4
 
+
 def _collection_id() -> str:
     return f"col_{uuid4().hex[:16]}"
 

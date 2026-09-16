@@ -4,6 +4,7 @@ import time
 from collections import Counter
 from pathlib import Path
 from sqlite3 import Connection
+from typing import Any
 
 from .analysis import analyze_metadata_coverage
 from .catalog import ensure_catalog
@@ -169,7 +170,7 @@ def benchmark_dataset(
         connection.close()
 
 
-def _resolve_images(connection: Connection, image_dirs: list[Path], thresholds: Thresholds) -> dict[str, object]:
+def _resolve_images(connection: Connection, image_dirs: list[Path], thresholds: Thresholds) -> dict[str, Any]:
     counts: Counter[str] = Counter()
     processed = 0
     for image_path in _iter_image_files(image_dirs):

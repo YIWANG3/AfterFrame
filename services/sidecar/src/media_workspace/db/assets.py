@@ -11,15 +11,9 @@ from hashlib import sha1
 from pathlib import Path
 
 from ..models import ImageCandidate, MatchDecision, RawMetadata
-
-RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
-
-from .core import _json
-from .core import _file_id
+from .core import RESOLVER_VERSION, _file_id, _json
 from .locations import upsert_asset_location_from_metadata
 from .resource_sets import get_resource_set_for_asset, link_assets
-
-
 
 
 def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, commit: bool = True) -> None:
@@ -663,7 +657,7 @@ def upsert_preview_entry(
     status: str,
     commit: bool = True,
 ) -> None:
-    cache_key = sha1(f"{asset_id}:{kind}".encode("utf-8")).hexdigest()[:20]
+    cache_key = sha1(f"{asset_id}:{kind}".encode()).hexdigest()[:20]
     connection.execute(
         """
         INSERT INTO preview_entries (cache_key, asset_id, kind, relative_path, width, height, status)
@@ -682,7 +676,7 @@ def upsert_preview_entry(
 
 
 def upsert_catalog_root(connection: sqlite3.Connection, root_type: str, path: Path, commit: bool = True) -> None:
-    digest = sha1(f"{root_type}:{path.resolve()}".encode("utf-8")).hexdigest()[:20]
+    digest = sha1(f"{root_type}:{path.resolve()}".encode()).hexdigest()[:20]
     connection.execute(
         """
         INSERT INTO catalog_roots (root_id, root_type, path)

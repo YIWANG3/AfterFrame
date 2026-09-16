@@ -32,7 +32,7 @@ import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 MIN_CONFIDENCE = 60
 RESOLVER_VERSION = "wikidata-gazetteer-2"
@@ -74,8 +74,8 @@ class ResolvedLocation:
     precision_level: str  # 'exact' (landmark) | 'locality' | 'admin1' | 'country'
     place_id: str  # "wd:Q..."
     matched_label: str
-    country_code: Optional[str]
-    confidence: Optional[float]
+    country_code: str | None
+    confidence: float | None
 
 
 class Gazetteer:

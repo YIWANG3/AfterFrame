@@ -55,6 +55,19 @@ The root commands set the sidecar `PYTHONPATH` automatically. ESLint's checked-i
 bulk-suppression file records existing warnings by file and rule, so new lint or
 React Hooks violations still fail locally and in CI.
 
+`npm run lint` covers both sides: ESLint for the desktop app and ruff + mypy for
+the sidecar (`npm run lint:python`). The Python tools come from the sidecar's
+`dev` extra — install it once so the root scripts can find them:
+
+```bash
+python3 -m pip install -e "services/sidecar[dev]"
+```
+
+mypy runs with a per-module debt list in `services/sidecar/pyproject.toml`
+(`[[tool.mypy.overrides]] … ignore_errors = true`). Modules on that list are
+excluded until someone cleans them; everything else is checked, and the list
+only ever shrinks.
+
 ### Sidecar (Python backend)
 
 The desktop app calls the sidecar CLI automatically. For manual testing:
