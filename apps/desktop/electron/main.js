@@ -5,6 +5,19 @@ const { sampleOriginalNames, copySampleOriginals, repairLegacySamplePreviews } =
 const http = require("node:http");
 const { pathToFileURL } = require("node:url");
 
+// stdout/stderr are usually a pipe, and the reader can go away while we keep
+// running: Playwright tearing down a test app, `npm run dev`'s concurrently
+// exiting before Electron does, the launching terminal closing. Without an
+// 'error' listener the next console.log — the renderer console forwarder in
+// createWindow fires on EVERY renderer message — throws EPIPE as an uncaught
+// exception, and Electron turns each one into a modal "Uncaught Exception"
+// dialog. Swallow EPIPE only; anything else is still a real error.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (err) => {
+    if (err?.code !== "EPIPE") throw err;
+  });
+}
+
 const VIDEO_MIME = {
   ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
   ".webm": "video/webm", ".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
