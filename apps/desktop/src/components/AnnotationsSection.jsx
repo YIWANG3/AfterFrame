@@ -181,6 +181,8 @@ export default function AnnotationsSection({
         setError(e?.message || t("loadFailed"));
       });
     }
+    // `t` only formats the failure text — a language switch must not refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId, known]);
 
   const run = useCallback(async (options = {}) => {
@@ -221,7 +223,7 @@ export default function AnnotationsSection({
     } finally {
       setRunning(false);
     }
-  }, [assetId, imagePath, onLocationChanged, pushToast]);
+  }, [assetId, imagePath, onLocationChanged, pushToast, t]);
 
   const addTag = useCallback(async (tag) => {
     if (!assetId || !tag) return;
@@ -231,7 +233,7 @@ export default function AnnotationsSection({
     } catch (e) {
       pushToast?.({ title: t("toast.addTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
     }
-  }, [assetId, pushToast]);
+  }, [assetId, pushToast, t]);
 
   const removeTag = useCallback(async (tag) => {
     if (!assetId || !tag) return;
@@ -241,7 +243,7 @@ export default function AnnotationsSection({
     } catch (e) {
       pushToast?.({ title: t("toast.removeTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
     }
-  }, [assetId, pushToast]);
+  }, [assetId, pushToast, t]);
 
   // User veto: null the annotation's location + drop the resolved map point.
   const clearLocation = useCallback(async () => {
@@ -254,7 +256,7 @@ export default function AnnotationsSection({
     } catch (e) {
       pushToast?.({ title: t("loc.clearFailed"), message: e?.message || t("toast.failedFallback"), ttl: 5000, tone: "error" });
     }
-  }, [assetId, onLocationChanged, pushToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [assetId, onLocationChanged, pushToast, t]);
 
   const submitHint = () => {
     const value = hintText.trim();

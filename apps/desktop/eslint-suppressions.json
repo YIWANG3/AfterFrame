@@ -4,11 +4,6 @@
       "count": 3
     }
   },
-  "src/components/AnnotationsSection.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 4
-    }
-  },
   "src/components/CollageOverlay.jsx": {
     "react-hooks/exhaustive-deps": {
       "count": 2
@@ -42,11 +37,6 @@
   "src/components/editor/TextPanel.jsx": {
     "react-hooks/exhaustive-deps": {
       "count": 2
-    }
-  },
-  "src/hooks/useWorkspace.js": {
-    "react-hooks/exhaustive-deps": {
-      "count": 5
     }
   }
 }

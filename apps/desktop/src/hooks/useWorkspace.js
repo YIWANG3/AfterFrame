@@ -176,6 +176,10 @@ export default function useWorkspace({ pushToast } = {}) {
       });
     }, 250);
     return () => clearTimeout(searchTimerRef.current);
+    // Fires on the typed query only. loadBrowser is recreated every render and
+    // browserReady is a gate, not a trigger — listing either would re-browse
+    // on unrelated renders. The current scope is read through jobsBridgeRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   // Reload from backend when sort changes
@@ -183,6 +187,8 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!browserReady) return;
     if (Date.now() < suppressAutoReloadUntilRef.current) return;
     void loadBrowser({ force: true, sortKey: sort });
+    // Sort change only — see the query effect above for why not loadBrowser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
 
   // Reload when structured facet filters change
@@ -202,6 +208,8 @@ export default function useWorkspace({ pushToast } = {}) {
       return;
     }
     void loadBrowser({ force: true, facetFilters: filters });
+    // Filter change only — see the query effect above for why not loadBrowser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   // Refresh facet options when the catalog/library changes
@@ -911,8 +919,12 @@ export default function useWorkspace({ pushToast } = {}) {
     pokeJobs();
   }
 
+  // Initial load, once. refreshAll closes over the current view state on
+  // purpose — re-running it whenever that state changes is what the targeted
+  // effects above are for.
   useEffect(() => {
     void refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -948,6 +960,8 @@ export default function useWorkspace({ pushToast } = {}) {
         ttl: 6000,
       });
     }
+    // One toast per finished import; pushToast/t only format it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastFinishedJob]);
 
   // Menu actions: registered ONCE, dispatched through a ref so the handler

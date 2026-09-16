@@ -104,25 +104,25 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     setSelectedId((current) => (removed.has(current) ? null : current));
   }, []);
 
-  async function run(action, failTitle) {
+  const run = useCallback(async (action, failTitle) => {
     try {
       return await action();
     } catch (error) {
       pushToast?.({ title: failTitle, message: error?.message || String(error), ttl: 6000, tone: "error" });
       throw error;
     }
-  }
+  }, [pushToast]);
 
   const rename = useCallback((groupId, name) => run(async () => {
     const updated = await api.renamePeopleGroup({ groupId, name });
     patch(groupId, { name: updated?.name ?? name, state: updated?.state ?? "confirmed" });
-  }, t("people.renameFailed")), [patch, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, t("people.renameFailed")), [patch, run, t]);
 
   const merge = useCallback((sourceGroupId, targetGroupId) => run(async () => {
     const target = await api.mergePeopleGroups({ sourceGroupId, targetGroupId });
     remove(sourceGroupId);
     if (target?.group_id) patch(target.group_id, { face_count: target.face_count, name: target.name, state: target.state });
-  }, t("people.mergeFailed")), [patch, remove, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, t("people.mergeFailed")), [patch, remove, run, t]);
 
   // "Delete" is intentionally a persistent ignore, not a destructive erase.
   // The sidecar keeps the group's memberships as a user decision, so future
@@ -131,14 +131,14 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     await api.setPeopleGroupState({ groupId, state: "ignored" });
     remove(groupId);
     pushToast?.({ title: t("people.deleted"), ttl: 3500 });
-  }, t("people.deleteFailed")), [pushToast, remove, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, t("people.deleteFailed")), [pushToast, remove, run, t]);
 
   const deleteGroups = useCallback((groupIds) => run(async () => {
     const ids = [...new Set(groupIds)].filter(Boolean);
     await api.setPeopleGroupsState({ groupIds: ids, state: "ignored" });
     removeMany(ids);
     pushToast?.({ title: t("people.deletedCount", { count: ids.length }), ttl: 3500 });
-  }, t("people.deleteFailed")), [pushToast, removeMany, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, t("people.deleteFailed")), [pushToast, removeMany, run, t]);
 
   const startScan = useCallback(() => run(async () => {
     const status = await api.startPeopleIndex();
@@ -146,7 +146,7 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
       scanWasActive.current = !!status.active;
       setScan({ active: !!status.active, progress: Number(status.progress) || 0, result: status.result || null });
     }
-  }, t("people.scanFailed")), [t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, t("people.scanFailed")), [run, t]);
 
   const refreshModelState = useCallback(async () => {
     try {
