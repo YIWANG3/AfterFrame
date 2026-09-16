@@ -52,9 +52,8 @@ function CustomAspectTile({ t, active, custom, onCommit }) {
       onChange={(e) => change(key, e.target.value)}
       onBlur={() => setDraft({ width: String(custom.width), height: String(custom.height) })}
       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
-      // Plain grey pill, no focus ring or shadow (unlike the collage input).
-      className="h-6 w-10 rounded-full border-0 px-1 text-center text-[11px] tabular-nums text-text shadow-none outline-none focus:outline-none focus-visible:outline-none"
-      style={{ background: "var(--fill)" }}
+      // Plain grey pill; the chrome lives in .split-ratio-input (index.css).
+      className="split-ratio-input h-6 w-10 px-1 text-center text-[11px] tabular-nums text-text"
     />
   );
   return (
