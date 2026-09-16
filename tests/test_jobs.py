@@ -18,6 +18,7 @@ from media_workspace.db import (
     request_job_resume,
     set_catalog_path,
 )
+from media_workspace.db.jobs import STALL_MINUTES_BY_JOB_TYPE, STALL_MINUTES_DEFAULT
 from media_workspace.job_runner import run_enrichment_job, run_import_job
 from media_workspace.scanner import scan_raw_directory
 
@@ -60,6 +61,63 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(resumed["status"], "queued")
             self.assertFalse(resumed["pause_requested"])
             self.assertEqual(resumed["resume_cursor"], {"offset": 12})
+
+    def test_stall_reaper_uses_a_per_type_window(self) -> None:
+        """A job that reports progress per batch is dead after 10 silent minutes;
+        one that blocks inside a single remote call is not.
+
+        run_ai_repaint_job writes status='running' once and then waits on the
+        provider. The Jimeng sync2async poll alone runs 180 x 2s plus 5s per
+        concurrency-limit response, so a healthy generation can be silent for
+        ~20 minutes — reaping it at 10 would show the user a phantom failure.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+
+            batch = create_job(connection, "import", status="running")
+            generation = create_job(connection, "ai_repaint", status="running")
+
+            def age(job_id: str, minutes: int) -> None:
+                connection.execute(
+                    "UPDATE jobs SET updated_at = datetime('now', ?) WHERE job_id = ?",
+                    (f"-{minutes} minutes", job_id),
+                )
+                connection.commit()
+
+            # Past the batch window, well inside the generation one.
+            age(batch["job_id"], STALL_MINUTES_DEFAULT + 5)
+            age(generation["job_id"], STALL_MINUTES_DEFAULT + 5)
+            list_active_jobs(connection)
+
+            self.assertEqual(get_job(connection, batch["job_id"])["status"], "failed")
+            self.assertEqual(get_job(connection, generation["job_id"])["status"], "running")
+
+            # Past its own window, the generation job is reaped too.
+            age(generation["job_id"], STALL_MINUTES_BY_JOB_TYPE["ai_repaint"] + 5)
+            list_active_jobs(connection)
+            reaped = get_job(connection, generation["job_id"])
+            self.assertEqual(reaped["status"], "failed")
+            self.assertIn("no heartbeat", reaped["error"])
+
+    def test_stall_reaper_leaves_fresh_jobs_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+
+            queued = create_job(connection, "import")
+            running = create_job(connection, "annotation", status="running")
+
+            active = {job["job_id"] for job in list_active_jobs(connection)}
+
+            self.assertIn(queued["job_id"], active)
+            self.assertIn(running["job_id"], active)
+            self.assertEqual(get_job(connection, queued["job_id"])["status"], "queued")
+            self.assertEqual(get_job(connection, running["job_id"])["status"], "running")
 
     def test_run_import_job_persists_phase_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -41,19 +41,19 @@ function register({
 
   // ── Unified job handling ───────────────────────────────────────────────────
   // All queued/running jobs across every type, formatted for the renderer.
+  // A sidecar failure must NOT be swallowed into [] — the renderer's poll reads
+  // an empty list as "everything finished" and would fire finish side effects
+  // for jobs that are still running, then stop polling. Let it reject so the
+  // caller can tell "query failed" apart from "nothing is active".
   ipcMain.handle("workspace:active-jobs", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];
-    try {
-      const jobs = await commands.listActiveJobs();
-      return jobs.map((job) => ({
-        ...formatJobStatus(job),
-        jobType: job.job_type,
-        cancel_requested: !!job.cancel_requested,
-      }));
-    } catch {
-      return [];
-    }
+    const jobs = await commands.listActiveJobs();
+    return jobs.map((job) => ({
+      ...formatJobStatus(job),
+      jobType: job.job_type,
+      cancel_requested: !!job.cancel_requested,
+    }));
   });
 
   // Cooperative cancel: flags the job; the runner notices at its next

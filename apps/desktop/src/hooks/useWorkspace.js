@@ -151,7 +151,16 @@ export default function useWorkspace({ pushToast } = {}) {
     localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
   }, [inspectorWidth]);
 
-  // Backend handles sorting; client only does local text filtering for instant feedback
+  // Backend handles sorting; the client only narrows the PREVIOUS page locally
+  // so typing feels instant during the 250ms search debounce. The server result
+  // then replaces `items` wholesale.
+  //
+  // This projection must stay a SUPERSET of the sidecar's own search
+  // (db/browse.py `_search_clause`) — filename/path, camera, lens, AI caption,
+  // OCR text and tags. It used to omit caption/OCR/tags/lens, so a term that
+  // only appeared in an AI annotation came back correctly from the sidecar and
+  // was then filtered out here, leaving the gallery blank. Add every field the
+  // server can match on when extending `_search_clause`.
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return items;
@@ -164,6 +173,11 @@ export default function useWorkspace({ pushToast } = {}) {
         item.version_kind,
         item.image_metadata?.camera_model,
         item.raw_metadata?.camera_model,
+        item.image_metadata?.lens_model,
+        item.raw_metadata?.lens_model,
+        item.annotation?.caption,
+        item.annotation?.detected_text,
+        ...(item.annotation?.tags || []),
       ]
         .some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery)),
     );
@@ -612,21 +626,47 @@ export default function useWorkspace({ pushToast } = {}) {
     const nextRating = normalized > 0 ? normalized : null;
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
+    const targetSet = new Set(targetIds);
 
-    setItems((current) =>
-      current.map((item) =>
-        targetIds.includes(item.asset_id)
-          ? { ...item, app_rating: nextRating }
-          : item,
-      ),
-    );
-    setDetail((current) =>
-      current && targetIds.includes(current.asset_id)
-        ? { ...current, app_rating: nextRating }
-        : current,
-    );
+    // Snapshot what each tile showed so a failed write can be undone. Without
+    // this the stars stay on the new value while the catalog still holds the
+    // old one, until some unrelated browse reload happens to correct it.
+    const previousRatings = new Map();
+    for (const item of items) {
+      if (targetSet.has(item.asset_id)) previousRatings.set(item.asset_id, item.app_rating ?? null);
+    }
+    if (detail && targetSet.has(detail.asset_id) && !previousRatings.has(detail.asset_id)) {
+      previousRatings.set(detail.asset_id, detail.app_rating ?? null);
+    }
 
-    await api.setAssetRating(targetIds, normalized);
+    const applyRating = (resolve) => {
+      setItems((current) =>
+        current.map((item) => (targetSet.has(item.asset_id)
+          ? { ...item, app_rating: resolve(item.asset_id, item.app_rating) }
+          : item)),
+      );
+      setDetail((current) => (current && targetSet.has(current.asset_id)
+        ? { ...current, app_rating: resolve(current.asset_id, current.app_rating) }
+        : current));
+    };
+
+    applyRating(() => nextRating);
+
+    try {
+      await api.setAssetRating(targetIds, normalized);
+    } catch (error) {
+      applyRating((assetId, current) => (previousRatings.has(assetId) ? previousRatings.get(assetId) : current));
+      pushToast?.({
+        title: t("ratingFailed"),
+        message: String(error?.message || error),
+        tone: "error",
+        ttl: 6000,
+      });
+      // Handled in full here (rolled back + surfaced); the only caller invokes
+      // this as `void setAssetRating(...)`, so rethrowing would just produce an
+      // unhandled rejection.
+      return;
+    }
     // Ratings order cluster covers on the map — invalidate its point cache.
     bumpCatalogRevision();
   }

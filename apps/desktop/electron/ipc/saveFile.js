@@ -6,6 +6,49 @@ const path = require("path");
 const fs = require("fs");
 const sharp = require("sharp");
 
+// ── Orientation algebra ──────────────────────────────────────────────────────
+// Every combination of quarter turns and mirrors is an element of the dihedral
+// group D4, and each one has exactly one normal form `rotate(angle) ∘ flop^n`
+// — mirror FIRST, then rotate. That is precisely what sharp does: inside a
+// single pipeline flip/flop always runs before rotate, whatever order the calls
+// appear in (`.rotate(90).flop()` and `.flop().rotate(90)` produce the same
+// image). Canvas agrees: translate → rotate → scale → drawImage applies the
+// scale (the mirror) first.
+//
+// Composing by hand does NOT work, because rotations and mirrors don't commute
+// (R_θ ∘ F = F ∘ R_−θ). Merging the EXIF mirror with the user's flip via XOR
+// and adding the angles — which this file used to do — silently drops that
+// sign flip and lands 180° off for mirrored EXIF orientations. Compose here
+// instead, once, with the real group law.
+const IDENTITY_ORIENT = { angle: 0, flop: false };
+const FLIP_X = { angle: 0, flop: true };
+const FLIP_Y = { angle: 180, flop: true }; // vertical mirror = flop, then 180°
+
+// EXIF orientation → the transform a viewer applies, in normal form.
+const EXIF_ORIENTATION = {
+  1: { angle: 0, flop: false },
+  2: { angle: 0, flop: true },
+  3: { angle: 180, flop: false },
+  4: { angle: 180, flop: true },
+  5: { angle: 270, flop: true },
+  6: { angle: 90, flop: false },
+  7: { angle: 90, flop: true },
+  8: { angle: 270, flop: false },
+};
+
+// `after ∘ before`: apply `before` first. With both in normal form
+// (R_a ∘ F^m) ∘ (R_b ∘ F^n) = R_(a ± b) ∘ F^(m xor n), the sign coming from
+// F ∘ R_b = R_−b ∘ F.
+function composeOrientation(after, before) {
+  const angle = after.angle + (after.flop ? -before.angle : before.angle);
+  return { angle: ((angle % 360) + 360) % 360, flop: after.flop !== before.flop };
+}
+
+// Left-to-right = first-applied to last-applied.
+function composeOrientations(steps) {
+  return steps.reduce((acc, step) => composeOrientation(step, acc), IDENTITY_ORIENT);
+}
+
 function register({
   ipcMain,
   dialog,
@@ -60,47 +103,31 @@ function register({
     // Read metadata (fast — no pixel decode)
     const meta = await sharp(sourcePath, { limitInputPixels: false }).metadata();
 
-    // EXIF orientation decomposition: rotation angle + optional horizontal mirror.
-    // Sharp pipeline order is rotate → flop → flip, but EXIF semantics apply
-    // mirror BEFORE rotation. Flop then Rotate(θ) ≡ Rotate(−θ) then Flop, so we
-    // negate the EXIF angle when mirror is present.
-    const EXIF_MAP = {
-      1: { angle: 0, flop: false },
-      2: { angle: 0, flop: true },
-      3: { angle: 180, flop: false },
-      4: { angle: 180, flop: true },
-      5: { angle: 90, flop: true },   // want: flop→rotate(270) ≡ rotate(−270=90)→flop
-      6: { angle: 90, flop: false },
-      7: { angle: 270, flop: true },  // want: flop→rotate(90) ≡ rotate(−90=270)→flop
-      8: { angle: 270, flop: false },
-    };
-    const exif = EXIF_MAP[meta.orientation] || { angle: 0, flop: false };
-
-    // Oriented source dimensions (post-EXIF)
-    const orientSwaps = [5, 6, 7, 8].includes(meta.orientation);
-    const srcW = orientSwaps ? meta.height : meta.width;
-    const srcH = orientSwaps ? meta.width : meta.height;
-
     const discreteAngle = ((quarterTurns * 90) % 360 + 360) % 360;
+    // Order matters and is dictated by the canvas preview
+    // (canvasHelpers.buildTransformedCanvas): translate → rotate → scale →
+    // drawImage means the browser applies the flips FIRST and the quarter turns
+    // last, on top of an <img> the browser already EXIF-oriented.
+    const orient = composeOrientations([
+      EXIF_ORIENTATION[meta.orientation] || IDENTITY_ORIENT,
+      flipX ? FLIP_X : IDENTITY_ORIENT,
+      flipY ? FLIP_Y : IDENTITY_ORIENT,
+      { angle: discreteAngle, flop: false },
+    ]);
 
-    // Single pipeline merges EXIF + user transforms into one .rotate() call.
-    let pipeline = sharp(sourcePath, { limitInputPixels: false, sequentialRead: true });
-
-    const combinedDiscreteAngle = (exif.angle + discreteAngle) % 360;
-    // XOR: EXIF flop and user flipX are both horizontal mirrors.
-    const effectiveFlipX = exif.flop !== flipX;
-
-    // Stage 1 — orientation + user quarter turns + flips. This is the basis the
-    // editor's crop rect and free angle are expressed in (transformedPreview).
+    // Stage 1 — orientation + user quarter turns + flips, merged into ONE
+    // rotate + at most one flop. This is the basis the editor's crop rect and
+    // free angle are expressed in (transformedPreview).
     // 0° still needs an explicit rotate(0) to suppress sharp's EXIF auto-orient.
-    pipeline = pipeline.rotate(combinedDiscreteAngle);
-    if (effectiveFlipX) pipeline = pipeline.flop();
-    if (flipY) pipeline = pipeline.flip();
+    let pipeline = sharp(sourcePath, { limitInputPixels: false, sequentialRead: true });
+    pipeline = pipeline.rotate(orient.angle);
+    if (orient.flop) pipeline = pipeline.flop();
 
-    // Post-orient + post-discrete-rotation dimensions
-    let w = srcW;
-    let h = srcH;
-    if (discreteAngle === 90 || discreteAngle === 270) [w, h] = [h, w];
+    // Output dimensions: the source's, swapped when the composed rotation is a
+    // quarter turn. (Mirrors never change the bounding box.)
+    let w = meta.width;
+    let h = meta.height;
+    if (orient.angle === 90 || orient.angle === 270) [w, h] = [h, w];
 
     if (freeAngle !== 0) {
       // Stage 2 — the free angle. The editor turns the photo under an

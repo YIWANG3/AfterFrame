@@ -785,6 +785,16 @@ async function startImportTask(options) {
   }
   const current = await latestJobStatus("import");
   if (current.running) {
+    // The requested dirs are NOT imported here — the caller gets someone else's
+    // job back. The UI copes by queueing them (useWorkspace `pendingImport`,
+    // replayed from the import-finished handler); callers without a queue must
+    // opt into an error so they don't report a phantom success.
+    if (options?.rejectIfBusy) {
+      throw new Error(
+        `An import is already running (job ${current.jobId}); these folders were not imported. `
+        + "Wait for it to finish (poll get_job_status) and call import_directory again.",
+      );
+    }
     return current;
   }
   const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode });
@@ -1358,7 +1368,9 @@ async function switchCatalogTo(nextCatalogPath) {
   // the agent-facing selection mirror, and the MCP preview-path cache.
   resetMediaAllowlist();
   currentSelection = { assets: [], updatedAt: null };
-  mcpServerApi?.clearPreviewCache?.();
+  // Not `?.clearPreviewCache?.()` — the second optional chain silently no-ops
+  // when the method goes missing, which is exactly how this leak survived.
+  mcpServerApi?.clearPreviewCache();
   await prepareCatalogPath();
   void peopleApi?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch

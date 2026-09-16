@@ -73,10 +73,26 @@ export default function useJobs(bridgeRef) {
   }
 
   async function pollActiveJobsOnce() {
-    let jobs = [];
+    let jobs;
     try {
       jobs = (await api.getActiveJobs()) || [];
-    } catch { jobs = []; }
+    } catch (error) {
+      // A failed query is NOT "no active jobs". Treating it as one would
+      // dispatch finish side effects for every running job and then stop the
+      // loop (jobs.length === 0), so a single sidecar hiccup during a long
+      // import makes it vanish from the JobDock. Keep knownActiveRef intact
+      // and try again, backing off so a wedged sidecar isn't hammered.
+      console.warn("[jobs] active-jobs poll failed:", error?.message || error);
+      if (knownActiveRef.current.size) {
+        jobsTimerRef.current = window.setTimeout(pollActiveJobsOnce, 3000);
+      } else {
+        // Nothing was in flight — no state to protect, so go back to sleep
+        // exactly as a successful empty poll would.
+        jobsPollingRef.current = false;
+        jobsTimerRef.current = null;
+      }
+      return;
+    }
     // Skip the state churn when nothing actually changed — otherwise every
     // 1.2s tick re-renders the whole tree for the lifetime of a job.
     const jobsJson = JSON.stringify(jobs);

@@ -15,7 +15,7 @@
     "build": "vite build",
     "build:web": "vite build --config vite.web.config.js",
     "preview:web": "vite preview --config vite.web.config.js",
-    "test:electron": "node --test electron/settingsStore.test.js electron/sidecar/transport.test.js electron/sampleCatalog.test.js",
+    "test:electron": "node --test electron/settingsStore.test.js electron/sidecar/transport.test.js electron/sampleCatalog.test.js electron/ipc/saveFile.test.js",
     "test:renderer": "vitest run src",
     "test:unit": "npm run test:electron && npm run test:renderer",
     "check": "npm run lint && npm run test:unit && npm run build",

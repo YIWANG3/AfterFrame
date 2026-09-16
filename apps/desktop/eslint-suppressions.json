@@ -117,11 +117,6 @@
       "count": 1
     }
   },
-  "src/hooks/useJobs.js": {
-    "no-useless-assignment": {
-      "count": 1
-    }
-  },
   "src/hooks/useWorkspace.js": {
     "react-hooks/exhaustive-deps": {
       "count": 5

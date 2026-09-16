@@ -36,7 +36,7 @@ from . import video
 from .annotation_location import asset_gps_location, effective_location
 
 try:
-    from PIL import Image  # noqa: F401 — needed for image preprocessing
+    from PIL import Image, ImageOps  # noqa: F401 — needed for image preprocessing
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("Pillow is required for annotation. Install: pip install Pillow") from exc
 
@@ -87,6 +87,12 @@ class AnnotationResult:
 def encode_image_for_llm(image_path: Path, max_edge: int = THUMB_MAX_EDGE) -> tuple[str, str]:
     """Resize, strip EXIF, JPEG-encode, base64. Returns (b64_data, mime_type)."""
     img = Image.open(image_path)
+    # Bake in EXIF orientation BEFORE stripping metadata — otherwise a portrait
+    # phone shot (orientation 6) reaches the model lying on its side, which
+    # wrecks OCR in particular. Generated previews (sips/QuickLook) are already
+    # upright, but `_batch_image_path` falls back to the untouched original when
+    # no preview exists yet, and `annotate-asset --image` always passes one.
+    img = ImageOps.exif_transpose(img)
     img = img.convert("RGB")  # strips alpha + drops most EXIF
     w, h = img.size
     if max(w, h) > max_edge:

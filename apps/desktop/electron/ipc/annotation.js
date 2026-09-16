@@ -95,7 +95,7 @@ function register({
   // ── Annotation actions ───────────────────────────────────────────────────
   ipcMain.handle("workspace:annotate-asset", async (_event, options) => {
     const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb) throw new Error("Open a catalog before annotating assets.");
+    if (!catalogHasDb()) throw new Error("Open a catalog before annotating assets.");
 
     const opts = options || {};
     if (!opts.assetId) throw new Error("assetId is required");
@@ -212,21 +212,21 @@ function register({
   // location and drops the resolved map point in one step.
   ipcMain.handle("workspace:clear-ai-location", async (_event, assetId) => {
     const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb) return null;
+    if (!catalogHasDb()) return null;
     if (!assetId) return null;
     return await callSidecarJsonAsync(["clear-ai-location", "--asset-id", String(assetId)]);
   });
 
   ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {
     const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb) return null;
+    if (!catalogHasDb()) return null;
     if (!assetId) return null;
     return await callSidecarJsonAsync(["get-annotation", "--asset-id", String(assetId)]);
   });
 
   ipcMain.handle("workspace:list-tags", async (_event, limit) => {
     const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb) return [];
+    if (!catalogHasDb()) return [];
     const n = Number.isFinite(limit) ? Math.max(1, Math.min(1000, limit)) : 200;
     return await callSidecarJsonAsync(["list-tags", "--limit", String(n)]) || [];
   });
