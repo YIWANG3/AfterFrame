@@ -46,6 +46,21 @@ module.exports = [
     },
   },
   {
+    // The preload bridge is reachable ONLY through src/api. Everything else
+    // calls api.* so the facade stays the single inventory (api/apiSurface.test.js
+    // pins it to preload and the web bridge); a component reaching for
+    // window.mediaWorkspace directly is how four preload methods went missing
+    // from the facade unnoticed.
+    files: ["src/**/*.{js,jsx}"],
+    ignores: ["src/api/**", "src/web-main.jsx"],
+    rules: {
+      "no-restricted-syntax": ["error", {
+        selector: 'MemberExpression[object.name="window"][property.name="mediaWorkspace"]',
+        message: "Use api.* (src/api) instead of window.mediaWorkspace — see api/client.js.",
+      }],
+    },
+  },
+  {
     // Cross-process pure modules: ESM for Vite, require(esm)'d by main.
     files: ["shared/**/*.mjs"],
     languageOptions: { ecmaVersion: "latest", sourceType: "module" },

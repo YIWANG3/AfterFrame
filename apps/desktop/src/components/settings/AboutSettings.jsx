@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink, Github, Download, FileText, MessageSquare } from "lucide-react";
 import { Group } from "./SettingsPrimitives";
 import logo from "../../assets/logo.png";
+import api from "../../api";
 
 const REPO_URL = "https://github.com/YIWANG3/AfterFrame";
 const RELEASES_URL = `${REPO_URL}/releases`;
@@ -22,14 +23,14 @@ export default function AboutSettings() {
   useEffect(() => {
     (async () => {
       try {
-        const info = await window.mediaWorkspace?.getInfo?.();
+        const info = await api.getInfo();
         if (info?.version) setVersion(String(info.version));
       } catch {}
     })();
   }, []);
 
   function openExternal(url) {
-    window.mediaWorkspace?.openExternal?.(url);
+    api.openExternal(url);
   }
 
   return (

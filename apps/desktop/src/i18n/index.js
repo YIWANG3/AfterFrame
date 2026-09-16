@@ -25,6 +25,7 @@ import zhEditor from "./locales/zh-CN/editor.json";
 import zhCollage from "./locales/zh-CN/collage.json";
 import zhStickerView from "./locales/zh-CN/stickerView.json";
 import zhApp from "./locales/zh-CN/app.json";
+import api from "../api";
 
 export const SUPPORTED_LOCALES = ["en", "zh-CN"];
 
@@ -35,7 +36,7 @@ const resources = {
 
 function initialLocale() {
   try {
-    const fromMain = window.mediaWorkspace?.getInitialLocale?.();
+    const fromMain = api.getInitialLocale();
     if (fromMain && SUPPORTED_LOCALES.includes(fromMain)) return fromMain;
   } catch { /* preload not ready (tests) — fall back */ }
   return "en";

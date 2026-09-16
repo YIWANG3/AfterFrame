@@ -307,7 +307,7 @@ function PersonFilterOptions({ value, onSelect, onLoaded }) {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await window.mediaWorkspace?.listPeopleGroups?.() || [];
+        const rows = await api.listPeopleGroups() || [];
         const named = rows.filter((group) => group.name?.trim());
         if (!cancelled) { setGroups(named); onLoaded?.(named); }
       } catch {
@@ -390,7 +390,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           label={t("filter.tag")}
           value={f.tag}
           options={tags}
-          onSearch={(q) => window.mediaWorkspace?.searchFacet?.({ field: "tag", q, limit: 60 })}
+          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60 })}
           onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
         />
       )}

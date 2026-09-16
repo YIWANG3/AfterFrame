@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "./SettingsPrimitives";
 import { getProviderType, dedupeModels, ProviderModal } from "../ai/providers";
+import api from "../../api";
 
 export default function RepaintSettings() {
   const { t } = useTranslation("settings");
@@ -17,7 +18,7 @@ export default function RepaintSettings() {
 
   useEffect(() => {
     void (async () => {
-      const p = (await window.mediaWorkspace?.getAiPreferences?.()) || {};
+      const p = (await api.getAiPreferences()) || {};
       setPrefs({ providers: [], activeProvider: null, selectedModels: {}, modelsCache: {}, ...p });
     })();
   }, []);
@@ -25,7 +26,7 @@ export default function RepaintSettings() {
   function persist(patch) {
     setPrefs((current) => {
       const next = { ...current, ...patch };
-      void window.mediaWorkspace?.saveAiPreferences?.(next);
+      void api.saveAiPreferences(next);
       return next;
     });
   }
@@ -39,7 +40,7 @@ export default function RepaintSettings() {
   async function refreshModels(inst) {
     setRefreshing((r) => ({ ...r, [inst.id]: true }));
     try {
-      const models = await window.mediaWorkspace?.listAiModels?.(inst.id, inst.type);
+      const models = await api.listAiModels(inst.id, inst.type);
       if (Array.isArray(models) && models.length) {
         const selected = prefs.selectedModels?.[inst.id];
         persist({
@@ -61,7 +62,7 @@ export default function RepaintSettings() {
       ? prefs.providers.map((p) => (p.id === inst.id ? { id: inst.id, type: inst.type, name: inst.name } : p))
       : [...prefs.providers, { id: inst.id, type: inst.type, name: inst.name }];
     if (tokenValue) {
-      await window.mediaWorkspace?.setAiProviderToken?.(inst.id, tokenValue);
+      await api.setAiProviderToken(inst.id, tokenValue);
     }
     persist({
       providers,
@@ -71,7 +72,7 @@ export default function RepaintSettings() {
   }
 
   async function handleDelete(instanceId) {
-    await window.mediaWorkspace?.deleteAiProviderToken?.(instanceId);
+    await api.deleteAiProviderToken(instanceId);
     const providers = prefs.providers.filter((p) => p.id !== instanceId);
     const selectedModels = { ...prefs.selectedModels };
     const modelsCache = { ...prefs.modelsCache };
