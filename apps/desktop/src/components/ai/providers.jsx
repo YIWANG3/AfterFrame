@@ -136,7 +136,7 @@ export function ProviderModal({
   useEffect(() => {
     if (mode === "edit" && instance?.id) {
       void (async () => {
-        const stored = await window.mediaWorkspace?.getAiProviderToken?.(instance.id);
+        const stored = await api.getAiProviderToken(instance.id);
         if (stored?.token) {
           setTokenValue(stored.token);
           setHasExistingToken(true);

@@ -115,7 +115,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   async function openFaceNaming(face, anchorRect) {
     let namedGroups = [];
     try {
-      const groups = await window.mediaWorkspace?.listPeopleGroups?.() || [];
+      const groups = await api.listPeopleGroups() || [];
       namedGroups = groups.filter((group) => group.name?.trim());
     } catch { /* suggestions are optional; naming still works */ }
     setNamingFace({ face, anchorRect, namedGroups });
@@ -135,11 +135,11 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
     if (!detail?.asset_id || relinking) return;
     setRelinking(true);
     try {
-      let res = await window.mediaWorkspace?.relinkAsset?.({ assetId: detail.asset_id });
+      let res = await api.relinkAsset({ assetId: detail.asset_id });
       if (res?.status === "fingerprint_mismatch") {
         const proceed = window.confirm(t("missing.mismatchConfirm"));
         if (!proceed) return;
-        res = await window.mediaWorkspace?.relinkAsset?.({
+        res = await api.relinkAsset({
           assetId: detail.asset_id,
           newPath: res.candidate_path,
           force: true,
@@ -362,7 +362,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                 <button
                   type="button"
                   className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                  onClick={() => void window.mediaWorkspace?.revealPath?.(detail.image_path)}
+                  onClick={() => void api.revealPath(detail.image_path)}
                   title={t("reveal")}
                 >
                   {escapePathLabel(detail.image_path)}
@@ -374,7 +374,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                 <button
                   type="button"
                   className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                  onClick={() => void window.mediaWorkspace?.revealPath?.(detail.raw_path)}
+                  onClick={() => void api.revealPath(detail.raw_path)}
                   title={t("reveal")}
                 >
                   {escapePathLabel(detail.raw_path)}
@@ -430,7 +430,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                     key={dup.asset_id}
                     type="button"
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover"
-                    onClick={() => void window.mediaWorkspace?.revealPath?.(dup.image_path)}
+                    onClick={() => void api.revealPath(dup.image_path)}
                     title={t("reveal")}
                   >
                     <Copy className="h-3 w-3 shrink-0 text-muted2" />
@@ -471,7 +471,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                 ? t("people.removeFrom", { name: faceMenu.face.name })
                 : t("people.removeFromGroup"),
               onClick: () => void applyPeopleChange(async () => {
-                await window.mediaWorkspace?.removeFaceFromPerson?.({ faceId: faceMenu.face.face_id });
+                await api.removeFaceFromPerson({ faceId: faceMenu.face.face_id });
                 pushToast?.({ title: t("people.removed"), ttl: 3500 });
               }, t("people.correctionFailed")).catch(() => {}),
             },
@@ -485,7 +485,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           excludeGroupId={pickingFace.face.group_id}
           onClose={() => setPickingFace(null)}
           onPick={(target) => void applyPeopleChange(async () => {
-            await window.mediaWorkspace?.assignFaceToPerson?.({ faceId: pickingFace.face.face_id, groupId: target.group_id });
+            await api.assignFaceToPerson({ faceId: pickingFace.face.face_id, groupId: target.group_id });
             pushToast?.({ title: t("people.reassigned", { name: target.name }), ttl: 3500 });
           }, t("people.correctionFailed")).catch(() => {})}
         />
@@ -498,11 +498,11 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           namedGroups={namingFace.namedGroups}
           onClose={() => setNamingFace(null)}
           onRename={(name) => applyPeopleChange(
-            () => window.mediaWorkspace?.renamePeopleGroup?.({ groupId: namingFace.face.group_id, name }),
+            () => api.renamePeopleGroup({ groupId: namingFace.face.group_id, name }),
             t("people.renameFailed"),
           )}
           onMerge={(target) => applyPeopleChange(
-            () => window.mediaWorkspace?.mergePeopleGroups?.({ sourceGroupId: namingFace.face.group_id, targetGroupId: target.group_id }),
+            () => api.mergePeopleGroups({ sourceGroupId: namingFace.face.group_id, targetGroupId: target.group_id }),
             t("people.mergeFailed"),
           )}
         />

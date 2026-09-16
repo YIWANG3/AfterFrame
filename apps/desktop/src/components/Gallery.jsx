@@ -343,7 +343,7 @@ const CardContent = memo(function CardContent({
   const [hoverIdx, setHoverIdx] = useState(-1);
   const onVideoEnter = useCallback(() => {
     if (!isVideo || hoverFrames) return;
-    Promise.resolve(window.mediaWorkspace?.videoKeyframes?.(item.image_path, 12))
+    Promise.resolve(api.videoKeyframes(item.image_path, 12))
       .then((frames) => { if (Array.isArray(frames) && frames.length) setHoverFrames(frames); })
       .catch(() => {});
   }, [isVideo, hoverFrames, item.image_path]);
@@ -379,9 +379,9 @@ const CardContent = memo(function CardContent({
         // only acknowledges that the native session was started; it is not a
         // drag-finished signal (HTML5 dragend never fires once dragstart is
         // preventDefault()ed). App owns cleanup via mouseup/blur/Escape/drop.
-        if (window.mediaWorkspace?.startNativeDrag) {
+        if (api.has("startNativeDrag")) {
           event.preventDefault();
-          Promise.resolve(window.mediaWorkspace.startNativeDrag({
+          Promise.resolve(api.startNativeDrag({
             files: payload.imagePaths || [item.image_path],
             iconPath: item.preview_path || item.image_path,
           })).then((result) => {
@@ -1041,7 +1041,7 @@ export default function Gallery({
           onCopyPath={() => onCopyPath?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onRefreshFromDisk={refreshFromDisk}
-          onReveal={(path) => window.mediaWorkspace?.revealPath?.(path)}
+          onReveal={(path) => api.revealPath(path)}
           editors={editors}
           onOpenWith={(appPath) => onOpenWith?.(contextMenu.assetIds || [contextMenu.item.asset_id], appPath)}
           onEdit={onEdit}

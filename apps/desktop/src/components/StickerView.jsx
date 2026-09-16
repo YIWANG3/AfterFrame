@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Star, Trash2, FolderOpen, ChevronRight, Cannabis, Eye } from "lucide-react";
 import { localFileUrl, fileName, stickerLabel } from "../utils/format";
 import LibraryToolbar from "./LibraryToolbar";
+import api from "../api";
 
 // Sticker view that slots into the main App layout (replacing Toolbar+Gallery
 // in the center pane and the Inspector on the right when active). Same chrome
@@ -78,7 +79,7 @@ export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete
         <StickerContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          onReveal={() => window.mediaWorkspace?.revealPath?.(contextMenu.sticker.path)}
+          onReveal={() => api.revealPath(contextMenu.sticker.path)}
           onDelete={() => onDelete?.(contextMenu.sticker)}
           onClose={() => setContextMenu(null)}
         />
@@ -296,7 +297,7 @@ export function StickerInspector({ sticker, onStar }) {
               <DetailRow label={t("rows.path")}>
                 <button
                   type="button"
-                  onClick={() => window.mediaWorkspace?.revealPath?.(sticker.sourcePath)}
+                  onClick={() => api.revealPath(sticker.sourcePath)}
                   className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-text"
                   title={sticker.sourcePath}
                 >
@@ -308,7 +309,7 @@ export function StickerInspector({ sticker, onStar }) {
             <DetailRow label={t("rows.sticker")}>
               <button
                 type="button"
-                onClick={() => window.mediaWorkspace?.revealPath?.(sticker.path)}
+                onClick={() => api.revealPath(sticker.path)}
                 className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-text"
               >
                 <FolderOpen className="h-3 w-3" />
@@ -332,10 +333,10 @@ export function useStickerView() {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!window.mediaWorkspace?.stickerList) return;
+    if (!api.has("stickerList")) return;
     setLoading(true);
     try {
-      const list = await window.mediaWorkspace.stickerList();
+      const list = await api.stickerList();
       setStickers(list || []);
       setSelected((sel) => sel ? list.find((s) => s.id === sel.id) || null : null);
     } finally {
@@ -347,7 +348,7 @@ export function useStickerView() {
 
   const handleStar = useCallback(async () => {
     if (!selected) return;
-    await window.mediaWorkspace.stickerToggleStar(selected.id);
+    await api.stickerToggleStar(selected.id);
     refresh();
   }, [selected, refresh]);
 
@@ -355,7 +356,7 @@ export function useStickerView() {
     const sticker = target || selected;
     if (!sticker) return;
     if (!confirm(`Delete this sticker?\n${stickerLabel(sticker)}`)) return;
-    await window.mediaWorkspace.stickerDelete(sticker.id);
+    await api.stickerDelete(sticker.id);
     setSelected((cur) => (cur?.id === sticker.id ? null : cur));
     refresh();
   }, [selected, refresh]);

@@ -5,6 +5,8 @@
 //   2. switching between assets that we've already loaded is synchronous —
 //      no IPC roundtrip, no Loading placeholder flicker
 
+import api from "../../api";
+
 const subscribers = new Set();
 let cachedHasProvider = null; // null = unknown, boolean = known
 let providerInflight = null;
@@ -48,7 +50,7 @@ export async function refreshProviders() {
   if (providerInflight) return providerInflight;
   providerInflight = (async () => {
     try {
-      const s = (await window.mediaWorkspace?.getAnnotationSettings?.()) || {};
+      const s = (await api.getAnnotationSettings()) || {};
       const next = Array.isArray(s.providers) && s.providers.length > 0;
       if (next !== cachedHasProvider) {
         cachedHasProvider = next;
@@ -111,12 +113,12 @@ export function invalidateAnnotations() {
 // scope: "all" | "selection" | "collection". onlyMissing defaults true
 // (skip already-annotated); pass false to re-annotate.
 export async function countAnnotationTargets(opts = {}) {
-  const res = await window.mediaWorkspace?.countAnnotationTargets?.(opts);
+  const res = await api.countAnnotationTargets(opts);
   return Number(res?.count || 0);
 }
 
 export async function startAnnotationJob(opts = {}) {
-  return await window.mediaWorkspace?.startAnnotationJob?.({
+  return await api.startAnnotationJob({
     scope: opts.scope || "all",
     onlyMissing: opts.onlyMissing !== false,
     assetIds: Array.isArray(opts.assetIds) ? opts.assetIds : null,
@@ -125,7 +127,7 @@ export async function startAnnotationJob(opts = {}) {
 }
 
 export async function getAnnotationJobStatus() {
-  return await window.mediaWorkspace?.getAnnotationJobStatus?.();
+  return await api.getAnnotationJobStatus();
 }
 
 export async function fetchAnnotation(assetId) {
@@ -133,7 +135,7 @@ export async function fetchAnnotation(assetId) {
   if (annotationInflight.has(assetId)) return annotationInflight.get(assetId);
   const p = (async () => {
     try {
-      const result = (await window.mediaWorkspace?.getAnnotation?.(assetId)) || null;
+      const result = (await api.getAnnotation(assetId)) || null;
       annotationCache.set(assetId, result);
       notify();
       return result;

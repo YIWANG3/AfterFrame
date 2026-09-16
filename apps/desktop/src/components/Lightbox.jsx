@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
 import VideoPlayer from "./VideoPlayer";
+import api from "../api";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
@@ -182,7 +183,7 @@ export default function Lightbox({
     const orig = currentItem?.image_path;
     if (!orig) return;
     setProxyPending(true);
-    Promise.resolve(window.mediaWorkspace?.videoProxy?.(orig))
+    Promise.resolve(api.videoProxy(orig))
       .then((url) => { setProxyPending(false); if (url) setProxySrc(url); })
       .catch(() => setProxyPending(false));
   };

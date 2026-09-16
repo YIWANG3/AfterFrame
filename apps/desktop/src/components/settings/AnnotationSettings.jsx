@@ -130,7 +130,7 @@ export default function AnnotationSettings() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const stored = (await window.mediaWorkspace?.getAnnotationSettings?.()) || {};
+      const stored = (await api.getAnnotationSettings()) || {};
       if (cancelled) return;
       setSettings(hydrate(stored));
     })();
@@ -147,7 +147,7 @@ export default function AnnotationSettings() {
       const hasProvider = Array.isArray(next.providers) && next.providers.length > 0;
       void (async () => {
         try {
-          await window.mediaWorkspace?.saveAnnotationSettings?.(next);
+          await api.saveAnnotationSettings(next);
         } finally {
           window.dispatchEvent(
             new CustomEvent("annotation-settings:changed", { detail: { hasProvider } }),
@@ -188,7 +188,7 @@ export default function AnnotationSettings() {
       ? (next[0]?.id || null)
       : settings.activeProviderId;
     await persist({ providers: next, activeProviderId: nextActive });
-    try { await window.mediaWorkspace?.deleteAnnotationKey?.(provider.id); } catch {}
+    try { await api.deleteAnnotationKey(provider.id); } catch {}
   }
   async function setActive(provider) {
     await persist({ activeProviderId: provider.id });
@@ -406,7 +406,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const cfg = (await window.mediaWorkspace?.getAnnotationKey?.(draft.id)) || {};
+      const cfg = (await api.getAnnotationKey(draft.id)) || {};
       if (cancelled) return;
       setKeyConfigured(!!cfg.token);
       setKeyValue(cfg.token ? "•".repeat(20) : "");
@@ -425,7 +425,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
     if (!keyValue || keyValue.startsWith("•")) return;
     setKeySaving(true);
     try {
-      await window.mediaWorkspace?.setAnnotationKey?.(draft.id, keyValue);
+      await api.setAnnotationKey(draft.id, keyValue);
       setKeyConfigured(true);
       setKeyValue("•".repeat(20));
     } finally {
@@ -434,19 +434,19 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
   }
 
   async function handleClearKey() {
-    await window.mediaWorkspace?.deleteAnnotationKey?.(draft.id);
+    await api.deleteAnnotationKey(draft.id);
     setKeyConfigured(false);
     setKeyValue("");
   }
 
   async function handleTest() {
-    if (typeof window.mediaWorkspace?.testAnnotationConnection !== "function") {
+    if (!api.has("testAnnotationConnection")) {
       setTestState({ ok: false, error: t("annotation.restartHandlers") });
       return;
     }
     setTestState("running");
     try {
-      const result = await window.mediaWorkspace.testAnnotationConnection({
+      const result = await api.testAnnotationConnection({
         providerId: draft.id,
         provider: SIDECAR_PROVIDER(draft.type),
         apiKey: keyValue && !keyValue.startsWith("•") ? keyValue : null,
@@ -459,14 +459,14 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
   }
 
   async function handleFetchModels() {
-    if (typeof window.mediaWorkspace?.listAnnotationModels !== "function") {
+    if (!api.has("listAnnotationModels")) {
       setFetchModelsError(t("annotation.restartHandlers"));
       return;
     }
     setFetchingModels(true);
     setFetchModelsError(null);
     try {
-      const result = await window.mediaWorkspace.listAnnotationModels({
+      const result = await api.listAnnotationModels({
         providerId: draft.id,
         provider: SIDECAR_PROVIDER(draft.type),
         apiKey: keyValue && !keyValue.startsWith("•") ? keyValue : null,

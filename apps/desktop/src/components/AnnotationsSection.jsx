@@ -91,7 +91,7 @@ function TagAdder({ onAdd, existing }) {
   useEffect(() => {
     if (!open) return undefined;
     const t = setTimeout(async () => {
-      const res = (await window.mediaWorkspace?.searchFacet?.({ field: "tag", q: q.trim(), limit: 8 })) || [];
+      const res = (await api.searchFacet({ field: "tag", q: q.trim(), limit: 8 })) || [];
       const have = new Set((existing || []).map((x) => String(x).toLowerCase()));
       setSuggestions(res.filter((r) => !have.has(String(r.value).toLowerCase())));
     }, 180);
@@ -191,7 +191,7 @@ export default function AnnotationsSection({
     setRunning(true);
     setError(null);
     try {
-      const settings = (await window.mediaWorkspace?.getAnnotationSettings?.()) || {};
+      const settings = (await api.getAnnotationSettings()) || {};
       const providers = Array.isArray(settings.providers) ? settings.providers : [];
       const active = providers.find((p) => p.id === settings.activeProviderId) || providers[0];
       if (!active) {
@@ -200,7 +200,7 @@ export default function AnnotationsSection({
       // Sidecar adapters only know two: anthropic + openai_compatible. OpenAI
       // and Google route through openai_compatible (URL inferred at the sidecar).
       const sidecarProvider = active.type === "anthropic" ? "anthropic" : "openai_compatible";
-      const result = await window.mediaWorkspace?.annotateAsset?.({
+      const result = await api.annotateAsset({
         assetId,
         imagePath,
         providerId: active.id,
@@ -228,7 +228,7 @@ export default function AnnotationsSection({
   const addTag = useCallback(async (tag) => {
     if (!assetId || !tag) return;
     try {
-      const updated = await window.mediaWorkspace?.addAssetTag?.(assetId, tag);
+      const updated = await api.addAssetTag(assetId, tag);
       setCachedAnnotation(assetId, updated || null);
     } catch (e) {
       pushToast?.({ title: t("toast.addTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
@@ -238,7 +238,7 @@ export default function AnnotationsSection({
   const removeTag = useCallback(async (tag) => {
     if (!assetId || !tag) return;
     try {
-      const updated = await window.mediaWorkspace?.removeAssetTag?.(assetId, tag);
+      const updated = await api.removeAssetTag(assetId, tag);
       setCachedAnnotation(assetId, updated || null);
     } catch (e) {
       pushToast?.({ title: t("toast.removeTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
@@ -249,7 +249,7 @@ export default function AnnotationsSection({
   const clearLocation = useCallback(async () => {
     if (!assetId) return;
     try {
-      const updated = await window.mediaWorkspace?.clearAiLocation?.(assetId);
+      const updated = await api.clearAiLocation(assetId);
       setCachedAnnotation(assetId, updated || null);
       onLocationChanged?.();
       pushToast?.({ title: t("loc.cleared"), ttl: 3500 });

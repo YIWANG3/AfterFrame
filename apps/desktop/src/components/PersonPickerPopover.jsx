@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ScanFace } from "lucide-react";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
+import api from "../api";
 
 // Named-people picker used by "move to another person…" corrections.
 export default function PersonPickerPopover({ anchorRect, excludeGroupId, onPick, onClose }) {
@@ -15,7 +16,7 @@ export default function PersonPickerPopover({ anchorRect, excludeGroupId, onPick
     let cancelled = false;
     (async () => {
       try {
-        const rows = await window.mediaWorkspace?.listPeopleGroups?.() || [];
+        const rows = await api.listPeopleGroups() || [];
         if (!cancelled) setGroups(rows.filter((group) => group.name?.trim() && group.group_id !== excludeGroupId));
       } catch { if (!cancelled) setGroups([]); }
     })();

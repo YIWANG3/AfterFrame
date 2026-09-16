@@ -27,7 +27,7 @@ function FinderButton({ onClick, label }) {
 }
 
 function OpenFolderButton({ kind, label }) {
-  return <FinderButton onClick={() => void window.mediaWorkspace?.openCacheDir?.(kind)} label={label} />;
+  return <FinderButton onClick={() => void api.openCacheDir(kind)} label={label} />;
 }
 
 export default function LibrarySettings({ info, summary, onSwitchCatalog, onClose }) {
@@ -39,7 +39,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const stored = (await window.mediaWorkspace?.getPreviewSettings?.()) || {};
+      const stored = (await api.getPreviewSettings()) || {};
       if (!cancelled) setGenerateHd(stored.generateHd === true);
       const dirs = await api.getWatchedDirs?.();
       if (!cancelled) setWatched(Array.isArray(dirs) ? dirs : []);
@@ -49,7 +49,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
 
   const setHd = useCallback((value) => {
     setGenerateHd(value);
-    void window.mediaWorkspace?.savePreviewSettings?.({ generateHd: value });
+    void api.savePreviewSettings({ generateHd: value });
   }, []);
 
   const catalogPath = info?.catalogPath || null;
