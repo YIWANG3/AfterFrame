@@ -642,13 +642,14 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
 /* 文本 / 数值输入框、下拉、多行框:一律小圆角 5px,不随高度放大(用户:「这种输入框不能用大 radius」) */
 [data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]) { border-radius: 5px; }
-/* Split tool custom-ratio inputs: plain grey pills, no border, ring or shadow
-   in any state (overrides the generic editor-panel input chrome above). */
+/* Split tool custom-ratio inputs: bare numbers inside the grey tile — no own
+   background, border, ring or shadow in any state (overrides the generic
+   editor-panel input chrome above). */
 [data-editor-wheel-scope="panel"] input.split-ratio-input,
 [data-editor-wheel-scope="panel"] input.split-ratio-input:hover,
 [data-editor-wheel-scope="panel"] input.split-ratio-input:focus,
 [data-editor-wheel-scope="panel"] input.split-ratio-input:focus-visible {
-  border: 0; border-radius: 999px; background: var(--fill); box-shadow: none; outline: none;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
 }
 /* 带边框、bg-app 底的按钮(AI 面板的 + / 钥匙 / 新建风格)与旁边的字段同行,圆角跟字段走 5px */
 [data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"]:not(.w-full) { border-radius: 5px; }

@@ -53,7 +53,7 @@ function CustomAspectTile({ t, active, custom, onCommit }) {
       onBlur={() => setDraft({ width: String(custom.width), height: String(custom.height) })}
       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
       // Plain grey pill; the chrome lives in .split-ratio-input (index.css).
-      className="split-ratio-input h-6 w-10 px-1 text-center text-[11px] tabular-nums text-text"
+      className="split-ratio-input h-6 w-8 px-0 text-center text-[11px] tabular-nums text-text"
     />
   );
   return (
