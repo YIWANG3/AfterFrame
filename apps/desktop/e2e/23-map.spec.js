@@ -8,6 +8,7 @@
 const { test, expect } = require("@playwright/test");
 const sharp = require("sharp");
 const { launchApp, closeApp } = require("./helpers/app");
+const { captureElement } = require("./helpers/screenshot");
 
 test.describe("Map drawer", () => {
   let app, window, userDataDir;
@@ -60,7 +61,7 @@ test.describe("Map drawer", () => {
     expect(canvasSize.cssHeight).toBeGreaterThan(200);
     expect(canvasSize.width).toBeGreaterThan(400);
     expect(canvasSize.height).toBeGreaterThan(200);
-    const pixels = await sharp(await canvas.screenshot()).stats();
+    const pixels = await sharp(await captureElement(app, window, canvas)).stats();
     expect(Math.max(...pixels.channels.slice(0, 3).map((channel) => channel.stdev))).toBeGreaterThan(1);
     expect(pageErrors.filter((message) => message.includes("Cannot use import statement outside a module"))).toEqual([]);
     window.off("pageerror", recordPageError);
@@ -72,9 +73,9 @@ test.describe("Map drawer", () => {
 
     // Two far-apart GPS points → photo markers appear on the world view.
     await expect(window.locator(".photo-map-marker").first()).toBeVisible({ timeout: 15_000 });
-    const screenshotPath = test.info().outputPath("rendered-map.png");
-    await drawer.screenshot({ path: screenshotPath });
-    await test.info().attach("rendered-map", { path: screenshotPath, contentType: "image/png" });
+    await test.info().attach("rendered-map", {
+      body: await captureElement(app, window, drawer), contentType: "image/png",
+    });
   });
 
   test("panning the map engages the viewport filter and narrows the gallery", async () => {

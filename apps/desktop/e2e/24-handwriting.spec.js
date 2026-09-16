@@ -5,7 +5,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 const state = (window) => window.evaluate(() => window.__afterframeTest.getState());
@@ -31,6 +31,7 @@ test.describe("AI handwriting sticker (mock provider)", () => {
     );
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window);
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => { await closeApp(app, userDataDir); });

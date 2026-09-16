@@ -9,7 +9,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
 const SRC_W = 1600, SRC_H = 1200; // small enough that sourceImage == full res
 const FIX = path.join(__dirname, "fixtures", "canvas-pad-1600.jpg");
@@ -34,9 +34,7 @@ test.describe("Canvas margin (pad) save", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), FIX);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
     await window.evaluate(() => window.__afterframeTest.addTextLayer("pad"));
   });

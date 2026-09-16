@@ -2,6 +2,7 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { launchApp, closeApp } = require("./helpers/app");
+const { captureElement } = require("./helpers/screenshot");
 
 test.describe("GPS priority and collage menu", () => {
   let app, window, userDataDir, assetId;
@@ -56,9 +57,9 @@ test.describe("GPS priority and collage menu", () => {
     await expect(menu).toHaveCSS("overflow-x", "hidden");
     await expect(menu).toHaveCSS("overflow-y", "hidden");
     expect(await menu.evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius))).toBeGreaterThan(0);
-    const screenshotPath = testInfo.outputPath("replace-hover.png");
-    await menu.screenshot({ path: screenshotPath });
-    await testInfo.attach("replace-hover", { path: screenshotPath, contentType: "image/png" });
+    await testInfo.attach("replace-hover", {
+      body: await captureElement(app, window, menu), contentType: "image/png",
+    });
     await window.mouse.click(1, 1);
     await window.keyboard.press("Escape");
   });
