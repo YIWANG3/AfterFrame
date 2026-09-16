@@ -3,7 +3,7 @@ import { getBgPadding, measureTextWidthDOM, getDisplayText } from "./textState";
 import { stickerSrc } from "../../utils/format";
 import SelectionHandles from "./components/SelectionHandles";
 import { snapAngle, resizeRatio, snapAxis } from "./selectionMath";
-import { buildDepthAlphaMask, scrimCoverageRect, scrimToCss } from "./render/canvasHelpers";
+import { buildDepthAlphaMask, hexToRgba, scrimCoverageRect, scrimToCss } from "./render/canvasHelpers";
 
 // Half-width / half-height of a layer as fractions of the image rect — for
 // element-to-element alignment snapping. Text is measured via the DOM (see
@@ -736,13 +736,4 @@ function StickerLayerEl({ layer, scale, px, py, imageWidth, isSelected, onDragSt
       {isSelected && <SelectionHandles onResizeStart={(e) => onDragStart(e, "resize")} onRotateStart={(e) => onDragStart(e, "rotate")} />}
     </div>
   );
-}
-
-function hexToRgba(hex, alpha = 1) {
-  if (!hex || hex === "transparent") return `rgba(0,0,0,${alpha})`;
-  const h = hex.replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }

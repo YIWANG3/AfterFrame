@@ -10,6 +10,7 @@
 
 import { getAspectRatio, resizeCropRect } from "./cropMath";
 import { cropExtentForAngle } from "./imageMath";
+import { panelBoundaries } from "../../../shared/splitGeometry.mjs";
 
 export const SPLIT_ASPECT_KEYS = ["1:1", "3:4", "2:3", "9:16", "4:5"];
 export const DEFAULT_SPLIT_ASPECT_KEY = "3:4";
@@ -150,11 +151,11 @@ export function denormalizeSplitRect(normalized, bounds) {
 // Seamless boundaries: cumulative rounding, so adjacent panels share an edge
 // pixel-exactly (no gap, no overlap); widths differ by at most 1px. The main
 // process (electron/ipc/saveFile.js) uses the identical formula.
-export function panelBoundaries(width, count) {
-  const bounds = [];
-  for (let i = 0; i <= count; i++) bounds.push(Math.round((i * width) / count));
-  return bounds;
-}
+// Lives in shared/ because the main process cuts pixels with the same
+// boundaries (ipc/saveFile.js). Imported (not just forwarded) because the
+// helpers below use it too; re-exported so editor code keeps one import for
+// all split geometry.
+export { panelBoundaries };
 
 // The region as a pixel rect of a W×H raster, rounded like the sharp path.
 export function regionToPixels(normalized, sourceWidth, sourceHeight) {

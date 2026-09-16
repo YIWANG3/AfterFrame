@@ -6,7 +6,10 @@ import { fileName } from "../../../utils/format";
 const PREVIEW_MAX_EDGE = 2200;
 
 export function hexToRgba(hex, alpha = 1) {
-  const h = String(hex || "#000000").replace("#", "");
+  // "transparent" is a legal fillColor (see textState presets); parsing it as
+  // hex would yield rgba(NaN,…), which the browser silently drops.
+  if (!hex || hex === "transparent") return `rgba(0,0,0,${alpha})`;
+  const h = String(hex).replace("#", "");
   const r = parseInt(h.substring(0, 2), 16);
   const g = parseInt(h.substring(2, 4), 16);
   const b = parseInt(h.substring(4, 6), 16);

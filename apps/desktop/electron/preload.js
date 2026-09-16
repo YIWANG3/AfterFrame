@@ -101,6 +101,10 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   // i18n: synchronous so the first render is already in the right language.
   getInitialLocale: () => { try { return ipcRenderer.sendSync("app:get-locale"); } catch { return "en"; } },
   setLocale: (lng) => ipcRenderer.invoke("app:set-locale", lng),
+  exportSettings: (options) => ipcRenderer.invoke("settings:export", options),
+  inspectSettingsImport: () => ipcRenderer.invoke("settings:import-inspect"),
+  applySettingsImport: (options) => ipcRenderer.invoke("settings:import-apply", options),
+  cancelSettingsImport: () => ipcRenderer.invoke("settings:import-cancel"),
   openExternal: (url) => ipcRenderer.invoke("workspace:open-external", url),
   setTheme: (theme) => ipcRenderer.invoke("workspace:set-theme", theme),
   onFullscreen: (cb) => { const h = (_e, flag) => cb(!!flag); ipcRenderer.on("window:fullscreen", h); return () => ipcRenderer.removeListener("window:fullscreen", h); },

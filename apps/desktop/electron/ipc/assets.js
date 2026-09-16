@@ -1,7 +1,7 @@
 // Asset-level IPC: quick-register (after a save), collage-sources lookup,
 // delete-image-assets, and the cross-platform "reveal in Finder/Explorer".
 
-function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecarJsonAsync, addAllowedMediaDir, getCatalogState, t }) {
+function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedMediaDir, getCatalogState, t }) {
   const fs = require("node:fs");
   const path = require("node:path");
   // t() returns a translator bound to the current locale; fall back to identity
@@ -67,7 +67,7 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
 
   ipcMain.handle("workspace:collage-sources", async (_event, assetId) => {
     if (!assetId) return { sources: [], used_in_collages: [] };
-    return await callSidecarJsonAsync(["collage-sources", "--asset-id", assetId]);
+    return await commands.collageSources(assetId);
   });
 
   // Cheap watched-dir catch-up check (startup): returns only media files not yet
@@ -76,17 +76,13 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
   ipcMain.handle("workspace:scan-new-media", async (_event, dirs) => {
     const ds = [...new Set((dirs || []).filter(Boolean))];
     if (!ds.length) return { new_files: [], scanned: 0 };
-    const command = ["scan-new-media"];
-    for (const d of ds) command.push("--image-dir", String(d));
-    return await callSidecarJsonAsync(command) || { new_files: [], scanned: 0 };
+    return await commands.scanNewMedia(ds) || { new_files: [], scanned: 0 };
   });
 
   ipcMain.handle("workspace:delete-image-assets", async (_event, assetIds) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];
     if (!ids.length) return [];
-    const command = ["delete-image-assets"];
-    for (const assetId of ids) command.push("--asset-id", String(assetId));
-    return await callSidecarJsonAsync(command) || [];
+    return await commands.deleteImageAssets(ids);
   });
 
   // Delete from disk: move the originals to the OS trash (recoverable), THEN
@@ -110,9 +106,7 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, callSidecar
         failed.push({ path: p, error: err?.message || String(err) });
       }
     }
-    const command = ["delete-image-assets"];
-    for (const assetId of ids) command.push("--asset-id", String(assetId));
-    const deleted = await callSidecarJsonAsync(command) || [];
+    const deleted = await commands.deleteImageAssets(ids);
     return { deleted, trashed, failed };
   });
 }

@@ -186,6 +186,26 @@ function createSidecarCommands(callJson) {
       return callJson(["catalog-roots"]).then((rows) => rows || []);
     },
 
+    summary() {
+      return callJson(["summary", "--json"]);
+    },
+
+    // Startup migrations for catalogs written by older builds. Both are
+    // idempotent; callers treat failure as best-effort.
+    splitSharedAssets() {
+      return callJson(["split-shared-assets"]);
+    },
+
+    repairResourceSets() {
+      return callJson(["repair-resource-sets"]);
+    },
+
+    // Legacy token store inside the catalog DB, read once to migrate into the
+    // app's keychain-backed settings.
+    getProviderToken(provider) {
+      return callJson(["get-provider-token", "--provider", String(provider)]);
+    },
+
     // On-demand HD (2000px) preview generation scoped to specific source files.
     // Used by the collage editor so cells render/export from HD instead of the
     // 512px thumbnail when the catalog-wide HD pass hasn't run.
@@ -312,6 +332,67 @@ function createSidecarCommands(callJson) {
 
     listRepaintHistory(assetPath) {
       return callJson(["list-repaint-history", "--asset-path", String(assetPath)]).then((rows) => rows || []);
+    },
+
+    // Collage provenance: the source assets of a collage and the collages an
+    // asset appears in.
+    collageSources(assetId) {
+      return callJson(["collage-sources", "--asset-id", String(assetId)]);
+    },
+
+    // ── AI providers / annotation ────────────────────────────────────────
+    // apiKey rides on argv only until the transport strips it into the
+    // environment (see sidecar/transport.js extractSecretEnv).
+    listAiModels({ providerType, apiKey, baseUrl } = {}) {
+      const argv = ["list-ai-models", "--provider", String(providerType), "--api-key", String(apiKey)];
+      if (baseUrl) argv.push("--base-url", String(baseUrl));
+      return callJson(argv).then((rows) => rows || []);
+    },
+
+    annotateAsset({
+      assetId, imagePath, provider, model, apiKey, baseUrl,
+      languages, maxTags, maxCaptionChars, customInstructions, hint,
+    } = {}) {
+      const argv = [
+        "annotate-asset",
+        "--asset-id", String(assetId),
+        "--image", String(imagePath),
+        "--provider", String(provider),
+        "--model", String(model),
+      ];
+      if (apiKey) argv.push("--api-key", apiKey);
+      if (baseUrl) argv.push("--base-url", String(baseUrl));
+      if (Array.isArray(languages) && languages.length) argv.push("--languages", languages.join(","));
+      if (Number.isFinite(maxTags)) argv.push("--max-tags", String(maxTags));
+      if (Number.isFinite(maxCaptionChars)) argv.push("--max-caption-chars", String(maxCaptionChars));
+      if (customInstructions) argv.push("--custom-instructions", String(customInstructions));
+      if (hint) argv.push("--hint", String(hint));
+      return callJson(argv);
+    },
+
+    // How many assets a batch annotation would touch, before starting it.
+    annotationCount({ onlyMissing = true, assetIds, collectionId } = {}) {
+      const argv = ["annotation-count"];
+      if (onlyMissing === false) argv.push("--reannotate");
+      const ids = Array.isArray(assetIds) ? assetIds.filter(Boolean) : [];
+      if (ids.length) argv.push("--asset-ids", ids.join(","));
+      if (collectionId) argv.push("--collection-id", String(collectionId));
+      return callJson(argv).then((res) => res || { count: 0 });
+    },
+
+    // Catalog-free: these run before any catalog is open (Settings → AI).
+    annotationTestConnection({ provider, apiKey, baseUrl } = {}) {
+      const argv = ["annotation-test-connection", "--provider", String(provider)];
+      if (apiKey) argv.push("--api-key", apiKey);
+      if (baseUrl) argv.push("--base-url", String(baseUrl));
+      return callJson(argv);
+    },
+
+    annotationListModels({ provider, apiKey, baseUrl } = {}) {
+      const argv = ["annotation-list-models", "--provider", String(provider)];
+      if (apiKey) argv.push("--api-key", apiKey);
+      if (baseUrl) argv.push("--base-url", String(baseUrl));
+      return callJson(argv);
     },
 
     // ── Derived / export ─────────────────────────────────────────────────

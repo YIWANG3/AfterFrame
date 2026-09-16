@@ -70,6 +70,7 @@ const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const editorsIpc = require("./ipc/editors");
+const settingsTransferIpc = require("./ipc/settingsTransfer");
 const { createAgentRenderBridge } = require("./agentRender");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
@@ -276,7 +277,7 @@ async function getStoredProviderConfigWithMigration(provider) {
     return existing;
   }
   try {
-    const payload = await callSidecarJsonAsync(["get-provider-token", "--provider", provider]);
+    const payload = await sidecarCommands.getProviderToken(provider);
     if (payload?.token) {
       const migrated = await setStoredProviderConfig(provider, payload);
       return migrated;
@@ -308,8 +309,8 @@ async function prepareCatalogPath() {
     console.log("[prepareCatalogPath] empty catalog, skipping sidecar migration");
     return;
   }
-  try { await callSidecarAsync(["split-shared-assets"]); } catch (_) { /* best-effort */ }
-  try { await callSidecarAsync(["repair-resource-sets"]); } catch (_) { /* best-effort */ }
+  try { await sidecarCommands.splitSharedAssets(); } catch (_) { /* best-effort */ }
+  try { await sidecarCommands.repairResourceSets(); } catch (_) { /* best-effort */ }
   if (currentCatalogPath === getSampleCatalogPath()) {
     const repaired = await repairLegacySamplePreviews({
       catalogPath: currentCatalogPath, source: samplePhotosSource,
@@ -415,7 +416,10 @@ const sidecarTransport = createSidecarTransport({
   resourcesPath: process.resourcesPath,
   getCatalogPath: () => currentCatalogPath,
 });
-const callSidecarAsync = sidecarTransport.callAsync;
+// Only the JSON entry point is bound here, and only to feed the verb layer
+// below — nothing in main.js or the ipc/mcp modules assembles sidecar argv by
+// hand any more (that invariant is what keeps the three call surfaces from
+// drifting apart again).
 const callSidecarJsonAsync = sidecarTransport.callJsonAsync;
 const launchSidecarJob = sidecarTransport.launchJob;
 const stopResidentSidecar = sidecarTransport.stopResident;
@@ -1279,8 +1283,7 @@ ipcMain.handle("workspace:summary", async () => {
     return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   }
   try {
-    const payload = await callSidecarAsync(["summary", "--json"]);
-    return payload ? JSON.parse(payload) : { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
+    return await sidecarCommands.summary() || { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   } catch (err) {
     console.warn("[workspace:summary] sidecar error:", err.message);
     return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
@@ -1290,7 +1293,7 @@ ipcMain.handle("workspace:summary", async () => {
 ipcMain.handle("workspace:roots", async () => {
   if (!currentCatalogPath || !catalogHasDb()) return [];
   try {
-    return await callSidecarJsonAsync(["catalog-roots"]) || [];
+    return await sidecarCommands.catalogRoots();
   } catch (err) {
     console.warn("[workspace:roots] sidecar error:", err.message);
     return [];
@@ -1409,7 +1412,7 @@ jobsIpc.register({
 
 aiIpc.register({
   app, ipcMain,
-  callSidecarJsonAsync,
+  commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
@@ -1418,7 +1421,6 @@ aiIpc.register({
 
 const annotationApi = annotationIpc.register({
   ipcMain,
-  callSidecarJsonAsync,
   commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
@@ -1444,7 +1446,7 @@ browseIpc.register({
 
 assetsIpc.register({
   ipcMain, shell, dialog, BrowserWindow,
-  commands: sidecarCommands, callSidecarJsonAsync, addAllowedMediaDir,
+  commands: sidecarCommands, addAllowedMediaDir,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   t: () => makeT(currentLocale),
 });
@@ -1457,12 +1459,22 @@ ipcMain.on("app:get-locale", (event) => {
 ipcMain.on("app:get-media-port", (event) => {
   event.returnValue = mediaHttpPort;
 });
-ipcMain.handle("app:set-locale", async (_event, lng) => {
+async function applyLocale(lng) {
   if (!SUPPORTED_LOCALES.includes(lng)) return currentLocale;
   await updateAppSettings((s) => ({ ...s, locale: lng }));
   currentLocale = lng;
   Menu.setApplicationMenu(buildAppMenu());
   return currentLocale;
+}
+ipcMain.handle("app:set-locale", (_event, lng) => applyLocale(lng));
+
+settingsTransferIpc.register({
+  app, ipcMain, dialog,
+  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  getAppSettingsPath, readAppSettings, updateAppSettings,
+  decryptToken, setStoredProviderConfig,
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+  applyLocale,
 });
 
 // Open an app cache directory in Finder (for manual cleanup). These live under
@@ -1813,8 +1825,6 @@ app.whenReady().then(async () => {
   // through this while it runs. Failures must never affect the app itself.
   mcpServerApi = createMcpServer({
     getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
-    callSidecarJsonAsync,
-    callSidecarAsync,
     startImportTask,
     formatJobStatus,
     registerRoots,

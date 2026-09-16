@@ -3,14 +3,6 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
 
-function hexToRgba(hex, alpha = 1) {
-  const h = (hex || "#000000").replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 import {
   Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
@@ -23,7 +15,7 @@ import { handwritingAlphaFromUrl, colorizeHandwriting } from "./render/handwriti
 import { localFileUrl as mediaUrlFor } from "../../utils/format";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
-import { gradientToCss, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
+import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
 import { isTextLayer, isStickerLayer, isOverlayLayer, layerLabel } from "./layerStack";
 import {

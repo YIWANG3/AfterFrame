@@ -46,6 +46,12 @@ module.exports = [
     },
   },
   {
+    // Cross-process pure modules: ESM for Vite, require(esm)'d by main.
+    files: ["shared/**/*.mjs"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+    rules: sharedRules,
+  },
+  {
     files: [
       "electron/**/*.js",
       "*.config.js",

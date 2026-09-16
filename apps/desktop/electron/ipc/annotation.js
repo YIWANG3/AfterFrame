@@ -4,7 +4,6 @@
 
 function register({
   ipcMain,
-  callSidecarJsonAsync,
   commands,
   getCatalogState,
   readAppSettings,
@@ -109,22 +108,19 @@ function register({
     const stored = await getStoredProviderConfigWithMigration(ns) || {};
     const apiKey = opts.apiKey || stored.token || null;
 
-    const args = [
-      "annotate-asset",
-      "--asset-id", String(opts.assetId),
-      "--image", String(opts.imagePath),
-      "--provider", String(opts.provider),
-      "--model", String(opts.model),
-    ];
-    if (apiKey) args.push("--api-key", apiKey);
-    if (opts.baseUrl) args.push("--base-url", String(opts.baseUrl));
-    if (Array.isArray(opts.languages) && opts.languages.length) args.push("--languages", opts.languages.join(","));
-    if (Number.isFinite(opts.maxTags)) args.push("--max-tags", String(opts.maxTags));
-    if (Number.isFinite(opts.maxCaptionChars)) args.push("--max-caption-chars", String(opts.maxCaptionChars));
-    if (opts.customInstructions) args.push("--custom-instructions", String(opts.customInstructions));
-    if (opts.hint) args.push("--hint", String(opts.hint));
-
-    return await callSidecarJsonAsync(args);
+    return await commands.annotateAsset({
+      assetId: opts.assetId,
+      imagePath: opts.imagePath,
+      provider: opts.provider,
+      model: opts.model,
+      apiKey,
+      baseUrl: opts.baseUrl,
+      languages: opts.languages,
+      maxTags: opts.maxTags,
+      maxCaptionChars: opts.maxCaptionChars,
+      customInstructions: opts.customInstructions,
+      hint: opts.hint,
+    });
   });
 
   // ── Batch annotation job ──────────────────────────────────────────────────
@@ -186,12 +182,11 @@ function register({
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) return { count: 0 };
     const opts = options || {};
-    const args = ["annotation-count"];
-    if (opts.onlyMissing === false) args.push("--reannotate");
-    if (Array.isArray(opts.assetIds) && opts.assetIds.length) args.push("--asset-ids", opts.assetIds.filter(Boolean).join(","));
-    if (opts.collectionId) args.push("--collection-id", String(opts.collectionId));
-    const res = await callSidecarJsonAsync(args);
-    return res || { count: 0 };
+    return await commands.annotationCount({
+      onlyMissing: opts.onlyMissing,
+      assetIds: opts.assetIds,
+      collectionId: opts.collectionId,
+    });
   });
 
   ipcMain.handle("workspace:add-asset-tag", async (_event, assetId, tag) => {
@@ -214,21 +209,21 @@ function register({
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) return null;
     if (!assetId) return null;
-    return await callSidecarJsonAsync(["clear-ai-location", "--asset-id", String(assetId)]);
+    return await commands.clearAiLocation(assetId);
   });
 
   ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) return null;
     if (!assetId) return null;
-    return await callSidecarJsonAsync(["get-annotation", "--asset-id", String(assetId)]);
+    return await commands.getAnnotation(assetId);
   });
 
   ipcMain.handle("workspace:list-tags", async (_event, limit) => {
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) return [];
     const n = Number.isFinite(limit) ? Math.max(1, Math.min(1000, limit)) : 200;
-    return await callSidecarJsonAsync(["list-tags", "--limit", String(n)]) || [];
+    return await commands.listTags(n);
   });
 
   // Catalog-independent — works even when no catalog is open. Used by the
@@ -241,11 +236,8 @@ function register({
     const stored = await getStoredProviderConfigWithMigration(ns) || {};
     const apiKey = opts.apiKey || stored.token || "";
 
-    const args = ["annotation-test-connection", "--provider", String(opts.provider)];
-    if (apiKey) args.push("--api-key", apiKey);
-    if (opts.baseUrl) args.push("--base-url", String(opts.baseUrl));
     try {
-      return await callSidecarJsonAsync(args);
+      return await commands.annotationTestConnection({ provider: opts.provider, apiKey, baseUrl: opts.baseUrl });
     } catch (err) {
       return { ok: false, error: err?.message || String(err) };
     }
@@ -259,11 +251,8 @@ function register({
     const stored = await getStoredProviderConfigWithMigration(ns) || {};
     const apiKey = opts.apiKey || stored.token || "";
 
-    const args = ["annotation-list-models", "--provider", String(opts.provider)];
-    if (apiKey) args.push("--api-key", apiKey);
-    if (opts.baseUrl) args.push("--base-url", String(opts.baseUrl));
     try {
-      const result = await callSidecarJsonAsync(args);
+      const result = await commands.annotationListModels({ provider: opts.provider, apiKey, baseUrl: opts.baseUrl });
       return result || { ok: false, error: "no result", models: [] };
     } catch (err) {
       return { ok: false, error: err?.message || String(err), models: [] };

@@ -9,7 +9,7 @@ const fs = require("fs");
 function register({
   app,
   ipcMain,
-  callSidecarJsonAsync,
+  commands,
   getCatalogState,
   readAppSettings,
   updateAppSettings,
@@ -81,9 +81,7 @@ function register({
     }
     if (!apiKey) return [];
     try {
-      const cmd = ["list-ai-models", "--provider", typeKey, "--api-key", apiKey];
-      if (baseUrl) cmd.push("--base-url", baseUrl);
-      return await callSidecarJsonAsync(cmd) || [];
+      return await commands.listAiModels({ providerType: typeKey, apiKey, baseUrl });
     } catch (err) {
       console.error("[list-ai-models] error:", err.message);
       return [];
@@ -109,7 +107,7 @@ function register({
 
   ipcMain.handle("workspace:list-repaint-history", async (_event, assetPath) => {
     if (!assetPath) return [];
-    return await callSidecarJsonAsync(["list-repaint-history", "--asset-path", String(assetPath)]) || [];
+    return await commands.listRepaintHistory(assetPath);
   });
 
   ipcMain.handle("workspace:get-ai-provider-token", async (_event, provider) => {

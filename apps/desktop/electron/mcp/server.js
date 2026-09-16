@@ -127,7 +127,6 @@ function createMcpServer(deps) {
   const {
     getCatalogState,
     commands,
-    callSidecarAsync,
     startImportTask,
     formatJobStatus,
     registerRoots,
@@ -174,15 +173,11 @@ function createMcpServer(deps) {
       inputSchema: { type: "object", properties: {} },
       async handler() {
         const catalogPath = requireCatalog();
-        const [summaryRaw, facets] = await Promise.all([
-          callSidecarAsync(["summary", "--json"]),
+        const [summary, facets] = await Promise.all([
+          commands.summary(),
           commands.facetValues().catch(() => null),
         ]);
-        return {
-          catalog_path: catalogPath,
-          summary: summaryRaw ? JSON.parse(summaryRaw) : null,
-          facets,
-        };
+        return { catalog_path: catalogPath, summary, facets };
       },
     },
     {

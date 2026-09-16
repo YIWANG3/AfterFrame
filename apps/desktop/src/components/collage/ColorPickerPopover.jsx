@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { gradientColorAt, gradientStops, gradientWithStops } from "../editor/render/canvasHelpers";
+import { gradientColorAt, gradientStops, gradientWithStops, hexToRgba } from "../editor/render/canvasHelpers";
 
 // ── Color math ────────────────────────────────────────────
 
@@ -726,12 +726,4 @@ function GradientStopsBar({ stops, activeStop, onSelectStop, onAddStop, onMoveSt
       })}
     </div>
   );
-}
-
-function hexToRgba(hex, alpha) {
-  const h = (hex || "#000000").replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

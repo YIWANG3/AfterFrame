@@ -5,6 +5,8 @@
 const path = require("path");
 const fs = require("fs");
 const sharp = require("sharp");
+// Same boundaries the renderer previews with — one copy for both processes.
+const { panelBoundaries } = require("../../shared/splitGeometry.mjs");
 
 // ── Orientation algebra ──────────────────────────────────────────────────────
 // Every combination of quarter turns and mirrors is an element of the dihedral
@@ -199,14 +201,6 @@ function register({
 
     console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${savePath}`);
     return { path: savePath, width: result.width, height: result.height };
-  }
-
-  // Seamless-split boundaries: cumulative rounding, so adjacent panels share
-  // an edge pixel-exactly (no gap, no overlap); widths differ by at most 1px.
-  function panelBoundaries(width, count) {
-    const bounds = [];
-    for (let i = 0; i <= count; i++) bounds.push(Math.round((i * width) / count));
-    return bounds;
   }
 
   // Split export: cut `region` (normalized, stage-1 basis) out of the oriented
