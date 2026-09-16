@@ -138,4 +138,23 @@ async function closeApp(app, userDataDir) {
   }
 }
 
-module.exports = { launchApp, closeApp, mcpCall, REPO_DESKTOP_DIR };
+// The editor's test backdoor arrives in two steps: App.jsx installs
+// window.__afterframeTest.openEditor before any editor exists, and
+// EditorOverlay's passive effect merges setTool/addTextLayer/undo/… in AFTER
+// its first paint. "Save button visible" is the paint, not the effect — on a
+// slow runner a spec that calls setTool right after it hits
+// `__afterframeTest.setTool is not a function` (CI, 2026-09-16). Waits for the
+// merged backdoor; pass { preview: true } to also wait for the decoded
+// preview — transform / layer specs need it (commitTransform is a no-op while
+// the image is still decoding), sticker/handwriting specs don't.
+async function waitForEditor(window, { preview = false, timeout = 15_000, previewTimeout = 10_000 } = {}) {
+  await window.waitForFunction(
+    () => typeof window.__afterframeTest?.setTool === "function", null, { timeout },
+  );
+  if (!preview) return;
+  await window.waitForFunction(
+    () => window.__afterframeTest.getPreviewReady?.() === true, null, { timeout: previewTimeout },
+  );
+}
+
+module.exports = { launchApp, closeApp, waitForEditor, mcpCall, REPO_DESKTOP_DIR };

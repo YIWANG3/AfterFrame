@@ -10,7 +10,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
 const SRC_W = 3000, SRC_H = 2000; // deliberately > PREVIEW_MAX_EDGE (2200)
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-unified-frame-"));
@@ -41,9 +41,7 @@ test.describe("Frame preset save (unified canvas)", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => {

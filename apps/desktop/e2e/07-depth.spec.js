@@ -5,7 +5,7 @@
 const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const path = require("node:path");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
 
 // SF skyline at dusk — a real photo with a genuine foreground→background depth
@@ -27,6 +27,7 @@ test.describe("Scene depth", () => {
     // image with actual scene structure rather than a flat gradient.
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), DEPTH_FIXTURE);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window);
     // Switch to Text tool — that's where the Scene Depth section lives.
     // The backdoor registers in an effect a beat after Save becomes visible.
     await window.waitForFunction(() => typeof window.__afterframeTest?.setTool === "function", null, { timeout: 10_000 });

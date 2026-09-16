@@ -10,7 +10,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
 async function openEditorOnFirstAsset(window) {
   // Wait for gallery, single-click to select, press E to open editor (the
@@ -19,6 +19,7 @@ async function openEditorOnFirstAsset(window) {
   await window.locator("[data-gallery-item='true']").first().click();
   await window.keyboard.press("e");
   await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+  await waitForEditor(window);
 }
 
 async function saveTo(window, savePath) {
@@ -84,9 +85,7 @@ test.describe("Save pipeline", () => {
 
     await openEditorOnFirstAsset(window);
     await window.waitForFunction(() => typeof window.__afterframeTest?.saveAs === "function", null, { timeout: 10_000 });
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     const out = path.join(tmpDir, "linked-edit.jpg");
     await saveTo(window, out);
     expect(fs.existsSync(out)).toBe(true);
@@ -156,9 +155,7 @@ test.describe("Save pipeline", () => {
     await window.waitForFunction(() => typeof window.__afterframeTest?.setTool === "function", null, { timeout: 10_000 });
     await window.evaluate(() => window.__afterframeTest.setTool("crop"));
     // Rotating before the preview finishes decoding is silently ignored
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.getByRole("button", { name: /90° L/ }).click();
     // commitTransform is React state — give it a beat before saving
     await window.waitForTimeout(500);

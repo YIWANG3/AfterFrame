@@ -9,7 +9,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-golden-tf-"));
@@ -19,9 +19,7 @@ const state = (window) => window.evaluate(() => window.__afterframeTest.getState
 
 async function waitPreview(window) {
   await window.waitForFunction(() => typeof window.__afterframeTest?.getPreviewReady === "function", null, { timeout: 10_000 });
-  await expect
-    .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady()), { timeout: 10_000 })
-    .toBe(true);
+  await waitForEditor(window, { preview: true });
 }
 
 test.describe("Golden: crop + transform", () => {
@@ -57,6 +55,7 @@ test.describe("Golden: crop + transform", () => {
     });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window);
     await window.evaluate(() => window.__afterframeTest.setTool("crop"));
     await waitPreview(window);
     await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));

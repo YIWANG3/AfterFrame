@@ -9,7 +9,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
 const W = 2400;
 const H = 800;
@@ -56,9 +56,7 @@ test.describe("Seamless split", () => {
     ).toBeTruthy();
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.getByTestId("tool-split").click();
     await expect.poll(async () => (await splitState(window)).rect, { timeout: 10_000 }).toBeTruthy();
   });

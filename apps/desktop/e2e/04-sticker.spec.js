@@ -5,7 +5,7 @@
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 const isMacOSWithXcode = () => {
@@ -22,6 +22,7 @@ test.describe("Sticker tool", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window);
     await window.getByRole("button", { name: /^Sticker$/i }).first().click();
   });
   test.afterAll(async () => {
@@ -85,6 +86,7 @@ test.describe("Sticker detection (real swift run)", () => {
       await window.waitForFunction(() => !!window.__afterframeTest?.openEditor, null, { timeout: 15_000 });
       await window.evaluate((p) => window.__afterframeTest.openEditor(p), subjectPath);
       await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+      await waitForEditor(window);
       await window.waitForFunction(() => typeof window.__afterframeTest?.setTool === "function", null, { timeout: 10_000 });
       await window.evaluate(() => window.__afterframeTest.setTool("sticker"));
 

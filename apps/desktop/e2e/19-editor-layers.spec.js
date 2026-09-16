@@ -3,7 +3,8 @@
 // selection via getState(), so the text-tool extraction can't change it.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { captureElement } = require("./helpers/screenshot");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 const state = (window) => window.evaluate(() => window.__afterframeTest.getState());
@@ -29,7 +30,7 @@ test.describe("Depth-mask layer stacking", () => {
     await window.waitForFunction(() => !!window.__afterframeTest);
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), await ensureFixture());
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible();
-    await expect.poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.())).toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
     textLayer = await window.evaluate(() => window.__afterframeTest.addTextLayer("MMMM"));
     await window.evaluate((p) => window.__afterframeTest.loadTestDepth(p), "data:image/png;base64," + fs.readFileSync(depthPath).toString("base64"));
@@ -72,8 +73,8 @@ test.describe("Depth-mask layer stacking", () => {
         await expect(wrapper).toBeVisible();
         if (zPosition < 1) await expect(wrapper).not.toHaveCSS("mask-image", "none");
         else await expect(wrapper).toHaveCSS("mask-image", "none");
-        await expect.poll(async () => (await redPixels(await wrapper.screenshot())).left).toBeGreaterThan(100);
-        const shown = await redPixels(await wrapper.screenshot());
+        await expect.poll(async () => (await redPixels(await captureElement(app, window, wrapper))).left).toBeGreaterThan(100);
+        const shown = await redPixels(await captureElement(app, window, wrapper));
         if (zPosition < 1) expect(shown.right).toBe(0);
         else expect(shown.right).toBeGreaterThan(100);
 
@@ -82,9 +83,9 @@ test.describe("Depth-mask layer stacking", () => {
           window.__afterframeTest.moveLayer(id, -1);
           window.__afterframeTest.selectLayers([id]);
         }, layer.id);
-        await expect.poll(async () => (await redPixels(await wrapper.screenshot())).left).toBe(0);
+        await expect.poll(async () => (await redPixels(await captureElement(app, window, wrapper))).left).toBe(0);
         await window.evaluate((id) => window.__afterframeTest.moveLayer(id, 1), layer.id);
-        await expect.poll(async () => (await redPixels(await wrapper.screenshot())).left).toBeGreaterThan(100);
+        await expect.poll(async () => (await redPixels(await captureElement(app, window, wrapper))).left).toBeGreaterThan(100);
       }
       // Compare to the real export pipeline, with the depth mask active.
       await window.evaluate(({ overlay, layer }) => window.__afterframeTest.setTestLayers([overlay, { ...layer, zPosition: 0.5 }]), { overlay, layer });
@@ -108,6 +109,7 @@ test.describe("Golden: text layers", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window);
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => { await closeApp(app, userDataDir); });
@@ -158,6 +160,7 @@ test.describe("Overlay layers", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+    await waitForEditor(window);
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => { await closeApp(app, userDataDir); });
@@ -203,9 +206,7 @@ test.describe("Overlay coverage + multi-stop gradient", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => { await closeApp(app, userDataDir); });
@@ -308,9 +309,7 @@ test.describe("Unified undo/redo (transform + layers, one timeline)", () => {
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() => window.evaluate(() => window.__afterframeTest.getPreviewReady?.()), { timeout: 10_000 })
-      .toBe(true);
+    await waitForEditor(window, { preview: true });
     await window.evaluate(() => window.__afterframeTest.setTool("text"));
   });
   test.afterAll(async () => { await closeApp(app, userDataDir); });
