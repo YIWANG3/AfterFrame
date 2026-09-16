@@ -2,8 +2,9 @@ import { useTranslation } from "react-i18next";
 import i18n, { SUPPORTED_LOCALES } from "../../i18n";
 import api from "../../api";
 import { FieldRow, Group } from "./SettingsPrimitives";
+import SettingsTransfer from "./SettingsTransfer";
 
-// General app settings: interface language + color theme.
+// General app settings: interface language + color theme, backup & transfer.
 export default function GeneralSettings({ theme = "dark", setTheme }) {
   const { t } = useTranslation("settings");
   const { t: tc } = useTranslation("common");
@@ -43,6 +44,7 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
         </select>
       </FieldRow>
       </Group>
+      <SettingsTransfer theme={theme} />
     </div>
   );
 }

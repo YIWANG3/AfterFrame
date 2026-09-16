@@ -1,6 +1,6 @@
 # 设置导出 / 导入设计方案
 
-> **状态（2026-09-16）**: 设计稿，未实现。
+> **状态（2026-09-16）**: P1 已实现（feat/settings-export）。入口在设置 → 通用 →「备份与迁移」；纯逻辑 `electron/settingsTransfer.js` + 单测，IPC `electron/ipc/settingsTransfer.js`，UI `SettingsTransfer.jsx`，e2e `34-settings-transfer.spec.js`。
 
 ## 需求
 
