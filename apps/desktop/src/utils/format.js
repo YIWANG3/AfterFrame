@@ -1,4 +1,5 @@
 import justifiedLayout from "justified-layout";
+import api from "../api";
 
 export function localFileUrl(filePath) {
   if (!filePath) return "";
@@ -23,7 +24,7 @@ export function stickerSrc(path) {
 let _mediaPort = 0;
 export function httpMediaUrl(filePath) {
   if (!filePath) return "";
-  if (!_mediaPort) _mediaPort = window.mediaWorkspace?.getMediaServerPort?.() || 0;
+  if (!_mediaPort) _mediaPort = api.getMediaServerPort() || 0;
   if (!_mediaPort) return "";
   return `http://127.0.0.1:${_mediaPort}/media?path=${encodeURIComponent(filePath)}`;
 }

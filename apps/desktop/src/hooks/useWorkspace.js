@@ -4,14 +4,14 @@ import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/for
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
+import {
+  browseScopeKey, chooseSelectionAfterReload, filterItemsByQuery, shouldResetScopeForReveal,
+} from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
-const browseScopeKey = ({ status, collectionId, search, sort, filters }) => JSON.stringify({
-  status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {},
-});
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
@@ -153,35 +153,9 @@ export default function useWorkspace({ pushToast } = {}) {
 
   // Backend handles sorting; the client only narrows the PREVIOUS page locally
   // so typing feels instant during the 250ms search debounce. The server result
-  // then replaces `items` wholesale.
-  //
-  // This projection must stay a SUPERSET of the sidecar's own search
-  // (db/browse.py `_search_clause`) — filename/path, camera, lens, AI caption,
-  // OCR text and tags. It used to omit caption/OCR/tags/lens, so a term that
-  // only appeared in an AI annotation came back correctly from the sidecar and
-  // was then filtered out here, leaving the gallery blank. Add every field the
-  // server can match on when extending `_search_clause`.
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return items;
-    return items.filter((item) =>
-      [
-        item.stem,
-        item.primary_stem,
-        item.image_path,
-        item.raw_path,
-        item.version_kind,
-        item.image_metadata?.camera_model,
-        item.raw_metadata?.camera_model,
-        item.image_metadata?.lens_model,
-        item.raw_metadata?.lens_model,
-        item.annotation?.caption,
-        item.annotation?.detected_text,
-        ...(item.annotation?.tags || []),
-      ]
-        .some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery)),
-    );
-  }, [items, query]);
+  // then replaces `items` wholesale. Field list + the superset invariant live
+  // in workspaceLogic.searchableFields.
+  const filteredItems = useMemo(() => filterItemsByQuery(items, query), [items, query]);
 
   // Debounced server-side search: reload browser when query changes
   const searchTimerRef = useRef(null);
@@ -307,21 +281,12 @@ export default function useWorkspace({ pushToast } = {}) {
         setItems((current) => [...current, ...payload]);
       } else {
         setItems(payload);
-        const firstId = payload[0]?.asset_id || null;
         const activeSelectedId = selectedAssetIdRef.current;
-        const selectionStillValid = activeSelectedId && payload.some((item) => item.asset_id === activeSelectedId);
-        // preserveView never steals selection by jumping to the first item;
-        // it only clears when the selected asset truly disappeared.
-        // A version selected from the inspector is also preserved even when it
-        // is outside this filtered page. The next ordinary gallery selection
-        // clears that relationship pin through setSelectedAssetId above.
-        const nextSelectedId = relatedSelectionRef.current && activeSelectedId
-          ? activeSelectedId
-          : selectionStillValid
-            ? activeSelectedId
-            : preserveView
-              ? null
-              : firstId;
+        // The pin (relatedSelectionRef) is cleared by the next ordinary gallery
+        // selection through setSelectedAssetId above.
+        const nextSelectedId = chooseSelectionAfterReload({
+          payload, activeSelectedId, relatedPinned: relatedSelectionRef.current, preserveView,
+        });
         if (nextSelectedId !== activeSelectedId) {
           setSelectedAssetId(nextSelectedId);
           await loadDetail(nextSelectedId || null);
@@ -411,10 +376,9 @@ export default function useWorkspace({ pushToast } = {}) {
       let location = await api.locateImageAsset({ assetId, ...scope });
       log("located", JSON.stringify(location));
       if (!isCurrent()) { log("superseded after locate"); return; }
-      let resetScope = location.index == null;
-      // The local text projection may hide a server-side annotation match.
-      if (query.trim() && items.some((item) => item.asset_id === assetId)
-        && !filteredItems.some((item) => item.asset_id === assetId)) resetScope = true;
+      const resetScope = shouldResetScopeForReveal({
+        locationIndex: location.index, query, items, filteredItems, assetId,
+      });
       if (resetScope) {
         scope = { status: "all", sort };
         location = await api.locateImageAsset({ assetId, ...scope });

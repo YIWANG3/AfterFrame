@@ -21,6 +21,8 @@ const api = {
   getPathForFile: (...args) => invoke("getPathForFile", ...args),
   revealPath: (...args) => invoke("revealPath", ...args),
   setTheme: (...args) => invoke("setTheme", ...args),
+  getMediaServerPort: (...args) => invoke("getMediaServerPort", ...args),
+  onFullscreen: (...args) => invoke("onFullscreen", ...args),
   copyText: (...args) => invoke("copyText", ...args),
   videoProxy: (...args) => invoke("videoProxy", ...args),
   videoKeyframes: (...args) => invoke("videoKeyframes", ...args),
@@ -42,6 +44,8 @@ const api = {
   sendAgentRevealResult: (...args) => invoke("sendAgentRevealResult", ...args),
   reportSelection: (...args) => invoke("reportSelection", ...args),
   onCatalogChanged: (...args) => invoke("onCatalogChanged", ...args),
+  onAgentRender: (...args) => invoke("onAgentRender", ...args),
+  sendAgentRenderResult: (...args) => invoke("sendAgentRenderResult", ...args),
 
   // ── workspace / catalog ──
   getInfo: (...args) => invoke("getInfo", ...args),

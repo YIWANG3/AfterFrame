@@ -19,6 +19,7 @@ import { FRAME_TEMPLATES } from "../components/editor/frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../components/editor/render/frameLogos";
 import { renderFrame, collectLogoNeeds } from "../components/editor/render/frameRender";
 import { exifFromItem } from "../components/editor/state/useFrameTool";
+import api from "../api";
 
 function loadImage(filePath) {
   return new Promise((resolve, reject) => {
@@ -78,8 +79,8 @@ async function handleCollage(payload) {
     width: width || 3000,
   });
   const buffer = await canvasToJpegBuffer(canvas);
-  await window.mediaWorkspace.saveImage(savePath, buffer, files[0].imagePath);
-  const asset = await window.mediaWorkspace.quickRegister(savePath, files[0].imagePath, sourceAssetIds);
+  await api.saveImage(savePath, buffer, files[0].imagePath);
+  const asset = await api.quickRegister(savePath, files[0].imagePath, sourceAssetIds);
   return { saved_path: savePath, template_id: template.id, width: canvas.width, height: canvas.height, asset };
 }
 
@@ -185,7 +186,7 @@ async function handleEdit(payload) {
   });
   // saveEditedImage already registered the file; re-register (idempotent
   // upsert) to obtain the asset payload for the agent.
-  const asset = await window.mediaWorkspace.quickRegister(savePath, imagePath);
+  const asset = await api.quickRegister(savePath, imagePath);
   return { saved_path: savePath, layers: builtLayers.length, asset };
 }
 
@@ -199,7 +200,7 @@ async function handleFrame(payload) {
   }
   const photo = await loadImage(imagePath);
   const exif = exifFromItem(exifItem || {});
-  const res = await window.mediaWorkspace.getFrameLogos?.();
+  const res = await api.getFrameLogos();
   const registry = res ? buildLogoRegistry(res.manifest) : { byId: new Map() };
   const svgs = res?.svgs || {};
   const logoImages = new Map();
@@ -219,8 +220,8 @@ async function handleFrame(payload) {
   }
   const canvas = renderFrame({ photo, exif, profile: {}, template, registry, logoImages });
   const buffer = await canvasToJpegBuffer(canvas);
-  await window.mediaWorkspace.saveImage(savePath, buffer, imagePath);
-  const asset = await window.mediaWorkspace.quickRegister(savePath, imagePath);
+  await api.saveImage(savePath, buffer, imagePath);
+  const asset = await api.quickRegister(savePath, imagePath);
   return { saved_path: savePath, template_id: template.id, width: canvas.width, height: canvas.height, asset };
 }
 
@@ -256,7 +257,7 @@ const HANDLERS = {
  * (needs access to UI state setters). Returns a dispose function.
  */
 export function registerRenderBridge(deps = {}) {
-  const unsubscribe = window.mediaWorkspace?.onAgentRender?.(async ({ requestId, kind, payload }) => {
+  const unsubscribe = api.onAgentRender(async ({ requestId, kind, payload }) => {
     try {
       let result;
       if (kind === "open_view") {
@@ -267,10 +268,10 @@ export function registerRenderBridge(deps = {}) {
         if (!handler) throw new Error(`unknown render kind: ${kind}`);
         result = await handler(payload || {});
       }
-      window.mediaWorkspace.sendAgentRenderResult(requestId, result ?? {});
+      api.sendAgentRenderResult(requestId, result ?? {});
     } catch (error) {
       console.error(`[renderBridge] ${kind} failed:`, error);
-      window.mediaWorkspace.sendAgentRenderResult(requestId, { error: error?.message || String(error) });
+      api.sendAgentRenderResult(requestId, { error: error?.message || String(error) });
     }
   });
   return unsubscribe || (() => {});
