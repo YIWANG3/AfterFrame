@@ -574,7 +574,7 @@ print(json.dumps({
   return runPythonJson(script, [sourcePath]);
 }
 
-async function writeImageWithSourceMetadata(targetPath, outputBuffer, sourceMetadataPath) {
+async function writeImageWithSourceMetadata(targetPath, outputBuffer, sourceMetadataPath, { quality } = {}) {
   const ext = path.extname(targetPath).toLowerCase();
   let pipeline = sharp(outputBuffer, { limitInputPixels: false }).withMetadata({ orientation: 1 });
 
@@ -599,9 +599,9 @@ async function writeImageWithSourceMetadata(targetPath, outputBuffer, sourceMeta
   if (ext === ".png") {
     pipeline = pipeline.png();
   } else if (ext === ".webp") {
-    pipeline = pipeline.webp();
+    pipeline = pipeline.webp(quality ? { quality } : undefined);
   } else {
-    pipeline = pipeline.jpeg();
+    pipeline = pipeline.jpeg(quality ? { quality } : undefined);
   }
 
   await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });

@@ -19,6 +19,13 @@ export const BASE_STATE = {
   // exactly. Consumed by the unified canvas/layer model
   // (docs/unified-canvas-plan.md).
   canvas: { pad: { top: 0, right: 0, bottom: 0, left: 0 }, bg: null, scrim: null },
+  // Seamless split (docs/split-carousel-plan.md): panel aspect preset, panel
+  // count (null = automatic from the photo's shape) and the covered region as
+  // FRACTIONS of the transformed photo, so it survives viewport resizes.
+  // `basis` remembers the preview size the region was made for; a quarter
+  // turn changes it and the tool regenerates the default region.
+  // `custom` is the W:H pair used when aspectKey === "custom".
+  split: { aspectKey: "3:4", custom: { width: 3, height: 4 }, count: null, rect: null, basis: null },
 };
 
 export function rectEquals(a, b) {
@@ -82,11 +89,32 @@ function cloneCanvas(canvas) {
   return { pad: { ...canvas.pad }, bg, scrim };
 }
 
+function cloneSplit(split) {
+  const s = split || BASE_STATE.split;
+  return {
+    aspectKey: s.aspectKey,
+    custom: s.custom ? { ...s.custom } : { ...BASE_STATE.split.custom },
+    count: s.count ?? null,
+    rect: s.rect ? { ...s.rect } : null,
+    basis: s.basis ? { ...s.basis } : null,
+  };
+}
+
+export function splitEquals(a, b) {
+  const sa = a || BASE_STATE.split;
+  const sb = b || BASE_STATE.split;
+  const ca = sa.custom || BASE_STATE.split.custom;
+  const cb = sb.custom || BASE_STATE.split.custom;
+  return sa.aspectKey === sb.aspectKey && ca.width === cb.width && ca.height === cb.height
+    && (sa.count ?? null) === (sb.count ?? null) && rectEquals(sa.rect, sb.rect);
+}
+
 export function cloneState(state) {
   return {
     ...state,
     cropRect: state.cropRect ? { ...state.cropRect } : null,
     canvas: cloneCanvas(state.canvas),
+    split: cloneSplit(state.split),
   };
 }
 
@@ -101,6 +129,7 @@ export function stateEquals(a, b) {
     a.imageOffsetX === b.imageOffsetX &&
     a.imageOffsetY === b.imageOffsetY &&
     rectEquals(a.cropRect, b.cropRect) &&
-    canvasEquals(a.canvas, b.canvas)
+    canvasEquals(a.canvas, b.canvas) &&
+    splitEquals(a.split, b.split)
   );
 }

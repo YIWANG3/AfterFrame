@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Split UI mock</title>
+<style>
+  :root {
+    --bg: #0b0b0c; --panel: #131315; --panel2: #1a1a1d; --line: #26262a;
+    --text: #e8e8ea; --muted: #8d8d93; --muted2: #5f5f66; --accent: #7c6cff; --accent2: #a89bff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 -apple-system, "PingFang SC", "Helvetica Neue", Arial, sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 320px 56px; height: 100vh; min-height: 720px; }
+  .stage { position: relative; display: flex; align-items: center; justify-content: center; padding: 48px 32px; }
+  .topbar { position: absolute; top: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; color: var(--muted); font-size: 12px; }
+  .topbar b { color: var(--text); font-weight: 500; }
+  .frame { position: relative; width: 100%; max-width: 1180px; aspect-ratio: 2.6 / 1; border-radius: 6px; overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 50% 10%, #e9b27a 0%, #c8724a 30%, #6b4f3b 55%, #2a3140 80%, #1a2432 100%);
+  }
+  .frame::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 55%, rgba(30,60,90,.55) 100%),
+                repeating-linear-gradient(90deg, transparent 0 60px, rgba(255,255,255,.04) 60px 61px); }
+  .dim { position: absolute; background: rgba(0,0,0,.55); z-index: 2; }
+  .region { position: absolute; z-index: 3; left: 14%; top: 0; width: 72%; height: 100%; outline: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6) inset; }
+  .divider { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed rgba(255,255,255,.85); }
+  .num { position: absolute; top: 8px; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.7); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+  .handle { position: absolute; width: 14px; height: 14px; border: 2.5px solid #fff; z-index: 4; }
+  .handle.tl { left: -3px; top: -3px; border-right: 0; border-bottom: 0; }
+  .handle.tr { right: -3px; top: -3px; border-left: 0; border-bottom: 0; }
+  .handle.bl { left: -3px; bottom: -3px; border-right: 0; border-top: 0; }
+  .handle.br { right: -3px; bottom: -3px; border-left: 0; border-top: 0; }
+  .hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 12px; }
+
+  .panel { background: var(--panel); border-left: 1px solid var(--line); padding: 16px 16px 20px; display: flex; flex-direction: column; gap: 18px; overflow: auto; }
+  .panel h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .panel h3 { margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted2); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .aspect { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px; background: var(--panel2); border: 1px solid transparent; color: var(--muted); cursor: pointer; }
+  .aspect.active { border-color: var(--accent); color: var(--text); background: #1c1a2b; }
+  .aspect i { display: block; border: 1.5px solid currentColor; border-radius: 2px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .stepper { display: inline-flex; align-items: center; background: var(--panel2); border-radius: 8px; overflow: hidden; }
+  .stepper button { all: unset; width: 30px; height: 28px; text-align: center; color: var(--muted); cursor: pointer; }
+  .stepper span { min-width: 34px; text-align: center; font-weight: 600; }
+  .tag { font-size: 11px; color: var(--accent2); background: #1c1a2b; border-radius: 6px; padding: 2px 6px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+  .kv b { color: var(--text); font-weight: 500; text-align: right; }
+  .ghost { all: unset; font-size: 12px; color: var(--accent2); cursor: pointer; }
+  .strip { display: flex; gap: 6px; }
+  .strip div { flex: 1; aspect-ratio: 3 / 4; border-radius: 4px; background: linear-gradient(160deg, #d99a68, #5b4a44 60%, #23303f); position: relative; overflow: hidden; }
+  .strip div::after { content: attr(data-n); position: absolute; left: 6px; top: 5px; font-size: 10px; font-weight: 600; color: #fff; opacity: .9; }
+  .strip div:nth-child(2) { background: linear-gradient(160deg, #e6b17f, #7a5c48 60%, #26364a); }
+  .strip div:nth-child(3) { background: linear-gradient(160deg, #cf8c60, #4e4643 60%, #1f2c3a); }
+  .select { display: flex; gap: 4px; }
+  .select span { flex: 1; text-align: center; padding: 6px 0; border-radius: 6px; background: var(--panel2); color: var(--muted); font-size: 12px; }
+  .select span.active { background: #1c1a2b; color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+  .path { font-size: 11px; color: var(--muted); background: var(--panel2); border-radius: 6px; padding: 7px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .primary { all: unset; display: block; text-align: center; padding: 11px; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; margin-top: auto; }
+  .primary small { display: block; font-weight: 400; opacity: .8; font-size: 11px; margin-top: 2px; }
+
+  .rail { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 6px; }
+  .tab { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--muted); }
+  .tab.active { background: #2a2a2f; color: #fff; }
+  .tab svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <div class="topbar"><span><b>DJI_0412.jpg</b> · 8192 × 3150</span><span>无缝切图 · 3 片 · 3:4</span></div>
+    <div class="frame">
+      <div class="dim" style="left:0;top:0;bottom:0;width:14%"></div>
+      <div class="dim" style="right:0;top:0;bottom:0;width:14%"></div>
+      <div class="region">
+        <div class="handle tl"></div><div class="handle tr"></div><div class="handle bl"></div><div class="handle br"></div>
+        <div class="divider" style="left:33.333%"></div>
+        <div class="divider" style="left:66.666%"></div>
+        <span class="num" style="left:8px">1</span>
+        <span class="num" style="left:calc(33.333% + 8px)">2</span>
+        <span class="num" style="left:calc(66.666% + 8px)">3</span>
+      </div>
+    </div>
+    <div class="hint">拖动区域平移，拖四角等比缩放 · 区域比例已锁定为 3 × 3:4</div>
+  </div>
+
+  <aside class="panel">
+    <h2>无缝切图</h2>
+
+    <section>
+      <h3>单片比例</h3>
+      <div class="grid2">
+        <div class="aspect active"><i style="width:13px;height:17px"></i>3:4</div>
+        <div class="aspect"><i style="width:14px;height:17px"></i>4:5</div>
+        <div class="aspect"><i style="width:16px;height:16px"></i>1:1</div>
+        <div class="aspect"><i style="width:10px;height:18px"></i>9:16</div>
+        <div class="aspect"><i style="width:12px;height:18px"></i>2:3</div>
+      </div>
+    </section>
+
+    <section>
+      <h3>片数</h3>
+      <div class="row">
+        <div class="stepper"><button>−</button><span>3</span><button>+</button></div>
+        <span class="tag">自动</span>
+      </div>
+    </section>
+
+    <section>
+      <h3>覆盖</h3>
+      <div class="kv">
+        <span>区域</span><b>72% × 100%</b>
+        <span>每片输出</span><b>2362 × 3150</b>
+      </div>
+      <div class="row" style="margin-top:6px"><button class="ghost">重置为全高</button></div>
+    </section>
+
+    <section>
+      <h3>预览</h3>
+      <div class="strip"><div data-n="1"></div><div data-n="2"></div><div data-n="3"></div></div>
+    </section>
+
+    <section>
+      <h3>输出</h3>
+      <div class="path">…/2026-09/DJI_0412_split/DJI_0412_split_01.jpg … 03.jpg</div>
+      <div class="row" style="margin:6px 0 0"><span style="color:var(--muted);font-size:11px">原图旁新建子文件夹，原始分辨率</span><button class="ghost">选择文件夹…</button></div>
+    </section>
+
+    <button class="primary">导出 3 张<small>进入 DJI_0412 的版本堆栈</small></button>
+  </aside>
+
+  <nav class="rail">
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></div>
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></div>
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 6l-1.6 4.4L21 12l-4.6 1.6L18 18l-4.2-1.6L12 21l-1.8-4.6L6 18l1.6-4.4L3 12l4.6-1.6L6 6l4.2 1.6z"/></svg></div>
+    <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></div>
+    <div class="tab active" title="切图 / Split"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="16" rx="1.2"/><rect x="16" y="4" width="5" height="16" rx="1.2"/></svg></div>
+  </nav>
+</div>
+</body>
+</html>

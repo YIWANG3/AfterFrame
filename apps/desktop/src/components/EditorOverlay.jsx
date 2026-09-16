@@ -27,12 +27,16 @@ import ToolRail from "./editor/components/ToolRail";
 import PanelChrome from "./editor/components/PanelChrome";
 import CropPanel from "./editor/components/CropPanel";
 import CropOverlay from "./editor/components/CropOverlay";
+import SplitPanel from "./editor/components/SplitPanel";
+import SplitOverlay from "./editor/components/SplitOverlay";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
 import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
 import { useCropTool } from "./editor/state/useCropTool";
+import { useSplitTool } from "./editor/state/useSplitTool";
+import { useSplitExport, resolveSplitOutputDir } from "./editor/state/useSplitExport";
 import { useTextTool } from "./editor/state/useTextTool";
 import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
@@ -260,6 +264,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   viewTransformRef.current = viewTransform;
   const [tool, setTool] = useState("crop");
   const [message, setMessage] = useState("");
+  // Split export destination: target folder (null = the original's folder)
+  // and whether to create a <stem>_split subfolder inside it. Not part of the
+  // undo history — a destination, not an edit.
+  const [splitOutputDir, setSplitOutputDir] = useState(null);
+  const [splitSubfolder, setSplitSubfolder] = useState(true);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
   // Text tool — selection + clipboard + layer CRUD (commits into the shared
   // history via commitLayers).
@@ -329,6 +338,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const discreteRotationDeg = quarterTurns * 90;
   const rotationDeg = discreteRotationDeg + freeAngle;
   const showCropUi = tool === "crop";
+  // Full-resolution photo size in the split region's basis (after quarter turns).
+  const splitSourceDims = useMemo(() => {
+    if (!sourceImage) return null;
+    const { width, height } = getSourceDimensions(sourceImage);
+    return quarterTurns % 2 ? { width: height, height: width } : { width, height };
+  }, [sourceImage, quarterTurns]);
 
   // Soft reset (panel "Reset"): clear layers as an undoable step.
   function layerReset() {
@@ -512,6 +527,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setTool("crop");
     setMessage("");
     setCompareState(null);
+    setSplitOutputDir(null);
+    setSplitSubfolder(true);
     setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
@@ -594,10 +611,26 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     beginAngleDrag, updateAngle, endAngleDrag,
     flushWheelCommit,
   } = useCropTool({
-    open, previewSource, transformedPreview, viewportSize, placement, imageRect,
+    open: open && tool !== "split", previewSource, transformedPreview, viewportSize, placement, imageRect,
     viewportRef, editorState, editorStateRef, pointFromClient,
     apply: applyState, record: recordState, commitCurrent, rebaseHistory,
   });
+
+  // Seamless split tool — region interactions + aspect/count commits, recorded
+  // into the same history via editorState.split (docs/split-carousel-plan.md).
+  const splitTool = useSplitTool({
+    active: tool === "split", transformedPreview, placement, sourceDims: splitSourceDims,
+    editorState, editorStateRef, pointFromClient,
+    apply: applyState, record: recordState, commitCurrent,
+  });
+  const splitToolRef = useRef(splitTool);
+  splitToolRef.current = splitTool;
+  const splitCenter = splitTool.rectPx
+    ? { x: splitTool.rectPx.x + splitTool.rectPx.width / 2, y: splitTool.rectPx.y + splitTool.rectPx.height / 2 }
+    : null;
+  // The viewport routes pointer events to whichever tool owns the drag.
+  const viewportPointerMove = tool === "split" ? splitTool.handlePointerMove : handlePointerMove;
+  const viewportPointerEnd = tool === "split" ? splitTool.handlePointerEnd : handlePointerEnd;
 
   // The text tool with an active border renders the COMPOSED view (cropped
   // content + margins) via a clipping window; every other view is the plain
@@ -606,7 +639,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const padActive = hasPad(editorState.canvas?.pad);
   const screenOutputView = tool === "text" ? transformOutputView(outputView, viewTransform) : outputView;
   const screenOutputRect = screenOutputView?.rect ?? null;
-  const screenImageRect = tool === "text" ? (screenOutputView?.photoRect || imageRect) : imageRect;
+  const screenImageRect = tool === "split"
+    ? (splitTool.splitImageRect || imageRect)
+    : tool === "text" ? (screenOutputView?.photoRect || imageRect) : imageRect;
   const composedView = tool === "text" && padActive && screenOutputView ? screenOutputView : null;
 
   useEffect(() => {
@@ -687,6 +722,26 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     t,
     onSaveStart: () => setMessage(""),
   });
+
+  const splitExport = useSplitExport({
+    saveBasePath, sourcePath, sourceImageRef, nativeSaveSourcePathRef, editorStateRef,
+    getCount: () => splitToolRef.current.count,
+    pushToast, t,
+    // No path: App refreshes the gallery; the split hook raises its own toast.
+    onSaveComplete: () => onSaveComplete?.(),
+  });
+  const splitExportRef = useRef(null);
+  splitExportRef.current = (outputDir = splitOutputDir, subfolder = splitSubfolder) => splitExport.exportSplit({ outputDir, subfolder });
+  const splitExportingRef = useRef(false);
+  splitExportingRef.current = splitExport.exporting;
+  // Destination as of the latest render, for the e2e backdoor (its effect
+  // does not re-run on destination changes).
+  const splitDestRef = useRef(null);
+  splitDestRef.current = { outputDir: splitOutputDir, subfolder: splitSubfolder };
+  async function chooseSplitFolder() {
+    const dir = await api.pickDirectory({ defaultPath: resolveSplitOutputDir(saveBasePath, splitOutputDir, false) || undefined });
+    if (dir) setSplitOutputDir(dir);
+  }
 
   // Frame presets — their own module so EditorOverlay stays the orchestrator.
   // Presets are generated on the cropped/transformed photo and applied as
@@ -838,6 +893,25 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       selectLayers: (ids) => selectLayers(ids),
       undo: () => handleUndo(),
       redo: () => handleRedo(),
+      // Split tool (read through refs so the values are always current).
+      getSplitState: () => {
+        const st = splitToolRef.current;
+        return {
+          aspectKey: st.aspectKey, count: st.count, isAutoCount: st.isAutoCount,
+          rect: st.rect, rectPx: st.rectPx, splitImageRect: st.splitImageRect,
+          custom: st.custom,
+          outputDir: splitDestRef.current.outputDir, subfolder: splitDestRef.current.subfolder,
+          resolvedOutputDir: resolveSplitOutputDir(saveBasePath, splitDestRef.current.outputDir, splitDestRef.current.subfolder),
+          exporting: splitExportingRef.current,
+        };
+      },
+      setSplitAspect: (key, custom) => splitToolRef.current.commitAspect(key, custom),
+      setSplitSubfolder: (on) => setSplitSubfolder(!!on),
+      setSplitCount: (n) => splitToolRef.current.commitCount(n),
+      resetSplitRegion: () => splitToolRef.current.resetRegion(),
+      exportSplit: (dir, subfolder) => splitExportRef.current?.(
+        dir ?? splitDestRef.current.outputDir, subfolder ?? splitDestRef.current.subfolder,
+      ),
     };
     return () => {
       if (window.__afterframeTest) {
@@ -847,6 +921,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           "selectLayers", "undo", "redo", "setPad", "applyFramePreset", "clearFramePreset",
           "sampleSourcePixel",
           "setTestLayers", "loadTestDepth",
+          "getSplitState", "setSplitAspect", "setSplitCount", "resetSplitRegion", "exportSplit", "setSplitSubfolder",
         ]) delete window.__afterframeTest[k];
       }
     };
@@ -956,7 +1031,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       }
       if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
         event.preventDefault();
-        handleApply();
+        if (tool === "split") void splitExportRef.current?.();
+        else handleApply();
       }
       if (event.key === " ") {
         setSpacePressed(true);
@@ -979,6 +1055,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   if (!open) return null;
 
   const edited = !stateEquals(editorState, baseSnapshotRef.current || BASE_STATE);
+  // P1 split works on the plain photo: layers and canvas margins need the
+  // composited path (docs/split-carousel-plan.md, P2).
+  const splitBlockedReason = layers.length > 0 || padActive || editorState.canvas?.scrim
+    ? t("split.layersBlocked")
+    : null;
   const dimsLabel = (() => {
     if (!sourceImage || !imageRect) return null;
     // Scale between screen and source pixels: quarter turns only — the free
@@ -990,6 +1071,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const nativeWidth = sourceWidth * absCos + sourceHeight * absSin;
     const scale = nativeWidth / imageRect.width;
     const dims = `${sourceWidth} × ${sourceHeight}`;
+    if (tool === "split" && splitTool.rect && splitSourceDims) {
+      const panelW = Math.round((splitTool.rect.width * splitSourceDims.width) / splitTool.count);
+      const panelH = Math.round(splitTool.rect.height * splitSourceDims.height);
+      return `· ${dims} · ${t("overlay.tools.split")} ${splitTool.count} × ${panelW} × ${panelH}`;
+    }
     if (!showCropUi || !cropRect) return `· ${dims}`;
     const cropW = Math.round(cropRect.width * scale);
     const cropH = Math.round(cropRect.height * scale);
@@ -1019,11 +1105,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         ref={viewportRef}
         data-editor-viewport="true"
         className="relative min-h-0 flex-1 overflow-hidden bg-app"
-        style={{ cursor: spacePressed ? "grab" : activeInteraction === "rotate" ? "crosshair" : activeInteraction === "image-pan" ? "grabbing" : "default" }}
-        onPointerDown={spacePressed ? beginImagePan : undefined}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
+        style={{ cursor: spacePressed && tool !== "split" ? "grab" : activeInteraction === "rotate" ? "crosshair" : activeInteraction === "image-pan" ? "grabbing" : "default" }}
+        onPointerDown={spacePressed && tool !== "split" ? beginImagePan : undefined}
+        onPointerMove={viewportPointerMove}
+        onPointerUp={viewportPointerEnd}
+        onPointerCancel={viewportPointerEnd}
       >
         {loadState === "loading" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{t("overlay.loading")}</div> : null}
         {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{loadError || message || "Failed to load image"}</div> : null}
@@ -1084,7 +1170,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
               /* Rotating image layer — only the image rotates */
               <div
                 className="absolute inset-0"
-                style={cropCenter ? { transform: `rotate(${freeAngle}deg)`, transformOrigin: `${cropCenter.x}px ${cropCenter.y}px` } : undefined}
+                style={(() => {
+                  // Split: the photo turns about the REGION centre, matching the
+                  // export (region cut as one crop with the free angle, then sliced).
+                  const origin = tool === "split" ? splitCenter : cropCenter;
+                  return origin ? { transform: `rotate(${freeAngle}deg)`, transformOrigin: `${origin.x}px ${origin.y}px` } : undefined;
+                })()}
               >
                 <canvas
                   ref={imageCanvasRef}
@@ -1094,9 +1185,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                     top: `${screenImageRect.y}px`,
                     width: `${screenImageRect.width}px`,
                     height: `${screenImageRect.height}px`,
-                    cursor: spacePressed ? "grab" : activeInteraction === "image-pan" ? "grabbing" : "grab",
+                    cursor: tool === "split" ? "default" : spacePressed ? "grab" : activeInteraction === "image-pan" ? "grabbing" : "grab",
                   }}
-                  onPointerDown={beginImagePan}
+                  onPointerDown={tool === "split" ? undefined : beginImagePan}
                 />
 
                 {/* Show depth map (debug overlay) — a canvas mirror of the source canvas.
@@ -1168,6 +1259,16 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 cropRect={cropRect}
                 viewportSize={viewportSize}
                 onBeginResize={beginCropResize}
+              />
+            )}
+
+            {tool === "split" && splitTool.rectPx && (
+              <SplitOverlay
+                rect={splitTool.rectPx}
+                count={splitTool.count}
+                viewportSize={viewportSize}
+                onBeginResize={splitTool.beginResize}
+                onBeginMove={splitTool.beginMove}
               />
             )}
           </>
@@ -1249,6 +1350,32 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   const s = editorStateRef.current;
                   recordState({ ...s, canvas: { ...s.canvas, bg: nextBg } });
                 }}
+              />
+            ) : tool === "split" ? (
+              <SplitPanel
+                t={t}
+                aspectKey={splitTool.aspectKey}
+                customAspect={splitTool.custom}
+                onCommitAspect={splitTool.commitAspect}
+                count={splitTool.count}
+                isAutoCount={splitTool.isAutoCount}
+                onCommitCount={splitTool.commitCount}
+                rect={splitTool.rect}
+                previewSource={transformedPreview}
+                sourceDims={splitSourceDims}
+                onResetRegion={splitTool.resetRegion}
+                outputDir={resolveSplitOutputDir(saveBasePath, splitOutputDir, splitSubfolder)}
+                subfolder={splitSubfolder}
+                onSubfolderChange={setSplitSubfolder}
+                onChooseFolder={chooseSplitFolder}
+                blockedReason={splitBlockedReason}
+                exporting={splitExport.exporting}
+                progress={splitExport.progress}
+                onExport={() => splitExportRef.current?.()}
+                onUndo={handleUndo}
+                canUndo={historyIndex > 0}
+                onRedo={handleRedo}
+                canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
               />
             ) : tool === "sticker" ? (
               <div className="flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden">
