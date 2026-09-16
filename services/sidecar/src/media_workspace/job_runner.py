@@ -2,10 +2,29 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
-from .ai_repaint import DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_JIMENG_MODEL, DEFAULT_ARK_MODEL, OPENAI_PROVIDER, OPENAI_COMPATIBLE_PROVIDER, JIMENG_PROVIDER, ARK_PROVIDER, run_mock_repaint, run_nanobanana_repaint, run_openai_repaint, run_jimeng_repaint, run_ark_repaint, run_mock_text_image, run_gemini_text_image, run_openai_text_image, run_jimeng_text_image, run_ark_text_image
+from .ai_repaint import (
+    ARK_PROVIDER,
+    DEFAULT_ARK_MODEL,
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_JIMENG_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    JIMENG_PROVIDER,
+    OPENAI_COMPATIBLE_PROVIDER,
+    OPENAI_PROVIDER,
+    run_ark_repaint,
+    run_ark_text_image,
+    run_gemini_text_image,
+    run_jimeng_repaint,
+    run_jimeng_text_image,
+    run_mock_repaint,
+    run_mock_text_image,
+    run_nanobanana_repaint,
+    run_openai_repaint,
+    run_openai_text_image,
+)
 from .catalog import ensure_catalog
 from .config import Thresholds
 from .db import (
@@ -14,18 +33,18 @@ from .db import (
     get_job,
     is_cancel_requested,
     is_pause_requested,
-    list_image_assets_missing_resource_set,
     list_assets_for_preview,
+    list_image_assets_missing_resource_set,
     list_people_index_candidates,
     rebuild_candidate_groups,
     replace_asset_faces,
     update_job,
     upsert_face_model,
     upsert_people_asset_index,
-    upsert_image_asset,
-    upsert_preview_entry,
-    upsert_registry,
 )
+from .preview_service import PreviewService
+from .reverse_lookup import resolve_image_batch
+from .scanner import enrich_raw_assets, scan_raw_directory
 
 
 class JobCancelled(Exception):
@@ -64,12 +83,6 @@ def _mark_cancelled(connection, job_id: str, payload: dict, result: dict | None 
         error_text=None,
     )
     return final
-from .metadata import extract_image_candidate
-from .models import MatchDecision
-from .preview_service import PreviewService
-from .reverse_lookup import resolve_image
-from .reverse_lookup import resolve_image_batch
-from .scanner import enrich_raw_assets, scan_raw_directory
 
 
 def _fraction(processed: int | None, total: int | None) -> float:

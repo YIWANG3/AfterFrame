@@ -81,7 +81,7 @@ def upsert_asset_location_from_metadata(
             """,
             (asset_id, latitude, longitude, latitude, latitude, longitude, longitude),
         )
-        location_id = int(cursor.lastrowid)
+        location_id = int(cursor.lastrowid or 0)
     connection.execute(
         """
         INSERT OR REPLACE INTO asset_location_rtree (
@@ -150,7 +150,7 @@ def upsert_ai_asset_location(
             """,
             (asset_id, *values),
         )
-        location_id = int(cursor.lastrowid)
+        location_id = int(cursor.lastrowid or 0)
     connection.execute(
         """
         INSERT OR REPLACE INTO asset_location_rtree (
@@ -209,7 +209,7 @@ def set_manual_asset_location(
             """,
             (asset_id, lat, lon, lat, lat, lon, lon),
         )
-        location_id = int(cursor.lastrowid)
+        location_id = int(cursor.lastrowid or 0)
     connection.execute(
         """
         INSERT OR REPLACE INTO asset_location_rtree (

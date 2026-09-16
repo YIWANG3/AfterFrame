@@ -23,20 +23,20 @@ import re
 import shutil
 import sqlite3
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
-
-import urllib.request
 import urllib.error
+import urllib.request
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from . import video
 from .annotation_location import asset_gps_location, effective_location
 
 try:
-    from PIL import Image  # noqa: F401 — needed for image preprocessing
+    from PIL import Image, ImageOps  # noqa: F401 — needed for image preprocessing
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("Pillow is required for annotation. Install: pip install Pillow") from exc
 
@@ -75,8 +75,8 @@ TAG_REUSE_HINT_LIMIT = 200
 class AnnotationResult:
     caption: str
     tags: list[str]
-    location: Optional[dict[str, Any]]  # v2: {"country", "admin1", "locality", "landmark", "confidence"}
-    detected_text: Optional[str]
+    location: dict[str, Any] | None  # v2: {"country", "admin1", "locality", "landmark", "confidence"}
+    detected_text: str | None
     raw_response: str
     provider: str
     model: str
@@ -86,12 +86,17 @@ class AnnotationResult:
 
 def encode_image_for_llm(image_path: Path, max_edge: int = THUMB_MAX_EDGE) -> tuple[str, str]:
     """Resize, strip EXIF, JPEG-encode, base64. Returns (b64_data, mime_type)."""
-    img = Image.open(image_path)
-    img = img.convert("RGB")  # strips alpha + drops most EXIF
+    # Bake in EXIF orientation BEFORE stripping metadata — otherwise a portrait
+    # phone shot (orientation 6) reaches the model lying on its side, which
+    # wrecks OCR in particular. Generated previews (sips/QuickLook) are already
+    # upright, but `_batch_image_path` falls back to the untouched original when
+    # no preview exists yet, and `annotate-asset --image` always passes one.
+    with Image.open(image_path) as source:
+        img = ImageOps.exif_transpose(source).convert("RGB")  # strips alpha + drops most EXIF
     w, h = img.size
     if max(w, h) > max_edge:
         scale = max_edge / max(w, h)
-        img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+        img = img.resize((round(w * scale), round(h * scale)), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
     return base64.b64encode(buf.getvalue()).decode("ascii"), "image/jpeg"
@@ -132,7 +137,7 @@ def build_system_prompt(
     max_tags: int,
     max_caption_chars: int,
     existing_tags: list[str],
-    custom_instructions: Optional[str],
+    custom_instructions: str | None,
 ) -> str:
     lang_clause = (
         "Generate tags in BOTH English and 中文 (each tag in only one language, never mixed)."
@@ -214,7 +219,7 @@ def call_anthropic(
 def call_openai_compatible(
     *,
     base_url: str,
-    api_key: Optional[str],
+    api_key: str | None,
     model: str,
     system_prompt: str,
     images: list[tuple[str, str]],
@@ -309,17 +314,17 @@ def annotate(
     *,
     image_paths: list[Path],
     provider: str,
-    api_key: Optional[str],
+    api_key: str | None,
     model: str,
-    base_url: Optional[str] = None,
-    languages: Optional[list[str]] = None,
+    base_url: str | None = None,
+    languages: list[str] | None = None,
     max_tags: int = DEFAULT_MAX_TAGS,
     max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
-    custom_instructions: Optional[str] = None,
-    existing_tags: Optional[list[str]] = None,
+    custom_instructions: str | None = None,
+    existing_tags: list[str] | None = None,
     is_video: bool = False,
-    location_hint: Optional[str] = None,
-    location_context: Optional[dict[str, Any]] = None,
+    location_hint: str | None = None,
+    location_context: dict[str, Any] | None = None,
 ) -> AnnotationResult:
     """Annotate one asset from one or more frames. Pure: no DB writes.
 
@@ -411,7 +416,7 @@ def annotate(
 
 def save_annotation(connection: sqlite3.Connection, asset_id: str, result: AnnotationResult) -> dict[str, Any]:
     """Write annotation + tags. Replaces any existing annotation for the asset."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     merged_tags = merge_with_existing_tags(connection, result.tags)
     location = asset_gps_location(connection, asset_id) or result.location
 
@@ -469,7 +474,7 @@ def save_annotation(connection: sqlite3.Connection, asset_id: str, result: Annot
     return get_annotation(connection, asset_id) or {}
 
 
-def _sync_ai_location(connection: sqlite3.Connection, asset_id: str, location: Optional[dict]) -> None:
+def _sync_ai_location(connection: sqlite3.Connection, asset_id: str, location: dict | None) -> None:
     """Keep asset_locations in step with this annotation's location guess.
 
     Resolvable → upsert an ai row (never touching manual/exif). Unresolvable →
@@ -516,15 +521,15 @@ def annotate_batch(
     assets: Sequence[sqlite3.Row],
     *,
     provider: str,
-    api_key: Optional[str],
+    api_key: str | None,
     model: str,
-    base_url: Optional[str] = None,
-    languages: Optional[list[str]] = None,
+    base_url: str | None = None,
+    languages: list[str] | None = None,
     max_tags: int = DEFAULT_MAX_TAGS,
     max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
-    custom_instructions: Optional[str] = None,
+    custom_instructions: str | None = None,
     video_frame_interval: float = 0.0,
-    progress_callback: Optional[Callable[[dict[str, int]], None]] = None,
+    progress_callback: Callable[[dict[str, int]], None] | None = None,
     max_workers: int = 3,
 ) -> dict[str, Any]:
     """Annotate many assets concurrently.
@@ -617,7 +622,7 @@ def annotate_batch(
     return {"total": total, "succeeded": succeeded, "failed": failed, "errors": errors}
 
 
-def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[dict[str, Any]]:
+def get_annotation(connection: sqlite3.Connection, asset_id: str) -> dict[str, Any] | None:
     row = connection.execute(
         """
         SELECT asset_id, provider, model, schema_version, caption, tags_json,
@@ -644,7 +649,7 @@ def get_annotation(connection: sqlite3.Connection, asset_id: str) -> Optional[di
     }
 
 
-def clear_ai_location(connection: sqlite3.Connection, asset_id: str) -> Optional[dict[str, Any]]:
+def clear_ai_location(connection: sqlite3.Connection, asset_id: str) -> dict[str, Any] | None:
     """User veto of a wrong AI location guess.
 
     Nulls the annotation's location_json AND drops the resolved AI point —
@@ -668,13 +673,13 @@ def clear_ai_location(connection: sqlite3.Connection, asset_id: str) -> Optional
     return get_annotation(connection, asset_id)
 
 
-def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, source: str = "user", commit: bool = True) -> Optional[dict[str, Any]]:
+def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, source: str = "user", commit: bool = True) -> dict[str, Any] | None:
     """Manually add a tag to an asset. Keeps tags_json (display) and asset_tags
     (search/filter) in sync. Creates a minimal annotation row if none exists."""
     tag = (tag or "").strip()
     if not tag:
         return get_annotation(connection, asset_id)
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     norm = normalize_tag(tag)
     connection.execute(
         "INSERT OR IGNORE INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, ?, ?)",
@@ -704,7 +709,7 @@ def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, so
     return get_annotation(connection, asset_id)
 
 
-def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> Optional[dict[str, Any]]:
+def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any] | None:
     """Remove a tag from an asset (both tags_json and asset_tags)."""
     tag = (tag or "").strip()
     if not tag:
@@ -719,7 +724,7 @@ def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *,
         tags = [t for t in json.loads(row["tags_json"] or "[]") if normalize_tag(t) != norm]
         connection.execute(
             "UPDATE asset_ai_annotations SET tags_json = ?, updated_at = ? WHERE asset_id = ?",
-            (json.dumps(tags, ensure_ascii=False), datetime.now(timezone.utc).isoformat(), asset_id),
+            (json.dumps(tags, ensure_ascii=False), datetime.now(UTC).isoformat(), asset_id),
         )
     if commit:
         connection.commit()
@@ -740,7 +745,7 @@ def list_top_tags(connection: sqlite3.Connection, limit: int = TAG_REUSE_HINT_LI
 ANTHROPIC_MODELS = ["claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-5"]
 
 
-def test_connection(*, provider: str, api_key: Optional[str], base_url: Optional[str] = None) -> dict[str, Any]:
+def test_connection(*, provider: str, api_key: str | None, base_url: str | None = None) -> dict[str, Any]:
     """Send a minimal request to verify reachability + auth. Returns {ok, error?, info?}."""
     try:
         if provider == "anthropic":
@@ -784,7 +789,7 @@ def test_connection(*, provider: str, api_key: Optional[str], base_url: Optional
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-def list_models(*, provider: str, api_key: Optional[str], base_url: Optional[str] = None) -> list[dict[str, str]]:
+def list_models(*, provider: str, api_key: str | None, base_url: str | None = None) -> list[dict[str, str]]:
     """Return [{id, label}] for the provider. Local providers proxy /v1/models."""
     if provider == "anthropic":
         # Anthropic has no public list-models endpoint — use a curated set.

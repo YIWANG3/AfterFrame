@@ -6,22 +6,23 @@ from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 from sqlite3 import Row
+from typing import Any
 
 from .config import DEFAULT_RAW_EXTENSIONS, Thresholds
-from .file_types import is_macos_metadata
 from .db import (
     get_registry,
     load_raw_cache,
     load_raw_candidates,
-    load_raw_candidates_by_camera_token,
     load_raw_candidates_by_camera,
+    load_raw_candidates_by_camera_token,
     load_raw_candidates_by_capture_window,
     upsert_catalog_root,
     upsert_image_asset,
     upsert_raw_asset,
-    upsert_video_asset,
     upsert_registry,
+    upsert_video_asset,
 )
+from .file_types import is_macos_metadata
 from .metadata import (
     camera_stem_token,
     extract_image_candidate,
@@ -31,11 +32,14 @@ from .metadata import (
     quick_fingerprint_from_handle,
     stable_asset_id,
     stem_alnum_key,
+)
+from .metadata import (
     stem_key as compute_stem_key,
 )
 from .models import ImageCandidate, MatchDecision
 from .source_readiness import SourceNotReadyError, validate_source_ready
-from .video import VIDEO_EXTENSIONS, is_video, probe as probe_video
+from .video import VIDEO_EXTENSIONS, is_video
+from .video import probe as probe_video
 
 RESOLVE_BATCH_COMMIT_SIZE = 200
 RECALL_LIMIT = 200
@@ -358,7 +362,7 @@ def resolve_image_batch(
     respect_tombstones: bool = False,
     validate_sources: bool = False,
     persist_roots: bool = True,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     thresholds = thresholds or Thresholds()
     counts: dict[str, int] = {
         "auto_bound": 0,

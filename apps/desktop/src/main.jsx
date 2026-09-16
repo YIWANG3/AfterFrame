@@ -10,9 +10,10 @@ if (/Electron/i.test(navigator.userAgent)) {
   document.documentElement.classList.add("electron");
   // Fullscreen: the window fills the screen, so the self-drawn 26px corner and
   // the traffic-light gutters go away (html.fs).
-  window.mediaWorkspace?.onFullscreen?.((flag) => document.documentElement.classList.toggle("fs", flag));
+  api.onFullscreen((flag) => document.documentElement.classList.toggle("fs", flag));
 }
 import "./ui/scrollFlag";
+import api from "./api";
 
 // vibepin annotation overlay (dev only) — Alt+A to mark up the live UI, the
 // daemon on :7331 collects feedback and Claude Code picks it up. Stripped in

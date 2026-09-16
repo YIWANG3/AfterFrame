@@ -1,5 +1,5 @@
-import tempfile
 import sqlite3
+import tempfile
 import threading
 import time
 import unittest
@@ -7,8 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
-from media_workspace.db import connect, init_db, list_image_assets
-from media_workspace.db import resource_sets
+from media_workspace.db import connect, init_db, list_image_assets, resource_sets
 
 
 class ResourceSetConcurrencyTest(unittest.TestCase):

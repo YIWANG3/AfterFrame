@@ -320,10 +320,10 @@ export default function App() {
   );
   const {
     selectedIds, setSelectedIds, setAnchorId: setSelectionAnchorId,
-    selectedIdSet, selectedIndex,
+    selectedIndex,
     selectSingle, selectRelatedAsset, handleItemSelect, selectByIndex,
     handleContextSelect, handleSelectionGroup, clearSelection,
-    prepareDragSelection, moveSelection, selectByDirection,
+    prepareDragSelection, selectByDirection,
   } = useSelection({
     orderedIds,
     itemById,
@@ -1219,7 +1219,6 @@ export default function App() {
                   onLoadMore={workspace.loadMoreBrowser}
                   displayMode={displayMode}
                   thumbSize={thumbSize}
-                  totalCount={Number(workspace.summary?.image_assets ?? 0)}
                   collections={workspace.collections}
                   activeCollectionId={workspace.activeCollectionId}
                   onAddToCollection={workspace.addToCollection}

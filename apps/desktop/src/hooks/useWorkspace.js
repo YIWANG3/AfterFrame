@@ -4,14 +4,14 @@ import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/for
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
+import {
+  browseScopeKey, chooseSelectionAfterReload, filterItemsByQuery, shouldResetScopeForReveal,
+} from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
 const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
-const browseScopeKey = ({ status, collectionId, search, sort, filters }) => JSON.stringify({
-  status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {},
-});
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
@@ -151,23 +151,11 @@ export default function useWorkspace({ pushToast } = {}) {
     localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
   }, [inspectorWidth]);
 
-  // Backend handles sorting; client only does local text filtering for instant feedback
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return items;
-    return items.filter((item) =>
-      [
-        item.stem,
-        item.primary_stem,
-        item.image_path,
-        item.raw_path,
-        item.version_kind,
-        item.image_metadata?.camera_model,
-        item.raw_metadata?.camera_model,
-      ]
-        .some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery)),
-    );
-  }, [items, query]);
+  // Backend handles sorting; the client only narrows the PREVIOUS page locally
+  // so typing feels instant during the 250ms search debounce. The server result
+  // then replaces `items` wholesale. Field list + the superset invariant live
+  // in workspaceLogic.searchableFields.
+  const filteredItems = useMemo(() => filterItemsByQuery(items, query), [items, query]);
 
   // Debounced server-side search: reload browser when query changes
   const searchTimerRef = useRef(null);
@@ -188,6 +176,10 @@ export default function useWorkspace({ pushToast } = {}) {
       });
     }, 250);
     return () => clearTimeout(searchTimerRef.current);
+    // Fires on the typed query only. loadBrowser is recreated every render and
+    // browserReady is a gate, not a trigger — listing either would re-browse
+    // on unrelated renders. The current scope is read through jobsBridgeRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   // Reload from backend when sort changes
@@ -195,6 +187,8 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!browserReady) return;
     if (Date.now() < suppressAutoReloadUntilRef.current) return;
     void loadBrowser({ force: true, sortKey: sort });
+    // Sort change only — see the query effect above for why not loadBrowser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
 
   // Reload when structured facet filters change
@@ -214,6 +208,8 @@ export default function useWorkspace({ pushToast } = {}) {
       return;
     }
     void loadBrowser({ force: true, facetFilters: filters });
+    // Filter change only — see the query effect above for why not loadBrowser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   // Refresh facet options when the catalog/library changes
@@ -293,21 +289,12 @@ export default function useWorkspace({ pushToast } = {}) {
         setItems((current) => [...current, ...payload]);
       } else {
         setItems(payload);
-        const firstId = payload[0]?.asset_id || null;
         const activeSelectedId = selectedAssetIdRef.current;
-        const selectionStillValid = activeSelectedId && payload.some((item) => item.asset_id === activeSelectedId);
-        // preserveView never steals selection by jumping to the first item;
-        // it only clears when the selected asset truly disappeared.
-        // A version selected from the inspector is also preserved even when it
-        // is outside this filtered page. The next ordinary gallery selection
-        // clears that relationship pin through setSelectedAssetId above.
-        const nextSelectedId = relatedSelectionRef.current && activeSelectedId
-          ? activeSelectedId
-          : selectionStillValid
-            ? activeSelectedId
-            : preserveView
-              ? null
-              : firstId;
+        // The pin (relatedSelectionRef) is cleared by the next ordinary gallery
+        // selection through setSelectedAssetId above.
+        const nextSelectedId = chooseSelectionAfterReload({
+          payload, activeSelectedId, relatedPinned: relatedSelectionRef.current, preserveView,
+        });
         if (nextSelectedId !== activeSelectedId) {
           setSelectedAssetId(nextSelectedId);
           await loadDetail(nextSelectedId || null);
@@ -397,10 +384,9 @@ export default function useWorkspace({ pushToast } = {}) {
       let location = await api.locateImageAsset({ assetId, ...scope });
       log("located", JSON.stringify(location));
       if (!isCurrent()) { log("superseded after locate"); return; }
-      let resetScope = location.index == null;
-      // The local text projection may hide a server-side annotation match.
-      if (query.trim() && items.some((item) => item.asset_id === assetId)
-        && !filteredItems.some((item) => item.asset_id === assetId)) resetScope = true;
+      const resetScope = shouldResetScopeForReveal({
+        locationIndex: location.index, query, items, filteredItems, assetId,
+      });
       if (resetScope) {
         scope = { status: "all", sort };
         location = await api.locateImageAsset({ assetId, ...scope });
@@ -612,21 +598,47 @@ export default function useWorkspace({ pushToast } = {}) {
     const nextRating = normalized > 0 ? normalized : null;
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
+    const targetSet = new Set(targetIds);
 
-    setItems((current) =>
-      current.map((item) =>
-        targetIds.includes(item.asset_id)
-          ? { ...item, app_rating: nextRating }
-          : item,
-      ),
-    );
-    setDetail((current) =>
-      current && targetIds.includes(current.asset_id)
-        ? { ...current, app_rating: nextRating }
-        : current,
-    );
+    // Snapshot what each tile showed so a failed write can be undone. Without
+    // this the stars stay on the new value while the catalog still holds the
+    // old one, until some unrelated browse reload happens to correct it.
+    const previousRatings = new Map();
+    for (const item of items) {
+      if (targetSet.has(item.asset_id)) previousRatings.set(item.asset_id, item.app_rating ?? null);
+    }
+    if (detail && targetSet.has(detail.asset_id) && !previousRatings.has(detail.asset_id)) {
+      previousRatings.set(detail.asset_id, detail.app_rating ?? null);
+    }
 
-    await api.setAssetRating(targetIds, normalized);
+    const applyRating = (resolve) => {
+      setItems((current) =>
+        current.map((item) => (targetSet.has(item.asset_id)
+          ? { ...item, app_rating: resolve(item.asset_id, item.app_rating) }
+          : item)),
+      );
+      setDetail((current) => (current && targetSet.has(current.asset_id)
+        ? { ...current, app_rating: resolve(current.asset_id, current.app_rating) }
+        : current));
+    };
+
+    applyRating(() => nextRating);
+
+    try {
+      await api.setAssetRating(targetIds, normalized);
+    } catch (error) {
+      applyRating((assetId, current) => (previousRatings.has(assetId) ? previousRatings.get(assetId) : current));
+      pushToast?.({
+        title: t("ratingFailed"),
+        message: String(error?.message || error),
+        tone: "error",
+        ttl: 6000,
+      });
+      // Handled in full here (rolled back + surfaced); the only caller invokes
+      // this as `void setAssetRating(...)`, so rethrowing would just produce an
+      // unhandled rejection.
+      return;
+    }
     // Ratings order cluster covers on the map — invalidate its point cache.
     bumpCatalogRevision();
   }
@@ -907,8 +919,12 @@ export default function useWorkspace({ pushToast } = {}) {
     pokeJobs();
   }
 
+  // Initial load, once. refreshAll closes over the current view state on
+  // purpose — re-running it whenever that state changes is what the targeted
+  // effects above are for.
   useEffect(() => {
     void refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -944,6 +960,8 @@ export default function useWorkspace({ pushToast } = {}) {
         ttl: 6000,
       });
     }
+    // One toast per finished import; pushToast/t only format it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastFinishedJob]);
 
   // Menu actions: registered ONCE, dispatched through a ref so the handler

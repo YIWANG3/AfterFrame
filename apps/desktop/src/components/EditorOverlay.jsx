@@ -2,7 +2,7 @@ import api from "../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName } from "../utils/format";
-import { resizeCropRect, MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
+import { MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
@@ -15,8 +15,6 @@ import {
   buildPreviewSource,
   buildDepthMaskCanvas,
   buildTransformedCanvas, cutRotatedCrop,
-  inferMimeType,
-  canvasToBlob,
   bgToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
@@ -64,7 +62,6 @@ import {
   isTextLayer,
   isStickerLayer,
   isOverlayLayer,
-  getTextLayers,
 } from "./editor/layerStack";
 
 function clamp(value, min, max) {
@@ -257,7 +254,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     commitLayers, commitLayersCoalesced, flushLayerCommit,
     undo: rawHandleUndo, redo: rawHandleRedo,
   } = useEditorHistory();
-  const [pointerPoint, setPointerPoint] = useState(null);
   const [spacePressed, setSpacePressed] = useState(false);
   const [viewTransform, setViewTransform] = useState(IDENTITY_VIEW_TRANSFORM);
   const viewTransformRef = useRef(IDENTITY_VIEW_TRANSFORM);
@@ -606,7 +602,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const {
     activeInteraction,
     commitAspect, commitTransform,
-    beginCropResize, beginRotate, beginImagePan,
+    beginCropResize, beginImagePan,
     handlePointerMove, handlePointerEnd,
     beginAngleDrag, updateAngle, endAngleDrag,
     flushWheelCommit,
@@ -712,7 +708,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     nativeSaveSourcePath: nativeSaveSourcePathRef.current,
     isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer) || isOverlayLayer(layer),
   });
-  const { saving, executeSave, executeSaveRef, handleExport, handleQuickSave } = useEditorSave({
+  const { saving, executeSaveRef, handleExport, handleQuickSave } = useEditorSave({
     saveBasePath,
     buildSaveArgs,
     canSave: () => !!(cropRect && imageRect),
@@ -1319,7 +1315,6 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 onRedo={handleRedo}
                 canUndo={historyIndex > 0}
                 canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
-                onMoveLayer={handleMoveLayer}
                 onDeleteLayer={handleDeleteLayer}
                 hasSceneDepth={!!depthSourcePath}
                 depthGenerating={depthGenerating}
@@ -1390,7 +1385,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
-              <AiRepaintPanel sourcePath={sourcePath} outputBasePath={saveBasePath} sourceLabel={sourceLabel} onCompareChange={setCompareState} compareState={compareState} onRepaintComplete={onSaveComplete} />
+              <AiRepaintPanel sourcePath={sourcePath} outputBasePath={saveBasePath} onCompareChange={setCompareState} compareState={compareState} onRepaintComplete={onSaveComplete} />
             </div>
           </PanelChrome>
 

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "./SettingsPrimitives";
-import { PROVIDER_TYPES, getProviderType, dedupeModels, ProviderModal } from "../ai/providers";
+import { getProviderType, dedupeModels, ProviderModal } from "../ai/providers";
 
 export default function RepaintSettings() {
   const { t } = useTranslation("settings");

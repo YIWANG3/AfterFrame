@@ -1,11 +1,11 @@
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from media_workspace import annotation
-from media_workspace.annotation_location import gps_location, effective_location, _nearby_labels
+from media_workspace.annotation_location import _nearby_labels, effective_location, gps_location
 from media_workspace.cli import _annotation_from_row, _cmd_annotate_asset
 from media_workspace.db import connect, init_db, list_image_assets, upsert_asset_location_from_metadata
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Palette, X, Search, ChevronDown, Check, Star, Sparkles, Play, FolderPlus } from "lucide-react";
+import { Palette, X, Search, Check, Star, Sparkles, Play, FolderPlus } from "lucide-react";
 
 /* ── Proposed design‑token reference ────────────────────────── */
 const RADIUS_SCALE = [

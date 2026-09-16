@@ -3,19 +3,11 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
 
-function hexToRgba(hex, alpha = 1) {
-  const h = (hex || "#000000").replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 import {
-  Plus, Trash2, Type,
+  Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, RotateCw, Cannabis, Image as ImageIcon, X, Brush, Blend,
+  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend,
   PanelTop, PanelBottom, PanelLeft, PanelRight,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
@@ -23,12 +15,12 @@ import { handwritingAlphaFromUrl, colorizeHandwriting } from "./render/handwriti
 import { localFileUrl as mediaUrlFor } from "../../utils/format";
 
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
-import { gradientToCss, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
+import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
 import { isTextLayer, isStickerLayer, isOverlayLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
-  createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, cloneLayers, getBgPadding,
+  createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, getBgPadding,
 } from "./textState";
 import {
   alignLeft, alignCenterH, alignRight,
@@ -48,7 +40,6 @@ export default function TextPanel({
   onRedo,
   canUndo = false,
   canRedo = false,
-  onMoveLayer,
   onDeleteLayer,
   // Scene depth (single ML inference per image)
   hasSceneDepth = false,
@@ -738,21 +729,6 @@ function SegGroup({ options, className }) {
   );
 }
 
-function ModeBtn({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      className={[
-        "flex-1 rounded-md border py-1.5 text-center text-[11px] transition-colors",
-        active
-          ? "border-[rgb(var(--accent-color)/0.3)] bg-[rgb(var(--accent-color)/0.08)] text-[rgb(var(--accent-color))]"
-          : "border-border/60 text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-      onClick={onClick}
-    >{children}</button>
-  );
-}
-
 function Switch({ on, onToggle }) {
   return (
     <button
@@ -866,7 +842,6 @@ const WEIGHT_OPTIONS = [
 ];
 
 function WeightSelect({ value, onChange }) {
-  const current = WEIGHT_OPTIONS.find((w) => w.value === value) || WEIGHT_OPTIONS[3];
   return (
     <select
       className="h-6 flex-1 rounded border border-border/60 bg-app px-2 text-[11px] text-text outline-none transition-colors hover:border-border focus:border-[rgb(var(--accent-color))]"
@@ -1246,34 +1221,6 @@ function ShadowFieldRow({ layer, onChange }) {
   );
 }
 
-function ColorDot({ label, color, onChange, opacity, onOpacityChange, presets }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const hasAlpha = opacity != null && opacity < 1;
-  return (
-    <div className="flex items-center gap-1.5">
-      {label && <span className="text-[10px] text-muted2">{label}</span>}
-      <div
-        ref={ref}
-        className="h-5 w-5 cursor-pointer rounded border border-border/60"
-        style={{ background: hasAlpha ? `linear-gradient(${hexToRgba(color, opacity)}, ${hexToRgba(color, opacity)}), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 6px 6px` : color }}
-        onClick={() => onChange && setOpen(!open)}
-      />
-      {open && onChange && (
-        <ColorPickerPopover
-          color={color}
-          onChange={onChange}
-          opacity={opacity}
-          onOpacityChange={onOpacityChange}
-          onClose={() => setOpen(false)}
-          anchorEl={ref.current}
-          presets={presets}
-        />
-      )}
-    </div>
-  );
-}
-
 function FooterBtn({ icon: Icon, label, onClick, disabled }) {
   return (
     <button
@@ -1320,7 +1267,6 @@ function PresetPreview({ preset }) {
 
 function AlignBar({ layers, onLayersChange, allLayers }) {
   const { t } = useTranslation("editor");
-  const ids = new Set(layers.map((l) => l.id));
   const apply = (fn) => {
     const updated = fn(layers);
     const map = new Map(updated.map((l) => [l.id, l]));

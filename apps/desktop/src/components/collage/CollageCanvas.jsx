@@ -532,7 +532,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       setSelectedIdx(-1);
     },
     async exportToBlob(targetWidth = 3000) {
-      const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs, exportWidth: ew } = propsRef.current;
+      const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs } = propsRef.current;
       if (!tmpl?.cells) return null;
       const targetH = Math.round(targetWidth / (ratio || 1));
       const offscreen = document.createElement("canvas");

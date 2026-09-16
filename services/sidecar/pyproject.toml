@@ -23,6 +23,64 @@ dependencies = [
 # providers should actually run.
 jimeng = ["volcengine"]
 
+# Lint + type check. CI installs this group; locally `uvx ruff` / `uvx mypy`
+# works too. Pinned loosely — these tools add rules in minor releases and a
+# surprise CI failure is worse than a slightly stale linter.
+dev = ["ruff>=0.15,<0.16", "mypy>=1.19,<2"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+src = ["src", "../../tests"]
+
+[tool.ruff.lint]
+# Deliberately narrow: rules that catch real defects or keep imports tidy.
+# Style-only and opinionated families (SIM/RET/PLR/BLE/S) are left off — this
+# codebase makes conscious use of broad excepts on best-effort paths, and a
+# linter arguing with those just trains people to ignore it.
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "E402"]
+ignore = [
+    # Chinese is a first-class language in this codebase's comments and UI
+    # strings; "ambiguous unicode" would fire on every one of them.
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# db/__init__.py is a pure re-export facade (see its docstring): every name is
+# "unused" there by construction. Keeping a parallel __all__ in sync by hand
+# would be a papercut on every new db function.
+"src/media_workspace/db/__init__.py" = ["F401"]
+
+[tool.mypy]
+# 3.12, not the runtime floor of 3.11: mypy parses third-party stubs with this
+# grammar, and numpy's .pyi already uses the PEP 695 `type` statement — under
+# 3.11 that is a syntax error that aborts the whole run ("errors prevented
+# further checking"). CI runs 3.12 too.
+python_version = "3.12"
+files = ["src"]
+# Starting posture: catch the mistakes a reader can't see — calling something
+# that isn't there, passing the wrong kwarg, forgetting to call a function.
+# Not yet strict about missing annotations; tighten per-module over time.
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Debt list — the ratchet. These three modules carry ~90 annotation-hygiene
+# errors (dict invariance on job payloads, arithmetic on `object`-typed report
+# values, a few redefined locals). None of them is a runtime bug, so they are
+# excluded rather than blocking the rollout; every other module IS checked.
+# Clean one, delete its line here, and it stays clean. Never add to this list.
+[[tool.mypy.overrides]]
+module = [
+    "media_workspace.job_runner",
+    "media_workspace.metadata",
+    "media_workspace.reverse_lookup",
+]
+ignore_errors = true
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

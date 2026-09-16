@@ -4,8 +4,8 @@ import time
 from pathlib import Path
 
 from .config import DEFAULT_IMAGE_EXTENSIONS, Thresholds
-from .reverse_lookup import resolve_image
 from .file_types import is_macos_metadata
+from .reverse_lookup import resolve_image
 
 
 class ImageWatcher:

@@ -415,14 +415,14 @@ def run_openai_repaint(
         parts.append(
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
-            f"{value}\r\n".encode("utf-8")
+            f"{value}\r\n".encode()
         )
 
     def _add_file(name: str, filename: str, content: bytes, content_type: str) -> None:
         parts.append(
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
-            f"Content-Type: {content_type}\r\n\r\n".encode("utf-8")
+            f"Content-Type: {content_type}\r\n\r\n".encode()
             + content
             + b"\r\n"
         )
@@ -434,7 +434,7 @@ def run_openai_repaint(
     size = _openai_size_from_resolution(image_size, aspect_ratio)
     _add_field("size", size)
 
-    body = b"".join(parts) + f"--{boundary}--\r\n".encode("utf-8")
+    body = b"".join(parts) + f"--{boundary}--\r\n".encode()
 
     payload = _post_image_api(
         "OpenAI",
@@ -685,7 +685,7 @@ def run_mock_text_image(output_path: Path, prompt: str) -> RepaintResult:
         text = prompt.split("「", 1)[1].split("」", 1)[0]
     text = (text or "mock").strip()[:16]
 
-    font = None
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
     for candidate in (
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
         "/System/Library/Fonts/STHeiti Medium.ttc",
@@ -740,7 +740,7 @@ def run_gemini_text_image(
     parts.append({"text": prompt})
 
     # Gemini's imageConfig has no 3:1 band — fall back to the nearest one.
-    gemini_aspect = {"3:1": "16:9", "1:3": "9:16"}.get(aspect_ratio, aspect_ratio)
+    gemini_aspect = {"3:1": "16:9", "1:3": "9:16"}.get(aspect_ratio or "", aspect_ratio)
     return _gemini_generate(
         output_path,
         prompt,

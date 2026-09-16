@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 from collections import deque
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Callable
+from typing import Any
 
 from .db import load_raw_cache_index, load_raw_enrichment_candidates, upsert_catalog_root, upsert_raw_asset
 from .file_types import is_source_file
@@ -25,7 +26,7 @@ def scan_raw_directory(
     fingerprint_mode: str = "head-tail",
     metadata_profile: str = "full",
     progress_callback: ProgressCallback | None = None,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     raw_dir = raw_dir.resolve()
     indexed = 0
     skipped = 0
@@ -99,7 +100,7 @@ def scan_raw_directory(
             )
     else:
         executor = ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="raw-scan")
-        in_flight = deque()
+        in_flight: deque = deque()
         try:
             for path in iter_candidate_paths(raw_dir):
                 if not is_source_file(path):
@@ -189,7 +190,7 @@ def enrich_raw_assets(
     workers: int | None = None,
     fingerprint_mode: str = "head-only",
     progress_callback: ProgressCallback | None = None,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     if fingerprint_mode != "head-only":
         raise ValueError("enrich-raw currently supports only fingerprint-mode=head-only to avoid raw asset id churn")
 
@@ -249,7 +250,7 @@ def enrich_raw_assets(
             )
     else:
         executor = ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="raw-enrich")
-        in_flight = deque()
+        in_flight: deque = deque()
         max_in_flight = max(16, worker_count * 4)
         try:
             for row in candidates:
@@ -352,7 +353,7 @@ def should_commit(indexed: int, batch_size: int) -> bool:
     return indexed % batch_size == 0
 
 
-def report_progress(progress_callback: ProgressCallback | None, **payload: int | str | None) -> None:
+def report_progress(progress_callback: ProgressCallback | None, **payload: Any) -> None:
     if progress_callback is None:
         return
     progress_callback(payload)

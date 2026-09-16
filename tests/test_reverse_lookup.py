@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from hashlib import sha1
 import tempfile
 import unittest
+from hashlib import sha1
 from pathlib import Path
 
 from media_workspace.catalog import ensure_catalog

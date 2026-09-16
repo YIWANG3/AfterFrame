@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping
 from uuid import uuid4
+
+from .core import _json
 
 # Sentinel: distinguishes "don't touch error_text" from "clear it" in update_job.
 _UNSET = object()
 
-from .core import _json
 
 def _job_id(job_type: str) -> str:
     return f"job_{job_type}_{uuid4().hex[:20]}"
@@ -42,13 +44,13 @@ def _decode_job_row(row: sqlite3.Row | None) -> dict[str, object] | None:
 def create_job(
     connection: sqlite3.Connection,
     job_type: str,
-    payload: dict[str, object] | None = None,
+    payload: Mapping[str, object] | None = None,
     *,
     status: str = "queued",
     progress: float = 0.0,
-    result: dict[str, object] | None = None,
+    result: Mapping[str, object] | None = None,
     priority: int = 50,
-    resume_cursor: dict[str, object] | None = None,
+    resume_cursor: Mapping[str, object] | None = None,
     commit: bool = True,
 ) -> dict[str, object]:
     job_id = _job_id(job_type)
@@ -69,12 +71,12 @@ def update_job(
     job_id: str,
     *,
     status: str | None = None,
-    payload: dict[str, object] | None = None,
-    result: dict[str, object] | None = None,
+    payload: Mapping[str, object] | None = None,
+    result: Mapping[str, object] | None = None,
     progress: float | None = None,
     priority: int | None = None,
     pause_requested: bool | None = None,
-    resume_cursor: dict[str, object] | None = None,
+    resume_cursor: Mapping[str, object] | None = None,
     increment_attempt: bool = False,
     error_text: object = _UNSET,
     commit: bool = True,
@@ -182,38 +184,71 @@ def list_jobs(connection: sqlite3.Connection, job_type: str | None = None, limit
             """,
             (limit,),
         ).fetchall()
-    return [_decode_job_row(row) for row in rows if row is not None]
+    decoded = (_decode_job_row(row) for row in rows)
+    return [job for job in decoded if job is not None]
+
+
+# How long a job may go without touching updated_at before we call it dead.
+#
+# Batch runners (import, preview, enrichment, annotation, people_index) report
+# progress per batch, so 10 minutes of silence really does mean the process is
+# gone. The single-shot generation jobs block inside ONE remote call with no
+# checkpoint to report from — the Jimeng sync2async poll alone runs up to
+# 180 × 2s, plus 5s per 50430 concurrency-limit response (~21 min worst case),
+# and OpenAI/Ark use a 300s request timeout plus an image download. Reaping
+# those at 10 minutes flags a perfectly healthy job as failed.
+STALL_MINUTES_DEFAULT = 10
+STALL_MINUTES_BY_JOB_TYPE = {
+    "ai_repaint": 45,
+    "text_image": 45,
+}
+
+
+def _stall_cutoff_sql(alias: str = "jobs") -> str:
+    """CASE expression giving each row its own stall cutoff timestamp."""
+    whens = " ".join(
+        f"WHEN '{job_type}' THEN datetime('now', '-{minutes} minutes')"
+        for job_type, minutes in sorted(STALL_MINUTES_BY_JOB_TYPE.items())
+    )
+    return (
+        f"CASE {alias}.job_type {whens} "
+        f"ELSE datetime('now', '-{STALL_MINUTES_DEFAULT} minutes') END"
+    )
 
 
 def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
     """All queued/running jobs across every type — drives the activity center.
 
-    Also reconciles orphans: every runner touches updated_at on each progress
-    batch, so an 'active' job whose heartbeat is >10 minutes old is a process
-    that died (app quit, crash, kill). Mark it failed so it doesn't haunt the
-    activity center forever.
+    Also reconciles orphans: a runner that reports progress touches updated_at,
+    so an 'active' job whose heartbeat is older than its per-type stall window
+    (see STALL_MINUTES_BY_JOB_TYPE) is a process that died (app quit, crash,
+    kill). Mark it failed so it doesn't haunt the activity center forever.
     """
+    stall_cutoff = _stall_cutoff_sql()
     # Only people_index jobs have a durable per-asset cursor today. Recover
     # stalled runs with that cursor instead of marking them irretrievably failed;
     # the dispatcher will launch them again when the app reconnects.
     connection.execute(
-        """
+        f"""
         UPDATE jobs
         SET status = 'queued', error_text = NULL, cancel_requested = 0, pause_requested = 0,
             attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP
         WHERE job_type = 'people_index'
           AND status = 'running'
-          AND resume_cursor_json != '{}'
-          AND updated_at < datetime('now', '-10 minutes')
+          AND resume_cursor_json != '{{}}'
+          AND updated_at < {stall_cutoff}
         """
     )
     connection.execute(
-        """
+        f"""
         UPDATE jobs
-        SET status = 'failed', error_text = 'stalled — no heartbeat for 10 minutes (process likely terminated)',
+        SET status = 'failed',
+            error_text = 'stalled — no heartbeat for ' || CAST(
+                (julianday('now') - julianday(updated_at)) * 24 * 60 AS INTEGER
+            ) || ' minutes (process likely terminated)',
             updated_at = CURRENT_TIMESTAMP
         WHERE status IN ('queued', 'running')
-          AND updated_at < datetime('now', '-10 minutes')
+          AND updated_at < {stall_cutoff}
         """
     )
     connection.commit()
@@ -226,7 +261,8 @@ def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
         ORDER BY priority DESC, created_at ASC
         """
     ).fetchall()
-    return [_decode_job_row(row) for row in rows if row is not None]
+    decoded = (_decode_job_row(row) for row in rows)
+    return [job for job in decoded if job is not None]
 
 
 def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:

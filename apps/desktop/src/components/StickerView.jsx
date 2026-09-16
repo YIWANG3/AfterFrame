@@ -78,7 +78,6 @@ export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete
         <StickerContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          sticker={contextMenu.sticker}
           onReveal={() => window.mediaWorkspace?.revealPath?.(contextMenu.sticker.path)}
           onDelete={() => onDelete?.(contextMenu.sticker)}
           onClose={() => setContextMenu(null)}
@@ -132,7 +131,7 @@ function StickerCard({ sticker, selected, onSelect, onContextMenu }) {
   );
 }
 
-function StickerContextMenu({ x, y, sticker, onReveal, onDelete, onClose }) {
+function StickerContextMenu({ x, y, onReveal, onDelete, onClose }) {
   const { t } = useTranslation("stickerView");
   const ref = useRef(null);
   const [pos, setPos] = useState({ x, y });

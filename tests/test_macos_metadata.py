@@ -1,12 +1,12 @@
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 
+from media_workspace.catalog import ensure_catalog
+from media_workspace.db import connect, init_db
 from media_workspace.file_types import is_raw_file, is_source_file
 from media_workspace.reverse_lookup import iter_image_files
 from media_workspace.scanner import scan_raw_directory
-from media_workspace.catalog import ensure_catalog
-from media_workspace.db import connect, init_db
 
 
 class MacMetadataTests(unittest.TestCase):

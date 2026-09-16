@@ -8,6 +8,9 @@ const sharedRules = {
     argsIgnorePattern: "^_",
     caughtErrorsIgnorePattern: "^_",
     varsIgnorePattern: "^_",
+    // `const { drop, ...rest } = obj` is how you omit a key; the named binding
+    // is the point, not an oversight.
+    ignoreRestSiblings: true,
   }],
   "no-useless-assignment": "error",
   "no-empty": ["error", { allowEmptyCatch: true }],
@@ -41,6 +44,12 @@ module.exports = [
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
     },
+  },
+  {
+    // Cross-process pure modules: ESM for Vite, require(esm)'d by main.
+    files: ["shared/**/*.mjs"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+    rules: sharedRules,
   },
   {
     files: [

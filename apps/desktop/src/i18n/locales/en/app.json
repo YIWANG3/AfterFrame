@@ -5,6 +5,7 @@
     "showingAll": "Switched to All Assets to show this version"
   },
   "folderOrderFailed": "Could not save folder order",
+  "ratingFailed": "Could not save rating",
   "drop": {
     "title": "Drop to import",
     "subtitle": "Files and folders will be added to the catalog"

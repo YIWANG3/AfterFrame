@@ -194,7 +194,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
 function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClearRegion }) {
   const { t } = useTranslation("editor");
   const [phase, setPhase] = useState("idle"); // idle | detecting | preview | saving
-  const [scratchDir, setScratchDir] = useState(null);
+  const [, setScratchDir] = useState(null);
   const [instances, setInstances] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [outline, setOutline] = useState({ width: 8, color: "#ffffff" });

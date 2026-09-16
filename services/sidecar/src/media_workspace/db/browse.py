@@ -348,7 +348,7 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
     if collection_id:
         joins = "JOIN collection_items ci ON ci.asset_id = assets.asset_id"
         where = "ci.collection_id = ? AND assets.asset_type IN ('image', 'video', 'raw')"
-        params = [collection_id]
+        params: list[object] = [collection_id]
         order = "ci.added_at DESC, assets.stem, assets.asset_id"
     else:
         joins = "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"

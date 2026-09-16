@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -100,7 +99,9 @@ class PreviewService:
             )
 
         source_marker = validate_source_ready(source_path)
-        validate = lambda: validate_source_unchanged(source_path, source_marker)
+
+        def validate() -> None:
+            validate_source_unchanged(source_path, source_marker)
 
         if video.is_video(source_path):
             # Videos: a poster frame via the AVFoundation helper (sips can't do

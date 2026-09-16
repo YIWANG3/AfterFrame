@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 
-import { PROVIDER_TYPES, getProviderType, generateInstanceId, generateInstanceName, ProviderModal } from "../ai/providers";
+import { getProviderType, ProviderModal } from "../ai/providers";
 import { SliderRow } from "../../ui";
 
 /* ── Provider type templates (not instances) ── */
@@ -255,7 +255,7 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
 
 /* ── Provider instance modal: create new / edit existing ── */
 
-export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel = "Current image", onCompareChange, compareState, onRepaintComplete }) {
+export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareChange, compareState, onRepaintComplete }) {
   const { t } = useTranslation("editor");
   const repaintPollRef = useRef(null);
   const prefsRef = useRef({});
@@ -318,7 +318,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, sourceLabel
     persistPrefs({ selectedModels: { ...prefsRef.current.selectedModels, [providerId]: modelId } });
   }
 
-  async function fetchModels(providerId, providerType, tokenValue) {
+  async function fetchModels(providerId, providerType) {
     const models = await api.listAiModels(providerId, providerType);
     if (Array.isArray(models) && models.length) {
       setAvailableModels((current) => ({ ...current, [providerId]: models }));

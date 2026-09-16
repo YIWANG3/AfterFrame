@@ -43,6 +43,12 @@ const VIEW_TIME_BUDGET_MS = 20000;
 
 // asset_id -> { preview, previewHd } absolute paths, filled by search results
 // so /assets/{id} usually serves without spawning the sidecar again.
+//
+// MUST be cleared on every catalog switch: asset_id is a stable hash of
+// fingerprint + path (metadata.py stable_asset_id), so the same photo carries
+// the same id in two different catalogs — a stale entry would serve the OTHER
+// library's preview file. main.js calls clearPreviewCache() from
+// switchCatalogTo; keep it in the returned API.
 const previewPathCache = new Map();
 
 function rememberPreview(assetId, preview, previewHd) {
@@ -121,7 +127,6 @@ function createMcpServer(deps) {
   const {
     getCatalogState,
     commands,
-    callSidecarAsync,
     startImportTask,
     formatJobStatus,
     registerRoots,
@@ -168,15 +173,11 @@ function createMcpServer(deps) {
       inputSchema: { type: "object", properties: {} },
       async handler() {
         const catalogPath = requireCatalog();
-        const [summaryRaw, facets] = await Promise.all([
-          callSidecarAsync(["summary", "--json"]),
+        const [summary, facets] = await Promise.all([
+          commands.summary(),
           commands.facetValues().catch(() => null),
         ]);
-        return {
-          catalog_path: catalogPath,
-          summary: summaryRaw ? JSON.parse(summaryRaw) : null,
-          facets,
-        };
+        return { catalog_path: catalogPath, summary, facets };
       },
     },
     {
@@ -575,7 +576,10 @@ function createMcpServer(deps) {
         const mode = imageDirs.length && rawDirs.length ? "combined" : imageDirs.length ? "processed_only" : "source_only";
         if (rawDirs.length) await registerRoots("raw", rawDirs);
         if (imageDirs.length) await registerRoots("image", imageDirs);
-        let status = await startImportTask({ mode, rawDirs, imageDirs: imageDirs });
+        // rejectIfBusy: with an import already running, startImportTask would
+        // hand back THAT job and silently drop these dirs — the tool would then
+        // poll a stranger's job and report success for an import that never ran.
+        let status = await startImportTask({ mode, rawDirs, imageDirs, rejectIfBusy: true });
         deps.broadcastCatalogChanged?.("jobs", { jobId: status.jobId, jobType: "import" });
         const deadline = Date.now() + IMPORT_WAIT_MS;
         while (status.running && status.jobId && Date.now() < deadline) {
@@ -1624,7 +1628,7 @@ function createMcpServer(deps) {
     });
   }
 
-  return { start, server, port };
+  return { start, server, port, clearPreviewCache: () => previewPathCache.clear() };
 }
 
 module.exports = { createMcpServer, DEFAULT_PORT };

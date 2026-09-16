@@ -30,8 +30,9 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date, datetime
-from typing import Any, Iterable
+from typing import Any
 
 from .geo_resolver import load_gazetteer
 
@@ -261,7 +262,7 @@ def build_discover_collections(points: list[dict], geocoder: ReverseGeocoder | N
                         "cover_preview_path": cover["preview_path"] if cover else None,
                     })
                 run = []
-            if day is not None:
+            if day is not None and entry[1] is not None:
                 run.append((day, entry[1]))
     memories.sort(key=lambda m: m["date_to"], reverse=True)
     return {"places": places, "memories": memories}

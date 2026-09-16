@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "check": "npm run lint && npm test && npm run build",
-    "lint": "npm --prefix apps/desktop run lint",
+    "lint": "npm run lint:desktop && npm run lint:python",
+    "lint:desktop": "npm --prefix apps/desktop run lint",
+    "lint:python": "cd services/sidecar && python3 -m ruff check . ../../tests && python3 -m mypy --config-file pyproject.toml",
     "build": "npm --prefix apps/desktop run build",
     "test": "npm run test:python && npm run test:electron && npm run test:renderer",
     "test:python": "PYTHONPATH=services/sidecar/src python3 -m unittest discover -s tests",

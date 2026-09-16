@@ -70,12 +70,15 @@ const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const editorsIpc = require("./ipc/editors");
+const settingsTransferIpc = require("./ipc/settingsTransfer");
 const { createAgentRenderBridge } = require("./agentRender");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
 const { createSettingsStore } = require("./settingsStore");
+const { createImageMetadataWriter } = require("./imageMetadata");
+const { createTaskStarters } = require("./tasks");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -276,7 +279,7 @@ async function getStoredProviderConfigWithMigration(provider) {
     return existing;
   }
   try {
-    const payload = await callSidecarJsonAsync(["get-provider-token", "--provider", provider]);
+    const payload = await sidecarCommands.getProviderToken(provider);
     if (payload?.token) {
       const migrated = await setStoredProviderConfig(provider, payload);
       return migrated;
@@ -308,8 +311,8 @@ async function prepareCatalogPath() {
     console.log("[prepareCatalogPath] empty catalog, skipping sidecar migration");
     return;
   }
-  try { await callSidecarAsync(["split-shared-assets"]); } catch (_) { /* best-effort */ }
-  try { await callSidecarAsync(["repair-resource-sets"]); } catch (_) { /* best-effort */ }
+  try { await sidecarCommands.splitSharedAssets(); } catch (_) { /* best-effort */ }
+  try { await sidecarCommands.repairResourceSets(); } catch (_) { /* best-effort */ }
   if (currentCatalogPath === getSampleCatalogPath()) {
     const repaired = await repairLegacySamplePreviews({
       catalogPath: currentCatalogPath, source: samplePhotosSource,
@@ -415,7 +418,10 @@ const sidecarTransport = createSidecarTransport({
   resourcesPath: process.resourcesPath,
   getCatalogPath: () => currentCatalogPath,
 });
-const callSidecarAsync = sidecarTransport.callAsync;
+// Only the JSON entry point is bound here, and only to feed the verb layer
+// below — nothing in main.js or the ipc/mcp modules assembles sidecar argv by
+// hand any more (that invariant is what keeps the three call surfaces from
+// drifting apart again).
 const callSidecarJsonAsync = sidecarTransport.callJsonAsync;
 const launchSidecarJob = sidecarTransport.launchJob;
 const stopResidentSidecar = sidecarTransport.stopResident;
@@ -426,252 +432,23 @@ const stopResidentSidecar = sidecarTransport.stopResident;
 const sidecarCommands = createSidecarCommands(callSidecarJsonAsync);
 
 
-function runPythonJson(script, args = []) {
-  if (isPackaged) {
-    // In packaged mode, python3 may not be available. Use sidecar binary if possible,
-    // otherwise fall back to python3 and let it fail gracefully.
-    console.warn("[runPythonJson] called in packaged mode — python3 may not be available");
-  }
-  const result = spawnSync("python3", ["-c", script, ...args], {
-    cwd: rootDir,
-    env: {
-      ...process.env,
-      PYTHONPATH: sidecarSrc,
-    },
-    encoding: "utf-8",
-    timeout: 10000,
-  });
-
-  if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || "python helper failed");
-  }
-
-  return result.stdout.trim() ? JSON.parse(result.stdout) : null;
-}
-
-function gcd(a, b) {
-  let x = Math.abs(Math.round(a));
-  let y = Math.abs(Math.round(b));
-  while (y) {
-    [x, y] = [y, x % y];
-  }
-  return x || 1;
-}
-
-function formatExifDateTime(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const pad = (part) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}:${pad(date.getMonth() + 1)}:${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function toExifRational(value, denominator = 1000) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const sign = numeric < 0 ? -1 : 1;
-  const scaled = Math.round(Math.abs(numeric) * denominator);
-  const divisor = gcd(scaled, denominator);
-  return `${sign * (scaled / divisor)}/${denominator / divisor}`;
-}
-
-function hasMetadataNumber(value) {
-  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
-}
-
-function toExifGpsCoordinate(value) {
-  if (!hasMetadataNumber(value)) return null;
-  const numeric = Number(value);
-  const absolute = Math.abs(numeric);
-  const degrees = Math.floor(absolute);
-  const minutesFloat = (absolute - degrees) * 60;
-  const minutes = Math.floor(minutesFloat);
-  const seconds = (minutesFloat - minutes) * 60;
-  const secondsRational = toExifRational(seconds, 10000);
-  if (!secondsRational) return null;
-  return `${degrees}/1 ${minutes}/1 ${secondsRational}`;
-}
-
-function pruneEmptyExifDirectories(exif) {
-  return Object.fromEntries(
-    Object.entries(exif).filter(([, entries]) => entries && Object.keys(entries).length > 0),
-  );
-}
-
-function buildExifPayload(metadata) {
-  if (!metadata) return null;
-  const dateTime = formatExifDateTime(metadata.capture_time);
-  const exposureTime = metadata.shutter_speed ? toExifRational(metadata.shutter_speed, 1000000) : null;
-  const aperture = metadata.aperture ? toExifRational(metadata.aperture, 1000) : null;
-  const focalLength = metadata.focal_length ? toExifRational(metadata.focal_length, 1000) : null;
-  const latitude = toExifGpsCoordinate(metadata.gps_latitude);
-  const longitude = toExifGpsCoordinate(metadata.gps_longitude);
-
-  const exif = pruneEmptyExifDirectories({
-    IFD0: {
-      Orientation: "1",
-      ...(metadata.camera_make ? { Make: String(metadata.camera_make) } : {}),
-      ...(metadata.camera_model ? { Model: String(metadata.camera_model) } : {}),
-      ...(metadata.software ? { Software: String(metadata.software) } : {}),
-      ...(dateTime ? { DateTime: dateTime } : {}),
-    },
-    IFD2: {
-      ...(dateTime ? { DateTimeOriginal: dateTime } : {}),
-      ...(metadata.lens_model ? { LensModel: String(metadata.lens_model) } : {}),
-      ...(metadata.iso != null ? { ISOSpeedRatings: String(metadata.iso) } : {}),
-      ...(aperture ? { FNumber: aperture } : {}),
-      ...(exposureTime ? { ExposureTime: exposureTime } : {}),
-      ...(focalLength ? { FocalLength: focalLength } : {}),
-      ...(metadata.flash != null ? { Flash: String(metadata.flash) } : {}),
-      ...(metadata.white_balance != null ? { WhiteBalance: String(metadata.white_balance) } : {}),
-      ...(metadata.color_space != null ? { ColorSpace: String(metadata.color_space) } : {}),
-    },
-    IFD3: {
-      ...(latitude
-        ? {
-            GPSLatitudeRef: Number(metadata.gps_latitude) >= 0 ? "N" : "S",
-            GPSLatitude: latitude,
-          }
-        : {}),
-      ...(longitude
-        ? {
-            GPSLongitudeRef: Number(metadata.gps_longitude) >= 0 ? "E" : "W",
-            GPSLongitude: longitude,
-          }
-        : {}),
-    },
-  });
-
-  return Object.keys(exif).length ? exif : null;
-}
-
-function readSourceMetadataForExport(sourcePath) {
-  if (!sourcePath) return null;
-  const script = `
-import json
-import sys
-from pathlib import Path
-from media_workspace.metadata import extract_image_candidate
-
-meta = extract_image_candidate(Path(sys.argv[1]))
-print(json.dumps({
-    "capture_time": meta.capture_time,
-    "camera_make": meta.camera_make,
-    "camera_model": meta.camera_model,
-    "lens_model": meta.lens_model,
-    "software": meta.software,
-    "iso": meta.iso,
-    "aperture": meta.aperture,
-    "shutter_speed": meta.shutter_speed,
-    "focal_length": meta.focal_length,
-    "flash": meta.flash,
-    "white_balance": meta.white_balance,
-    "color_space": meta.color_space,
-    "gps_latitude": meta.gps_latitude,
-    "gps_longitude": meta.gps_longitude,
-}))
-`;
-  return runPythonJson(script, [sourcePath]);
-}
-
-async function writeImageWithSourceMetadata(targetPath, outputBuffer, sourceMetadataPath, { quality } = {}) {
-  const ext = path.extname(targetPath).toLowerCase();
-  let pipeline = sharp(outputBuffer, { limitInputPixels: false }).withMetadata({ orientation: 1 });
-
-  if (sourceMetadataPath) {
-    try {
-      const [structuredMetadata, sourceSharpMeta] = await Promise.all([
-        Promise.resolve(readSourceMetadataForExport(sourceMetadataPath)),
-        sharp(sourceMetadataPath, { limitInputPixels: false }).metadata(),
-      ]);
-      const exif = buildExifPayload(structuredMetadata);
-      if (exif) {
-        pipeline = pipeline.withExif(exif);
-      }
-      if (sourceSharpMeta.xmp) {
-        pipeline = pipeline.withXmp(sourceSharpMeta.xmp.toString("utf8"));
-      }
-    } catch (error) {
-      console.warn("[save-image] failed to preserve source metadata:", error);
-    }
-  }
-
-  if (ext === ".png") {
-    pipeline = pipeline.png();
-  } else if (ext === ".webp") {
-    pipeline = pipeline.webp(quality ? { quality } : undefined);
-  } else {
-    pipeline = pipeline.jpeg(quality ? { quality } : undefined);
-  }
-
-  await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-  await pipeline.toFile(targetPath);
-  return { path: targetPath };
-}
-
-function formatJobStatus(job) {
-  if (!job) {
-    return {
-      running: false,
-      active: false,
-      paused: false,
-      startedAt: null,
-      finishedAt: null,
-      exitCode: null,
-      phase: null,
-      phaseLabel: null,
-      phaseIndex: 0,
-      phaseCount: 0,
-      rawDirs: [],
-      imageDirs: [],
-      mode: null,
-      kind: null,
-      phaseResults: [],
-      progress: 0,
-      result: null,
-      error: null,
-      status: null,
-      jobId: null,
-      createdAt: null,
-      updatedAt: null,
-    };
-  }
-  const payload = job.payload || {};
-  const result = job.result || {};
-  const status = String(job.status || "");
-  return {
-    running: status === "queued" || status === "running",
-    active: status === "queued" || status === "running" || status === "paused",
-    paused: status === "paused",
-    startedAt: job.created_at || null,
-    finishedAt: status === "succeeded" || status === "failed" ? job.updated_at || null : null,
-    exitCode: status === "failed" ? 1 : status === "succeeded" ? 0 : null,
-    phase: payload.phase || null,
-    phaseLabel: payload.phase_label || null,
-    phaseIndex: Number(payload.phase_index || 0),
-    phaseCount: Number(payload.phase_count || 0),
-    rawDirs: Array.isArray(payload.raw_dirs) ? payload.raw_dirs : [],
-    imageDirs: Array.isArray(payload.image_dirs) ? payload.image_dirs : [],
-    mode: payload.mode || null,
-    kind: payload.kind || null,
-    phaseResults: Array.isArray(result.phase_results) ? result.phase_results : [],
-    progress: Number(job.progress || 0),
-    result,
-    error: job.error || null,
-    status,
-    jobId: job.job_id,
-    createdAt: job.created_at || null,
-    updatedAt: job.updated_at || null,
-  };
-}
-
-async function latestJobStatus(jobType) {
-  return formatJobStatus(await sidecarCommands.latestJob(jobType));
-}
-
-async function createJob(jobType, payload, options) {
-  return await sidecarCommands.createJob(jobType, payload, options);
-}
+// Image write-back with the original's EXIF/XMP, and the background-task
+// starters — both lived here until review 2026-09-16 §2. See ./imageMetadata.js
+// and ./tasks.js; the module-level names below are what the ipc/mcp modules
+// receive through their register() deps.
+const { writeImageWithSourceMetadata } = createImageMetadataWriter({ rootDir, sidecarSrc, isPackaged });
+const {
+  formatJobStatus, latestJobStatus, createJob,
+  startEnrichmentTask, startImportTask, startPreviewTask,
+  startAiRepaintTask, startTextImageTask,
+} = createTaskStarters({
+  app,
+  readAppSettings,
+  commands: sidecarCommands,
+  launchSidecarJob,
+  addAllowedMediaDir,
+  getStoredProviderConfigWithMigration,
+});
 
 // ---- media:// allowlist ----------------------------------------------------
 // The media: protocol must only serve files the app legitimately knows about:
@@ -759,285 +536,6 @@ async function registerRoots(rootType, paths) {
   }
   for (const targetPath of uniquePaths) addAllowedMediaDir(targetPath);
   return await sidecarCommands.registerRoots(rootType, uniquePaths);
-}
-
-async function startEnrichmentTask() {
-  const current = await latestJobStatus("enrichment");
-  if (current.running) {
-    return current;
-  }
-  const job = await createJob("enrichment", {});
-  launchSidecarJob(["run-enrichment-job", "--job-id", job.job_id]);
-  return formatJobStatus(job);
-}
-
-async function startImportTask(options) {
-  const mode = String(options?.mode || "combined");
-  const rawDirs = [...new Set((options?.rawDirs || []).filter(Boolean))];
-  const imageDirs = [...new Set((options?.imageDirs || []).filter(Boolean))];
-  const needsSources = mode === "source_only" || mode === "source_with_media" || mode === "combined";
-  const needsProcessed = mode === "processed_only" || mode === "processed_with_sources" || mode === "combined";
-  if (needsSources && !rawDirs.length) {
-    throw new Error("choose at least one Source file or folder");
-  }
-  if (needsProcessed && !imageDirs.length) {
-    throw new Error("choose at least one image folder");
-  }
-  const current = await latestJobStatus("import");
-  if (current.running) {
-    return current;
-  }
-  const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode });
-  const command = ["run-import-job", "--job-id", job.job_id, "--mode", mode];
-  // HD (2000px) previews are opt-in — Settings ▸ Library. Off by default.
-  if (readAppSettings()?.previews?.generateHd === true) {
-    command.push("--generate-hd");
-  }
-  // Auto imports (watched dirs live + catch-up) must not resurrect files the
-  // user removed from the catalog but left on disk. Manual imports omit this so
-  // an explicit re-import clears the tombstone.
-  if (options?.auto === true) {
-    command.push("--respect-tombstones");
-  }
-  for (const rawDir of rawDirs) {
-    command.push("--raw-dir", rawDir);
-  }
-  for (const imageDir of imageDirs) {
-    command.push("--image-dir", imageDir);
-  }
-  launchSidecarJob(command);
-  return formatJobStatus(job);
-}
-
-async function startPreviewTask(kind = "preview") {
-  const current = await latestJobStatus("preview");
-  if (current.running) {
-    return current;
-  }
-  const job = await createJob("preview", { kind, asset_type: "image" });
-  launchSidecarJob(["run-preview-job", "--job-id", job.job_id, "--kind", kind, "--asset-type", "image"]);
-  return formatJobStatus(job);
-}
-
-function deriveAiRepaintOutputPath(sourcePath) {
-  const source = path.resolve(sourcePath);
-  const ext = ".png";
-  const parsed = path.parse(source);
-  const shortId = crypto.randomBytes(4).toString("hex");
-  return path.join(parsed.dir, `${parsed.name}_ai-repaint_${shortId}${ext}`);
-}
-
-async function startAiRepaintTask(options) {
-  const sourcePath = String(options?.sourcePath || "");
-  const prompt = String(options?.prompt || "");
-  const providerId = String(options?.provider || "");
-  const providerType = String(options?.providerType || "nanobanana");
-  if (!sourcePath) {
-    throw new Error("Missing source image");
-  }
-  const model = String(options?.model || "");
-  const isUpscale = model === "jimeng_i2i_seed3_tilesr_cvtob";
-  if (!prompt.trim() && !isUpscale) {
-    throw new Error("Missing prompt");
-  }
-  const current = await latestJobStatus("ai_repaint");
-  if (current.running) {
-    return current;
-  }
-  const { apiKey, baseUrl } = await resolveProviderCredentials(providerId, providerType);
-  if (!apiKey) {
-    throw new Error(`No API token configured for provider.`);
-  }
-  // Output lands next to the original file. For RAW the editor's sourcePath is
-  // the (catalog) preview, so callers pass outputBasePath = the original path.
-  const outputPath = options?.outputPath || deriveAiRepaintOutputPath(options?.outputBasePath || sourcePath);
-  // The sidecar writes the result next to the source; allow the renderer to
-  // load it back via media:// (same as editor saves / crops / video proxies).
-  // Repaint outputs aren't registered as catalog roots, so without this the
-  // before/after compare 403s on the freshly-written file.
-  addAllowedMediaDir(path.dirname(outputPath));
-  const payload = {
-    provider: providerType,
-    source_path: sourcePath,
-    output_path: outputPath,
-    prompt,
-    aspect_ratio: options?.aspectRatio || null,
-    image_size: options?.resolution ? String(options.resolution).toUpperCase() : null,
-    temperature: typeof options?.temperature === "number" ? options.temperature : null,
-    model,
-  };
-  const job = await createJob("ai_repaint", payload);
-  const command = [
-    "run-ai-repaint-job",
-    "--job-id",
-    job.job_id,
-    "--provider",
-    providerType,
-    "--input",
-    sourcePath,
-    "--output",
-    outputPath,
-    "--origin-path",
-    sourcePath,
-    "--prompt",
-    prompt,
-  ];
-  if (payload.aspect_ratio) {
-    command.push("--aspect-ratio", payload.aspect_ratio);
-  }
-  if (payload.image_size) {
-    command.push("--image-size", payload.image_size);
-  }
-  if (typeof payload.temperature === "number") {
-    command.push("--temperature", String(payload.temperature));
-  }
-  if (model) {
-    command.push("--model", model);
-  }
-  if (baseUrl) {
-    command.push("--base-url", baseUrl);
-  }
-  command.push("--api-key", apiKey);
-  launchSidecarJob(command);
-  return formatJobStatus(job);
-}
-
-// Stored provider token → { apiKey, baseUrl }. openai_compatible packs both
-// fields into one JSON token; every other type stores the key as-is.
-async function resolveProviderCredentials(providerId, providerType) {
-  const providerConfig = await getStoredProviderConfigWithMigration(providerId);
-  let apiKey = providerConfig?.token || null;
-  let baseUrl = null;
-  if (providerType === "openai_compatible" && apiKey) {
-    try {
-      const parsed = JSON.parse(apiKey);
-      apiKey = parsed.token || null;
-      baseUrl = parsed.base_url || null;
-    } catch (_) { /* plain string token */ }
-  }
-  return { apiKey, baseUrl };
-}
-
-// Text-to-image (handwriting stickers). Output is a sticker source asset, not
-// a photo derivative: it lands in userData/handwriting-cache (already inside
-// the baseline media:// allowlist) keyed by a hash of the generation params,
-// so an identical request returns the cached file without another paid call.
-function handwritingCachePath(params) {
-  const key = crypto
-    .createHash("sha1")
-    .update(JSON.stringify(params))
-    .digest("hex");
-  return path.join(app.getPath("userData"), "handwriting-cache", `${key}.png`);
-}
-
-// The cache only ever grows (every Regenerate mints a new seed → new key, and
-// placed stickers are baked to data: URLs, so old entries are never read
-// again). Trim to a byte budget by oldest mtime; cache hits bump mtime so
-// recently reused entries survive. Runs fire-and-forget per generation.
-const HANDWRITING_CACHE_MAX_BYTES = 200 * 1024 * 1024;
-let handwritingTrimRunning = false;
-async function trimHandwritingCache() {
-  if (handwritingTrimRunning) return;
-  handwritingTrimRunning = true;
-  try {
-    const dir = path.join(app.getPath("userData"), "handwriting-cache");
-    const names = await fs.promises.readdir(dir).catch(() => []);
-    const entries = [];
-    for (const name of names) {
-      if (!name.endsWith(".png")) continue;
-      const filePath = path.join(dir, name);
-      const stat = await fs.promises.stat(filePath).catch(() => null);
-      if (stat) entries.push({ filePath, size: stat.size, mtimeMs: stat.mtimeMs });
-    }
-    let total = entries.reduce((sum, e) => sum + e.size, 0);
-    if (total <= HANDWRITING_CACHE_MAX_BYTES) return;
-    entries.sort((a, b) => a.mtimeMs - b.mtimeMs);
-    for (const entry of entries) {
-      if (total <= HANDWRITING_CACHE_MAX_BYTES) break;
-      await fs.promises.unlink(entry.filePath).catch(() => {});
-      total -= entry.size;
-    }
-  } finally {
-    handwritingTrimRunning = false;
-  }
-}
-
-async function startTextImageTask(options) {
-  const prompt = String(options?.prompt || "");
-  if (!prompt.trim()) {
-    throw new Error("Missing prompt");
-  }
-  const providerId = String(options?.provider || "");
-  const providerType = String(options?.providerType || "nanobanana");
-  const model = String(options?.model || "");
-  const aspectRatio = options?.aspectRatio || null;
-  const imageSize = options?.imageSize ? String(options.imageSize).toUpperCase() : null;
-  const quality = options?.quality || null;
-  const refImagePath = options?.refImagePath ? String(options.refImagePath) : null;
-  // seed lets the UI request several candidates for otherwise identical params
-  // without colliding in the cache.
-  const seed = Number(options?.seed || 0);
-
-  const outputPath = handwritingCachePath({
-    providerType, model, prompt, aspectRatio, imageSize, quality, refImagePath, seed,
-  });
-  if (fs.existsSync(outputPath)) {
-    // Bump recency so the LRU trim keeps entries that still get hits.
-    const now = new Date();
-    fs.promises.utimes(outputPath, now, now).catch(() => {});
-    return {
-      ...formatJobStatus(null),
-      running: false,
-      status: "succeeded",
-      progress: 1,
-      result: { output_path: outputPath, cached: true },
-    };
-  }
-
-  const current = await latestJobStatus("text_image");
-  if (current.running) {
-    return current;
-  }
-  const { apiKey, baseUrl } = await resolveProviderCredentials(providerId, providerType);
-  // Env fallback (dev): the sidecar reads these when no --api-key is passed.
-  const envFallback =
-    providerType === "openai" ? Boolean(process.env.OPENAI_API_KEY)
-    : providerType === "jimeng" ? Boolean(process.env.VOLC_ACCESSKEY && process.env.VOLC_SECRETKEY)
-    : providerType === "nanobanana" ? Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)
-    : providerType === "ark" ? Boolean(process.env.ARK_API_KEY)
-    : false;
-  if (!apiKey && providerType !== "mock" && !envFallback) {
-    throw new Error("No API token configured for provider.");
-  }
-
-  const payload = {
-    provider: providerType,
-    output_path: outputPath,
-    prompt,
-    aspect_ratio: aspectRatio,
-    image_size: imageSize,
-    quality,
-    model,
-    seed,
-  };
-  const job = await createJob("text_image", payload);
-  const command = [
-    "run-text-image-job",
-    "--job-id", job.job_id,
-    "--provider", providerType,
-    "--output", outputPath,
-    "--prompt", prompt,
-  ];
-  if (aspectRatio) command.push("--aspect-ratio", aspectRatio);
-  if (imageSize) command.push("--image-size", imageSize);
-  if (quality) command.push("--quality", quality);
-  if (model) command.push("--model", model);
-  if (baseUrl) command.push("--base-url", baseUrl);
-  if (refImagePath) command.push("--ref-image", refImagePath);
-  if (apiKey) command.push("--api-key", apiKey);
-  launchSidecarJob(command);
-  void trimHandwritingCache();
-  return formatJobStatus(job);
 }
 
 // UI → Agent bridge: the renderer reports every selection change so the MCP
@@ -1269,8 +767,7 @@ ipcMain.handle("workspace:summary", async () => {
     return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   }
   try {
-    const payload = await callSidecarAsync(["summary", "--json"]);
-    return payload ? JSON.parse(payload) : { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
+    return await sidecarCommands.summary() || { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
   } catch (err) {
     console.warn("[workspace:summary] sidecar error:", err.message);
     return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
@@ -1280,7 +777,7 @@ ipcMain.handle("workspace:summary", async () => {
 ipcMain.handle("workspace:roots", async () => {
   if (!currentCatalogPath || !catalogHasDb()) return [];
   try {
-    return await callSidecarJsonAsync(["catalog-roots"]) || [];
+    return await sidecarCommands.catalogRoots();
   } catch (err) {
     console.warn("[workspace:roots] sidecar error:", err.message);
     return [];
@@ -1358,7 +855,9 @@ async function switchCatalogTo(nextCatalogPath) {
   // the agent-facing selection mirror, and the MCP preview-path cache.
   resetMediaAllowlist();
   currentSelection = { assets: [], updatedAt: null };
-  mcpServerApi?.clearPreviewCache?.();
+  // Not `?.clearPreviewCache?.()` — the second optional chain silently no-ops
+  // when the method goes missing, which is exactly how this leak survived.
+  mcpServerApi?.clearPreviewCache();
   await prepareCatalogPath();
   void peopleApi?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch
@@ -1397,7 +896,7 @@ jobsIpc.register({
 
 aiIpc.register({
   app, ipcMain,
-  callSidecarJsonAsync,
+  commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
   getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
@@ -1406,7 +905,6 @@ aiIpc.register({
 
 const annotationApi = annotationIpc.register({
   ipcMain,
-  callSidecarJsonAsync,
   commands: sidecarCommands,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   readAppSettings, updateAppSettings,
@@ -1432,7 +930,7 @@ browseIpc.register({
 
 assetsIpc.register({
   ipcMain, shell, dialog, BrowserWindow,
-  commands: sidecarCommands, callSidecarJsonAsync, addAllowedMediaDir,
+  commands: sidecarCommands, addAllowedMediaDir,
   getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
   t: () => makeT(currentLocale),
 });
@@ -1445,12 +943,22 @@ ipcMain.on("app:get-locale", (event) => {
 ipcMain.on("app:get-media-port", (event) => {
   event.returnValue = mediaHttpPort;
 });
-ipcMain.handle("app:set-locale", async (_event, lng) => {
+async function applyLocale(lng) {
   if (!SUPPORTED_LOCALES.includes(lng)) return currentLocale;
   await updateAppSettings((s) => ({ ...s, locale: lng }));
   currentLocale = lng;
   Menu.setApplicationMenu(buildAppMenu());
   return currentLocale;
+}
+ipcMain.handle("app:set-locale", (_event, lng) => applyLocale(lng));
+
+settingsTransferIpc.register({
+  app, ipcMain, dialog,
+  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  getAppSettingsPath, readAppSettings, updateAppSettings,
+  decryptToken, setStoredProviderConfig,
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+  applyLocale,
 });
 
 // Open an app cache directory in Finder (for manual cleanup). These live under
@@ -1801,8 +1309,6 @@ app.whenReady().then(async () => {
   // through this while it runs. Failures must never affect the app itself.
   mcpServerApi = createMcpServer({
     getCatalogState: () => ({ currentCatalogPath, catalogHasDb }),
-    callSidecarJsonAsync,
-    callSidecarAsync,
     startImportTask,
     formatJobStatus,
     registerRoots,

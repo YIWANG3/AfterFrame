@@ -15,7 +15,6 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
@@ -74,7 +73,7 @@ def _crop_box(width: int, height: int, ratio_w: float, ratio_h: float, gravity: 
     return (x0, y0, x0 + crop_w, y0 + crop_h)
 
 
-def _save_image(image: Image.Image, dest: Path, *, exif_bytes: Optional[bytes], quality: int) -> None:
+def _save_image(image: Image.Image, dest: Path, *, exif_bytes: bytes | None, quality: int) -> None:
     suffix = dest.suffix.lower()
     kwargs: dict = {}
     if exif_bytes:
@@ -91,10 +90,10 @@ def _save_image(image: Image.Image, dest: Path, *, exif_bytes: Optional[bytes], 
 
 def crop_image_to_ratio(src: Path, dest: Path, ratio: str, gravity: str = "center", quality: int = 95) -> dict:
     ratio_w, ratio_h = parse_ratio(ratio)
-    with Image.open(src) as im:
+    with Image.open(src) as source:
         # Normalize pixel orientation; exif_transpose strips the Orientation
         # tag from the copy's EXIF so re-embedding it is safe.
-        im = ImageOps.exif_transpose(im)
+        im = ImageOps.exif_transpose(source)
         exif_bytes = im.info.get("exif")
         box = _crop_box(im.width, im.height, ratio_w, ratio_h, gravity)
         cropped = im.crop(box)
@@ -106,8 +105,8 @@ def register_image_file(
     connection,
     catalog: CatalogPaths,
     image_path: Path,
-    origin_path: Optional[Path] = None,
-    collage_source_ids: Optional[list[str]] = None,
+    origin_path: Path | None = None,
+    collage_source_ids: list[str] | None = None,
     version_kind: str = "derived",
 ) -> dict:
     """Register a finished file as an export asset (ported from quick-register).
@@ -264,7 +263,7 @@ FONT_CANDIDATES = [
 ]
 
 
-def _resolve_font(font_path: Optional[str], size: int) -> ImageFont.FreeTypeFont:
+def _resolve_font(font_path: str | None, size: int) -> ImageFont.FreeTypeFont:
     candidates = [font_path] if font_path else FONT_CANDIDATES
     for candidate in candidates:
         if candidate and Path(candidate).exists():
@@ -293,11 +292,11 @@ def render_text_overlay(
     y: float = 0.9,
     size: float = 0.05,
     color: str = "#FFFFFF",
-    stroke_color: Optional[str] = "#000000",
-    stroke_width: Optional[int] = None,
+    stroke_color: str | None = "#000000",
+    stroke_width: int | None = None,
     opacity: float = 1.0,
     align: str = "center",
-    font_path: Optional[str] = None,
+    font_path: str | None = None,
     quality: int = 95,
 ) -> dict:
     """Draw text onto a copy of the image. (x, y) are normalized 0-1 coords of
@@ -306,8 +305,8 @@ def render_text_overlay(
     """
     if not text or not text.strip():
         raise ValueError("text is empty")
-    with Image.open(src) as im:
-        im = ImageOps.exif_transpose(im)
+    with Image.open(src) as source:
+        im = ImageOps.exif_transpose(source)
         exif_bytes = im.info.get("exif")
         base = im.convert("RGBA")
         overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -329,7 +328,7 @@ def render_text_overlay(
             fill=_rgba(color, opacity),
             align=align,
             stroke_width=stroke,
-            stroke_fill=_rgba(stroke_color, opacity) if stroke else None,
+            stroke_fill=_rgba(stroke_color, opacity) if stroke and stroke_color else None,
         )
         out = Image.alpha_composite(base, overlay)
         if dest.suffix.lower() in (".jpg", ".jpeg"):
@@ -343,7 +342,7 @@ def render_text_overlay(
         }
 
 
-def create_derived_text(connection, catalog: CatalogPaths, asset_id: str, output: Optional[Path] = None, **opts) -> dict:
+def create_derived_text(connection, catalog: CatalogPaths, asset_id: str, output: Path | None = None, **opts) -> dict:
     """Render text onto an asset. With output: render only (preview, no catalog
     writes). Without: write into derived/ and register as a derived version.
     """
@@ -373,8 +372,8 @@ def export_assets_to_dir(
     connection,
     asset_ids: list[str],
     dest_dir: Path,
-    max_edge: Optional[int] = None,
-    fmt: Optional[str] = None,
+    max_edge: int | None = None,
+    fmt: str | None = None,
     quality: int = 90,
 ) -> list[dict]:
     """Copy assets out of the library, optionally resizing/transcoding.
@@ -399,11 +398,11 @@ def export_assets_to_dir(
                 raise ValueError(f"unsupported source format: {src.suffix}")
             suffix = EXT_BY_FORMAT[fmt] if fmt else src.suffix.lower()
             dest = _unique_dest(dest_dir, stem, suffix)
-            with Image.open(src) as im:
-                im = ImageOps.exif_transpose(im)
+            with Image.open(src) as source:
+                im = ImageOps.exif_transpose(source)
                 exif_bytes = im.info.get("exif")
                 if max_edge and max(im.size) > max_edge:
-                    im.thumbnail((max_edge, max_edge), Image.LANCZOS)
+                    im.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
                 _save_image(im, dest, exif_bytes=exif_bytes, quality=quality)
                 results.append({
                     "asset_id": asset_id,

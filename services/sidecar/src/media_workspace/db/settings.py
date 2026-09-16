@@ -9,6 +9,7 @@ import sqlite3
 
 from .core import _json
 
+
 def get_app_setting(connection: sqlite3.Connection, setting_key: str) -> object | None:
     row = connection.execute(
         "SELECT value_json FROM app_settings WHERE setting_key = ?",
