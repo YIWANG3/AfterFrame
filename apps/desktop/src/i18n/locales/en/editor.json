@@ -50,8 +50,7 @@
     "customWidth": "Custom ratio width",
     "customHeight": "Custom ratio height",
     "subfolder": "Create a subfolder for the panels",
-    "webDownloads": "The {{count}} panels download one by one.",
-    "customRatio": "Width : height"
+    "webDownloads": "The {{count}} panels download one by one."
   },
   "text": {
     "presets": "Presets",

@@ -21,46 +21,23 @@ function middleEllipsis(text, max = 40) {
   return `${text.slice(0, head)}…${text.slice(-tail)}`;
 }
 
-// "Custom" tile — same shape as the crop tool's AspectButton (dashed preview
-// box like Free), so the grid reads as one set of presets.
-function CustomAspectTile({ label, active, custom, onClick }) {
+// "Custom" tile — the sixth cell of the ratio grid: dashed preview box (like
+// the crop tool's Free) plus two inline W:H inputs, styled like the collage
+// panel's ratio inputs. Typing applies immediately once both sides are valid;
+// focusing an input selects the tile.
+function CustomAspectTile({ t, active, custom, onCommit }) {
+  const [draft, setDraft] = useState({ width: String(custom.width), height: String(custom.height) });
+  useEffect(() => { setDraft({ width: String(custom.width), height: String(custom.height) }); }, [custom.width, custom.height]);
   const aspect = isValidCustomAspect(custom) ? custom.width / custom.height : 3 / 4;
   const max = 14;
   const box = aspect >= 1
     ? { width: max, height: Math.max(6, Math.round(max / aspect)) }
     : { width: Math.max(6, Math.round(max * aspect)), height: max };
-  return (
-    <button
-      type="button"
-      className={[
-        "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] transition-colors",
-        active ? "bg-selected text-accent" : "text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-      onClick={onClick}
-      data-testid="split-aspect-custom"
-    >
-      <span className="flex h-4 w-4 items-center justify-center shrink-0">
-        <span
-          className="block border border-current opacity-70"
-          style={{ width: `${box.width}px`, height: `${box.height}px`, borderStyle: "dashed", borderRadius: "1.5px" }}
-        />
-      </span>
-      <span>{label}</span>
-    </button>
-  );
-}
-
-// W:H inputs for the custom panel ratio, shown while the Custom tile is
-// active. Local draft so half-typed values don't reshape the region; commits
-// on blur / Enter when both sides are valid.
-function CustomAspectInputs({ t, value, onCommit }) {
-  const [draft, setDraft] = useState({ width: String(value.width), height: String(value.height) });
-  useEffect(() => { setDraft({ width: String(value.width), height: String(value.height) }); }, [value.width, value.height]);
-  const commit = () => {
-    const next = { width: Number(draft.width), height: Number(draft.height) };
-    if (!isValidCustomAspect(next)) { setDraft({ width: String(value.width), height: String(value.height) }); return; }
-    if (next.width === value.width && next.height === value.height) return;
-    onCommit(next);
+  const change = (key, raw) => {
+    const nextDraft = { ...draft, [key]: raw };
+    setDraft(nextDraft);
+    const next = { width: Number(nextDraft.width), height: Number(nextDraft.height) };
+    if (isValidCustomAspect(next)) onCommit(next);
   };
   const field = (key, label) => (
     <input
@@ -71,20 +48,33 @@ function CustomAspectInputs({ t, value, onCommit }) {
       value={draft[key]}
       aria-label={label}
       data-testid={`split-custom-${key}`}
-      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-      onBlur={commit}
+      onFocus={() => { if (!active) onCommit(isValidCustomAspect(custom) ? custom : { width: 3, height: 4 }); }}
+      onChange={(e) => change(key, e.target.value)}
+      onBlur={() => setDraft({ width: String(custom.width), height: String(custom.height) })}
       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
-      className="h-7 w-14 rounded-md bg-app px-2 text-center text-[11px] tabular-nums text-text outline-none focus:ring-1 focus:ring-[rgb(var(--accent-color))]"
+      className="collage-ratio-input w-10 px-1 text-center text-[11px] tabular-nums text-text"
     />
   );
   return (
-    <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
-      <span>{t("split.customRatio")}</span>
-      <div className="flex items-center gap-1.5">
+    <div
+      className={[
+        "flex items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors",
+        active ? "bg-selected text-accent" : "text-muted hover:bg-hover hover:text-text",
+      ].join(" ")}
+      data-testid="split-aspect-custom"
+      title={t("split.custom")}
+    >
+      <span className="flex h-4 w-4 items-center justify-center shrink-0">
+        <span
+          className="block border border-current opacity-70"
+          style={{ width: `${box.width}px`, height: `${box.height}px`, borderStyle: "dashed", borderRadius: "1.5px" }}
+        />
+      </span>
+      <span className="flex items-center gap-1">
         {field("width", t("split.customWidth"))}
         <span className="text-muted2">:</span>
         {field("height", t("split.customHeight"))}
-      </div>
+      </span>
     </div>
   );
 }
@@ -174,19 +164,12 @@ export default function SplitPanel({
               />
             ))}
             <CustomAspectTile
-              label={t("split.custom")}
+              t={t}
               active={aspectKey === CUSTOM_SPLIT_ASPECT_KEY}
               custom={customAspect}
-              onClick={() => onCommitAspect(CUSTOM_SPLIT_ASPECT_KEY)}
-            />
-          </div>
-          {aspectKey === CUSTOM_SPLIT_ASPECT_KEY ? (
-            <CustomAspectInputs
-              t={t}
-              value={customAspect}
               onCommit={(next) => onCommitAspect(CUSTOM_SPLIT_ASPECT_KEY, next)}
             />
-          ) : null}
+          </div>
         </div>
 
         <div className="border-b border-border/60 px-4 py-3">

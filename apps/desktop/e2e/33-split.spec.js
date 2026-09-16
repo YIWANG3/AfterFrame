@@ -115,10 +115,8 @@ test.describe("Seamless split", () => {
   });
 
   test("custom W:H typed into the ratio inputs drives the panel shape", async () => {
-    await expect(window.getByTestId("split-custom-width")).toHaveCount(0);
-    await window.getByTestId("split-aspect-custom").click();
-    expect((await splitState(window)).aspectKey).toBe("custom");
     await window.getByTestId("split-custom-width").fill("2");
+    expect((await splitState(window)).aspectKey).toBe("custom");
     await window.getByTestId("split-custom-height").fill("1");
     await window.getByTestId("split-custom-height").press("Enter");
     let s = await splitState(window);
