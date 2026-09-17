@@ -349,6 +349,9 @@ export default function useWorkspace({ pushToast } = {}) {
     if (Date.now() < suppressAutoReloadUntilRef.current) return;
     invalidateAnnotations();
     void loadBrowser({ force: true, preserveView: true });
+    // Asset writes move the sidebar counts too (delete_assets, crops adding
+    // versions); the gallery alone reloading left "All Assets N" stale.
+    void api.getSummary().then(setSummary).catch(() => {});
   };
   useEffect(() => {
     return api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));

@@ -85,6 +85,7 @@ jobs:
           e2e/32-gps-location-menu.spec.js
           e2e/33-split.spec.js
           e2e/35-raw-import.spec.js
+          e2e/36-mcp-jobs-tools.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
