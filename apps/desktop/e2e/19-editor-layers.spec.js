@@ -328,6 +328,9 @@ test.describe("Unified undo/redo (transform + layers, one timeline)", () => {
     // ride the same timeline as transform edits, not a separate stack.
     await window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(0);
+    // The add had selected the new layer; undoing the add must not leave the
+    // selection pointing at an id that no longer exists.
+    await expect.poll(() => window.evaluate(() => window.__afterframeTest.getState().selectedIds), { timeout: 5000 }).toEqual([]);
 
     await window.evaluate(() => window.__afterframeTest.redo());
     await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(1);
