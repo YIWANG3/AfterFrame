@@ -1070,6 +1070,7 @@ export default function App() {
         /> : <div className="bg-chrome" />}
 
         <section
+          data-testid="gallery-drop-zone"
           className="relative flex min-w-0 min-h-0 flex-col overflow-hidden bg-app"
           onDragStart={() => setDropActive(false)}
           onDragOver={viewMode === "assets" ? handleGalleryDragOver : undefined}
