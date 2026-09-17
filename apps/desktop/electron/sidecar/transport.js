@@ -330,6 +330,9 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   function launchSidecarJob(command) {
     const catalogPath = getCatalogPath();
     const generation = generationOf(catalogPath);
+    // Runners are detached with stdio ignored, so this line is the only
+    // record of what was launched (e2e app-logs, user bug reports).
+    console.log("[sidecar:job]", redactCommand(command));
     const child = spawnDetachedSidecar(command);
     // A runner that dies before its first update_job (spawn failure, argparse
     // rejection) would leave the row 'queued' until the heartbeat reaper —
