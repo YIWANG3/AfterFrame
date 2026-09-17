@@ -68,18 +68,10 @@ warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
 
-# Debt list — the ratchet. These three modules carry ~90 annotation-hygiene
-# errors (dict invariance on job payloads, arithmetic on `object`-typed report
-# values, a few redefined locals). None of them is a runtime bug, so they are
-# excluded rather than blocking the rollout; every other module IS checked.
-# Clean one, delete its line here, and it stays clean. Never add to this list.
-[[tool.mypy.overrides]]
-module = [
-    "media_workspace.job_runner",
-    "media_workspace.metadata",
-    "media_workspace.reverse_lookup",
-]
-ignore_errors = true
+# No per-module exclusions: the three modules that carried ~90 annotation-
+# hygiene errors at rollout (job_runner, metadata, reverse_lookup) were
+# cleaned on 2026-09-17 — JSON-shaped dicts are dict[str, Any], not
+# dict[str, object]. Keep it that way; do not reintroduce an ignore list.
 
 [tool.setuptools]
 package-dir = {"" = "src"}

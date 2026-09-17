@@ -27,7 +27,7 @@
 | [mcp-parity-plan.md](mcp-parity-plan.md) | Phase 1–2 已实现（17→34 tools）；Phase 3–4 未开始 |
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
 | [liquid-glass-redesign.md](liquid-glass-redesign.md) | 视觉重构的调研、原型与定调；材质规则是现行约束 |
-| [people-recognition-design.md](people-recognition-design.md) | 本地人物识别设计。**注意**：文内状态行仍写「尚未实现」，实际已落地（`ipc/people.js`、`db/people.py`、`native/people-worker.swift`），状态行待回填 |
+| [people-recognition-design.md](people-recognition-design.md) | 本地人物识别设计，已实现（状态行 2026-09-17 回填；`ipc/people.js`、`db/people.py`、`native/people-worker.swift`），状态行待回填 |
 
 ## 已完成的计划（历史记录；实现以代码为准）
 

@@ -7,12 +7,24 @@
 // stays in EditorOverlay — like the crop Apply, it's a cross-cutting operation,
 // not tool-local state.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createDefaultLayer } from "../textState";
 import { isTextLayer, moveLayerBy, removeLayerById } from "../layerStack";
 
 export function useTextTool({ layers, layersRef, commit }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
+  // The stack can lose layers without going through deleteLayer — undo of an
+  // add, Apply baking layers into the crop, a preset swap — and a selection
+  // pointing at a vanished id kept the inspector on a ghost layer. Drop ids
+  // that no longer exist whenever the stack changes.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(layers.map((l) => l.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [layers]);
   const clipboardRef = useRef(null);
 
   function moveLayer(id, direction) {

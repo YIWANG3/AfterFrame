@@ -1,6 +1,6 @@
 # 本地人物识别与聚类设计
 
-状态：**产品设计，尚未实现**  
+状态：**已实现**（2026-09-17 回填）。落地位置：`apps/desktop/electron/ipc/people.js`（模型安装、任务启动 / 恢复）、`services/sidecar/src/media_workspace/db/people.py`（人脸、分组、聚类）、`apps/desktop/native/people-worker.swift`（Core ML 推理）、`apps/desktop/src/components/PeopleView.jsx`（人物墙）。e2e：`18-people-flows`、`12-people-view`。本文其余部分是当时的设计稿，实现以代码为准。  
 默认模型：**ArcFace R100**  
 相关原型：[人物与模型交互 Mock](prototypes/people-arcface-ui.html)  
 相关旧调研：[people-faces-plan.md](people-faces-plan.md)（其中 Vision FeaturePrint 路线已不再是实现方案）

@@ -276,7 +276,7 @@ def resolve_image(
             content_changed=content_changed,
         )
 
-    ranked: list[dict[str, object]] = []
+    ranked: list[dict[str, Any]] = []
     for row in shortlist_candidates(connection, export):
         score, features = score_candidate(export, row)
         ranked.append(

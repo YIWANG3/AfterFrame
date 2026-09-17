@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from .ai_repaint import (
     ARK_PROVIDER,
@@ -71,7 +72,12 @@ def _check_pause(connection, job_id: str) -> None:
         raise JobPaused(job_id)
 
 
-def _mark_cancelled(connection, job_id: str, payload: dict, result: dict | None = None, progress: float = 0.0) -> dict[str, object]:
+def _as_dict(value: object) -> dict[str, Any]:
+    """A JSON column read back from the jobs table, or {} when unset."""
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _mark_cancelled(connection, job_id: str, payload: dict, result: dict | None = None, progress: float = 0.0) -> dict[str, Any]:
     final = {**(result or {}), "cancelled": True, "current_phase": None}
     update_job(
         connection,
@@ -99,18 +105,18 @@ def _scan_fraction(update: dict[str, int | str]) -> float:
     return max(0.0, min(0.99, float(processed) / float(discovered)))
 
 
-def _phase_result(phase: dict[str, object], result: dict[str, object]) -> dict[str, object]:
+def _phase_result(phase: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     return {"key": phase["key"], "label": phase["label"], "result": result}
 
 
 def _mark_people_paused(
     connection,
     job_id: str,
-    payload: dict[str, object],
-    result: dict[str, object],
-    cursor: dict[str, object],
+    payload: dict[str, Any],
+    result: dict[str, Any],
+    cursor: dict[str, Any],
     progress: float,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     final = {**result, "paused": True, "current_phase": {"status": "paused"}}
     update_job(
         connection,
@@ -137,7 +143,7 @@ def run_people_index_job(
     asset_ids: list[str] | None = None,
     limit: int | None = None,
     cluster_every: int = 300,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Run one resumable batch through the precompiled native people worker.
 
     The sidecar owns the child process and all database writes. A worker result
@@ -155,8 +161,12 @@ def run_people_index_job(
     if not model_path.exists():
         raise FileNotFoundError(f"People model is missing: {model_path}")
 
-    prior_payload = dict(job.get("payload") or {})
-    prior_result = dict(job.get("result") or {})
+    def checkpoint() -> None:
+        _check_cancel(connection, job_id)
+        _check_pause(connection, job_id)
+
+    prior_payload = _as_dict(job.get("payload"))
+    prior_result = _as_dict(job.get("result"))
     stored_scope = prior_payload.get("resolved_asset_ids")
     requested_ids = [str(asset_id) for asset_id in asset_ids] if asset_ids is not None else None
     if isinstance(stored_scope, list):
@@ -179,11 +189,11 @@ def run_people_index_job(
         limit=limit,
     )
     resolved_asset_ids = [str(candidate["asset_id"]) for candidate in candidates]
-    cursor = dict(job.get("resume_cursor") or {})
+    cursor = _as_dict(job.get("resume_cursor"))
     offset = int(cursor.get("offset", 0) or 0)
     if offset < 0 or offset > len(candidates):
         offset = 0
-    payload: dict[str, object] = {
+    payload: dict[str, Any] = {
         **prior_payload,
         "model_id": model_id,
         "model_version": model_version,
@@ -194,7 +204,7 @@ def run_people_index_job(
         "phase_index": 1,
         "phase_count": 2,
     }
-    stats: dict[str, object] = {
+    stats: dict[str, Any] = {
         "processed": max(int(prior_result.get("processed", 0) or 0), offset),
         "total": len(candidates),
         "analyzed": int(prior_result.get("analyzed", 0) or 0),
@@ -234,7 +244,7 @@ def run_people_index_job(
             connection,
             model_id=model_id,
             model_version=model_version,
-            checkpoint=lambda: (_check_cancel(connection, job_id), _check_pause(connection, job_id)),
+            checkpoint=checkpoint,
             commit=False,
         )
         connection.commit()
@@ -282,15 +292,15 @@ def run_people_index_job(
             # restored mtime would hide.
             file_stat = None
             try:
-                file_stat = os.stat(candidate["canonical_path"])
+                file_stat = os.stat(str(candidate["canonical_path"]))
             except OSError:
                 pass
             if (
                 known_hash
                 and file_stat is not None
                 and candidate.get("file_size") == file_stat.st_size
-                and candidate.get("file_mtime") is not None
-                and abs(float(candidate["file_mtime"]) - file_stat.st_mtime) < 1e-6
+                and isinstance(candidate.get("file_mtime"), (int, float))
+                and abs(float(str(candidate["file_mtime"])) - file_stat.st_mtime) < 1e-6
             ):
                 stats["skipped"] = int(stats["skipped"]) + 1
                 active_cursor = {"offset": position + 1, "total": len(candidates)}
@@ -365,7 +375,7 @@ def run_people_index_job(
                         connection,
                         model_id=model_id,
                         model_version=model_version,
-                        checkpoint=lambda: (_check_cancel(connection, job_id), _check_pause(connection, job_id)),
+                        checkpoint=checkpoint,
                         commit=False,
                     )
                     connection.commit()
@@ -414,7 +424,7 @@ def run_people_index_job(
             connection,
             model_id=model_id,
             model_version=model_version,
-            checkpoint=lambda: (_check_cancel(connection, job_id), _check_pause(connection, job_id)),
+            checkpoint=checkpoint,
             commit=False,
         )
         connection.commit()
@@ -490,14 +500,14 @@ _HD_PHASE = {"key": "generate_previews_hd", "label": "Generate HD Previews", "pr
 
 def _build_import_phases(
     mode: str, has_raw_dirs: bool, has_image_dirs: bool, generate_hd: bool = True
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     # HD (2000px) previews are opt-in (Settings ▸ Library). When off we skip the
     # phase entirely — the execution loop is driven by this same list, so a
     # missing phase is both unplanned and unrun.
     if mode == "source_only":
         return [{"key": "scan_sources", "label": "Index Sources", "progress": 1.0}]
     if mode == "processed_only":
-        phases = [{"key": "index_processed_media", "label": "Index Images", "progress": 0.5}]
+        phases: list[dict[str, Any]] = [{"key": "index_processed_media", "label": "Index Images", "progress": 0.5}]
         if has_image_dirs:
             phases.append({"key": "generate_previews", "label": "Generate Previews", "progress": 0.75})
             if generate_hd:
@@ -518,7 +528,7 @@ def _build_import_phases(
             if generate_hd:
                 phases.append(dict(_HD_PHASE))
         return phases
-    phases: list[dict[str, object]] = []
+    phases = []
     if has_raw_dirs:
         phases.append({"key": "scan_sources", "label": "Index Sources", "progress": 1 / 4})
     if has_image_dirs:
@@ -538,13 +548,13 @@ def run_import_job(
     mode: str = "combined",
     generate_hd: bool = True,
     respect_tombstones: bool = False,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     thresholds = Thresholds()
-    phase_results: list[dict[str, object]] = []
+    phase_results: list[dict[str, Any]] = []
     changed_paths: list[Path] = []
     phases = _build_import_phases(mode, bool(raw_dirs), bool(image_dirs), generate_hd)
     if not phases:
-        result = {"phase_results": [], "current_phase": None}
+        result: dict[str, Any] = {"phase_results": [], "current_phase": None}
         update_job(
             connection,
             job_id,
@@ -580,7 +590,7 @@ def run_import_job(
         if raw_dirs:
             scan_phase = phases[phase_cursor]
             if scan_phase["key"] == "scan_sources":
-                scan_totals: dict[str, object] = {
+                scan_totals: dict[str, Any] = {
                     "indexed": 0,
                     "skipped": 0,
                     "unchanged": 0,
@@ -866,7 +876,7 @@ def run_enrichment_job(
     connection,
     job_id: str,
     raw_dirs: list[Path] | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     payload = {
         "raw_dirs": [str(path.resolve()) for path in raw_dirs] if raw_dirs else [],
         "phase": "enrich_raw",
@@ -928,7 +938,7 @@ def run_preview_job(
     asset_type: str | None = "image",
     limit: int | None = None,
     force: bool = False,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     payload = {
         "kind": kind,
         "asset_type": asset_type,
@@ -1005,7 +1015,7 @@ def run_annotation_job(
     video_frame_interval: float = 0.0,
     limit: int | None = None,
     max_workers: int = 3,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     from . import annotation as _annotation
     from .db import list_assets_for_annotation
 
@@ -1099,7 +1109,7 @@ def run_ai_repaint_job(
     temperature: float | None = None,
     model: str | None = None,
     base_url: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     payload = {
         "provider": provider,
         "input_path": str(input_path.resolve()),
@@ -1136,7 +1146,7 @@ def run_ai_repaint_job(
                 ak, sk = None, None
                 if effective_api_key:
                     try:
-                        creds = json.loads(effective_api_key)
+                        creds = json.loads(effective_api_key or "")
                         ak, sk = creds.get("access_key_id"), creds.get("secret_access_key")
                     except (json.JSONDecodeError, TypeError):
                         pass
@@ -1260,7 +1270,7 @@ def run_text_image_job(
     model: str | None = None,
     base_url: str | None = None,
     ref_image_path: Path | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Text-to-image generation (handwriting stickers). Unlike repaint the
     output is a sticker source asset, not a photo derivative — it is NOT
     registered into the catalog."""
@@ -1295,7 +1305,7 @@ def run_text_image_job(
             if provider == JIMENG_PROVIDER:
                 ak, sk = None, None
                 try:
-                    creds = json.loads(effective_api_key)
+                    creds = json.loads(effective_api_key or "")
                     ak, sk = creds.get("access_key_id"), creds.get("secret_access_key")
                 except (json.JSONDecodeError, TypeError):
                     pass

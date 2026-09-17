@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from .models import ImageCandidate, RawMetadata
 
@@ -274,26 +275,26 @@ def _parse_tiff_value(
         ]
         return values[0] if count == 1 and values else values
     if field_type == RATIONAL_TYPE:
-        values: list[float | None] = []
+        ratios: list[float | None] = []
         for index in range(0, len(raw), 8):
             denominator = struct.unpack("<I" if little_endian else ">I", raw[index + 4 : index + 8])[0]
             if denominator == 0:
-                values.append(None)
+                ratios.append(None)
                 continue
             numerator = struct.unpack("<I" if little_endian else ">I", raw[index : index + 4])[0]
-            values.append(numerator / denominator)
-        clean = [value for value in values if value is not None]
+            ratios.append(numerator / denominator)
+        clean = [value for value in ratios if value is not None]
         return clean[0] if count == 1 and clean else clean
     if field_type == SIGNED_RATIONAL_TYPE:
-        values: list[float | None] = []
+        ratios = []
         for index in range(0, len(raw), 8):
             denominator = struct.unpack("<i" if little_endian else ">i", raw[index + 4 : index + 8])[0]
             if denominator == 0:
-                values.append(None)
+                ratios.append(None)
                 continue
             numerator = struct.unpack("<i" if little_endian else ">i", raw[index : index + 4])[0]
-            values.append(numerator / denominator)
-        clean = [value for value in values if value is not None]
+            ratios.append(numerator / denominator)
+        clean = [value for value in ratios if value is not None]
         return clean[0] if count == 1 and clean else clean
     return raw
 
@@ -396,7 +397,7 @@ def _extract_tiff_metadata(
     data: bytes,
     tiff_base: int,
     profile: str = "full",
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if profile not in RAW_METADATA_PROFILES:
         raise ValueError(f"unsupported metadata profile: {profile}")
     if tiff_base + 8 > len(data):
@@ -413,9 +414,11 @@ def _extract_tiff_metadata(
     gps_pointer = ifd0.get(0x8825)
     gps_ifd = _parse_tiff_ifd(data, tiff_base, gps_pointer, little_endian) if isinstance(gps_pointer, int) else {}
 
+    date_time_original = exif_ifd.get(0x9003)
+    date_time = ifd0.get(0x0132)
     capture_time = (
-        _normalize_capture_time(exif_ifd.get(0x9003) if isinstance(exif_ifd.get(0x9003), str) else None)
-        or _normalize_capture_time(ifd0.get(0x0132) if isinstance(ifd0.get(0x0132), str) else None)
+        _normalize_capture_time(date_time_original if isinstance(date_time_original, str) else None)
+        or _normalize_capture_time(date_time if isinstance(date_time, str) else None)
     )
     camera_make = _coerce_ascii(ifd0.get(0x010F))
     camera_model = ifd0.get(0x0110) if isinstance(ifd0.get(0x0110), str) else None
@@ -504,8 +507,8 @@ def _iter_embedded_tiff_offsets(data: bytes) -> list[int]:
     return offsets
 
 
-def _merge_metadata(candidates: list[dict[str, object]]) -> dict[str, object]:
-    merged: dict[str, object] = {
+def _merge_metadata(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    merged: dict[str, Any] = {
         "capture_time": None,
         "rating": None,
         "camera_make": None,
@@ -532,12 +535,12 @@ def _merge_metadata(candidates: list[dict[str, object]]) -> dict[str, object]:
     return merged
 
 
-def extract_embedded_metadata(path: Path, profile: str = "full") -> dict[str, object]:
+def extract_embedded_metadata(path: Path, profile: str = "full") -> dict[str, Any]:
     with path.open("rb") as handle:
         return extract_embedded_metadata_from_handle(handle, path.suffix.lower(), profile=profile)
 
 
-def extract_embedded_metadata_from_handle(handle, suffix: str, profile: str = "full") -> dict[str, object]:
+def extract_embedded_metadata_from_handle(handle, suffix: str, profile: str = "full") -> dict[str, Any]:
     metadata, _sample = _extract_embedded_metadata_with_sample(handle, suffix, profile=profile)
     return metadata
 
@@ -546,13 +549,13 @@ def _extract_embedded_metadata_with_sample(
     handle,
     suffix: str,
     profile: str = "full",
-) -> tuple[dict[str, object], bytes]:
+) -> tuple[dict[str, Any], bytes]:
     limits = (EXIF_SAMPLE_BYTES,) if suffix in {".jpg", ".jpeg"} else EMBEDDED_METADATA_SAMPLE_STEPS
     sample = bytearray()
 
     for limit in limits:
         data = _ensure_sample(handle, sample, limit)
-        candidates: list[dict[str, object]] = []
+        candidates: list[dict[str, Any]] = []
 
         if suffix in {".jpg", ".jpeg"}:
             exif_offset = _find_jpeg_exif_offset(data)
