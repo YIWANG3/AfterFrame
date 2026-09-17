@@ -77,13 +77,21 @@ test.describe("Save pipeline", () => {
   test("saved edit joins the original's version stack (original ↔ new reference)", async () => {
     await window.evaluate(() => window.__afterframeTest.closeEditor?.());
 
-    // The original (first cataloged asset) + its resource set, before editing.
-    const originId = await window.locator("[data-gallery-item='true']").first().getAttribute("data-asset-id");
-    expect(originId).toBeTruthy();
+    // The ORIGINAL by stem, not "the first card": the two saves above joined
+    // its version stack, the gallery collapses a stack to one card, and which
+    // member heads it differs between machines (CI showed text-layer-save).
+    const origin = await window.evaluate(async () => {
+      const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 100 });
+      const row = rows.find((r) => r.stem === "0Y1A6707-9");
+      return row ? { assetId: row.asset_id, imagePath: row.image_path } : null;
+    });
+    expect(origin, "0Y1A6707-9 should be in the seeded catalog").toBeTruthy();
+    const originId = origin.assetId;
     const originBefore = await window.evaluate((id) => window.mediaWorkspace.getAssetDetailById(id), originId);
     expect(originBefore?.resource_set_id).toBeTruthy();
 
-    await openEditorOnFirstAsset(window);
+    await window.evaluate((p) => window.__afterframeTest.openEditor(p), origin.imagePath);
+    await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await window.waitForFunction(() => typeof window.__afterframeTest?.saveAs === "function", null, { timeout: 10_000 });
     await waitForEditor(window, { preview: true });
     const out = path.join(tmpDir, "linked-edit.jpg");
