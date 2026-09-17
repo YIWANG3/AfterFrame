@@ -111,6 +111,7 @@ jobs:
           e2e/39-context-menu-selection.spec.js
           e2e/40-crop-mouse.spec.js
           e2e/41-text-layer-panel.spec.js
+          e2e/42-drop-and-menu.spec.js
           e2e/43-sticker-library.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
