@@ -56,34 +56,54 @@ jobs:
         run: npm run build:native --prefix apps/desktop
       - name: Build renderer
         run: npm run build --prefix apps/desktop
-      # CI-stable subset: GitHub macOS VMs have no GPU/WebGL (23-map,
-      # 22-lightbox-zoom), no reliable AVFoundation playback (14-video),
-      # flaky fs-watch timing (17-watched-dirs, parts of 02/05), and slow
-      # I/O that cascades editor/save timeouts (06, 12, 18-people-flows).
-      # Those suites remain part of the local pre-release run
-      # (npm run e2e:only). Promote a suite back here once it proves stable.
-      - name: Run Electron E2E (CI-stable subset)
+      # CI subset. Everything else runs nightly (e2e-nightly.yml). Left out
+      # and why (2026-09-17, #58):
+      #   22-lightbox-zoom, 23-map   no GPU/WebGL on the macOS VM
+      #   14-video                   no reliable AVFoundation playback
+      #   17-watched-dirs            fs-watch timing
+      #   25-collage-batch           layout assertions assume the local
+      #                              window size (cards wrap on the VM)
+      #   02-navigation              "Rated" filter raced the startup browse
+      #                              storm on the slow VM (gallery kept "all")
+      #   12-missing-original        relink hit UNIQUE(asset_files.path) on
+      #                              the VM only
+      #   05-catalog                 thumbnail-regeneration test fails locally
+      #                              too — open item
+      # The save / people suites were once excluded as "slow I/O"; the real
+      # cause was the seeded catalog's absolute paths (fixed in #57), so they
+      # are back. Opt-in suites (27-agent, demo) skip themselves.
+      - name: Run Electron E2E (CI subset)
         run: >
           npm run e2e:only --prefix apps/desktop --
           e2e/01-launch.spec.js
           e2e/03-editor.spec.js
           e2e/04-sticker.spec.js
+          e2e/06-save.spec.js
           e2e/07-depth.spec.js
           e2e/08-mcp-http.spec.js
           e2e/09-agent-bridge.spec.js
           e2e/10-settings.spec.js
           e2e/11-jobs-toasts.spec.js
+          e2e/12-people-view.spec.js
           e2e/13-i18n.spec.js
           e2e/15-welcome.spec.js
           e2e/16-open-with.spec.js
           e2e/18-editor-transform.spec.js
+          e2e/18-people-flows.spec.js
           e2e/19-editor-layers.spec.js
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
+          e2e/24-handwriting.spec.js
+          e2e/26-mcp-parity.spec.js
+          e2e/28-mcp-render.spec.js
           e2e/29-folder-order.spec.js
+          e2e/29-tahoe-shell.spec.js
+          e2e/30-sidebar-scroll.spec.js
+          e2e/31-ui-regressions.spec.js
           e2e/31-version-navigation.spec.js
           e2e/32-gps-location-menu.spec.js
           e2e/33-split.spec.js
+          e2e/34-settings-transfer.spec.js
           e2e/35-raw-import.spec.js
           e2e/36-mcp-jobs-tools.spec.js
       - name: Upload E2E failure diagnostics
