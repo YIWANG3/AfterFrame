@@ -49,11 +49,19 @@ Run the standard repository gate from the repository root:
 npm run check      # lint + Python/Node/Renderer unit tests + production build
 npm test           # all fast unit tests
 npm run test:e2e   # full Electron Playwright suite (macOS)
+npm run test:e2e:coverage   # same suite, with line coverage for renderer / main / sidecar
 ```
 
-The root commands set the sidecar `PYTHONPATH` automatically. ESLint's checked-in
-bulk-suppression file records existing warnings by file and rule, so new lint or
-React Hooks violations still fail locally and in CI.
+The root commands set the sidecar `PYTHONPATH` automatically. ESLint has no
+suppression file any more (the last entry went in #54): every `no-unused-vars`
+and `react-hooks/exhaustive-deps` finding is a hard error locally and in CI.
+
+`test:e2e:coverage` builds an istanbul-instrumented renderer, arms
+`NODE_V8_COVERAGE` for the main process and wraps the dev sidecar in Python
+`coverage`, then prints one line per process and writes HTML under
+`apps/desktop/.coverage/report/`. The nightly workflow runs this variant and
+uploads the report; numbers and cold spots as of 2026-09-17 are in
+[review/2026-09-17-E2E覆盖率.md](review/2026-09-17-E2E覆盖率.md).
 
 `npm run lint` covers both sides: ESLint for the desktop app and ruff + mypy for
 the sidecar (`npm run lint:python`). The Python tools come from the sidecar's

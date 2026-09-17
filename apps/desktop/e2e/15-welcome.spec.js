@@ -5,7 +5,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
 const sampleManifest = require("../sample-photos/manifest.json");
 const sampleNames = Object.keys(sampleManifest).sort();
 
@@ -123,6 +123,7 @@ test.describe("First run (no catalog)", () => {
     const original = before.find((row) => row.image_path === fs.realpathSync(path.join(photosDir, "sample-01.jpg")));
     await window.evaluate((id) => window.mediaWorkspace.setAssetRating([id], 5), original.asset_id);
 
+    await collectCoverage(app); // restart path bypasses closeApp
     await app.close();
     ({ app, window } = await launchApp({ withCatalog: false, reuseUserDataDir: userDataDir }));
     app.process().stdout.on("data", (data) => mainLogs.push(String(data)));

@@ -26,7 +26,7 @@ jimeng = ["volcengine"]
 # Lint + type check. CI installs this group; locally `uvx ruff` / `uvx mypy`
 # works too. Pinned loosely — these tools add rules in minor releases and a
 # surprise CI failure is worse than a slightly stale linter.
-dev = ["ruff>=0.15,<0.16", "mypy>=1.19,<2"]
+dev = ["ruff>=0.15,<0.16", "mypy>=1.19,<2", "coverage>=7,<8"]
 
 [tool.ruff]
 line-length = 140

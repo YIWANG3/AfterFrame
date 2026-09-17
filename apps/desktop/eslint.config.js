@@ -61,6 +61,12 @@ module.exports = [
     },
   },
   {
+    // Node ESM dev scripts.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module", globals: globals.node },
+    rules: sharedRules,
+  },
+  {
     // Cross-process pure modules: ESM for Vite, require(esm)'d by main.
     files: ["shared/**/*.mjs"],
     languageOptions: { ecmaVersion: "latest", sourceType: "module" },

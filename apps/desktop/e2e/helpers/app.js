@@ -35,6 +35,37 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
 // which would make MCP-dependent specs flake in confusing ways.
 let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
 
+// Coverage run (npm run e2e:coverage): the renderer is an istanbul build
+// (vite.config.js), the main process writes V8 coverage on exit, and the dev
+// sidecar runs under Python coverage. Everything lands in .coverage/ and
+// scripts/e2e-coverage.mjs turns it into one report.
+const COVERAGE = process.env.AFTERFRAME_COVERAGE === "1";
+const COVERAGE_DIR = path.resolve(REPO_DESKTOP_DIR, ".coverage");
+function coverageEnv() {
+  if (!COVERAGE) return {};
+  for (const sub of ["main", "renderer", "sidecar"]) fs.mkdirSync(path.join(COVERAGE_DIR, sub), { recursive: true });
+  return {
+    NODE_V8_COVERAGE: path.join(COVERAGE_DIR, "main"),
+    AFTERFRAME_SIDECAR_COVERAGE: path.join(COVERAGE_DIR, "sidecar"),
+    AFTERFRAME_SIDECAR_COVERAGE_PYLIB: path.resolve(REPO_DESKTOP_DIR, ".coverage-tools", "pylib"),
+  };
+}
+
+// Pull window.__coverage__ out of every renderer window. Must run BEFORE the
+// app closes (the counters live in the page); a no-op on normal runs and on
+// pages that were never instrumented.
+async function collectCoverage(app) {
+  if (!COVERAGE) return;
+  for (const page of app.windows()) {
+    try {
+      const json = await page.evaluate(() => (window.__coverage__ ? JSON.stringify(window.__coverage__) : null));
+      if (!json) continue;
+      const name = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2)}.json`;
+      fs.writeFileSync(path.join(COVERAGE_DIR, "renderer", name), json);
+    } catch (_) { /* window already gone */ }
+  }
+}
+
 async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir } = {}) {
   // Fresh userData so each run starts from a clean slate
   if (reuseUserDataDir && (!path.basename(reuseUserDataDir).startsWith("afterframe-e2e-")
@@ -50,6 +81,7 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
     AFTERFRAME_MCP_PORT: String(mcpPort),
     AFTERFRAME_SIDECAR_TRACE: "1",
     NODE_ENV: "test",
+    ...coverageEnv(),
   };
   // Production tests must not accidentally attach to an inherited Vite URL.
   delete env.VITE_DEV_SERVER_URL;
@@ -130,6 +162,7 @@ async function mcpCall(port, method, params) {
 }
 
 async function closeApp(app, userDataDir) {
+  await collectCoverage(app);
   try {
     await app.close();
   } catch (_) { /* already closed */ }
@@ -160,4 +193,4 @@ async function waitForEditor(window, { preview = false, timeout = 15_000, previe
   );
 }
 
-module.exports = { launchApp, closeApp, waitForEditor, mcpCall, REPO_DESKTOP_DIR };
+module.exports = { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, REPO_DESKTOP_DIR };
