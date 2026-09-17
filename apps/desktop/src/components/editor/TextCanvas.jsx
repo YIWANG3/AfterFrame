@@ -129,7 +129,10 @@ export default function TextCanvas({
     const layer = layers.find((l) => l.id === layerId);
     if (!layer || !imageRect) return;
 
-    if (!selectedIds.has(layerId)) {
+    // onSelect has just run for this pointerdown; a shift-click added the
+    // layer to the selection and must not be collapsed back to a single one
+    // here (this closure's selectedIds predates that add).
+    if (!selectedIds.has(layerId) && !e.shiftKey) {
       onSelectionChange(new Set([layerId]));
     }
 
