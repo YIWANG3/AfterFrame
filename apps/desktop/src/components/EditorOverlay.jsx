@@ -865,6 +865,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         layers: layers.map((l) => ({
           id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale,
           naturalWidth: l.naturalWidth, naturalHeight: l.naturalHeight,
+          // Text styling the panel/gesture specs assert on.
+          text: l.text, fontFamily: l.fontFamily, fontSize: l.fontSize, rotation: l.rotation,
+          strokeEnabled: !!l.strokeEnabled, strokeWidth: l.strokeWidth, shadow: !!l.shadow, shadowX: l.shadowX, bgMode: l.bgMode,
           // Data URLs are megabytes — expose only the kind, not the payload.
           stickerPathKind: typeof l.stickerPath === "string"
             ? (l.stickerPath.startsWith("data:") ? "data" : "path")

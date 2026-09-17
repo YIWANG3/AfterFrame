@@ -37,10 +37,11 @@ export default function SelectionHandles({ onResizeStart, onRotateStart }) {
         ["0%", "50%", "ew"], ["100%", "50%", "ew"],
         ["0%", "100%", "nesw"], ["50%", "100%", "ns"], ["100%", "100%", "nwse"],
       ].map(([x, y, cursor], i) => (
-        <div key={i} style={handleStyle(x, y, cursor)} onPointerDown={(e) => onResizeStart(e)} />
+        <div key={i} data-selection-handle="resize" style={handleStyle(x, y, cursor)} onPointerDown={(e) => onResizeStart(e)} />
       ))}
       <div style={{ position: "absolute", left: "50%", top: `-${pad}px`, width: 1.5, height: ROT_HANDLE_DIST, backgroundColor: ACCENT, opacity: 0.5, transform: "translate(-50%, -100%)", pointerEvents: "none" }} />
       <div
+        data-selection-handle="rotate"
         style={{ position: "absolute", left: "50%", top: `-${pad + ROT_HANDLE_DIST}px`, width: ROT_HANDLE_RADIUS * 2, height: ROT_HANDLE_RADIUS * 2, borderRadius: "50%", backgroundColor: ACCENT, border: "1.5px solid #fff", transform: "translate(-50%, -50%)", cursor: "grab" }}
         onPointerDown={(e) => onRotateStart(e)}
       />

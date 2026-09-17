@@ -567,7 +567,7 @@ export default function TextPanel({
 
 function Section({ label, action, right, children }) {
   return (
-    <div className="border-b border-border/60 px-4 py-3">
+    <div className="border-b border-border/60 px-4 py-3" data-editor-section={label}>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{label}</span>
         {action || right || null}
@@ -647,6 +647,7 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
           <div key={l.id} className="relative">
             {showLineAbove && <div className="pointer-events-none absolute left-2 right-2 top-0 h-0.5 bg-[rgb(var(--accent-color))]" />}
             <div
+              data-layer-row={l.id}
               draggable={true}
               onDragStart={(e) => startDrag(e, l.id)}
               onDragEnd={endDrag}
@@ -978,6 +979,7 @@ function FontSelect({ value, onChange }) {
     <div className="relative">
       <button
         type="button"
+        data-testid="font-select"
         className="flex h-6 w-full items-center gap-2 rounded border border-border/60 bg-app px-2 transition-colors hover:border-border focus:border-[rgb(var(--accent-color))] outline-none"
         onClick={() => {
           if (!open) openValueRef.current = value;
