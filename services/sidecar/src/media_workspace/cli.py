@@ -1789,7 +1789,13 @@ def _cmd_list_pending(args, connection, catalog, parser):
 
 def _cmd_confirm_match(args, connection, catalog, parser):
     confirm_match(connection, args.image_path, args.raw_asset_id)
-    print(f"confirmed {args.image_path} -> {args.raw_asset_id}")
+    # JSON, not a sentence: Electron's commands.confirmMatch parses stdout
+    # (the MCP raw_pairing confirm_match action failed on the old text).
+    print(json.dumps({
+        "confirmed": True,
+        "image_path": str(args.image_path.resolve()),
+        "raw_asset_id": args.raw_asset_id,
+    }))
     return 0
 
 
