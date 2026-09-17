@@ -113,6 +113,7 @@ jobs:
           e2e/41-text-layer-panel.spec.js
           e2e/42-drop-and-menu.spec.js
           e2e/43-sticker-library.spec.js
+          e2e/44-discover.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
