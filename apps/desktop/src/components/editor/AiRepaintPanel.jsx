@@ -1,5 +1,5 @@
 import api from "../../api";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlignJustify,
@@ -388,69 +388,73 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
     return [];
   }
 
-  useEffect(() => {
-    async function loadStored() {
-      // Load prefs and styles in parallel — styles first so migration can't interfere
-      const [prefs, savedStyles] = await Promise.all([
-        api.getAiPreferences().then((p) => p || {}),
-        api.getAiStyles(),
-      ]);
-      prefsRef.current = prefs;
+  // Mount-once load. An effect event rather than an inline function so the
+  // helpers it calls (fetchModels, migrateOldProviders) stay ordinary
+  // component functions without dragging their identities into the deps.
+  const loadStored = useEffectEvent(async () => {
+    // Load prefs and styles in parallel — styles first so migration can't interfere
+    const [prefs, savedStyles] = await Promise.all([
+      api.getAiPreferences().then((p) => p || {}),
+      api.getAiStyles(),
+    ]);
+    prefsRef.current = prefs;
 
-      // Apply styles immediately (before any migration)
-      if (Array.isArray(savedStyles) && savedStyles.length) {
-        setStyles(savedStyles);
-        setSelectedStyleId((current) => {
-          if (current && savedStyles.some((s) => s.id === current)) return current;
-          return savedStyles[0]?.id ?? null;
+    // Apply styles immediately (before any migration)
+    if (Array.isArray(savedStyles) && savedStyles.length) {
+      setStyles(savedStyles);
+      setSelectedStyleId((current) => {
+        if (current && savedStyles.some((s) => s.id === current)) return current;
+        return savedStyles[0]?.id ?? null;
+      });
+    } else {
+      setStyles(INITIAL_STYLES);
+      setSelectedStyleId(INITIAL_STYLES[0]?.id ?? null);
+      persistStyles(INITIAL_STYLES);
+    }
+
+    // Migrate or load instances
+    let instances = prefs.providers?.length
+      ? prefs.providers
+      : await migrateOldProviders(prefs);
+
+    setProviderInstances(instances);
+
+    // Reload prefs after migration may have changed them
+    const freshPrefs = (await api.getAiPreferences()) || prefs;
+    prefsRef.current = freshPrefs;
+
+    if (freshPrefs.activeProvider) setActiveProviderId(freshPrefs.activeProvider);
+    else if (instances.length) setActiveProviderId(instances[0].id);
+
+    if (freshPrefs.selectedModels) setSelectedModel((cur) => ({ ...cur, ...freshPrefs.selectedModels }));
+    if (freshPrefs.modelsCache) setAvailableModels((cur) => ({ ...cur, ...freshPrefs.modelsCache }));
+
+    // Initialize default models for instances without cache
+    for (const inst of instances) {
+      const tmpl = getProviderType(inst.type);
+      if (tmpl?.defaultModels?.length) {
+        setAvailableModels((cur) => {
+          if (cur[inst.id]?.length) return cur;
+          return { ...cur, [inst.id]: tmpl.defaultModels };
         });
-      } else {
-        setStyles(INITIAL_STYLES);
-        setSelectedStyleId(INITIAL_STYLES[0]?.id ?? null);
-        persistStyles(INITIAL_STYLES);
-      }
-
-      // Migrate or load instances
-      let instances = prefs.providers?.length
-        ? prefs.providers
-        : await migrateOldProviders(prefs);
-
-      setProviderInstances(instances);
-
-      // Reload prefs after migration may have changed them
-      const freshPrefs = (await api.getAiPreferences()) || prefs;
-      prefsRef.current = freshPrefs;
-
-      if (freshPrefs.activeProvider) setActiveProviderId(freshPrefs.activeProvider);
-      else if (instances.length) setActiveProviderId(instances[0].id);
-
-      if (freshPrefs.selectedModels) setSelectedModel((cur) => ({ ...cur, ...freshPrefs.selectedModels }));
-      if (freshPrefs.modelsCache) setAvailableModels((cur) => ({ ...cur, ...freshPrefs.modelsCache }));
-
-      // Initialize default models for instances without cache
-      for (const inst of instances) {
-        const tmpl = getProviderType(inst.type);
-        if (tmpl?.defaultModels?.length) {
-          setAvailableModels((cur) => {
-            if (cur[inst.id]?.length) return cur;
-            return { ...cur, [inst.id]: tmpl.defaultModels };
-          });
-          setSelectedModel((cur) => {
-            if (cur[inst.id]) return cur;
-            return { ...cur, [inst.id]: tmpl.defaultModels[0].id };
-          });
-        }
-      }
-
-      // Load tokens and fetch models for configured instances
-      for (const inst of instances) {
-        const payload = await api.getAiProviderToken(inst.id);
-        if (payload?.token) {
-          setProviderConfigs((current) => ({ ...current, [inst.id]: payload }));
-          fetchModels(inst.id, inst.type);
-        }
+        setSelectedModel((cur) => {
+          if (cur[inst.id]) return cur;
+          return { ...cur, [inst.id]: tmpl.defaultModels[0].id };
+        });
       }
     }
+
+    // Load tokens and fetch models for configured instances
+    for (const inst of instances) {
+      const payload = await api.getAiProviderToken(inst.id);
+      if (payload?.token) {
+        setProviderConfigs((current) => ({ ...current, [inst.id]: payload }));
+        fetchModels(inst.id, inst.type);
+      }
+    }
+  });
+
+  useEffect(() => {
     void loadStored();
     return () => {
       if (repaintPollRef.current) {
@@ -636,6 +640,12 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
     })();
   }
 
+  // Effect event: the poll is (re)armed by generateStatus.running only, but
+  // must report through whatever onRepaintComplete the parent holds now.
+  const onRepaintFinished = useEffectEvent((outputPath) => {
+    onRepaintComplete?.(outputPath);
+    refreshHistory();
+  });
   useEffect(() => {
     if (!generateStatus.running) {
       if (repaintPollRef.current) {
@@ -660,8 +670,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
             { path: outputPath, timestamp: Date.now(), prompt: task.result.prompt || "" },
             ...prev,
           ]);
-          onRepaintComplete?.(outputPath);
-          refreshHistory();
+          onRepaintFinished(outputPath);
         }
       }
     }, 1500);

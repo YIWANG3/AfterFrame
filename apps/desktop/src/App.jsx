@@ -269,8 +269,11 @@ export default function App() {
   // Lets E2E specs open the editor with an arbitrary file path without
   // needing a catalog seeded. Namespaced so collision risk is zero, and
   // there's no UI affordance in production to discover/trigger it.
+  // Merged, never replaced: EditorOverlay installs its own methods on the
+  // same object, and child effects run before this one — assigning a fresh
+  // object here on the editorItem change would wipe them.
   useEffect(() => {
-    window.__afterframeTest = {
+    Object.assign((window.__afterframeTest ??= {}), {
       openEditor(pathOrItem) {
         const item = typeof pathOrItem === "string"
           ? { image_path: pathOrItem, stem: pathOrItem.split("/").pop() }
@@ -282,7 +285,7 @@ export default function App() {
       getEditorOpen() { return !!editorItem; },
       refresh() { return workspaceRef.current.refreshAll({ force: true }); },
       async setLocale(lng) { await i18n.changeLanguage(lng); await api.setLocale(lng); },
-    };
+    });
   }, [viewMode, editorItem]);
   const stickerView = useStickerView();
 

@@ -252,7 +252,11 @@ export default function TextCanvas({
   const geomKey = depthMaskGeom
     ? [depthMaskGeom.sx, depthMaskGeom.sy, depthMaskGeom.sw, depthMaskGeom.sh, depthMaskGeom.dx, depthMaskGeom.dy, depthMaskGeom.dw, depthMaskGeom.dh].map((v) => v.toFixed(4)).join(",")
     : "id";
+  // The dep lists ARE the invalidation keys: a fresh Map whenever any of them
+  // changes, nothing read inside — hence the "unnecessary dependency" opt-outs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const alphaCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const urlCache = useMemo(() => new Map(), [depthFieldCanvas, depthFieldVersion, depthFeather, geomKey]);
   const getMaskUrl = useCallback((zPosition) => {
     if (!depthFieldCanvas || zPosition == null || zPosition >= 1) return null;

@@ -1,5 +1,5 @@
 import api from "../api";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName } from "../utils/format";
 import { MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
@@ -92,13 +92,21 @@ function createInitialSnapshot(viewportSize, transformedPreview) {
 }
 
 
+// Editor shortcuts must not steal keys from text inputs / the layer editor.
+function shouldIgnoreKey(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+}
+
+const RULER_W = 600;
+const TICK_RANGE = 45;
+const PX_PER_DEG = RULER_W / (TICK_RANGE * 2);
+
 function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeStart, onChange, onChangeEnd }) {
   const trackRef = useRef(null);
   const draggingRef = useRef(false);
-
-  const RULER_W = 600;
-  const TICK_RANGE = 45;
-  const PX_PER_DEG = RULER_W / (TICK_RANGE * 2);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -639,16 +647,20 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     ? (splitTool.splitImageRect || imageRect)
     : tool === "text" ? (screenOutputView?.photoRect || imageRect) : imageRect;
   const composedView = tool === "text" && padActive && screenOutputView ? screenOutputView : null;
+  // The two draw effects below key on presence, not identity: imageRect is a
+  // fresh object every render and composedView flips with the tool.
+  const composedActive = !!composedView;
+  const hasImageRect = !!imageRect;
 
   useEffect(() => {
     const canvas = imageCanvasRef.current;
-    if (!canvas || !transformedPreview || !imageRect) return;
+    if (!canvas || !transformedPreview || !hasImageRect) return;
     canvas.width = transformedPreview.width;
     canvas.height = transformedPreview.height;
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(transformedPreview, 0, 0);
-  }, [transformedPreview, !!composedView]);
+  }, [transformedPreview, hasImageRect, composedActive]);
 
   // Paint the depth field into a display canvas with the SAME intrinsic dimensions
   // as the source canvas. This way the two canvases share identical
@@ -663,7 +675,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(depthCanvas, 0, 0, canvas.width, canvas.height);
-  }, [depthMapVisible, depthFieldVersion, transformedPreview, !!composedView]);
+  }, [depthMapVisible, depthFieldVersion, depthFieldCanvasRef, transformedPreview, composedActive]);
 
 
   // Layers are stored in full-photo coords and converted to the current display
@@ -794,134 +806,130 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setCanvasPreset(null);
   }
 
-  // Test backdoor — let E2E specs trigger save to a known path without
-  // driving the native save-as dialog. Registered while the editor is open.
+  // Test backdoor — let E2E specs drive the editor (save to a known path,
+  // switch tools, read state …) without the native dialogs. The method table
+  // is rebuilt every render so each closure sees the current state, and
+  // installed once per open through the ref: re-installing on every state
+  // change (the old shape) left gaps a polling spec could land in.
+  const testApiRef = useRef(null);
+  testApiRef.current = {
+    // executeSave is itself kept in a ref (see executeSaveRef) so a backdoor
+    // save after rotating never runs an older closure and saves unrotated.
+    saveAs: (path) => executeSaveRef.current?.(path),
+    // Tests must wait for this before transform clicks — commitTransform
+    // aborts while the preview image is still decoding.
+    getPreviewReady: () => previewReadyRef.current,
+    getSaving: () => saving,
+    sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
+      const source = sourceImageRef.current;
+      const { width, height } = getSourceDimensions(source);
+      if (!source || !width || !height) return null;
+      const sample = document.createElement("canvas");
+      sample.width = 1;
+      sample.height = 1;
+      const sx = Math.min(width - 1, Math.max(0, Math.round(fx * (width - 1))));
+      const sy = Math.min(height - 1, Math.max(0, Math.round(fy * (height - 1))));
+      sample.getContext("2d").drawImage(source, sx, sy, 1, 1, 0, 0, 1, 1);
+      return [...sample.getContext("2d").getImageData(0, 0, 1, 1).data];
+    },
+    addTextLayer: (text) => addTextLayer(text),
+    setTestLayers: (next) => commitLayers(next),
+    loadTestDepth: (path) => loadDepthFromPath(path),
+    getLayerCount: () => layers.length,
+    getTool: () => tool,
+    setTool: (t) => setTool(t),
+    // Characterization backdoor for the refactor safety-net (Phase 0).
+    getState: () => {
+      const s = editorStateRef.current;
+      return {
+        tool,
+        aspectKey: s.aspectKey,
+        quarterTurns: s.quarterTurns,
+        freeAngle: s.freeAngle,
+        flipX: s.flipX,
+        flipY: s.flipY,
+        imageZoom: s.imageZoom,
+        imageOffsetX: s.imageOffsetX,
+        imageOffsetY: s.imageOffsetY,
+        hasCrop: !!s.cropRect,
+        cropRect: s.cropRect,
+        // `layers` is the STORED (full-photo) basis; `displayLayers` is the
+        // derived current-basis position shown on screen.
+        layers: layers.map((l) => ({
+          id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale,
+          naturalWidth: l.naturalWidth, naturalHeight: l.naturalHeight,
+          // Data URLs are megabytes — expose only the kind, not the payload.
+          stickerPathKind: typeof l.stickerPath === "string"
+            ? (l.stickerPath.startsWith("data:") ? "data" : "path")
+            : null,
+          handwriting: l.handwriting
+            ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
+            : null,
+          // Overlay (蒙层) model: paint + where it covers.
+          ...(l.type === "overlay" ? {
+            fromPreset: !!l.fromPreset, mode: l.mode, opacity: l.opacity,
+            edge: l.edge, coverage: l.coverage,
+            gradientStops: l.gradient?.stops?.map((st) => ({ ...st })) || null,
+            gradientAngle: l.gradient?.angle,
+          } : {}),
+        })),
+        displayLayers: displayLayers.map((l) => ({ id: l.id, x: l.x, y: l.y })),
+        selectedIds: [...selectedIds],
+        historyIndex: historyIndexRef.current,
+        historyLength: historyRef.current.length,
+        canvasPad: s.canvas?.pad,
+        imageRect,
+        outputRect: screenOutputRect,
+        outputContentRect: screenOutputView?.contentRect || null,
+        viewTransform,
+        placement,
+        stageBounds: getStageBounds(viewportSize),
+      };
+    },
+    setAspect: (key) => commitAspect(key),
+    setPad: (pad) => {
+      applyCanvasPad({ top: 0, right: 0, bottom: 0, left: 0, ...pad }, { record: true });
+    },
+    clearFramePreset: () => clearFramePreset(),
+    applyFramePreset: (templateId) => {
+      const tpl = frameToolRef.current?.templates?.find((x) => x.id === templateId);
+      return tpl ? applyFramePreset(tpl) : undefined;
+    },
+    deleteLayer: (id) => handleDeleteLayer(id),
+    moveLayer: (id, dir) => handleMoveLayer(id, dir),
+    selectLayers: (ids) => selectLayers(ids),
+    undo: () => handleUndo(),
+    redo: () => handleRedo(),
+    // Split tool (read through refs so the values are always current).
+    getSplitState: () => {
+      const st = splitToolRef.current;
+      return {
+        aspectKey: st.aspectKey, count: st.count, isAutoCount: st.isAutoCount,
+        rect: st.rect, rectPx: st.rectPx, splitImageRect: st.splitImageRect,
+        custom: st.custom,
+        outputDir: splitDestRef.current.outputDir, subfolder: splitDestRef.current.subfolder,
+        resolvedOutputDir: resolveSplitOutputDir(saveBasePath, splitDestRef.current.outputDir, splitDestRef.current.subfolder),
+        exporting: splitExportingRef.current,
+      };
+    },
+    setSplitAspect: (key, custom) => splitToolRef.current.commitAspect(key, custom),
+    setSplitSubfolder: (on) => setSplitSubfolder(!!on),
+    setSplitCount: (n) => splitToolRef.current.commitCount(n),
+    resetSplitRegion: () => splitToolRef.current.resetRegion(),
+    exportSplit: (dir, subfolder) => splitExportRef.current?.(
+      dir ?? splitDestRef.current.outputDir, subfolder ?? splitDestRef.current.subfolder,
+    ),
+  };
+
   useEffect(() => {
-    if (!open) return;
-    window.__afterframeTest = {
-      ...(window.__afterframeTest || {}),
-      // Through a ref: the effect's dep list doesn't include every piece of
-      // edit state (quarterTurns, crop …), so a direct closure goes stale —
-      // a backdoor save after rotating would silently save unrotated.
-      saveAs: (path) => executeSaveRef.current?.(path),
-      // Tests must wait for this before transform clicks — commitTransform
-      // aborts while the preview image is still decoding.
-      getPreviewReady: () => previewReadyRef.current,
-      getSaving: () => saving,
-      sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
-        const source = sourceImageRef.current;
-        const { width, height } = getSourceDimensions(source);
-        if (!source || !width || !height) return null;
-        const sample = document.createElement("canvas");
-        sample.width = 1;
-        sample.height = 1;
-        const sx = Math.min(width - 1, Math.max(0, Math.round(fx * (width - 1))));
-        const sy = Math.min(height - 1, Math.max(0, Math.round(fy * (height - 1))));
-        sample.getContext("2d").drawImage(source, sx, sy, 1, 1, 0, 0, 1, 1);
-        return [...sample.getContext("2d").getImageData(0, 0, 1, 1).data];
-      },
-      addTextLayer: (text) => addTextLayer(text),
-      setTestLayers: (next) => commitLayers(next),
-      loadTestDepth: (path) => loadDepthFromPath(path),
-      getLayerCount: () => layers.length,
-      getTool: () => tool,
-      setTool: (t) => setTool(t),
-      // Characterization backdoor for the refactor safety-net (Phase 0). Reads
-      // via refs so it stays fresh regardless of this effect's deps.
-      getState: () => {
-        const s = editorStateRef.current;
-        return {
-          tool,
-          aspectKey: s.aspectKey,
-          quarterTurns: s.quarterTurns,
-          freeAngle: s.freeAngle,
-          flipX: s.flipX,
-          flipY: s.flipY,
-          imageZoom: s.imageZoom,
-          imageOffsetX: s.imageOffsetX,
-          imageOffsetY: s.imageOffsetY,
-          hasCrop: !!s.cropRect,
-          cropRect: s.cropRect,
-          // `layers` is the STORED (full-photo) basis; `displayLayers` is the
-          // derived current-basis position shown on screen.
-          layers: layers.map((l) => ({
-            id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale,
-            naturalWidth: l.naturalWidth, naturalHeight: l.naturalHeight,
-            // Data URLs are megabytes — expose only the kind, not the payload.
-            stickerPathKind: typeof l.stickerPath === "string"
-              ? (l.stickerPath.startsWith("data:") ? "data" : "path")
-              : null,
-            handwriting: l.handwriting
-              ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
-              : null,
-            // Overlay (蒙层) model: paint + where it covers.
-            ...(l.type === "overlay" ? {
-              fromPreset: !!l.fromPreset, mode: l.mode, opacity: l.opacity,
-              edge: l.edge, coverage: l.coverage,
-              gradientStops: l.gradient?.stops?.map((st) => ({ ...st })) || null,
-              gradientAngle: l.gradient?.angle,
-            } : {}),
-          })),
-          displayLayers: displayLayers.map((l) => ({ id: l.id, x: l.x, y: l.y })),
-          selectedIds: [...selectedIds],
-          historyIndex: historyIndexRef.current,
-          historyLength: historyRef.current.length,
-          canvasPad: s.canvas?.pad,
-          imageRect,
-          outputRect: screenOutputRect,
-          outputContentRect: screenOutputView?.contentRect || null,
-          viewTransform,
-          placement,
-          stageBounds: getStageBounds(viewportSize),
-        };
-      },
-      setAspect: (key) => commitAspect(key),
-      setPad: (pad) => {
-        applyCanvasPad({ top: 0, right: 0, bottom: 0, left: 0, ...pad }, { record: true });
-      },
-      clearFramePreset: () => clearFramePreset(),
-      applyFramePreset: (templateId) => {
-        const tpl = frameToolRef.current?.templates?.find((x) => x.id === templateId);
-        return tpl ? applyFramePreset(tpl) : undefined;
-      },
-      deleteLayer: (id) => handleDeleteLayer(id),
-      moveLayer: (id, dir) => handleMoveLayer(id, dir),
-      selectLayers: (ids) => selectLayers(ids),
-      undo: () => handleUndo(),
-      redo: () => handleRedo(),
-      // Split tool (read through refs so the values are always current).
-      getSplitState: () => {
-        const st = splitToolRef.current;
-        return {
-          aspectKey: st.aspectKey, count: st.count, isAutoCount: st.isAutoCount,
-          rect: st.rect, rectPx: st.rectPx, splitImageRect: st.splitImageRect,
-          custom: st.custom,
-          outputDir: splitDestRef.current.outputDir, subfolder: splitDestRef.current.subfolder,
-          resolvedOutputDir: resolveSplitOutputDir(saveBasePath, splitDestRef.current.outputDir, splitDestRef.current.subfolder),
-          exporting: splitExportingRef.current,
-        };
-      },
-      setSplitAspect: (key, custom) => splitToolRef.current.commitAspect(key, custom),
-      setSplitSubfolder: (on) => setSplitSubfolder(!!on),
-      setSplitCount: (n) => splitToolRef.current.commitCount(n),
-      resetSplitRegion: () => splitToolRef.current.resetRegion(),
-      exportSplit: (dir, subfolder) => splitExportRef.current?.(
-        dir ?? splitDestRef.current.outputDir, subfolder ?? splitDestRef.current.subfolder,
-      ),
-    };
+    if (!open) return undefined;
+    const keys = Object.keys(testApiRef.current);
+    const target = (window.__afterframeTest = window.__afterframeTest || {});
+    for (const k of keys) target[k] = (...args) => testApiRef.current[k](...args);
     return () => {
-      if (window.__afterframeTest) {
-        for (const k of [
-          "saveAs", "getPreviewReady", "getSaving", "addTextLayer", "getLayerCount",
-          "getTool", "setTool", "getState", "setAspect", "deleteLayer", "moveLayer",
-          "selectLayers", "undo", "redo", "setPad", "applyFramePreset", "clearFramePreset",
-          "sampleSourcePixel",
-          "setTestLayers", "loadTestDepth",
-          "getSplitState", "setSplitAspect", "setSplitCount", "resetSplitRegion", "exportSplit", "setSplitSubfolder",
-        ]) delete window.__afterframeTest[k];
-      }
+      for (const k of keys) delete target[k];
     };
-  }, [open, saving, layers, displayLayers, tool, selectedIds, editorState, imageRect, screenOutputRect, screenOutputView, viewTransform, placement, viewportSize]);
+  }, [open]);
 
   const previewReadyRef = useRef(false);
   previewReadyRef.current = !!previewSource;
@@ -983,70 +991,67 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setMessage("Applied");
   }
 
+  // Shortcut handlers are effect events: they read whatever state is current
+  // when a key arrives, while the listener itself is bound once per open.
+  const onEditorKeyDown = useEffectEvent((event) => {
+    if (event.defaultPrevented) return;
+    if (shouldIgnoreKey(event)) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose?.();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) handleRedo();
+      else handleUndo();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      void handleQuickSave();
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && selectedIds.size > 0) {
+      event.preventDefault();
+      copySelection();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && tool === "text") {
+      event.preventDefault();
+      pasteClipboard();
+      return;
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && selectedIds.size > 0) {
+      event.preventDefault();
+      deleteSelection();
+      return;
+    }
+    if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+      event.preventDefault();
+      if (tool === "split") void splitExportRef.current?.();
+      else handleApply();
+    }
+    if (event.key === " ") {
+      setSpacePressed(true);
+    }
+  });
+  const onEditorKeyUp = useEffectEvent((event) => {
+    if (shouldIgnoreKey(event)) return;
+    if (event.key === " ") {
+      setSpacePressed(false);
+    }
+  });
   useEffect(() => {
     if (!open) return undefined;
-    function shouldIgnoreKey(event) {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return false;
-      const tagName = target.tagName;
-      return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
-    }
-
-    function handleKeyDown(event) {
-      if (event.defaultPrevented) return;
-      if (shouldIgnoreKey(event)) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose?.();
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) handleRedo();
-        else handleUndo();
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void handleQuickSave();
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && selectedIds.size > 0) {
-        event.preventDefault();
-        copySelection();
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && tool === "text") {
-        event.preventDefault();
-        pasteClipboard();
-        return;
-      }
-      if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && selectedIds.size > 0) {
-        event.preventDefault();
-        deleteSelection();
-        return;
-      }
-      if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
-        event.preventDefault();
-        if (tool === "split") void splitExportRef.current?.();
-        else handleApply();
-      }
-      if (event.key === " ") {
-        setSpacePressed(true);
-      }
-    }
-    function handleKeyUp(event) {
-      if (shouldIgnoreKey(event)) return;
-      if (event.key === " ") {
-        setSpacePressed(false);
-      }
-    }
+    const handleKeyDown = (event) => onEditorKeyDown(event);
+    const handleKeyUp = (event) => onEditorKeyUp(event);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [open, onClose, saving, rotationDeg, flipX, flipY, sourceImage, cropRect, imageRect, outputRect, transformedPreview, tool, selectedIds, layers]);
+  }, [open]);
 
   if (!open) return null;
 
