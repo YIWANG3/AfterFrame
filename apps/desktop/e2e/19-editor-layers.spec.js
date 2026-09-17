@@ -316,6 +316,10 @@ test.describe("Unified undo/redo (transform + layers, one timeline)", () => {
 
   test("global undo reverses a text-layer add; redo re-applies (same stack)", async () => {
     const len0 = await historyLen(window);
+    // The base snapshot must already be in history, otherwise the undo below
+    // lands on index 0 and no-ops — waitForEditor({ preview: true }) waits for
+    // it; this assertion makes a regression readable instead of mysterious.
+    expect(len0).toBeGreaterThan(0);
     await window.evaluate(() => window.__afterframeTest.addTextLayer("Undo me"));
     await expect.poll(() => layerCount(window), { timeout: 5000 }).toBe(1);
     await expect.poll(() => historyLen(window), { timeout: 5000 }).toBe(len0 + 1);

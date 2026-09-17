@@ -816,9 +816,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     // executeSave is itself kept in a ref (see executeSaveRef) so a backdoor
     // save after rotating never runs an older closure and saves unrotated.
     saveAs: (path) => executeSaveRef.current?.(path),
-    // Tests must wait for this before transform clicks — commitTransform
-    // aborts while the preview image is still decoding.
+    // Preview decoded. 18-editor-transform polls this while it deliberately
+    // holds back viewport measurements, so it must not imply a measured stage.
     getPreviewReady: () => previewReadyRef.current,
+    // Ready to EDIT: preview decoded AND the initial snapshot is in history.
+    // waitForEditor({ preview: true }) waits for this — on a slow runner the
+    // viewport measures late, the base snapshot lands after the test's first
+    // edit, and an undo at history index 0 is a no-op (CI 19-editor-layers,
+    // 2026-09-17).
+    getEditReady: () => previewReadyRef.current && !!baseSnapshotRef.current,
     getSaving: () => saving,
     sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
       const source = sourceImageRef.current;
