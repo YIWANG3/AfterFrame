@@ -1,1 +1,4 @@
 native/bin/
+# e2e coverage data + report (npm run e2e:coverage) and the local Python coverage lib
+.coverage/
+.coverage-tools/

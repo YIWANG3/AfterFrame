@@ -6,6 +6,11 @@ name: E2E (full, nightly)
 # remembered `npm run e2e:only` locally. This runs ALL of it once a night and
 # on demand, so a regression in the excluded half surfaces within a day
 # instead of at the next release. Informational: it is not a merge gate.
+#
+# It is also the coverage run: the renderer is an istanbul build, the main
+# process and the Python sidecar collect on the side (scripts/e2e-coverage.mjs,
+# docs/review/2026-09-17-E2E覆盖率.md), and the HTML report is uploaded on
+# every run — pass or fail.
 
 on:
   schedule:
@@ -41,10 +46,16 @@ jobs:
         run: npm ci --prefix apps/desktop
       - name: Build native tools
         run: npm run build:native --prefix apps/desktop
-      - name: Build renderer
-        run: npm run build --prefix apps/desktop
-      - name: Run the full Electron E2E suite
-        run: npm run e2e:only --prefix apps/desktop -- --retries=1
+      - name: Run the full Electron E2E suite with coverage
+        # Builds the instrumented renderer itself; reports even when a spec fails.
+        run: npm run e2e:coverage --prefix apps/desktop -- --retries=1
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-coverage-report
+          path: apps/desktop/.coverage/report/
+          retention-days: 30
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

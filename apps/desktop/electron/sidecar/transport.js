@@ -299,10 +299,23 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
         env: { ...process.env, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
       };
     }
+    // Coverage runs (npm run e2e:coverage) wrap the dev sidecar in
+    // `coverage run`: one data file per process (resident serve + every
+    // detached job runner), combined by scripts/e2e-coverage.mjs. The
+    // rcfile turns on SIGTERM handling so the resident process, which
+    // stopResident kills with SIGTERM, still flushes its data.
+    const coverageDir = process.env.AFTERFRAME_SIDECAR_COVERAGE;
+    const coverageArgs = coverageDir
+      ? ["-m", "coverage", "run", "--parallel-mode",
+        "--rcfile", path.join(coverageDir, "sidecar.coveragerc"),
+        "--data-file", path.join(coverageDir, ".coverage"),
+        "--source", "media_workspace"]
+      : [];
+    const pythonPath = [sidecarSrc, process.env.AFTERFRAME_SIDECAR_COVERAGE_PYLIB].filter(Boolean).join(path.delimiter);
     return {
       cmd: "python3",
-      args: ["-m", "media_workspace", "--catalog", getCatalogPath(), ...command],
-      env: { ...process.env, PYTHONPATH: sidecarSrc, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
+      args: [...coverageArgs, "-m", "media_workspace", "--catalog", getCatalogPath(), ...command],
+      env: { ...process.env, PYTHONPATH: pythonPath, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
     };
   }
 

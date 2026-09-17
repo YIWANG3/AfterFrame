@@ -2,6 +2,24 @@ const { defineConfig } = require("vite");
 const react = require("@vitejs/plugin-react");
 const esbuild = require("esbuild");
 
+// AFTERFRAME_COVERAGE=1 (npm run e2e:coverage) builds an istanbul-instrumented
+// renderer: every src/ module reports hit counts into window.__coverage__,
+// which e2e/helpers/app.js harvests before each app closes. Never on for a
+// normal build — the instrumented bundle is slower and much larger. The
+// plugin is ESM-only, hence the dynamic import inside an async config.
+const coverageBuild = process.env.AFTERFRAME_COVERAGE === "1";
+async function coveragePlugins() {
+  if (!coverageBuild) return [];
+  const { default: istanbul } = await import("vite-plugin-istanbul");
+  return [istanbul({
+    include: "src/**/*.{js,jsx}",
+    exclude: ["node_modules", "**/*.test.{js,jsx}"],
+    extension: [".js", ".jsx"],
+    requireEnv: false,
+    forceBuildInstrument: true,
+  })];
+}
+
 // MapLibre 6 ships an ES-module worker. Passing Vite's `?worker&url` result
 // through MapLibre loses Vite's worker-constructor metadata in development,
 // so Chromium starts that URL as a classic worker and rejects its first
@@ -49,12 +67,12 @@ function maplibreClassicWorker() {
   };
 }
 
-module.exports = defineConfig({
+module.exports = defineConfig(async () => ({
   base: "./",
-  plugins: [react(), maplibreClassicWorker()],
+  plugins: [react(), maplibreClassicWorker(), ...(await coveragePlugins())],
   server: {
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
   },
-});
+}));
