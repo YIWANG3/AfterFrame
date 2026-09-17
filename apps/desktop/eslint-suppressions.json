@@ -9,11 +9,6 @@
       "count": 2
     }
   },
-  "src/components/EditorOverlay.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 7
-    }
-  },
   "src/components/Lightbox.jsx": {
     "react-hooks/exhaustive-deps": {
       "count": 2
@@ -22,21 +17,6 @@
   "src/components/collage/CollageCanvas.jsx": {
     "react-hooks/exhaustive-deps": {
       "count": 6
-    }
-  },
-  "src/components/editor/AiRepaintPanel.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
-    }
-  },
-  "src/components/editor/TextCanvas.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
-    }
-  },
-  "src/components/editor/TextPanel.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
     }
   }
 }

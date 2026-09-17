@@ -1,5 +1,5 @@
 import api from "../../api";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useEffectEvent, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
 
@@ -92,12 +92,16 @@ export default function TextPanel({
 
   const [vPadLinked, setVPadLinked] = useState(true);
   const [hPadLinked, setHPadLinked] = useState(true);
-  useEffect(() => {
+  // Re-derive the link toggles only when the selection moves to another
+  // layer; editing the current layer's padding must not flip them back.
+  const syncPadLinks = useEffectEvent(() => {
     if (!current) return;
     const pad = getBgPadding(current);
     setVPadLinked(pad.top === pad.bottom);
     setHPadLinked(pad.left === pad.right);
-  }, [current?.id]);
+  });
+  const currentId = current?.id;
+  useEffect(() => { syncPadLinks(); }, [currentId]);
 
   const addLayer = () => {
     const nl = createDefaultLayer();
@@ -911,7 +915,7 @@ function FontSelect({ value, onChange }) {
     if (open && inputRef.current) {
       inputRef.current.focus({ preventScroll: true });
     }
-  }, [open]);
+  }, [open, filter]);
 
   // Reset highlight when filter changes
   useEffect(() => { setHighlightIdx(-1); }, [filter]);
