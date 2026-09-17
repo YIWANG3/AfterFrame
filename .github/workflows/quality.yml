@@ -109,6 +109,7 @@ jobs:
           e2e/37-heic-import.spec.js
           e2e/38-legacy-catalog.spec.js
           e2e/39-context-menu-selection.spec.js
+          e2e/40-crop-mouse.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
