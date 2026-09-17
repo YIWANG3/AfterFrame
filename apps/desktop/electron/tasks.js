@@ -6,13 +6,15 @@
 //   app                              userData path for the handwriting cache
 //   readAppSettings                  HD-preview opt-in
 //   commands                         sidecar verb layer (job rows)
-//   launchSidecarJob                 transport.launchJob (detached runners)
+//   launchSidecarJob                 transport.launchJob (detached runners;
+//                                    argv comes from sidecar/jobArgv.js only)
 //   addAllowedMediaDir               media:// allowlist for repaint outputs
 //   getStoredProviderConfigWithMigration  provider tokens (keychain-backed)
 
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
+const jobArgv = require("./sidecar/jobArgv");
 
 function createTaskStarters({
   app,
@@ -92,7 +94,7 @@ function createTaskStarters({
       return current;
     }
     const job = await createJob("enrichment", {});
-    launchSidecarJob(["run-enrichment-job", "--job-id", job.job_id]);
+    launchSidecarJob(jobArgv.enrichmentJob({ jobId: job.job_id }));
     return formatJobStatus(job);
   }
 
@@ -123,24 +125,16 @@ function createTaskStarters({
       return current;
     }
     const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode });
-    const command = ["run-import-job", "--job-id", job.job_id, "--mode", mode];
-    // HD (2000px) previews are opt-in — Settings ▸ Library. Off by default.
-    if (readAppSettings()?.previews?.generateHd === true) {
-      command.push("--generate-hd");
-    }
-    // Auto imports (watched dirs live + catch-up) must not resurrect files the
-    // user removed from the catalog but left on disk. Manual imports omit this so
-    // an explicit re-import clears the tombstone.
-    if (options?.auto === true) {
-      command.push("--respect-tombstones");
-    }
-    for (const rawDir of rawDirs) {
-      command.push("--raw-dir", rawDir);
-    }
-    for (const imageDir of imageDirs) {
-      command.push("--image-dir", imageDir);
-    }
-    launchSidecarJob(command);
+    launchSidecarJob(jobArgv.importJob({
+      jobId: job.job_id,
+      mode,
+      rawDirs,
+      imageDirs,
+      generateHd: readAppSettings()?.previews?.generateHd === true,
+      // Auto imports (watched dirs live + catch-up) respect tombstones; a
+      // manual re-import is the user's way to clear one.
+      respectTombstones: options?.auto === true,
+    }));
     return formatJobStatus(job);
   }
 
@@ -150,7 +144,7 @@ function createTaskStarters({
       return current;
     }
     const job = await createJob("preview", { kind, asset_type: "image" });
-    launchSidecarJob(["run-preview-job", "--job-id", job.job_id, "--kind", kind, "--asset-type", "image"]);
+    launchSidecarJob(jobArgv.previewJob({ jobId: job.job_id, kind, assetType: "image" }));
     return formatJobStatus(job);
   }
 
@@ -202,38 +196,20 @@ function createTaskStarters({
       model,
     };
     const job = await createJob("ai_repaint", payload);
-    const command = [
-      "run-ai-repaint-job",
-      "--job-id",
-      job.job_id,
-      "--provider",
-      providerType,
-      "--input",
-      sourcePath,
-      "--output",
+    launchSidecarJob(jobArgv.aiRepaintJob({
+      jobId: job.job_id,
+      provider: providerType,
+      inputPath: sourcePath,
       outputPath,
-      "--origin-path",
-      sourcePath,
-      "--prompt",
+      originPath: sourcePath,
       prompt,
-    ];
-    if (payload.aspect_ratio) {
-      command.push("--aspect-ratio", payload.aspect_ratio);
-    }
-    if (payload.image_size) {
-      command.push("--image-size", payload.image_size);
-    }
-    if (typeof payload.temperature === "number") {
-      command.push("--temperature", String(payload.temperature));
-    }
-    if (model) {
-      command.push("--model", model);
-    }
-    if (baseUrl) {
-      command.push("--base-url", baseUrl);
-    }
-    command.push("--api-key", apiKey);
-    launchSidecarJob(command);
+      aspectRatio: payload.aspect_ratio,
+      imageSize: payload.image_size,
+      temperature: payload.temperature,
+      model,
+      baseUrl,
+      apiKey,
+    }));
     return formatJobStatus(job);
   }
 
@@ -356,21 +332,19 @@ function createTaskStarters({
       seed,
     };
     const job = await createJob("text_image", payload);
-    const command = [
-      "run-text-image-job",
-      "--job-id", job.job_id,
-      "--provider", providerType,
-      "--output", outputPath,
-      "--prompt", prompt,
-    ];
-    if (aspectRatio) command.push("--aspect-ratio", aspectRatio);
-    if (imageSize) command.push("--image-size", imageSize);
-    if (quality) command.push("--quality", quality);
-    if (model) command.push("--model", model);
-    if (baseUrl) command.push("--base-url", baseUrl);
-    if (refImagePath) command.push("--ref-image", refImagePath);
-    if (apiKey) command.push("--api-key", apiKey);
-    launchSidecarJob(command);
+    launchSidecarJob(jobArgv.textImageJob({
+      jobId: job.job_id,
+      provider: providerType,
+      outputPath,
+      prompt,
+      aspectRatio,
+      imageSize,
+      quality,
+      model,
+      baseUrl,
+      refImagePath,
+      apiKey,
+    }));
     void trimHandwritingCache();
     return formatJobStatus(job);
   }

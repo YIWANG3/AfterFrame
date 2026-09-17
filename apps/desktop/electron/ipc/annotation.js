@@ -2,6 +2,8 @@
 // Provider keys reuse the same token store as AI Repaint (different provider
 // namespace) so users only ever have one place to think about keys.
 
+const jobArgv = require("../sidecar/jobArgv");
+
 function register({
   ipcMain,
   commands,
@@ -42,24 +44,6 @@ function register({
       throw new Error("No API key configured for the active provider.");
     }
     return { settings, active, sidecarProvider, apiKey, baseUrl };
-  }
-
-  function annotationArgsFromSettings(settings) {
-    const args = [];
-    if (Array.isArray(settings.languages) && settings.languages.length) {
-      args.push("--languages", settings.languages.join(","));
-    }
-    if (Number.isFinite(settings.maxTags)) args.push("--max-tags", String(settings.maxTags));
-    if (Number.isFinite(settings.maxCaptionChars)) args.push("--max-caption-chars", String(settings.maxCaptionChars));
-    if (settings.customInstructions) args.push("--custom-instructions", String(settings.customInstructions));
-    // Video frame sampling interval (seconds). 0 / unset → default 3 frames.
-    if (Number.isFinite(settings.videoFrameInterval) && settings.videoFrameInterval > 0) {
-      args.push("--video-frame-interval", String(settings.videoFrameInterval));
-    }
-    if (Number.isFinite(settings.maxWorkers) && settings.maxWorkers > 0) {
-      args.push("--max-workers", String(settings.maxWorkers));
-    }
-    return args;
   }
 
   // ── Settings (annotation-specific subtree under aiAnnotation) ────────────
@@ -153,20 +137,17 @@ function register({
       collection_id: collectionId,
     });
 
-    const args = [
-      "run-annotation-job",
-      "--job-id", job.job_id,
-      "--provider", String(sidecarProvider),
-      "--model", String(active.model || ""),
-    ];
-    if (apiKey) args.push("--api-key", apiKey);
-    if (baseUrl) args.push("--base-url", baseUrl);
-    if (!onlyMissing) args.push("--reannotate");
-    if (assetIds.length) args.push("--asset-ids", assetIds.join(","));
-    if (collectionId) args.push("--collection-id", String(collectionId));
-    args.push(...annotationArgsFromSettings(settings));
-
-    launchSidecarJob(args);
+    launchSidecarJob(jobArgv.annotationJob({
+      jobId: job.job_id,
+      provider: sidecarProvider,
+      model: active.model || "",
+      apiKey,
+      baseUrl,
+      reannotate: !onlyMissing,
+      assetIds,
+      collectionId,
+      settings,
+    }));
     return formatJobStatus(job);
   }
 
