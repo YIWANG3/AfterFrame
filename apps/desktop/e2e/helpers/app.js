@@ -144,12 +144,32 @@ function relocateFixturePaths(catalogDir) {
   if (at < 0) return;
   const oldPrefix = seededRoot.slice(0, at + marker.length);
   const newPrefix = path.resolve(__dirname, "..", "fixtures") + path.sep;
-  if (oldPrefix === newPrefix) return;
   const quote = (value) => `'${value.replace(/'/g, "''")}'`;
-  const sql = PATH_COLUMNS.map(([table, column]) =>
-    `UPDATE ${table} SET ${column} = ${quote(newPrefix)} || substr(${column}, ${oldPrefix.length + 1}) WHERE ${column} LIKE ${quote(`${oldPrefix}%`)};`,
-  ).join(" ");
-  execFileSync("sqlite3", [db, sql]);
+  if (oldPrefix !== newPrefix) {
+    const sql = PATH_COLUMNS.map(([table, column]) =>
+      `UPDATE ${table} SET ${column} = ${quote(newPrefix)} || substr(${column}, ${oldPrefix.length + 1}) WHERE ${column} LIKE ${quote(`${oldPrefix}%`)};`,
+    ).join(" ");
+    execFileSync("sqlite3", [db, sql]);
+  }
+  restoreSeededMtimes(db);
+}
+
+// A fresh checkout gives every fixture file a new mtime. Browse compares
+// size + mtime against the catalog row and reports the source as changed,
+// which the app answers by re-reading metadata from disk — wiping whatever a
+// spec seeded into the row (32-gps-location-menu's GPS, on CI). Put the
+// mtimes back to what the catalog recorded; microseconds round-trip through
+// utimes and the sidecar's iso_mtime exactly.
+function restoreSeededMtimes(db) {
+  const rows = execFileSync("sqlite3", ["-separator", "\t", db, "SELECT canonical_path, modified_time FROM assets"]).toString();
+  for (const line of rows.split("\n")) {
+    const [file, iso] = line.split("\t");
+    if (!file || !iso || !fs.existsSync(file)) continue;
+    const whole = Math.floor(Date.parse(iso) / 1000);
+    const micros = Number((/\.(\d{1,6})/.exec(iso)?.[1] || "0").padEnd(6, "0"));
+    const seconds = whole + micros / 1e6;
+    try { fs.utimesSync(file, seconds, seconds); } catch (_) { /* read-only checkout: browse will just flag it */ }
+  }
 }
 
 // Main-process stdout/stderr and renderer console lines go to
