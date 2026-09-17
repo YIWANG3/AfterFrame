@@ -153,6 +153,13 @@ test("the export honours a mouse-made crop", async () => {
   try {
     await ctx.window.evaluate(() => window.__afterframeTest.setAspect("1:1"));
     await expect.poll(async () => (await state()).aspectKey).toBe("1:1");
+    // The crop box is re-centred for the new aspect on the next render; on a
+    // slow runner saving right after the aspectKey flip exported the OLD box
+    // (CI: 80 px off square). Wait for the square box itself.
+    await expect.poll(async () => {
+      const r = (await state()).cropRect;
+      return Math.abs(r.width - r.height);
+    }, { timeout: 5_000 }).toBeLessThan(1);
     const out = path.join(tmp, "square.jpg");
     await ctx.window.evaluate((p) => window.__afterframeTest.saveAs(p), out);
     await expect.poll(() => fs.existsSync(out), { timeout: 20_000 }).toBe(true);
