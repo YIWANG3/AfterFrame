@@ -164,10 +164,12 @@ test("delete_assets drops catalog records and previews but leaves the files on d
   test.setTimeout(90_000);
   const dir = makeImportDir("mcpdel", 2);
   try {
-    const cardsBefore = await ctx.window.locator("[data-gallery-item='true']").count();
+    // The gallery windows its cards, so count through the sidebar badge —
+    // which also proves the renderer refreshed after the agent's import.
+    const countBefore = (await callTool("get_catalog_info")).summary.image_assets;
     const imported = await callTool("import_directory", { image_dirs: [dir] });
     expect(imported.status).toBe("succeeded");
-    await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(cardsBefore + 2, { timeout: 15_000 });
+    await expect(ctx.window.getByRole("button", { name: `All Assets ${countBefore + 2}` })).toBeVisible({ timeout: 15_000 });
     const { assets } = await callTool("search_assets", { query: "mcpdel", limit: 10 });
     expect(assets).toHaveLength(2);
     const previews = await Promise.all(assets.map(async (a) => (await callTool("get_asset", { asset_id: a.asset_id })).image_preview_path));
@@ -175,7 +177,7 @@ test("delete_assets drops catalog records and previews but leaves the files on d
     const deleted = await callTool("delete_assets", { asset_ids: assets.map((a) => a.asset_id) });
     expect(deleted.deleted).toBe(2);
     expect((await callTool("search_assets", { query: "mcpdel", limit: 10 })).count).toBe(0);
-    await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(cardsBefore, { timeout: 15_000 });
+    await expect(ctx.window.getByRole("button", { name: `All Assets ${countBefore}` })).toBeVisible({ timeout: 15_000 });
     for (const preview of previews) expect(fs.existsSync(preview)).toBe(false);
     expect(fs.readdirSync(dir)).toHaveLength(2); // originals untouched
   } finally {
