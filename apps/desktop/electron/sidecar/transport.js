@@ -312,6 +312,8 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     return trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore" }), getCatalogPath(), true);
   }
 
+  // `command` is always the product of sidecar/jobArgv.js (the one module
+  // that spells run-*-job argv); nothing else should hand-build it.
   function launchSidecarJob(command) {
     const catalogPath = getCatalogPath();
     const generation = generationOf(catalogPath);

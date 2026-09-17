@@ -12,6 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const https = require("node:https");
+const jobArgv = require("../sidecar/jobArgv");
 
 const MODEL_EXTENSIONS = new Set([".mlpackage", ".mlmodelc"]);
 const MAX_MANIFEST_BYTES = 128 * 1024;
@@ -355,18 +356,17 @@ function register({
       throw new Error("This people task is missing its model configuration and cannot be resumed.");
     }
     if (!fs.existsSync(modelPath)) throw new Error("The model used by this people task is no longer installed.");
-    const args = [
-      "run-people-index-job",
-      "--job-id", String(job.job_id),
-      "--model-id", modelId,
-      "--model-version", modelVersion,
-      "--model-path", modelPath,
-      "--manifest-hash", manifestHash,
-    ];
-    if (!Array.isArray(payload.resolved_asset_ids) && Array.isArray(payload.requested_asset_ids)) {
-      for (const assetId of payload.requested_asset_ids) args.push("--asset-id", String(assetId));
-    }
-    return args;
+    // Once the runner has resolved the request into concrete asset ids (stored
+    // on the payload) a resume must not re-send the original request.
+    const resolved = Array.isArray(payload.resolved_asset_ids);
+    return jobArgv.peopleIndexJob({
+      jobId: job.job_id,
+      modelId,
+      modelVersion,
+      modelPath,
+      manifestHash,
+      assetIds: !resolved && Array.isArray(payload.requested_asset_ids) ? payload.requested_asset_ids : [],
+    });
   }
 
   function launchPeopleJob(job) {
