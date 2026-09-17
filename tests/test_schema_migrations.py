@@ -156,6 +156,19 @@ class SchemaMigrationTest(unittest.TestCase):
         self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
 
+
+    def test_v5_catalog_gets_asset_files_backfilled(self) -> None:
+        # asset_files did not exist before the current schema; summary() and
+        # the sidebar count through it, so a migrated catalog with none reads
+        # as empty. One primary row per legacy asset, keyed like upserts.
+        connection = create_v5_catalog()
+        init_db(connection)
+        rows = connection.execute(
+            "SELECT asset_id, path, role FROM asset_files ORDER BY asset_id"
+        ).fetchall()
+        self.assertEqual([tuple(row) for row in rows], [("export_legacy", "/legacy/images/sample.jpg", "primary")])
+        init_db(connection)  # idempotent: a second open adds nothing
+        self.assertEqual(connection.execute("SELECT COUNT(*) FROM asset_files").fetchone()[0], 1)
     def test_repeated_init_is_idempotent(self) -> None:
         connection = create_v5_catalog()
         self.addCleanup(connection.close)

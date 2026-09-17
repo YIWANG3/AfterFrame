@@ -98,6 +98,7 @@ def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     _ensure_column(connection, "jobs", "pause_requested", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(connection, "jobs", "resume_cursor_json", "TEXT NOT NULL DEFAULT '{}'")
     _ensure_column(connection, "jobs", "attempt_count", "INTEGER NOT NULL DEFAULT 0")
+    _backfill_asset_files(connection)
     _ensure_column(connection, "people_asset_index", "file_size", "INTEGER")
     _ensure_column(connection, "people_asset_index", "file_mtime", "REAL")
     for name, sql_type, json_path in _FACET_COLUMNS:
@@ -109,6 +110,23 @@ def _apply_latest_schema(connection: sqlite3.Connection) -> None:
         )
     for index_sql in _FACET_INDEXES:
         connection.execute(index_sql)
+
+
+def _backfill_asset_files(connection: sqlite3.Connection) -> None:
+    """Catalogs written before asset_files existed get the table created
+    empty by SCHEMA_STATEMENTS and never a row per asset — summary() then
+    counts 0 and the sidebar says "No indexed assets yet" over a populated
+    gallery (e2e 38-legacy-catalog, 2026-09-17). One primary file per asset,
+    keyed exactly as upsert_*_asset does; a no-op once the rows exist."""
+    missing = connection.execute(
+        "SELECT asset_id, canonical_path FROM assets "
+        "WHERE asset_id NOT IN (SELECT asset_id FROM asset_files)"
+    ).fetchall()
+    for asset_id, canonical_path in missing:
+        connection.execute(
+            "INSERT OR IGNORE INTO asset_files (file_id, asset_id, path, role) VALUES (?, ?, ?, 'primary')",
+            (_file_id(asset_id, canonical_path), asset_id, canonical_path),
+        )
 
 
 def _ensure_column(connection: sqlite3.Connection, table_name: str, column_name: str, column_spec: str) -> None:
