@@ -1,5 +1,5 @@
 import api from "../api";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid, ArrowUpDown, Search } from "lucide-react";
 import { localFileUrl } from "../utils/format";
@@ -130,7 +130,10 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
     }
   }, [builtInItems, hasMore, loading, loadingMore, offset, source, sort, search]);
 
-  useEffect(() => {
+  // A new scope restarts paging from the top. Effect event: loadPage's
+  // identity follows offset/loading, and listing it here would re-run the
+  // reset after every page that lands.
+  const restartPaging = useEffectEvent(() => {
     requestIdRef.current += 1;
     setSourceItems([]);
     setSelectedItemsById(new Map());
@@ -139,7 +142,8 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
     setScrollTop(0);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     void loadPage({ append: false });
-  }, [source, sort, search]);
+  });
+  useEffect(() => { restartPaging(); }, [source, sort, search]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -621,14 +625,17 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     return () => { cancelled = true; };
   }, [open, images]);
 
-  // Auto-select template when image count changes
-  useEffect(() => {
-    if (!images.length) return;
-    const templates = getTemplatesForCount(images.length);
-    // Keep current template if still valid for count
+  // Auto-select template when the image COUNT changes; a template the user
+  // picks is left alone, so the current template is read, not depended on.
+  const ensureTemplateForCount = useEffectEvent((count) => {
+    const templates = getTemplatesForCount(count);
     if (template && templates.some((t) => t.id === template.id)) return;
     setTemplate(templates[0] || null);
-  }, [images.length]);
+  });
+  const imageCount = images.length;
+  useEffect(() => {
+    if (imageCount) ensureTemplateForCount(imageCount);
+  }, [imageCount]);
 
   // Keyboard
   useEffect(() => {

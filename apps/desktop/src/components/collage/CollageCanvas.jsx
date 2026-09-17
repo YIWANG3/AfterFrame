@@ -7,6 +7,26 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
 const SNAP_THRESHOLD = 8; // display px
 
+// Candidate sources for a cell, best first. The HD preview is generated
+// lazily and patched in later; until it has actually decoded we keep
+// drawing the thumbnail so the upgrade is a seamless swap, not a flash.
+function getPreviewCandidates(item) {
+  if (!item) return [];
+  const out = [];
+  for (const src of [
+    item.preview_hd_path, item.image_preview_hd_path,
+    item.preview_path, item.image_preview_path,
+    item.image_path,
+  ]) {
+    if (src && !out.includes(src)) out.push(src);
+  }
+  return out;
+}
+
+function isReady(img) {
+  return !!img && img.complete && img.naturalWidth > 0;
+}
+
 
 
 
@@ -67,11 +87,11 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     }
   }, [selectedIdx, getState]);
 
-  function emitSelectedState() {
+  const emitSelectedState = useCallback(() => {
     if (selectedIdx < 0) return;
     const state = getState(selectedIdx);
     onSelectedStateChangeRef.current?.({ pan: { ...state.pan }, zoom: state.zoom });
-  }
+  }, [selectedIdx, getState]);
 
   // Drop states for images no longer on this canvas (a shared store is owned
   // by the parent and pruned there); clamp selection.
@@ -83,40 +103,23 @@ const CollageCanvas = forwardRef(function CollageCanvas(
         if (!live.has(key)) localStatesRef.current.delete(key);
       }
     }
-    if (selectedIdx >= count) setSelectedIdx(-1);
+    setSelectedIdx((current) => (current >= count ? -1 : current));
   }, [template, images]);
 
-  // Candidate sources for a cell, best first. The HD preview is generated
-  // lazily and patched in later; until it has actually decoded we keep
-  // drawing the thumbnail so the upgrade is a seamless swap, not a flash.
-  function getPreviewCandidates(item) {
-    if (!item) return [];
-    const out = [];
-    for (const src of [
-      item.preview_hd_path, item.image_preview_hd_path,
-      item.preview_path, item.image_preview_path,
-      item.image_path,
-    ]) {
-      if (src && !out.includes(src)) out.push(src);
-    }
-    return out;
-  }
-
-  function isReady(img) {
-    return !!img && img.complete && img.naturalWidth > 0;
-  }
-
   // Best already-decoded image for a cell (HD if ready, else thumbnail…).
-  function getLoadedImage(item) {
+  const getLoadedImage = useCallback((item) => {
     const map = loadedImgsRef.current;
     for (const src of getPreviewCandidates(item)) {
       const img = map.get(src);
       if (isReady(img)) return img;
     }
     return null;
-  }
+  }, []);
 
-  function redraw() {
+  // paint() reads the latest props/selection through its render closure;
+  // redraw / scheduleRedraw are the stable handles effects and handlers
+  // list as deps, always dispatching to the newest paint.
+  function paint() {
     const canvas = canvasRef.current;
     const { template: tmpl, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs, exportWidth: ew, highlightCell: hl, dimCell: dim } = propsRef.current;
     if (!canvas || !tmpl?.cells) return;
@@ -229,16 +232,19 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     }
   }
 
-  function scheduleRedraw() {
+  const paintRef = useRef(paint);
+  paintRef.current = paint;
+  const redraw = useCallback(() => paintRef.current(), []);
+  const scheduleRedraw = useCallback(() => {
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
-      redraw();
+      paintRef.current();
     });
-  }
+  }, []);
 
   // Redraw on selection changes / guide changes / drag feedback
-  useEffect(() => { scheduleRedraw(); }, [selectedIdx, snapGuides.x, snapGuides.y, highlightCell, dimCell]);
+  useEffect(() => { scheduleRedraw(); }, [selectedIdx, snapGuides.x, snapGuides.y, highlightCell, dimCell, scheduleRedraw]);
 
   // Load images. Only the best candidate per cell is fetched, but every
   // candidate stays "needed" so a thumbnail that is already decoded survives
@@ -271,7 +277,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     }
     scheduleRedraw();
     return () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; } };
-  }, [images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth]);
+  }, [images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, scheduleRedraw]);
 
   // Hit test
   function hitTest(px, py) {
@@ -473,7 +479,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [template, gap, padding, exportWidth, selectedIdx, snapGuides.x, snapGuides.y, mode]);
+  }, [template, gap, padding, exportWidth, selectedIdx, snapGuides.x, snapGuides.y, mode, getState, setState, emitSelectedState, redraw]);
 
   // Keyboard: arrows nudge selected cell pan, esc deselects
   useEffect(() => {
@@ -498,7 +504,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedIdx]);
+  }, [selectedIdx, getState, setState, emitSelectedState, redraw]);
 
   // Export at target resolution + cell controls for panel
   useImperativeHandle(ref, () => ({
@@ -580,7 +586,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       }
       return new Promise((resolve) => offscreen.toBlob(resolve, "image/jpeg", 0.92));
     },
-  }), [selectedIdx]);
+  }), [selectedIdx, getState, setState, emitSelectedState, getLoadedImage, redraw]);
 
   // Close context menu on click outside
   useEffect(() => {
