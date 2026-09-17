@@ -61,6 +61,7 @@ export default function CropOverlay({ cropRect, viewportSize, onBeginResize }) {
         {HANDLE_SPECS.map((handle) => (
           <div
             key={handle.key}
+            data-crop-handle={handle.key}
             className="pointer-events-auto absolute"
             style={{
               ...handle.style,

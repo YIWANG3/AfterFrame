@@ -216,6 +216,7 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
     >
       <div
         ref={trackRef}
+        data-testid="angle-ruler"
         style={{
           position: "relative",
           width: `${RULER_W}px`,
