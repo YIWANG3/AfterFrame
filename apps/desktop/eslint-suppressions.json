@@ -4,19 +4,9 @@
       "count": 3
     }
   },
-  "src/components/CollageOverlay.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
-    }
-  },
   "src/components/Lightbox.jsx": {
     "react-hooks/exhaustive-deps": {
       "count": 2
-    }
-  },
-  "src/components/collage/CollageCanvas.jsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 6
     }
   }
 }
