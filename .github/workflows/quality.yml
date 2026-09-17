@@ -84,6 +84,7 @@ jobs:
           e2e/31-version-navigation.spec.js
           e2e/32-gps-location-menu.spec.js
           e2e/33-split.spec.js
+          e2e/35-raw-import.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
