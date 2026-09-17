@@ -51,9 +51,13 @@ test("a schema-5 catalog opens, migrates to the current schema and keeps its ass
     exists_on_disk: false,
   });
 
-  const version = execFileSync("sqlite3", [path.join(ctx.catalogDir, "catalog.sqlite3"), "SELECT schema_version FROM catalog_info"]).toString().trim();
+  // The app holds the database open (WAL); read with a busy timeout so a
+  // checkpoint in flight doesn't surface as "database is locked". (Not
+  // -readonly: that refuses to open a WAL database whose -shm it can't map.)
+  const query = (sql) => execFileSync("sqlite3", ["-cmd", ".timeout 5000", path.join(ctx.catalogDir, "catalog.sqlite3"), sql]).toString().trim();
+  const version = query("SELECT schema_version FROM catalog_info");
   expect(Number(version)).toBeGreaterThanOrEqual(8);
-  const tables = execFileSync("sqlite3", [path.join(ctx.catalogDir, "catalog.sqlite3"), "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"]).toString();
+  const tables = query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
   expect(tables).toContain("image_lookup_registry");
   expect(tables).not.toContain("export_lookup_registry");
 });
