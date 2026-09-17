@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Minus, Pencil, Plus, SwatchBook, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
@@ -233,6 +233,9 @@ export default function Lightbox({
     schedulePaint();
     if (previewDuringMotion) settleDetailInteraction();
   }
+  // The resize observer and wheel listener are bound per open/naturalSize
+  // but must run the newest applyView (it closes over detail-mode state).
+  const applyLatestView = useEffectEvent(applyView);
 
   function hideDetail() {
     detailVisibleRef.current = false;
@@ -377,7 +380,7 @@ export default function Lightbox({
         const wasAtFit = !current || current.scale <= fitScaleRef.current + 0.001;
         fitScaleRef.current = nextFit.scale;
         if (wasAtFit || current.scale < nextFit.scale) {
-          applyView(nextFit);
+          applyLatestView(nextFit);
         }
       });
     });
@@ -405,7 +408,7 @@ export default function Lightbox({
       const nextScale = clamp(current.scale * factor, MIN_SCALE, MAX_SCALE);
       if (Math.abs(nextScale - current.scale) < 0.0001) return;
       const ratio = nextScale / current.scale;
-      applyView({
+      applyLatestView({
         scale: nextScale,
         tx: mx - ratio * (mx - current.tx),
         ty: my - ratio * (my - current.ty),

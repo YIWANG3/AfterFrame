@@ -144,16 +144,19 @@ async function closeApp(app, userDataDir) {
 // its first paint. "Save button visible" is the paint, not the effect — on a
 // slow runner a spec that calls setTool right after it hits
 // `__afterframeTest.setTool is not a function` (CI, 2026-09-16). Waits for the
-// merged backdoor; pass { preview: true } to also wait for the decoded
-// preview — transform / layer specs need it (commitTransform is a no-op while
-// the image is still decoding), sticker/handwriting specs don't.
+// merged backdoor; pass { preview: true } to also wait until the editor is
+// ready to edit (getEditReady): preview decoded (commitTransform is a no-op
+// while the image is still decoding) AND the initial snapshot recorded (an
+// edit made before it lands cannot be undone — history index 0). Transform /
+// layer specs need it; sticker/handwriting specs don't, and 18-editor-
+// transform polls getPreviewReady itself because it holds measurements back.
 async function waitForEditor(window, { preview = false, timeout = 15_000, previewTimeout = 10_000 } = {}) {
   await window.waitForFunction(
     () => typeof window.__afterframeTest?.setTool === "function", null, { timeout },
   );
   if (!preview) return;
   await window.waitForFunction(
-    () => window.__afterframeTest.getPreviewReady?.() === true, null, { timeout: previewTimeout },
+    () => window.__afterframeTest.getEditReady?.() === true, null, { timeout: previewTimeout },
   );
 }
 

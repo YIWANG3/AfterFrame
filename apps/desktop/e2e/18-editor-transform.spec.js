@@ -19,7 +19,10 @@ const state = (window) => window.evaluate(() => window.__afterframeTest.getState
 
 async function waitPreview(window) {
   await window.waitForFunction(() => typeof window.__afterframeTest?.getPreviewReady === "function", null, { timeout: 10_000 });
-  await waitForEditor(window, { preview: true });
+  // Preview decoded only — NOT waitForEditor({ preview: true }): that waits
+  // for the initial snapshot, which needs the viewport measurements this
+  // spec deliberately holds back until releaseEditorMeasurements().
+  await window.waitForFunction(() => window.__afterframeTest.getPreviewReady() === true, null, { timeout: 10_000 });
 }
 
 test.describe("Golden: crop + transform", () => {

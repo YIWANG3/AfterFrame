@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { filterTitle, fileName } from "./utils/format";
 
@@ -58,6 +58,18 @@ function clearSelfDragMarkers() {
 
 function defaultMapHeight() {
   return Math.max(MAP_MIN_HEIGHT, Math.min(Math.round(window.innerHeight * 0.42), 420));
+}
+
+// Global shortcuts must not steal keys from text fields. Range sliders (e.g.
+// the lightbox zoom slider) take no text, so they don't swallow shortcuts —
+// otherwise Esc with the zoom slider focused never reaches the close-lightbox
+// handler (it just leaves the slider showing its focus ring).
+function shouldIgnoreKey(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  if (tagName === "INPUT" && target.type === "range") return false;
+  return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
 export default function App() {
@@ -520,9 +532,9 @@ export default function App() {
 
   // Unified finish handling: annotation results (toast + cache invalidation)
   // and auto-annotate-on-import both react to the workspace's finish events.
-  useEffect(() => {
-    const fin = workspace.lastFinishedJob;
-    if (!fin) return;
+  // Effect event: fires once per finish event, with the current toast/i18n/
+  // annotation closures rather than the ones from that render.
+  const onJobFinished = useEffectEvent((fin) => {
     if (fin.jobType === "annotation") {
       invalidateAnnotations();
       const r = fin.result || {};
@@ -559,6 +571,9 @@ export default function App() {
         tone: "error",
       });
     }
+  });
+  useEffect(() => {
+    if (workspace.lastFinishedJob) onJobFinished(workspace.lastFinishedJob);
   }, [workspace.lastFinishedJob]);
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
@@ -588,9 +603,8 @@ export default function App() {
   // therefore shows nothing on startup; an import (and its toast) appears only
   // when something genuinely new is found.
   const watchedCatchUpRef = useRef(null);
-  useEffect(() => {
-    const cat = workspace.info?.catalogPath;
-    if (!cat || watchedCatchUpRef.current === cat) return;
+  const catchUpWatchedDirs = useEffectEvent((cat) => {
+    if (watchedCatchUpRef.current === cat) return;
     watchedCatchUpRef.current = cat;
     (async () => {
       const dirs = await api.getWatchedDirs?.();
@@ -610,7 +624,11 @@ export default function App() {
       });
       workspace.addImagesFromPaths(newFiles, { auto: true });
     })();
-  }, [workspace.info?.catalogPath]);
+  });
+  const catalogPath = workspace.info?.catalogPath;
+  useEffect(() => {
+    if (catalogPath) catchUpWatchedDirs(catalogPath);
+  }, [catalogPath]);
 
   // Native menu → Settings (⌘,). onMenuAction is a multi-listener ipcRenderer
   // channel, so this coexists with useWorkspace's own menu handler.
@@ -859,158 +877,148 @@ export default function App() {
     }
   }, [workspace.selectedAssetId]);
 
-  useEffect(() => {
-    function shouldIgnoreKey(event) {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return false;
-      const tagName = target.tagName;
-      // Range sliders (e.g. the lightbox zoom slider) take no text, so they
-      // shouldn't swallow global shortcuts — otherwise Esc with the zoom slider
-      // focused never reaches the close-lightbox handler (it just leaves the
-      // slider showing its focus ring).
-      if (tagName === "INPUT" && target.type === "range") return false;
-      return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+  // Global shortcuts. An effect event so the handler reads the current
+  // selection / view / lightbox state while the listener is bound once.
+  const onGlobalKeyDown = useEffectEvent((event) => {
+    // Cmd+, opens Settings — handled before the modifier early-return
+    // since this shortcut REQUIRES the modifier.
+    if ((event.metaKey || event.ctrlKey) && event.key === "," && !event.shiftKey && !event.altKey) {
+      event.preventDefault();
+      setSettingsOpen((open) => !open);
+      return;
+    }
+    // Cmd+A selects all assets in the gallery. Skipped when focus is in a
+    // text field (native text select-all wins) or in the editor/stickers.
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a" && !event.shiftKey && !event.altKey) {
+      if (shouldIgnoreKey(event)) return; // text field: native select-all wins
+      if (selectAllAssets()) event.preventDefault();
+      return;
+    }
+    if (editorItem || viewMode === "people") return;
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (shouldIgnoreKey(event)) return;
+
+    // Delete / Backspace removes the selected assets (with confirmation).
+    // Skipped in stickers view, which has its own deletion path.
+    if (event.key === "Delete" || event.key === "Backspace") {
+      if (viewMode !== "assets") return;
+      const ids = targetAssetIds();
+      if (!ids.length) return;
+      event.preventDefault();
+      void deleteAssets(ids);
+      return;
     }
 
-    function handleKeyDown(event) {
-      // Cmd+, opens Settings — handled before the modifier early-return
-      // since this shortcut REQUIRES the modifier.
-      if ((event.metaKey || event.ctrlKey) && event.key === "," && !event.shiftKey && !event.altKey) {
-        event.preventDefault();
-        setSettingsOpen((open) => !open);
-        return;
-      }
-      // Cmd+A selects all assets in the gallery. Skipped when focus is in a
-      // text field (native text select-all wins) or in the editor/stickers.
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a" && !event.shiftKey && !event.altKey) {
-        if (shouldIgnoreKey(event)) return; // text field: native select-all wins
-        if (selectAllAssets()) event.preventDefault();
-        return;
-      }
-      if (editorItem || viewMode === "people") return;
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (shouldIgnoreKey(event)) return;
-
-      // Delete / Backspace removes the selected assets (with confirmation).
-      // Skipped in stickers view, which has its own deletion path.
-      if (event.key === "Delete" || event.key === "Backspace") {
-        if (viewMode !== "assets") return;
-        const ids = targetAssetIds();
-        if (!ids.length) return;
-        event.preventDefault();
-        void deleteAssets(ids);
-        return;
-      }
-
-      if (event.code === "Space") {
-        if (viewMode === "stickers") {
-          if (!stickerView.selected) return;
-          event.preventDefault();
-          setLightboxOpen((current) => !current);
-          return;
-        }
-        if (!workspace.selectedAssetId) return;
+    if (event.code === "Space") {
+      if (viewMode === "stickers") {
+        if (!stickerView.selected) return;
         event.preventDefault();
         setLightboxOpen((current) => !current);
         return;
       }
-
-      if (viewMode === "stickers") {
-        // Arrow navigation. In the lightbox we stay linear (single image
-        // pager). In the grid we measure column count from the DOM so
-        // up/down jump rows the same way Gallery does.
-        if (event.key === "ArrowLeft" || event.key === "ArrowUp" ||
-            event.key === "ArrowRight" || event.key === "ArrowDown") {
-          if (!stickerItemsForLightbox.length) return;
-          event.preventDefault();
-          const list = stickerItemsForLightbox;
-          const cur = stickerView.selected
-            ? list.findIndex((it) => it.asset_id === stickerView.selected.id)
-            : -1;
-          let next;
-          if (lightboxOpen) {
-            const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
-            next = cur < 0
-              ? (dir === 1 ? 0 : list.length - 1)
-              : (cur + dir + list.length) % list.length;
-          } else {
-            const isHoriz = event.key === "ArrowLeft" || event.key === "ArrowRight";
-            const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
-            if (isHoriz) {
-              next = cur < 0 ? (dir === 1 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, cur + dir));
-            } else {
-              const grid = document.querySelector("[data-sticker-grid='true']");
-              let cols = 1;
-              if (grid) {
-                const cards = grid.querySelectorAll("[data-sticker-card]");
-                if (cards.length > 0) {
-                  const firstTop = cards[0].offsetTop;
-                  cols = Array.from(cards).filter((el) => Math.abs(el.offsetTop - firstTop) < 2).length || 1;
-                }
-              }
-              next = cur < 0 ? 0 : Math.max(0, Math.min(list.length - 1, cur + dir * cols));
-            }
-          }
-          const item = list[next];
-          const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
-          if (sticker) stickerView.setSelected(sticker);
-          return;
-        }
-        // Esc closes lightbox (handled here so we don't fall through to asset logic)
-        if (event.key === "Escape" && lightboxOpen) {
-          event.preventDefault();
-          setLightboxOpen(false);
-          return;
-        }
-        return;
-      }
-
-      // M toggles the map drawer (assets view only; text fields already
-      // returned above via shouldIgnoreKey).
-      if (event.key.toLowerCase() === "m" && viewMode === "assets" && !lightboxOpen) {
-        event.preventDefault();
-        setMapExpanded((current) => !current);
-        return;
-      }
-
-      if (/^[0-5]$/.test(event.key) && (selectedAssetIds.length || workspace.selectedAssetId)) {
-        event.preventDefault();
-        applyRating(Number(event.key));
-        return;
-      }
-
-      if (event.key.toLowerCase() === "e" && (lightboxOpen || workspace.selectedAssetId)) {
-        event.preventDefault();
-        openEditor();
-        return;
-      }
-
-      if (lightboxOpen && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        setProofMode((current) => !current);
-        return;
-      }
-
-      if (event.key === "Escape") {
-        if (!lightboxOpen) return;
-        event.preventDefault();
-        if (proofMode) {
-          setProofMode(false);
-        } else {
-          setLightboxOpen(false);
-        }
-      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-        event.preventDefault();
-        selectByDirection(event.key === "ArrowLeft" ? "left" : "up");
-      } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-        event.preventDefault();
-        selectByDirection(event.key === "ArrowRight" ? "right" : "down");
-      }
+      if (!workspace.selectedAssetId) return;
+      event.preventDefault();
+      setLightboxOpen((current) => !current);
+      return;
     }
 
+    if (viewMode === "stickers") {
+      // Arrow navigation. In the lightbox we stay linear (single image
+      // pager). In the grid we measure column count from the DOM so
+      // up/down jump rows the same way Gallery does.
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp" ||
+          event.key === "ArrowRight" || event.key === "ArrowDown") {
+        if (!stickerItemsForLightbox.length) return;
+        event.preventDefault();
+        const list = stickerItemsForLightbox;
+        const cur = stickerView.selected
+          ? list.findIndex((it) => it.asset_id === stickerView.selected.id)
+          : -1;
+        let next;
+        if (lightboxOpen) {
+          const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+          next = cur < 0
+            ? (dir === 1 ? 0 : list.length - 1)
+            : (cur + dir + list.length) % list.length;
+        } else {
+          const isHoriz = event.key === "ArrowLeft" || event.key === "ArrowRight";
+          const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
+          if (isHoriz) {
+            next = cur < 0 ? (dir === 1 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, cur + dir));
+          } else {
+            const grid = document.querySelector("[data-sticker-grid='true']");
+            let cols = 1;
+            if (grid) {
+              const cards = grid.querySelectorAll("[data-sticker-card]");
+              if (cards.length > 0) {
+                const firstTop = cards[0].offsetTop;
+                cols = Array.from(cards).filter((el) => Math.abs(el.offsetTop - firstTop) < 2).length || 1;
+              }
+            }
+            next = cur < 0 ? 0 : Math.max(0, Math.min(list.length - 1, cur + dir * cols));
+          }
+        }
+        const item = list[next];
+        const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
+        if (sticker) stickerView.setSelected(sticker);
+        return;
+      }
+      // Esc closes lightbox (handled here so we don't fall through to asset logic)
+      if (event.key === "Escape" && lightboxOpen) {
+        event.preventDefault();
+        setLightboxOpen(false);
+        return;
+      }
+      return;
+    }
+
+    // M toggles the map drawer (assets view only; text fields already
+    // returned above via shouldIgnoreKey).
+    if (event.key.toLowerCase() === "m" && viewMode === "assets" && !lightboxOpen) {
+      event.preventDefault();
+      setMapExpanded((current) => !current);
+      return;
+    }
+
+    if (/^[0-5]$/.test(event.key) && (selectedAssetIds.length || workspace.selectedAssetId)) {
+      event.preventDefault();
+      applyRating(Number(event.key));
+      return;
+    }
+
+    if (event.key.toLowerCase() === "e" && (lightboxOpen || workspace.selectedAssetId)) {
+      event.preventDefault();
+      openEditor();
+      return;
+    }
+
+    if (lightboxOpen && event.key.toLowerCase() === "p") {
+      event.preventDefault();
+      setProofMode((current) => !current);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (!lightboxOpen) return;
+      event.preventDefault();
+      if (proofMode) {
+        setProofMode(false);
+      } else {
+        setLightboxOpen(false);
+      }
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      selectByDirection(event.key === "ArrowLeft" ? "left" : "up");
+    } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      selectByDirection(event.key === "ArrowRight" ? "right" : "down");
+    }
+  });
+  useEffect(() => {
+    const handleKeyDown = (event) => onGlobalKeyDown(event);
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentItems, displayMode, editorItem, layoutItems, lightboxOpen, openEditor, proofMode, selectedIndex, workspace.selectedAssetId, selectedAssetIds, viewMode]);
+  }, []);
 
   return (
     <div className="noise-overlay h-full overflow-hidden bg-app text-text">
