@@ -153,11 +153,13 @@ test("the export honours a mouse-made crop", async () => {
   try {
     await ctx.window.evaluate(() => window.__afterframeTest.setAspect("1:1"));
     await expect.poll(async () => (await state()).aspectKey).toBe("1:1");
-    // The crop is re-fitted to the viewport after the aspect commit; export
-    // only once it has actually become square (the VM lagged here: 80 px off).
+    // getState().cropRect is the state ref, updated synchronously by the
+    // aspect commit; the save path reads the latest RENDER's crop. On the CI
+    // VM the render lagged and the export used the previous test's crop
+    // (300×220 from a 512×384 source: 80 px off). Wait for the rendered one.
     await expect.poll(async () => {
-      const r = (await state()).cropRect;
-      return Math.abs(r.width - r.height);
+      const r = (await state()).cropRectRendered;
+      return r ? Math.abs(r.width - r.height) : Infinity;
     }, { timeout: 5_000 }).toBeLessThanOrEqual(1);
     const out = path.join(tmp, "square.jpg");
     await ctx.window.evaluate((p) => window.__afterframeTest.saveAs(p), out);
