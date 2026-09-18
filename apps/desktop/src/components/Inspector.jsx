@@ -148,6 +148,8 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
       if (res?.status === "relinked") {
         pushToast?.({ title: t("toast.relinked"), message: t("toast.relinkedMsg"), ttl: 4000 });
         onRelinked?.();
+      } else if (res?.status === "path_in_use") {
+        pushToast?.({ title: t("toast.relinkFailed"), message: t("toast.relinkPathInUse"), ttl: 6000, tone: "error" });
       } else if (res && res.status !== "cancelled") {
         pushToast?.({ title: t("toast.relinkFailed"), message: String(res.status || "Unknown error"), ttl: 6000, tone: "error" });
       }

@@ -70,7 +70,8 @@
   "toast": {
     "relinked": "已重新连接",
     "relinkedMsg": "原文件已重新连接。",
-    "relinkFailed": "重新连接失败"
+    "relinkFailed": "重新连接失败",
+    "relinkPathInUse": "这个文件已经属于目录里的另一项。请重新选择文件，或先删掉重复的那一项。"
   },
   "peoplePanel": {
     "empty": "选择一个人物，在这里查看详情。",

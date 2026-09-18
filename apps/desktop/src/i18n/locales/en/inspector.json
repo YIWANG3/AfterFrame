@@ -70,7 +70,8 @@
   "toast": {
     "relinked": "Relinked",
     "relinkedMsg": "Original file reconnected.",
-    "relinkFailed": "Relink failed"
+    "relinkFailed": "Relink failed",
+    "relinkPathInUse": "This file already belongs to another item in the catalog. Pick the file again, or remove the duplicate first."
   },
   "peoplePanel": {
     "empty": "Select a person to see their details here.",
