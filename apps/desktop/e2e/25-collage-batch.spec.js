@@ -99,13 +99,19 @@ test.describe("Batch collage", () => {
     const pages = window.locator("[data-testid='batch-page-card']");
     const boxes = [];
     for (let i = 0; i < 4; i++) boxes.push(await pages.nth(i).boundingBox());
-    const row1 = boxes.filter((b) => Math.abs(b.y - boxes[0].y) < 2);
-    expect(row1.length).toBeGreaterThanOrEqual(2);
-    expect(row1.length).toBeLessThan(4); // window is narrow enough that page 4 wraps
-    const last = boxes[3];
-    expect(last.y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1); // wrapped to a new row
-    expect(Math.abs(last.x - boxes[0].x)).toBeLessThan(2);            // …left-aligned with row 1
     const area = await pages.first().locator("xpath=../..").boundingBox();
+    const row1 = boxes.filter((b) => Math.abs(b.y - boxes[0].y) < 2);
+    // How many cards the grid can fit per row follows from the measured
+    // widths, not from the window this was written on: the CI VM is narrower
+    // than a laptop and previously wrapped where this assumed it would not.
+    const gap = row1.length > 1 ? row1[1].x - (row1[0].x + row1[0].width) : 0;
+    const fit = Math.max(1, Math.floor((area.width + gap) / (boxes[0].width + gap)));
+    expect(row1.length).toBe(Math.min(4, fit));
+    if (fit < 4) {
+      const last = boxes[3];
+      expect(last.y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1); // wrapped to a new row
+      expect(Math.abs(last.x - boxes[0].x)).toBeLessThan(2);            // …left-aligned with row 1
+    }
     const rowRight = Math.max(...row1.map((b) => b.x + b.width));
     const leftGap = boxes[0].x - area.x;
     const rightGap = area.x + area.width - rowRight;

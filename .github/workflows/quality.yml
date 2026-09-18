@@ -88,6 +88,7 @@ jobs:
           e2e/09-agent-bridge.spec.js
           e2e/10-settings.spec.js
           e2e/11-jobs-toasts.spec.js
+          e2e/12-missing-original.spec.js
           e2e/12-people-view.spec.js
           e2e/13-i18n.spec.js
           e2e/15-welcome.spec.js
@@ -98,6 +99,7 @@ jobs:
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
           e2e/24-handwriting.spec.js
+          e2e/25-collage-batch.spec.js
           e2e/26-mcp-parity.spec.js
           e2e/28-mcp-render.spec.js
           e2e/29-folder-order.spec.js
