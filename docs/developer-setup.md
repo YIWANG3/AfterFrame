@@ -68,6 +68,15 @@ covers. The nightly workflow runs that variant and uploads the report; numbers
 and cold spots are in
 [review/2026-09-17-E2E覆盖率.md](review/2026-09-17-E2E覆盖率.md).
 
+Adding a request/response method to the desktop bridge is one row in
+`apps/desktop/shared/ipcChannels.mjs` (`[method, channel, arity]`) plus the
+`ipcMain.handle` that answers it. `preload.js` builds its bindings from the
+table at startup and `src/api/index.js` generates the facade entry, so neither
+file is edited; `apiSurface.test.js` and `electron/ipcChannels.test.js` fail
+if the row, the handler and the web bridge do not agree. Only subscriptions,
+sync values and methods that reshape their arguments are still written out by
+hand in `preload.js` and `src/api/index.js`.
+
 `npm run lint` covers both sides: ESLint for the desktop app and ruff + mypy for
 the sidecar (`npm run lint:python`). The Python tools come from the sidecar's
 `dev` extra — install it once so the root scripts can find them:

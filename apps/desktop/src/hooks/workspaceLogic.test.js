@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  browseScopeKey,
-  chooseSelectionAfterReload,
-  filterItemsByQuery,
-  shouldResetScopeForReveal,
+  DEFAULT_SCOPE, browseScopeKey, chooseSelectionAfterReload, filterItemsByQuery, scopeKeyOf, shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
 const item = (asset_id, extra = {}) => ({ asset_id, stem: asset_id, ...extra });
@@ -81,5 +78,21 @@ describe("shouldResetScopeForReveal", () => {
   it("does not reset when the asset is located and visible", () => {
     expect(shouldResetScopeForReveal({ locationIndex: 3, query: "sea", items, filteredItems: items, assetId: "x" })).toBe(false);
     expect(shouldResetScopeForReveal({ locationIndex: 3, query: "", items, filteredItems: items, assetId: "x" })).toBe(false);
+  });
+});
+
+describe("scopeKeyOf", () => {
+  it("keys the default scope like an explicit all/no-collection/empty browse", () => {
+    expect(scopeKeyOf(DEFAULT_SCOPE)).toBe(browseScopeKey({ status: "all", collectionId: null, search: undefined, sort: "imported-desc", filters: {} }));
+  });
+  it("ignores query whitespace, so typing a space is not a new destination", () => {
+    expect(scopeKeyOf({ ...DEFAULT_SCOPE, query: "  " })).toBe(scopeKeyOf(DEFAULT_SCOPE));
+    expect(scopeKeyOf({ ...DEFAULT_SCOPE, query: "sunset" })).not.toBe(scopeKeyOf(DEFAULT_SCOPE));
+  });
+  it("changes on every field that changes what the grid shows", () => {
+    const base = scopeKeyOf(DEFAULT_SCOPE);
+    for (const patch of [{ status: "rated" }, { collectionId: "c1" }, { sort: "name-asc" }, { filters: { tag: "x" } }]) {
+      expect(scopeKeyOf({ ...DEFAULT_SCOPE, ...patch }), JSON.stringify(patch)).not.toBe(base);
+    }
   });
 });
