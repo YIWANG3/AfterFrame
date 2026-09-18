@@ -12,6 +12,7 @@
     "test:electron": "npm --prefix apps/desktop run test:electron",
     "test:renderer": "npm --prefix apps/desktop run test:renderer",
     "test:e2e": "npm --prefix apps/desktop run e2e",
-    "test:e2e:coverage": "npm --prefix apps/desktop run e2e:coverage"
+    "test:e2e:coverage": "npm --prefix apps/desktop run e2e:coverage",
+    "test:coverage": "npm --prefix apps/desktop run coverage"
   }
 }

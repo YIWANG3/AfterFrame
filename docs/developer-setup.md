@@ -50,6 +50,7 @@ npm run check      # lint + Python/Node/Renderer unit tests + production build
 npm test           # all fast unit tests
 npm run test:e2e   # full Electron Playwright suite (macOS)
 npm run test:e2e:coverage   # same suite, with line coverage for renderer / main / sidecar
+npm run test:coverage       # unit suites + e2e, reported side by side
 ```
 
 The root commands set the sidecar `PYTHONPATH` automatically. ESLint has no
@@ -59,8 +60,12 @@ and `react-hooks/exhaustive-deps` finding is a hard error locally and in CI.
 `test:e2e:coverage` builds an istanbul-instrumented renderer, arms
 `NODE_V8_COVERAGE` for the main process and wraps the dev sidecar in Python
 `coverage`, then prints one line per process and writes HTML under
-`apps/desktop/.coverage/report/`. The nightly workflow runs this variant and
-uploads the report; numbers and cold spots as of 2026-09-17 are in
+`apps/desktop/.coverage/report/`. `test:coverage` runs the three unit suites
+first with the matching collector for each (vitest under istanbul, `node
+--test` under `NODE_V8_COVERAGE`, `unittest` under Python `coverage`) and
+reports both columns: what e2e covers alone, and what the whole test suite
+covers. The nightly workflow runs that variant and uploads the report; numbers
+and cold spots are in
 [review/2026-09-17-E2E覆盖率.md](review/2026-09-17-E2E覆盖率.md).
 
 `npm run lint` covers both sides: ESLint for the desktop app and ruff + mypy for
