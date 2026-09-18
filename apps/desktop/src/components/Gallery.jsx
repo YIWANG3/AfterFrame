@@ -322,6 +322,7 @@ const CardContent = memo(function CardContent({
   compact = false,
   bustToken,
   onPreviewError,
+  onPreviewLoaded,
 }) {
   const { t } = useTranslation("nav");
   const title = fileName(item.image_path) || item.stem;
@@ -454,6 +455,7 @@ const CardContent = memo(function CardContent({
             fit={fit}
             className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
             onLoadError={item.exists_on_disk === false ? undefined : () => onPreviewError?.(item)}
+            onLoadSuccess={() => onPreviewLoaded?.(item)}
             onNaturalSize={onNaturalSize}
           />
         ) : (
@@ -568,6 +570,10 @@ export default function Gallery({
   // full refresh path as the context menu so an early 0-byte import also heals
   // its missing dimensions. Two attempts per asset tolerate one transient
   // startup/protocol error while still preventing an endless repair loop.
+  // The budget is per REASON: the stale-metadata pass below re-queues the same
+  // assets on every `items` change until its refresh lands, and when it shared
+  // one counter with <img> errors it spent that budget during startup — a
+  // thumbnail that broke afterwards could then never heal.
   const [previewBust, setPreviewBust] = useState({}); // asset_id -> cache-bust token
   const previewRegenRef = useRef({ attempts: new Map(), pending: new Map(), timer: null });
   // Vite Fast Refresh preserves useRef values. Migrate the pre-refactor shape
@@ -601,24 +607,32 @@ export default function Gallery({
       return next;
     });
   }, [onRefreshFromDisk]);
-  const queueAssetRepair = useCallback((item) => {
+  const queueAssetRepair = useCallback((item, reason = "preview-error") => {
     const st = previewRegenRef.current;
     const id = item?.asset_id;
     const src = item?.image_path || item?.preview_path;
-    const attempts = st.attempts.get(id) || 0;
-    if (!id || !src || attempts >= 2) return;
-    st.attempts.set(id, attempts + 1);
+    if (!id || !src) return;
+    const budgetKey = `${reason}:${id}`;
+    const attempts = st.attempts.get(budgetKey) || 0;
+    if (attempts >= 2) return;
+    st.attempts.set(budgetKey, attempts + 1);
     st.pending.set(id, src);
     if (st.timer) clearTimeout(st.timer);
     st.timer = setTimeout(flushPreviewRegen, 400); // batch a page's failures
   }, [flushPreviewRegen]);
   const stableOnPreviewError = queueAssetRepair;
+  // The thumbnail loaded: hand the asset its repair budget back, so a preview
+  // that breaks later in the session is treated as a new failure.
+  const stableOnPreviewLoaded = useCallback((item) => {
+    if (item?.asset_id) previewRegenRef.current.attempts.delete(`preview-error:${item.asset_id}`);
+  }, []);
 
   // A partial Lightroom overwrite can still produce a valid JPEG preview, so
   // the browser never emits an image error. The browse response compares the
   // live source stat with the catalog; missing metadata is another legacy
   // signal. Repair either case as soon as the card enters the loaded page.
   useEffect(() => {
+    const st = previewRegenRef.current;
     for (const item of items) {
       const metadata = item?.image_metadata || {};
       const missingImageMetadata = item?.asset_type === "image" && (
@@ -626,7 +640,10 @@ export default function Gallery({
         || Number(metadata.height || 0) <= 0
         || Number(metadata.file_size || metadata.size_bytes || 0) <= 0
       );
-      if (item?.source_changed || missingImageMetadata) queueAssetRepair(item);
+      if (item?.source_changed || missingImageMetadata) queueAssetRepair(item, "stale-source");
+      // Healthy again: return the budget, or a second bout of staleness later
+      // in the session (an external edit, a partial re-export) is refused.
+      else if (item?.asset_id) st.attempts.delete(`stale-source:${item.asset_id}`);
     }
   }, [items, queueAssetRepair]);
 
@@ -1010,6 +1027,7 @@ export default function Gallery({
                 compact={isTileMode}
                 bustToken={previewBust[item.asset_id]}
                 onPreviewError={stableOnPreviewError}
+                onPreviewLoaded={stableOnPreviewLoaded}
               />
             </div>
           );
