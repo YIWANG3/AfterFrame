@@ -110,15 +110,12 @@ test("the Stickers view lists it, its inspector toggles the star, and Delete rem
   await expect(ctx.window.getByTitle("Star", { exact: true })).toBeVisible();
 
   ctx.window.once("dialog", (dialog) => dialog.accept()); // window.confirm("Delete this sticker?…")
-  // Open the card's context menu with a real MouseEvent (Playwright's
-  // dispatchEvent("contextmenu") builds a plain Event — no clientX/Y — and
-  // the menu positions itself from those). See the PR: a Playwright
-  // right-click never showed this menu while the gallery's identical menu
-  // works, which deserves a manual check.
-  const box = await card.boundingBox();
-  await card.evaluate((el, at) => {
-    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y }));
-  }, { x: box.x + 20, y: box.y + 20 });
+  // A real right-click. This used to be a dispatched MouseEvent because the
+  // real one never showed the menu: the opening contextmenu event reached
+  // the menu's own outside-click listener while still bubbling and closed it
+  // 0.2 ms after it mounted (a user-visible bug; the menu ignores the
+  // opening event now).
+  await card.click({ button: "right" });
   await ctx.window.getByText("Delete sticker", { exact: true }).click();
   await expect(card).toHaveCount(0, { timeout: 10_000 });
   await expect.poll(() => manifest().length).toBe(0);

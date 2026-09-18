@@ -136,6 +136,12 @@ function StickerContextMenu({ x, y, onReveal, onDelete, onClose }) {
   const { t } = useTranslation("stickerView");
   const ref = useRef(null);
   const [pos, setPos] = useState({ x, y });
+  // The contextmenu event that opened this menu is still bubbling towards
+  // `document` when the menu mounts (React flushes the discrete update and
+  // this effect synchronously), so the outside-click listener below received
+  // it and closed the menu 0.2 ms after opening it. Ignore any event older
+  // than the mount.
+  const openedAtRef = useRef(performance.now());
 
   useEffect(() => {
     function handlePointerDown(e) {
@@ -143,6 +149,7 @@ function StickerContextMenu({ x, y, onReveal, onDelete, onClose }) {
       if (ref.current && !ref.current.contains(e.target)) onClose();
     }
     function handleContextMenu(e) {
+      if (e.timeStamp <= openedAtRef.current) return;
       if (ref.current && !ref.current.contains(e.target)) onClose();
     }
     function handleKey(e) {
