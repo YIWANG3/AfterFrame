@@ -96,6 +96,13 @@ export default function useWorkspace({ pushToast } = {}) {
   // new Hook here during Vite Fast Refresh can leave React's development Hook
   // queue out of sync and crash the renderer until a full reload.
   jobsBridgeRef.browseContext = { status, activeCollectionId, query, filters, sort };
+  // Every explicit scope change bumps this. refreshAll waits on six status
+  // IPC calls before it browses; two clicks in a row (Recently Added, then
+  // Rated) resolve in sidecar order, not click order, so the older click's
+  // browse could land last and win. A refresh that resumes after a newer
+  // intent browses the latest scope instead of the one it was called with.
+  jobsBridgeRef.browseIntent ??= 0;
+  const bumpBrowseIntent = () => { jobsBridgeRef.browseIntent += 1; };
   jobsBridgeRef.current = {
     refreshAll: (opts) => refreshAll(opts),
     startIncrementalImport: (opts) => startIncrementalImport(opts),
@@ -238,7 +245,12 @@ export default function useWorkspace({ pushToast } = {}) {
     if (requestId === detailRequestRef.current) setDetail(payload);
   }
 
-  async function loadBrowser({ nextStatus = status, append = false, collectionId = activeCollectionId, search = query.trim() || undefined, force = false, sortKey = sort, facetFilters = filters, preserveView = false } = {}) {
+  // Defaults come from the bridge ref (the latest render), not this render's
+  // closure. Background callers hold on to an older instance across awaits —
+  // useJobs captures the bridge before polling the sidecar — and a stale
+  // default status/filters quietly browsed the scope the user had just left
+  // (02-navigation: Rated → 14 items on the CI VM).
+  async function loadBrowser({ nextStatus = jobsBridgeRef.browseContext.status, append = false, collectionId = jobsBridgeRef.browseContext.activeCollectionId, search = jobsBridgeRef.browseContext.query.trim() || undefined, force = false, sortKey = jobsBridgeRef.browseContext.sort, facetFilters = jobsBridgeRef.browseContext.filters, preserveView = false } = {}) {
     if (!force && (append ? browserLoadingMore || browserLoading || !browserHasMore : browserLoading)) {
       return;
     }
@@ -647,25 +659,32 @@ export default function useWorkspace({ pushToast } = {}) {
   }
 
   function selectCollection(collectionId) {
+    bumpBrowseIntent();
     setActiveCollectionId(collectionId);
-    void loadBrowser({ collectionId });
+    void loadBrowser({ collectionId, force: true });
   }
 
   // Status filters and collections are mutually exclusive views. This owns
   // that invariant — callers must not have to remember to clear the
   // collection themselves (pagination/reloads would silently mix datasets).
   function setStatusFilter(next, { facetFilters = filters } = {}) {
+    bumpBrowseIntent();
     setActiveCollectionId(null);
     setStatus(next);
     // Carry the caller's exact next filters through the async summary refresh.
     // Otherwise refreshAll can resume later with this render's stale person
     // filter and overwrite a newer unfiltered gallery response.
-    void refreshAll({ nextStatus: next, collectionId: null, facetFilters });
+    // force: a user's scope switch must win over whatever browse is already in
+    // flight (a catalog-changed refresh keeps the old scope). Without it the
+    // click was dropped by loadBrowser's busy guard and the gallery kept the
+    // previous scope — the 02/44 "Rated" race on the CI VM.
+    void refreshAll({ nextStatus: next, collectionId: null, facetFilters, force: true });
   }
 
   function clearCollection(options = {}) {
     const { reload = true } = options;
     if (!activeCollectionId) return;
+    bumpBrowseIntent();
     setActiveCollectionId(null);
     if (reload) {
       void loadBrowser({ collectionId: null });
@@ -677,6 +696,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // intended context across separate status/collection/filter updates.
   function filterByPerson(groupId) {
     if (!groupId) return;
+    bumpBrowseIntent();
     // Opening a person is a new browse destination, not an intersection with
     // a stale text query/date/tag/rating filter from the previous gallery.
     // Keeping any of those made a valid person group appear mysteriously empty.
@@ -703,6 +723,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // person/date/map filter and open "empty"). One explicit browse, like
   // filterByPerson.
   function browseTo({ status: nextStatus = "all", filters: nextFilters = {}, collectionId = null, query: nextQuery = "" } = {}) {
+    bumpBrowseIntent();
     const facetFilters = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
     setActiveCollectionId(collectionId);
     setStatus(nextStatus);
@@ -730,6 +751,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // alone can leave the rendered chips ahead of the gallery during rapid view
   // transitions (most visibly when clearing a person filter).
   function applyFilters(nextFilters) {
+    bumpBrowseIntent();
     const next = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
     explicitlyLoadedFiltersRef.current = next;
     setFilters(next);
@@ -737,12 +759,13 @@ export default function useWorkspace({ pushToast } = {}) {
   }
 
   async function refreshAll({
-    nextStatus = status,
-    collectionId = activeCollectionId,
+    nextStatus = jobsBridgeRef.browseContext.status,
+    collectionId = jobsBridgeRef.browseContext.activeCollectionId,
     force = false,
     preserveView = false,
-    facetFilters = filters,
+    facetFilters = jobsBridgeRef.browseContext.filters,
   } = {}) {
+    const intent = jobsBridgeRef.browseIntent;
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
       api.getInfo(),
       api.getSummary(),
@@ -757,6 +780,13 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportTask(nextImportTask);
     setPreviewTask(nextPreviewTask);
     setEnrichmentTask(nextEnrichmentTask);
+    if (intent !== jobsBridgeRef.browseIntent) {
+      // A newer scope change owns the gallery now; its state has rendered.
+      const latest = jobsBridgeRef.browseContext;
+      nextStatus = latest.status;
+      collectionId = latest.activeCollectionId;
+      facetFilters = latest.filters;
+    }
     await Promise.all([
       loadCollections(),
       loadBrowser({ nextStatus, collectionId, force, preserveView, facetFilters }),
@@ -899,6 +929,7 @@ export default function useWorkspace({ pushToast } = {}) {
 
   async function switchCatalog(nextCatalogPath) {
     await api.switchCatalog(nextCatalogPath ?? null);
+    bumpBrowseIntent();
     setStatus("all");
     setSort("imported-desc"); // matches the app-default sort (was name-asc — inconsistent)
     setQuery("");
@@ -918,7 +949,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setCollections([]);
     setActiveCollectionId(null);
     resetJobs();
-    await refreshAll({ nextStatus: "all", force: true });
+    await refreshAll({ nextStatus: "all", collectionId: null, facetFilters: {}, force: true });
     pokeJobs();
   }
 

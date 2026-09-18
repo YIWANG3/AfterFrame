@@ -63,19 +63,22 @@ jobs:
       #   17-watched-dirs            fs-watch timing
       #   25-collage-batch           layout assertions assume the local
       #                              window size (cards wrap on the VM)
-      #   02-navigation              "Rated" filter raced the startup browse
-      #                              storm on the slow VM (gallery kept "all")
       #   12-missing-original        relink hit UNIQUE(asset_files.path) on
       #                              the VM only
       #   05-catalog                 thumbnail-regeneration test fails locally
       #                              too — open item
       # The save / people suites were once excluded as "slow I/O"; the real
       # cause was the seeded catalog's absolute paths (fixed in #57), so they
-      # are back. Opt-in suites (27-agent, demo) skip themselves.
+      # are back. 02-navigation was excluded for the "Rated" race; the cause
+      # was refreshAll browsing the scope it was called with after six status
+      # IPC awaits, so an older click (or a job-finished refresh) could land
+      # last and win (#68, with 44's identical failure), so it is back too.
+      # Opt-in suites (27-agent, demo) skip themselves.
       - name: Run Electron E2E (CI subset)
         run: >
           npm run e2e:only --prefix apps/desktop --
           e2e/01-launch.spec.js
+          e2e/02-navigation.spec.js
           e2e/03-editor.spec.js
           e2e/04-sticker.spec.js
           e2e/06-save.spec.js
