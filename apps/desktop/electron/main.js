@@ -91,6 +91,7 @@ const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
 const { createSettingsStore } = require("./settingsStore");
 const { createCatalogState } = require("./catalog");
+const { IPC_METHODS } = require("../shared/ipcChannels.mjs");
 const { createImageMetadataWriter } = require("./imageMetadata");
 const { createTaskStarters } = require("./tasks");
 
@@ -1032,6 +1033,9 @@ if (devServerUrl) {
 // (registered above), so the inline handlers for those are removed here.
 
 ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });
+// The preload is sandboxed and cannot require shared/ipcChannels.mjs itself;
+// it asks for the rows synchronously and builds its invoke bindings from them.
+ipcMain.on("app:ipc-methods", (event) => { event.returnValue = IPC_METHODS; });
 
 ipcMain.handle("workspace:info", () => catalog.info());
 // The renderer owns the theme (dark / light / system). Mirror it into the
