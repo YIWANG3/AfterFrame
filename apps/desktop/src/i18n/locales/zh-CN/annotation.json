@@ -25,7 +25,7 @@
   "noProviderError": "未配置服务商。打开 设置 → AI 添加一个。",
   "loadFailed": "加载标注失败",
   "loc": {
-    "gpsNearby": "优先使用 GPS。以下地名是离线匹配的附近地点，不代表精确地址。",
+    "gpsNearby": "GPS 优先，离线地名仅供参考。",
     "country": "国家",
     "region": "地区",
     "landmark": "地标",
