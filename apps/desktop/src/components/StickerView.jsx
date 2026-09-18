@@ -178,7 +178,7 @@ function StickerContextMenu({ x, y, onReveal, onDelete, onClose }) {
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu"
+      className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
       <MenuItem icon={Eye} label={t("reveal")} onClick={() => { onReveal?.(); onClose(); }} />
@@ -195,7 +195,7 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
       type="button"
       onClick={onClick}
       className={[
-        "flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] transition-colors",
+        "flex w-full rounded-[6px] items-center gap-2.5 px-3 py-1.5 text-left text-[12px] transition-colors",
         danger
           ? "text-[rgb(var(--error-color))] hover:bg-[rgb(var(--error-color)/0.1)]"
           : "text-muted hover:bg-hover hover:text-text",
