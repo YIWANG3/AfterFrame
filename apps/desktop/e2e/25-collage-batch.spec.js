@@ -19,6 +19,12 @@ function stripHdPreviews(catalogDir) {
   fs.rmSync(path.join(catalogDir, "previews-hd"), { recursive: true, force: true });
 }
 
+// Every test past the second continues the batch session the one before it
+// set up (grouping, per-page layout, swapped cells). Serial: one failure ends
+// the chain instead of restarting the app and failing the rest for a state
+// they never had.
+test.describe.configure({ mode: "serial" });
+
 test.describe("Batch collage", () => {
   let app, window, userDataDir;
   const exportDir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-collage-out-"));
@@ -215,8 +221,13 @@ test.describe("Batch collage", () => {
     await expect(window.locator("img.object-cover.h-full.w-full").last()).toBeVisible();
     await window.mouse.up();
 
-    await expect.poll(() => cellColor(0, 0), { timeout: 3000 }).toBe(before2);
-    await expect.poll(() => cellColor(1, 0), { timeout: 3000 }).toBe(before1);
+    // Within a tolerance: the sampled pixel moves a little when the lazily
+    // generated HD preview replaces the thumbnail between the two samples
+    // (the CI VM is slow enough for that to land mid-test). Two different
+    // photos differ by far more than this.
+    const near = (a, b) => a.split(",").every((v, i) => Math.abs(Number(v) - Number(b.split(",")[i])) <= 24);
+    await expect.poll(() => cellColor(0, 0).then((c) => near(c, before2)), { timeout: 3000 }).toBe(true);
+    await expect.poll(() => cellColor(1, 0).then((c) => near(c, before1)), { timeout: 3000 }).toBe(true);
     // Page structure unchanged
     await expect(window.getByText("14 images · 7 per collage · 2 collages")).toBeVisible();
   });
