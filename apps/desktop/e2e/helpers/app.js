@@ -36,7 +36,7 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
 // which would make MCP-dependent specs flake in confusing ways.
 let nextMcpPort = 42100 + (Number(process.env.TEST_WORKER_INDEX) || 0) * 50;
 
-// Coverage run (npm run e2e:coverage): the renderer is an istanbul build
+// Coverage run (npm run coverage / e2e:coverage): the renderer is an istanbul build
 // (vite.config.js), the main process writes V8 coverage on exit, and the dev
 // sidecar runs under Python coverage. Everything lands in .coverage/ and
 // scripts/e2e-coverage.mjs turns it into one report.
