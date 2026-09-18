@@ -19,6 +19,7 @@ test.describe("Missing original handling", () => {
   const cardById = () =>
     window.locator(`[data-gallery-item='true'][data-asset-id='${assetId}']`);
 
+  let dump = () => {};
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "missing" }));
     await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
@@ -42,7 +43,7 @@ test.describe("Missing original handling", () => {
       { id: assetId, newPath: tmpCopy },
     );
     expect(relinked.status).toBe("relinked");
-    const dump = (label) => {
+    dump = (label) => {
       const db = path.join(userDataDir, "catalogs", "test-catalog.afcatalog", "catalog.sqlite3");
       const found = fs.existsSync(db) ? db : require("node:child_process").execSync(`find "${userDataDir}" -name catalog.sqlite3 | head -1`).toString().trim();
       const out = require("node:child_process").execFileSync("sqlite3", ["-cmd", ".timeout 5000", "-header", found,
@@ -74,6 +75,7 @@ test.describe("Missing original handling", () => {
   });
 
   test("inspector shows the missing banner with a Relink button", async () => {
+    dump("start: inspector");
     await cardById().click();
     await expect(window.getByText(/Original file moved or deleted/i)).toBeVisible({ timeout: 5_000 });
     await expect(window.getByRole("button", { name: /^Relink$/i })).toBeVisible();
@@ -82,6 +84,7 @@ test.describe("Missing original handling", () => {
   });
 
   test("opening the editor is blocked with a toast", async () => {
+    dump("start: opening");
     await cardById().click();
     await window.keyboard.press("e");
     await expect(window.getByText(/Original file missing/i)).toBeVisible({ timeout: 5_000 });
@@ -89,6 +92,7 @@ test.describe("Missing original handling", () => {
   });
 
   test("relinking restores the asset and preserves its rating", async () => {
+    dump("start: relinking");
     const restored = await window.evaluate(
       ({ id, newPath }) => window.mediaWorkspace.relinkAsset({ assetId: id, newPath }),
       { id: assetId, newPath: committedPath },
