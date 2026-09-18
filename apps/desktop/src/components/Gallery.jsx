@@ -147,7 +147,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
       <div className="relative" onMouseEnter={enterItem} onMouseLeave={leaveItem}>
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer rounded-[6px] items-center justify-between px-3 py-1.5 text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={onClick}
         >
           <span className="flex items-center gap-2.5">
@@ -157,7 +157,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
           <ChevronRight className="h-3 w-3 text-muted2" />
         </button>
         {subOpen && (
-          <div className="absolute left-full top-0 z-50 ml-1 w-max min-w-[160px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu">
+          <div className="absolute left-full top-0 z-50 ml-1 w-max min-w-[160px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu">
             {children}
           </div>
         )}
@@ -169,7 +169,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
     <button
       type="button"
       className={[
-        "flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px]",
+        "flex w-full rounded-[6px] items-center justify-between px-3 py-1.5 text-left text-[12px]",
         locked ? "cursor-default text-muted2" : "cursor-pointer text-muted hover:bg-hover hover:text-text",
       ].join(" ")}
       title={locked ? tc("desktop.hint") : undefined}
@@ -226,7 +226,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
   return createPortal(
     <div
       ref={(el) => { ref.current = el; menuRef.current = el; }}
-      className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome py-1 shadow-menu"
+      className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
       <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut="E" onClick={() => { onEdit?.(item.image_path); onClose(); }} />
@@ -239,14 +239,14 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")} locked={!api.can("annotation")}>
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
         >
           {t("gallery.menu.annotateSkip", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
         </button>
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
         >
           {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
@@ -258,7 +258,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
             <button
               key={ed.appPath}
               type="button"
-              className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+              className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
               onClick={() => { onOpenWith?.(ed.appPath); onClose(); }}
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -289,7 +289,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
             <button
               key={col.collection_id}
               type="button"
-              className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+              className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
               onClick={() => { onAddTo(col.collection_id); onClose(); }}
             >
               <Folder className="h-3.5 w-3.5" />
