@@ -65,15 +65,15 @@ jobs:
       #                              window size (cards wrap on the VM)
       #   12-missing-original        relink hit UNIQUE(asset_files.path) on
       #                              the VM only
-      #   05-catalog                 thumbnail-regeneration test fails locally
-      #                              too — open item
       # The save / people suites were once excluded as "slow I/O"; the real
       # cause was the seeded catalog's absolute paths (fixed in #57), so they
       # are back. 02-navigation was excluded for the "Rated" race; the cause
       # was refreshAll browsing the scope it was called with after six status
       # IPC awaits, so an older click (or a job-finished refresh) could land
       # last and win (#68, with 44's identical failure), so it is back too.
-      # Opt-in suites (27-agent, demo) skip themselves.
+      # 05-catalog was excluded for its thumbnail-regeneration test; the cause
+      # was a real repair bug (one budget shared by the two repair triggers),
+      # so it is back as well. Opt-in suites (27-agent, demo) skip themselves.
       - name: Run Electron E2E (CI subset)
         run: >
           npm run e2e:only --prefix apps/desktop --
@@ -81,6 +81,7 @@ jobs:
           e2e/02-navigation.spec.js
           e2e/03-editor.spec.js
           e2e/04-sticker.spec.js
+          e2e/05-catalog.spec.js
           e2e/06-save.spec.js
           e2e/07-depth.spec.js
           e2e/08-mcp-http.spec.js

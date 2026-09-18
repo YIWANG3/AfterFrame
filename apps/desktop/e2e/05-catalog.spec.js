@@ -159,7 +159,9 @@ test.describe("Catalog browse", () => {
 
     // First asset: catalog stat no longer matches disk. Second asset: the
     // preview is good, but its dimensions/file-size metadata was never stored.
-    execFileSync("sqlite3", [path.join(catalogDir, "catalog.sqlite3"), `
+    // The app holds the same WAL database open; without a busy timeout this
+    // write intermittently fails outright with "database is locked".
+    execFileSync("sqlite3", ["-cmd", ".timeout 5000", path.join(catalogDir, "catalog.sqlite3"), `
       UPDATE assets
       SET file_size = 0
       WHERE asset_id = '${firstDetail.asset_id}';

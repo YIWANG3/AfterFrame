@@ -8,6 +8,7 @@ export default function PreviewImage({
   fit = "cover",
   placeholderLabel = "No preview",
   onLoadError,
+  onLoadSuccess,
   onNaturalSize,
 }) {
   const [container, setContainer] = useState(null);
@@ -61,7 +62,7 @@ export default function PreviewImage({
             fit === "contain" ? "object-contain" : "object-cover",
             className || "",
           ].join(" ")}
-          onLoad={(e) => { setLoaded(true); onNaturalSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight); }}
+          onLoad={(e) => { setLoaded(true); onLoadSuccess?.(); onNaturalSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight); }}
           onError={() => { setErrored(true); onLoadError?.(); }}
         />
       ) : null}
