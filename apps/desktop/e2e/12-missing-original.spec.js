@@ -42,12 +42,23 @@ test.describe("Missing original handling", () => {
       { id: assetId, newPath: tmpCopy },
     );
     expect(relinked.status).toBe("relinked");
+    const dump = (label) => {
+      const db = path.join(userDataDir, "catalogs", "test-catalog.afcatalog", "catalog.sqlite3");
+      const found = fs.existsSync(db) ? db : require("node:child_process").execSync(`find "${userDataDir}" -name catalog.sqlite3 | head -1`).toString().trim();
+      const out = require("node:child_process").execFileSync("sqlite3", ["-cmd", ".timeout 5000", "-header", found,
+        `SELECT 'assets' AS t, asset_id, canonical_path AS p, exists_on_disk AS e FROM assets WHERE asset_id='${assetId}';
+         SELECT 'asset_files' AS t, asset_id, path AS p, '' AS e FROM asset_files WHERE asset_id='${assetId}' OR path LIKE '%B0016108%';
+         SELECT 'registry' AS t, image_asset_id, image_path, '' FROM image_lookup_registry WHERE image_asset_id='${assetId}';`]).toString();
+      console.log(`[probe ${label}] relinked=${JSON.stringify(relinked)} committed=${committedPath} tmp=${tmpCopy}\n${out}`);
+    };
+    dump("after first relink");
 
     // Now delete the copy → the original is "missing", and run the explicit
     // verify sweep (File ▸ Verify Files), then refresh the gallery.
     fs.rmSync(tmpCopy, { force: true });
     const sweep = await window.evaluate(() => window.mediaWorkspace.verifyAssets());
     expect(sweep.missing).toBeGreaterThanOrEqual(1);
+    dump("after sweep");
     await window.evaluate(() => window.__afterframeTest.refresh());
   });
 

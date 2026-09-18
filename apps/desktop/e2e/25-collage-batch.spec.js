@@ -108,9 +108,12 @@ test.describe("Batch collage", () => {
     const fit = Math.max(1, Math.floor((area.width + gap) / (boxes[0].width + gap)));
     expect(row1.length).toBe(Math.min(4, fit));
     if (fit < 4) {
-      const last = boxes[3];
-      expect(last.y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1); // wrapped to a new row
-      expect(Math.abs(last.x - boxes[0].x)).toBeLessThan(2);            // …left-aligned with row 1
+      // The first page of the second row starts under the first page of the
+      // first — rows fill left to right; the block is centered, the rows are
+      // not (page 4 is only at that column when three fit per row).
+      const firstOnRow2 = boxes[fit];
+      expect(firstOnRow2.y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1); // wrapped to a new row
+      expect(Math.abs(firstOnRow2.x - boxes[0].x)).toBeLessThan(2);            // …left-aligned with row 1
     }
     const rowRight = Math.max(...row1.map((b) => b.x + b.width));
     const leftGap = boxes[0].x - area.x;
