@@ -1,8 +1,11 @@
-// Flat facade over the preload bridge, grouped by domain. Method names match
-// preload.js 1:1 so call sites migrate mechanically; renames later only touch
-// this file. New preload methods MUST be added here (greppable inventory).
+// Flat facade over the bridge. The request/response methods are generated
+// from shared/ipcChannels.mjs — declare a new one there and it exists here,
+// in preload.js and in the two tests that keep the three aligned. Only the
+// subscriptions, sync values and the one argument-reshaping method are
+// written out below.
 
 import { invoke, bridge } from "./client";
+import { IPC_METHOD_NAMES } from "../../shared/ipcChannels.mjs";
 
 const api = {
   get isPackaged() { return bridge().isPackaged; },
@@ -16,29 +19,11 @@ const api = {
   // the flag false — undeclared (desktop) means available.
   can: (flag) => !flag || bridge().capabilities?.[flag] !== false,
 
-
-  // ── files & external ──
+  // ── hand-written: not plain invokes ──
+  deleteImageAssetsFromDisk: (...args) => invoke("deleteImageAssetsFromDisk", ...args),
   getPathForFile: (...args) => invoke("getPathForFile", ...args),
-  revealPath: (...args) => invoke("revealPath", ...args),
-  setTheme: (...args) => invoke("setTheme", ...args),
   getMediaServerPort: (...args) => invoke("getMediaServerPort", ...args),
   onFullscreen: (...args) => invoke("onFullscreen", ...args),
-  copyText: (...args) => invoke("copyText", ...args),
-  videoProxy: (...args) => invoke("videoProxy", ...args),
-  videoKeyframes: (...args) => invoke("videoKeyframes", ...args),
-  openCacheDir: (...args) => invoke("openCacheDir", ...args),
-  getPreviewSettings: (...args) => invoke("getPreviewSettings", ...args),
-  savePreviewSettings: (...args) => invoke("savePreviewSettings", ...args),
-  openExternal: (...args) => invoke("openExternal", ...args),
-  pickSavePath: (...args) => invoke("pickSavePath", ...args),
-  pickDirectory: (...args) => invoke("pickDirectory", ...args),
-  pickDirectories: (...args) => invoke("pickDirectories", ...args),
-  pickCatalog: (...args) => invoke("pickCatalog", ...args),
-  createCatalog: (...args) => invoke("createCatalog", ...args),
-  openSampleCatalog: (...args) => invoke("openSampleCatalog", ...args),
-  resetSampleCatalog: (...args) => invoke("resetSampleCatalog", ...args),
-
-  // ── agent bridge (MCP) ──
   onExternalImport: (...args) => invoke("onExternalImport", ...args),
   onAgentRevealAssets: (...args) => invoke("onAgentRevealAssets", ...args),
   sendAgentRevealResult: (...args) => invoke("sendAgentRevealResult", ...args),
@@ -46,144 +31,13 @@ const api = {
   onCatalogChanged: (...args) => invoke("onCatalogChanged", ...args),
   onAgentRender: (...args) => invoke("onAgentRender", ...args),
   sendAgentRenderResult: (...args) => invoke("sendAgentRenderResult", ...args),
-
-  // ── workspace / catalog ──
-  getInfo: (...args) => invoke("getInfo", ...args),
-  getSummary: (...args) => invoke("getSummary", ...args),
-  getCatalogRoots: (...args) => invoke("getCatalogRoots", ...args),
-  registerRoots: (...args) => invoke("registerRoots", ...args),
-  switchCatalog: (...args) => invoke("switchCatalog", ...args),
   onMenuAction: (...args) => invoke("onMenuAction", ...args),
-
-  // ── browse & assets ──
-  browseImages: (...args) => invoke("browseImages", ...args),
-  locateImageAsset: (...args) => invoke("locateImageAsset", ...args),
-  browseMapPoints: (...args) => invoke("browseMapPoints", ...args),
-  resolveAiLocations: (...args) => invoke("resolveAiLocations", ...args),
-  discoverCollections: (...args) => invoke("discoverCollections", ...args),
-  getAssetLocation: (...args) => invoke("getAssetLocation", ...args),
-  clearAiLocation: (...args) => invoke("clearAiLocation", ...args),
-  getFacetValues: (...args) => invoke("getFacetValues", ...args),
-  searchFacet: (...args) => invoke("searchFacet", ...args),
-  getAssetDetail: (...args) => invoke("getAssetDetail", ...args),
-  getAssetDetailById: (...args) => invoke("getAssetDetailById", ...args),
-  ensureHdPreviews: (...args) => invoke("ensureHdPreviews", ...args),
-  regeneratePreviews: (...args) => invoke("regeneratePreviews", ...args),
-  refreshAssets: (...args) => invoke("refreshAssets", ...args),
-  detectEditors: (...args) => invoke("detectEditors", ...args),
-  openInEditor: (...args) => invoke("openInEditor", ...args),
-  getWatchedDirs: (...args) => invoke("getWatchedDirs", ...args),
-  addWatchedDir: (...args) => invoke("addWatchedDir", ...args),
-  removeWatchedDir: (...args) => invoke("removeWatchedDir", ...args),
-  statDirs: (...args) => invoke("statDirs", ...args),
   onWatchedImport: (cb) => window.mediaWorkspace?.onWatchedImport?.(cb),
-  verifyAssets: (...args) => invoke("verifyAssets", ...args),
-  relinkAsset: (...args) => invoke("relinkAsset", ...args),
   getInitialLocale: (...args) => invoke("getInitialLocale", ...args),
-  setLocale: (...args) => invoke("setLocale", ...args),
-  exportSettings: (...args) => invoke("exportSettings", ...args),
-  inspectSettingsImport: (...args) => invoke("inspectSettingsImport", ...args),
-  applySettingsImport: (...args) => invoke("applySettingsImport", ...args),
-  cancelSettingsImport: (...args) => invoke("cancelSettingsImport", ...args),
-  getPending: (...args) => invoke("getPending", ...args),
-  quickRegister: (...args) => invoke("quickRegister", ...args),
-  getCollageSources: (...args) => invoke("getCollageSources", ...args),
-  scanNewMedia: (...args) => invoke("scanNewMedia", ...args),
-  getFrameLogos: (...args) => invoke("getFrameLogos", ...args),
-  deleteImageAssets: (...args) => invoke("deleteImageAssets", ...args),
-  deleteImageAssetsFromDisk: (...args) => invoke("deleteImageAssetsFromDisk", ...args),
-  setAssetRating: (...args) => invoke("setAssetRating", ...args),
-  saveImage: (...args) => invoke("saveImage", ...args),
-  processAndSave: (...args) => invoke("processAndSave", ...args),
-  processAndSavePanels: (...args) => invoke("processAndSavePanels", ...args),
-  listSystemFonts: (...args) => invoke("listSystemFonts", ...args),
-  startNativeDrag: (...args) => invoke("startNativeDrag", ...args),
-
-  // ── collections ──
-  reorderCollections: (...args) => invoke("reorderCollections", ...args),
-  listCollections: (...args) => invoke("listCollections", ...args),
-  createCollection: (...args) => invoke("createCollection", ...args),
-  updateCollection: (...args) => invoke("updateCollection", ...args),
-  deleteCollection: (...args) => invoke("deleteCollection", ...args),
-  collectionAddItems: (...args) => invoke("collectionAddItems", ...args),
-  collectionRemoveItems: (...args) => invoke("collectionRemoveItems", ...args),
-  browseCollection: (...args) => invoke("browseCollection", ...args),
-
-  // ── jobs ──
-  getImportStatus: (...args) => invoke("getImportStatus", ...args),
-  startImport: (...args) => invoke("startImport", ...args),
-  getEnrichmentStatus: (...args) => invoke("getEnrichmentStatus", ...args),
-  startEnrichment: (...args) => invoke("startEnrichment", ...args),
-  getPreviewStatus: (...args) => invoke("getPreviewStatus", ...args),
-  startPreviewGeneration: (...args) => invoke("startPreviewGeneration", ...args),
-  getActiveJobs: (...args) => invoke("getActiveJobs", ...args),
-  cancelJob: (...args) => invoke("cancelJob", ...args),
-  pauseJob: (...args) => invoke("pauseJob", ...args),
-  resumeJob: (...args) => invoke("resumeJob", ...args),
-
-  // ── annotation ──
-  getAnnotationSettings: (...args) => invoke("getAnnotationSettings", ...args),
-  saveAnnotationSettings: (...args) => invoke("saveAnnotationSettings", ...args),
-  getAnnotationKey: (...args) => invoke("getAnnotationKey", ...args),
-  setAnnotationKey: (...args) => invoke("setAnnotationKey", ...args),
-  deleteAnnotationKey: (...args) => invoke("deleteAnnotationKey", ...args),
-  annotateAsset: (...args) => invoke("annotateAsset", ...args),
-  startAnnotationJob: (...args) => invoke("startAnnotationJob", ...args),
-  getAnnotationJobStatus: (...args) => invoke("getAnnotationJobStatus", ...args),
-  countAnnotationTargets: (...args) => invoke("countAnnotationTargets", ...args),
-  getAnnotation: (...args) => invoke("getAnnotation", ...args),
-  addAssetTag: (...args) => invoke("addAssetTag", ...args),
-  removeAssetTag: (...args) => invoke("removeAssetTag", ...args),
-  listTags: (...args) => invoke("listTags", ...args),
-  testAnnotationConnection: (...args) => invoke("testAnnotationConnection", ...args),
-  listAnnotationModels: (...args) => invoke("listAnnotationModels", ...args),
-
-  // ── ai repaint ──
-  getAiProviderToken: (...args) => invoke("getAiProviderToken", ...args),
-  setAiProviderToken: (...args) => invoke("setAiProviderToken", ...args),
-  deleteAiProviderToken: (...args) => invoke("deleteAiProviderToken", ...args),
-  getAiPreferences: (...args) => invoke("getAiPreferences", ...args),
-  saveAiPreferences: (...args) => invoke("saveAiPreferences", ...args),
-  getAiRepaintStatus: (...args) => invoke("getAiRepaintStatus", ...args),
-  startAiRepaint: (...args) => invoke("startAiRepaint", ...args),
-  listAiModels: (...args) => invoke("listAiModels", ...args),
-  listRepaintHistory: (...args) => invoke("listRepaintHistory", ...args),
-  getAiStyles: (...args) => invoke("getAiStyles", ...args),
-  saveAiStyles: (...args) => invoke("saveAiStyles", ...args),
-  getTextImageStatus: (...args) => invoke("getTextImageStatus", ...args),
-  startTextImage: (...args) => invoke("startTextImage", ...args),
-  pickHandwritingRef: (...args) => invoke("pickHandwritingRef", ...args),
-  getHandwritingPresetRef: (...args) => invoke("getHandwritingPresetRef", ...args),
-
-  // ── stickers / depth / misc ──
-  computeDepth: (...args) => invoke("computeDepth", ...args),
-  getDepthModel: (...args) => invoke("getDepthModel", ...args),
-  pickDepthModel: (...args) => invoke("pickDepthModel", ...args),
-  resetDepthModel: (...args) => invoke("resetDepthModel", ...args),
-  getPeopleSettings: (...args) => invoke("getPeopleSettings", ...args),
-  setPeopleAutomaticDownloads: (...args) => invoke("setPeopleAutomaticDownloads", ...args),
-  pickPeopleModel: (...args) => invoke("pickPeopleModel", ...args),
-  downloadOfficialPeopleModel: (...args) => invoke("downloadOfficialPeopleModel", ...args),
-  setActivePeopleModel: (...args) => invoke("setActivePeopleModel", ...args),
-  removePeopleModel: (...args) => invoke("removePeopleModel", ...args),
-  startPeopleIndex: (...args) => invoke("startPeopleIndex", ...args),
-  getPeopleIndexStatus: (...args) => invoke("getPeopleIndexStatus", ...args),
-  listPeopleGroups: (...args) => invoke("listPeopleGroups", ...args),
-  peopleGroupDetail: (...args) => invoke("peopleGroupDetail", ...args),
-  similarPeopleGroups: (...args) => invoke("similarPeopleGroups", ...args),
-  renamePeopleGroup: (...args) => invoke("renamePeopleGroup", ...args),
-  setPeopleGroupCover: (...args) => invoke("setPeopleGroupCover", ...args),
-  setPeopleGroupState: (...args) => invoke("setPeopleGroupState", ...args),
-  setPeopleGroupsState: (...args) => invoke("setPeopleGroupsState", ...args),
-  mergePeopleGroups: (...args) => invoke("mergePeopleGroups", ...args),
-  removeFaceFromPerson: (...args) => invoke("removeFaceFromPerson", ...args),
-  assignFaceToPerson: (...args) => invoke("assignFaceToPerson", ...args),
-  stickerList: (...args) => invoke("stickerList", ...args),
-  stickerDetect: (...args) => invoke("stickerDetect", ...args),
-  stickerSave: (...args) => invoke("stickerSave", ...args),
-  stickerDelete: (...args) => invoke("stickerDelete", ...args),
-  stickerToggleStar: (...args) => invoke("stickerToggleStar", ...args),
-  stickerCleanupScratch: (...args) => invoke("stickerCleanupScratch", ...args),
 };
+
+for (const method of IPC_METHOD_NAMES) {
+  api[method] = (...args) => invoke(method, ...args);
+}
 
 export default api;
