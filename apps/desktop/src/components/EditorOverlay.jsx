@@ -860,6 +860,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         imageOffsetY: s.imageOffsetY,
         hasCrop: !!s.cropRect,
         cropRect: s.cropRect,
+        // The crop as of the latest committed render — what buildSaveArgs
+        // (and therefore a backdoor save) actually exports. `s.cropRect`
+        // above is the ref, updated synchronously by record(); polling it can
+        // pass a frame before the render that the save path reads.
+        cropRectRendered: cropRect,
         // `layers` is the STORED (full-photo) basis; `displayLayers` is the
         // derived current-basis position shown on screen.
         layers: layers.map((l) => ({

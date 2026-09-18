@@ -409,6 +409,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                 return (
                   <button
                     key={item.asset_id}
+                    data-picker-item={item.asset_id}
                     type="button"
                     disabled={used}
                     title={used ? t("alreadyAdded") : undefined}
