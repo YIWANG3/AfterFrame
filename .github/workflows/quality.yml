@@ -70,9 +70,10 @@ jobs:
       # The save / people suites were once excluded as "slow I/O"; the real
       # cause was the seeded catalog's absolute paths (fixed in #57), so they
       # are back. 02-navigation was excluded for the "Rated" race; the cause
-      # was setStatusFilter's unforced browse being dropped while a background
-      # refresh was in flight (fixed with 44's identical failure), so it is
-      # back too. Opt-in suites (27-agent, demo) skip themselves.
+      # was refreshAll browsing the scope it was called with after six status
+      # IPC awaits, so an older click (or a job-finished refresh) could land
+      # last and win (#68, with 44's identical failure), so it is back too.
+      # Opt-in suites (27-agent, demo) skip themselves.
       - name: Run Electron E2E (CI subset)
         run: >
           npm run e2e:only --prefix apps/desktop --
