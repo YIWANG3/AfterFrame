@@ -660,7 +660,11 @@ export default function useWorkspace({ pushToast } = {}) {
     // Carry the caller's exact next filters through the async summary refresh.
     // Otherwise refreshAll can resume later with this render's stale person
     // filter and overwrite a newer unfiltered gallery response.
-    void refreshAll({ nextStatus: next, collectionId: null, facetFilters });
+    // force: a user's scope switch must win over whatever browse is already in
+    // flight (a catalog-changed refresh keeps the old scope). Without it the
+    // click was dropped by loadBrowser's busy guard and the gallery kept the
+    // previous scope — the 02/44 "Rated" race on the CI VM.
+    void refreshAll({ nextStatus: next, collectionId: null, facetFilters, force: true });
   }
 
   function clearCollection(options = {}) {
