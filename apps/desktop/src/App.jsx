@@ -560,6 +560,20 @@ export default function App() {
           if (s?.autoOnImport) runAnnotation(null, { scope: "all", onlyMissing: true });
         } catch { /* ignore */ }
       })();
+      // Auto-analyze faces on import. Already-indexed photos are skipped by
+      // the job, and a running people job is returned instead of doubled up.
+      // Without an installed model this stays silent: the toggle is opt-in and
+      // an import must never end in an error about a feature the user didn't ask for.
+      if (api.can("people")) {
+        void (async () => {
+          try {
+            const p = await api.getPeopleSettings();
+            if (!p?.autoIndexOnImport || !p.activeModel?.available) return;
+            const started = await api.startPeopleIndex({ priority: 1 });
+            window.dispatchEvent(new CustomEvent("people-index:started", { detail: started }));
+          } catch { /* ignore */ }
+        })();
+      }
     } else if (fin.status === "failed" && fin.jobType !== "ai_repaint") {
       // Generic failure surfacing for the other job types (the editor handles
       // ai_repaint errors inline).
