@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
 import {
-  browseScopeKey, chooseSelectionAfterReload, filterItemsByQuery, shouldResetScopeForReveal,
+  DEFAULT_SCOPE, chooseSelectionAfterReload, filterItemsByQuery, scopeKeyOf, shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
@@ -25,10 +25,20 @@ export default function useWorkspace({ pushToast } = {}) {
   const [roots, setRoots] = useState([]);
   const [items, setItems] = useState([]);
   const [detail, setDetail] = useState(null);
-  const [status, setStatus] = useState("all");
-  const [sort, setSort] = useState("imported-desc");
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState({}); // structured facet filters
+  // The browse destination is ONE value. Every way of changing what the grid
+  // shows (sidebar status, a collection, typed search, facet chips, sort, the
+  // Discover tiles, a person, an agent reveal) writes this object; one effect
+  // below browses it. Nothing reads status/filters/query as separate state
+  // across an await any more — that is what let a background refresh, or an
+  // older click, land last with a scope the user had already left (#68).
+  const [scope, setScopeState] = useState(DEFAULT_SCOPE);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const updateScope = useCallback((patch) => setScopeState((current) => ({ ...current, ...patch })), []);
+  const replaceScope = useCallback((next) => setScopeState({ ...DEFAULT_SCOPE, ...next }), []);
+  // What the search box holds. It narrows the current page locally at once and
+  // becomes scope.query after the debounce.
+  const [typedQuery, setTypedQuery] = useState("");
   const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
   const [selectedAssetId, setSelectedAssetIdState] = useState(null);
   const selectedAssetIdRef = useRef(null);
@@ -64,7 +74,6 @@ export default function useWorkspace({ pushToast } = {}) {
   const [enrichmentTask, setEnrichmentTask] = useState(null);
   const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [], auto: false });
   const [collections, setCollections] = useState([]);
-  const [activeCollectionId, setActiveCollectionId] = useState(null);
   // Monotonic catalog-content revision: bumped on every refreshAll, every
   // catalog-changed event (imports, metadata refresh, agent writes) AND every
   // in-UI mutation below (deletes, collection membership, ratings) — those
@@ -73,12 +82,17 @@ export default function useWorkspace({ pushToast } = {}) {
   // COUNTS can stay identical across real changes, so counting is not enough.
   const [catalogRevision, setCatalogRevision] = useState(0);
   const bumpCatalogRevision = () => setCatalogRevision((revision) => revision + 1);
+  // Supersession: every browse takes the next id; a response whose id is no
+  // longer current is dropped. The later request always wins, whoever sent it.
   const browserRequestIdRef = useRef(0);
-  const loadedBrowserScopeRef = useRef(null);
-  const explicitlyLoadedFiltersRef = useRef(null);
-  // While an agent-driven reveal resets query/filters/status, the reload
-  // effects below must not fire — the reveal does one imperative load itself.
-  const suppressAutoReloadUntilRef = useRef(0);
+  // Key of the scope the grid currently shows. The browse effect compares the
+  // rendered scope against it; a reveal that loads a scope itself sets it
+  // first so the effect does not browse the same destination again.
+  const loadedScopeRef = useRef(null);
+  // A reveal in flight owns the gallery: background catalog-changed refreshes
+  // must not supersede it mid-way ("Selected N photos" with nothing selected).
+  // User scope changes still win — they go through the effect, not this gate.
+  const revealRef = useRef(null);
 
   const rawDirs = useMemo(
     () => roots.filter((item) => item.root_type === "raw").map((item) => item.path),
@@ -92,17 +106,6 @@ export default function useWorkspace({ pushToast } = {}) {
   // Unified job polling lives in useJobs; domain reactions flow through this
   // bridge ref (reassigned every render → the timer never sees stale closures).
   const jobsBridgeRef = useRef({});
-  // Reuse this existing stable ref for debounced browse context too. Adding a
-  // new Hook here during Vite Fast Refresh can leave React's development Hook
-  // queue out of sync and crash the renderer until a full reload.
-  jobsBridgeRef.browseContext = { status, activeCollectionId, query, filters, sort };
-  // Every explicit scope change bumps this. refreshAll waits on six status
-  // IPC calls before it browses; two clicks in a row (Recently Added, then
-  // Rated) resolve in sidecar order, not click order, so the older click's
-  // browse could land last and win. A refresh that resumes after a newer
-  // intent browses the latest scope instead of the one it was called with.
-  jobsBridgeRef.browseIntent ??= 0;
-  const bumpBrowseIntent = () => { jobsBridgeRef.browseIntent += 1; };
   jobsBridgeRef.current = {
     refreshAll: (opts) => refreshAll(opts),
     startIncrementalImport: (opts) => startIncrementalImport(opts),
@@ -162,62 +165,29 @@ export default function useWorkspace({ pushToast } = {}) {
   // so typing feels instant during the 250ms search debounce. The server result
   // then replaces `items` wholesale. Field list + the superset invariant live
   // in workspaceLogic.searchableFields.
-  const filteredItems = useMemo(() => filterItemsByQuery(items, query), [items, query]);
+  const filteredItems = useMemo(() => filterItemsByQuery(items, typedQuery), [items, typedQuery]);
 
-  // Debounced server-side search: reload browser when query changes
+  // Typed search → scope.query after 250ms. Programmatic scope changes set
+  // both at once (browseTo, reveals), so this only fires for keystrokes. The
+  // timer is kept in a ref so a reveal can cancel it: a click on a related
+  // version while the search is still debouncing must not be overridden by
+  // that search landing 200 ms later.
   const searchTimerRef = useRef(null);
   useEffect(() => {
-    if (!browserReady) return;
-    if (Date.now() < suppressAutoReloadUntilRef.current) return;
-    clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      if (Date.now() < suppressAutoReloadUntilRef.current) return;
-      const context = jobsBridgeRef.browseContext;
-      void loadBrowser({
-        nextStatus: context.status,
-        collectionId: context.activeCollectionId,
-        search: context.query.trim() || null,
-        facetFilters: context.filters,
-        sortKey: context.sort,
-        force: true,
-      });
-    }, 250);
+    if (typedQuery.trim() === scopeRef.current.query.trim()) return undefined;
+    searchTimerRef.current = setTimeout(() => updateScope({ query: typedQuery }), 250);
     return () => clearTimeout(searchTimerRef.current);
-    // Fires on the typed query only. loadBrowser is recreated every render and
-    // browserReady is a gate, not a trigger — listing either would re-browse
-    // on unrelated renders. The current scope is read through jobsBridgeRef.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [typedQuery, updateScope]);
 
-  // Reload from backend when sort changes
-  useEffect(() => {
-    if (!browserReady) return;
-    if (Date.now() < suppressAutoReloadUntilRef.current) return;
-    void loadBrowser({ force: true, sortKey: sort });
-    // Sort change only — see the query effect above for why not loadBrowser.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
-
-  // Reload when structured facet filters change
-  useEffect(() => {
-    // UI actions already send the browse with their new filters immediately.
-    // Do not enqueue the same expensive query again on the serial sidecar.
-    if (explicitlyLoadedFiltersRef.current === filters) {
-      explicitlyLoadedFiltersRef.current = null;
-      return;
-    }
-    if (!browserReady) {
-      console.warn("[filters-effect] skipped: browser not ready", JSON.stringify(filters));
-      return;
-    }
-    if (Date.now() < suppressAutoReloadUntilRef.current) {
-      console.warn("[filters-effect] skipped: auto-reload suppressed", JSON.stringify(filters));
-      return;
-    }
-    void loadBrowser({ force: true, facetFilters: filters });
-    // Filter change only — see the query effect above for why not loadBrowser.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  // The one place a scope change turns into a browse. Runs after the render
+  // that committed the new scope, so it always browses what the user sees in
+  // the sidebar/chips/toolbar — never a value captured before an await.
+  const scopeKey = useMemo(() => scopeKeyOf(scope), [scope]);
+  const browseCurrentScope = useEffectEvent(() => {
+    if (scopeKey === loadedScopeRef.current) return;
+    void loadBrowser({ scope: scopeRef.current });
+  });
+  useEffect(() => { browseCurrentScope(); }, [scopeKey]);
 
   // Refresh facet options when the catalog/library changes
   useEffect(() => {
@@ -245,15 +215,12 @@ export default function useWorkspace({ pushToast } = {}) {
     if (requestId === detailRequestRef.current) setDetail(payload);
   }
 
-  // Defaults come from the bridge ref (the latest render), not this render's
-  // closure. Background callers hold on to an older instance across awaits —
-  // useJobs captures the bridge before polling the sidecar — and a stale
-  // default status/filters quietly browsed the scope the user had just left
-  // (02-navigation: Rated → 14 items on the CI VM).
-  async function loadBrowser({ nextStatus = jobsBridgeRef.browseContext.status, append = false, collectionId = jobsBridgeRef.browseContext.activeCollectionId, search = jobsBridgeRef.browseContext.query.trim() || undefined, force = false, sortKey = jobsBridgeRef.browseContext.sort, facetFilters = jobsBridgeRef.browseContext.filters, preserveView = false } = {}) {
-    if (!force && (append ? browserLoadingMore || browserLoading || !browserHasMore : browserLoading)) {
-      return;
-    }
+  // `scope` is always explicit: the caller says what to browse, this function
+  // never fills it in from a closure. append continues the current page set;
+  // preserveView re-fetches everything already paged through so a background
+  // refresh keeps the scroll position and selection.
+  async function loadBrowser({ scope: target, append = false, preserveView = false }) {
+    if (append && (browserLoadingMore || browserLoading || !browserHasMore)) return;
     const requestId = browserRequestIdRef.current + 1;
     browserRequestIdRef.current = requestId;
     if (append) {
@@ -264,27 +231,25 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     try {
       const nextOffset = append ? browserOffset : 0;
-      // Background refreshes (preserveView) re-fetch everything the user has
-      // already paged through, so their scroll position and selection survive
-      // instead of being reset to page 1.
       const pageLimit = preserveView ? Math.max(PAGE_SIZE, browserOffset) : PAGE_SIZE;
-      const activeFilters = facetFilters && Object.keys(facetFilters).length ? facetFilters : undefined;
+      const search = target.query.trim() || undefined;
+      const activeFilters = target.filters && Object.keys(target.filters).length ? target.filters : undefined;
       if (activeFilters?.person_group) {
-        console.log("[browse] person filter request", JSON.stringify({ status: nextStatus, collectionId, filters: activeFilters }));
+        console.log("[browse] person filter request", JSON.stringify({ status: target.status, collectionId: target.collectionId, filters: activeFilters }));
       }
       let payload;
-      if (collectionId) {
-        payload = await api.browseCollection(collectionId, {
+      if (target.collectionId) {
+        payload = await api.browseCollection(target.collectionId, {
           limit: pageLimit,
           offset: nextOffset,
         });
       } else {
         payload = await api.browseImages({
-          status: nextStatus,
+          status: target.status,
           limit: pageLimit,
           offset: nextOffset,
-          search: search || undefined,
-          sort: sortKey || undefined,
+          search,
+          sort: target.sort || undefined,
           filters: activeFilters,
         });
       }
@@ -293,7 +258,7 @@ export default function useWorkspace({ pushToast } = {}) {
           browserRequestIdRef.current === requestId ? "(current)" : "(SUPERSEDED — discarded)");
       }
       if (browserRequestIdRef.current !== requestId) return;
-      loadedBrowserScopeRef.current = browseScopeKey({ status: nextStatus, collectionId, search, sort: sortKey, filters: facetFilters });
+      loadedScopeRef.current = scopeKeyOf(target);
       seedAnnotations(payload);
       setBrowserOffset(nextOffset + payload.length);
       setBrowserHasMore(payload.length === (append ? PAGE_SIZE : pageLimit));
@@ -326,20 +291,24 @@ export default function useWorkspace({ pushToast } = {}) {
     }
   }
 
+  // Re-browse what the grid shows, keeping scroll and selection. Background
+  // callers (jobs, catalog-changed, addToCollection) use this.
+  const refreshBrowse = () => loadBrowser({ scope: scopeRef.current, preserveView: true });
+
   // Agent write tools (MCP update_assets / manage_collections) mutated the
   // catalog out-of-band — refresh the affected views. Ref pattern so the IPC
   // listener registers once but always sees fresh closures.
   const [lastAgentChange, setLastAgentChange] = useState(null);
   const catalogChangedRef = useRef(null);
   catalogChangedRef.current = (payload) => {
-    const scope = payload?.scope;
+    const scope_ = payload?.scope;
     setCatalogRevision((revision) => revision + 1);
     // Surface agent writes as a toast (jobs excluded — JobDock already shows
     // those). App.jsx watches lastAgentChange.
-    if (payload?.reason === "agent" && scope !== "jobs") {
-      setLastAgentChange({ scope, ids: payload?.ids || null, at: Date.now() });
+    if (payload?.reason === "agent" && scope_ !== "jobs") {
+      setLastAgentChange({ scope: scope_, ids: payload?.ids || null, at: Date.now() });
     }
-    if (scope === "jobs") {
+    if (scope_ === "jobs") {
       // Agent started/cancelled a background job — wake the polling loop so
       // JobDock picks it up (it self-stops when no jobs are known active).
       // Seeding with the job id guarantees finish side effects (refresh,
@@ -348,19 +317,14 @@ export default function useWorkspace({ pushToast } = {}) {
       pokeJobs(payload?.jobId ? { jobId: payload.jobId, jobType: payload.jobType } : undefined);
       return;
     }
-    if (scope === "collections") {
+    if (scope_ === "collections") {
       void loadCollections();
-      if (activeCollectionId && Date.now() >= suppressAutoReloadUntilRef.current) {
-        void loadBrowser({ force: true, preserveView: true });
-      }
+      if (scopeRef.current.collectionId && !revealRef.current) void refreshBrowse();
       return;
     }
-    // During an agent reveal the reveal's own imperative load supersedes this
-    // refresh — a forced reload here would bump the request id and cancel the
-    // reveal mid-flight ("Selected N photos" toast with nothing selected).
-    if (Date.now() < suppressAutoReloadUntilRef.current) return;
+    if (revealRef.current) return;
     invalidateAnnotations();
-    void loadBrowser({ force: true, preserveView: true });
+    void refreshBrowse();
     // Asset writes move the sidebar counts too (delete_assets, crops adding
     // versions); the gallery alone reloading left "All Assets N" stale.
     void api.getSummary().then(setSummary).catch(() => {});
@@ -368,6 +332,14 @@ export default function useWorkspace({ pushToast } = {}) {
   useEffect(() => {
     return api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));
   }, []);
+
+  // A reveal loads a destination itself, then installs it as the scope: the
+  // loaded key is set first so the browse effect sees "already showing this".
+  function installLoadedScope(next) {
+    loadedScopeRef.current = scopeKeyOf(next);
+    setTypedQuery(next.query);
+    replaceScope(next);
+  }
 
   // Related versions are genuine gallery destinations, including later pages.
   // Locate using the same scope/order as browse, then fetch only the missing
@@ -380,31 +352,38 @@ export default function useWorkspace({ pushToast } = {}) {
     const log = (step, extra = "") => console.log(`[reveal] #${navigationId} ${step} +${Date.now() - startedAt}ms ${extra}`);
     log("start", assetId);
     setRelatedAssetId(assetId);
+    // Whatever is in the search box is part of the scope the user means, even
+    // if its debounce has not landed yet — locate inside it, and stop the
+    // debounce from browsing on its own behind this reveal.
     clearTimeout(searchTimerRef.current);
     const requestId = ++browserRequestIdRef.current;
-    const initialContext = JSON.stringify(jobsBridgeRef.browseContext);
+    const startScope = { ...scopeRef.current, query: typedQuery };
+    const startKey = scopeKeyOf(scopeRef.current);
+    // Superseded by a newer reveal, a newer browse, or a scope the user changed.
     const isCurrent = () => navigationId === relatedNavigationRef.current
       && requestId === browserRequestIdRef.current
-      && initialContext === JSON.stringify(jobsBridgeRef.browseContext);
+      && scopeKeyOf(scopeRef.current) === startKey;
+    revealRef.current = navigationId;
     setBrowserLoading(true);
     setBrowserLoadingMore(false);
     try {
-      let scope = { status, collectionId: activeCollectionId, search: query.trim() || undefined, sort, filters };
-      const sameLoadedScope = loadedBrowserScopeRef.current === browseScopeKey(scope);
+      const asQuery = (s) => ({ status: s.status, collectionId: s.collectionId, search: s.query.trim() || undefined, sort: s.sort, filters: s.filters });
+      let target = startScope;
+      const sameLoadedScope = loadedScopeRef.current === scopeKeyOf(startScope);
       if (sameLoadedScope && filteredItems.some((item) => item.asset_id === assetId)) {
         log("already loaded");
         setRevealAssetRequest({ assetId, navigationId });
         return;
       }
-      let location = await api.locateImageAsset({ assetId, ...scope });
+      let location = await api.locateImageAsset({ assetId, ...asQuery(target) });
       log("located", JSON.stringify(location));
       if (!isCurrent()) { log("superseded after locate"); return; }
       const resetScope = shouldResetScopeForReveal({
-        locationIndex: location.index, query, items, filteredItems, assetId,
+        locationIndex: location.index, query: typedQuery, items, filteredItems, assetId,
       });
       if (resetScope) {
-        scope = { status: "all", sort };
-        location = await api.locateImageAsset({ assetId, ...scope });
+        target = { ...DEFAULT_SCOPE, sort: startScope.sort };
+        location = await api.locateImageAsset({ assetId, ...asQuery(target) });
         log("located in all", JSON.stringify(location));
         if (!isCurrent()) { log("superseded after relocate"); return; }
       }
@@ -412,25 +391,18 @@ export default function useWorkspace({ pushToast } = {}) {
       const limit = Math.ceil((location.index + 1) / PAGE_SIZE) * PAGE_SIZE;
       const offset = resetScope || !sameLoadedScope ? 0 : browserOffset;
       const count = Math.max(0, limit - offset);
-      const payload = count === 0 ? [] : scope.collectionId
-        ? await api.browseCollection(scope.collectionId, { limit: count, offset })
-        : await api.browseImages({ ...scope, limit: count, offset });
+      const payload = count === 0 ? [] : target.collectionId
+        ? await api.browseCollection(target.collectionId, { limit: count, offset })
+        : await api.browseImages({ ...asQuery(target), limit: count, offset });
       log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
       if (!isCurrent()) { log("superseded after page"); return; }
       const nextItems = offset === 0 ? payload : [...items, ...payload];
       if (!nextItems.some((item) => item.asset_id === assetId)) throw new Error(t("relatedAsset.missing"));
-      if (resetScope) {
-        // The explicit result below owns this scope change, not the reload effects.
-        suppressAutoReloadUntilRef.current = Date.now() + 1500;
-        clearTimeout(searchTimerRef.current);
-        setActiveCollectionId(null);
-        setQuery("");
-        setFilters({});
-        setStatus("all");
-        pushToast?.({ title: t("relatedAsset.showingAll"), ttl: 4000 });
-      }
+      // Either way the scope the grid now shows becomes THE scope — including
+      // the absorbed search text, so the box and the grid agree.
+      installLoadedScope(target);
+      if (resetScope) pushToast?.({ title: t("relatedAsset.showingAll"), ttl: 4000 });
       seedAnnotations(payload);
-      loadedBrowserScopeRef.current = browseScopeKey(scope);
       setItems(nextItems);
       setRevealAssetRequest({ assetId, navigationId });
       setBrowserOffset(nextItems.length);
@@ -441,6 +413,7 @@ export default function useWorkspace({ pushToast } = {}) {
       log("failed", error?.message || String(error));
       if (isCurrent()) pushToast?.({ title: t("relatedAsset.failed"), message: error.message, tone: "error", ttl: 6000 });
     } finally {
+      if (revealRef.current === navigationId) revealRef.current = null;
       if (requestId === browserRequestIdRef.current) setBrowserLoading(false);
     }
   }
@@ -451,13 +424,11 @@ export default function useWorkspace({ pushToast } = {}) {
   async function revealAssets(assetIds) {
     const wanted = new Set((assetIds || []).filter(Boolean));
     if (!wanted.size) return { found: [], missing: [] };
-    suppressAutoReloadUntilRef.current = Date.now() + 1500;
-    setActiveCollectionId(null);
-    setQuery("");
-    setFilters({});
-    setStatus("all");
+    const target = { ...DEFAULT_SCOPE, sort: scopeRef.current.sort };
+    installLoadedScope(target);
     const requestId = browserRequestIdRef.current + 1;
     browserRequestIdRef.current = requestId;
+    revealRef.current = requestId;
     setBrowserLoading(true);
     try {
       const MAX_PAGES = 12; // bounded: scans at most MAX_PAGES * PAGE_SIZE assets
@@ -470,7 +441,7 @@ export default function useWorkspace({ pushToast } = {}) {
           status: "all",
           limit: PAGE_SIZE,
           offset,
-          sort: sort || undefined,
+          sort: target.sort || undefined,
         });
         collected.push(...payload);
         offset += payload.length;
@@ -498,12 +469,13 @@ export default function useWorkspace({ pushToast } = {}) {
       }
       return { found, missing: [...wanted] };
     } finally {
+      if (revealRef.current === requestId) revealRef.current = null;
       setBrowserLoading(false);
     }
   }
 
   async function loadMoreBrowser() {
-    await loadBrowser({ nextStatus: status, append: true, search: query.trim() || undefined, facetFilters: filters });
+    await loadBrowser({ scope: scopeRef.current, append: true });
   }
 
   async function loadCollections() {
@@ -551,9 +523,7 @@ export default function useWorkspace({ pushToast } = {}) {
   async function deleteCollection(collectionId) {
     await api.deleteCollection(collectionId);
     bumpCatalogRevision();
-    if (activeCollectionId === collectionId) {
-      setActiveCollectionId(null);
-    }
+    if (scopeRef.current.collectionId === collectionId) updateScope({ collectionId: null });
     await loadCollections();
   }
 
@@ -561,8 +531,8 @@ export default function useWorkspace({ pushToast } = {}) {
     await api.collectionAddItems(collectionId, assetIds);
     bumpCatalogRevision();
     await loadCollections();
-    if (activeCollectionId === collectionId) {
-      await loadBrowser({ collectionId });
+    if (scopeRef.current.collectionId === collectionId) {
+      await refreshBrowse();
     }
   }
 
@@ -572,7 +542,7 @@ export default function useWorkspace({ pushToast } = {}) {
     await api.collectionRemoveItems(collectionId, targetIds);
     bumpCatalogRevision();
     await loadCollections();
-    if (activeCollectionId === collectionId) {
+    if (scopeRef.current.collectionId === collectionId) {
       const removedSet = new Set(targetIds);
       setItems((current) => current.filter((item) => !removedSet.has(item.asset_id)));
     }
@@ -658,78 +628,44 @@ export default function useWorkspace({ pushToast } = {}) {
     bumpCatalogRevision();
   }
 
+  // ── scope changes: each one is a write to `scope`; the effect browses ──
+
   function selectCollection(collectionId) {
-    bumpBrowseIntent();
-    setActiveCollectionId(collectionId);
-    void loadBrowser({ collectionId, force: true });
+    updateScope({ collectionId });
   }
 
   // Status filters and collections are mutually exclusive views. This owns
   // that invariant — callers must not have to remember to clear the
   // collection themselves (pagination/reloads would silently mix datasets).
-  function setStatusFilter(next, { facetFilters = filters } = {}) {
-    bumpBrowseIntent();
-    setActiveCollectionId(null);
-    setStatus(next);
-    // Carry the caller's exact next filters through the async summary refresh.
-    // Otherwise refreshAll can resume later with this render's stale person
-    // filter and overwrite a newer unfiltered gallery response.
-    // force: a user's scope switch must win over whatever browse is already in
-    // flight (a catalog-changed refresh keeps the old scope). Without it the
-    // click was dropped by loadBrowser's busy guard and the gallery kept the
-    // previous scope — the 02/44 "Rated" race on the CI VM.
-    void refreshAll({ nextStatus: next, collectionId: null, facetFilters, force: true });
+  function setStatusFilter(next, { facetFilters } = {}) {
+    updateScope(facetFilters ? { status: next, collectionId: null, filters: facetFilters } : { status: next, collectionId: null });
+    // The sidebar counts next to the entry the user just clicked.
+    void api.getSummary().then(setSummary).catch(() => {});
   }
 
-  function clearCollection(options = {}) {
-    const { reload = true } = options;
-    if (!activeCollectionId) return;
-    bumpBrowseIntent();
-    setActiveCollectionId(null);
-    if (reload) {
-      void loadBrowser({ collectionId: null });
-    }
+  // reload: false leaves the grid as it is (the caller is switching to a view
+  // that is not the gallery) — the new scope is marked as already shown.
+  function clearCollection({ reload = true } = {}) {
+    const current = scopeRef.current;
+    if (!current.collectionId) return;
+    if (!reload) loadedScopeRef.current = scopeKeyOf({ ...current, collectionId: null });
+    updateScope({ collectionId: null });
   }
 
-  // Enter the gallery for one person as a single, explicit browse operation.
-  // Updating React state alone leaves the reload effect to reconstruct the
-  // intended context across separate status/collection/filter updates.
+  // Opening a person is a new browse destination, not an intersection with a
+  // stale text query/date/tag/rating filter from the previous gallery.
   function filterByPerson(groupId) {
     if (!groupId) return;
-    bumpBrowseIntent();
-    // Opening a person is a new browse destination, not an intersection with
-    // a stale text query/date/tag/rating filter from the previous gallery.
-    // Keeping any of those made a valid person group appear mysteriously empty.
-    const nextFilters = { person_group: groupId };
-    setActiveCollectionId(null);
-    setStatus("all");
-    setQuery("");
-    explicitlyLoadedFiltersRef.current = nextFilters;
-    setFilters(nextFilters);
-    void loadBrowser({
-      nextStatus: "all",
-      collectionId: null,
-      // `undefined` would trigger loadBrowser's default (the stale query from
-      // this render); null explicitly disables search for this request.
-      search: null,
-      facetFilters: nextFilters,
-      force: true,
-    });
+    setTypedQuery("");
+    replaceScope({ filters: { person_group: groupId }, sort: scopeRef.current.sort });
   }
 
   // Open the gallery as a fresh destination: collection, status, query and
   // facets are all replaced, never intersected with whatever the previous
   // gallery had (the Discover page's entries would otherwise inherit a stale
-  // person/date/map filter and open "empty"). One explicit browse, like
-  // filterByPerson.
-  function browseTo({ status: nextStatus = "all", filters: nextFilters = {}, collectionId = null, query: nextQuery = "" } = {}) {
-    bumpBrowseIntent();
-    const facetFilters = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
-    setActiveCollectionId(collectionId);
-    setStatus(nextStatus);
-    setQuery(nextQuery);
-    explicitlyLoadedFiltersRef.current = facetFilters;
-    setFilters(facetFilters);
+  // person/date/map filter and open "empty").
+  function browseTo({ status = "all", filters = {}, collectionId = null, query = "" } = {}) {
+    const facetFilters = filters && typeof filters === "object" ? filters : {};
     // Drop the previous gallery right away: the grid must not paint the old
     // result set (and the inspector the old selection) for the frames until
     // the new browse resolves — that flash reads as "wrong photos, then fixed".
@@ -737,35 +673,23 @@ export default function useWorkspace({ pushToast } = {}) {
     setBrowserOffset(0);
     setBrowserHasMore(true);
     setSelectedAssetId(null);
-    void loadBrowser({
-      nextStatus,
-      collectionId,
-      search: nextQuery.trim() || null,
-      facetFilters,
-      force: true,
-    });
+    setTypedQuery(query);
+    replaceScope({ status, collectionId, query, filters: facetFilters, sort: scopeRef.current.sort });
   }
 
-  // Filter controls need an immediate browse as well as a state update. The
-  // effect remains as a safety net for programmatic callers, but relying on it
-  // alone can leave the rendered chips ahead of the gallery during rapid view
-  // transitions (most visibly when clearing a person filter).
   function applyFilters(nextFilters) {
-    bumpBrowseIntent();
-    const next = nextFilters && typeof nextFilters === "object" ? nextFilters : {};
-    explicitlyLoadedFiltersRef.current = next;
-    setFilters(next);
-    void loadBrowser({ force: true, facetFilters: next });
+    updateScope({ filters: nextFilters && typeof nextFilters === "object" ? nextFilters : {} });
   }
 
-  async function refreshAll({
-    nextStatus = jobsBridgeRef.browseContext.status,
-    collectionId = jobsBridgeRef.browseContext.activeCollectionId,
-    force = false,
-    preserveView = false,
-    facetFilters = jobsBridgeRef.browseContext.filters,
-  } = {}) {
-    const intent = jobsBridgeRef.browseIntent;
+  // Status/summary/roots/tasks/collections, then the gallery. `scope` is
+  // explicit when the caller has just changed it (switchCatalog) — the
+  // rendered value would still be the old one. `force` is accepted for the
+  // callers that pass it; every browse supersedes the one before it now.
+  async function refreshAll({ preserveView = false, browse = true, scope: explicitScope = null } = {}) {
+    const target = explicitScope || scopeRef.current;
+    // Issue the browse first: it is the answer the user is waiting for, and
+    // the sidecar is serial.
+    const browsing = browse ? loadBrowser({ scope: target, preserveView }) : Promise.resolve();
     const [nextInfo, nextSummary, nextRoots, nextImportTask, nextPreviewTask, nextEnrichmentTask] = await Promise.all([
       api.getInfo(),
       api.getSummary(),
@@ -780,17 +704,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportTask(nextImportTask);
     setPreviewTask(nextPreviewTask);
     setEnrichmentTask(nextEnrichmentTask);
-    if (intent !== jobsBridgeRef.browseIntent) {
-      // A newer scope change owns the gallery now; its state has rendered.
-      const latest = jobsBridgeRef.browseContext;
-      nextStatus = latest.status;
-      collectionId = latest.activeCollectionId;
-      facetFilters = latest.filters;
-    }
-    await Promise.all([
-      loadCollections(),
-      loadBrowser({ nextStatus, collectionId, force, preserveView, facetFilters }),
-    ]);
+    await Promise.all([loadCollections(), browsing]);
     setCatalogRevision((revision) => revision + 1);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
@@ -929,13 +843,10 @@ export default function useWorkspace({ pushToast } = {}) {
 
   async function switchCatalog(nextCatalogPath) {
     await api.switchCatalog(nextCatalogPath ?? null);
-    bumpBrowseIntent();
-    setStatus("all");
-    setSort("imported-desc"); // matches the app-default sort (was name-asc — inconsistent)
-    setQuery("");
     // Facet filters reference catalog-local entities (person groups, tags) —
-    // carrying them across catalogs yields empty or nonsense views.
-    setFilters({});
+    // carrying them across catalogs yields empty or nonsense views. The sort
+    // resets too (app default).
+    installLoadedScope(DEFAULT_SCOPE);
     setItems([]);
     setDetail(null);
     setBrowserReady(false);
@@ -947,17 +858,15 @@ export default function useWorkspace({ pushToast } = {}) {
     setEnrichmentTask(null);
     setPendingImport({ rawDirs: [], imageDirs: [], auto: false });
     setCollections([]);
-    setActiveCollectionId(null);
     resetJobs();
-    await refreshAll({ nextStatus: "all", collectionId: null, facetFilters: {}, force: true });
+    await refreshAll({ scope: DEFAULT_SCOPE });
     pokeJobs();
   }
 
-  // Initial load, once. refreshAll closes over the current view state on
-  // purpose — re-running it whenever that state changes is what the targeted
-  // effects above are for.
+  // Initial load, once. The browse effect above does the first browse; this
+  // fetches everything else.
   useEffect(() => {
-    void refreshAll();
+    void refreshAll({ browse: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1057,7 +966,6 @@ export default function useWorkspace({ pushToast } = {}) {
     return api.onMenuAction((action) => menuActionRef.current?.(action));
   }, []);
 
-
   return {
     theme,
     setTheme,
@@ -1076,15 +984,18 @@ export default function useWorkspace({ pushToast } = {}) {
     setRelatedAssetId,
     revealRelatedAsset,
     revealAssetRequest,
-    status,
-    setStatus,
-    sort,
-    setSort,
-    query,
-    setQuery,
-    filters,
-    setFilters,
+    // The scope, exposed field by field for the toolbar/sidebar/filter bar,
+    // with setters that each write one field of it.
+    status: scope.status,
+    setStatus: (status) => updateScope({ status }),
+    sort: scope.sort,
+    setSort: (sort) => updateScope({ sort }),
+    query: typedQuery,
+    setQuery: setTypedQuery,
+    filters: scope.filters,
+    setFilters: applyFilters,
     applyFilters,
+    activeCollectionId: scope.collectionId,
     facetValues,
     browserLoading,
     browserReady,
@@ -1111,7 +1022,6 @@ export default function useWorkspace({ pushToast } = {}) {
     resumeJob,
     pokeJobs,
     collections,
-    activeCollectionId,
     catalogRevision,
     bumpCatalogRevision,
     selectCollection,

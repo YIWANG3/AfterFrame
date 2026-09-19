@@ -9,6 +9,21 @@ export const browseScopeKey = ({ status, collectionId, search, sort, filters }) 
   status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {},
 });
 
+// The gallery's browse destination, as one value. Everything that decides
+// what the grid shows lives here — never in separate pieces of state that an
+// async caller could read half-updated.
+export const DEFAULT_SCOPE = Object.freeze({
+  status: "all", collectionId: null, query: "", filters: {}, sort: "imported-desc",
+});
+
+export const scopeKeyOf = (scope) => browseScopeKey({
+  status: scope.status,
+  collectionId: scope.collectionId,
+  search: scope.query.trim() || undefined,
+  sort: scope.sort,
+  filters: scope.filters,
+});
+
 // Fields the client narrows on while the 250ms search debounce is pending.
 // This MUST stay a superset of what the sidecar's `_search_clause`
 // (db/browse.py) matches — filename/path, camera, lens, AI caption, OCR text

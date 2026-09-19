@@ -1,5 +1,6 @@
 // Browser implementation of the preload bridge, for the static web build
-// (web.html). Method names mirror electron/preload.js 1:1 — the real App.jsx
+// (web.html). Method names come from shared/ipcChannels.mjs plus preload.js's
+// hand-written extras (src/api/apiSurface.test.js checks) — the real App.jsx
 // runs against this bridge and never knows which one is behind api.*.
 //
 // It plays the part of an in-memory catalog backend: an empty catalog on
