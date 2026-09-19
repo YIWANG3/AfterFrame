@@ -1613,22 +1613,34 @@ function createMcpServer(deps) {
     res.writeHead(404).end("not found");
   });
 
+  // Settings → Integrations shows this, so a swallowed start failure is still
+  // visible to the user instead of only in the log.
+  let status = "starting";
+  let lastError = null;
+
   function start() {
     return new Promise((resolve) => {
       server.once("error", (error) => {
         // Most likely EADDRINUSE from a second app instance — log and carry on,
         // the app itself must not be affected by MCP server failures.
         console.error("[mcp] server failed to start:", error.message);
+        status = error.code === "EADDRINUSE" ? "port_in_use" : "error";
+        lastError = error.message;
         resolve(null);
       });
       server.listen(port, "127.0.0.1", () => {
         console.log(`[mcp] AfterFrame MCP server listening on http://127.0.0.1:${port}/mcp`);
+        status = "running";
         resolve(server);
       });
     });
   }
 
-  return { start, server, port, clearPreviewCache: () => previewPathCache.clear() };
+  function getStatus() {
+    return { status, port, url: `http://127.0.0.1:${port}/mcp`, toolCount: tools.length, error: lastError };
+  }
+
+  return { start, getStatus, server, port, clearPreviewCache: () => previewPathCache.clear() };
 }
 
 module.exports = { createMcpServer, DEFAULT_PORT };

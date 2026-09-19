@@ -159,6 +159,8 @@
     "downloading": "Downloading & validating…",
     "automaticDownload": "Automatically download updates",
     "automaticDownloadHint": "Available after a signed official release manifest is configured.",
+    "autoIndexOnImport": "Analyze faces after import",
+    "autoIndexOnImportHint": "Off by default. When an import finishes, new photos are analyzed in the background. Needs an installed model. You can pause it from Background Activity.",
     "installedModels": "Installed models",
     "modelMeta": "v{{version}} · {{size}} · {{dimensions}} dimensions",
     "modelMissing": "Model file missing",
@@ -195,7 +197,35 @@
     "title": "Integrations",
     "editorsTitle": "External editors",
     "editorsSubtitle": "Auto-detected photo editors available in the gallery right-click → Open With.",
-    "noEditors": "No supported editors detected."
+    "noEditors": "No supported editors detected.",
+    "mcpTitle": "AI agents (MCP)",
+    "mcpSubtitle": "AfterFrame runs a local MCP server so agents like Claude Code can search, organise and edit this library. It only accepts connections from this Mac.",
+    "mcpStatus": {
+      "running": "Running",
+      "starting": "Starting…",
+      "port_in_use": "Port in use",
+      "error": "Not running"
+    },
+    "mcpRunningHint": "{{url}} · {{count}} tools",
+    "mcpPortInUseHint": "Port {{port}} is taken, usually by another AfterFrame window. Quit the other one and restart, or set AFTERFRAME_MCP_PORT to a free port.",
+    "mcpErrorHint": "The MCP server could not start. {{error}}",
+    "mcpDocs": "Docs",
+    "mcpCopy": "Copy",
+    "mcpCopied": "Copied",
+    "mcpSnippets": {
+      "claudeCode": {
+        "label": "Claude Code",
+        "hint": "Run this in a terminal."
+      },
+      "json": {
+        "label": "Cursor and .mcp.json",
+        "hint": "For clients that connect to HTTP servers directly."
+      },
+      "claudeDesktop": {
+        "label": "Claude Desktop",
+        "hint": "Add to claude_desktop_config.json. Claude Desktop needs the mcp-remote bridge, which requires Node.js."
+      }
+    }
   },
   "transfer": {
     "title": "Backup & transfer",

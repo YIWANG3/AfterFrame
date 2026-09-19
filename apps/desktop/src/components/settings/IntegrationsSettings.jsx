@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 import api from "../../api";
 import { Group, FieldRow, SecondaryButton } from "./SettingsPrimitives";
+import McpConnectionGroup from "./McpConnectionGroup";
 
 // Integrations that belong to this app installation. Catalog-specific watched
 // directories live in Library so their ownership is visible at the point of use.
@@ -16,6 +17,7 @@ export default function IntegrationsSettings() {
 
   return (
     <div>
+      <McpConnectionGroup />
       <Group title={t("integrations.editorsTitle")} subtitle={t("integrations.editorsSubtitle")}>
         {editors.length === 0 ? (
           <div className="py-3 text-[11px] text-muted2">{t("integrations.noEditors")}</div>
