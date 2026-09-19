@@ -61,6 +61,9 @@ jobs:
       #   22-lightbox-zoom, 23-map   no GPU/WebGL on the macOS VM
       #   14-video                   no reliable AVFoundation playback
       #   17-watched-dirs            fs-watch timing
+      # 23 and 17 also skip themselves under CI (test.skip(process.env.CI)),
+      # so the nightly's own result stays meaningful: a red nightly is
+      # something new, not those two again.
       # The save / people suites were once excluded as "slow I/O"; the real
       # cause was the seeded catalog's absolute paths (fixed in #57), so they
       # are back. 02-navigation was excluded for the "Rated" race; the cause

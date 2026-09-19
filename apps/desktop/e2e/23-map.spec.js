@@ -11,6 +11,11 @@ const { launchApp, closeApp } = require("./helpers/app");
 const { captureElement } = require("./helpers/screenshot");
 
 test.describe("Map drawer", () => {
+  // Runs nightly for the record, but the assertions cannot hold on the CI VM
+  // (see .github/workflows/quality.yml). Skipped there so a red nightly means
+  // something new; locally it runs in full.
+  test.skip(!!process.env.CI, "no GPU/WebGL on the GitHub macOS runner: MapLibre never renders");
+
   let app, window, userDataDir;
 
   test.beforeAll(async () => {

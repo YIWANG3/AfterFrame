@@ -13,6 +13,11 @@ const { launchApp, closeApp } = require("./helpers/app");
 const SRC_IMAGE = path.resolve(__dirname, "fixtures", "test-image.jpg");
 
 test.describe("Watched directories", () => {
+  // Runs nightly for the record, but the assertions cannot hold on the CI VM
+  // (see .github/workflows/quality.yml). Skipped there so a red nightly means
+  // something new; locally it runs in full.
+  test.skip(!!process.env.CI, "fs-watch delivery on the GitHub macOS runner is too slow and uneven to assert on");
+
   let app, window, userDataDir, catalogDir, watchDir;
 
   test.beforeAll(async () => {

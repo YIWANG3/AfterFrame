@@ -136,8 +136,12 @@ if (!reportOnly) {
   }
 
   const env = { ...process.env, AFTERFRAME_COVERAGE: "1" };
+  // The instrumented build carries istanbul counters plus the sourcemaps the
+  // plugin turns on, and Vite's chunk rendering ran out of Node's default
+  // 2 GB heap on the CI runner (nightly 2026-09-18). Give this one build more.
+  const buildEnv = { ...env, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --max-old-space-size=4096`.trim() };
   console.log("[coverage] building instrumented renderer");
-  if (run("npx", ["vite", "build"], { env }) !== 0) process.exit(1);
+  if (run("npx", ["vite", "build"], { env: buildEnv }) !== 0) process.exit(1);
   console.log("[coverage] running e2e", playwrightArgs.join(" "));
   const e2eStatus = run("npx", ["playwright", "test", ...playwrightArgs], { env });
   if (e2eStatus !== 0) {
