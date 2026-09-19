@@ -159,6 +159,8 @@
     "downloading": "Downloading & validating…",
     "automaticDownload": "Automatically download updates",
     "automaticDownloadHint": "Available after a signed official release manifest is configured.",
+    "autoIndexOnImport": "Analyze faces after import",
+    "autoIndexOnImportHint": "Off by default. When an import finishes, new photos are analyzed in the background. Needs an installed model. You can pause it from Background Activity.",
     "installedModels": "Installed models",
     "modelMeta": "v{{version}} · {{size}} · {{dimensions}} dimensions",
     "modelMissing": "Model file missing",
