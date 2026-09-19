@@ -324,3 +324,104 @@ def resolve_location(location: dict[str, Any] | None) -> ResolvedLocation | None
     if country_entry:
         return _resolved(country_entry, "country", gazetteer, confidence_value)
     return None
+
+
+# ── Place search (manual location) ───────────────────────────────────────────
+# The offline basemap is far too coarse to click a position on, and nobody
+# knows a photo's coordinates by heart. A manual location is therefore the same
+# thing an AI location is: a named city or landmark picked from this gazetteer.
+
+_SEARCH_TIERS = (("landmarks", "exact"), ("localities", "locality"), ("admin1", "admin1"), ("countries", "country"))
+T2S_PATH = Path(__file__).parent / "data" / "t2s.json"
+_t2s: dict[int, str] | None = None
+_search_index: list[tuple[str, dict, str]] | None = None
+_search_index_owner: Gazetteer | None = None
+
+
+def _fold(text: str) -> str:
+    """Case-fold, and map Traditional Chinese to Simplified when the table is
+    bundled. Wikidata's `zh` labels mix both scripts (東京都, 首爾, 广州市), so
+    without this a Simplified query misses a third of the Chinese names."""
+    global _t2s
+    if _t2s is None:
+        try:
+            _t2s = {ord(k): v for k, v in json.loads(T2S_PATH.read_text(encoding="utf-8")).items()}
+        except (OSError, ValueError):
+            _t2s = {}
+    return text.casefold().translate(_t2s)
+
+
+def _simplified(text: str | None) -> str | None:
+    if not text:
+        return text
+    _fold("")  # loads the table on first use
+    return text.translate(_t2s or {})
+
+
+def _build_search_index(gazetteer: Gazetteer) -> list[tuple[str, dict, str]]:
+    rows: list[tuple[str, dict, str]] = []
+    for tier, precision in _SEARCH_TIERS:
+        for item in gazetteer.payload.get(tier, []):
+            for name in (item.get("en"), item.get("zh"), *item.get("aliases", [])):
+                if name:
+                    rows.append((_fold(name), item, precision))
+    # Most notable first, so the scan can stop as soon as it has enough prefix hits.
+    rows.sort(key=lambda row: -(row[1].get("links") or 0))
+    return rows
+
+
+def search_places(query: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Type-ahead over the gazetteer: prefix matches first, then substring
+    matches, each ordered by notability (Wikipedia sitelink count)."""
+    global _search_index, _search_index_owner
+    gazetteer = load_gazetteer()
+    needle = _fold(str(query or "").strip())
+    if gazetteer is None or not needle:
+        return []
+    if _search_index is None or _search_index_owner is not gazetteer:
+        _search_index = _build_search_index(gazetteer)
+        _search_index_owner = gazetteer
+
+    prefix: list[tuple[dict, str]] = []
+    inner: list[tuple[dict, str]] = []
+    seen: set[str] = set()
+    for name, item, precision in _search_index:
+        if needle not in name or item["q"] in seen:
+            continue
+        seen.add(item["q"])
+        if name.startswith(needle):
+            prefix.append((item, precision))
+            if len(prefix) >= limit:
+                break
+        elif len(inner) < limit:
+            inner.append((item, precision))
+
+    results = []
+    for item, precision in (prefix + inner)[:limit]:
+        country = gazetteer.countries_by_qid.get(item.get("country") or "") or {}
+        results.append({
+            "place_id": f"wd:{item['q']}",
+            "precision_level": precision,
+            "name_en": item.get("en"),
+            # The app's only Chinese locale is zh-CN, so show 东京都, not 東京都.
+            "name_zh": _simplified(item.get("zh")),
+            "country_en": country.get("en"),
+            "country_zh": _simplified(country.get("zh")),
+            "country_code": country.get("iso") or item.get("iso"),
+            "latitude": float(item["lat"]),
+            "longitude": float(item["lon"]),
+        })
+    return results
+
+
+def resolve_place_id(place_id: str) -> ResolvedLocation | None:
+    """A search_places() result back to a full location, for writing."""
+    gazetteer = load_gazetteer()
+    if gazetteer is None or not str(place_id).startswith("wd:"):
+        return None
+    qid = str(place_id)[3:]
+    for tier, precision in _SEARCH_TIERS:
+        for item in gazetteer.payload.get(tier, []):
+            if item["q"] == qid:
+                return _resolved(item, precision, gazetteer, None)
+    return None
