@@ -26,7 +26,7 @@ class CollectionOrderTests(unittest.TestCase):
             self.addCleanup(connection.close)
             init_db(connection)
             ids = [create_collection(connection, name)['collection_id'] for name in ['B', 'A']]
-            smart = create_collection(connection, 'Smart', 'smart')['collection_id']
+            smart = create_collection(connection, 'Smart', 'smart', '{"filters": {"rating_min": 5}}')['collection_id']
             before = list_collections(connection)
             for invalid in ([ids[0]], [ids[0], ids[0]], [ids[1], 'missing'], [ids[0], smart]):
                 with self.assertRaises(ValueError):

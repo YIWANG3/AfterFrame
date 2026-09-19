@@ -1,11 +1,16 @@
-"""Manual albums CRUD + membership.
+"""Albums CRUD + membership: manual folders, and smart collections whose
+contents are a saved filter (see smart_rules.py).
 
 Split from the monolithic db.py (review P3-5); one module per domain.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from uuid import uuid4
+
+from .browse import count_image_assets
+from .smart_rules import normalize_rules, parse_rules
 
 
 def _collection_id() -> str:
@@ -23,7 +28,24 @@ def list_collections(connection: sqlite3.Connection) -> list[dict]:
         ORDER BY c.sort_order, c.name
         """
     ).fetchall()
-    return [dict(r) for r in rows]
+    collections = [dict(r) for r in rows]
+    for collection in collections:
+        if collection["kind"] != "smart":
+            continue
+        rules = parse_rules(collection["rules_json"])
+        collection["rules"] = rules
+        collection["item_count"] = (
+            count_image_assets(connection, rules["status"], rules["search"], rules["filters"]) if rules else 0
+        )
+    return collections
+
+
+def _checked_rules_json(rules_json: str) -> str:
+    try:
+        rules = json.loads(rules_json)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Smart collection rules are not valid JSON: {error}") from error
+    return json.dumps(normalize_rules(rules), ensure_ascii=False)
 
 
 def create_collection(
@@ -33,6 +55,8 @@ def create_collection(
     rules_json: str = "[]",
     commit: bool = True,
 ) -> dict:
+    if kind == "smart":
+        rules_json = _checked_rules_json(rules_json)
     collection_id = _collection_id()
     connection.execute(
         """
@@ -60,8 +84,9 @@ def update_collection(
         parts.append("name = ?")
         params.append(name)
     if rules_json is not None:
+        kind = connection.execute("SELECT kind FROM collections WHERE collection_id = ?", (collection_id,)).fetchone()
         parts.append("rules_json = ?")
-        params.append(rules_json)
+        params.append(_checked_rules_json(rules_json) if kind is not None and kind[0] == "smart" else rules_json)
     if sort_order is not None:
         parts.append("sort_order = ?")
         params.append(sort_order)
@@ -104,6 +129,9 @@ def add_collection_items(
     asset_ids: list[str],
     commit: bool = True,
 ) -> int:
+    kind = connection.execute("SELECT kind FROM collections WHERE collection_id = ?", (collection_id,)).fetchone()
+    if kind is not None and kind[0] == "smart":
+        raise ValueError("A smart collection fills itself from its rules; photos cannot be added to it")
     added = 0
     for asset_id in asset_ids:
         added += connection.execute(

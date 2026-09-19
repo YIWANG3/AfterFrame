@@ -190,11 +190,23 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
     return clause, [*location_params, *location_params]
 
 
+# Every key _facet_clauses understands. Smart collection rules are validated
+# against this, so a saved filter can never name something browse ignores.
+FACET_KEYS = frozenset({
+    "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
+    "focal_min", "focal_max", "shutter_min", "shutter_max",
+    "date_from", "date_to", "date_within_days", "rating_min", "orientation",
+    "asset_type", "tag", "extension", "people", "annotated", "person_group", "geo",
+})
+
+
 def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     """Build AND-combined WHERE fragments + params from a structured facet dict.
 
     Recognized keys: camera, lens (exact), iso_min/iso_max, aperture_min/max,
     focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
+    date_within_days (captured in the last N days — relative, so a saved
+    filter keeps moving with the calendar),
     rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags),
     people ('with_faces'|'without_faces'), person_group (group ID),
     annotated ('with'|'without' — AI annotation presence),
@@ -225,6 +237,9 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
         add("date(assets.meta_capture_time) >= date(?)", filters["date_from"])
     if filters.get("date_to"):
         add("date(assets.meta_capture_time) <= date(?)", filters["date_to"])
+    within_days = filters.get("date_within_days")
+    if within_days is not None and int(within_days) > 0:
+        add("date(assets.meta_capture_time) >= date('now', ?)", f"-{int(within_days)} days")
     if filters.get("rating_min") is not None:
         add("assets.app_rating >= ?", filters["rating_min"])
     orientation = filters.get("orientation")
@@ -338,6 +353,34 @@ def list_image_assets(
         """,
         params,
     ).fetchall()
+
+
+def count_image_assets(
+    connection: sqlite3.Connection,
+    status: str,
+    search: str | None = None,
+    filters: dict | None = None,
+) -> int:
+    """How many rows list_image_assets would page through. Same WHERE, none of
+    the preview / version-stack joins — the sidebar asks this per smart
+    collection."""
+    search_clause, params = _search_clause(search)
+    facet_clause, facet_params = _facet_clauses(filters)
+    row = connection.execute(
+        f"""
+        SELECT COUNT(*)
+        FROM image_lookup_registry AS registry
+        JOIN assets
+            ON assets.asset_id = registry.image_asset_id
+        LEFT JOIN asset_ai_annotations AS anno
+            ON anno.asset_id = assets.asset_id
+        WHERE {_status_clause(status)}
+          {search_clause}
+          {facet_clause}
+        """,
+        [*params, *facet_params],
+    ).fetchone()
+    return int(row[0])
 
 
 def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
