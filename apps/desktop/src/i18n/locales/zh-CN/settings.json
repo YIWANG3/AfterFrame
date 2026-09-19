@@ -195,7 +195,35 @@
     "title": "集成",
     "editorsTitle": "外部编辑器",
     "editorsSubtitle": "自动探测到的图片编辑器,可在画廊右键 →「打开方式」中使用。",
-    "noEditors": "未探测到支持的编辑器。"
+    "noEditors": "未探测到支持的编辑器。",
+    "mcpTitle": "AI 智能体 (MCP)",
+    "mcpSubtitle": "AfterFrame 在本机运行一个 MCP 服务,让 Claude Code 等智能体可以搜索、整理和编辑这个图库。只接受来自本机的连接。",
+    "mcpStatus": {
+      "running": "运行中",
+      "starting": "启动中…",
+      "port_in_use": "端口被占用",
+      "error": "未运行"
+    },
+    "mcpRunningHint": "{{url}} · {{count}} 个工具",
+    "mcpPortInUseHint": "端口 {{port}} 已被占用,通常是另一个 AfterFrame 窗口。退出另一个后重启,或把 AFTERFRAME_MCP_PORT 设为空闲端口。",
+    "mcpErrorHint": "MCP 服务未能启动。{{error}}",
+    "mcpDocs": "文档",
+    "mcpCopy": "复制",
+    "mcpCopied": "已复制",
+    "mcpSnippets": {
+      "claudeCode": {
+        "label": "Claude Code",
+        "hint": "在终端里运行。"
+      },
+      "json": {
+        "label": "Cursor 与 .mcp.json",
+        "hint": "适用于可以直接连接 HTTP 服务的客户端。"
+      },
+      "claudeDesktop": {
+        "label": "Claude Desktop",
+        "hint": "加入 claude_desktop_config.json。Claude Desktop 需要通过 mcp-remote 桥接,本机需装有 Node.js。"
+      }
+    }
   },
   "transfer": {
     "title": "备份与迁移",
