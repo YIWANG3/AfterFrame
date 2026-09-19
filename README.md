@@ -49,6 +49,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
+- **Backup & transfer** your settings to another Mac — AI provider configs, API keys and app preferences export to one passphrase-encrypted file (Settings → General), since keychain-encrypted keys do not survive a plain copy of the settings file
 - Local-first: your files stay on your drives, nothing is uploaded
 
 ![Library import and annotation actions](docs/assets/en/library-actions.webp)
