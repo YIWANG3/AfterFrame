@@ -78,6 +78,24 @@ test("Library tab renders catalog/cache groups + HD preview toggle", async () =>
   await expect(hdToggle).toHaveAttribute("aria-checked", "false");
 });
 
+test("Integrations tab shows the live MCP endpoint and copies a working config", async () => {
+  await ctx.window.getByRole("button", { name: "Integrations" }).click();
+  await expect(ctx.window.locator("[data-mcp-status='running']")).toBeVisible();
+  // The snippets are built from the port this instance actually bound, not a default.
+  const url = `http://127.0.0.1:${ctx.mcpPort}/mcp`;
+  await expect(ctx.window.getByText(new RegExp(`${url} · \\d+ tools`))).toBeVisible();
+  await expect(ctx.window.locator("[data-mcp-snippet='claudeCode']"))
+    .toHaveText(`claude mcp add --transport http afterframe ${url}`);
+  const desktop = JSON.parse(await ctx.window.locator("[data-mcp-snippet='claudeDesktop']").innerText());
+  expect(desktop.mcpServers.afterframe).toEqual({ command: "npx", args: ["-y", "mcp-remote", url] });
+
+  const jsonRow = ctx.window.locator("[data-mcp-snippet='json']");
+  await jsonRow.locator("xpath=..").getByRole("button", { name: "Copy" }).click();
+  await expect(jsonRow.locator("xpath=..").getByRole("button", { name: "Copied" })).toBeVisible();
+  const clip = JSON.parse(await ctx.app.evaluate(({ clipboard }) => clipboard.readText()));
+  expect(clip.mcpServers.afterframe).toEqual({ type: "http", url });
+});
+
 test("About tab renders the product blurb", async () => {
   await ctx.window.getByRole("button", { name: "About" }).click();
   await expect(ctx.window.getByText(/local-first photo workspace/i)).toBeVisible();
