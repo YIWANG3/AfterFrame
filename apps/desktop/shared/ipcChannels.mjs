@@ -127,6 +127,7 @@ export const IPC_METHODS = [
   ["resetDepthModel", "workspace:reset-depth-model", 0],
   ["getPeopleSettings", "workspace:get-people-settings", 0],
   ["setPeopleAutomaticDownloads", "workspace:set-people-auto-download", 1],
+  ["setPeopleAutoIndexOnImport", "workspace:set-people-auto-index", 1],
   ["pickPeopleModel", "workspace:pick-people-model", 0],
   ["downloadOfficialPeopleModel", "workspace:download-official-people-model", 0],
   ["setActivePeopleModel", "workspace:set-active-people-model", 1],

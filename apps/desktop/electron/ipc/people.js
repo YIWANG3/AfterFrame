@@ -273,6 +273,7 @@ function register({
       activeModel: activeKey ? models.find((model) => model.key === activeKey) : null,
       models,
       automaticDownloads: !!settings.automaticDownloads,
+      autoIndexOnImport: !!settings.autoIndexOnImport,
       download: {
         available: true,
         name: OFFICIAL_ARCFACE_R100.name,
@@ -379,6 +380,16 @@ function register({
     await updateAppSettings((settings) => ({
       ...settings,
       peopleRecognition: { ...(settings.peopleRecognition || {}), automaticDownloads: !!enabled },
+    }));
+    return state();
+  });
+
+  // The renderer reads this when an import job finishes (App.jsx), the same
+  // place annotation's autoOnImport is honoured.
+  ipcMain.handle("workspace:set-people-auto-index", async (_event, enabled) => {
+    await updateAppSettings((settings) => ({
+      ...settings,
+      peopleRecognition: { ...(settings.peopleRecognition || {}), autoIndexOnImport: !!enabled },
     }));
     return state();
   });

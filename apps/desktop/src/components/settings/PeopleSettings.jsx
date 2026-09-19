@@ -5,7 +5,7 @@ import api from "../../api";
 import { Callout, FieldRow, Group, PrimaryButton, SecondaryButton, Toggle } from "./SettingsPrimitives";
 
 function emptySettings() {
-  return { activeModelKey: null, activeModel: null, models: [], automaticDownloads: false, download: { available: false } };
+  return { activeModelKey: null, activeModel: null, models: [], automaticDownloads: false, autoIndexOnImport: false, download: { available: false } };
 }
 
 function formatSize(bytes) {
@@ -139,6 +139,9 @@ export default function PeopleSettings() {
         </FieldRow>
         <FieldRow label={t("people.automaticDownload")} hint={t("people.automaticDownloadHint")}>
           <Toggle on={settings.automaticDownloads} disabled={!settings.download?.available} onChange={(value) => perform("updates", () => api.setPeopleAutomaticDownloads(value))} />
+        </FieldRow>
+        <FieldRow label={t("people.autoIndexOnImport")} hint={t("people.autoIndexOnImportHint")}>
+          <Toggle on={settings.autoIndexOnImport} disabled={!model?.available} onChange={(value) => perform("autoIndex", () => api.setPeopleAutoIndexOnImport(value))} />
         </FieldRow>
       </Group>
 
