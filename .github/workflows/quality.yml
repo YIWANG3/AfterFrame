@@ -61,10 +61,6 @@ jobs:
       #   22-lightbox-zoom, 23-map   no GPU/WebGL on the macOS VM
       #   14-video                   no reliable AVFoundation playback
       #   17-watched-dirs            fs-watch timing
-      #   25-collage-batch           layout assertions assume the local
-      #                              window size (cards wrap on the VM)
-      #   12-missing-original        relink hit UNIQUE(asset_files.path) on
-      #                              the VM only
       # The save / people suites were once excluded as "slow I/O"; the real
       # cause was the seeded catalog's absolute paths (fixed in #57), so they
       # are back. 02-navigation was excluded for the "Rated" race; the cause
@@ -73,7 +69,12 @@ jobs:
       # last and win (#68, with 44's identical failure), so it is back too.
       # 05-catalog was excluded for its thumbnail-regeneration test; the cause
       # was a real repair bug (one budget shared by the two repair triggers),
-      # so it is back as well. Opt-in suites (27-agent, demo) skip themselves.
+      # so it is back as well. 12-missing-original's UNIQUE(asset_files.path)
+      # was the startup metadata repair landing after the test's relink on the
+      # slow VM and registering the original path anew (relink now reports
+      # path_in_use; the spec waits for the repair); 25-collage-batch assumed
+      # three page cards per row (#80). Both are back. Opt-in suites
+      # (27-agent, demo) skip themselves.
       - name: Run Electron E2E (CI subset)
         run: >
           npm run e2e:only --prefix apps/desktop --
@@ -88,6 +89,7 @@ jobs:
           e2e/09-agent-bridge.spec.js
           e2e/10-settings.spec.js
           e2e/11-jobs-toasts.spec.js
+          e2e/12-missing-original.spec.js
           e2e/12-people-view.spec.js
           e2e/13-i18n.spec.js
           e2e/15-welcome.spec.js
@@ -98,6 +100,7 @@ jobs:
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
           e2e/24-handwriting.spec.js
+          e2e/25-collage-batch.spec.js
           e2e/26-mcp-parity.spec.js
           e2e/28-mcp-render.spec.js
           e2e/29-folder-order.spec.js

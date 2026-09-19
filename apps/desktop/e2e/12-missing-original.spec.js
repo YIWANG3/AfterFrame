@@ -34,6 +34,17 @@ test.describe("Missing original handling", () => {
     assetId = info.assetId;
     committedPath = info.imagePath;
 
+    // The seeded row for this asset has no image metadata, so the gallery's
+    // startup self-heal queues a refresh-assets for its ORIGINAL path. On a
+    // slow runner that refresh lands after the relink below, finds the file
+    // no longer owned by any asset, and registers it as a new one — which the
+    // relink back would then collide with. Let the repair finish first.
+    await expect.poll(async () => window.evaluate(async (id) => {
+      const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 50 });
+      const r = rows.find((x) => x.asset_id === id);
+      return Number(r?.image_metadata?.width || 0) > 0 && !r?.source_changed;
+    }, assetId), { timeout: 20_000 }).toBe(true);
+
     // Relink to a tmp copy (same bytes → fingerprint matches, no force needed).
     tmpCopy = path.join(os.tmpdir(), `af-missing-${Date.now()}-B0016108.jpg`);
     fs.copyFileSync(committedPath, tmpCopy);

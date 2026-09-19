@@ -19,6 +19,12 @@ function stripHdPreviews(catalogDir) {
   fs.rmSync(path.join(catalogDir, "previews-hd"), { recursive: true, force: true });
 }
 
+// Every test past the second continues the batch session the one before it
+// set up (grouping, per-page layout, swapped cells). Serial: one failure ends
+// the chain instead of restarting the app and failing the rest for a state
+// they never had.
+test.describe.configure({ mode: "serial" });
+
 test.describe("Batch collage", () => {
   let app, window, userDataDir;
   const exportDir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-collage-out-"));
@@ -99,13 +105,22 @@ test.describe("Batch collage", () => {
     const pages = window.locator("[data-testid='batch-page-card']");
     const boxes = [];
     for (let i = 0; i < 4; i++) boxes.push(await pages.nth(i).boundingBox());
-    const row1 = boxes.filter((b) => Math.abs(b.y - boxes[0].y) < 2);
-    expect(row1.length).toBeGreaterThanOrEqual(2);
-    expect(row1.length).toBeLessThan(4); // window is narrow enough that page 4 wraps
-    const last = boxes[3];
-    expect(last.y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1); // wrapped to a new row
-    expect(Math.abs(last.x - boxes[0].x)).toBeLessThan(2);            // …left-aligned with row 1
     const area = await pages.first().locator("xpath=../..").boundingBox();
+    const row1 = boxes.filter((b) => Math.abs(b.y - boxes[0].y) < 2);
+    // How many cards the grid can fit per row follows from the measured
+    // widths, not from the window this was written on: the CI VM is narrower
+    // than a laptop and previously wrapped where this assumed it would not.
+    const gap = row1.length > 1 ? row1[1].x - (row1[0].x + row1[0].width) : 0;
+    const fit = Math.max(1, Math.floor((area.width + gap) / (boxes[0].width + gap)));
+    expect(row1.length).toBe(Math.min(4, fit));
+    if (fit < 4) {
+      // The first page of the second row starts under the first page of the
+      // first — rows fill left to right; the block is centered, the rows are
+      // not (page 4 is only at that column when three fit per row).
+      const firstOnRow2 = boxes[fit];
+      expect(firstOnRow2.y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1); // wrapped to a new row
+      expect(Math.abs(firstOnRow2.x - boxes[0].x)).toBeLessThan(2);            // …left-aligned with row 1
+    }
     const rowRight = Math.max(...row1.map((b) => b.x + b.width));
     const leftGap = boxes[0].x - area.x;
     const rightGap = area.x + area.width - rowRight;
@@ -206,8 +221,13 @@ test.describe("Batch collage", () => {
     await expect(window.locator("img.object-cover.h-full.w-full").last()).toBeVisible();
     await window.mouse.up();
 
-    await expect.poll(() => cellColor(0, 0), { timeout: 3000 }).toBe(before2);
-    await expect.poll(() => cellColor(1, 0), { timeout: 3000 }).toBe(before1);
+    // Within a tolerance: the sampled pixel moves a little when the lazily
+    // generated HD preview replaces the thumbnail between the two samples
+    // (the CI VM is slow enough for that to land mid-test). Two different
+    // photos differ by far more than this.
+    const near = (a, b) => a.split(",").every((v, i) => Math.abs(Number(v) - Number(b.split(",")[i])) <= 24);
+    await expect.poll(() => cellColor(0, 0).then((c) => near(c, before2)), { timeout: 3000 }).toBe(true);
+    await expect.poll(() => cellColor(1, 0).then((c) => near(c, before1)), { timeout: 3000 }).toBe(true);
     // Page structure unchanged
     await expect(window.getByText("14 images · 7 per collage · 2 collages")).toBeVisible();
   });

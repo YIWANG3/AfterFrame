@@ -78,6 +78,8 @@ def relink_asset(
       {"status": "relinked", asset_id, old_path, new_path, forced}
       {"status": "fingerprint_mismatch", asset_id, old_path, candidate_path,
        expected_fingerprint, actual_fingerprint}
+      {"status": "path_in_use", asset_id, old_path, candidate_path,
+       owner_asset_id}  -- another asset already points at candidate_path
     """
     from ..metadata import quick_fingerprint
 
@@ -104,6 +106,24 @@ def relink_asset(
             "candidate_path": new_str,
             "expected_fingerprint": expected_fp,
             "actual_fingerprint": actual_fp,
+        }
+
+    # Another asset may already own the target path: a background refresh that
+    # found the file after this asset was relinked away registers it anew, or
+    # the user picked a file that is simply in the catalog under its own
+    # entry. Say so instead of tripping UNIQUE(asset_files.path) with a
+    # traceback; the caller decides.
+    owner = connection.execute(
+        "SELECT asset_id FROM asset_files WHERE path = ? AND asset_id != ?",
+        (new_str, asset_id),
+    ).fetchone()
+    if owner is not None:
+        return {
+            "status": "path_in_use",
+            "asset_id": asset_id,
+            "old_path": old_path,
+            "candidate_path": new_str,
+            "owner_asset_id": str(owner["asset_id"]),
         }
 
     connection.execute(
