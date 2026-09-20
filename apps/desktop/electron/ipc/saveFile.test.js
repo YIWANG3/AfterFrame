@@ -116,3 +116,19 @@ test("processAndSave matches the canvas preview for every orientation × turn ×
     }
   }
 });
+
+test("the saved file is upright for viewers too: no leftover orientation tag", async (t) => {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "afterframe-tag-"));
+  t.after(() => fs.promises.rm(dir, { recursive: true, force: true }));
+  for (const orientation of [1, 3, 6, 8]) {
+    const sourcePath = await writeOriented(dir, orientation);
+    const savePath = path.join(dir, `saved-${orientation}.jpg`);
+    await processAndSave({ sourcePath, savePath });
+    // What a viewer shows = sharp's auto-orient of the SAVED file. It must equal
+    // the auto-oriented source; with the tag left in place it is turned twice.
+    const shown = await grayGrid(await sharp(savePath).rotate().toBuffer());
+    const expected = await grayGrid(await sharp(sourcePath).rotate().toBuffer());
+    assert.deepEqual([shown.width, shown.height], [expected.width, expected.height], `orientation ${orientation}`);
+    assert.equal((await sharp(savePath).metadata()).orientation ?? 1, 1, `orientation ${orientation}`);
+  }
+});

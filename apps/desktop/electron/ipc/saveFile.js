@@ -189,7 +189,10 @@ function register({
     console.log("[process-and-save] source:", sourcePath);
 
     let { pipeline } = await buildRegionPipeline(options);
-    pipeline = pipeline.keepMetadata();
+    // Keep EXIF/XMP/ICC, but the pixels are upright now: a surviving
+    // orientation tag (6 on every portrait phone shot) makes each viewer turn
+    // the saved file a second time.
+    pipeline = pipeline.keepMetadata().withMetadata({ orientation: 1 });
 
     const ext = path.extname(savePath).toLowerCase();
     if (ext === ".png") pipeline = pipeline.png();
