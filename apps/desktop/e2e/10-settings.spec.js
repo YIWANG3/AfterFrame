@@ -2,6 +2,7 @@
 // Escape closes back to the gallery.
 
 const { test, expect } = require("@playwright/test");
+const path = require("node:path");
 const { launchApp, closeApp } = require("./helpers/app");
 
 let ctx;
@@ -61,6 +62,11 @@ test("People tab renders local-model onboarding", async () => {
   await expect(ctx.window.getByRole("button", { name: /Download ArcFace R100/ })).toBeVisible();
   await expect(ctx.window.getByRole("button", { name: "Choose model…" })).toBeVisible();
   await expect(ctx.window.getByText("Index your library")).toBeVisible();
+  // Auto-analyze on import is opt-in, and cannot be switched on without a model.
+  const autoIndex = ctx.window.getByText("Analyze faces after import", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class,'justify-between')][1]").getByRole("switch");
+  await expect(autoIndex).toHaveAttribute("aria-checked", "false");
+  await expect(autoIndex).toBeDisabled();
 });
 
 test("Library tab renders catalog/cache groups + HD preview toggle", async () => {
@@ -105,4 +111,29 @@ test("Escape closes settings and restores the gallery", async () => {
   await ctx.window.keyboard.press("Escape");
   await expect(ctx.window.getByText("Auto-annotation providers")).toHaveCount(0);
   await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible();
+});
+
+test("auto-analyze faces on import stays silent when no model is installed", async () => {
+  // The setting can outlive its model (removed, or settings carried to a new
+  // Mac). An import must then finish cleanly: no people job, no error toast.
+  // Last in the file: it adds photos to the catalog the tab tests count.
+  const state = await ctx.window.evaluate(() => window.mediaWorkspace.setPeopleAutoIndexOnImport(true));
+  expect(state.autoIndexOnImport).toBe(true);
+  expect(state.activeModel).toBeNull();
+  const before = await ctx.window.evaluate(() => window.mediaWorkspace.getImportStatus());
+  // The renderer's own import path (what a watched folder uses), so the job
+  // poller is awake and the job-finished hook in App.jsx really runs.
+  await ctx.app.evaluate(({ BrowserWindow }, paths) => {
+    BrowserWindow.getAllWindows()[0].webContents.send("workspace:watched-import", paths);
+  }, [path.join(__dirname, "fixtures", "people-images")]);
+  await expect.poll(async () => {
+    const job = await ctx.window.evaluate(() => window.mediaWorkspace.getImportStatus());
+    return job?.jobId !== before?.jobId ? job?.status : null;
+  }, { timeout: 60_000 }).toBe("succeeded");
+  // Give the job-finished hook a beat to (not) act.
+  await ctx.window.waitForTimeout(2000);
+  const people = await ctx.window.evaluate(() => window.mediaWorkspace.getPeopleIndexStatus());
+  expect(people?.active).toBeFalsy();
+  await expect(ctx.window.locator("[data-testid='toast-card'] .text-error")).toHaveCount(0);
+  await ctx.window.evaluate(() => window.mediaWorkspace.setPeopleAutoIndexOnImport(false));
 });
