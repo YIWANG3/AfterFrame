@@ -252,11 +252,12 @@
 
 **步骤**
 
-1. ✅ 纯逻辑 `src/components/editor/pasteEdits.js` 加 14 条单测（`b89e447`）。
-2. 剪贴板状态（应用级，存 localStorage）和编辑器里的「拷贝编辑」按钮加勾选面板。
-3. 网格右键「粘贴编辑」：过滤目标、确认、顺序执行、进度、完成提示。
-4. 目标图的显示尺寸来源（`meta_width` / `meta_height` 是否已应用 EXIF 方向需要核实）。
-5. i18n（en + zh-CN）、e2e。
+1. ✅ 纯逻辑 `src/components/editor/pasteEdits.js` 加 14 条单测。
+2. ✅ 剪贴板状态（`src/utils/editClipboard.js`，存 localStorage）和编辑器头部的「拷贝编辑」按钮加勾选面板。
+3. ✅ 网格右键「粘贴编辑」：过滤目标、顺序执行、一个原地更新的进度提示、完成提示（`src/utils/runPasteEdits.js`）。
+4. ✅ 目标图的显示尺寸：catalog 里的宽高是没应用 EXIF 方向的原始像素尺寸，不能用。新增主进程接口 `imageDisplaySize`（只读文件头）。
+5. ✅ i18n（en + zh-CN）、e2e `46-paste-edits.spec.js`。
+   - e2e 顺带抓到一个 main 上已有的 bug：`processAndSave` 保存后保留了源文件的 EXIF 方向标签，竖拍手机照片在别的看图软件里会再被转一次。单独修在 #88。
 6. 以后：MCP 暴露、RAW 和 HEIC 走高清预览、从已保存的版本拷贝。
 
 ---
