@@ -159,6 +159,8 @@
     "downloading": "正在下载并验证…",
     "automaticDownload": "自动下载更新",
     "automaticDownloadHint": "配置了签名的官方发布清单后才可使用。",
+    "autoIndexOnImport": "导入后自动分析人物",
+    "autoIndexOnImportHint": "默认关闭。导入完成后在后台分析新照片,需要已安装模型,可在「后台活动」中暂停。",
     "installedModels": "已安装模型",
     "modelMeta": "v{{version}} · {{size}} · {{dimensions}} 维",
     "modelMissing": "模型文件缺失",
