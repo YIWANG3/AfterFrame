@@ -593,6 +593,9 @@ ipcMain.handle("app:copy-text", (_event, text) => {
   return true;
 });
 
+// Settings → Integrations: where agents connect, and whether the server came up.
+ipcMain.handle("app:mcp-status", () => mcpServerApi?.getStatus() ?? { status: "starting" });
+
 const saveFileApi = saveFileIpc.register({
   ipcMain, dialog,
   rootDir,

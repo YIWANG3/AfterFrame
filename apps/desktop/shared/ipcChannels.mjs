@@ -157,6 +157,7 @@ export const IPC_METHODS = [
   ["resetSampleCatalog", "workspace:reset-sample-catalog", 0],
   ["revealPath", "workspace:reveal", 1],
   ["copyText", "app:copy-text", 1],
+  ["getMcpStatus", "app:mcp-status", 0],
   ["videoProxy", "app:video-proxy", 1],
   ["videoKeyframes", "app:video-keyframes", 2],
   ["openCacheDir", "app:open-cache-dir", 1],
