@@ -219,7 +219,9 @@
       "refreshFromDisk_other": "从磁盘刷新 {{count}} 项",
       "copyPath": "复制文件路径",
       "copyName": "复制名称",
-      "openWith": "打开方式"
+      "openWith": "打开方式",
+      "pasteEdits_one": "粘贴编辑",
+      "pasteEdits_other": "粘贴编辑到 {{count}} 张"
     }
   },
   "map": {

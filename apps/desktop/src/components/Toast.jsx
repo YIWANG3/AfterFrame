@@ -27,7 +27,12 @@ export function useToasts() {
     return id;
   }, []);
 
-  return { toasts, pushToast, dismissToast };
+  // For a toast that reports progress: same card, new text, no re-entrance.
+  const updateToast = useCallback((id, patch) => {
+    setToasts((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }, []);
+
+  return { toasts, pushToast, updateToast, dismissToast };
 }
 
 // `inline` skips the fixed positioning so the stack can live inside a shared

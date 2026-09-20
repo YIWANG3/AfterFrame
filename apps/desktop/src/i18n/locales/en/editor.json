@@ -274,5 +274,18 @@
     "missingTextWarn": "The prompt has no {text} — your text above won't be used.",
     "insertText": "Insert {text}",
     "presets": "Style presets"
+  },
+  "copyEdits": {
+    "button": "Copy edits",
+    "copied": "Copied",
+    "nothing": "Nothing to copy yet: rotate, flip, crop or straighten first",
+    "hint": "Choose what to copy, then select photos in the library and paste.",
+    "confirm": "Copy",
+    "kinds": {
+      "rotate": "Rotation",
+      "flip": "Flip",
+      "crop": "Crop",
+      "angle": "Straighten angle"
+    }
   }
 }

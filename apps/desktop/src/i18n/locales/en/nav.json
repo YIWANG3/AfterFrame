@@ -228,7 +228,9 @@
       "refreshFromDisk_other": "Refresh {{count}} from Disk",
       "copyPath": "Copy File Path",
       "copyName": "Copy Name",
-      "openWith": "Open With"
+      "openWith": "Open With",
+      "pasteEdits_one": "Paste edits",
+      "pasteEdits_other": "Paste edits onto {{count}} photos"
     }
   },
   "map": {

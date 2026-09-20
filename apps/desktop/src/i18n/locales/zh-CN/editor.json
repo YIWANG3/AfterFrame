@@ -274,5 +274,18 @@
     "missingTextWarn": "Prompt 中没有 {text}，上方输入的文字不会被写入画面。",
     "insertText": "补回 {text}",
     "presets": "风格预设"
+  },
+  "copyEdits": {
+    "button": "拷贝编辑",
+    "copied": "已拷贝",
+    "nothing": "还没有可拷贝的编辑:先旋转、翻转、裁剪或校正",
+    "hint": "选择要拷贝的项目,然后在图库里选中照片并粘贴。",
+    "confirm": "拷贝",
+    "kinds": {
+      "rotate": "旋转",
+      "flip": "翻转",
+      "crop": "裁剪",
+      "angle": "校正角度"
+    }
   }
 }

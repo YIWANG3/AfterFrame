@@ -92,5 +92,15 @@
   "watchedCatchUpTitle_one": "1 new file in watched folders",
   "watchedCatchUpTitle_other": "{{count}} new files in watched folders",
   "watchedCatchUpMsg": "Importing them now…",
-  "webUnsupportedFiles": "{{count}} file(s) skipped: videos and RAW need the desktop app"
+  "webUnsupportedFiles": "{{count}} file(s) skipped: videos and RAW need the desktop app",
+  "pasteEdits": {
+    "running": "Pasting edits… {{done}} / {{total}}",
+    "done_one": "Pasted edits onto {{count}} photo",
+    "done_other": "Pasted edits onto {{count}} photos",
+    "nothingDone": "No photos were edited",
+    "skipped_one": "{{count}} skipped (video, RAW or HEIC)",
+    "skipped_other": "{{count}} skipped (video, RAW or HEIC)",
+    "failed_one": "{{count}} failed",
+    "failed_other": "{{count}} failed"
+  }
 }

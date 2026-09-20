@@ -32,6 +32,8 @@ import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
 import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
+import CopyEditsButton from "./editor/components/CopyEditsButton";
+import { describeEdits } from "./editor/pasteEdits";
 import { useCropTool } from "./editor/state/useCropTool";
 import { useSplitTool } from "./editor/state/useSplitTool";
 import { useSplitExport, resolveSplitOutputDir } from "./editor/state/useSplitExport";
@@ -1114,6 +1116,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         exportDisabled={saving || loadState !== "ready"}
         onExport={handleExport}
         onClose={onClose}
+        actions={api.has("processAndSave") && loadState === "ready"
+          ? <CopyEditsButton edits={describeEdits(editorState, normalizedCrop, transformedPreview)} t={t} />
+          : null}
         t={t}
       />
 

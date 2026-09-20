@@ -27,6 +27,16 @@ const FLIP_X = { angle: 0, flop: true };
 const FLIP_Y = { angle: 180, flop: true }; // vertical mirror = flop, then 180°
 
 // EXIF orientation → the transform a viewer applies, in normal form.
+// savePath itself when nothing is there, else <stem>_2.<ext>, _3, …
+function freePath(savePath) {
+  if (!fs.existsSync(savePath)) return savePath;
+  const { dir, name, ext } = path.parse(savePath);
+  for (let n = 2; ; n += 1) {
+    const candidate = path.join(dir, `${name}_${n}${ext}`);
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+}
+
 const EXIF_ORIENTATION = {
   1: { angle: 0, flop: false },
   2: { angle: 0, flop: true },
@@ -200,10 +210,24 @@ function register({
     else pipeline = pipeline.jpeg({ quality });
 
     await fs.promises.mkdir(path.dirname(savePath), { recursive: true });
-    const result = await pipeline.toFile(savePath);
+    // Pasting edits onto many photos must never replace a file the user
+    // already has (an earlier <name>_edited.jpg); the editor's own save keeps
+    // overwriting, which is what saving twice is expected to do.
+    const targetPath = options.avoidOverwrite ? freePath(savePath) : savePath;
+    const result = await pipeline.toFile(targetPath);
 
-    console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${savePath}`);
-    return { path: savePath, width: result.width, height: result.height };
+    console.log(`[process-and-save] ${result.width}×${result.height} in ${Date.now() - t0}ms → ${targetPath}`);
+    return { path: targetPath, width: result.width, height: result.height };
+  }
+
+  // Size as displayed (EXIF orientation applied), from the header alone. The
+  // catalog stores raw pixel dimensions, so a portrait shot with an
+  // orientation tag reads as landscape there.
+  async function imageDisplaySize(sourcePath) {
+    if (!sourcePath) throw new Error("Missing source path");
+    const meta = await sharp(sourcePath, { limitInputPixels: false }).metadata();
+    const turned = (EXIF_ORIENTATION[meta.orientation] || IDENTITY_ORIENT).angle % 180 !== 0;
+    return turned ? { width: meta.height, height: meta.width } : { width: meta.width, height: meta.height };
   }
 
   // Split export: cut `region` (normalized, stage-1 basis) out of the oriented
@@ -245,9 +269,10 @@ function register({
   }
 
   ipcMain.handle("workspace:process-and-save", (_event, options) => processAndSave(options));
+  ipcMain.handle("workspace:image-display-size", (_event, sourcePath) => imageDisplaySize(sourcePath));
   ipcMain.handle("workspace:process-and-save-panels", (_event, options) => processAndSavePanels(options));
 
-  return { processAndSave, processAndSavePanels, panelBoundaries };
+  return { processAndSave, processAndSavePanels, panelBoundaries, imageDisplaySize, freePath };
 }
 
 module.exports = { register };

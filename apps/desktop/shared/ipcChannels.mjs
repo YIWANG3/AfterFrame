@@ -59,6 +59,7 @@ export const IPC_METHODS = [
   ["cancelSettingsImport", "settings:import-cancel", 0],
   ["saveImage", "workspace:save-image", 3],
   ["processAndSave", "workspace:process-and-save", 1],
+  ["imageDisplaySize", "workspace:image-display-size", 1],
   ["processAndSavePanels", "workspace:process-and-save-panels", 1],
   ["quickRegister", "workspace:quick-register", 3],
   ["getCollageSources", "workspace:collage-sources", 1],

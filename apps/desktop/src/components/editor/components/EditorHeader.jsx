@@ -1,11 +1,11 @@
 // Editor top bar: source label + edited badge + dimensions readout on the left,
-// Export and Close buttons on the right. Purely presentational — the parent
+// optional `actions` (Copy edits), Export and Close buttons on the right. Purely presentational — the parent
 // computes `dimsLabel` and passes flags. Extracted from EditorOverlay (Phase 4).
 
 import { Download, X } from "lucide-react";
 
 export default function EditorHeader({
-  sourceLabel, edited, dimsLabel, saving, exportDisabled, onExport, onClose, t,
+  sourceLabel, edited, dimsLabel, saving, exportDisabled, onExport, onClose, actions, t,
 }) {
   return (
     <div className="relative flex h-11 shrink-0 items-center justify-center border-b border-border/60 bg-chrome px-4">
@@ -15,6 +15,7 @@ export default function EditorHeader({
         {dimsLabel ? <span className="text-[11px] text-muted2/60">{dimsLabel}</span> : null}
       </div>
       <div className="absolute right-3 flex items-center gap-1">
+        {actions}
         <button
           type="button"
           className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)] disabled:opacity-60"

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import api from "../api";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw, ClipboardPaste } from "lucide-react";
+import { useEditClipboard } from "../utils/editClipboard";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -184,8 +185,9 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onPasteEdits, onAnnotate, onClose }) {
   const { t } = useTranslation("nav");
+  const editClipboard = useEditClipboard();
   const ref = useRef(null);
   useEffect(() => {
     function handlePointerDown(e) {
@@ -235,6 +237,13 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       )}
       {assetIds?.length >= 2 && (
         <MenuItem icon={LayoutGrid} label={t("gallery.menu.collage")} onClick={() => { onCollage?.(assetIds); onClose(); }} />
+      )}
+      {editClipboard && onPasteEdits && api.has("processAndSave") && (
+        <MenuItem
+          icon={ClipboardPaste}
+          label={t("gallery.menu.pasteEdits", { count: assetIds?.length || 1 })}
+          onClick={() => { onPasteEdits(assetIds || [item.asset_id]); onClose(); }}
+        />
       )}
       <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")} locked={!api.can("annotation")}>
         <button
@@ -546,6 +555,7 @@ export default function Gallery({
   editors,
   onCompare,
   onCollage,
+  onPasteEdits,
   onAnnotate,
 }) {
   const { t } = useTranslation("nav");
@@ -1065,6 +1075,7 @@ export default function Gallery({
           onEdit={onEdit}
           onCompare={onCompare}
           onCollage={onCollage}
+          onPasteEdits={onPasteEdits}
           onAnnotate={(ids, opts) => onAnnotate?.(ids, opts)}
           onClose={closeContextMenu}
         />

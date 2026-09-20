@@ -36,6 +36,8 @@ import PeopleInspector from "./components/PeopleInspector";
 import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
+import { getEditClipboard } from "./utils/editClipboard";
+import { runPasteEdits } from "./utils/runPasteEdits";
 import { ConfirmHost, confirm } from "./components/confirm";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
@@ -75,7 +77,7 @@ function shouldIgnoreKey(event) {
 export default function App() {
   // Toasts must exist before useWorkspace so menu actions (e.g. Verify Files)
   // can report their result.
-  const { toasts, pushToast, dismissToast } = useToasts();
+  const { toasts, pushToast, updateToast, dismissToast } = useToasts();
   const { t } = useTranslation("app");
   const { t: tNav } = useTranslation("nav");
   const { t: tInspector } = useTranslation("inspector");
@@ -876,6 +878,43 @@ export default function App() {
     setCompareState({ beforePath: a.image_path, afterPath: b.image_path, layout: "side" });
   }
 
+  // Paste the copied edits onto the selection. Progress lives in one toast
+  // (a renderer-driven batch cannot appear in the job dock, which only polls
+  // the sidecar), then the same toast's slot reports the outcome.
+  const pastingRef = useRef(false);
+  async function handlePasteEdits(assetIds) {
+    const clipboard = getEditClipboard();
+    const items = (assetIds || []).map((id) => itemById.get(id)).filter(Boolean);
+    if (!clipboard || !items.length || pastingRef.current) return;
+    pastingRef.current = true;
+    const progressId = pushToast({ title: t("pasteEdits.running", { done: 0, total: items.length }), ttl: 0 });
+    try {
+      const result = await runPasteEdits(clipboard, items, {
+        onProgress: ({ done, total }) => updateToast(progressId, { title: t("pasteEdits.running", { done, total }) }),
+      });
+      dismissToast(progressId);
+      if (result.saved.length) await workspace.refreshAll?.();
+      const notes = [
+        result.skipped ? t("pasteEdits.skipped", { count: result.skipped }) : null,
+        result.failed ? t("pasteEdits.failed", { count: result.failed }) : null,
+      ].filter(Boolean).join(" · ");
+      pushToast({
+        title: result.saved.length ? t("pasteEdits.done", { count: result.saved.length }) : t("pasteEdits.nothingDone"),
+        message: notes || (result.saved[0] ? toastPathLabel(result.saved[0]) : undefined),
+        tone: !result.saved.length || result.failed ? "error" : undefined,
+        ttl: 20_000,
+        actions: result.saved.length && api.has("revealPath") ? [{
+          label: t("showInFinder"),
+          primary: true,
+          onClick: () => api.revealPath(result.saved[0]),
+        }] : [],
+      });
+    } finally {
+      dismissToast(progressId);
+      pastingRef.current = false;
+    }
+  }
+
   function handleCollage(assetIds) {
     if (!assetIds?.length || assetIds.length < 2) return;
     const items = assetIds.map((id) => itemById.get(id)).filter(Boolean);
@@ -1259,6 +1298,7 @@ export default function App() {
                   editors={externalEditors}
                   onCompare={handleCompare}
                   onCollage={handleCollage}
+                  onPasteEdits={handlePasteEdits}
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
                 />
                 </div>

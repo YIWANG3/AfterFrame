@@ -21,7 +21,7 @@ const { register } = require("./saveFile");
 
 // register() only needs ipcMain.handle to exist; we call the returned functions
 // directly rather than going through IPC.
-const { processAndSave } = register({
+const { processAndSave, imageDisplaySize } = register({
   ipcMain: { handle() {} },
   dialog: {},
   rootDir: os.tmpdir(),
@@ -116,6 +116,38 @@ test("processAndSave matches the canvas preview for every orientation × turn ×
     }
   }
 });
+
+test("imageDisplaySize applies the EXIF orientation the catalog's raw dimensions ignore", async (t) => {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "afterframe-size-"));
+  t.after(() => fs.promises.rm(dir, { recursive: true, force: true }));
+  // The ramp is stored 2 wide × 3 tall; orientations 5–8 display it on its side.
+  for (const orientation of [1, 2, 3, 4]) {
+    assert.deepEqual(await imageDisplaySize(await writeOriented(dir, orientation)), { width: 2, height: 3 }, `orientation ${orientation}`);
+  }
+  for (const orientation of [5, 6, 7, 8]) {
+    assert.deepEqual(await imageDisplaySize(await writeOriented(dir, orientation)), { width: 3, height: 2 }, `orientation ${orientation}`);
+  }
+});
+
+test("avoidOverwrite saves beside an existing file instead of replacing it", async (t) => {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "afterframe-free-"));
+  t.after(() => fs.promises.rm(dir, { recursive: true, force: true }));
+  const sourcePath = await writeOriented(dir, 1);
+  const savePath = path.join(dir, "shot_edited.jpg");
+  await fs.promises.writeFile(savePath, "the user's earlier edit");
+
+  const first = await processAndSave({ sourcePath, savePath, quarterTurns: 1, avoidOverwrite: true });
+  const second = await processAndSave({ sourcePath, savePath, quarterTurns: 1, avoidOverwrite: true });
+  assert.equal(first.path, path.join(dir, "shot_edited_2.jpg"));
+  assert.equal(second.path, path.join(dir, "shot_edited_3.jpg"));
+  assert.equal(await fs.promises.readFile(savePath, "utf8"), "the user's earlier edit");
+  assert.deepEqual([first.width, first.height], [3, 2]);
+
+  // Without the flag the editor's own save still overwrites, as before.
+  const plain = await processAndSave({ sourcePath, savePath });
+  assert.equal(plain.path, savePath);
+});
+
 
 test("the saved file is upright for viewers too: no leftover orientation tag", async (t) => {
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "afterframe-tag-"));
