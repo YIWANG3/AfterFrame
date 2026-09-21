@@ -6,6 +6,17 @@
 // Functions are thin: argv assembly + result normalization only. Transport,
 // catalog binding and secrets handling stay in main.js's call layer.
 
+// argv for the view a facet query is counted inside; shared by facet-values
+// and search-facet so the two can never disagree about it.
+function facetViewArgv({ collectionId, status, search, filters } = {}) {
+  const argv = [];
+  if (collectionId) argv.push("--collection-id", String(collectionId));
+  if (status) argv.push("--status", String(status));
+  if (search) argv.push("--search", String(search));
+  if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+  return argv;
+}
+
 function createSidecarCommands(callJson) {
   return {
     // ── Browse / read ────────────────────────────────────────────────────
@@ -161,18 +172,17 @@ function createSidecarCommands(callJson) {
       return callJson(argv);
     },
 
-    // collectionId: describe that folder (options and counts) instead of the library.
-    facetValues({ collectionId } = {}) {
-      const argv = ["facet-values"];
-      if (collectionId) argv.push("--collection-id", String(collectionId));
-      return callJson(argv);
+    // The view the counts are taken inside (folder or status, search text, the
+    // other active filters). No arguments: the whole library.
+    facetValues(view = {}) {
+      return callJson(["facet-values", ...facetViewArgv(view)]);
     },
 
-    searchFacet({ field, q = "", limit, collectionId } = {}) {
+    searchFacet({ field, q = "", limit, ...view } = {}) {
       const argv = ["search-facet", "--field", String(field)];
       if (q) argv.push("--q", String(q));
       if (limit) argv.push("--limit", String(limit));
-      if (collectionId) argv.push("--collection-id", String(collectionId));
+      argv.push(...facetViewArgv(view));
       return callJson(argv).then((rows) => rows || []);
     },
 

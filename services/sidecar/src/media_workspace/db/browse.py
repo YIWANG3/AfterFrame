@@ -419,90 +419,121 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
     return row[0] if row else None
 
 
-# Narrows a facet query to one folder's members. Returned as (sql, params) so
-# every query below appends it the same way.
-def _member_clause(collection_id: str | None, asset_col: str = "assets.asset_id") -> tuple[str, list[object]]:
-    if not collection_id:
-        return "", []
-    return f" AND {asset_col} IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)", [collection_id]
+# ── facet options (the filter bar's dropdowns and sliders) ──────────────────
+# Every number shown beside an option answers "how many photos would I see if
+# I picked this?", so it is counted inside the current view: the folder (or
+# status), the search text and every OTHER active filter. A facet's own keys
+# are left out of its own count — with PNG selected, JPG must still say how
+# many JPGs there are, or the dropdown could never be used to switch.
+_FACET_OWN_KEYS: dict[str, frozenset[str]] = {
+    "camera": frozenset({"camera"}),
+    "lens": frozenset({"lens"}),
+    "tag": frozenset({"tag"}),
+    "extension": frozenset({"extension"}),
+    "iso": frozenset({"iso_min", "iso_max"}),
+    "aperture": frozenset({"aperture_min", "aperture_max"}),
+    "focal": frozenset({"focal_min", "focal_max"}),
+    "shutter": frozenset({"shutter_min", "shutter_max"}),
+    "capture_time": frozenset({"date_from", "date_to", "date_within_days"}),
+}
+
+_FACET_FROM = (
+    "FROM image_lookup_registry AS registry "
+    "JOIN assets ON assets.asset_id = registry.image_asset_id "
+    "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
+)
 
 
-def get_facet_values(connection: sqlite3.Connection, collection_id: str | None = None) -> dict[str, object]:
-    """Available facet options for building the filter bar.
+def _facet_scope(
+    facet: str,
+    *,
+    collection_id: str | None,
+    status: str,
+    search: str | None,
+    filters: dict | None,
+) -> tuple[str, list[object]]:
+    """WHERE (without the keyword) + params for counting one facet's options."""
+    own = _FACET_OWN_KEYS[facet]
+    others = {k: v for k, v in (filters or {}).items() if k not in own}
+    params: list[object] = []
+    if collection_id:
+        # A folder replaces the status, exactly as browse_collection does.
+        where = "assets.asset_id IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)"
+        params.append(collection_id)
+    else:
+        where = _status_clause(status or "all")
+    search_clause, search_params = _search_clause(search)
+    facet_clause, facet_params = _facet_clauses(others)
+    return f"{where} {search_clause} {facet_clause}", [*params, *search_params, *facet_params]
 
-    Returns distinct cameras/lenses with counts, numeric min/max for the range
-    sliders, and the capture-time span — scoped to *browseable* assets (those
-    with a registry image_asset_id row, same universe as the gallery). This
-    includes RAW imported via "Import" but excludes RAW added as reverse-lookup
-    sources. WHERE 1=1 lets each helper append "AND assets.<col> …".
 
-    With collection_id the options and their counts describe that folder, not
-    the library: inside a folder of 40 photos a camera must not read "1794".
+def get_facet_values(
+    connection: sqlite3.Connection,
+    collection_id: str | None = None,
+    *,
+    status: str = "all",
+    search: str | None = None,
+    filters: dict | None = None,
+) -> dict[str, object]:
+    """Options for the filter bar: distinct cameras / lenses / tags / formats
+    with counts, numeric ranges for the sliders, and the capture-time span.
+
+    The universe is browseable assets (a registry image_asset_id row, same as
+    the gallery): RAW imported via "Import" counts, RAW added as a
+    reverse-lookup source does not. With no arguments this describes the whole
+    library, which is what get_catalog_info reports to agents.
     """
-    member, member_params = _member_clause(collection_id)
-    base = (
-        "FROM image_lookup_registry AS registry "
-        f"JOIN assets ON assets.asset_id = registry.image_asset_id WHERE 1=1{member}"
-    )
+    def scope_for(facet: str) -> tuple[str, list[object]]:
+        return _facet_scope(facet, collection_id=collection_id, status=status, search=search, filters=filters)
 
-    def value_counts(col: str) -> list[dict[str, object]]:
+    def value_counts(facet: str, expr: str, order: str = "c DESC") -> list[dict[str, object]]:
+        where, params = scope_for(facet)
         rows = connection.execute(
-            f"SELECT assets.{col} AS v, COUNT(*) AS c {base} AND assets.{col} IS NOT NULL "
-            f"AND assets.{col} != '' GROUP BY assets.{col} ORDER BY c DESC",
-            member_params,
+            f"SELECT {expr} AS v, COUNT(*) AS c {_FACET_FROM} "
+            f"WHERE {where} AND {expr} IS NOT NULL AND {expr} != '' GROUP BY v ORDER BY {order}",
+            params,
         ).fetchall()
         return [{"value": r["v"], "count": r["c"]} for r in rows]
 
-    def min_max(col: str) -> dict[str, object]:
+    def min_max(facet: str, col: str) -> dict[str, object]:
+        where, params = scope_for(facet)
         r = connection.execute(
-            f"SELECT MIN(assets.{col}) AS lo, MAX(assets.{col}) AS hi {base} AND assets.{col} IS NOT NULL",
-            member_params,
+            f"SELECT MIN(assets.{col}) AS lo, MAX(assets.{col}) AS hi {_FACET_FROM} "
+            f"WHERE {where} AND assets.{col} IS NOT NULL",
+            params,
         ).fetchone()
         return {"min": r["lo"], "max": r["hi"]}
 
     # Only the most-used tags for the default dropdown; the rest are reachable
     # via server-side search (search_facet_values) so this stays bounded even
     # with thousands of tags.
-    tag_member, _ = _member_clause(collection_id, "t.asset_id")
+    tag_where, tag_params = scope_for("tag")
     tag_rows = connection.execute(
         f"""
         SELECT t.tag AS v, COUNT(*) AS c
         FROM asset_tags AS t
         JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
-        WHERE 1=1{tag_member}
+        JOIN assets ON assets.asset_id = registry.image_asset_id
+        LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id
+        WHERE {tag_where}
         GROUP BY t.tag
         ORDER BY c DESC, t.tag
         LIMIT 60
         """,
-        member_params,
-    ).fetchall()
-
-    # File-format facet, scoped to *browseable* assets only — i.e. those with a
-    # registry image_asset_id row (same universe as the gallery). This excludes
-    # RAW added via "Add RAW source", which are reverse-lookup sources, not tiles.
-    # Values are dot-stripped + lowercased (jpg, png, mp4, cr2, 3fr, …).
-    ext_rows = connection.execute(
-        f"""
-        SELECT LOWER(TRIM(assets.extension, '.')) AS v, COUNT(*) AS c
-        FROM image_lookup_registry AS registry
-        JOIN assets ON assets.asset_id = registry.image_asset_id
-        WHERE assets.extension IS NOT NULL AND assets.extension != ''{member}
-        GROUP BY v
-        ORDER BY c DESC, v
-        """,
-        member_params,
+        tag_params,
     ).fetchall()
 
     return {
-        "cameras": value_counts("meta_camera_model"),
-        "lenses": value_counts("meta_lens_model"),
+        "cameras": value_counts("camera", "assets.meta_camera_model"),
+        "lenses": value_counts("lens", "assets.meta_lens_model"),
         "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
-        "extensions": [{"value": r["v"], "count": r["c"]} for r in ext_rows],
-        "iso": min_max("meta_iso"),
-        "aperture": min_max("meta_aperture"),
-        "focal": min_max("meta_focal"),
-        "shutter": min_max("meta_shutter"),
-        "capture_time": min_max("meta_capture_time"),
+        # Dot-stripped + lowercased (jpg, png, mp4, cr2, 3fr, …).
+        "extensions": value_counts("extension", "LOWER(TRIM(assets.extension, '.'))", "c DESC, v"),
+        "iso": min_max("iso", "meta_iso"),
+        "aperture": min_max("aperture", "meta_aperture"),
+        "focal": min_max("focal", "meta_focal"),
+        "shutter": min_max("shutter", "meta_shutter"),
+        "capture_time": min_max("capture_time", "meta_capture_time"),
     }
 
 
@@ -512,43 +543,46 @@ def search_facet_values(
     q: str = "",
     limit: int = 50,
     collection_id: str | None = None,
+    *,
+    status: str = "all",
+    search: str | None = None,
+    filters: dict | None = None,
 ) -> list[dict[str, object]]:
     """Server-side facet search, so a dropdown never loads more than `limit`
     rows regardless of how many distinct values exist. Matches substring,
-    ordered by frequency."""
+    ordered by frequency, counted inside the same view as get_facet_values."""
+    if field not in ("tag", "camera", "lens"):
+        return []
     like = f"%{q}%" if q else "%"
-    member, member_params = _member_clause(collection_id)
-    tag_member, _ = _member_clause(collection_id, "t.asset_id")
+    where, params = _facet_scope(field, collection_id=collection_id, status=status, search=search, filters=filters)
     if field == "tag":
         rows = connection.execute(
             f"""
             SELECT t.tag AS v, COUNT(*) AS c
             FROM asset_tags AS t
             JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
-            WHERE t.tag LIKE ?{tag_member}
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id
+            WHERE {where} AND t.tag LIKE ?
             GROUP BY t.tag
             ORDER BY c DESC, t.tag
             LIMIT ?
             """,
-            [like, *member_params, limit],
+            [*params, like, limit],
         ).fetchall()
-    elif field in ("camera", "lens"):
+    else:
         col = "meta_camera_model" if field == "camera" else "meta_lens_model"
         rows = connection.execute(
             f"""
-            SELECT assets.{col} AS v, COUNT(*) AS c
-            FROM image_lookup_registry AS registry
-            JOIN assets ON assets.asset_id = registry.image_asset_id
-            WHERE assets.{col} IS NOT NULL
-              AND assets.{col} != '' AND assets.{col} LIKE ?{member}
+            SELECT assets.{col} AS v, COUNT(*) AS c {_FACET_FROM}
+            WHERE {where} AND assets.{col} IS NOT NULL
+              AND assets.{col} != '' AND assets.{col} LIKE ?
             GROUP BY assets.{col}
             ORDER BY c DESC
             LIMIT ?
             """,
-            [like, *member_params, limit],
+            [*params, like, limit],
         ).fetchall()
-    else:
-        return []
     return [{"value": r["v"], "count": r["c"]} for r in rows]
 
 

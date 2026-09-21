@@ -30,6 +30,48 @@ test("nothing to save until there is a condition", async () => {
   await expect(window.locator("[data-smart-collections]")).toHaveCount(0);
 });
 
+test("Clear and the smart collection actions stay put while the facets scroll", async () => {
+  // Narrow enough that the facets overflow their row.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760));
+  await window.getByTitle("Rating ≥ 3").click();
+  const scroller = window.locator("[data-filter-scroll]");
+  const actions = window.locator("[data-filter-actions]");
+  await expect(actions.getByRole("button", { name: /^Clear/ })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Save as smart collection" })).toBeVisible();
+  expect(await scroller.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  // The right-edge fade says "more this way": on now, off at the end of the row.
+  await expect(scroller).toHaveAttribute("data-more", "true");
+  const before = await actions.boundingBox();
+  await scroller.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  await expect(scroller).not.toHaveAttribute("data-more", "true");
+  expect(await scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const after = await actions.boundingBox();
+  expect(after.x).toBeCloseTo(before.x, 0);
+  // Pinned at the bar's right edge, fully inside it, not under the scroller.
+  const bar = await window.locator("[data-filter-bar]").boundingBox();
+  const scrollBox = await scroller.boundingBox();
+  expect(after.x + after.width).toBeLessThanOrEqual(bar.x + bar.width + 1);
+  expect(after.x).toBeGreaterThanOrEqual(scrollBox.x + scrollBox.width - 1);
+  // The bar floats over the photos: the actions need a surface of their own,
+  // like the facet chips, or they vanish against an image.
+  // (Base colour only: whichever button the pointer rests on also has a hover gradient.)
+  const surface = (locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const chip = await surface(scroller.getByRole("button", { name: "Camera", exact: true }));
+  expect(chip).not.toBe("rgba(0, 0, 0, 0)");
+  expect(await surface(actions.getByRole("button", { name: /^Clear/ }))).toBe(chip);
+  expect(await surface(actions.getByRole("button", { name: "Save as smart collection" }))).toBe(chip);
+  if (process.env.AF_SHOT) {
+    await window.evaluate(() => { document.documentElement.dataset.theme = "light"; document.querySelector("[data-testid='gallery-scroll']").scrollTop = 140; });
+    await window.waitForTimeout(300);
+    await window.screenshot({ path: process.env.AF_SHOT });
+    await window.evaluate(() => { document.documentElement.dataset.theme = "dark"; document.querySelector("[data-testid='gallery-scroll']").scrollTop = 0; });
+  }
+
+  await actions.getByRole("button", { name: /^Clear/ }).click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1440, 900));
+});
+
 test("saving the current filter creates a sidebar entry with the matching count", async () => {
   // Make sure at least one photo qualifies, whatever the fixture ships with.
   await window.locator("[data-gallery-item='true']").first().click();
@@ -44,6 +86,16 @@ test("saving the current filter creates a sidebar entry with the matching count"
   const expected = await browseCount({ rating_min: 5 });
   expect(expected).toBeGreaterThan(0);
   await expect.poll(() => rowCount("Five stars")).toBe(expected);
+  // Saved from this very view, so the grid already shows its photos and must
+  // keep showing them: the new row is highlighted and the title takes its name.
+  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
+  await expect(smartRow("Five stars")).toHaveClass(/bg-selected/);
+  await expect(window.getByTestId("gallery-title")).toHaveText("Five stars");
+  // Clicking it right away used to empty the grid: the conditions are the ones
+  // already loaded, so nothing reloaded after the grid was cleared.
+  await smartRow("Five stars").click();
+  await window.waitForTimeout(600);
+  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
   // Saved and unchanged: neither "Update" nor a second save is offered.
   await expect(window.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
   await expect(window.getByRole("button", { name: "Save as smart collection" })).toHaveCount(0);
@@ -99,6 +151,26 @@ test("last N days is saved as a relative condition", async () => {
     .then((rows) => rows.find((row) => row.name === "This month").rules));
   expect(stored.filters).toEqual({ date_within_days: 30 });
   await expect.poll(() => rowCount("This month")).toBe(await browseCount({ date_within_days: 30 }));
+});
+
+test("the sidebar's covers switch gives smart collections a cover too", async () => {
+  await window.getByTitle("Show covers").click();
+  const row = smartRow("Five stars");
+  const cover = row.locator("[data-smart-cover]");
+  await expect(cover).toBeVisible();
+  await expect.poll(() => cover.evaluate((el) => el.naturalWidth), { timeout: 10_000 }).toBeGreaterThan(0);
+  // The cover is the first photo the collection currently shows.
+  const first = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", filters: { rating_min: 4 }, limit: 1 })
+    .then((rows) => rows[0].preview_path || rows[0].image_path));
+  expect(decodeURIComponent(await cover.getAttribute("src"))).toContain(first.split("/").pop());
+  // Covers mode shows the count as "N items" under the name, like a folder.
+  await expect(row).toContainText(`${await browseCount({ rating_min: 4 })} items`);
+  // A collection with nothing in it keeps the placeholder tile.
+  if ((await browseCount({ date_within_days: 30 })) === 0) {
+    await expect(smartRow("This month").locator("[data-smart-cover]")).toHaveCount(0);
+  }
+  await window.getByTitle("Show as list").click();
+  await expect(cover).toHaveCount(0);
 });
 
 test("a snapshot freezes the current photos into an ordinary folder", async () => {

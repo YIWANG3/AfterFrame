@@ -254,6 +254,7 @@ export default function Sidebar({
         <SmartCollections
           collections={collections}
           activeId={stickerMode || peopleMode || discoverMode ? null : activeSmartCollectionId}
+          view={folderView}
           onOpen={onOpenSmartCollection}
           onRename={onRenameCollection}
           onDelete={onDeleteCollection}

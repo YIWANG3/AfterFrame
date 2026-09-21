@@ -296,7 +296,7 @@ export default function Toolbar({
       </div>
 
       <div className="ml-2 mr-2 min-w-0 flex-1">
-        <div className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{title}</div>
+        <div data-testid="gallery-title" className="truncate text-[13px] font-semibold tracking-[-0.01em] text-text">{title}</div>
       </div>
 
       <div className="toolbar-thumbsize flex h-8 items-center gap-1.5 text-muted2">

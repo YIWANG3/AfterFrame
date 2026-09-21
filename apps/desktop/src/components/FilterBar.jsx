@@ -103,6 +103,12 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
   if (onSearch) shown = q.trim() ? (remote || []) : options;
   else if (searchable && q) shown = options.filter((o) => String(o.value).toLowerCase().includes(q.toLowerCase()));
   else shown = options;
+  // Counts follow the other active filters, so the selected value can drop out
+  // of the list (nothing matches it any more). Keep it, at 0: that is the
+  // explanation for an empty grid, and the row the user unticks to get out.
+  if (value && !q.trim() && !shown.some((o) => String(o.value).toLowerCase() === String(value).toLowerCase())) {
+    shown = [{ value, count: 0 }, ...shown];
+  }
 
   return (
     <Popover label={label} active={!!value} summary={value} width={200}>
@@ -388,6 +394,12 @@ function PersonFilterOptions({ value, onSelect, onLoaded }) {
   );
 }
 
+// The bar floats over the photos, so anything in it needs a surface of its own:
+// bare text ("Clear", "Save as smart collection") vanishes against an image.
+// These are the facet chips' classes, which is also what the skin hangs the
+// glass pill on (index.css: `.flex-wrap.border-b button.rounded-md.border`).
+const ACTION_CHIP = "flex h-6 items-center gap-1 rounded-md border border-border/70 bg-app px-2 text-[11px] text-muted transition-colors hover:border-border hover:text-text";
+
 // Save the current view (status + search + filters) as a smart collection, or
 // write changed conditions back to the one that is open.
 function SmartCollectionControls({ smart }) {
@@ -396,7 +408,7 @@ function SmartCollectionControls({ smart }) {
   if (!smart?.canSave) return null;
   if (naming) {
     return (
-      <span className="w-40" data-smart-name-input="true">
+      <span className="w-40 rounded-md border border-border/70 bg-app" data-smart-name-input="true">
         <InlineEdit
           initial=""
           onConfirm={async (name) => { setNaming(false); await smart.onSave?.(name); }}
@@ -405,7 +417,7 @@ function SmartCollectionControls({ smart }) {
       </span>
     );
   }
-  const button = "flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text";
+  const button = ACTION_CHIP;
   return (
     <>
       {smart.dirty && (
@@ -424,7 +436,7 @@ function SmartCollectionControls({ smart }) {
   );
 }
 
-export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, collectionId, smart }) {
+export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
   const { t } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -433,19 +445,50 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const extensions = facetValues?.extensions || [];
   const activeCount = Object.keys(f).length;
 
+  const scrollRef = useRef(null);
+  const [moreRight, setMoreRight] = useState(false);
+  const measureMore = () => {
+    const el = scrollRef.current;
+    if (el) setMoreRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+  // Re-measure when the row's width changes (window resize, the actions
+  // appearing beside it) or its contents do (a chip added or removed).
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    measureMore();
+    const observer = new ResizeObserver(measureMore);
+    observer.observe(el);
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [activeCount, f.geo?.label]);
+
   return (
+    // Two parts: the facets scroll sideways when they do not fit; the actions
+    // on what is filtered (Clear, save / update a smart collection) stay put
+    // at the right edge, so they are never scrolled out of reach.
     <div
       data-filter-bar="true"
       className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"
-      // The skin lays the bar out as one sideways-scrolling row. Trackpads
-      // scroll it natively; a mouse wheel only has a vertical axis, so map
-      // that onto the row when it overflows.
-      onWheel={(event) => {
-        const el = event.currentTarget;
-        if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
-        el.scrollLeft += event.deltaY;
-      }}
     >
+      <div
+        ref={scrollRef}
+        data-filter-scroll="true"
+        // The right-edge fade is a "more this way" hint, so it is only on
+        // while there IS more: at the end of the row it would just dim the
+        // last facet.
+        data-more={moreRight ? "true" : undefined}
+        onScroll={measureMore}
+        className="filter-bar-scroll flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+        // The skin lays the facets out as one sideways-scrolling row. Trackpads
+        // scroll it natively; a mouse wheel only has a vertical axis, so map
+        // that onto the row when it overflows.
+        onWheel={(event) => {
+          const el = event.currentTarget;
+          if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
+          el.scrollLeft += event.deltaY;
+        }}
+      >
       {cameras.length > 0 && (
         <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
       )}
@@ -457,7 +500,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           label={t("filter.tag")}
           value={f.tag}
           options={tags}
-          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, collectionId: collectionId || undefined })}
+          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, ...(facetScope || {}) })}
           onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
         />
       )}
@@ -555,17 +598,23 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         </button>
       )}
 
-      {activeCount > 0 && (
-        <button
-          type="button"
-          onClick={() => onChange({})}
-          className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
-        >
-          <X className="h-2.5 w-2.5" />
-          {t("filter.clear", { count: activeCount })}
-        </button>
+      </div>
+
+      {(activeCount > 0 || smart?.canSave) && (
+        <div data-filter-actions="true" className="filter-bar-actions flex shrink-0 items-center gap-1.5">
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange({})}
+              className={ACTION_CHIP}
+            >
+              <X className="h-2.5 w-2.5" />
+              {t("filter.clear", { count: activeCount })}
+            </button>
+          )}
+          <SmartCollectionControls smart={smart} />
+        </div>
       )}
-      <SmartCollectionControls smart={smart} />
     </div>
   );
 }
