@@ -153,6 +153,26 @@ test("last N days is saved as a relative condition", async () => {
   await expect.poll(() => rowCount("This month")).toBe(await browseCount({ date_within_days: 30 }));
 });
 
+test("the sidebar's covers switch gives smart collections a cover too", async () => {
+  await window.getByTitle("Show covers").click();
+  const row = smartRow("Five stars");
+  const cover = row.locator("[data-smart-cover]");
+  await expect(cover).toBeVisible();
+  await expect.poll(() => cover.evaluate((el) => el.naturalWidth), { timeout: 10_000 }).toBeGreaterThan(0);
+  // The cover is the first photo the collection currently shows.
+  const first = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", filters: { rating_min: 4 }, limit: 1 })
+    .then((rows) => rows[0].preview_path || rows[0].image_path));
+  expect(decodeURIComponent(await cover.getAttribute("src"))).toContain(first.split("/").pop());
+  // Covers mode shows the count as "N items" under the name, like a folder.
+  await expect(row).toContainText(`${await browseCount({ rating_min: 4 })} items`);
+  // A collection with nothing in it keeps the placeholder tile.
+  if ((await browseCount({ date_within_days: 30 })) === 0) {
+    await expect(smartRow("This month").locator("[data-smart-cover]")).toHaveCount(0);
+  }
+  await window.getByTitle("Show as list").click();
+  await expect(cover).toHaveCount(0);
+});
+
 test("a snapshot freezes the current photos into an ordinary folder", async () => {
   const expected = await browseCount({ rating_min: 4 });
   await smartRow("Five stars").hover();
