@@ -144,7 +144,10 @@ function facetFiltersFrom(source) {
 // manage_collections `rules` → what the sidecar stores for a smart collection.
 function smartRulesFrom(rules) {
   if (!rules || typeof rules !== "object") throw new Error("rules is required for a smart collection.");
-  return { status: rules.status || "all", search: rules.query ? String(rules.query) : "", filters: facetFiltersFrom(rules) };
+  const filters = facetFiltersFrom(rules);
+  // "The five-star photos of this folder": membership of a folder as a condition.
+  if (rules.collection_id) filters.in_collection = String(rules.collection_id);
+  return { status: rules.status || "all", search: rules.query ? String(rules.query) : "", filters };
 }
 
 function createMcpServer(deps) {
@@ -480,7 +483,8 @@ function createMcpServer(deps) {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets: query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
-              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated.",
+              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated; " +
+              "plus collection_id to mean 'only photos in that folder'.",
           },
           collection_id: { type: "string" },
           name: { type: "string", description: "For create/rename" },
@@ -541,7 +545,7 @@ function createMcpServer(deps) {
           if (smart && !smart.rules) throw new Error("This smart collection's rules cannot be read by this version of AfterFrame.");
           const page = { limit: args.limit || 24, offset: args.offset || 0 };
           const rows = smart
-            ? await commands.browseImages({ status: smart.rules.status, search: smart.rules.search || undefined, filters: smart.rules.filters, ...page })
+            ? await commands.browseImages({ status: "all", base: smart.rules, ...page })
             : await commands.browseCollection(String(args.collection_id), page);
           for (const row of rows) rememberPreview(row.asset_id, row.preview_path, row.preview_hd_path);
           return { count: rows.length, assets: rows.map((row) => compactAsset(row, port)) };

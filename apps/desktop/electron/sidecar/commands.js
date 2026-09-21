@@ -8,27 +8,31 @@
 
 // argv for the view a facet query is counted inside; shared by facet-values
 // and search-facet so the two can never disagree about it.
-function facetViewArgv({ collectionId, status, search, filters } = {}) {
+function facetViewArgv({ collectionId, status, search, filters, base } = {}) {
   const argv = [];
   if (collectionId) argv.push("--collection-id", String(collectionId));
   if (status) argv.push("--status", String(status));
   if (search) argv.push("--search", String(search));
   if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+  if (base && !collectionId) argv.push("--base", JSON.stringify(base));
   return argv;
 }
 
 function createSidecarCommands(callJson) {
   return {
     // ── Browse / read ────────────────────────────────────────────────────
-    locateImageAsset({ assetId, status = "all", collectionId, search, sort, filters } = {}) {
+    // `base`: the rules of the smart collection being viewed — the set that
+    // search and filters refine (db/browse.py _view_where).
+    locateImageAsset({ assetId, status = "all", collectionId, search, sort, filters, base } = {}) {
       const argv = ["locate-image-asset", "--asset-id", String(assetId), "--status", String(status)];
       if (collectionId) argv.push("--collection-id", String(collectionId));
       if (search) argv.push("--search", String(search));
       if (sort) argv.push("--sort", String(sort));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      if (base) argv.push("--base", JSON.stringify(base));
       return callJson(argv);
     },
-    browseImages({ status = "all", limit = 120, offset = 0, search, sort, filters } = {}) {
+    browseImages({ status = "all", limit = 120, offset = 0, search, sort, filters, base } = {}) {
       const argv = [
         "browse-images",
         "--status", String(status),
@@ -38,18 +42,20 @@ function createSidecarCommands(callJson) {
       if (search) argv.push("--search", String(search));
       if (sort) argv.push("--sort", String(sort));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      if (base) argv.push("--base", JSON.stringify(base));
       return callJson(argv).then((rows) => rows || []);
     },
 
     // Lightweight location points for the map. Mirrors the gallery scope
     // (status/collection/search/facets); the sidecar ignores filters.geo so
     // the map keeps showing clusters outside the current viewport.
-    browseMapPoints({ status = "all", collectionId, search, filters, minPrecision, limit = 100000 } = {}) {
+    browseMapPoints({ status = "all", collectionId, search, filters, base, minPrecision, limit = 100000 } = {}) {
       const argv = ["browse-map-points", "--limit", String(limit)];
       if (collectionId) argv.push("--collection-id", String(collectionId));
       else argv.push("--status", String(status));
       if (search) argv.push("--search", String(search));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      if (base && !collectionId) argv.push("--base", JSON.stringify(base));
       if (minPrecision) argv.push("--min-precision", String(minPrecision));
       return callJson(argv).then((rows) => rows || []);
     },
@@ -85,7 +91,7 @@ function createSidecarCommands(callJson) {
     },
 
     // A folder takes the same search text and facet filters the library does.
-    browseCollection(collectionId, { limit = 120, offset = 0, search, filters } = {}) {
+    browseCollection(collectionId, { limit = 120, offset = 0, search, filters, sort } = {}) {
       const argv = [
         "browse-collection",
         "--collection-id", String(collectionId),
@@ -94,6 +100,7 @@ function createSidecarCommands(callJson) {
       ];
       if (search) argv.push("--search", String(search));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      if (sort) argv.push("--sort", String(sort));
       return callJson(argv).then((rows) => rows || []);
     },
 

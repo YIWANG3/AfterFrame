@@ -5,7 +5,8 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import {
-  DEFAULT_SCOPE, chooseSelectionAfterReload, filterItemsByQuery, facetScopeOf, rulesDirty, rulesFromScope, scopeFromRules, scopeKeyOf,
+  DEFAULT_SCOPE, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
+  rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
@@ -258,6 +259,7 @@ export default function useWorkspace({ pushToast } = {}) {
           offset: nextOffset,
           search,
           filters: activeFilters,
+          sort: target.sort || undefined,
         });
       } else {
         payload = await api.browseImages({
@@ -267,6 +269,8 @@ export default function useWorkspace({ pushToast } = {}) {
           search,
           sort: target.sort || undefined,
           filters: activeFilters,
+          // The smart collection being viewed: the set the filters refine.
+          base: target.base || undefined,
         });
       }
       if (activeFilters?.person_group) {
@@ -385,7 +389,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setBrowserLoading(true);
     setBrowserLoadingMore(false);
     try {
-      const asQuery = (s) => ({ status: s.status, collectionId: s.collectionId, search: s.query.trim() || undefined, sort: s.sort, filters: s.filters });
+      const asQuery = (s) => ({ status: s.status, collectionId: s.collectionId, search: s.query.trim() || undefined, sort: s.sort, filters: s.filters, base: s.base || undefined });
       let target = startScope;
       const sameLoadedScope = loadedScopeRef.current === scopeKeyOf(startScope);
       if (sameLoadedScope && filteredItems.some((item) => item.asset_id === assetId)) {
@@ -410,7 +414,7 @@ export default function useWorkspace({ pushToast } = {}) {
       const offset = resetScope || !sameLoadedScope ? 0 : browserOffset;
       const count = Math.max(0, limit - offset);
       const payload = count === 0 ? [] : target.collectionId
-        ? await api.browseCollection(target.collectionId, { limit: count, offset, search: asQuery(target).search, filters: target.filters })
+        ? await api.browseCollection(target.collectionId, { limit: count, offset, search: asQuery(target).search, filters: target.filters, sort: target.sort || undefined })
         : await api.browseImages({ ...asQuery(target), limit: count, offset });
       log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
       if (!isCurrent()) { log("superseded after page"); return; }
@@ -513,7 +517,10 @@ export default function useWorkspace({ pushToast } = {}) {
     return col;
   }
 
-  // A smart collection is the current scope, saved (workspaceLogic.rulesFromScope).
+  // Save the current view as a smart collection: where the user is plus the
+  // refinement (workspaceLogic.rulesFromScope). The new collection then becomes
+  // the place, which also empties the filter bar: what was a refinement is now
+  // its rules.
   async function saveSmartCollection(name) {
     const rules = rulesFromScope(scopeRef.current);
     if (!rules) return null;
@@ -528,15 +535,20 @@ export default function useWorkspace({ pushToast } = {}) {
       await loadCollections();
       throw new Error(t("smartCollectionRulesLost"));
     }
-    updateScope({ smartCollectionId: col.collection_id });
+    openSmartCollection(saved);
     return col;
   }
 
+  // Rewrite a smart collection's rules from the current view, then show it:
+  //   viewing + a refinement → "narrow this collection to what I see" (the
+  //                            refinement nests on its old rules)
+  //   editing                → the bar's conditions replace its top layer
   async function updateSmartCollectionRules(collectionId) {
     const rules = rulesFromScope(scopeRef.current);
     if (!rules) return;
     await api.updateCollection(collectionId, { rules });
-    await loadCollections();
+    const saved = (await loadCollections()).find((c) => c.collection_id === collectionId);
+    if (saved) openSmartCollection(saved);
   }
 
   // Freeze what a smart collection shows right now into an ordinary folder.
@@ -545,7 +557,7 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!rules) return null;
     const ids = [];
     for (let offset = 0; ; offset += 500) {
-      const page = await api.browseImages({ status: rules.status, search: rules.search || undefined, filters: rules.filters, limit: 500, offset });
+      const page = await api.browseImages({ status: "all", base: rules, limit: 500, offset });
       ids.push(...(page || []).map((row) => row.asset_id));
       if (!page || page.length < 500) break;
     }
@@ -586,7 +598,7 @@ export default function useWorkspace({ pushToast } = {}) {
     await api.deleteCollection(collectionId);
     bumpCatalogRevision();
     if (scopeRef.current.collectionId === collectionId) updateScope({ collectionId: null });
-    if (scopeRef.current.smartCollectionId === collectionId) updateScope({ smartCollectionId: null });
+    if (scopeRef.current.smartCollectionId === collectionId) goTo({});
     await loadCollections();
   }
 
@@ -695,38 +707,49 @@ export default function useWorkspace({ pushToast } = {}) {
 
   // ── scope changes: each one is a write to `scope`; the effect browses ──
 
-  function selectCollection(collectionId) {
-    updateScope({ collectionId, smartCollectionId: null });
+  // Going somewhere: a location change is a fresh destination. The refinement
+  // (search text + filters) belongs to the place it was made in, so it is
+  // dropped — the classic "why is this folder empty?" is a filter carried in
+  // from somewhere else. The sort is a preference and stays.
+  // When the destination is what the grid already shows (saving a smart
+  // collection from the current view, a Discover entry equal to the current
+  // scope) the browse effect will not run again, so the grid must not be cleared.
+  function goTo(next) {
+    const full = { ...DEFAULT_SCOPE, sort: scopeRef.current.sort, ...next };
+    if (!full.collectionId) full.sort = sortOutsideFolder(full.sort);
+    if (scopeKeyOf(full) !== scopeKeyOf(scopeRef.current)) {
+      // Drop the previous gallery right away: the grid must not paint the old
+      // result set (and the inspector the old selection) for the frames until
+      // the new browse resolves — that flash reads as "wrong photos, then fixed".
+      setItems([]);
+      setBrowserOffset(0);
+      setBrowserHasMore(true);
+      setSelectedAssetId(null);
+    }
+    setTypedQuery(full.query);
+    setScopeState(full);
   }
 
-  // A smart collection opens as a fresh destination made of its saved
-  // conditions; from there the ordinary browse path does everything.
+  function selectCollection(collectionId) {
+    goTo({ collectionId });
+  }
+
+  // A smart collection's rules become the base set; the filter bar starts
+  // empty and only narrows inside it (workspaceLogic.scopeFromRules).
   function openSmartCollection(collection) {
     const next = scopeFromRules(collection, scopeRef.current.sort);
-    if (!next) return;
-    // Already showing exactly these conditions — always the case right after
-    // saving one from the current view. The browse effect keys on the scope
-    // and would not run again, so clearing the grid here left it empty until
-    // the user went somewhere else and came back. Only the label changes.
-    if (scopeKeyOf(next) === scopeKeyOf(scopeRef.current)) {
-      updateScope({ smartCollectionId: next.smartCollectionId });
-      return;
-    }
-    setItems([]);
-    setBrowserOffset(0);
-    setBrowserHasMore(true);
-    setSelectedAssetId(null);
-    setTypedQuery(next.query);
-    replaceScope(next);
+    if (next) goTo(next);
   }
 
-  // Status filters and collections are mutually exclusive views. This owns
-  // that invariant — callers must not have to remember to clear the
-  // collection themselves (pagination/reloads would silently mix datasets).
-  function setStatusFilter(next, { facetFilters } = {}) {
-    updateScope(facetFilters
-      ? { status: next, collectionId: null, smartCollectionId: null, filters: facetFilters }
-      : { status: next, collectionId: null, smartCollectionId: null });
+  // The filter bar shows the collection's own conditions, to be changed and saved.
+  function editSmartCollection(collection) {
+    const next = editScopeFromRules(collection, scopeRef.current.sort);
+    if (next) goTo(next);
+  }
+
+  // Status views, folders and smart collections are mutually exclusive places.
+  function setStatusFilter(next) {
+    goTo({ status: next });
     // The sidebar counts next to the entry the user just clicked.
     void api.getSummary().then(setSummary).catch(() => {});
   }
@@ -736,16 +759,16 @@ export default function useWorkspace({ pushToast } = {}) {
   function clearCollection({ reload = true } = {}) {
     const current = scopeRef.current;
     if (!current.collectionId) return;
-    if (!reload) loadedScopeRef.current = scopeKeyOf({ ...current, collectionId: null });
-    updateScope({ collectionId: null });
+    const next = { ...current, collectionId: null, sort: sortOutsideFolder(current.sort) };
+    if (!reload) loadedScopeRef.current = scopeKeyOf(next);
+    setScopeState(next);
   }
 
   // Opening a person is a new browse destination, not an intersection with a
   // stale text query/date/tag/rating filter from the previous gallery.
   function filterByPerson(groupId) {
     if (!groupId) return;
-    setTypedQuery("");
-    replaceScope({ filters: { person_group: groupId }, sort: scopeRef.current.sort });
+    goTo({ filters: { person_group: groupId } });
   }
 
   // Open the gallery as a fresh destination: collection, status, query and
@@ -753,16 +776,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // gallery had (the Discover page's entries would otherwise inherit a stale
   // person/date/map filter and open "empty").
   function browseTo({ status = "all", filters = {}, collectionId = null, query = "" } = {}) {
-    const facetFilters = filters && typeof filters === "object" ? filters : {};
-    // Drop the previous gallery right away: the grid must not paint the old
-    // result set (and the inspector the old selection) for the frames until
-    // the new browse resolves — that flash reads as "wrong photos, then fixed".
-    setItems([]);
-    setBrowserOffset(0);
-    setBrowserHasMore(true);
-    setSelectedAssetId(null);
-    setTypedQuery(query);
-    replaceScope({ status, collectionId, query, filters: facetFilters, sort: scopeRef.current.sort });
+    goTo({ status, collectionId, query, filters: filters && typeof filters === "object" ? filters : {} });
   }
 
   function applyFilters(nextFilters) {
@@ -1092,8 +1106,12 @@ export default function useWorkspace({ pushToast } = {}) {
     activeSmartCollectionId: scope.smartCollectionId,
     // Filter bar: "Save as smart collection" when there is something to save,
     // "Update" when an open smart collection's conditions were changed.
+    // Filter bar: what it offers depends on the layer the user is working in.
+    hasRefinement: hasRefinement(scope),
+    editingSmartCollection: !!scope.editingRules,
     canSaveSmartCollection: !!rulesFromScope(scope),
     smartCollectionDirty: !!activeSmartCollection && rulesDirty(scope, activeSmartCollection.rules),
+    activeBase: scope.collectionId ? null : scope.base,
     facetValues,
     browserLoading,
     browserReady,
@@ -1132,6 +1150,7 @@ export default function useWorkspace({ pushToast } = {}) {
     updateSmartCollectionRules,
     snapshotSmartCollection,
     openSmartCollection,
+    editSmartCollection,
     reorderCollections,
     reorderingCollections,
     renameCollection,

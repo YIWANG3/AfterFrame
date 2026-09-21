@@ -874,9 +874,21 @@ export default function App() {
     setCompareState({ beforePath: a.image_path, afterPath: b.image_path, layout: "side" });
   }
 
+  // An active filter must be on screen: a hidden bar that is still filtering is
+  // how a folder comes to look empty for no visible reason.
+  const filterBarVisible = showFilters || workspace.hasRefinement || workspace.editingSmartCollection;
   const activeSmartCollection = workspace.activeSmartCollectionId
     ? (workspace.collections || []).find((c) => c.collection_id === workspace.activeSmartCollectionId) || null
     : null;
+
+  async function rewriteSmartCollection() {
+    try {
+      await workspace.updateSmartCollectionRules(workspace.activeSmartCollectionId);
+      pushToast({ title: t("smartCollection.updated"), message: activeSmartCollection?.name, ttl: 4000 });
+    } catch (error) {
+      pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+    }
+  }
 
   function handleCollage(assetIds) {
     if (!assetIds?.length || assetIds.length < 2) return;
@@ -1046,8 +1058,7 @@ export default function App() {
           setStatus={(next) => {
             setViewMode("assets");
             setPeopleGroup(null);
-            const nextFilters = clearPeopleGroupFilter();
-            workspace.setStatusFilter(next, { facetFilters: nextFilters });
+            workspace.setStatusFilter(next);
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
@@ -1055,9 +1066,12 @@ export default function App() {
           onOpenSmartCollection={(collection) => {
             setViewMode("assets");
             setPeopleGroup(null);
-            // Its conditions ARE the filter bar's contents: show them.
-            setShowFilters(true);
             workspace.openSmartCollection(collection);
+          }}
+          onEditSmartCollection={(collection) => {
+            setViewMode("assets");
+            setPeopleGroup(null);
+            workspace.editSmartCollection(collection);
           }}
           onSnapshotSmartCollection={async (collection) => {
             try {
@@ -1171,6 +1185,7 @@ export default function App() {
                 query={workspace.query}
                 setQuery={workspace.setQuery}
                 sort={workspace.sort}
+                inFolder={!!workspace.activeCollectionId}
                 setSort={workspace.setSort}
                 refreshAll={() => workspace.refreshAll({ force: true })}
                 onAddProcessed={workspace.addImages}
@@ -1186,7 +1201,7 @@ export default function App() {
                 setThumbSize={setThumbSize}
                 mapExpanded={mapExpanded}
                 onToggleMap={() => setMapExpanded((current) => !current)}
-                showFilters={showFilters}
+                showFilters={filterBarVisible}
                 onToggleFilters={() => setShowFilters((v) => !v)}
                 filterCount={Object.keys(workspace.filters || {}).length}
                 activityJobs={workspace.jobs}
@@ -1195,7 +1210,7 @@ export default function App() {
                 onPauseJob={workspace.pauseJob}
                 onResumeJob={workspace.resumeJob}
               />
-              {showFilters && (
+              {filterBarVisible && (
                 <FilterBar
                   facetValues={workspace.facetValues}
                   filters={workspace.filters}
@@ -1215,14 +1230,13 @@ export default function App() {
                         pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
                       }
                     },
-                    onUpdate: async () => {
-                      try {
-                        await workspace.updateSmartCollectionRules(workspace.activeSmartCollectionId);
-                        pushToast({ title: t("smartCollection.updated"), message: activeSmartCollection?.name, ttl: 4000 });
-                      } catch (error) {
-                        pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
-                      }
-                    },
+                    editing: workspace.editingSmartCollection,
+                    // Rewrites the open collection from what is showing: while
+                    // viewing it narrows it to the refinement, while editing it
+                    // saves the bar's conditions.
+                    onNarrow: () => rewriteSmartCollection(),
+                    onSaveEdit: () => rewriteSmartCollection(),
+                    onCancelEdit: () => { if (activeSmartCollection) workspace.openSmartCollection(activeSmartCollection); },
                   }}
                 />
               )}
@@ -1248,6 +1262,7 @@ export default function App() {
                   collectionId={workspace.activeCollectionId}
                   search={workspace.query}
                   filters={workspace.filters}
+                  base={workspace.activeBase}
                   catalogKey={workspace.info?.catalogPath || null}
                   refreshToken={workspace.catalogRevision}
                   onViewportChange={handleViewportChange}

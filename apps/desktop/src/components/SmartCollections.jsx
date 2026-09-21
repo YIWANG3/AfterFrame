@@ -3,13 +3,13 @@
 // in them is decided by their conditions (hooks/workspaceLogic.rulesFromScope).
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderInput, ListFilter, Pencil, Trash2 } from "lucide-react";
+import { FolderInput, ListFilter, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import InlineEdit from "./InlineEdit";
 
 // `view` is the sidebar's list / covers switch, shared with the folders below.
-export default function SmartCollections({ collections, activeId, view = "list", onOpen, onRename, onDelete, onSnapshot }) {
+export default function SmartCollections({ collections, activeId, view = "list", onOpen, onEditRules, onRename, onDelete, onSnapshot }) {
   const { t } = useTranslation("nav");
   const [editingId, setEditingId] = useState(null);
   const smart = (collections || []).filter((c) => c.kind === "smart");
@@ -30,7 +30,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
         let path = null;
         if (c.rules && (c.item_count || 0) > 0) {
           try {
-            const rows = await api.browseImages({ status: c.rules.status, search: c.rules.search || undefined, filters: c.rules.filters, limit: 1, offset: 0 });
+            const rows = await api.browseImages({ status: "all", base: c.rules, limit: 1, offset: 0 });
             path = rows?.[0]?.preview_path || rows?.[0]?.image_path || null;
           } catch { path = null; }
         }
@@ -110,6 +110,16 @@ export default function SmartCollections({ collections, activeId, view = "list",
                 <span className={`text-[11px] tabular-nums ${active ? "text-accent" : "text-muted2"}`}>{col.item_count || 0}</span>
               )}
               <span className="hidden gap-0.5 group-hover:flex">
+                {readable && (
+                  <button
+                    type="button"
+                    className="rounded-md p-0.5 text-muted2 hover:text-text"
+                    title={t("sidebar.editSmartRules")}
+                    onClick={(e) => { e.stopPropagation(); onEditRules?.(col); }}
+                  >
+                    <SlidersHorizontal className="h-3 w-3" />
+                  </button>
+                )}
                 {readable && (
                   <button
                     type="button"

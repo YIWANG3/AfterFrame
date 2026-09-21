@@ -30,7 +30,7 @@ const DISPLAY_MODES = [
   { key: "waterfall", icon: Columns2 },
 ];
 
-const SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
+const LIBRARY_SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
 // `cap` marks entries a bridge may declare unavailable (api.can) — the web
 // bridge hides RAW sources, sidecar tasks and AI annotation.
@@ -138,7 +138,11 @@ function DisplayModeDropdown({ displayMode, setDisplayMode }) {
   );
 }
 
-function SortDropdown({ sort, setSort }) {
+// "Added" only means something inside a folder, so it is only offered there.
+const FOLDER_SORT_OPTIONS = ["added-desc", "added-asc"];
+
+function SortDropdown({ sort, setSort, inFolder = false }) {
+  const SORT_OPTIONS = inFolder ? [...FOLDER_SORT_OPTIONS, ...LIBRARY_SORT_OPTIONS] : LIBRARY_SORT_OPTIONS;
   const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -200,6 +204,7 @@ export default function Toolbar({
   setQuery,
   sort,
   setSort,
+  inFolder = false,
   refreshAll,
   onAddProcessed,
   onAddSources,
@@ -339,7 +344,7 @@ export default function Toolbar({
         />
       </label>
 
-      <SortDropdown sort={sort} setSort={setSort} />
+      <SortDropdown sort={sort} setSort={setSort} inFolder={inFolder} />
 
       <div className="relative">
         <IconButton

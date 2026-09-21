@@ -24,7 +24,9 @@
       "captured-asc": "Captured ↑",
       "rating-desc": "Rating",
       "name-asc": "Name A-Z",
-      "name-desc": "Name Z-A"
+      "name-desc": "Name Z-A",
+      "added-desc": "Added ↓",
+      "added-asc": "Added ↑"
     },
     "menu": {
       "library": "Library",
@@ -84,7 +86,8 @@
     "webWelcomeHint": "Browse sample photos or drag in your own",
     "smartCollections": "Smart collections",
     "snapshotToFolder": "Copy current photos to a folder",
-    "smartUnreadable": "Saved by a newer version of AfterFrame"
+    "smartUnreadable": "Saved by a newer version of AfterFrame",
+    "editSmartRules": "Edit conditions"
   },
   "people": {
     "title": "People",
@@ -177,12 +180,16 @@
     "mapAreaRemove": "Remove map area filter",
     "saveSmart": "Save as smart collection",
     "saveSmartAs": "Save as new",
-    "updateSmart": "Update",
-    "updateSmartHint": "Save these conditions to “{{name}}”",
     "lastDays_one": "Last day",
     "lastDays_other": "Last {{count}} days",
     "lastDaysShort_one": "{{count}}d",
-    "lastDaysShort_other": "{{count}}d"
+    "lastDaysShort_other": "{{count}}d",
+    "narrowSmart": "Narrow “{{name}}” to this",
+    "narrowSmartHint": "Rewrite “{{name}}” so it only holds what is showing now",
+    "editingSmart": "Editing “{{name}}”",
+    "saveEdit": "Save",
+    "cancelEdit": "Cancel",
+    "needsCondition": "A smart collection needs at least one condition"
   },
   "activity": {
     "title": "Background Activity",

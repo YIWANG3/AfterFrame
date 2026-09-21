@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
@@ -400,12 +400,39 @@ function PersonFilterOptions({ value, onSelect, onLoaded }) {
 // glass pill on (index.css: `.flex-wrap.border-b button.rounded-md.border`).
 const ACTION_CHIP = "flex h-6 items-center gap-1 rounded-md border border-border/70 bg-app px-2 text-[11px] text-muted transition-colors hover:border-border hover:text-text";
 
-// Save the current view (status + search + filters) as a smart collection, or
-// write changed conditions back to the one that is open.
+// What the bar offers depends on the layer the user is working in
+// (hooks/workspaceLogic.js):
+//   a status view or folder, refined → "Save as smart collection"
+//   inside a smart collection, refined → "Narrow «X» to this" (its rules are
+//       rewritten) or "Save as new". An unrefined collection offers nothing:
+//       picking a format in there narrows the view, it does not edit the rules.
+//   editing a collection's conditions → Save / Cancel
 function SmartCollectionControls({ smart }) {
   const { t } = useTranslation("nav");
   const [naming, setNaming] = useState(false);
-  if (!smart?.canSave) return null;
+  if (!smart) return null;
+  if (smart.editing) {
+    return (
+      <>
+        <span className="flex h-6 items-center gap-1 px-1 text-[11px] text-muted2" data-smart-editing="true">
+          <SlidersHorizontal className="h-2.5 w-2.5" />
+          <span className="max-w-[140px] truncate">{t("filter.editingSmart", { name: smart.activeName })}</span>
+        </span>
+        <button type="button" className={ACTION_CHIP} onClick={() => smart.onCancelEdit?.()}>{t("filter.cancelEdit")}</button>
+        <button
+          type="button"
+          className={`${ACTION_CHIP} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={!smart.dirty || !smart.canSave}
+          title={smart.canSave ? undefined : t("filter.needsCondition")}
+          onClick={() => smart.onSaveEdit?.()}
+        >
+          <Save className="h-2.5 w-2.5" />
+          {t("filter.saveEdit")}
+        </button>
+      </>
+    );
+  }
+  if (!smart.canSave) return null;
   if (naming) {
     return (
       <span className="w-40 rounded-md border border-border/70 bg-app" data-smart-name-input="true">
@@ -417,21 +444,18 @@ function SmartCollectionControls({ smart }) {
       </span>
     );
   }
-  const button = ACTION_CHIP;
   return (
     <>
-      {smart.dirty && (
-        <button type="button" className={button} onClick={() => smart.onUpdate?.()} title={t("filter.updateSmartHint", { name: smart.activeName })}>
+      {smart.activeName && (
+        <button type="button" className={ACTION_CHIP} onClick={() => smart.onNarrow?.()} title={t("filter.narrowSmartHint", { name: smart.activeName })}>
           <Save className="h-2.5 w-2.5" />
-          {t("filter.updateSmart")}
+          <span className="max-w-[160px] truncate">{t("filter.narrowSmart", { name: smart.activeName })}</span>
         </button>
       )}
-      {(!smart.activeName || smart.dirty) && (
-        <button type="button" className={button} onClick={() => setNaming(true)}>
-          <ListFilter className="h-2.5 w-2.5" />
-          {smart.activeName ? t("filter.saveSmartAs") : t("filter.saveSmart")}
-        </button>
-      )}
+      <button type="button" className={ACTION_CHIP} onClick={() => setNaming(true)}>
+        <ListFilter className="h-2.5 w-2.5" />
+        {smart.activeName ? t("filter.saveSmartAs") : t("filter.saveSmart")}
+      </button>
     </>
   );
 }
@@ -600,7 +624,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
 
       </div>
 
-      {(activeCount > 0 || smart?.canSave) && (
+      {(activeCount > 0 || smart?.canSave || smart?.editing) && (
         <div data-filter-actions="true" className="filter-bar-actions flex shrink-0 items-center gap-1.5">
           {activeCount > 0 && (
             <button

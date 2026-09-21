@@ -93,15 +93,34 @@ function hydrateAsset(record, blobs) {
 
 // ── collections (manual albums, sidecar row shape) ──
 const collections = []; // rows carry asset_ids; item_count derives from it
-// A smart collection's count is its saved filter run over the library (same
-// predicates browseImages uses), not a membership list.
-function smartCount(rules) {
-  let list = assets;
-  if (rules.status === "rated") list = list.filter((a) => a.app_rating > 0);
-  else if (rules.status === "matched") list = [];
-  if (rules.search) list = list.filter((a) => matchesSearch(a, rules.search));
-  return list.filter((a) => matchesFacetFilters(a, rules.filters || {})).length;
+// The toolbar's sort orders. `assets` is in import order, oldest first.
+function sortAssets(list, sort) {
+  const sorted = [...list];
+  if (sort === "name-asc") sorted.sort((a, b) => a.stem.localeCompare(b.stem));
+  else if (sort === "name-desc") sorted.sort((a, b) => b.stem.localeCompare(a.stem));
+  else if (sort === "rating-desc") sorted.sort((a, b) => b.app_rating - a.app_rating);
+  else if (sort === "captured-asc" || sort === "captured-desc") {
+    // ISO strings compare lexicographically; missing capture_time sinks last.
+    const key = (a) => a.image_metadata?.capture_time || "￿";
+    sorted.sort((a, b) => key(a).localeCompare(key(b)));
+    if (sort === "captured-desc") sorted.reverse();
+  } else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported desc
+  return sorted;
 }
+
+// A smart collection's rules as a predicate (sidecar _base_clause): its status,
+// search and filters, AND its nested base. The gallery's search and filters
+// then refine inside whatever this lets through.
+function matchesRules(asset, rules, depth = 0) {
+  if (!rules || depth >= 4) return true;
+  if (rules.status === "rated" && !(asset.app_rating > 0)) return false;
+  if (rules.status === "matched") return false;
+  if (rules.search && !matchesSearch(asset, rules.search)) return false;
+  if (!matchesFacetFilters(asset, rules.filters || {})) return false;
+  return matchesRules(asset, rules.base, depth + 1);
+}
+// Live, not a membership list.
+const smartCount = (rules) => assets.filter((a) => matchesRules(a, rules)).length;
 const publicCollection = ({ asset_ids, ...row }) => (row.kind === "smart"
   ? { ...row, item_count: row.rules ? smartCount(row.rules) : 0 }
   : { ...row, item_count: asset_ids?.length ?? 0 });
@@ -300,6 +319,10 @@ function matchesFacetFilters(asset, filters) {
   if (filters.annotated === "with" && !asset.annotation) return false;
   if (filters.annotated === "without" && asset.annotation) return false;
   if (filters.person_group) return false;
+  if (filters.in_collection) {
+    const folder = collections.find((c) => c.collection_id === filters.in_collection);
+    if (!(folder?.asset_ids || []).includes(asset.asset_id)) return false;
+  }
   if (filters.geo && !matchesGeo(meta, filters.geo)) return false;
   return true;
 }
@@ -419,13 +442,14 @@ const FACET_OWN_KEYS = {
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
   capture_time: ["date_from", "date_to", "date_within_days"],
 };
-function facetUniverse(facet, { collectionId, status = "all", search, filters } = {}) {
+function facetUniverse(facet, { collectionId, status = "all", search, filters, base } = {}) {
   let list = assets;
+  if (base && !collectionId) list = list.filter((a) => matchesRules(a, base));
   if (collectionId) {
     const member = new Set(collections.find((c) => c.collection_id === collectionId)?.asset_ids || []);
     list = list.filter((a) => member.has(a.asset_id));
-  } else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
-  else if (status === "matched") list = [];
+  } else if (!base && status === "rated") list = list.filter((a) => a.app_rating > 0);
+  else if (!base && status === "matched") list = [];
   if (search) list = list.filter((a) => matchesSearch(a, search));
   const others = { ...(filters || {}) };
   for (const key of FACET_OWN_KEYS[facet] || []) delete others[key];
@@ -817,38 +841,30 @@ export const browserBridge = {
     const index = rows.findIndex((row) => row.asset_id === assetId);
     return { index: index < 0 ? null : index };
   },
-  browseImages: async ({ status = "all", limit = 180, offset = 0, search, sort, filters } = {}) => {
+  browseImages: async ({ status = "all", limit = 180, offset = 0, search, sort, filters, base } = {}) => {
     let list = assets;
-    if (status === "rated") list = list.filter((a) => a.app_rating > 0);
+    // A smart collection's rules are the base set and carry their own status.
+    if (base) list = list.filter((a) => matchesRules(a, base));
+    else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
     else if (status === "matched") list = [];
     if (search) list = list.filter((a) => matchesSearch(a, search));
     if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
-    let sorted = [...list];
-    if (sort === "name-asc") sorted.sort((a, b) => a.stem.localeCompare(b.stem));
-    else if (sort === "name-desc") sorted.sort((a, b) => b.stem.localeCompare(a.stem));
-    else if (sort === "rating-desc") sorted.sort((a, b) => b.app_rating - a.app_rating);
-    else if (sort === "captured-asc" || sort === "captured-desc") {
-      // ISO strings compare lexicographically; missing capture_time sinks last.
-      const key = (a) => a.image_metadata?.capture_time || "￿";
-      sorted.sort((a, b) => key(a).localeCompare(key(b)));
-      if (sort === "captured-desc") sorted.reverse();
-    }
-    else if (!sort || sort.endsWith("-desc")) sorted.reverse(); // imported desc
-    return sorted.slice(offset, offset + limit);
+    return sortAssets(list, sort).slice(offset, offset + limit);
   },
   // The web catalog has no gazetteer; the Discover page falls back to
   // month groups when both lists are empty.
   discoverCollections: async () => ({ places: [], memories: [] }),
   // Location points for the map drawer, scoped like the gallery. Same row
   // shape as the sidecar's browse-map-points; all web points are EXIF-exact.
-  browseMapPoints: async ({ status = "all", collectionId, search, filters } = {}) => {
+  browseMapPoints: async ({ status = "all", collectionId, search, filters, base } = {}) => {
     let list = assets;
+    if (base && !collectionId) list = list.filter((a) => matchesRules(a, base));
     if (collectionId) {
       const row = collections.find((c) => c.collection_id === collectionId);
       const member = new Set(row?.asset_ids || []);
       list = list.filter((a) => member.has(a.asset_id));
-    } else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
-    else if (status === "matched") list = [];
+    } else if (!base && status === "rated") list = list.filter((a) => a.app_rating > 0);
+    else if (!base && status === "matched") list = [];
     // A folder is narrowed by search and facets like any other scope.
     if (search) list = list.filter((a) => matchesSearch(a, search));
     if (filters) {
@@ -871,13 +887,17 @@ export const browserBridge = {
         preview_path: a.preview_path,
       }));
   },
-  browseCollection: async (collectionId, { limit = 180, offset = 0, search, filters } = {}) => {
+  browseCollection: async (collectionId, { limit = 180, offset = 0, search, filters, sort } = {}) => {
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return [];
     const byId = new Map(assets.map((a) => [a.asset_id, a]));
     let list = (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean);
     if (search) list = list.filter((a) => matchesSearch(a, search));
     if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
+    // asset_ids is in the order photos were added; the sidecar's default is
+    // most recently added first.
+    if (!sort || sort === "added-desc") list = [...list].reverse();
+    else if (sort !== "added-asc") list = sortAssets(list, sort);
     return list.slice(offset, offset + limit);
   },
   listCollections: async () => {
