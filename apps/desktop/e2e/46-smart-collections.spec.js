@@ -30,6 +30,35 @@ test("nothing to save until there is a condition", async () => {
   await expect(window.locator("[data-smart-collections]")).toHaveCount(0);
 });
 
+test("Clear and the smart collection actions stay put while the facets scroll", async () => {
+  // Narrow enough that the facets overflow their row.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760));
+  await window.getByTitle("Rating ≥ 3").click();
+  const scroller = window.locator("[data-filter-scroll]");
+  const actions = window.locator("[data-filter-actions]");
+  await expect(actions.getByRole("button", { name: /^Clear/ })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Save as smart collection" })).toBeVisible();
+  expect(await scroller.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  // The right-edge fade says "more this way": on now, off at the end of the row.
+  await expect(scroller).toHaveAttribute("data-more", "true");
+  const before = await actions.boundingBox();
+  await scroller.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  await expect(scroller).not.toHaveAttribute("data-more", "true");
+  expect(await scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const after = await actions.boundingBox();
+  expect(after.x).toBeCloseTo(before.x, 0);
+  // Pinned at the bar's right edge, fully inside it, not under the scroller.
+  const bar = await window.locator("[data-filter-bar]").boundingBox();
+  const scrollBox = await scroller.boundingBox();
+  expect(after.x + after.width).toBeLessThanOrEqual(bar.x + bar.width + 1);
+  expect(after.x).toBeGreaterThanOrEqual(scrollBox.x + scrollBox.width - 1);
+  if (process.env.AF_SHOT) await window.screenshot({ path: process.env.AF_SHOT });
+
+  await actions.getByRole("button", { name: /^Clear/ }).click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1440, 900));
+});
+
 test("saving the current filter creates a sidebar entry with the matching count", async () => {
   // Make sure at least one photo qualifies, whatever the fixture ships with.
   await window.locator("[data-gallery-item='true']").first().click();
