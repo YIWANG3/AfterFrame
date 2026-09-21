@@ -5,7 +5,8 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import {
-  DEFAULT_SCOPE, chooseSelectionAfterReload, filterItemsByQuery, scopeKeyOf, shouldResetScopeForReveal,
+  DEFAULT_SCOPE, chooseSelectionAfterReload, filterItemsByQuery, rulesDirty, rulesFromScope, scopeFromRules, scopeKeyOf,
+  shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
@@ -340,6 +341,8 @@ export default function useWorkspace({ pushToast } = {}) {
     if (revealRef.current) return;
     invalidateAnnotations();
     void refreshBrowse();
+    // Smart collection counts are live queries over the assets.
+    void loadCollections();
     // Asset writes move the sidebar counts too (delete_assets, crops adding
     // versions); the gallery alone reloading left "All Assets N" stale.
     void api.getSummary().then(setSummary).catch(() => {});
@@ -508,6 +511,39 @@ export default function useWorkspace({ pushToast } = {}) {
     return col;
   }
 
+  // A smart collection is the current scope, saved (workspaceLogic.rulesFromScope).
+  async function saveSmartCollection(name) {
+    const rules = rulesFromScope(scopeRef.current);
+    if (!rules) return null;
+    const col = await api.createCollection(name, "smart", rules);
+    await loadCollections();
+    updateScope({ smartCollectionId: col.collection_id });
+    return col;
+  }
+
+  async function updateSmartCollectionRules(collectionId) {
+    const rules = rulesFromScope(scopeRef.current);
+    if (!rules) return;
+    await api.updateCollection(collectionId, { rules });
+    await loadCollections();
+  }
+
+  // Freeze what a smart collection shows right now into an ordinary folder.
+  async function snapshotSmartCollection(collection, name) {
+    const rules = collection?.rules;
+    if (!rules) return null;
+    const ids = [];
+    for (let offset = 0; ; offset += 500) {
+      const page = await api.browseImages({ status: rules.status, search: rules.search || undefined, filters: rules.filters, limit: 500, offset });
+      ids.push(...(page || []).map((row) => row.asset_id));
+      if (!page || page.length < 500) break;
+    }
+    const folder = await api.createCollection(name, "manual");
+    if (ids.length) await api.collectionAddItems(folder.collection_id, ids);
+    await loadCollections();
+    return { ...folder, count: ids.length };
+  }
+
   const reorderingCollectionsRef = useRef(false);
   const [reorderingCollections, setReorderingCollections] = useState(false);
   async function reorderCollections(collectionIds) {
@@ -539,6 +575,7 @@ export default function useWorkspace({ pushToast } = {}) {
     await api.deleteCollection(collectionId);
     bumpCatalogRevision();
     if (scopeRef.current.collectionId === collectionId) updateScope({ collectionId: null });
+    if (scopeRef.current.smartCollectionId === collectionId) updateScope({ smartCollectionId: null });
     await loadCollections();
   }
 
@@ -626,6 +663,8 @@ export default function useWorkspace({ pushToast } = {}) {
 
     try {
       await api.setAssetRating(targetIds, normalized);
+      // A rating is the most common smart-collection condition.
+      if (collections.some((c) => c.kind === "smart")) void loadCollections();
     } catch (error) {
       applyRating((assetId, current) => (previousRatings.has(assetId) ? previousRatings.get(assetId) : current));
       pushToast?.({
@@ -646,14 +685,29 @@ export default function useWorkspace({ pushToast } = {}) {
   // ── scope changes: each one is a write to `scope`; the effect browses ──
 
   function selectCollection(collectionId) {
-    updateScope({ collectionId });
+    updateScope({ collectionId, smartCollectionId: null });
+  }
+
+  // A smart collection opens as a fresh destination made of its saved
+  // conditions; from there the ordinary browse path does everything.
+  function openSmartCollection(collection) {
+    const next = scopeFromRules(collection, scopeRef.current.sort);
+    if (!next) return;
+    setItems([]);
+    setBrowserOffset(0);
+    setBrowserHasMore(true);
+    setSelectedAssetId(null);
+    setTypedQuery(next.query);
+    replaceScope(next);
   }
 
   // Status filters and collections are mutually exclusive views. This owns
   // that invariant — callers must not have to remember to clear the
   // collection themselves (pagination/reloads would silently mix datasets).
   function setStatusFilter(next, { facetFilters } = {}) {
-    updateScope(facetFilters ? { status: next, collectionId: null, filters: facetFilters } : { status: next, collectionId: null });
+    updateScope(facetFilters
+      ? { status: next, collectionId: null, smartCollectionId: null, filters: facetFilters }
+      : { status: next, collectionId: null, smartCollectionId: null });
     // The sidebar counts next to the entry the user just clicked.
     void api.getSummary().then(setSummary).catch(() => {});
   }
@@ -981,6 +1035,10 @@ export default function useWorkspace({ pushToast } = {}) {
     return api.onMenuAction((action) => menuActionRef.current?.(action));
   }, []);
 
+  const activeSmartCollection = scope.smartCollectionId
+    ? collections.find((c) => c.collection_id === scope.smartCollectionId) || null
+    : null;
+
   return {
     theme,
     setTheme,
@@ -1011,6 +1069,11 @@ export default function useWorkspace({ pushToast } = {}) {
     setFilters: applyFilters,
     applyFilters,
     activeCollectionId: scope.collectionId,
+    activeSmartCollectionId: scope.smartCollectionId,
+    // Filter bar: "Save as smart collection" when there is something to save,
+    // "Update" when an open smart collection's conditions were changed.
+    canSaveSmartCollection: !!rulesFromScope(scope),
+    smartCollectionDirty: !!activeSmartCollection && rulesDirty(scope, activeSmartCollection.rules),
     facetValues,
     browserLoading,
     browserReady,
@@ -1045,6 +1108,10 @@ export default function useWorkspace({ pushToast } = {}) {
     browseTo,
     setStatusFilter,
     createCollection,
+    saveSmartCollection,
+    updateSmartCollectionRules,
+    snapshotSmartCollection,
+    openSmartCollection,
     reorderCollections,
     reorderingCollections,
     renameCollection,

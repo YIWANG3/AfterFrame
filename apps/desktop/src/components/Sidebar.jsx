@@ -4,43 +4,13 @@ import api from "../api";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
 import { DesktopHint } from "./DesktopOnly";
 import { baseName, formatTimestamp, navItems, localFileUrl } from "../utils/format";
+import SmartCollections from "./SmartCollections";
+import InlineEdit from "./InlineEdit";
 
 const FOLDER_VIEW_KEY = "sidebar.folderView"; // "list" | "covers"
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
 
-function InlineEdit({ initial, onConfirm, onCancel }) {
-  const ref = useRef(null);
-  const done = useRef(false);
-  const [value, setValue] = useState(initial);
-  useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
-  }, []);
-  function commit() {
-    if (done.current) return;
-    done.current = true;
-    const trimmed = value.trim();
-    if (trimmed && trimmed !== initial) {
-      void onConfirm(trimmed);
-    } else {
-      onCancel();
-    }
-  }
-  return (
-    <input
-      ref={ref}
-      className="w-full rounded-md bg-hover px-2 py-0.5 text-[13px] text-text outline-none border border-accent/50"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") { e.preventDefault(); commit(); }
-        if (e.key === "Escape") { e.preventDefault(); if (!done.current) { done.current = true; onCancel(); } }
-      }}
-    />
-  );
-}
 
 export default function Sidebar({
   info,
@@ -49,6 +19,9 @@ export default function Sidebar({
   setStatus,
   collections,
   activeCollectionId,
+  activeSmartCollectionId,
+  onOpenSmartCollection,
+  onSnapshotSmartCollection,
   onSelectCollection,
   onClearCollection,
   onCreateCollection,
@@ -214,7 +187,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !stickerMode && !peopleMode && !discoverMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !stickerMode && !peopleMode && !discoverMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
@@ -277,6 +250,15 @@ export default function Sidebar({
             </span>
           </button>
         </div>
+
+        <SmartCollections
+          collections={collections}
+          activeId={stickerMode || peopleMode || discoverMode ? null : activeSmartCollectionId}
+          onOpen={onOpenSmartCollection}
+          onRename={onRenameCollection}
+          onDelete={onDeleteCollection}
+          onSnapshot={onSnapshotSmartCollection}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex shrink-0 items-center justify-between px-2.5 pb-1.5">

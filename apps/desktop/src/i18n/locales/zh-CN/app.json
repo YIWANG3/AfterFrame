@@ -88,5 +88,13 @@
   "watchedCatchUpTitle_one": "监控文件夹有 1 个新文件",
   "watchedCatchUpTitle_other": "监控文件夹有 {{count}} 个新文件",
   "watchedCatchUpMsg": "正在导入",
-  "webUnsupportedFiles": "已跳过 {{count}} 个文件，视频和 RAW 请使用桌面版"
+  "webUnsupportedFiles": "已跳过 {{count}} 个文件，视频和 RAW 请使用桌面版",
+  "smartCollection": {
+    "saved": "已保存智能合集",
+    "updated": "已更新智能合集",
+    "snapshotDone_one": "已复制 {{count}} 张照片到「{{name}}」",
+    "snapshotDone_other": "已复制 {{count}} 张照片到「{{name}}」",
+    "snapshotName": "{{name}}(快照)",
+    "failed": "保存智能合集失败"
+  }
 }
