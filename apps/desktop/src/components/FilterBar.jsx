@@ -103,6 +103,12 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
   if (onSearch) shown = q.trim() ? (remote || []) : options;
   else if (searchable && q) shown = options.filter((o) => String(o.value).toLowerCase().includes(q.toLowerCase()));
   else shown = options;
+  // Counts follow the other active filters, so the selected value can drop out
+  // of the list (nothing matches it any more). Keep it, at 0: that is the
+  // explanation for an empty grid, and the row the user unticks to get out.
+  if (value && !q.trim() && !shown.some((o) => String(o.value).toLowerCase() === String(value).toLowerCase())) {
+    shown = [{ value, count: 0 }, ...shown];
+  }
 
   return (
     <Popover label={label} active={!!value} summary={value} width={200}>
@@ -430,7 +436,7 @@ function SmartCollectionControls({ smart }) {
   );
 }
 
-export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, collectionId, smart }) {
+export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
   const { t } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -494,7 +500,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           label={t("filter.tag")}
           value={f.tag}
           options={tags}
-          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, collectionId: collectionId || undefined })}
+          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, ...(facetScope || {}) })}
           onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
         />
       )}

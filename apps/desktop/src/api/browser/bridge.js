@@ -410,11 +410,26 @@ function readAnnotationSettings() {
 
 const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-// Facets describe a folder when one is open, the library otherwise.
-function facetUniverse(collectionId) {
-  if (!collectionId) return assets;
-  const member = new Set(collections.find((c) => c.collection_id === collectionId)?.asset_ids || []);
-  return assets.filter((a) => member.has(a.asset_id));
+// The photos one facet's options are counted over (sidecar _facet_scope): the
+// folder or status, the search text and every OTHER active filter. A facet's
+// own keys are dropped so its dropdown can still be used to switch value.
+const FACET_OWN_KEYS = {
+  camera: ["camera"], lens: ["lens"], tag: ["tag"], extension: ["extension"],
+  iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
+  focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
+  capture_time: ["date_from", "date_to", "date_within_days"],
+};
+function facetUniverse(facet, { collectionId, status = "all", search, filters } = {}) {
+  let list = assets;
+  if (collectionId) {
+    const member = new Set(collections.find((c) => c.collection_id === collectionId)?.asset_ids || []);
+    list = list.filter((a) => member.has(a.asset_id));
+  } else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
+  else if (status === "matched") list = [];
+  if (search) list = list.filter((a) => matchesSearch(a, search));
+  const others = { ...(filters || {}) };
+  for (const key of FACET_OWN_KEYS[facet] || []) delete others[key];
+  return Object.keys(others).length ? list.filter((a) => matchesFacetFilters(a, others)) : list;
 }
 
 function aggregateTags(limit = 50, needle = "", universe = assets) {
@@ -747,9 +762,8 @@ export const browserBridge = {
   detectEditors: async () => [],
   // Facets aggregate over the in-memory catalog, mirroring the sidecar's
   // get_facet_values keys (db/browse.py).
-  getFacetValues: async ({ collectionId } = {}) => {
-    const universe = facetUniverse(collectionId);
-    const metas = universe.map((a) => a.image_metadata || {});
+  getFacetValues: async (view = {}) => {
+    const metasFor = (facet) => facetUniverse(facet, view).map((a) => a.image_metadata || {});
     const counts = (values) => {
       const m = new Map();
       for (const v of values) { if (v) m.set(v, (m.get(v) || 0) + 1); }
@@ -757,26 +771,26 @@ export const browserBridge = {
         .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
         .map(([value, count]) => ({ value, count }));
     };
-    const minMax = (key) => {
-      const vals = metas.map((m) => m[key]).filter((v) => v != null && Number.isFinite(Number(v)));
+    const minMax = (facet, key) => {
+      const vals = metasFor(facet).map((m) => m[key]).filter((v) => v != null && Number.isFinite(Number(v)));
       return vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : { min: null, max: null };
     };
-    const times = metas.map((m) => m.capture_time).filter(Boolean).sort();
+    const times = metasFor("capture_time").map((m) => m.capture_time).filter(Boolean).sort();
     return {
-      cameras: counts(metas.map((m) => m.camera_model)),
-      lenses: counts(metas.map((m) => m.lens_model)),
-      tags: aggregateTags(60, "", universe),
-      extensions: counts(universe.map((a) => fileExt(a.file_name))),
-      iso: minMax("iso"),
-      aperture: minMax("aperture"),
-      focal: minMax("focal_length"),
-      shutter: minMax("shutter_speed"),
+      cameras: counts(metasFor("camera").map((m) => m.camera_model)),
+      lenses: counts(metasFor("lens").map((m) => m.lens_model)),
+      tags: aggregateTags(60, "", facetUniverse("tag", view)),
+      extensions: counts(facetUniverse("extension", view).map((a) => fileExt(a.file_name))),
+      iso: minMax("iso", "iso"),
+      aperture: minMax("aperture", "aperture"),
+      focal: minMax("focal", "focal_length"),
+      shutter: minMax("shutter", "shutter_speed"),
       capture_time: times.length ? { min: times[0], max: times[times.length - 1] } : { min: null, max: null },
     };
   },
-  searchFacet: async ({ field, q = "", limit = 50, collectionId } = {}) => {
+  searchFacet: async ({ field, q = "", limit = 50, ...view } = {}) => {
     const needle = String(q).toLowerCase();
-    const universe = facetUniverse(collectionId);
+    const universe = facetUniverse(field, view);
     const pick = (get) => {
       const m = new Map();
       for (const a of universe) {

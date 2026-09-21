@@ -5,7 +5,7 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import {
-  DEFAULT_SCOPE, chooseSelectionAfterReload, filterItemsByQuery, rulesDirty, rulesFromScope, scopeFromRules, scopeKeyOf,
+  DEFAULT_SCOPE, chooseSelectionAfterReload, filterItemsByQuery, facetScopeOf, rulesDirty, rulesFromScope, scopeFromRules, scopeKeyOf,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
@@ -190,22 +190,22 @@ export default function useWorkspace({ pushToast } = {}) {
   });
   useEffect(() => { browseCurrentScope(); }, [scopeKey]);
 
-  // Refresh facet options when the catalog/library changes, and when the
-  // folder does: inside a folder the options and their counts describe that
-  // folder. The request is tagged so a slow answer for the previous folder
+  // Refresh facet options when the catalog/library changes, and whenever the
+  // view does: every count is "how many photos picking this would show" given
+  // the folder, the search text and the other active filters. The request is tagged so a slow answer for the previous folder
   // cannot land on top of the current one.
   const facetRequestRef = useRef(0);
   // Reads only refs, so it is stable and refreshAll (not an effect) can call it too.
   const loadFacetValues = useCallback(() => {
     const request = ++facetRequestRef.current;
-    void api.getFacetValues({ collectionId: scopeRef.current.collectionId || undefined })
+    void api.getFacetValues(facetScopeOf(scopeRef.current))
       .then((values) => { if (request === facetRequestRef.current) setFacetValues(values); })
       .catch(() => {});
   }, []);
   useEffect(() => {
     if (!browserReady) return;
     loadFacetValues();
-  }, [browserReady, summary?.image_assets, scope.collectionId, loadFacetValues]);
+  }, [browserReady, summary?.image_assets, scopeKey, loadFacetValues]);
 
   // Queued-changes note for the import card in the unified JobDock.
   const queuedImportNote = useMemo(() => {
@@ -1088,6 +1088,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setFilters: applyFilters,
     applyFilters,
     activeCollectionId: scope.collectionId,
+    facetScope: facetScopeOf(scope),
     activeSmartCollectionId: scope.smartCollectionId,
     // Filter bar: "Save as smart collection" when there is something to save,
     // "Update" when an open smart collection's conditions were changed.

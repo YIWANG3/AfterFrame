@@ -27,6 +27,15 @@ export const scopeKeyOf = (scope) => browseScopeKey({
   filters: scope.filters,
 });
 
+// The view facet counts are taken inside (db/browse.py _facet_scope): what
+// the grid is showing, minus the sort, which does not change any count.
+export const facetScopeOf = (scope) => ({
+  collectionId: scope.collectionId || undefined,
+  status: scope.collectionId ? undefined : scope.status,
+  search: scope.query.trim() || undefined,
+  filters: scope.filters && Object.keys(scope.filters).length ? scope.filters : undefined,
+});
+
 // ── smart collections: a saved scope ─────────────────────────────────────
 // The map viewport is where the user happens to be looking, not a condition.
 const savableFilters = (filters) => Object.fromEntries(
