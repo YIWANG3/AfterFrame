@@ -433,19 +433,50 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const extensions = facetValues?.extensions || [];
   const activeCount = Object.keys(f).length;
 
+  const scrollRef = useRef(null);
+  const [moreRight, setMoreRight] = useState(false);
+  const measureMore = () => {
+    const el = scrollRef.current;
+    if (el) setMoreRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+  // Re-measure when the row's width changes (window resize, the actions
+  // appearing beside it) or its contents do (a chip added or removed).
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    measureMore();
+    const observer = new ResizeObserver(measureMore);
+    observer.observe(el);
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [activeCount, f.geo?.label]);
+
   return (
+    // Two parts: the facets scroll sideways when they do not fit; the actions
+    // on what is filtered (Clear, save / update a smart collection) stay put
+    // at the right edge, so they are never scrolled out of reach.
     <div
       data-filter-bar="true"
       className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"
-      // The skin lays the bar out as one sideways-scrolling row. Trackpads
-      // scroll it natively; a mouse wheel only has a vertical axis, so map
-      // that onto the row when it overflows.
-      onWheel={(event) => {
-        const el = event.currentTarget;
-        if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
-        el.scrollLeft += event.deltaY;
-      }}
     >
+      <div
+        ref={scrollRef}
+        data-filter-scroll="true"
+        // The right-edge fade is a "more this way" hint, so it is only on
+        // while there IS more: at the end of the row it would just dim the
+        // last facet.
+        data-more={moreRight ? "true" : undefined}
+        onScroll={measureMore}
+        className="filter-bar-scroll flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+        // The skin lays the facets out as one sideways-scrolling row. Trackpads
+        // scroll it natively; a mouse wheel only has a vertical axis, so map
+        // that onto the row when it overflows.
+        onWheel={(event) => {
+          const el = event.currentTarget;
+          if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
+          el.scrollLeft += event.deltaY;
+        }}
+      >
       {cameras.length > 0 && (
         <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
       )}
@@ -555,17 +586,23 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         </button>
       )}
 
-      {activeCount > 0 && (
-        <button
-          type="button"
-          onClick={() => onChange({})}
-          className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
-        >
-          <X className="h-2.5 w-2.5" />
-          {t("filter.clear", { count: activeCount })}
-        </button>
+      </div>
+
+      {(activeCount > 0 || smart?.canSave) && (
+        <div data-filter-actions="true" className="filter-bar-actions flex shrink-0 items-center gap-1.5">
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange({})}
+              className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
+            >
+              <X className="h-2.5 w-2.5" />
+              {t("filter.clear", { count: activeCount })}
+            </button>
+          )}
+          <SmartCollectionControls smart={smart} />
+        </div>
       )}
-      <SmartCollectionControls smart={smart} />
     </div>
   );
 }
