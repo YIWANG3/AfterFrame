@@ -704,6 +704,14 @@ export default function useWorkspace({ pushToast } = {}) {
   function openSmartCollection(collection) {
     const next = scopeFromRules(collection, scopeRef.current.sort);
     if (!next) return;
+    // Already showing exactly these conditions — always the case right after
+    // saving one from the current view. The browse effect keys on the scope
+    // and would not run again, so clearing the grid here left it empty until
+    // the user went somewhere else and came back. Only the label changes.
+    if (scopeKeyOf(next) === scopeKeyOf(scopeRef.current)) {
+      updateScope({ smartCollectionId: next.smartCollectionId });
+      return;
+    }
     setItems([]);
     setBrowserOffset(0);
     setBrowserHasMore(true);

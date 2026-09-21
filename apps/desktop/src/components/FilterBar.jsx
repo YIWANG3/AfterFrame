@@ -388,6 +388,12 @@ function PersonFilterOptions({ value, onSelect, onLoaded }) {
   );
 }
 
+// The bar floats over the photos, so anything in it needs a surface of its own:
+// bare text ("Clear", "Save as smart collection") vanishes against an image.
+// These are the facet chips' classes, which is also what the skin hangs the
+// glass pill on (index.css: `.flex-wrap.border-b button.rounded-md.border`).
+const ACTION_CHIP = "flex h-6 items-center gap-1 rounded-md border border-border/70 bg-app px-2 text-[11px] text-muted transition-colors hover:border-border hover:text-text";
+
 // Save the current view (status + search + filters) as a smart collection, or
 // write changed conditions back to the one that is open.
 function SmartCollectionControls({ smart }) {
@@ -396,7 +402,7 @@ function SmartCollectionControls({ smart }) {
   if (!smart?.canSave) return null;
   if (naming) {
     return (
-      <span className="w-40" data-smart-name-input="true">
+      <span className="w-40 rounded-md border border-border/70 bg-app" data-smart-name-input="true">
         <InlineEdit
           initial=""
           onConfirm={async (name) => { setNaming(false); await smart.onSave?.(name); }}
@@ -405,7 +411,7 @@ function SmartCollectionControls({ smart }) {
       </span>
     );
   }
-  const button = "flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text";
+  const button = ACTION_CHIP;
   return (
     <>
       {smart.dirty && (
@@ -594,7 +600,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
             <button
               type="button"
               onClick={() => onChange({})}
-              className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
+              className={ACTION_CHIP}
             >
               <X className="h-2.5 w-2.5" />
               {t("filter.clear", { count: activeCount })}

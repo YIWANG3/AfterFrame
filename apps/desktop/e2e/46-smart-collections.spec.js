@@ -53,7 +53,20 @@ test("Clear and the smart collection actions stay put while the facets scroll", 
   const scrollBox = await scroller.boundingBox();
   expect(after.x + after.width).toBeLessThanOrEqual(bar.x + bar.width + 1);
   expect(after.x).toBeGreaterThanOrEqual(scrollBox.x + scrollBox.width - 1);
-  if (process.env.AF_SHOT) await window.screenshot({ path: process.env.AF_SHOT });
+  // The bar floats over the photos: the actions need a surface of their own,
+  // like the facet chips, or they vanish against an image.
+  // (Base colour only: whichever button the pointer rests on also has a hover gradient.)
+  const surface = (locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const chip = await surface(scroller.getByRole("button", { name: "Camera", exact: true }));
+  expect(chip).not.toBe("rgba(0, 0, 0, 0)");
+  expect(await surface(actions.getByRole("button", { name: /^Clear/ }))).toBe(chip);
+  expect(await surface(actions.getByRole("button", { name: "Save as smart collection" }))).toBe(chip);
+  if (process.env.AF_SHOT) {
+    await window.evaluate(() => { document.documentElement.dataset.theme = "light"; document.querySelector("[data-testid='gallery-scroll']").scrollTop = 140; });
+    await window.waitForTimeout(300);
+    await window.screenshot({ path: process.env.AF_SHOT });
+    await window.evaluate(() => { document.documentElement.dataset.theme = "dark"; document.querySelector("[data-testid='gallery-scroll']").scrollTop = 0; });
+  }
 
   await actions.getByRole("button", { name: /^Clear/ }).click();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1440, 900));
@@ -73,6 +86,16 @@ test("saving the current filter creates a sidebar entry with the matching count"
   const expected = await browseCount({ rating_min: 5 });
   expect(expected).toBeGreaterThan(0);
   await expect.poll(() => rowCount("Five stars")).toBe(expected);
+  // Saved from this very view, so the grid already shows its photos and must
+  // keep showing them: the new row is highlighted and the title takes its name.
+  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
+  await expect(smartRow("Five stars")).toHaveClass(/bg-selected/);
+  await expect(window.getByTestId("gallery-title")).toHaveText("Five stars");
+  // Clicking it right away used to empty the grid: the conditions are the ones
+  // already loaded, so nothing reloaded after the grid was cleared.
+  await smartRow("Five stars").click();
+  await window.waitForTimeout(600);
+  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
   // Saved and unchanged: neither "Update" nor a second save is offered.
   await expect(window.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
   await expect(window.getByRole("button", { name: "Save as smart collection" })).toHaveCount(0);

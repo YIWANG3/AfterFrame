@@ -1166,7 +1166,8 @@ export default function App() {
               <Toolbar
                 title={workspace.activeCollectionId
                   ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
-                  : (peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : filterTitle(workspace.status))}
+                  : (activeSmartCollection?.name
+                    || (peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : filterTitle(workspace.status)))}
                 query={workspace.query}
                 setQuery={workspace.setQuery}
                 sort={workspace.sort}
