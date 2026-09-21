@@ -193,6 +193,8 @@
       "manual": "手动设置",
       "none": "无位置"
     },
+    "country": "国家",
+    "city": "城市",
     "textContains": "文字",
     "containsPlaceholder": "包含…",
     "contains": {

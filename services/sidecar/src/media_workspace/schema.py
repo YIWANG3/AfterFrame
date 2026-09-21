@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 SCHEMA_STATEMENTS = [
@@ -360,12 +360,19 @@ SCHEMA_STATEMENTS = [
         resolver_version TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        -- Canonical city from the offline gazetteer (schema 9): what the City
+        -- filter matches. `locality` above stays the model's free text.
+        city_key TEXT,
+        city_en TEXT,
+        city_zh TEXT,
         FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
     )
     """,
     # asset_id already has an implicit unique index; only place/source need one.
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_place ON asset_locations(place_id)",
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_source ON asset_locations(source)",
+    "CREATE INDEX IF NOT EXISTS idx_asset_locations_country ON asset_locations(country_code)",
+    "CREATE INDEX IF NOT EXISTS idx_asset_locations_city ON asset_locations(city_key)",
     """
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(
         location_id,

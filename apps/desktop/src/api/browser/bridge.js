@@ -336,6 +336,9 @@ function matchesFacetFilters(asset, filters) {
     const source = meta.gps_latitude != null && meta.gps_longitude != null ? "exif" : "none";
     if (!sources.includes(source)) return false;
   }
+  // No gazetteer in the browser, so no photo has a country or a city: the
+  // chips never show (no options), and a rule naming one matches nothing.
+  if (facetValues(filters.country).length || facetValues(filters.city).length) return false;
   const contains = (text, needle) => String(text || "").toLowerCase().includes(String(needle).trim().toLowerCase());
   if (String(filters.caption_contains || "").trim() && !contains(asset.annotation?.caption, filters.caption_contains)) return false;
   if (String(filters.ocr_contains || "").trim() && !contains(asset.annotation?.detected_text, filters.ocr_contains)) return false;

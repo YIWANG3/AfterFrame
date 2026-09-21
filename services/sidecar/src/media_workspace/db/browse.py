@@ -378,8 +378,23 @@ def get_facet_values(
     ).fetchall()
     source_counts = {r["v"]: r["c"] for r in source_rows}
 
+    country_where, country_params = scope_for("country")
+    country_rows = connection.execute(
+        f"""
+        SELECT loc.country_code AS v, COUNT(*) AS c
+        {_FACET_FROM}
+        JOIN asset_locations AS loc ON loc.asset_id = {_LOCATION_OWNER}
+        WHERE {country_where} AND loc.country_code IS NOT NULL AND loc.country_code != ''
+        GROUP BY v ORDER BY c DESC, v
+        """,
+        country_params,
+    ).fetchall()
+
     return {
         "location_sources": [{"value": v, "count": source_counts[v]} for v in LOCATION_SOURCES if source_counts.get(v)],
+        "countries": [_country_option(r["v"], r["c"]) for r in country_rows],
+        # The most photographed cities; the rest through search_facet_values.
+        "cities": _city_options(connection, *scope_for("city"), like="%", limit=60),
         "cameras": value_counts("camera", "assets.meta_camera_model"),
         "lenses": value_counts("lens", "assets.meta_lens_model"),
         "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
@@ -391,6 +406,33 @@ def get_facet_values(
         "shutter": min_max("shutter", "meta_shutter"),
         "capture_time": min_max("capture_time", "meta_capture_time"),
     }
+
+
+def _country_option(iso: str, count: int) -> dict[str, object]:
+    from ..geo_resolver import country_names
+
+    names = country_names(iso)
+    return {"value": iso, "count": count, "label_en": names["en"], "label_zh": names["zh"]}
+
+
+def _city_options(
+    connection: sqlite3.Connection, where: str, params: list[object], *, like: str, limit: int
+) -> list[dict[str, object]]:
+    rows = connection.execute(
+        f"""
+        SELECT loc.city_en AS v, MAX(loc.city_zh) AS zh, MAX(loc.country_code) AS country, COUNT(*) AS c
+        {_FACET_FROM}
+        JOIN asset_locations AS loc ON loc.asset_id = {_LOCATION_OWNER}
+        WHERE {where} AND loc.city_en IS NOT NULL AND (loc.city_en LIKE ? OR loc.city_zh LIKE ?)
+        GROUP BY v ORDER BY c DESC, v
+        LIMIT ?
+        """,
+        [*params, like, like, limit],
+    ).fetchall()
+    return [
+        {"value": r["v"], "count": r["c"], "label_en": r["v"], "label_zh": r["zh"] or r["v"], "country": r["country"]}
+        for r in rows
+    ]
 
 
 def search_facet_values(
@@ -408,10 +450,12 @@ def search_facet_values(
     """Server-side facet search, so a dropdown never loads more than `limit`
     rows regardless of how many distinct values exist. Matches substring,
     ordered by frequency, counted inside the same view as get_facet_values."""
-    if field not in ("tag", "camera", "lens"):
+    if field not in ("tag", "camera", "lens", "city"):
         return []
     like = f"%{q}%" if q else "%"
     where, params = _facet_scope(field, collection_id=collection_id, status=status, search=search, filters=filters, base=base)
+    if field == "city":
+        return _city_options(connection, where, params, like=like, limit=limit)
     if field == "tag":
         rows = connection.execute(
             f"""

@@ -25,6 +25,80 @@ def _valid_coordinates(latitude: object, longitude: object) -> tuple[float, floa
     return lat, lon
 
 
+_PLACE_COLUMNS = ("country_code", "city_key", "city_en", "city_zh")
+# An AI row placed at a region's or a country's centroid says nothing about
+# which city the photo was taken in.
+_CITY_PRECISIONS = ("exact", "locality")
+
+
+def place_fields(latitude: float, longitude: float, precision_level: str | None = "exact") -> dict[str, str | None]:
+    """Canonical country + city for a coordinate, from the offline gazetteer.
+
+    These are what the Country and City filters match on: an ISO code and the
+    gazetteer's own city (its id, English name, Simplified Chinese name), so
+    "NYC" typed by a model and a GPS fix in Manhattan land on the same option.
+    All None when the gazetteer is unavailable or nothing is near."""
+    from ..discover import load_reverse_geocoder
+    from ..geo_resolver import simplified
+
+    empty: dict[str, str | None] = dict.fromkeys(_PLACE_COLUMNS)
+    geocoder = load_reverse_geocoder()
+    if geocoder is None:
+        return empty
+    place = geocoder.lookup(latitude, longitude)
+    if place is None:
+        return empty
+    fields = {**empty, "country_code": place.get("country_iso")}
+    if place.get("tier") == "locality" and (precision_level or "exact") in _CITY_PRECISIONS:
+        fields.update(
+            city_key=place["key"],
+            city_en=place["en"],
+            city_zh=simplified(place["zh"]),
+        )
+    return fields
+
+
+def _write_place_fields(connection: sqlite3.Connection, location_id: int) -> None:
+    """Fill country/city for one row from its coordinates. A country the row
+    already names (the AI resolver's) is kept."""
+    row = connection.execute(
+        "SELECT latitude, longitude, precision_level, country_code FROM asset_locations WHERE location_id = ?",
+        (location_id,),
+    ).fetchone()
+    if row is None:
+        return
+    fields = place_fields(float(row[0]), float(row[1]), row[2])
+    connection.execute(
+        "UPDATE asset_locations SET country_code = ?, city_key = ?, city_en = ?, city_zh = ? WHERE location_id = ?",
+        (row[3] or fields["country_code"], fields["city_key"], fields["city_en"], fields["city_zh"], location_id),
+    )
+
+
+def backfill_place_fields(connection: sqlite3.Connection) -> int:
+    """Fill country/city on every location row that has no city yet (the
+    schema 9 upgrade). Returns how many rows were looked at; does nothing
+    when the gazetteer is unavailable."""
+    from ..discover import load_reverse_geocoder
+
+    if load_reverse_geocoder() is None:
+        return 0
+    cache: dict[tuple[float, float, str], dict[str, str | None]] = {}
+    rows = connection.execute(
+        "SELECT location_id, latitude, longitude, precision_level, country_code FROM asset_locations WHERE city_key IS NULL"
+    ).fetchall()
+    for row in rows:
+        precision = row[3] or "exact"
+        key = (round(float(row[1]), 3), round(float(row[2]), 3), precision)
+        fields = cache.get(key)
+        if fields is None:
+            fields = cache[key] = place_fields(key[0], key[1], precision)
+        connection.execute(
+            "UPDATE asset_locations SET country_code = ?, city_key = ?, city_en = ?, city_zh = ? WHERE location_id = ?",
+            (row[4] or fields["country_code"], fields["city_key"], fields["city_en"], fields["city_zh"], row[0]),
+        )
+    return len(rows)
+
+
 def upsert_asset_location_from_metadata(
     connection: sqlite3.Connection,
     asset_id: str,
@@ -91,6 +165,7 @@ def upsert_asset_location_from_metadata(
         """,
         (location_id, longitude, longitude, latitude, latitude),
     )
+    _write_place_fields(connection, location_id)
     if commit:
         connection.commit()
 
@@ -161,6 +236,7 @@ def upsert_ai_asset_location(
         (location_id, resolved.min_longitude, resolved.max_longitude,
          resolved.min_latitude, resolved.max_latitude),
     )
+    _write_place_fields(connection, location_id)
     if commit:
         connection.commit()
     return True
@@ -219,6 +295,7 @@ def set_manual_asset_location(
         """,
         (location_id, lon, lon, lat, lat),
     )
+    _write_place_fields(connection, location_id)
     if commit:
         connection.commit()
 

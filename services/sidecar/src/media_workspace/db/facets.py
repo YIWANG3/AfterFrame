@@ -301,6 +301,22 @@ def _location_source(filters: dict) -> list[Clause]:
     return [("(" + " OR ".join(parts) + ")", params)]
 
 
+def _place_facet(name: str, column: str, *, upper: bool = False) -> Facet:
+    """Country / city of the effective location. The values are the
+    gazetteer's canonical ones (ISO code, English city name), filled from the
+    coordinates when a location is written, so GPS, AI and manual locations
+    all land on the same options."""
+
+    def clauses(filters: dict) -> list[Clause]:
+        values = [str(v).strip() for v in _values(filters.get(name)) if str(v).strip()]
+        if not values:
+            return []
+        cond, params = _in(f"loc.{column}", [v.upper() if upper else v for v in values])
+        return [(f"EXISTS (SELECT 1 FROM asset_locations loc WHERE loc.asset_id = {_LOCATION_OWNER} AND {cond})", params)]
+
+    return Facet(name, (name,), clauses)
+
+
 def _contains_facet(name: str, expr: str) -> Facet:
     """Case-insensitive "contains" on one text field. The search box matches
     seven fields at once (a camera name hits as readily as a caption); these
@@ -336,6 +352,8 @@ FACETS: tuple[Facet, ...] = (
     Facet("annotated", ("annotated",), _annotated),
     Facet("person_group", ("person_group",), _person_group),
     Facet("location_source", ("location_source",), _location_source),
+    _place_facet("country", "country_code", upper=True),
+    _place_facet("city", "city_en"),
     _contains_facet("caption_contains", "(SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),

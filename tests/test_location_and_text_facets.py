@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from media_workspace.db import connect, init_db, list_image_assets, upsert_image_asset, upsert_registry
-from media_workspace.db.browse import get_facet_values
+from media_workspace.db.browse import get_facet_values, search_facet_values
 from media_workspace.db.locations import set_manual_asset_location, upsert_asset_location_from_metadata
 from media_workspace.db.smart_rules import normalize_rules
 from media_workspace.models import ImageCandidate, MatchDecision
@@ -53,6 +53,39 @@ class LocationAndTextFacetTests(unittest.TestCase):
 
     def stems(self, filters):
         return sorted(row["stem"] for row in list_image_assets(self.connection, "all", filters=filters))
+
+    def test_country_and_city_come_from_the_coordinates_whatever_the_source(self):
+        # A GPS fix and a manual pin never named a place; the gazetteer does.
+        self.assertEqual(self.stems({"country": "FR"}), ["gps_shot"])
+        self.assertEqual(self.stems({"country": "us"}), ["manual_shot"])
+        self.assertEqual(self.stems({"country": ["FR", "US"]}), ["gps_shot", "manual_shot"])
+        self.assertEqual(self.stems({"city": "Paris"}), ["gps_shot"])
+        self.assertEqual(self.stems({"city": ["Paris", "San Francisco"]}), ["gps_shot", "manual_shot"])
+        self.assertEqual(self.stems({"country": "FR", "city": "San Francisco"}), [])
+        self.assertEqual(normalize_rules({"filters": {"country": ["FR"], "city": "Paris"}})["filters"],
+                         {"country": "FR", "city": "Paris"})
+
+    def test_country_and_city_options_with_names_in_both_languages(self):
+        facets = get_facet_values(self.connection)
+        self.assertEqual(
+            [(o["value"], o["count"], o["label_en"], o["label_zh"]) for o in facets["countries"]],
+            [("FR", 1, "France", "法国"), ("US", 1, "United States", "美国")],
+        )
+        self.assertEqual(
+            [(o["value"], o["label_zh"], o["country"]) for o in facets["cities"]],
+            [("Paris", "巴黎", "FR"), ("San Francisco", "旧金山", "US")],
+        )
+        # Picking a country narrows the cities, but not the countries themselves.
+        narrowed = get_facet_values(self.connection, filters={"country": "FR"})
+        self.assertEqual([o["value"] for o in narrowed["cities"]], ["Paris"])
+        self.assertEqual([o["value"] for o in narrowed["countries"]], ["FR", "US"])
+        self.assertEqual([o["value"] for o in search_facet_values(self.connection, "city", "旧金")], ["San Francisco"])
+        self.assertEqual([o["value"] for o in search_facet_values(self.connection, "city", "pari")], ["Paris"])
+
+    def test_a_location_that_moves_gets_its_new_city(self):
+        set_manual_asset_location(self.connection, "image_gps_shot", 35.68, 139.76, commit=False)
+        self.assertEqual(self.stems({"city": "Tokyo"}), ["gps_shot"])
+        self.assertEqual(self.stems({"city": "Paris"}), [])
 
     def test_location_source_including_the_photos_with_no_location(self):
         self.assertEqual(self.stems({"location_source": "exif"}), ["gps_shot"])

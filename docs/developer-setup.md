@@ -167,6 +167,11 @@ All migrations run in one transaction. Do not update `catalog_info.schema_versio
 from feature/domain modules or rely only on `CREATE TABLE IF NOT EXISTS` for an
 existing table change.
 
+Before an upgrade runs, `init_db` copies the database next to itself as
+`<name>.schema<old version>.bak` (once per old version; a new or up-to-date
+catalog is not copied). An upgraded catalog cannot be opened by an older app,
+so that copy is the way back.
+
 ## Notes
 
 - The app is not code-signed. Users need to bypass Gatekeeper on first launch.

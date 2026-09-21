@@ -115,8 +115,9 @@ class ReverseGeocoder:
         self.country_by_qid = {c["q"]: c for c in payload.get("countries", []) if c.get("q")}
 
     def lookup(self, lat: float, lon: float) -> dict | None:
-        """→ {key, en, zh, country_en, country_zh} or None when the gazetteer
-        has nothing anywhere near (open ocean)."""
+        """→ {key, tier, en, zh, country_en, country_zh, country_iso} or None when
+        the gazetteer has nothing anywhere near (open ocean). `tier` says what
+        was matched: "locality" (a city), "admin1" or "country"."""
         candidates = self.localities.within(lat, lon, LOCALITY_SEARCH_KM)
         scored = None
         if candidates:
@@ -127,20 +128,24 @@ class ReverseGeocoder:
                 country = self.country_by_qid.get(item.get("country") or "", {})
                 return {
                     "key": item["q"],
+                    "tier": "locality" if index is self.localities else "admin1",
                     "en": item.get("en") or item.get("zh") or item["q"],
                     "zh": item.get("zh") or item.get("en") or item["q"],
                     "country_en": country.get("en"),
                     "country_zh": country.get("zh"),
+                    "country_iso": country.get("iso"),
                 }
         item, _km = self.countries.nearest(lat, lon, 3000.0)
         if item is None:
             return None
         return {
             "key": item["q"],
+            "tier": "country",
             "en": item.get("en") or item["q"],
             "zh": item.get("zh") or item.get("en") or item["q"],
-            "country_en": None,
-            "country_zh": None,
+            "country_en": item.get("en"),
+            "country_zh": item.get("zh"),
+            "country_iso": item.get("iso"),
         }
 
 

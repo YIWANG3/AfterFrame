@@ -109,6 +109,37 @@ class Gazetteer:
         return self.tiers.get(tier, {}).get(name.lower(), [])
 
 
+# Wikidata's `zh` labels mix scripts (東京都, 首爾, 广州市). The app's only
+# Chinese locale is zh-CN, so names shown to the user go through this table:
+# the Traditional characters that occur in the gazetteer → Simplified,
+# generated once from the system ICU Hant-Hans transform.
+T2S_PATH = Path(__file__).parent / "data" / "t2s.json"
+_t2s: dict[int, str] | None = None
+
+
+def simplified(text: str | None) -> str | None:
+    global _t2s
+    if not text:
+        return text
+    if _t2s is None:
+        try:
+            _t2s = {ord(k): v for k, v in json.loads(T2S_PATH.read_text(encoding="utf-8")).items()}
+        except (OSError, ValueError):
+            _t2s = {}
+    return text.translate(_t2s)
+
+
+def country_names(iso: str | None) -> dict[str, str | None]:
+    """ISO code → display names, for the country filter's options."""
+    gazetteer = load_gazetteer()
+    if gazetteer is None or not iso:
+        return {"en": iso, "zh": iso}
+    for country in gazetteer.countries_by_qid.values():
+        if country.get("iso") == iso:
+            return {"en": country.get("en") or iso, "zh": simplified(country.get("zh")) or country.get("en") or iso}
+    return {"en": iso, "zh": iso}
+
+
 _gazetteer: Gazetteer | None = None
 _load_failed = False
 

@@ -350,6 +350,21 @@ def _migrate_to_8(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_to_9(connection: sqlite3.Connection) -> None:
+    """Canonical country + city on every location, for the Country and City
+    filters. EXIF and manual rows only ever stored coordinates, so their place
+    is looked up in the offline gazetteer here. Idempotent."""
+    from .locations import backfill_place_fields
+
+    existing = {row[1] for row in connection.execute("PRAGMA table_info(asset_locations)").fetchall()}
+    for column in ("city_key", "city_en", "city_zh"):
+        if column not in existing:
+            connection.execute(f"ALTER TABLE asset_locations ADD COLUMN {column} TEXT")
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_asset_locations_country ON asset_locations(country_code)")
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_asset_locations_city ON asset_locations(city_key)")
+    backfill_place_fields(connection)
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
@@ -357,6 +372,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     6: _migrate_to_6,
     7: _migrate_to_7,
     8: _migrate_to_8,
+    9: _migrate_to_9,
 }
 
 
