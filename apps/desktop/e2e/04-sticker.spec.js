@@ -48,15 +48,19 @@ test.describe("Sticker tool", () => {
 
   test("Detect subjects → either instance found or 'No subject' toast", async ({ }, testInfo) => {
     test.skip(!isMacOSWithXcode(), "Sticker extraction needs macOS 14+ with Xcode toolchain");
+    // The first Vision request on a cold CI runner is slow: this passed at
+    // 21.7 s on one run and timed out at 30 s on the next, on a run where the
+    // whole suite took 14 minutes instead of 10. Locally it takes about 2 s.
+    test.setTimeout(150_000);
 
     await window.getByRole("button", { name: /Detect subjects/i }).click();
 
-    // Wait up to 30s for either:
+    // Wait for either:
     //   - DETECTED (N) section to appear (success)
     //   - "No subject detected" toast (graceful failure on our boring fixture)
     const success = window.getByText(/DETECTED \(\d+\)/i);
     const noSubject = window.getByText(/No subject detected/i);
-    await expect(success.or(noSubject)).toBeVisible({ timeout: 30_000 });
+    await expect(success.or(noSubject)).toBeVisible({ timeout: 120_000 });
   });
 });
 
