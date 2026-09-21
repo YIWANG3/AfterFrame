@@ -168,6 +168,23 @@ describe("two layers: where the user is, and the refinement inside it", () => {
       .toEqual({ collectionId: "col_f", status: undefined, search: undefined, filters: undefined, base: undefined });
   });
 
+  it("a facet value may be a list: an empty one is no condition, and tick order is not a difference", () => {
+    expect(hasRefinement(scope({ filters: { camera: [] } }))).toBe(false);
+    expect(hasRefinement(scope({ filters: { tag_match: "all" } }))).toBe(false); // a modifier alone filters nothing
+    expect(hasRefinement(scope({ filters: { camera: ["FC9113", "FC9184"] } }))).toBe(true);
+    expect(rulesFromScope(scope({ filters: { camera: ["FC9113", "FC9184"], lens: [] } })))
+      .toEqual({ status: "all", search: "", filters: { camera: ["FC9113", "FC9184"] } });
+    // "All of these" only means something with several tags.
+    expect(rulesFromScope(scope({ filters: { tag: "night", tag_match: "all" } })).filters).toEqual({ tag: "night" });
+    expect(rulesFromScope(scope({ filters: { tag: ["night", "neon"], tag_match: "all" } })).filters)
+      .toEqual({ tag: ["night", "neon"], tag_match: "all" });
+
+    const drones = { collection_id: "col_d", rules: { status: "all", search: "", filters: { camera: ["FC9113", "FC9184"] } } };
+    const editing = editScopeFromRules(drones, "imported-desc");
+    expect(rulesDirty({ ...editing, filters: { camera: ["FC9184", "FC9113"] } }, drones.rules)).toBe(false);
+    expect(rulesDirty({ ...editing, filters: { camera: ["FC9184"] } }, drones.rules)).toBe(true);
+  });
+
   it("the folder-only sort does not leak out of a folder", () => {
     expect(sortOutsideFolder("added-desc")).toBe(DEFAULT_SCOPE.sort);
     expect(sortOutsideFolder("rating-desc")).toBe("rating-desc");

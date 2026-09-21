@@ -289,10 +289,16 @@ function matchesSearch(asset, search) {
 // Mirrors the sidecar's facet filter semantics (db/browse.py _facet_clauses),
 // AND-combined. Faces/annotations/person groups don't exist on the web
 // catalog, so "with" matches nothing and "without" matches everything.
+// A facet value is a scalar or a list; several values within one facet are OR
+// (sidecar db/facets.py).
+const facetValues = (raw) => (raw == null || raw === "" ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => v != null && v !== "");
+
 function matchesFacetFilters(asset, filters) {
   const meta = asset.image_metadata || {};
-  if (filters.camera && meta.camera_model !== filters.camera) return false;
-  if (filters.lens && meta.lens_model !== filters.lens) return false;
+  const cameras = facetValues(filters.camera);
+  if (cameras.length && !cameras.includes(meta.camera_model)) return false;
+  const lenses = facetValues(filters.lens);
+  if (lenses.length && !lenses.includes(meta.lens_model)) return false;
   for (const [key, field] of [["iso", "iso"], ["aperture", "aperture"], ["focal", "focal_length"], ["shutter", "shutter_speed"]]) {
     const lo = filters[`${key}_min`];
     const hi = filters[`${key}_max`];
@@ -307,22 +313,25 @@ function matchesFacetFilters(asset, filters) {
     if (!(day && day >= since)) return false;
   }
   if (filters.rating_min != null && !(asset.app_rating >= filters.rating_min)) return false;
-  if (filters.orientation === "portrait" && !(meta.height > meta.width)) return false;
-  if (filters.orientation === "landscape" && !(meta.width > meta.height)) return false;
-  if (filters.orientation === "square" && !(meta.width && meta.width === meta.height)) return false;
-  if (filters.extension && fileExt(asset.file_name) !== String(filters.extension).toLowerCase().replace(/^\./, "")) return false;
-  if (filters.tag) {
-    const t = normalizeTag(filters.tag);
-    if (!(asset.annotation?.tags || []).some((x) => normalizeTag(x) === t)) return false;
+  const orientations = facetValues(filters.orientation);
+  if (orientations.length) {
+    const shape = meta.height > meta.width ? "portrait" : meta.width > meta.height ? "landscape" : meta.width ? "square" : null;
+    if (!orientations.includes(shape)) return false;
+  }
+  const extensions = facetValues(filters.extension).map((v) => String(v).toLowerCase().replace(/^\./, ""));
+  if (extensions.length && !extensions.includes(fileExt(asset.file_name))) return false;
+  const wanted = facetValues(filters.tag).map(normalizeTag);
+  if (wanted.length) {
+    const has = new Set((asset.annotation?.tags || []).map(normalizeTag));
+    const hit = filters.tag_match === "all" ? wanted.every((t) => has.has(t)) : wanted.some((t) => has.has(t));
+    if (!hit) return false;
   }
   if (filters.people === "with_faces") return false;
   if (filters.annotated === "with" && !asset.annotation) return false;
   if (filters.annotated === "without" && asset.annotation) return false;
   if (filters.person_group) return false;
-  if (filters.in_collection) {
-    const folder = collections.find((c) => c.collection_id === filters.in_collection);
-    if (!(folder?.asset_ids || []).includes(asset.asset_id)) return false;
-  }
+  const folders = facetValues(filters.in_collection);
+  if (folders.length && !folders.some((id) => (collections.find((c) => c.collection_id === id)?.asset_ids || []).includes(asset.asset_id))) return false;
   if (filters.geo && !matchesGeo(meta, filters.geo)) return false;
   return true;
 }
@@ -437,7 +446,7 @@ const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g,
 // folder or status, the search text and every OTHER active filter. A facet's
 // own keys are dropped so its dropdown can still be used to switch value.
 const FACET_OWN_KEYS = {
-  camera: ["camera"], lens: ["lens"], tag: ["tag"], extension: ["extension"],
+  camera: ["camera"], lens: ["lens"], tag: ["tag", "tag_match"], extension: ["extension"],
   iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
   capture_time: ["date_from", "date_to", "date_within_days"],

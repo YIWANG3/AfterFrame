@@ -180,7 +180,12 @@
     "editingSmart": "正在编辑「{{name}}」",
     "saveEdit": "保存",
     "cancelEdit": "取消",
-    "needsCondition": "智能合集至少需要一个条件"
+    "needsCondition": "智能合集至少需要一个条件",
+    "pickedMore": "{{first}} +{{count}}",
+    "match": {
+      "any": "含任意一个",
+      "all": "同时含全部"
+    }
   },
   "activity": {
     "title": "后台活动",

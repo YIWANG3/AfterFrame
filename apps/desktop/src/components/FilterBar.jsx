@@ -82,10 +82,20 @@ function Popover({ label, active, summary, children, width = 220 }) {
   );
 }
 
-function ListPopover({ label, value, options, onSelect, searchable, onSearch }) {
+// A facet's value: nothing, one pick (a scalar, as it has always been stored),
+// or several (a list). Several values within one facet are OR.
+const toList = (value) => (value == null || value === "" ? [] : Array.isArray(value) ? value : [value]);
+const fromList = (list) => (list.length === 0 ? undefined : list.length === 1 ? list[0] : list);
+const sameOption = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+// Multi-select list. Ticking several options means "any of these"; the popover
+// stays open so they can be ticked in a row. `matchMode` / `onMatchMode` add the
+// any / all switch that only tags need ("night AND neon").
+function ListPopover({ label, value, options, onSelect, searchable, onSearch, matchMode, onMatchMode }) {
   const { t } = useTranslation("nav");
   const [q, setQ] = useState("");
   const [remote, setRemote] = useState(null);
+  const picked = toList(value);
 
   // When onSearch is provided, typing queries the backend (debounced) so the
   // list stays bounded no matter how many distinct values exist.
@@ -103,15 +113,22 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
   if (onSearch) shown = q.trim() ? (remote || []) : options;
   else if (searchable && q) shown = options.filter((o) => String(o.value).toLowerCase().includes(q.toLowerCase()));
   else shown = options;
-  // Counts follow the other active filters, so the selected value can drop out
-  // of the list (nothing matches it any more). Keep it, at 0: that is the
+  // Counts follow the other active filters, so a picked value can drop out of
+  // the list (nothing matches it any more). Keep it, at 0: that is the
   // explanation for an empty grid, and the row the user unticks to get out.
-  if (value && !q.trim() && !shown.some((o) => String(o.value).toLowerCase() === String(value).toLowerCase())) {
-    shown = [{ value, count: 0 }, ...shown];
+  if (!q.trim()) {
+    const missing = picked.filter((value_) => !shown.some((o) => sameOption(o.value, value_)));
+    if (missing.length) shown = [...missing.map((value_) => ({ value: value_, count: 0 })), ...shown];
   }
 
+  const isPicked = (option) => picked.some((value_) => sameOption(value_, option));
+  const toggle = (option) => onSelect(fromList(isPicked(option)
+    ? picked.filter((value_) => !sameOption(value_, option))
+    : [...picked, option]));
+  const summary = picked.length > 1 ? t("filter.pickedMore", { first: picked[0], count: picked.length - 1 }) : picked[0];
+
   return (
-    <Popover label={label} active={!!value} summary={value} width={200}>
+    <Popover label={label} active={picked.length > 0} summary={summary} width={200}>
       {(searchable || onSearch) && (
         <input
           autoFocus
@@ -121,34 +138,62 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
           className="mb-1.5 w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
       )}
+      {onMatchMode && picked.length > 1 && (
+        <div className="mb-1.5 flex gap-1 rounded-md bg-app p-0.5" data-facet-match="true">
+          {["any", "all"].map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onMatchMode(mode)}
+              className={[
+                "h-5 flex-1 rounded text-[10px] transition-colors",
+                (matchMode || "any") === mode ? "bg-selected text-text" : "text-muted2 hover:text-text",
+              ].join(" ")}
+            >
+              {t(`filter.match.${mode}`)}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="popover-scroll -mr-2 max-h-[280px] overflow-y-auto pr-1">
         <button
           type="button"
           className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] text-muted hover:bg-hover hover:text-text"
           onClick={() => onSelect(undefined)}
         >
-          <span className="flex h-3 w-3 items-center justify-center">{!value && <Check className="h-3 w-3 text-accent" />}</span>
+          <span className="flex h-3 w-3 items-center justify-center">{picked.length === 0 && <Check className="h-3 w-3 text-accent" />}</span>
           {t("filter.any", { label })}
         </button>
-        {shown.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            className={[
-              "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] hover:bg-hover",
-              value === opt.value ? "text-text" : "text-muted",
-            ].join(" ")}
-            onClick={() => onSelect(value === opt.value ? undefined : opt.value)}
-            data-facet-option={opt.value}
-            data-facet-count={opt.count}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="flex h-3 w-3 shrink-0 items-center justify-center">{value === opt.value && <Check className="h-3 w-3 text-accent" />}</span>
-              <span className="truncate">{opt.value}</span>
-            </span>
-            <span className="shrink-0 text-[10px] tabular-nums text-muted2">{opt.count}</span>
-          </button>
-        ))}
+        {shown.map((opt) => {
+          const on = isPicked(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="checkbox"
+              aria-checked={on}
+              className={[
+                "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] hover:bg-hover",
+                on ? "text-text" : "text-muted",
+              ].join(" ")}
+              onClick={() => toggle(opt.value)}
+              data-facet-option={opt.value}
+              data-facet-count={opt.count}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className={[
+                  "flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] border",
+                  on ? "border-accent/70 bg-accent/15" : "border-border",
+                ].join(" ")}
+                >
+                  {on && <Check className="h-2.5 w-2.5 text-accent" />}
+                </span>
+                <span className="truncate">{opt.value}</span>
+              </span>
+              <span className="shrink-0 text-[10px] tabular-nums text-muted2">{opt.count}</span>
+            </button>
+          );
+        })}
       </div>
     </Popover>
   );
@@ -467,7 +512,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const lenses = facetValues?.lenses || [];
   const tags = facetValues?.tags || [];
   const extensions = facetValues?.extensions || [];
-  const activeCount = Object.keys(f).length;
+  const activeCount = Object.keys(f).filter((key) => key !== "tag_match").length;
 
   const scrollRef = useRef(null);
   const [moreRight, setMoreRight] = useState(false);
@@ -513,22 +558,28 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           el.scrollLeft += event.deltaY;
         }}
       >
-      {cameras.length > 0 && (
+      {/* A facet with nothing to offer is hidden — unless it is filtering: counts
+          follow the other filters, so its options can run out while its own
+          pick is still in force, and that pick must stay reachable. */}
+      {(cameras.length > 0 || toList(f.camera).length > 0) && (
         <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
       )}
-      {lenses.length > 0 && (
+      {(lenses.length > 0 || toList(f.lens).length > 0) && (
         <ListPopover label={t("filter.lens")} value={f.lens} options={lenses} onSelect={(v) => onChange(setOrDelete(f, "lens", v))} />
       )}
-      {tags.length > 0 && (
+      {(tags.length > 0 || toList(f.tag).length > 0) && (
         <ListPopover
           label={t("filter.tag")}
           value={f.tag}
           options={tags}
           onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, ...(facetScope || {}) })}
-          onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
+          // "All" only means something with several tags; a single pick drops it.
+          onSelect={(v) => onChange(setOrDelete(setOrDelete(f, "tag", v), "tag_match", Array.isArray(v) ? f.tag_match : undefined))}
+          matchMode={f.tag_match}
+          onMatchMode={(mode) => onChange(setOrDelete(f, "tag_match", mode === "all" ? "all" : undefined))}
         />
       )}
-      {extensions.length > 0 && (
+      {(extensions.length > 0 || toList(f.extension).length > 0) && (
         <ListPopover
           label={t("filter.format")}
           value={f.extension}

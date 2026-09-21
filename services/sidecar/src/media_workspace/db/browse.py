@@ -6,6 +6,11 @@ from __future__ import annotations
 
 import sqlite3
 
+# The facet filters (what the filter bar sends) live in facets.py: one registry
+# that the WHERE builder, the rules validation and the option counts all read.
+from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
+from .facets import _facet_clauses
+
 # Shared between list_image_assets and browse_collection — the two SELECTs
 # went out of sync by hand twice before (annotation columns). Single source.
 _BROWSE_SELECT_COLUMNS = """\
@@ -105,210 +110,6 @@ def _browse_sort_clause(sort: str | None) -> str:
         return "CASE WHEN assets.app_rating IS NULL OR assets.app_rating = 0 THEN 1 ELSE 0 END, assets.app_rating DESC, assets.stem"
     # default: name-asc
     return "assets.stem, registry.image_path"
-
-
-# Precision ranks for filters.geo min_precision: keep everything at least as
-# precise as the requested level.
-_GEO_PRECISION_RANK = {"exact": 3, "locality": 2, "admin1": 1, "country": 0}
-
-
-def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
-    """WHERE fragment for filters.geo.
-
-    bounds mode filters by the map viewport via the R*Tree; when the viewport
-    crosses the antimeridian (west > east) the longitude test is split into two
-    ranges on the base table instead. place mode (Phase 2 UI) matches place_id.
-
-    Matches against the asset's EFFECTIVE location: the paired RAW's
-    (registry.raw_asset_id) first, or — only when no paired RAW has one — the
-    image's own row. RAW is the authoritative capture metadata; same order as
-    list_map_points and the Inspector's rawMeta-first GPS display. (Phase 3
-    note: a future 'manual' source on the image row must win over RAW exif.)
-    """
-    if not isinstance(geo, dict):
-        return None
-
-    extra_conditions = ""
-    extra_params: list[object] = []
-    for source, included in (("exif", geo.get("include_exif", True)),
-                             ("ai", geo.get("include_ai", True))):
-        if not included:
-            extra_conditions += " AND loc.source != ?"
-            extra_params.append(source)
-    min_precision = geo.get("min_precision")
-    if min_precision in _GEO_PRECISION_RANK:
-        allowed = sorted(
-            name for name, rank in _GEO_PRECISION_RANK.items()
-            if rank >= _GEO_PRECISION_RANK[min_precision]
-        )
-        placeholders = ", ".join("?" for _ in allowed)
-        extra_conditions += f" AND loc.precision_level IN ({placeholders})"
-        extra_params.extend(allowed)
-
-    if geo.get("mode") == "place":
-        place_id = geo.get("place_id")
-        if not place_id:
-            return None
-        location_join = ""
-        location_conditions = "loc.place_id = ?" + extra_conditions
-        location_params: list[object] = [place_id, *extra_params]
-    elif geo.get("mode") == "bounds":
-        try:
-            west = float(geo["west"])
-            south = float(geo["south"])
-            east = float(geo["east"])
-            north = float(geo["north"])
-        except (KeyError, TypeError, ValueError):
-            return None
-        if west <= east:
-            location_join = (
-                "JOIN asset_location_rtree geo_idx ON geo_idx.location_id = loc.location_id"
-            )
-            location_conditions = (
-                "geo_idx.max_longitude >= ? AND geo_idx.min_longitude <= ? "
-                "AND geo_idx.max_latitude >= ? AND geo_idx.min_latitude <= ?"
-            ) + extra_conditions
-            location_params = [west, east, south, north, *extra_params]
-        else:
-            # Viewport crosses the antimeridian: split the longitude test in two.
-            location_join = ""
-            location_conditions = (
-                "loc.max_latitude >= ? AND loc.min_latitude <= ? "
-                "AND (loc.max_longitude >= ? OR loc.min_longitude <= ?)"
-            ) + extra_conditions
-            location_params = [south, north, west, east, *extra_params]
-    else:
-        return None
-
-    clause = f"""(
-        EXISTS (
-            SELECT 1 FROM image_lookup_registry reg
-            JOIN asset_locations loc ON loc.asset_id = reg.raw_asset_id
-            {location_join}
-            WHERE reg.image_asset_id = assets.asset_id AND {location_conditions}
-        )
-        OR (
-            NOT EXISTS (
-                SELECT 1 FROM image_lookup_registry reg2
-                JOIN asset_locations raw_loc ON raw_loc.asset_id = reg2.raw_asset_id
-                WHERE reg2.image_asset_id = assets.asset_id
-            )
-            AND EXISTS (
-                SELECT 1 FROM asset_locations loc
-                {location_join}
-                WHERE loc.asset_id = assets.asset_id AND {location_conditions}
-            )
-        )
-    )"""
-    return clause, [*location_params, *location_params]
-
-
-# Every key _facet_clauses understands. Smart collection rules are validated
-# against this, so a saved filter can never name something browse ignores.
-FACET_KEYS = frozenset({
-    "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
-    "focal_min", "focal_max", "shutter_min", "shutter_max",
-    "date_from", "date_to", "date_within_days", "rating_min", "orientation",
-    "asset_type", "tag", "extension", "people", "annotated", "person_group", "geo",
-    "in_collection",
-})
-
-
-def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
-    """Build AND-combined WHERE fragments + params from a structured facet dict.
-
-    Recognized keys: camera, lens (exact), iso_min/iso_max, aperture_min/max,
-    focal_min/max, shutter_min/max, date_from/date_to (ISO, vs capture time),
-    date_within_days (captured in the last N days — relative, so a saved
-    filter keeps moving with the calendar),
-    rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags),
-    people ('with_faces'|'without_faces'), person_group (group ID),
-    annotated ('with'|'without' — AI annotation presence),
-    geo (map viewport/place filter — see _geo_filter_clause),
-    in_collection (folder id — membership as a condition).
-    Unknown/empty keys are ignored.
-    """
-    if not filters:
-        return "", []
-    clauses: list[str] = []
-    params: list[object] = []
-
-    def add(clause: str, *vals: object) -> None:
-        clauses.append(clause)
-        params.extend(vals)
-
-    if filters.get("camera"):
-        add("assets.meta_camera_model = ?", filters["camera"])
-    if filters.get("lens"):
-        add("assets.meta_lens_model = ?", filters["lens"])
-    for key, col in (("iso", "meta_iso"), ("aperture", "meta_aperture"),
-                     ("focal", "meta_focal"), ("shutter", "meta_shutter")):
-        lo, hi = filters.get(f"{key}_min"), filters.get(f"{key}_max")
-        if lo is not None:
-            add(f"assets.{col} >= ?", lo)
-        if hi is not None:
-            add(f"assets.{col} <= ?", hi)
-    if filters.get("date_from"):
-        add("date(assets.meta_capture_time) >= date(?)", filters["date_from"])
-    if filters.get("date_to"):
-        add("date(assets.meta_capture_time) <= date(?)", filters["date_to"])
-    within_days = filters.get("date_within_days")
-    if within_days is not None and int(within_days) > 0:
-        add("date(assets.meta_capture_time) >= date('now', ?)", f"-{int(within_days)} days")
-    if filters.get("rating_min") is not None:
-        add("assets.app_rating >= ?", filters["rating_min"])
-    orientation = filters.get("orientation")
-    if orientation == "portrait":
-        add("assets.meta_height > assets.meta_width")
-    elif orientation == "landscape":
-        add("assets.meta_width > assets.meta_height")
-    elif orientation == "square":
-        add("assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL")
-    if filters.get("asset_type") in ("image", "video", "raw"):
-        add("assets.asset_type = ?", filters["asset_type"])
-    if filters.get("tag"):
-        add("EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = assets.asset_id AND t.tag = ?)", filters["tag"])
-    if filters.get("extension"):
-        # File-format filter (jpg / png / mp4 / cr2 / 3fr / …); stored extension
-        # keeps a leading dot, so trim it both sides for a clean compare.
-        add("LOWER(TRIM(assets.extension, '.')) = ?", str(filters["extension"]).lower().lstrip("."))
-    if filters.get("people") == "with_faces":
-        add("EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
-    elif filters.get("people") == "without_faces":
-        add("NOT EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id)")
-    if filters.get("annotated") == "with":
-        add("EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
-    elif filters.get("annotated") == "without":
-        add("NOT EXISTS (SELECT 1 FROM asset_ai_annotations AS ann WHERE ann.asset_id = assets.asset_id)")
-    if filters.get("person_group"):
-        # Build this person's asset set once. A correlated EXISTS lets SQLite
-        # choose group_id first for *every* gallery row, repeatedly walking all
-        # faces in a large group (library size × group size). IN also dedupes
-        # multiple faces in one photo without changing pagination semantics.
-        add(
-            """assets.asset_id IN (
-                SELECT face.asset_id
-                FROM person_group_faces AS membership
-                JOIN asset_faces AS face ON face.face_id = membership.face_id
-                WHERE membership.group_id = ?
-                  AND membership.membership_state != 'rejected'
-            )""",
-            filters["person_group"],
-        )
-    if filters.get("in_collection"):
-        # Membership of a folder as a condition, so a smart collection can be
-        # saved from inside one ("the five-star photos of this trip").
-        add(
-            "assets.asset_id IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)",
-            filters["in_collection"],
-        )
-    geo_clause = _geo_filter_clause(filters.get("geo"))
-    if geo_clause is not None:
-        add(geo_clause[0], *geo_clause[1])
-
-    if not clauses:
-        return "", []
-    return "AND " + " AND ".join(clauses), params
 
 
 # ── two layers ──────────────────────────────────────────────────────────────
@@ -475,18 +276,6 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
 # status), the search text and every OTHER active filter. A facet's own keys
 # are left out of its own count — with PNG selected, JPG must still say how
 # many JPGs there are, or the dropdown could never be used to switch.
-_FACET_OWN_KEYS: dict[str, frozenset[str]] = {
-    "camera": frozenset({"camera"}),
-    "lens": frozenset({"lens"}),
-    "tag": frozenset({"tag"}),
-    "extension": frozenset({"extension"}),
-    "iso": frozenset({"iso_min", "iso_max"}),
-    "aperture": frozenset({"aperture_min", "aperture_max"}),
-    "focal": frozenset({"focal_min", "focal_max"}),
-    "shutter": frozenset({"shutter_min", "shutter_max"}),
-    "capture_time": frozenset({"date_from", "date_to", "date_within_days"}),
-}
-
 _FACET_FROM = (
     "FROM image_lookup_registry AS registry "
     "JOIN assets ON assets.asset_id = registry.image_asset_id "

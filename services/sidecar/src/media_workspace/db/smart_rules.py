@@ -14,12 +14,27 @@ import json
 from typing import Any
 
 from .browse import _MAX_BASE_DEPTH as MAX_BASE_DEPTH
-from .browse import FACET_KEYS, _status_clause
+from .browse import _status_clause
+from .facets import FACET_KEYS, FACET_MODIFIER_KEYS
 
 RULES_VERSION = 1
 
 # The map viewport is a transient view state, not something to save.
 _SAVABLE_FILTER_KEYS = FACET_KEYS - {"geo"}
+
+
+def _clean_filters(filters: dict[str, Any]) -> dict[str, Any]:
+    """Drop empty values. A multi-value facet keeps a list; a list of one is
+    stored as the scalar, so a single pick saves exactly as it always has."""
+    out: dict[str, Any] = {}
+    for key, value in filters.items():
+        if isinstance(value, (list, tuple)):
+            items = [item for item in value if item not in (None, "")]
+            if items:
+                out[key] = items[0] if len(items) == 1 else items
+        elif value not in (None, ""):
+            out[key] = value
+    return out
 
 
 def normalize_rules(rules: Any, _depth: int = 0) -> dict[str, Any]:
@@ -47,13 +62,15 @@ def normalize_rules(rules: Any, _depth: int = 0) -> dict[str, Any]:
         "version": RULES_VERSION,
         "status": status,
         "search": str(rules.get("search") or "").strip(),
-        "filters": {k: v for k, v in filters.items() if v not in (None, "")},
+        "filters": _clean_filters(filters),
     }
     if rules.get("sort"):
         out["sort"] = str(rules["sort"])
     if rules.get("base"):
         out["base"] = normalize_rules(rules["base"], _depth + 1)
-    if status == "all" and not out["search"] and not out["filters"] and "base" not in out:
+    # A modifier (tag_match) tunes another key; it is not a condition by itself.
+    has_condition = any(key not in FACET_MODIFIER_KEYS for key in out["filters"])
+    if status == "all" and not out["search"] and not has_condition and "base" not in out:
         raise ValueError("A smart collection needs at least one condition")
     return out
 
