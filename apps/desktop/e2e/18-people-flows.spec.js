@@ -40,7 +40,9 @@ test("people wall shows the named person and the candidate with face covers", as
   for (const tile of await tiles.all()) {
     const img = tile.locator("img").first();
     await expect(img).toBeVisible();
-    expect(await img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0);
+    // Visible is not loaded: on a slow runner the <img> is laid out before its
+    // bytes arrive, and an immediate read sees naturalWidth 0.
+    await expect.poll(() => img.evaluate((el) => el.naturalWidth), { timeout: 10_000 }).toBeGreaterThan(0);
   }
 });
 
