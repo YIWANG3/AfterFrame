@@ -588,6 +588,17 @@ videoIpc.register({
 
 // Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
 // main process so it works regardless of renderer focus / gesture state.
+// Dev only: tells the renderer when electron/, shared/ or the sidecar's
+// sources are newer than this process (see electron/devStaleness.js). Off in a
+// packaged app, and under e2e (AFTERFRAME_USER_DATA), where a file saved while
+// the suite runs must not put a notice over the UI being tested.
+require("./devStaleness").register({
+  ipcMain,
+  app,
+  enabled: !isPackaged && !process.env.AFTERFRAME_USER_DATA,
+  roots: [__dirname, path.join(__dirname, "..", "shared"), sidecarSrc],
+});
+
 ipcMain.handle("app:copy-text", (_event, text) => {
   clipboard.writeText(String(text ?? ""));
   return true;

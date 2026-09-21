@@ -36,6 +36,7 @@ import PeopleInspector from "./components/PeopleInspector";
 import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
+import DevStaleNotice from "./components/DevStaleNotice";
 import { ConfirmHost, confirm } from "./components/confirm";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
@@ -1374,6 +1375,7 @@ export default function App() {
       <div className="fixed bottom-4 right-4 z-[20000] flex flex-col items-end gap-2">
         <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} onPause={workspace.pauseJob} onResume={workspace.resumeJob} />
         <ToastStack inline toasts={toasts} onDismiss={dismissToast} />
+        {!api.isPackaged && <DevStaleNotice />}
       </div>
       <Lightbox
         open={lightboxOpen}
