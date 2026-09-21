@@ -330,6 +330,16 @@ function matchesFacetFilters(asset, filters) {
   if (filters.annotated === "with" && !asset.annotation) return false;
   if (filters.annotated === "without" && asset.annotation) return false;
   if (filters.person_group) return false;
+  // Web locations only ever come from EXIF.
+  const sources = facetValues(filters.location_source);
+  if (sources.length) {
+    const source = meta.gps_latitude != null && meta.gps_longitude != null ? "exif" : "none";
+    if (!sources.includes(source)) return false;
+  }
+  const contains = (text, needle) => String(text || "").toLowerCase().includes(String(needle).trim().toLowerCase());
+  if (String(filters.caption_contains || "").trim() && !contains(asset.annotation?.caption, filters.caption_contains)) return false;
+  if (String(filters.ocr_contains || "").trim() && !contains(asset.annotation?.detected_text, filters.ocr_contains)) return false;
+  if (String(filters.path_contains || "").trim() && !contains(asset.image_path || asset.file_name, filters.path_contains)) return false;
   const folders = facetValues(filters.in_collection);
   if (folders.length && !folders.some((id) => (collections.find((c) => c.collection_id === id)?.asset_ids || []).includes(asset.asset_id))) return false;
   if (filters.geo && !matchesGeo(meta, filters.geo)) return false;
@@ -450,6 +460,7 @@ const FACET_OWN_KEYS = {
   iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
   capture_time: ["date_from", "date_to", "date_within_days"],
+  location_source: ["location_source"],
 };
 function facetUniverse(facet, { collectionId, status = "all", search, filters, base } = {}) {
   let list = assets;
@@ -809,7 +820,11 @@ export const browserBridge = {
       return vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : { min: null, max: null };
     };
     const times = metasFor("capture_time").map((m) => m.capture_time).filter(Boolean).sort();
+    const sourceOf = (m) => (m.gps_latitude != null && m.gps_longitude != null ? "exif" : "none");
     return {
+      location_sources: ["exif", "none"]
+        .map((value) => ({ value, count: metasFor("location_source").filter((m) => sourceOf(m) === value).length }))
+        .filter((row) => row.count > 0),
       cameras: counts(metasFor("camera").map((m) => m.camera_model)),
       lenses: counts(metasFor("lens").map((m) => m.lens_model)),
       tags: aggregateTags(60, "", facetUniverse("tag", view)),

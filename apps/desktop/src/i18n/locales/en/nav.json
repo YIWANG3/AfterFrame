@@ -194,6 +194,20 @@
     "match": {
       "any": "Any of these",
       "all": "All of these"
+    },
+    "locationSource": {
+      "label": "Location",
+      "exif": "GPS",
+      "ai": "AI guess",
+      "manual": "Set by hand",
+      "none": "No location"
+    },
+    "textContains": "Text",
+    "containsPlaceholder": "contains…",
+    "contains": {
+      "caption_contains": "Description",
+      "ocr_contains": "Text in the picture",
+      "path_contains": "Folder or file path"
     }
   },
   "activity": {

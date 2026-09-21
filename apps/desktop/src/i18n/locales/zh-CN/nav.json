@@ -185,6 +185,20 @@
     "match": {
       "any": "含任意一个",
       "all": "同时含全部"
+    },
+    "locationSource": {
+      "label": "位置",
+      "exif": "GPS",
+      "ai": "AI 推测",
+      "manual": "手动设置",
+      "none": "无位置"
+    },
+    "textContains": "文字",
+    "containsPlaceholder": "包含…",
+    "contains": {
+      "caption_contains": "描述",
+      "ocr_contains": "画面中的文字",
+      "path_contains": "文件夹或文件路径"
     }
   },
   "activity": {

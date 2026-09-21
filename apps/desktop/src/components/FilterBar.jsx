@@ -82,6 +82,58 @@ function Popover({ label, active, summary, children, width = 220 }) {
   );
 }
 
+// "Contains" on one text field each. The search box matches seven fields at
+// once (a camera name hits as readily as a caption); these match exactly one,
+// and are saved into a smart collection as such. Typing commits after a pause.
+const TEXT_FACETS = ["caption_contains", "ocr_contains", "path_contains"];
+
+function TextContainsPopover({ filters, onChange }) {
+  const { t } = useTranslation("nav");
+  const [draft, setDraft] = useState(() => Object.fromEntries(TEXT_FACETS.map((key) => [key, filters[key] || ""])));
+  const active = TEXT_FACETS.filter((key) => filters[key]);
+  // Cleared from outside (Clear, leaving the place): follow it.
+  const committed = TEXT_FACETS.map((key) => filters[key] || "").join("\u0000");
+  useEffect(() => {
+    setDraft((current) => {
+      const next = Object.fromEntries(TEXT_FACETS.map((key) => [key, filters[key] || ""]));
+      return TEXT_FACETS.every((key) => (current[key] || "").trim() === next[key]) ? current : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committed]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      let next = filters;
+      for (const key of TEXT_FACETS) {
+        const text = (draft[key] || "").trim();
+        if (text !== (filters[key] || "")) next = setOrDelete(next, key, text || undefined);
+      }
+      if (next !== filters) onChange(next);
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  const summary = active.length > 1
+    ? t("filter.pickedMore", { first: filters[active[0]], count: active.length - 1 })
+    : filters[active[0]];
+  return (
+    <Popover label={t("filter.textContains")} active={active.length > 0} summary={summary} width={230}>
+      {TEXT_FACETS.map((key) => (
+        <label key={key} className="mb-1.5 block last:mb-0">
+          <span className="mb-0.5 block text-[10px] text-muted2">{t(`filter.contains.${key}`)}</span>
+          <input
+            data-text-facet={key}
+            value={draft[key]}
+            onChange={(e) => setDraft((current) => ({ ...current, [key]: e.target.value }))}
+            placeholder={t("filter.containsPlaceholder")}
+            className="w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+          />
+        </label>
+      ))}
+    </Popover>
+  );
+}
+
 // A facet's value: nothing, one pick (a scalar, as it has always been stored),
 // or several (a list). Several values within one facet are OR.
 const toList = (value) => (value == null || value === "" ? [] : Array.isArray(value) ? value : [value]);
@@ -91,7 +143,7 @@ const sameOption = (a, b) => String(a).toLowerCase() === String(b).toLowerCase()
 // Multi-select list. Ticking several options means "any of these"; the popover
 // stays open so they can be ticked in a row. `matchMode` / `onMatchMode` add the
 // any / all switch that only tags need ("night AND neon").
-function ListPopover({ label, value, options, onSelect, searchable, onSearch, matchMode, onMatchMode }) {
+function ListPopover({ label, value, options, onSelect, searchable, onSearch, matchMode, onMatchMode, labelOf = String }) {
   const { t } = useTranslation("nav");
   const [q, setQ] = useState("");
   const [remote, setRemote] = useState(null);
@@ -125,7 +177,9 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
   const toggle = (option) => onSelect(fromList(isPicked(option)
     ? picked.filter((value_) => !sameOption(value_, option))
     : [...picked, option]));
-  const summary = picked.length > 1 ? t("filter.pickedMore", { first: picked[0], count: picked.length - 1 }) : picked[0];
+  const summary = picked.length > 1
+    ? t("filter.pickedMore", { first: labelOf(picked[0]), count: picked.length - 1 })
+    : picked.length ? labelOf(picked[0]) : undefined;
 
   return (
     <Popover label={label} active={picked.length > 0} summary={summary} width={200}>
@@ -188,7 +242,7 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
                 >
                   {on && <Check className="h-2.5 w-2.5 text-accent" />}
                 </span>
-                <span className="truncate">{opt.value}</span>
+                <span className="truncate">{labelOf(opt.value)}</span>
               </span>
               <span className="shrink-0 text-[10px] tabular-nums text-muted2">{opt.count}</span>
             </button>
@@ -512,6 +566,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const lenses = facetValues?.lenses || [];
   const tags = facetValues?.tags || [];
   const extensions = facetValues?.extensions || [];
+  const locationSources = facetValues?.location_sources || [];
   const activeCount = Object.keys(f).filter((key) => key !== "tag_match").length;
 
   const scrollRef = useRef(null);
@@ -587,6 +642,17 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           onSelect={(v) => onChange(setOrDelete(f, "extension", v))}
         />
       )}
+
+      {(locationSources.length > 0 || toList(f.location_source).length > 0) && (
+        <ListPopover
+          label={t("filter.locationSource.label")}
+          value={f.location_source}
+          options={locationSources}
+          labelOf={(value) => t(`filter.locationSource.${value}`, { defaultValue: String(value) })}
+          onSelect={(v) => onChange(setOrDelete(f, "location_source", v))}
+        />
+      )}
+      <TextContainsPopover filters={f} onChange={onChange} />
 
       {/* Face/annotation-backed filters need their data pipelines (People
           indexing, AI annotation) — hidden where the bridge declares those

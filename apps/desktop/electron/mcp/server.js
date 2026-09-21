@@ -134,6 +134,7 @@ const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
   "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "orientation", "tag", "tag_match",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
+  "location_source", "caption_contains", "ocr_contains", "path_contains",
 ];
 
 function facetFiltersFrom(source) {
@@ -240,6 +241,13 @@ function createMcpServer(deps) {
           rating_min: { type: "number", description: "Minimum star rating 1-5" },
           orientation: { type: "string", enum: ["portrait", "landscape", "square"] },
           tag: { ...ONE_OR_MANY, description: "Exact tag match. A list means any of them." },
+          location_source: {
+            anyOf: [{ type: "string", enum: ["exif", "ai", "manual", "none"] }, { type: "array", items: { type: "string", enum: ["exif", "ai", "manual", "none"] } }],
+            description: "What the photo's location is based on: exif (GPS), ai (guessed from the image), manual, or none (no location yet). A list means any of them.",
+          },
+          caption_contains: { type: "string", description: "Text the AI description must contain (that field only, unlike query)" },
+          ocr_contains: { type: "string", description: "Text that must appear IN the picture (signs, labels), as read by AI annotation" },
+          path_contains: { type: "string", description: "Text the file's folder or name must contain" },
           tag_match: { type: "string", enum: ["any", "all"], description: "With several tags: any of them (default) or all of them" },
           asset_type: { type: "string", enum: ["image", "video"], description: "Only photos or only videos" },
           extension: { ...ONE_OR_MANY, description: "File format, e.g. 'jpg', 'png', 'mp4', 'cr2'. A list means any of them." },
@@ -488,7 +496,7 @@ function createMcpServer(deps) {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets (camera, lens, tag and extension take one value or a list meaning any of them; tag_match: 'all' requires every tag): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
-              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated; " +
+              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated, location_source, caption_contains, ocr_contains, path_contains; " +
               "plus collection_id to mean 'only photos in that folder'.",
           },
           collection_id: { type: "string" },
