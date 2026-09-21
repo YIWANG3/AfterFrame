@@ -1202,7 +1202,7 @@ export default function App() {
                   onChange={workspace.applyFilters}
                   personGroup={peopleGroup}
                   onPersonGroup={setPeopleGroup}
-                  collectionId={workspace.activeCollectionId}
+                  facetScope={workspace.facetScope}
                   smart={{
                     canSave: workspace.canSaveSmartCollection,
                     dirty: workspace.smartCollectionDirty,

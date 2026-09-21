@@ -123,3 +123,63 @@ test("the dropdown counts describe the folder, and each count is what choosing i
   expect(total(inLibrary)).toBeGreaterThan(total(inFolder));
   expect(inLibrary[camera]).toBeGreaterThanOrEqual(count);
 });
+
+// Option → count, as an open dropdown in the filter bar shows it.
+async function facetCounts(label) {
+  await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: label, exact: true }).click();
+  const options = ctx.window.locator("[data-facet-option]");
+  await expect(options.first()).toBeVisible();
+  const counts = await options.evaluateAll((els) => Object.fromEntries(els.map((el) => [el.dataset.facetOption, Number(el.dataset.facetCount)])));
+  await ctx.window.keyboard.press("Escape");
+  return counts;
+}
+const browseLength = (filters) => ctx.window.evaluate(
+  (f) => window.mediaWorkspace.browseImages({ status: "all", filters: f, limit: 1000 }).then((rows) => rows.length),
+  filters,
+);
+
+test("counts follow the other active filters: what picking an option would show", async () => {
+  // Library view, nothing filtered: the fixture is JPGs plus one MP4.
+  await ctx.window.getByRole("button", { name: "All Assets" }).click();
+  const unfiltered = await facetCounts("Format");
+  expect(unfiltered.MP4).toBe(1);
+  expect(unfiltered.JPG).toBe(await browseLength({ extension: "jpg" }));
+
+  // A rating no video has: MP4 would show nothing, so it is no longer offered,
+  // and JPG counts only the rated JPGs.
+  await ctx.window.getByTitle("Rating ≥ 3").click();
+  const rated = await facetCounts("Format");
+  expect(rated.MP4).toBeUndefined();
+  expect(rated.JPG).toBe(await browseLength({ rating_min: 3, extension: "jpg" }));
+  expect(rated.JPG).toBeLessThan(unfiltered.JPG);
+  // Every count is exactly what choosing that option shows.
+  await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "Format", exact: true }).click();
+  await ctx.window.locator('[data-facet-option="JPG"]').click();
+  await ctx.window.keyboard.press("Escape");
+  await expect(cards()).toHaveCount(rated.JPG);
+  await ctx.window.getByRole("button", { name: /^Clear/ }).click();
+});
+
+test("a selected option that nothing matches any more stays listed at 0, and the facet can still be switched", async () => {
+  // The reported case: a format is selected, other filters leave it empty, and
+  // the dropdown kept quoting the library's total beside it.
+  await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "Format", exact: true }).click();
+  await ctx.window.locator('[data-facet-option="MP4"]').click();
+  await ctx.window.keyboard.press("Escape");
+  await expect(cards()).toHaveCount(1);
+  await ctx.window.getByTitle("Rating ≥ 3").click();
+  await expect(cards()).toHaveCount(0);
+
+  const counts = await facetCounts("MP4"); // the chip now reads its selected value
+  expect(counts.MP4).toBe(0);
+  // Its own selection does not count against the alternatives: JPG still says
+  // how many rated JPGs there are, so the user can switch to it.
+  expect(counts.JPG).toBe(await browseLength({ rating_min: 3, extension: "jpg" }));
+  expect(counts.JPG).toBeGreaterThan(0);
+
+  await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "MP4", exact: true }).click();
+  await ctx.window.locator('[data-facet-option="JPG"]').click();
+  await ctx.window.keyboard.press("Escape");
+  await expect(cards()).toHaveCount(counts.JPG);
+  await ctx.window.getByRole("button", { name: /^Clear/ }).click();
+});

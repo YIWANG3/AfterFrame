@@ -1,4 +1,5 @@
-"""Facet options inside a folder describe the folder, not the library."""
+"""Facet options and their counts describe the current view: the folder, the
+search text and every other active filter."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,6 +68,47 @@ class FolderFacetTests(unittest.TestCase):
         self.assertEqual(self.counts(search_facet_values(self.connection, "tag", "c")), {"coast": 2, "city": 1})
         self.assertEqual(self.counts(search_facet_values(self.connection, "tag", "c", collection_id=self.folder)), {"coast": 2})
         self.assertEqual(self.counts(search_facet_values(self.connection, "camera", "canon", collection_id=self.folder)), {"Canon R6": 1})
+
+    # ── counts follow the other active filters ─────────────────────────────
+
+    def test_a_count_is_what_picking_that_option_would_show_given_the_other_filters(self):
+        from media_workspace.db import list_image_assets
+
+        active = {"tag": "coast"}  # a and c
+        facets = get_facet_values(self.connection, filters=active)
+        self.assertEqual(self.counts(facets["cameras"]), {"CFV 100C": 1, "Canon R6": 1})
+        for row in facets["cameras"]:
+            shown = list_image_assets(self.connection, "all", filters={**active, "camera": row["value"]})
+            self.assertEqual(len(shown), row["count"], row["value"])
+        # Ranges narrow too: only a (ISO 100) and c (ISO 3200) carry the tag.
+        self.assertEqual(get_facet_values(self.connection, filters={"tag": "city"})["iso"], {"min": 800, "max": 800})
+
+    def test_a_facet_ignores_its_own_selection_so_it_can_still_be_switched(self):
+        facets = get_facet_values(self.connection, filters={"camera": "CFV 100C"})
+        # Canon is still offered with ITS count; only the OTHER facets narrowed.
+        self.assertEqual(self.counts(facets["cameras"]), {"CFV 100C": 2, "Canon R6": 2})
+        self.assertEqual(self.counts(facets["tags"]), {"coast": 1})
+        self.assertEqual(facets["iso"], {"min": 100, "max": 400})
+        # A range facet ignores its own bounds the same way.
+        self.assertEqual(get_facet_values(self.connection, filters={"iso_min": 3000})["iso"], {"min": 100, "max": 3200})
+
+    def test_an_option_the_other_filters_rule_out_is_not_offered(self):
+        # "city" is only on d, a Canon: with CFV picked, choosing it would show nothing.
+        tags = self.counts(get_facet_values(self.connection, filters={"camera": "CFV 100C"})["tags"])
+        self.assertNotIn("city", tags)
+        self.assertEqual(self.counts(search_facet_values(self.connection, "tag", "c", filters={"camera": "CFV 100C"})), {"coast": 1})
+
+    def test_search_text_status_and_folder_all_narrow_the_counts(self):
+        self.assertEqual(self.counts(get_facet_values(self.connection, search="canon")["tags"]), {"coast": 1, "city": 1})
+        self.connection.execute("UPDATE assets SET app_rating = 5 WHERE asset_id = ?", (self.ids["a"],))
+        self.assertEqual(self.counts(get_facet_values(self.connection, status="rated")["cameras"]), {"CFV 100C": 1})
+        # Inside a folder the status is replaced by membership, as in browse_collection.
+        in_folder = get_facet_values(self.connection, self.folder, status="rated", filters={"tag": "coast"})
+        self.assertEqual(self.counts(in_folder["cameras"]), {"CFV 100C": 1, "Canon R6": 1})
+
+    def test_no_arguments_still_describes_the_whole_library(self):
+        # get_catalog_info reports these to agents as the library's facets.
+        self.assertEqual(get_facet_values(self.connection), get_facet_values(self.connection, None, status="all", search=None, filters={}))
 
 
 if __name__ == "__main__":

@@ -328,12 +328,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     facet_values_p = subparsers.add_parser("facet-values", parents=[common])
     facet_values_p.add_argument("--collection-id", default=None, help="Describe this folder instead of the library")
+    # The view the counts are taken inside: a number beside an option is how
+    # many photos picking it would show, given everything else that is active.
+    facet_values_p.add_argument("--status", default="all")
+    facet_values_p.add_argument("--search", default=None)
+    facet_values_p.add_argument("--filters", default=None, help="JSON object of the active facet filters")
 
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
     search_facet_p.add_argument("--field", choices=["tag", "camera", "lens"], required=True)
     search_facet_p.add_argument("--q", default="")
     search_facet_p.add_argument("--limit", type=int, default=50)
     search_facet_p.add_argument("--collection-id", default=None)
+    search_facet_p.add_argument("--status", default="all")
+    search_facet_p.add_argument("--search", default=None)
+    search_facet_p.add_argument("--filters", default=None)
 
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
@@ -1438,13 +1446,19 @@ def _cmd_refresh_assets(args, connection, catalog, parser):
 
 def _cmd_facet_values(args, connection, catalog, parser):
     from .db import get_facet_values
-    print(json.dumps(get_facet_values(connection, args.collection_id), ensure_ascii=False))
+    print(json.dumps(get_facet_values(
+        connection, args.collection_id, status=args.status, search=args.search,
+        filters=json.loads(args.filters) if args.filters else None,
+    ), ensure_ascii=False))
     return 0
 
 
 def _cmd_search_facet(args, connection, catalog, parser):
     from .db import search_facet_values
-    print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit, args.collection_id), ensure_ascii=False))
+    print(json.dumps(search_facet_values(
+        connection, args.field, args.q, args.limit, args.collection_id, status=args.status, search=args.search,
+        filters=json.loads(args.filters) if args.filters else None,
+    ), ensure_ascii=False))
     return 0
 
 
