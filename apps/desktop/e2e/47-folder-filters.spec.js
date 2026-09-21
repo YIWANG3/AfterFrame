@@ -80,6 +80,73 @@ test("a filter nothing in the folder matches shows an empty folder, not the whol
   await expect(cards()).toHaveCount(4);
 });
 
+test("an active filter keeps the bar on screen: it cannot be hidden while it is filtering", async () => {
+  await ctx.window.getByTitle("Rating ≥ 5").click();
+  await ctx.window.getByRole("button", { name: "Filters" }).click(); // try to hide it
+  await expect(ctx.window.locator("[data-filter-bar]")).toBeVisible();
+  await ctx.window.getByRole("button", { name: /^Clear/ }).click();
+  // Nothing filtering any more: the toggle is the user's again. Put it back for the tests below.
+  if (!await ctx.window.locator("[data-filter-bar]").isVisible()) await ctx.window.getByRole("button", { name: "Filters" }).click();
+  await expect(ctx.window.locator("[data-filter-bar]")).toBeVisible();
+});
+
+test("a folder follows the toolbar's sort, and offers its own added order only there", async () => {
+  const stems = () => cards().evaluateAll((els) => els.map((el) => el.dataset.assetId));
+  const byStem = Object.fromEntries(members.map((m) => [m.id, m.stem]));
+  const sortTo = async (label) => {
+    await ctx.window.getByRole("button", { name: /^(Imported|Captured|Added|Name|Rating)/ }).first().click();
+    await ctx.window.getByRole("button", { name: label, exact: true }).click();
+  };
+  await sortTo("Name A-Z");
+  await expect.poll(async () => (await stems()).map((id) => byStem[id])).toEqual(members.map((m) => m.stem).sort((a, b) => a.localeCompare(b)));
+  await sortTo("Name Z-A");
+  await expect.poll(async () => (await stems()).map((id) => byStem[id])).toEqual(members.map((m) => m.stem).sort((a, b) => b.localeCompare(a)));
+  // "Added" exists here…
+  await sortTo("Added ↑");
+  await expect.poll(async () => (await stems()).map((id) => byStem[id])).toEqual(members.map((m) => m.stem));
+  // …and does not leak into the library: leaving the folder falls back to the default order.
+  await ctx.window.getByRole("button", { name: "All Assets" }).click();
+  await ctx.window.getByRole("button", { name: /^Imported/ }).first().click();
+  await expect(ctx.window.getByRole("button", { name: "Added ↑", exact: true })).toHaveCount(0);
+  await ctx.window.keyboard.press("Escape");
+  await ctx.window.getByRole("button", { name: /^Filter me/ }).click();
+});
+
+test("a refined folder can be saved as a smart collection that follows the folder", async () => {
+  await ctx.window.getByTitle("Rating ≥ 3").click();
+  // Ask the catalog, then wait for the grid to agree (the click only starts the reload).
+  const shown = await ctx.window.evaluate(() => window.mediaWorkspace.listCollections()
+    .then((rows) => window.mediaWorkspace.browseCollection(rows.find((r) => r.name === "Filter me").collection_id, { filters: { rating_min: 3 }, limit: 100 }))
+    .then((rows) => rows.length));
+  expect(shown).toBeGreaterThan(0);
+  expect(shown).toBeLessThan(4);
+  await expect(cards()).toHaveCount(shown);
+  await ctx.window.getByRole("button", { name: "Save as smart collection" }).click();
+  const nameInput = ctx.window.locator("[data-smart-name-input] input");
+  await nameInput.fill("Best of Filter me");
+  await nameInput.press("Enter");
+  const row = ctx.window.locator("[data-smart-collection]").filter({ hasText: "Best of Filter me" });
+  await expect(row).toHaveClass(/bg-selected/);
+  await expect(cards()).toHaveCount(shown);
+  const saved = await ctx.window.evaluate(() => window.mediaWorkspace.listCollections().then((rows) => rows.find((r) => r.name === "Best of Filter me")));
+  const folder = await ctx.window.evaluate(() => window.mediaWorkspace.listCollections().then((rows) => rows.find((r) => r.name === "Filter me")));
+  expect(saved.rules.filters).toEqual({ rating_min: 3, in_collection: folder.collection_id });
+  expect(saved.item_count).toBe(shown);
+  // It follows the folder: a rated photo added to the folder joins it.
+  const outsider = await ctx.window.evaluate(async (memberIds) => {
+    const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 100 });
+    const pick = rows.find((r) => !memberIds.includes(r.asset_id) && r.asset_type !== "video" && r.stem !== "B0016108");
+    await window.mediaWorkspace.setAssetRating([pick.asset_id], 5);
+    return pick.asset_id;
+  }, members.map((m) => m.id));
+  await ctx.window.evaluate(({ id, asset }) => window.mediaWorkspace.collectionAddItems(id, [asset]), { id: folder.collection_id, asset: outsider });
+  await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.listCollections()
+    .then((rows) => rows.find((r) => r.name === "Best of Filter me").item_count))).toBe(shown + 1);
+  await ctx.window.evaluate(({ id, asset }) => window.mediaWorkspace.collectionRemoveItems(id, [asset]), { id: folder.collection_id, asset: outsider });
+  await ctx.window.getByRole("button", { name: /^Filter me/ }).click();
+  await expect(cards()).toHaveCount(4);
+});
+
 // Camera → count, as the open Camera dropdown shows it.
 async function cameraCounts() {
   await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "Camera", exact: true }).click();

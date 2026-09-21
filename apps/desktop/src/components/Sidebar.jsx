@@ -21,6 +21,7 @@ export default function Sidebar({
   activeCollectionId,
   activeSmartCollectionId,
   onOpenSmartCollection,
+  onEditSmartCollection,
   onSnapshotSmartCollection,
   onSelectCollection,
   onClearCollection,
@@ -256,6 +257,7 @@ export default function Sidebar({
           activeId={stickerMode || peopleMode || discoverMode ? null : activeSmartCollectionId}
           view={folderView}
           onOpen={onOpenSmartCollection}
+          onEditRules={onEditSmartCollection}
           onRename={onRenameCollection}
           onDelete={onDeleteCollection}
           onSnapshot={onSnapshotSmartCollection}

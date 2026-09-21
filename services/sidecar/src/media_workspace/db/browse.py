@@ -77,6 +77,19 @@ def _browse_order_clause(sort: str | None) -> str:
     return _browse_sort_clause(sort) + ", assets.asset_id"
 
 
+# Inside a folder the toolbar's sort applies like anywhere else, plus one order
+# only a folder has: when each photo was added to it (requires the `ci` join).
+COLLECTION_SORTS = ("added-desc", "added-asc")
+
+
+def _collection_order_clause(sort: str | None) -> str:
+    if sort == "added-asc":
+        return "ci.added_at ASC, assets.stem, assets.asset_id"
+    if sort is None or sort == "added-desc":
+        return "ci.added_at DESC, assets.stem, assets.asset_id"
+    return _browse_order_clause(sort)
+
+
 def _browse_sort_clause(sort: str | None) -> str:
     if sort == "name-desc":
         return "assets.stem DESC, registry.image_path"
@@ -197,6 +210,7 @@ FACET_KEYS = frozenset({
     "focal_min", "focal_max", "shutter_min", "shutter_max",
     "date_from", "date_to", "date_within_days", "rating_min", "orientation",
     "asset_type", "tag", "extension", "people", "annotated", "person_group", "geo",
+    "in_collection",
 })
 
 
@@ -210,7 +224,8 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     rating_min, orientation ('portrait'|'landscape'|'square'), tag (asset_tags),
     people ('with_faces'|'without_faces'), person_group (group ID),
     annotated ('with'|'without' — AI annotation presence),
-    geo (map viewport/place filter — see _geo_filter_clause).
+    geo (map viewport/place filter — see _geo_filter_clause),
+    in_collection (folder id — membership as a condition).
     Unknown/empty keys are ignored.
     """
     if not filters:
@@ -280,6 +295,13 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
             )""",
             filters["person_group"],
         )
+    if filters.get("in_collection"):
+        # Membership of a folder as a condition, so a smart collection can be
+        # saved from inside one ("the five-star photos of this trip").
+        add(
+            "assets.asset_id IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)",
+            filters["in_collection"],
+        )
     geo_clause = _geo_filter_clause(filters.get("geo"))
     if geo_clause is not None:
         add(geo_clause[0], *geo_clause[1])
@@ -287,6 +309,30 @@ def _facet_clauses(filters: dict | None) -> tuple[str, list[object]]:
     if not clauses:
         return "", []
     return "AND " + " AND ".join(clauses), params
+
+
+# ── two layers ──────────────────────────────────────────────────────────────
+# WHERE the user is (a status view, a folder, a smart collection) defines the
+# base set; the filter bar and the search box only ever REFINE inside it. A
+# smart collection's rules are its base: {status, search, filters, base?}.
+# `base` nests — "inside collection X, refined by Y", saved as a new
+# collection, keeps X's rules intact instead of merging keys that may collide
+# (X wants tag=urban, Y wants tag=night: both must hold).
+_MAX_BASE_DEPTH = 4
+
+
+def _base_clause(base: dict | None, depth: int = 0) -> tuple[str, list[object]]:
+    """"AND …" fragment + params for a smart collection's rules. Requires the
+    `registry`, `assets` and `anno` aliases, like _search_clause."""
+    if not base:
+        return "", []
+    if depth >= _MAX_BASE_DEPTH:
+        raise ValueError("Smart collection rules are nested too deeply")
+    search_clause, params = _search_clause(base.get("search") or None)
+    facet_clause, facet_params = _facet_clauses(base.get("filters"))
+    nested_clause, nested_params = _base_clause(base.get("base"), depth + 1)
+    clause = f"AND ({_status_clause(base.get('status') or 'all')}) {search_clause} {facet_clause} {nested_clause}"
+    return clause, [*params, *facet_params, *nested_params]
 
 
 def _status_clause(status: str) -> str:
@@ -322,6 +368,19 @@ def _search_clause(search: str | None) -> tuple[str, list[object]]:
     return clause, [like_pattern] * 7
 
 
+def _view_where(
+    status: str, search: str | None, filters: dict | None, base: dict | None,
+) -> tuple[str, list[object]]:
+    """WHERE (without the keyword) + params for a non-folder view: the base
+    set — a status, or a smart collection's rules, which carry their own
+    status — refined by the search text and the facet filters."""
+    base_clause, base_params = _base_clause(base)
+    search_clause, search_params = _search_clause(search)
+    facet_clause, facet_params = _facet_clauses(filters)
+    where = f"{_status_clause('all' if base else status)} {base_clause} {search_clause} {facet_clause}"
+    return where, [*base_params, *search_params, *facet_params]
+
+
 def list_image_assets(
     connection: sqlite3.Connection,
     status: str,
@@ -330,11 +389,9 @@ def list_image_assets(
     search: str | None = None,
     sort: str | None = None,
     filters: dict | None = None,
+    base: dict | None = None,
 ) -> list[sqlite3.Row]:
-    status_clause = _status_clause(status)
-    search_clause, params = _search_clause(search)
-    facet_clause, facet_params = _facet_clauses(filters)
-    params.extend(facet_params)
+    where, params = _view_where(status, search, filters, base)
     params.extend([limit, offset])
 
     return connection.execute(
@@ -345,9 +402,7 @@ def list_image_assets(
         JOIN assets
             ON assets.asset_id = registry.image_asset_id
 {_BROWSE_SHARED_JOINS}
-        WHERE {status_clause}
-          {search_clause}
-          {facet_clause}
+        WHERE {where}
         ORDER BY {_browse_order_clause(sort)}
         LIMIT ? OFFSET ?
         """,
@@ -360,12 +415,12 @@ def count_image_assets(
     status: str,
     search: str | None = None,
     filters: dict | None = None,
+    base: dict | None = None,
 ) -> int:
     """How many rows list_image_assets would page through. Same WHERE, none of
     the preview / version-stack joins — the sidebar asks this per smart
     collection."""
-    search_clause, params = _search_clause(search)
-    facet_clause, facet_params = _facet_clauses(filters)
+    where, params = _view_where(status, search, filters, base)
     row = connection.execute(
         f"""
         SELECT COUNT(*)
@@ -374,11 +429,9 @@ def count_image_assets(
             ON assets.asset_id = registry.image_asset_id
         LEFT JOIN asset_ai_annotations AS anno
             ON anno.asset_id = assets.asset_id
-        WHERE {_status_clause(status)}
-          {search_clause}
-          {facet_clause}
+        WHERE {where}
         """,
-        [*params, *facet_params],
+        params,
     ).fetchone()
     return int(row[0])
 
@@ -386,11 +439,11 @@ def count_image_assets(
 def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
                        status: str = "all", search: str | None = None,
                        sort: str | None = None, filters: dict | None = None,
-                       collection_id: str | None = None) -> int | None:
+                       collection_id: str | None = None, base: dict | None = None) -> int | None:
     """Zero-based gallery position, without hydrating metadata or statting files."""
     if collection_id:
         # A folder narrows by membership; search and facets narrow it further,
-        # exactly as browse_collection does. The order stays "most recently added".
+        # exactly as browse_collection does, in the same order.
         joins = (
             "JOIN collection_items ci ON ci.asset_id = assets.asset_id "
             "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
@@ -399,13 +452,10 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
         facet_clause, facet_params = _facet_clauses(filters)
         where = f"ci.collection_id = ? AND assets.asset_type IN ('image', 'video', 'raw') {search_clause} {facet_clause}"
         params: list[object] = [collection_id, *search_params, *facet_params]
-        order = "ci.added_at DESC, assets.stem, assets.asset_id"
+        order = _collection_order_clause(sort)
     else:
         joins = "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
-        search_clause, params = _search_clause(search)
-        facet_clause, facet_params = _facet_clauses(filters)
-        params.extend(facet_params)
-        where = f"{_status_clause(status)} {search_clause} {facet_clause}"
+        where, params = _view_where(status, search, filters, base)
         order = _browse_order_clause(sort)
     row = connection.execute(f"""
         SELECT position FROM (
@@ -451,20 +501,20 @@ def _facet_scope(
     status: str,
     search: str | None,
     filters: dict | None,
+    base: dict | None = None,
 ) -> tuple[str, list[object]]:
     """WHERE (without the keyword) + params for counting one facet's options."""
     own = _FACET_OWN_KEYS[facet]
     others = {k: v for k, v in (filters or {}).items() if k not in own}
-    params: list[object] = []
     if collection_id:
         # A folder replaces the status, exactly as browse_collection does.
+        search_clause, search_params = _search_clause(search)
+        facet_clause, facet_params = _facet_clauses(others)
         where = "assets.asset_id IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)"
-        params.append(collection_id)
-    else:
-        where = _status_clause(status or "all")
-    search_clause, search_params = _search_clause(search)
-    facet_clause, facet_params = _facet_clauses(others)
-    return f"{where} {search_clause} {facet_clause}", [*params, *search_params, *facet_params]
+        return f"{where} {search_clause} {facet_clause}", [collection_id, *search_params, *facet_params]
+    # A smart collection's rules are the base set, never dropped as "own keys":
+    # inside "PNG screenshots", JPG must honestly count 0.
+    return _view_where(status or "all", search, others, base)
 
 
 def get_facet_values(
@@ -474,6 +524,7 @@ def get_facet_values(
     status: str = "all",
     search: str | None = None,
     filters: dict | None = None,
+    base: dict | None = None,
 ) -> dict[str, object]:
     """Options for the filter bar: distinct cameras / lenses / tags / formats
     with counts, numeric ranges for the sliders, and the capture-time span.
@@ -484,7 +535,7 @@ def get_facet_values(
     library, which is what get_catalog_info reports to agents.
     """
     def scope_for(facet: str) -> tuple[str, list[object]]:
-        return _facet_scope(facet, collection_id=collection_id, status=status, search=search, filters=filters)
+        return _facet_scope(facet, collection_id=collection_id, status=status, search=search, filters=filters, base=base)
 
     def value_counts(facet: str, expr: str, order: str = "c DESC") -> list[dict[str, object]]:
         where, params = scope_for(facet)
@@ -547,6 +598,7 @@ def search_facet_values(
     status: str = "all",
     search: str | None = None,
     filters: dict | None = None,
+    base: dict | None = None,
 ) -> list[dict[str, object]]:
     """Server-side facet search, so a dropdown never loads more than `limit`
     rows regardless of how many distinct values exist. Matches substring,
@@ -554,7 +606,7 @@ def search_facet_values(
     if field not in ("tag", "camera", "lens"):
         return []
     like = f"%{q}%" if q else "%"
-    where, params = _facet_scope(field, collection_id=collection_id, status=status, search=search, filters=filters)
+    where, params = _facet_scope(field, collection_id=collection_id, status=status, search=search, filters=filters, base=base)
     if field == "tag":
         rows = connection.execute(
             f"""
@@ -731,10 +783,11 @@ def browse_collection(
     offset: int = 0,
     search: str | None = None,
     filters: dict | None = None,
+    sort: str | None = None,
 ) -> list[sqlite3.Row]:
     """A folder's photos, narrowed by the same search text and facet filters
-    the library view takes. It used to accept neither, so the filter bar did
-    nothing inside a folder while still looking active."""
+    the library view takes, in the toolbar's sort order. No sort (or
+    "added-desc") keeps the folder's own order: most recently added first."""
     search_clause, search_params = _search_clause(search)
     facet_clause, facet_params = _facet_clauses(filters)
     return connection.execute(
@@ -750,7 +803,7 @@ def browse_collection(
           AND assets.asset_type IN ('image', 'video', 'raw')
           {search_clause}
           {facet_clause}
-        ORDER BY ci.added_at DESC, assets.stem, assets.asset_id
+        ORDER BY {_collection_order_clause(sort)}
         LIMIT ? OFFSET ?
         """,
         [collection_id, *search_params, *facet_params, limit, offset],

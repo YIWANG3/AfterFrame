@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from .browse import _GEO_PRECISION_RANK, _facet_clauses, _search_clause, _status_clause
+from .browse import _GEO_PRECISION_RANK, _base_clause, _facet_clauses, _search_clause, _status_clause
 
 
 def _valid_coordinates(latitude: object, longitude: object) -> tuple[float, float] | None:
@@ -270,6 +270,7 @@ def list_map_points(
     collection_id: str | None = None,
     search: str | None = None,
     filters: dict | None = None,
+    base: dict | None = None,
     min_precision: str = "locality",
     limit: int = 100000,
 ) -> list[sqlite3.Row]:
@@ -309,7 +310,8 @@ def list_map_points(
         params.append(collection_id)
     else:
         scope_join = ""
-        scope_clause = _status_clause(status)
+        # A smart collection's rules carry their own status.
+        scope_clause = _status_clause("all" if base else status)
 
     # Parameter order must mirror the SQL text: scope → precision IN (…) →
     # search → facets → limit.
@@ -318,8 +320,12 @@ def list_map_points(
     precision_placeholders = ", ".join("?" for _ in allowed_precision)
     params.extend(allowed_precision)
 
+    # The base set (a smart collection's rules) sits right before the search
+    # text in the SQL, so its params go right before the search params.
+    base_clause, base_params = _base_clause(None if collection_id is not None else base)
     search_clause, search_params = _search_clause(search)
-    params.extend(search_params)
+    search_clause = f"{base_clause} {search_clause}"
+    params.extend([*base_params, *search_params])
     facet_clause, facet_params = _facet_clauses(filters)
     params.extend(facet_params)
     params.append(limit)

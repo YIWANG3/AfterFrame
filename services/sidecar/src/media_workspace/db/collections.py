@@ -35,7 +35,7 @@ def list_collections(connection: sqlite3.Connection) -> list[dict]:
         rules = parse_rules(collection["rules_json"])
         collection["rules"] = rules
         collection["item_count"] = (
-            count_image_assets(connection, rules["status"], rules["search"], rules["filters"]) if rules else 0
+            count_image_assets(connection, "all", base=rules) if rules else 0
         )
     return collections
 

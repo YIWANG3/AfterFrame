@@ -24,7 +24,9 @@
       "captured-asc": "拍摄时间 ↑",
       "rating-desc": "评分",
       "name-asc": "名称 A-Z",
-      "name-desc": "名称 Z-A"
+      "name-desc": "名称 Z-A",
+      "added-desc": "加入时间 ↓",
+      "added-asc": "加入时间 ↑"
     },
     "menu": {
       "library": "图库",
@@ -83,7 +85,8 @@
     "webWelcomeHint": "浏览示例照片，或拖入自己的照片",
     "smartCollections": "智能合集",
     "snapshotToFolder": "把当前照片复制到一个文件夹",
-    "smartUnreadable": "由更新版本的 AfterFrame 保存"
+    "smartUnreadable": "由更新版本的 AfterFrame 保存",
+    "editSmartRules": "编辑条件"
   },
   "people": {
     "title": "人物",
@@ -168,12 +171,16 @@
     "mapAreaRemove": "移除地图范围筛选",
     "saveSmart": "存为智能合集",
     "saveSmartAs": "另存为",
-    "updateSmart": "更新",
-    "updateSmartHint": "把这些条件保存到「{{name}}」",
     "lastDays_one": "最近 1 天",
     "lastDays_other": "最近 {{count}} 天",
     "lastDaysShort_one": "{{count}} 天",
-    "lastDaysShort_other": "{{count}} 天"
+    "lastDaysShort_other": "{{count}} 天",
+    "narrowSmart": "把「{{name}}」收窄到这里",
+    "narrowSmartHint": "改写「{{name}}」,让它只包含现在显示的这些",
+    "editingSmart": "正在编辑「{{name}}」",
+    "saveEdit": "保存",
+    "cancelEdit": "取消",
+    "needsCondition": "智能合集至少需要一个条件"
   },
   "activity": {
     "title": "后台活动",

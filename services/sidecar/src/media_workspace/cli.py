@@ -283,6 +283,7 @@ def build_parser() -> argparse.ArgumentParser:
     # Structured facet filters (all optional, AND-combined). Passed as a single
     # JSON object to keep the surface small and forward-compatible.
     browse.add_argument("--filters", default=None, help="JSON object of facet filters")
+    browse.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
 
     locate = subparsers.add_parser("locate-image-asset", parents=[common])
     locate.add_argument("--asset-id", required=True)
@@ -291,6 +292,7 @@ def build_parser() -> argparse.ArgumentParser:
     locate.add_argument("--search", default=None)
     locate.add_argument("--sort", default=None)
     locate.add_argument("--filters", default=None)
+    locate.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
 
     # Lightweight location points for the map. Mirrors the gallery scope
     # (status/collection/search/facets) but ignores filters.geo — the map needs
@@ -300,6 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
     map_points.add_argument("--collection-id", default=None)
     map_points.add_argument("--search", default=None)
     map_points.add_argument("--filters", default=None, help="JSON object of facet filters (geo key is ignored)")
+    map_points.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
     # Coarser AI guesses (admin1/country centroids) look like precise markers
     # in the middle of a state — hidden from the map by default.
     map_points.add_argument("--min-precision", choices=["exact", "locality", "admin1", "country"], default="locality")
@@ -333,6 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
     facet_values_p.add_argument("--status", default="all")
     facet_values_p.add_argument("--search", default=None)
     facet_values_p.add_argument("--filters", default=None, help="JSON object of the active facet filters")
+    facet_values_p.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
 
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
     search_facet_p.add_argument("--field", choices=["tag", "camera", "lens"], required=True)
@@ -342,6 +346,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_facet_p.add_argument("--status", default="all")
     search_facet_p.add_argument("--search", default=None)
     search_facet_p.add_argument("--filters", default=None)
+    search_facet_p.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
 
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
@@ -392,6 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     browse_col.add_argument("--offset", type=int, default=0)
     browse_col.add_argument("--search", default=None)
     browse_col.add_argument("--filters", default=None, help="JSON object of facet filters")
+    browse_col.add_argument("--sort", default=None, help="Toolbar sort, or added-desc / added-asc (default: added-desc)")
 
     quick_reg = subparsers.add_parser("quick-register", parents=[common])
     quick_reg.add_argument("--image-path", type=Path, required=True)
@@ -1448,7 +1454,7 @@ def _cmd_facet_values(args, connection, catalog, parser):
     from .db import get_facet_values
     print(json.dumps(get_facet_values(
         connection, args.collection_id, status=args.status, search=args.search,
-        filters=json.loads(args.filters) if args.filters else None,
+        filters=json.loads(args.filters) if args.filters else None, base=json.loads(args.base) if args.base else None,
     ), ensure_ascii=False))
     return 0
 
@@ -1457,7 +1463,7 @@ def _cmd_search_facet(args, connection, catalog, parser):
     from .db import search_facet_values
     print(json.dumps(search_facet_values(
         connection, args.field, args.q, args.limit, args.collection_id, status=args.status, search=args.search,
-        filters=json.loads(args.filters) if args.filters else None,
+        filters=json.loads(args.filters) if args.filters else None, base=json.loads(args.base) if args.base else None,
     ), ensure_ascii=False))
     return 0
 
@@ -1489,7 +1495,8 @@ def _cmd_locate_image_asset(args, connection, catalog, parser):
     position = locate_image_asset(connection, args.asset_id, status=args.status,
                                   search=args.search, sort=args.sort,
                                   filters=json.loads(args.filters) if args.filters else None,
-                                  collection_id=args.collection_id)
+                                  collection_id=args.collection_id,
+                                  base=json.loads(args.base) if args.base else None)
     print(json.dumps({"index": position}))
     return 0
 
@@ -1502,7 +1509,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
     # it must stay read-only — reconciling assets.exists_on_disk is left to the
     # explicit verify-assets sweep. The live `present` value below is what the
     # UI badges/blocks read; the DB flag only gates preview/export batches.
-    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters):
+    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=json.loads(args.base) if args.base else None):
         preview_path = None
         if row["preview_relative_path"]:
             preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
@@ -1662,6 +1669,7 @@ def _cmd_browse_map_points(args, connection, catalog, parser):
         collection_id=args.collection_id,
         search=args.search,
         filters=facet_filters,
+        base=json.loads(args.base) if args.base else None,
         min_precision=args.min_precision,
         limit=args.limit,
     ):
@@ -2071,7 +2079,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
     payload = []
     rows = browse_collection(
         connection, args.collection_id, limit=args.limit, offset=args.offset,
-        search=args.search, filters=json.loads(args.filters) if args.filters else None,
+        search=args.search, filters=json.loads(args.filters) if args.filters else None, sort=args.sort,
     )
     for row in rows:
         preview_path = None

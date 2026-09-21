@@ -5,18 +5,27 @@
 // races) is only covered by E2E, and two of the bugs in the 2026-09-16 review
 // lived in exactly this logic.
 
-export const browseScopeKey = ({ status, collectionId, search, sort, filters }) => JSON.stringify({
-  status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {},
+export const browseScopeKey = ({ status, collectionId, search, sort, filters, base }) => JSON.stringify({
+  status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {}, base: base || null,
 });
 
 // The gallery's browse destination, as one value. Everything that decides
 // what the grid shows lives here — never in separate pieces of state that an
 // async caller could read half-updated.
-// `smartCollectionId` only says which saved filter the scope was opened from
-// (sidebar highlight, "Update" in the filter bar). It is NOT part of the browse
-// key: what the grid shows is decided by status/query/filters alone.
+//
+// Two layers (docs/next-features-plan.md §D, sidecar db/browse.py):
+//   WHERE the user is    status | collectionId | base (a smart collection's
+//                        rules) — picks the base set.
+//   the refinement       query + filters — what the filter bar and the search
+//                        box hold. It only ever narrows INSIDE the base set,
+//                        and changing location clears it.
+// `smartCollectionId` names the smart collection (sidebar highlight, title).
+// `editingRules`: the filter bar is showing that collection's OWN conditions
+// for editing, instead of a refinement on top of them; `base` is then only
+// the nested part of its rules, which the bar cannot show.
 export const DEFAULT_SCOPE = Object.freeze({
-  status: "all", collectionId: null, smartCollectionId: null, query: "", filters: {}, sort: "imported-desc",
+  status: "all", collectionId: null, smartCollectionId: null, base: null, editingRules: false,
+  query: "", filters: {}, sort: "imported-desc",
 });
 
 export const scopeKeyOf = (scope) => browseScopeKey({
@@ -25,57 +34,98 @@ export const scopeKeyOf = (scope) => browseScopeKey({
   search: scope.query.trim() || undefined,
   sort: scope.sort,
   filters: scope.filters,
+  base: scope.base,
 });
+
+// "Most recently added" only means something inside a folder.
+export const COLLECTION_SORTS = ["added-desc", "added-asc"];
+export const sortOutsideFolder = (sort) => (COLLECTION_SORTS.includes(sort) ? DEFAULT_SCOPE.sort : sort);
+
+// Is the user narrowing the place they are in? Drives "the filter bar cannot be
+// hidden while it is filtering" and which actions the bar offers.
+export const hasRefinement = (scope) => !!scope.query.trim() || Object.keys(scope.filters || {}).length > 0;
 
 // The view facet counts are taken inside (db/browse.py _facet_scope): what
 // the grid is showing, minus the sort, which does not change any count.
 export const facetScopeOf = (scope) => ({
   collectionId: scope.collectionId || undefined,
-  status: scope.collectionId ? undefined : scope.status,
+  status: scope.collectionId || scope.base ? undefined : scope.status,
   search: scope.query.trim() || undefined,
   filters: scope.filters && Object.keys(scope.filters).length ? scope.filters : undefined,
+  base: scope.collectionId ? undefined : scope.base || undefined,
 });
 
-// ── smart collections: a saved scope ─────────────────────────────────────
+// ── smart collections ─────────────────────────────────────────────────────
 // The map viewport is where the user happens to be looking, not a condition.
 const savableFilters = (filters) => Object.fromEntries(
   Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && value != null && value !== ""),
 );
 
-// What a scope would save as. null when there is nothing to save: a manual
-// folder is membership, not a filter, and an unfiltered library has no condition.
+// What the current view would save as: where the user is, plus the refinement.
+//   a status view      → {status, search, filters}
+//   a folder           → the refinement + in_collection (it follows the folder)
+//   a smart collection → the refinement ON its rules: {…, base: rules}. Nested,
+//                        not merged: both layers may hold the same key.
+//   editing one        → the bar IS its top layer: {status, search, filters, base?}
+// null when there is nothing to save (no refinement, or the plain library).
 export function rulesFromScope(scope) {
-  if (!scope || scope.collectionId) return null;
-  const rules = { status: scope.status || "all", search: (scope.query || "").trim(), filters: savableFilters(scope.filters) };
-  if (rules.status === "all" && !rules.search && !Object.keys(rules.filters).length) return null;
+  if (!scope) return null;
+  const search = (scope.query || "").trim();
+  const filters = savableFilters(scope.filters);
+  const refined = !!search || Object.keys(filters).length > 0;
+  if (scope.collectionId) {
+    return refined ? { status: "all", search, filters: { ...filters, in_collection: scope.collectionId } } : null;
+  }
+  if (scope.base && !scope.editingRules) {
+    return refined ? { status: "all", search, filters, base: scope.base } : null;
+  }
+  const rules = { status: scope.status || "all", search, filters };
+  if (scope.base) rules.base = scope.base;
+  if (rules.status === "all" && !refined && !rules.base) return null;
   return rules;
 }
 
-// The scope a smart collection opens as. The current sort is kept: how the
-// user likes the grid ordered is theirs, not the collection's.
+// Opening a smart collection: its rules become the base set, and the filter
+// bar starts EMPTY — picking a format in there narrows the collection, it does
+// not rewrite it. The sort is the user's, not the collection's.
 export function scopeFromRules(collection, currentSort) {
+  if (!collection?.rules) return null;
+  return {
+    ...DEFAULT_SCOPE,
+    smartCollectionId: collection.collection_id,
+    base: collection.rules,
+    sort: sortOutsideFolder(currentSort || DEFAULT_SCOPE.sort),
+  };
+}
+
+// Editing a smart collection's conditions: the bar shows its top layer. A
+// nested base stays applied underneath; the bar has no way to show it.
+export function editScopeFromRules(collection, currentSort) {
   const rules = collection?.rules;
   if (!rules) return null;
   return {
+    ...DEFAULT_SCOPE,
     status: rules.status || "all",
-    collectionId: null,
     smartCollectionId: collection.collection_id,
+    base: rules.base || null,
+    editingRules: true,
     query: rules.search || "",
     filters: { ...(rules.filters || {}) },
-    sort: currentSort || DEFAULT_SCOPE.sort,
+    sort: sortOutsideFolder(currentSort || DEFAULT_SCOPE.sort),
   };
 }
 
 const stable = (value) => JSON.stringify(value, (_key, v) => (
   v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v
 ));
+const comparable = (rules) => (rules ? {
+  status: rules.status || "all", search: rules.search || "", filters: savableFilters(rules.filters), base: rules.base ? comparable(rules.base) : null,
+} : null);
 
-// Has the user changed the conditions since opening this smart collection?
+// While editing: do the bar's conditions differ from what is saved?
 export function rulesDirty(scope, rules) {
-  if (!rules) return false;
-  const current = rulesFromScope(scope);
-  if (!current) return true;
-  return stable(current) !== stable({ status: rules.status || "all", search: rules.search || "", filters: savableFilters(rules.filters) });
+  if (!rules || !scope?.editingRules) return false;
+  return stable(comparable(rulesFromScope(scope))) !== stable(comparable(rules));
 }
 
 // Fields the client narrows on while the 250ms search debounce is pending.

@@ -1,7 +1,9 @@
 // Smart collections (docs/next-features-plan.md §D): a saved filter with a
-// live count. Driven through the real filter bar and sidebar; the counts are
-// checked against the bridge's own browse so the test does not hard-code what
-// the seeded fixture happens to contain.
+// live count — and the two layers it lives in. WHERE the user is (a status
+// view, a folder, a smart collection) defines the base set; the filter bar and
+// search only refine inside it, and changing place clears them. Driven through
+// the real filter bar and sidebar; counts are checked against the bridge's own
+// browse so the test does not hard-code what the seeded fixture contains.
 
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, collectCoverage, mcpCall } = require("./helpers/app");
@@ -12,6 +14,14 @@ const browseCount = (filters) => window.evaluate(
   (f) => window.mediaWorkspace.browseImages({ status: "all", filters: f, limit: 1000 }).then((rows) => rows.length),
   filters,
 );
+// What a smart collection holds right now, asked of the catalog through its rules.
+const collectionNamed = (name) => window.evaluate((n) => window.mediaWorkspace.listCollections().then((rows) => rows.find((row) => row.name === n)), name);
+const holds = async (name) => {
+  const { rules } = await collectionNamed(name);
+  return window.evaluate((base) => window.mediaWorkspace.browseImages({ status: "all", base, limit: 1000 }).then((rows) => rows.length), rules);
+};
+const cards = () => window.locator("[data-gallery-item='true']");
+const actions = () => window.locator("[data-filter-actions]");
 const smartRow = (name) => window.locator("[data-smart-collection]").filter({ hasText: name });
 const rowCount = async (name) => Number((await smartRow(name).locator("span.tabular-nums").innerText()).trim());
 
@@ -86,27 +96,26 @@ test("saving the current filter creates a sidebar entry with the matching count"
   const expected = await browseCount({ rating_min: 5 });
   expect(expected).toBeGreaterThan(0);
   await expect.poll(() => rowCount("Five stars")).toBe(expected);
-  // Saved from this very view, so the grid already shows its photos and must
-  // keep showing them: the new row is highlighted and the title takes its name.
-  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
+  // The new collection becomes the place: what was a refinement is now its
+  // rules, so the filter bar is empty again and offers nothing to save.
+  await expect(cards()).toHaveCount(expected);
   await expect(smartRow("Five stars")).toHaveClass(/bg-selected/);
   await expect(window.getByTestId("gallery-title")).toHaveText("Five stars");
-  // Clicking it right away used to empty the grid: the conditions are the ones
-  // already loaded, so nothing reloaded after the grid was cleared.
+  await expect(actions()).toHaveCount(0);
+  // Clicking it right away used to empty the grid (same conditions, no reload).
   await smartRow("Five stars").click();
   await window.waitForTimeout(600);
-  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
-  // Saved and unchanged: neither "Update" nor a second save is offered.
-  await expect(window.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
-  await expect(window.getByRole("button", { name: "Save as smart collection" })).toHaveCount(0);
+  await expect(cards()).toHaveCount(expected);
 });
 
-test("the count follows the library: rating another photo adds it", async () => {
+test("changing place clears the refinement, and the count follows the library", async () => {
   const before = await rowCount("Five stars");
-  // Leave the smart collection's view: the library entry alone keeps the
-  // filters (as it always has), so clear them too.
+  // Refine inside the collection, then leave: the refinement stays behind.
+  await window.getByTitle("Rating ≥ 5").click();
+  await expect(actions().getByRole("button", { name: /^Clear/ })).toBeVisible();
   await window.getByRole("button", { name: "All Assets" }).click();
-  await window.getByRole("button", { name: /^Clear/ }).click();
+  await expect(actions()).toHaveCount(0);
+  await expect(cards()).toHaveCount(await browseCount({}));
   // A photo that is not five stars yet.
   const target = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 })
     .then((rows) => rows.find((row) => (row.app_rating || 0) < 5)?.asset_id));
@@ -115,30 +124,84 @@ test("the count follows the library: rating another photo adds it", async () => 
   await expect.poll(() => rowCount("Five stars")).toBe(before + 1);
 });
 
-test("opening it shows exactly its photos, with its conditions in the filter bar", async () => {
+test("inside a smart collection the filter bar starts empty and only narrows the view", async () => {
   await smartRow("Five stars").click();
-  const expected = await browseCount({ rating_min: 5 });
-  await expect(window.locator("[data-gallery-item='true']")).toHaveCount(expected);
-  // The library entry is no longer the highlighted destination; the smart row is.
+  const all = await holds("Five stars");
+  await expect(cards()).toHaveCount(all);
   await expect(smartRow("Five stars")).toHaveClass(/bg-selected/);
   await expect(window.getByRole("button", { name: "All Assets" })).not.toHaveClass(/bg-selected/);
+  // Its own condition (five stars) is NOT shown as a filter: no Clear, nothing to save.
+  await expect(actions()).toHaveCount(0);
+
+  // Narrow to one camera: the grid shrinks, the collection itself does not change.
+  const camera = "Canon EOS R6m2";
+  await window.locator("[data-filter-bar]").getByRole("button", { name: "Camera", exact: true }).click();
+  // Counted INSIDE the collection: only cameras with five-star photos are offered.
+  const offered = await window.locator("[data-facet-option]").evaluateAll((els) => els.map((el) => el.dataset.facetOption));
+  expect(offered).not.toContain("Canon EOS 6D"); // that photo is unrated
+  await window.locator(`[data-facet-option="${camera}"]`).click();
+  await window.keyboard.press("Escape");
+  await expect(cards()).toHaveCount(1);
+  expect(await rowCount("Five stars")).toBe(all);
+  expect((await collectionNamed("Five stars")).rules.filters).toEqual({ rating_min: 5 });
+
+  // Clear goes back to the whole collection, not to the whole library.
+  await actions().getByRole("button", { name: /^Clear/ }).click();
+  await expect(cards()).toHaveCount(all);
+  await expect(window.getByTestId("gallery-title")).toHaveText("Five stars");
 });
 
-test("changing a condition offers Update, which rewrites the saved filter", async () => {
+test("a refinement can be saved as a new collection nested on this one, or narrow this one", async () => {
+  const camera = "Canon EOS R6m2";
+  await window.locator("[data-filter-bar]").getByRole("button", { name: "Camera", exact: true }).click();
+  await window.locator(`[data-facet-option="${camera}"]`).click();
+  await window.keyboard.press("Escape");
+  await expect(actions().getByRole("button", { name: /Narrow “Five stars” to this/ })).toBeVisible();
+
+  await actions().getByRole("button", { name: "Save as new" }).click();
+  const nameInput = window.locator("[data-smart-name-input] input");
+  await nameInput.fill("Five star Canon");
+  await nameInput.press("Enter");
+  await expect(smartRow("Five star Canon")).toHaveClass(/bg-selected/);
+  // Nested, not merged: the original rules ride along untouched.
+  const nested = (await collectionNamed("Five star Canon")).rules;
+  expect(nested.filters).toEqual({ camera });
+  expect(nested.base.filters).toEqual({ rating_min: 5 });
+  await expect.poll(() => rowCount("Five star Canon")).toBe(1);
+  await expect(cards()).toHaveCount(1);
+  // The original is unchanged.
+  expect((await collectionNamed("Five stars")).rules.filters).toEqual({ rating_min: 5 });
+});
+
+test("editing conditions is its own mode: the bar shows the rules, Save rewrites them, Cancel does not", async () => {
+  await smartRow("Five stars").hover();
+  await smartRow("Five stars").getByTitle("Edit conditions").click();
+  await expect(window.locator("[data-smart-editing]")).toContainText("Five stars");
+  const save = actions().getByRole("button", { name: "Save", exact: true });
+  await expect(save).toBeDisabled(); // nothing changed yet
+
   await window.getByTitle("Rating ≥ 4").click();
-  await expect(window.getByRole("button", { name: "Update", exact: true })).toBeVisible();
-  await expect(window.getByRole("button", { name: "Save as new" })).toBeVisible();
-  await window.getByRole("button", { name: "Update", exact: true }).click();
-  await expect(window.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
+  await expect(save).toBeEnabled();
+  await actions().getByRole("button", { name: "Cancel", exact: true }).click();
+  expect((await collectionNamed("Five stars")).rules.filters).toEqual({ rating_min: 5 });
+  await expect(window.locator("[data-smart-editing]")).toHaveCount(0);
+
+  await smartRow("Five stars").hover();
+  await smartRow("Five stars").getByTitle("Edit conditions").click();
+  await window.getByTitle("Rating ≥ 4").click();
+  await save.click();
+  await expect(window.locator("[data-smart-editing]")).toHaveCount(0);
+  expect((await collectionNamed("Five stars")).rules).toMatchObject({ version: 1, status: "all", filters: { rating_min: 4 } });
   await expect.poll(() => rowCount("Five stars")).toBe(await browseCount({ rating_min: 4 }));
-  const stored = await window.evaluate(() => window.mediaWorkspace.listCollections()
-    .then((rows) => rows.find((row) => row.name === "Five stars").rules));
-  expect(stored).toMatchObject({ version: 1, status: "all", filters: { rating_min: 4 } });
+  // Back to viewing it: all of it, with an empty bar.
+  await expect(cards()).toHaveCount(await browseCount({ rating_min: 4 }));
+  await expect(actions()).toHaveCount(0);
+  // The nested collection follows its base: it is still "Canon among Five stars".
+  expect(await holds("Five star Canon")).toBe(await browseCount({ rating_min: 4, camera: "Canon EOS R6m2" }));
 });
 
 test("last N days is saved as a relative condition", async () => {
   await window.getByRole("button", { name: "All Assets" }).click();
-  await window.getByRole("button", { name: /^Clear/ }).click();
   await window.getByRole("button", { name: "Date", exact: true }).click();
   await window.locator("[data-filter-within-days] button").filter({ hasText: "30d" }).click();
   await window.keyboard.press("Escape");
@@ -153,6 +216,28 @@ test("last N days is saved as a relative condition", async () => {
   await expect.poll(() => rowCount("This month")).toBe(await browseCount({ date_within_days: 30 }));
 });
 
+test("narrowing rewrites the open collection to what is showing, on top of its old rules", async () => {
+  // A status view is a condition by itself: "Rated", saved.
+  await window.getByRole("button", { name: /^Rated\b/ }).first().click();
+  await actions().getByRole("button", { name: "Save as smart collection" }).click();
+  const nameInput = window.locator("[data-smart-name-input] input");
+  await nameInput.fill("Rated ones");
+  await nameInput.press("Enter");
+  await expect(smartRow("Rated ones")).toHaveClass(/bg-selected/);
+  expect((await collectionNamed("Rated ones")).rules).toMatchObject({ status: "rated", filters: {} });
+  const before = await rowCount("Rated ones");
+  await window.getByTitle("Rating ≥ 5").click();
+  await actions().getByRole("button", { name: /Narrow “Rated ones” to this/ }).click();
+  await expect(actions()).toHaveCount(0); // it is the collection's rules now, not a refinement
+  const rules = (await collectionNamed("Rated ones")).rules;
+  expect(rules.filters).toEqual({ rating_min: 5 });
+  expect(rules.base).toMatchObject({ status: "rated" });
+  const after = await browseCount({ rating_min: 5 });
+  expect(after).toBeLessThan(before);
+  await expect.poll(() => rowCount("Rated ones")).toBe(after);
+  await expect(cards()).toHaveCount(after);
+});
+
 test("the sidebar's covers switch gives smart collections a cover too", async () => {
   await window.getByTitle("Show covers").click();
   const row = smartRow("Five stars");
@@ -160,11 +245,11 @@ test("the sidebar's covers switch gives smart collections a cover too", async ()
   await expect(cover).toBeVisible();
   await expect.poll(() => cover.evaluate((el) => el.naturalWidth), { timeout: 10_000 }).toBeGreaterThan(0);
   // The cover is the first photo the collection currently shows.
-  const first = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", filters: { rating_min: 4 }, limit: 1 })
-    .then((rows) => rows[0].preview_path || rows[0].image_path));
+  const first = await window.evaluate((base) => window.mediaWorkspace.browseImages({ status: "all", base, limit: 1 })
+    .then((rows) => rows[0].preview_path || rows[0].image_path), (await collectionNamed("Five stars")).rules);
   expect(decodeURIComponent(await cover.getAttribute("src"))).toContain(first.split("/").pop());
   // Covers mode shows the count as "N items" under the name, like a folder.
-  await expect(row).toContainText(`${await browseCount({ rating_min: 4 })} items`);
+  await expect(row).toContainText(`${await holds("Five stars")} items`);
   // A collection with nothing in it keeps the placeholder tile.
   if ((await browseCount({ date_within_days: 30 })) === 0) {
     await expect(smartRow("This month").locator("[data-smart-cover]")).toHaveCount(0);
@@ -174,7 +259,7 @@ test("the sidebar's covers switch gives smart collections a cover too", async ()
 });
 
 test("a snapshot freezes the current photos into an ordinary folder", async () => {
-  const expected = await browseCount({ rating_min: 4 });
+  const expected = await holds("Five stars");
   await smartRow("Five stars").hover();
   await smartRow("Five stars").getByTitle("Copy current photos to a folder").click();
   await expect.poll(() => window.evaluate(() => window.mediaWorkspace.listCollections()

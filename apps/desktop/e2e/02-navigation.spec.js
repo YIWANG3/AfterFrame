@@ -37,10 +37,13 @@ test.describe("Sidebar navigation", () => {
     const recent = window.getByRole("button", { name: /Recently Added/i }).first();
     await expect(recent).toBeVisible();
     await recent.click();
-    // Filter applied + real data loaded: the gallery shows items (more robust
-    // than matching the duplicated "Recently Added" label by index, which raced
-    // the toolbar title's render).
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 10_000 });
+    // The seeded catalog was imported long ago, so nothing is "recent": the view
+    // is honestly empty. (This used to assert "an item is visible", which only
+    // passed because the previous view's photos were still on screen for a
+    // moment after the click. Changing place now clears the grid at once.)
+    await expect(window.getByTestId("gallery-title")).toHaveText("Recently Added");
+    await expect(window.getByText("No assets in this view")).toBeVisible({ timeout: 10_000 });
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(0);
 
     // Four rated assets exist, so the Rated entry renders (gated on
     // rated_count > 0) and filters down to exactly them: two synthetic
