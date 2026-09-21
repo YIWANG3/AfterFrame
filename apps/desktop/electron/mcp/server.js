@@ -20,7 +20,7 @@ const SERVER_INSTRUCTIONS = `AfterFrame is a desktop photo library the user is r
 Domain model:
 - ASSET: one photo or video (an export/processed file, optionally paired with its RAW source file). Identified by asset_id; asset_type tells photos and videos apart.
 - RESOURCE SET (version stack): a family of versions of the same photo — original, crops, text overlays, AI repaints. crop_assets/add_text add versions; originals are never modified.
-- COLLECTION: a manual album. Smart collections are rule-based and read-only here.
+- COLLECTION: a folder is a manual album. A SMART collection is a saved filter (the same conditions search_assets takes) that fills itself and stays current; create and edit them with manage_collections. Photos cannot be added to a smart collection by hand.
 - PERSON: a face group produced by the offline face recognizer (list_people). person_id filters search_assets; update_person renames/merges/hides groups.
 - LOCATION: one effective location per asset, priority manual > EXIF GPS > AI-resolved place guess. browse_map lists points; search_assets geo filters by area; set_asset_location pins manually.
 - JOB: long-running background work (import / annotation / previews / people indexing). Jobs appear in the app's JobDock where the user can watch, pause and cancel them.
@@ -123,6 +123,30 @@ function contentTypeFor(filePath) {
   return "image/jpeg";
 }
 
+// The facet conditions shared by search_assets and smart collection rules,
+// under the names agents already know from search_assets. (geo is search-only:
+// a map area is not something a smart collection saves.)
+const FACET_ARG_KEYS = [
+  "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
+  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "orientation", "tag",
+  "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
+];
+
+function facetFiltersFrom(source) {
+  const filters = {};
+  for (const key of FACET_ARG_KEYS) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== "") filters[key] = source[key];
+  }
+  if (source.person_id) filters.person_group = String(source.person_id);
+  return filters;
+}
+
+// manage_collections `rules` → what the sidecar stores for a smart collection.
+function smartRulesFrom(rules) {
+  if (!rules || typeof rules !== "object") throw new Error("rules is required for a smart collection.");
+  return { status: rules.status || "all", search: rules.query ? String(rules.query) : "", filters: facetFiltersFrom(rules) };
+}
+
 function createMcpServer(deps) {
   const {
     getCatalogState,
@@ -205,6 +229,7 @@ function createMcpServer(deps) {
           focal_max: { type: "number" },
           date_from: { type: "string", description: "Capture date lower bound, ISO format e.g. 2026-05-01" },
           date_to: { type: "string" },
+          date_within_days: { type: "number", description: "Captured in the last N days (relative to today)" },
           rating_min: { type: "number", description: "Minimum star rating 1-5" },
           orientation: { type: "string", enum: ["portrait", "landscape", "square"] },
           tag: { type: "string", description: "Exact tag match" },
@@ -229,15 +254,7 @@ function createMcpServer(deps) {
       },
       async handler(args) {
         requireCatalog();
-        const filters = {};
-        for (const key of [
-          "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
-          "focal_min", "focal_max", "date_from", "date_to", "rating_min", "orientation", "tag",
-          "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
-        ]) {
-          if (args[key] !== undefined && args[key] !== null && args[key] !== "") filters[key] = args[key];
-        }
-        if (args.person_id) filters.person_group = String(args.person_id);
+        const filters = facetFiltersFrom(args);
         if (args.geo && typeof args.geo === "object") {
           const geo = args.geo.near
             ? nearToBounds(args.geo.near)
@@ -449,13 +466,22 @@ function createMcpServer(deps) {
     {
       name: "manage_collections",
       description:
-        "Collections (albums/folders) management. Actions: 'list' all collections; 'create' (name); " +
-        "'rename' (collection_id, name); 'delete' (collection_id); 'add_items' / 'remove_items' " +
-        "(collection_id, asset_ids); 'browse' (collection_id, limit/offset) to list a collection's assets.",
+        "Collections management. Two kinds: a folder holds photos you add to it; a SMART collection is a saved " +
+        "filter that fills itself and stays current (e.g. 5-star photos from the last 30 days). " +
+        "Actions: 'list' all collections (smart ones include their rules and live item_count); 'create' (name; " +
+        "pass rules to make it smart); 'update_rules' (collection_id, rules) to change a smart collection's " +
+        "conditions; 'rename' (collection_id, name); 'delete' (collection_id); 'add_items' / 'remove_items' " +
+        "(collection_id, asset_ids; folders only); 'browse' (collection_id, limit/offset) to list the assets of either kind.",
       inputSchema: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["list", "create", "rename", "delete", "add_items", "remove_items", "browse"] },
+          action: { type: "string", enum: ["list", "create", "update_rules", "rename", "delete", "add_items", "remove_items", "browse"] },
+          rules: {
+            type: "object",
+            description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
+              "search_assets: query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
+              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated.",
+          },
           collection_id: { type: "string" },
           name: { type: "string", description: "For create/rename" },
           sort_order: { type: "number", description: "For rename: optional new position in the sidebar" },
@@ -469,16 +495,23 @@ function createMcpServer(deps) {
         requireCatalog();
         const action = args.action;
         const ids = (args.asset_ids || []).map(String).filter(Boolean);
-        const needsId = ["rename", "delete", "add_items", "remove_items", "browse"];
+        const needsId = ["update_rules", "rename", "delete", "add_items", "remove_items", "browse"];
         if (needsId.includes(action) && !args.collection_id) throw new Error(`collection_id is required for ${action}.`);
         if (action === "list") {
           return { collections: await commands.listCollections() };
         }
         if (action === "create") {
           if (!args.name) throw new Error("name is required for create.");
-          const created = await commands.createCollection(String(args.name), "manual");
+          const created = args.rules
+            ? await commands.createCollection(String(args.name), "smart", smartRulesFrom(args.rules))
+            : await commands.createCollection(String(args.name), "manual");
           deps.broadcastCatalogChanged?.("collections");
           return created;
+        }
+        if (action === "update_rules") {
+          const updated = await commands.updateCollection(String(args.collection_id), { rules: smartRulesFrom(args.rules) });
+          deps.broadcastCatalogChanged?.("collections");
+          return updated;
         }
         if (action === "rename") {
           if (!args.name && args.sort_order == null) throw new Error("name and/or sort_order is required for rename.");
@@ -503,10 +536,13 @@ function createMcpServer(deps) {
           return result;
         }
         if (action === "browse") {
-          const rows = await commands.browseCollection(String(args.collection_id), {
-            limit: args.limit || 24,
-            offset: args.offset || 0,
-          });
+          // A smart collection has no members to list: browsing it is running its saved filter.
+          const smart = (await commands.listCollections()).find((c) => c.collection_id === String(args.collection_id) && c.kind === "smart");
+          if (smart && !smart.rules) throw new Error("This smart collection's rules cannot be read by this version of AfterFrame.");
+          const page = { limit: args.limit || 24, offset: args.offset || 0 };
+          const rows = smart
+            ? await commands.browseImages({ status: smart.rules.status, search: smart.rules.search || undefined, filters: smart.rules.filters, ...page })
+            : await commands.browseCollection(String(args.collection_id), page);
           for (const row of rows) rememberPreview(row.asset_id, row.preview_path, row.preview_hd_path);
           return { count: rows.length, assets: rows.map((row) => compactAsset(row, port)) };
         }

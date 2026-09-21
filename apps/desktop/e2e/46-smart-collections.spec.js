@@ -4,9 +4,9 @@
 // the seeded fixture happens to contain.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, mcpCall } = require("./helpers/app");
 
-let app, window, userDataDir;
+let app, window, userDataDir, mcpPort;
 
 const browseCount = (filters) => window.evaluate(
   (f) => window.mediaWorkspace.browseImages({ status: "all", filters: f, limit: 1000 }).then((rows) => rows.length),
@@ -16,7 +16,7 @@ const smartRow = (name) => window.locator("[data-smart-collection]").filter({ ha
 const rowCount = async (name) => Number((await smartRow(name).locator("span.tabular-nums").innerText()).trim());
 
 test.beforeAll(async () => {
-  ({ app, window, userDataDir } = await launchApp({ testName: "smart-collections" }));
+  ({ app, window, userDataDir, mcpPort } = await launchApp({ testName: "smart-collections" }));
   await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -107,6 +107,36 @@ test("a snapshot freezes the current photos into an ordinary folder", async () =
   await smartRow("Five stars").getByTitle("Copy current photos to a folder").click();
   await expect.poll(() => window.evaluate(() => window.mediaWorkspace.listCollections()
     .then((rows) => rows.find((row) => row.name === "Five stars (snapshot)")?.item_count ?? null))).toBe(expected);
+});
+
+test("an agent can create, browse and re-condition a smart collection over MCP", async () => {
+  const tool = async (name, args) => {
+    const result = await mcpCall(mcpPort, "tools/call", { name, arguments: args });
+    const text = result.content[0].text;
+    return result.isError ? { error: text } : JSON.parse(text);
+  };
+  const created = await tool("manage_collections", { action: "create", name: "Agent picks", rules: { rating_min: 5 } });
+  expect(created.kind).toBe("smart");
+  // The app's sidebar hears about it without a reload.
+  await expect(smartRow("Agent picks")).toBeVisible();
+
+  const browsed = await tool("manage_collections", { action: "browse", collection_id: created.collection_id, limit: 100 });
+  const searched = await tool("search_assets", { rating_min: 5, limit: 100 });
+  expect(browsed.count).toBeGreaterThan(0);
+  expect(browsed.assets.map((a) => a.asset_id).sort()).toEqual(searched.assets.map((a) => a.asset_id).sort());
+
+  await tool("manage_collections", { action: "update_rules", collection_id: created.collection_id, rules: { date_within_days: 30 } });
+  const listed = (await tool("manage_collections", { action: "list" })).collections.find((c) => c.collection_id === created.collection_id);
+  expect(listed.rules.filters).toEqual({ date_within_days: 30 });
+  expect(listed.item_count).toBe((await tool("search_assets", { date_within_days: 30, limit: 100 })).count);
+
+  // Misuse is answered plainly, not silently accepted.
+  const noConditions = await tool("manage_collections", { action: "create", name: "Empty", rules: {} });
+  expect(noConditions.error).toMatch(/at least one condition/);
+  const added = await tool("manage_collections", { action: "add_items", collection_id: created.collection_id, asset_ids: [searched.assets[0].asset_id] });
+  expect(added.error).toMatch(/fills itself/);
+  await tool("manage_collections", { action: "delete", collection_id: created.collection_id });
+  await expect(smartRow("Agent picks")).toHaveCount(0);
 });
 
 test("smart collections survive a restart, and photos cannot be added to one by hand", async () => {
