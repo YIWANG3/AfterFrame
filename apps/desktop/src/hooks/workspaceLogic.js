@@ -43,7 +43,8 @@ export const sortOutsideFolder = (sort) => (COLLECTION_SORTS.includes(sort) ? DE
 
 // Is the user narrowing the place they are in? Drives "the filter bar cannot be
 // hidden while it is filtering" and which actions the bar offers.
-export const hasRefinement = (scope) => !!scope.query.trim() || Object.keys(scope.filters || {}).length > 0;
+export const hasRefinement = (scope) => !!scope.query.trim()
+  || Object.entries(scope.filters || {}).some(([key, value]) => key !== "tag_match" && !isEmptyValue(value));
 
 // The view facet counts are taken inside (db/browse.py _facet_scope): what
 // the grid is showing, minus the sort, which does not change any count.
@@ -57,9 +58,14 @@ export const facetScopeOf = (scope) => ({
 
 // ── smart collections ─────────────────────────────────────────────────────
 // The map viewport is where the user happens to be looking, not a condition.
-const savableFilters = (filters) => Object.fromEntries(
-  Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && value != null && value !== ""),
-);
+// A facet value may be a list (several values within one facet are OR); an
+// empty list is no condition. tag_match only tunes `tag` and means nothing alone.
+const isEmptyValue = (value) => value == null || value === "" || (Array.isArray(value) && value.length === 0);
+const savableFilters = (filters) => {
+  const kept = Object.fromEntries(Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && !isEmptyValue(value)));
+  if (!Array.isArray(kept.tag)) delete kept.tag_match;
+  return kept;
+};
 
 // What the current view would save as: where the user is, plus the refinement.
 //   a status view      → {status, search, filters}
@@ -115,9 +121,11 @@ export function editScopeFromRules(collection, currentSort) {
   };
 }
 
-const stable = (value) => JSON.stringify(value, (_key, v) => (
-  v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v
-));
+// Key order and the order options were ticked in are not differences.
+const stable = (value) => JSON.stringify(value, (_key, v) => {
+  if (Array.isArray(v)) return [...v].sort((a, b) => String(a).localeCompare(String(b)));
+  return v && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v;
+});
 const comparable = (rules) => (rules ? {
   status: rules.status || "all", search: rules.search || "", filters: savableFilters(rules.filters), base: rules.base ? comparable(rules.base) : null,
 } : null);

@@ -189,7 +189,12 @@
     "editingSmart": "Editing “{{name}}”",
     "saveEdit": "Save",
     "cancelEdit": "Cancel",
-    "needsCondition": "A smart collection needs at least one condition"
+    "needsCondition": "A smart collection needs at least one condition",
+    "pickedMore": "{{first}} +{{count}}",
+    "match": {
+      "any": "Any of these",
+      "all": "All of these"
+    }
   },
   "activity": {
     "title": "Background Activity",

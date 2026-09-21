@@ -1203,7 +1203,7 @@ export default function App() {
                 onToggleMap={() => setMapExpanded((current) => !current)}
                 showFilters={filterBarVisible}
                 onToggleFilters={() => setShowFilters((v) => !v)}
-                filterCount={Object.keys(workspace.filters || {}).length}
+                filterCount={Object.keys(workspace.filters || {}).filter((key) => key !== "tag_match").length}
                 activityJobs={workspace.jobs}
                 lastFinishedJob={workspace.lastFinishedJob}
                 onCancelJob={workspace.cancelJob}

@@ -123,12 +123,16 @@ function contentTypeFor(filePath) {
   return "image/jpeg";
 }
 
+// Several values within one facet are OR ("FC9113 or FC9184": either drone);
+// different facets are AND. A single string still works.
+const ONE_OR_MANY = { anyOf: [{ type: "string" }, { type: "array", items: { type: "string" } }] };
+
 // The facet conditions shared by search_assets and smart collection rules,
 // under the names agents already know from search_assets. (geo is search-only:
 // a map area is not something a smart collection saves.)
 const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
-  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "orientation", "tag",
+  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "orientation", "tag", "tag_match",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
 ];
 
@@ -222,8 +226,8 @@ function createMcpServer(deps) {
           sort: { type: "string", enum: ["name-asc", "name-desc", "imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc"], description: "Default name-asc" },
           limit: { type: "number", description: "Max results, default 24" },
           offset: { type: "number" },
-          camera: { type: "string", description: "Exact camera model (see get_catalog_info facets)" },
-          lens: { type: "string", description: "Exact lens model" },
+          camera: { ...ONE_OR_MANY, description: "Exact camera model (see get_catalog_info facets). A list means any of them." },
+          lens: { ...ONE_OR_MANY, description: "Exact lens model. A list means any of them." },
           iso_min: { type: "number" },
           iso_max: { type: "number" },
           aperture_min: { type: "number" },
@@ -235,9 +239,10 @@ function createMcpServer(deps) {
           date_within_days: { type: "number", description: "Captured in the last N days (relative to today)" },
           rating_min: { type: "number", description: "Minimum star rating 1-5" },
           orientation: { type: "string", enum: ["portrait", "landscape", "square"] },
-          tag: { type: "string", description: "Exact tag match" },
+          tag: { ...ONE_OR_MANY, description: "Exact tag match. A list means any of them." },
+          tag_match: { type: "string", enum: ["any", "all"], description: "With several tags: any of them (default) or all of them" },
           asset_type: { type: "string", enum: ["image", "video"], description: "Only photos or only videos" },
-          extension: { type: "string", description: "File format, e.g. 'jpg', 'png', 'mp4', 'cr2'" },
+          extension: { ...ONE_OR_MANY, description: "File format, e.g. 'jpg', 'png', 'mp4', 'cr2'. A list means any of them." },
           shutter_min: { type: "number", description: "Shutter speed lower bound in seconds (e.g. 0.001 for 1/1000s)" },
           shutter_max: { type: "number" },
           people: { type: "string", enum: ["with_faces", "without_faces"], description: "Filter by detected faces" },
@@ -482,7 +487,7 @@ function createMcpServer(deps) {
           rules: {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
-              "search_assets: query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
+              "search_assets (camera, lens, tag and extension take one value or a list meaning any of them; tag_match: 'all' requires every tag): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
               "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated; " +
               "plus collection_id to mean 'only photos in that folder'.",
           },
