@@ -500,8 +500,10 @@ export default function useWorkspace({ pushToast } = {}) {
     try {
       const list = await api.listCollections();
       setCollections(list || []);
+      return list || [];
     } catch {
       setCollections([]);
+      return [];
     }
   }
 
@@ -516,7 +518,16 @@ export default function useWorkspace({ pushToast } = {}) {
     const rules = rulesFromScope(scopeRef.current);
     if (!rules) return null;
     const col = await api.createCollection(name, "smart", rules);
-    await loadCollections();
+    const saved = (await loadCollections()).find((c) => c.collection_id === col.collection_id);
+    // Never leave a smart collection that lost its conditions on the way in:
+    // it would sit in the sidebar at 0 photos, forever, under a "saved" toast.
+    // (Seen in dev with a main process older than the renderer, which dropped
+    // the rules argument.)
+    if (!saved?.rules) {
+      await api.deleteCollection(col.collection_id).catch(() => {});
+      await loadCollections();
+      throw new Error(t("smartCollectionRulesLost"));
+    }
     updateScope({ smartCollectionId: col.collection_id });
     return col;
   }

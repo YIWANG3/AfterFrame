@@ -100,5 +100,6 @@
     "snapshotDone_other": "Copied {{count}} photos to “{{name}}”",
     "snapshotName": "{{name}} (snapshot)",
     "failed": "Could not save the smart collection"
-  }
+  },
+  "smartCollectionRulesLost": "Its conditions were not stored. Quit and reopen AfterFrame, then save it again."
 }

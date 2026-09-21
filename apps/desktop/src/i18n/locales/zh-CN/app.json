@@ -96,5 +96,6 @@
     "snapshotDone_other": "已复制 {{count}} 张照片到「{{name}}」",
     "snapshotName": "{{name}}(快照)",
     "failed": "保存智能合集失败"
-  }
+  },
+  "smartCollectionRulesLost": "筛选条件没有存进去。请完全退出并重新打开 AfterFrame,再保存一次。"
 }
