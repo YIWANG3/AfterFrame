@@ -3,9 +3,8 @@ import { useEffect, useRef } from "react";
 const DEBOUNCE_MS = 250;
 
 // Turns map viewport moves into the gallery's filters.geo — debounced so a
-// pan/zoom flurry commits only the final viewport, and suspended entirely in
-// collection view (browse-collection ignores facet filters; a chip that does
-// nothing would just mislead).
+// pan/zoom flurry commits only the final viewport. Works in a folder too:
+// browse-collection takes the same facet filters the library view does.
 export default function useMapViewportFilter({ enabled, filters, applyFilters }) {
   const timerRef = useRef(null);
   const stateRef = useRef({});

@@ -57,11 +57,11 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
-  ipcMain.handle("workspace:facet-values", async () => {
+  ipcMain.handle("workspace:facet-values", async (_event, options) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return null;
     try {
-      return await commands.facetValues();
+      return await commands.facetValues(options || {});
     } catch (err) {
       console.warn("[workspace:facet-values] sidecar error:", err.message);
       return null;

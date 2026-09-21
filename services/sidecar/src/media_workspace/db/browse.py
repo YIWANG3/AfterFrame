@@ -346,9 +346,16 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
                        collection_id: str | None = None) -> int | None:
     """Zero-based gallery position, without hydrating metadata or statting files."""
     if collection_id:
-        joins = "JOIN collection_items ci ON ci.asset_id = assets.asset_id"
-        where = "ci.collection_id = ? AND assets.asset_type IN ('image', 'video', 'raw')"
-        params: list[object] = [collection_id]
+        # A folder narrows by membership; search and facets narrow it further,
+        # exactly as browse_collection does. The order stays "most recently added".
+        joins = (
+            "JOIN collection_items ci ON ci.asset_id = assets.asset_id "
+            "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
+        )
+        search_clause, search_params = _search_clause(search)
+        facet_clause, facet_params = _facet_clauses(filters)
+        where = f"ci.collection_id = ? AND assets.asset_type IN ('image', 'video', 'raw') {search_clause} {facet_clause}"
+        params: list[object] = [collection_id, *search_params, *facet_params]
         order = "ci.added_at DESC, assets.stem, assets.asset_id"
     else:
         joins = "LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id"
@@ -369,7 +376,15 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
     return row[0] if row else None
 
 
-def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
+# Narrows a facet query to one folder's members. Returned as (sql, params) so
+# every query below appends it the same way.
+def _member_clause(collection_id: str | None, asset_col: str = "assets.asset_id") -> tuple[str, list[object]]:
+    if not collection_id:
+        return "", []
+    return f" AND {asset_col} IN (SELECT asset_id FROM collection_items WHERE collection_id = ?)", [collection_id]
+
+
+def get_facet_values(connection: sqlite3.Connection, collection_id: str | None = None) -> dict[str, object]:
     """Available facet options for building the filter bar.
 
     Returns distinct cameras/lenses with counts, numeric min/max for the range
@@ -377,37 +392,46 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
     with a registry image_asset_id row, same universe as the gallery). This
     includes RAW imported via "Import" but excludes RAW added as reverse-lookup
     sources. WHERE 1=1 lets each helper append "AND assets.<col> …".
+
+    With collection_id the options and their counts describe that folder, not
+    the library: inside a folder of 40 photos a camera must not read "1794".
     """
+    member, member_params = _member_clause(collection_id)
     base = (
         "FROM image_lookup_registry AS registry "
-        "JOIN assets ON assets.asset_id = registry.image_asset_id WHERE 1=1"
+        f"JOIN assets ON assets.asset_id = registry.image_asset_id WHERE 1=1{member}"
     )
 
     def value_counts(col: str) -> list[dict[str, object]]:
         rows = connection.execute(
             f"SELECT assets.{col} AS v, COUNT(*) AS c {base} AND assets.{col} IS NOT NULL "
-            f"AND assets.{col} != '' GROUP BY assets.{col} ORDER BY c DESC"
+            f"AND assets.{col} != '' GROUP BY assets.{col} ORDER BY c DESC",
+            member_params,
         ).fetchall()
         return [{"value": r["v"], "count": r["c"]} for r in rows]
 
     def min_max(col: str) -> dict[str, object]:
         r = connection.execute(
-            f"SELECT MIN(assets.{col}) AS lo, MAX(assets.{col}) AS hi {base} AND assets.{col} IS NOT NULL"
+            f"SELECT MIN(assets.{col}) AS lo, MAX(assets.{col}) AS hi {base} AND assets.{col} IS NOT NULL",
+            member_params,
         ).fetchone()
         return {"min": r["lo"], "max": r["hi"]}
 
     # Only the most-used tags for the default dropdown; the rest are reachable
     # via server-side search (search_facet_values) so this stays bounded even
     # with thousands of tags.
+    tag_member, _ = _member_clause(collection_id, "t.asset_id")
     tag_rows = connection.execute(
-        """
+        f"""
         SELECT t.tag AS v, COUNT(*) AS c
         FROM asset_tags AS t
         JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
+        WHERE 1=1{tag_member}
         GROUP BY t.tag
         ORDER BY c DESC, t.tag
         LIMIT 60
-        """
+        """,
+        member_params,
     ).fetchall()
 
     # File-format facet, scoped to *browseable* assets only — i.e. those with a
@@ -415,14 +439,15 @@ def get_facet_values(connection: sqlite3.Connection) -> dict[str, object]:
     # RAW added via "Add RAW source", which are reverse-lookup sources, not tiles.
     # Values are dot-stripped + lowercased (jpg, png, mp4, cr2, 3fr, …).
     ext_rows = connection.execute(
-        """
+        f"""
         SELECT LOWER(TRIM(assets.extension, '.')) AS v, COUNT(*) AS c
         FROM image_lookup_registry AS registry
         JOIN assets ON assets.asset_id = registry.image_asset_id
-        WHERE assets.extension IS NOT NULL AND assets.extension != ''
+        WHERE assets.extension IS NOT NULL AND assets.extension != ''{member}
         GROUP BY v
         ORDER BY c DESC, v
-        """
+        """,
+        member_params,
     ).fetchall()
 
     return {
@@ -443,23 +468,26 @@ def search_facet_values(
     field: str,
     q: str = "",
     limit: int = 50,
+    collection_id: str | None = None,
 ) -> list[dict[str, object]]:
     """Server-side facet search, so a dropdown never loads more than `limit`
     rows regardless of how many distinct values exist. Matches substring,
     ordered by frequency."""
     like = f"%{q}%" if q else "%"
+    member, member_params = _member_clause(collection_id)
+    tag_member, _ = _member_clause(collection_id, "t.asset_id")
     if field == "tag":
         rows = connection.execute(
-            """
+            f"""
             SELECT t.tag AS v, COUNT(*) AS c
             FROM asset_tags AS t
             JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
-            WHERE t.tag LIKE ?
+            WHERE t.tag LIKE ?{tag_member}
             GROUP BY t.tag
             ORDER BY c DESC, t.tag
             LIMIT ?
             """,
-            (like, limit),
+            [like, *member_params, limit],
         ).fetchall()
     elif field in ("camera", "lens"):
         col = "meta_camera_model" if field == "camera" else "meta_lens_model"
@@ -469,12 +497,12 @@ def search_facet_values(
             FROM image_lookup_registry AS registry
             JOIN assets ON assets.asset_id = registry.image_asset_id
             WHERE assets.{col} IS NOT NULL
-              AND assets.{col} != '' AND assets.{col} LIKE ?
+              AND assets.{col} != '' AND assets.{col} LIKE ?{member}
             GROUP BY assets.{col}
             ORDER BY c DESC
             LIMIT ?
             """,
-            (like, limit),
+            [like, *member_params, limit],
         ).fetchall()
     else:
         return []
@@ -624,7 +652,14 @@ def browse_collection(
     collection_id: str,
     limit: int = 120,
     offset: int = 0,
+    search: str | None = None,
+    filters: dict | None = None,
 ) -> list[sqlite3.Row]:
+    """A folder's photos, narrowed by the same search text and facet filters
+    the library view takes. It used to accept neither, so the filter bar did
+    nothing inside a folder while still looking active."""
+    search_clause, search_params = _search_clause(search)
+    facet_clause, facet_params = _facet_clauses(filters)
     return connection.execute(
         f"""
         SELECT
@@ -636,10 +671,12 @@ def browse_collection(
 {_BROWSE_SHARED_JOINS}
         WHERE ci.collection_id = ?
           AND assets.asset_type IN ('image', 'video', 'raw')
+          {search_clause}
+          {facet_clause}
         ORDER BY ci.added_at DESC, assets.stem, assets.asset_id
         LIMIT ? OFFSET ?
         """,
-        (collection_id, limit, offset),
+        [collection_id, *search_params, *facet_params, limit, offset],
     ).fetchall()
 
 

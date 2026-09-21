@@ -132,6 +132,8 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch }) 
               value === opt.value ? "text-text" : "text-muted",
             ].join(" ")}
             onClick={() => onSelect(value === opt.value ? undefined : opt.value)}
+            data-facet-option={opt.value}
+            data-facet-count={opt.count}
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="flex h-3 w-3 shrink-0 items-center justify-center">{value === opt.value && <Check className="h-3 w-3 text-accent" />}</span>
@@ -358,7 +360,7 @@ function PersonFilterOptions({ value, onSelect, onLoaded }) {
   );
 }
 
-export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup }) {
+export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, collectionId }) {
   const { t } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -369,6 +371,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
 
   return (
     <div
+      data-filter-bar="true"
       className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"
       // The skin lays the bar out as one sideways-scrolling row. Trackpads
       // scroll it natively; a mouse wheel only has a vertical axis, so map
@@ -390,7 +393,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           label={t("filter.tag")}
           value={f.tag}
           options={tags}
-          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60 })}
+          onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, collectionId: collectionId || undefined })}
           onSelect={(v) => onChange(setOrDelete(f, "tag", v))}
         />
       )}

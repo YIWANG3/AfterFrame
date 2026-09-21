@@ -142,9 +142,7 @@ export default function App() {
   };
 
   const { handleViewportChange } = useMapViewportFilter({
-    // Collection browse ignores facet filters, so a viewport chip there would
-    // claim to filter while doing nothing — keep it status-view only.
-    enabled: mapExpanded && !workspace.activeCollectionId,
+    enabled: mapExpanded,
     filters: workspace.filters,
     applyFilters: workspace.applyFilters,
   });
@@ -183,9 +181,9 @@ export default function App() {
     workspaceRef.current.applyFilters(rest);
   }, [mapExpanded]);
 
-  // Entering a collection drops it too: browse-collection ignores facet
-  // filters, so the chip would claim to filter while doing nothing — and the
-  // stale viewport would silently re-engage on leaving the collection.
+  // Entering a collection drops it too: the viewport belongs to wherever the
+  // user was looking before, and a folder opened through it would look empty
+  // for no visible reason. Moving the map inside the folder filters it afresh.
   useEffect(() => {
     if (!workspace.activeCollectionId) return;
     const current = workspaceRef.current.filters;
@@ -1182,6 +1180,7 @@ export default function App() {
                   onChange={workspace.applyFilters}
                   personGroup={peopleGroup}
                   onPersonGroup={setPeopleGroup}
+                  collectionId={workspace.activeCollectionId}
                 />
               )}
               <div

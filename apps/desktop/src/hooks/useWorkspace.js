@@ -189,11 +189,22 @@ export default function useWorkspace({ pushToast } = {}) {
   });
   useEffect(() => { browseCurrentScope(); }, [scopeKey]);
 
-  // Refresh facet options when the catalog/library changes
+  // Refresh facet options when the catalog/library changes, and when the
+  // folder does: inside a folder the options and their counts describe that
+  // folder. The request is tagged so a slow answer for the previous folder
+  // cannot land on top of the current one.
+  const facetRequestRef = useRef(0);
+  // Reads only refs, so it is stable and refreshAll (not an effect) can call it too.
+  const loadFacetValues = useCallback(() => {
+    const request = ++facetRequestRef.current;
+    void api.getFacetValues({ collectionId: scopeRef.current.collectionId || undefined })
+      .then((values) => { if (request === facetRequestRef.current) setFacetValues(values); })
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     if (!browserReady) return;
-    void api.getFacetValues().then(setFacetValues).catch(() => {});
-  }, [browserReady, summary?.image_assets]);
+    loadFacetValues();
+  }, [browserReady, summary?.image_assets, scope.collectionId, loadFacetValues]);
 
   // Queued-changes note for the import card in the unified JobDock.
   const queuedImportNote = useMemo(() => {
@@ -239,9 +250,13 @@ export default function useWorkspace({ pushToast } = {}) {
       }
       let payload;
       if (target.collectionId) {
+        // Same search and filters as the library view: the filter bar is on
+        // screen in a folder too, so it has to mean something there.
         payload = await api.browseCollection(target.collectionId, {
           limit: pageLimit,
           offset: nextOffset,
+          search,
+          filters: activeFilters,
         });
       } else {
         payload = await api.browseImages({
@@ -392,7 +407,7 @@ export default function useWorkspace({ pushToast } = {}) {
       const offset = resetScope || !sameLoadedScope ? 0 : browserOffset;
       const count = Math.max(0, limit - offset);
       const payload = count === 0 ? [] : target.collectionId
-        ? await api.browseCollection(target.collectionId, { limit: count, offset })
+        ? await api.browseCollection(target.collectionId, { limit: count, offset, search: asQuery(target).search, filters: target.filters })
         : await api.browseImages({ ...asQuery(target), limit: count, offset });
       log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
       if (!isCurrent()) { log("superseded after page"); return; }
@@ -708,7 +723,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setCatalogRevision((revision) => revision + 1);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
-    void api.getFacetValues().then(setFacetValues).catch(() => {});
+    loadFacetValues();
   }
 
   async function startIncrementalImport({ rawDirs: nextRawDirs = [], imageDirs: nextImageDirs = [], fullCatalog = false, auto = false }) {

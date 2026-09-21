@@ -37,7 +37,7 @@ export const IPC_METHODS = [
   ["discoverCollections", "workspace:discover-collections", 0],
   ["getAssetLocation", "workspace:get-asset-location", 1],
   ["clearAiLocation", "workspace:clear-ai-location", 1],
-  ["getFacetValues", "workspace:facet-values", 0],
+  ["getFacetValues", "workspace:facet-values", 1],
   ["searchFacet", "workspace:search-facet", 1],
   ["getAssetDetail", "workspace:detail", 1],
   ["getAssetDetailById", "workspace:detail-by-id", 1],
