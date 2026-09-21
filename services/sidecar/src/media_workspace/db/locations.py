@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from .browse import _GEO_PRECISION_RANK, _base_clause, _facet_clauses, _search_clause, _status_clause
+from .browse import _base_clause, _search_clause, _status_clause
+from .facets import _GEO_PRECISION_RANK, _facet_clauses
 
 
 def _valid_coordinates(latitude: object, longitude: object) -> tuple[float, float] | None:

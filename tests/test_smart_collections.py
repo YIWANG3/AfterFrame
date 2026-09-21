@@ -6,13 +6,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from media_workspace.db import connect, init_db, list_image_assets, upsert_image_asset, upsert_registry
-from media_workspace.db.browse import FACET_KEYS, _facet_clauses, count_image_assets
+from media_workspace.db.browse import count_image_assets
 from media_workspace.db.collections import (
     add_collection_items,
     create_collection,
     list_collections,
     update_collection,
 )
+from media_workspace.db.facets import FACET_KEYS, _facet_clauses
 from media_workspace.db.smart_rules import normalize_rules, parse_rules
 from media_workspace.models import ImageCandidate, MatchDecision
 
@@ -128,9 +129,14 @@ class SmartCollectionTests(unittest.TestCase):
             "geo": {"mode": "bounds", "west": 0, "south": 0, "east": 1, "north": 1}, "date_from": "2025-01-01",
             "date_to": "2025-12-31",
         }
-        for key in FACET_KEYS:
+        from media_workspace.db.facets import FACET_MODIFIER_KEYS
+
+        for key in FACET_KEYS - FACET_MODIFIER_KEYS:
             clause, _ = _facet_clauses({key: samples.get(key, 1)})
             self.assertTrue(clause, f"_facet_clauses ignores {key!r}")
+        # A modifier tunes another key: nothing alone, a different clause with it.
+        self.assertEqual(_facet_clauses({"tag_match": "all"}), ("", []))
+        self.assertNotEqual(_facet_clauses({"tag": ["a", "b"]}), _facet_clauses({"tag": ["a", "b"], "tag_match": "all"}))
 
 
 if __name__ == "__main__":
