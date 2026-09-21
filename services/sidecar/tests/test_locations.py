@@ -360,10 +360,14 @@ class LocationTestCase(unittest.TestCase):
         europe = {"mode": "bounds", "west": -5.0, "south": 41.0, "east": 10.0, "north": 52.0}
         self.assertIn(image_id, self._browse_geo_ids(europe))
 
-    def test_map_points_collection_scope_ignores_search_and_facets(self):
-        # browse_collection accepts neither search nor facets, so the map in
-        # collection scope must ignore them too or it shows a narrower set.
-        paris = self._import_image(48.8566, 2.3522)
+    def test_a_folder_is_narrowed_by_search_and_facets_in_the_gallery_and_on_the_map(self):
+        # The filter bar used to do nothing inside a folder (browse_collection
+        # took neither search nor facets), and the map was made to ignore them
+        # too so the two would at least agree. Both honour them now, and they
+        # must keep agreeing: the map mirrors the gallery it sits above.
+        from media_workspace.db import browse_collection
+
+        paris = self._import_image(48.8566, 2.3522)  # camera X100VI, stem from its path
         self.connection.execute(
             "INSERT INTO collections (collection_id, name, kind) VALUES ('col1', 'Trip', 'manual')"
         )
@@ -371,12 +375,21 @@ class LocationTestCase(unittest.TestCase):
             "INSERT INTO collection_items (collection_id, asset_id) VALUES ('col1', ?)", (paris,)
         )
         self.connection.commit()
-        ids = self._map_asset_ids(
-            collection_id="col1",
-            search="no-such-photo",
-            filters={"camera": "OtherCam"},
-        )
-        self.assertEqual(ids, {paris})
+
+        def both(**scope):
+            gallery = {row["asset_id"] for row in browse_collection(self.connection, "col1", **scope)}
+            self.assertEqual(gallery, self._map_asset_ids(collection_id="col1", **scope))
+            return gallery
+
+        self.assertEqual(both(), {paris})
+        self.assertEqual(both(filters={"camera": "X100VI"}), {paris})
+        self.assertEqual(both(filters={"camera": "OtherCam"}), set())
+        self.assertEqual(both(search="no-such-photo"), set())
+        self.assertEqual(both(search="x100"), {paris})
+        # The viewport itself is the one facet the map never applies to its own points.
+        far_away = {"mode": "bounds", "west": 100, "south": 0, "east": 101, "north": 1}
+        self.assertEqual(self._map_asset_ids(collection_id="col1", filters={"geo": far_away}), {paris})
+        self.assertEqual({r["asset_id"] for r in browse_collection(self.connection, "col1", filters={"geo": far_away})}, set())
 
     # -- migration -------------------------------------------------------
 

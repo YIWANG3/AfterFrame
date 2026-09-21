@@ -30,14 +30,14 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
 
   const nonGeoFilters = { ...(filters || {}) };
   delete nonGeoFilters.geo;
-  // Collection scope: the sidecar ignores search/facets there (to mirror
-  // browse_collection) — key on what the query actually uses.
+  // Key on what the query actually uses: a folder replaces the status, and is
+  // narrowed by search and facets like any other scope.
   const cacheKey = JSON.stringify({
     catalogKey: catalogKey || null,
     collectionId: collectionId || null,
     status: collectionId ? null : status,
-    search: collectionId ? null : (search || "").trim() || null,
-    filters: collectionId ? null : nonGeoFilters,
+    search: (search || "").trim() || null,
+    filters: nonGeoFilters,
     refreshToken: refreshToken || 0,
   });
 

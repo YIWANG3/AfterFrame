@@ -73,13 +73,17 @@ function createSidecarCommands(callJson) {
       return callJson(["get-asset-location", "--asset-id", String(assetId)]);
     },
 
-    browseCollection(collectionId, { limit = 120, offset = 0 } = {}) {
-      return callJson([
+    // A folder takes the same search text and facet filters the library does.
+    browseCollection(collectionId, { limit = 120, offset = 0, search, filters } = {}) {
+      const argv = [
         "browse-collection",
         "--collection-id", String(collectionId),
         "--limit", String(limit),
         "--offset", String(offset),
-      ]).then((rows) => rows || []);
+      ];
+      if (search) argv.push("--search", String(search));
+      if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
+      return callJson(argv).then((rows) => rows || []);
     },
 
     assetDetail({ assetId, imagePath } = {}) {
@@ -157,14 +161,18 @@ function createSidecarCommands(callJson) {
       return callJson(argv);
     },
 
-    facetValues() {
-      return callJson(["facet-values"]);
+    // collectionId: describe that folder (options and counts) instead of the library.
+    facetValues({ collectionId } = {}) {
+      const argv = ["facet-values"];
+      if (collectionId) argv.push("--collection-id", String(collectionId));
+      return callJson(argv);
     },
 
-    searchFacet({ field, q = "", limit } = {}) {
+    searchFacet({ field, q = "", limit, collectionId } = {}) {
       const argv = ["search-facet", "--field", String(field)];
       if (q) argv.push("--q", String(q));
       if (limit) argv.push("--limit", String(limit));
+      if (collectionId) argv.push("--collection-id", String(collectionId));
       return callJson(argv).then((rows) => rows || []);
     },
 

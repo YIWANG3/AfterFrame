@@ -287,9 +287,9 @@ def list_map_points(
     'manual' source on the image row must win over RAW exif — revisit the
     predicate then.)
 
-    In collection scope, search and facets are ignored to match
-    browse_collection (which accepts neither) — the map must never show a
-    narrower set than the gallery it mirrors.
+    Collection scope swaps the status clause for folder membership and then
+    applies the same search and facets browse_collection does — the map must
+    show exactly the set the gallery it mirrors shows (minus the viewport).
 
     min_precision (default 'locality') drops coarser points: an admin1- or
     country-level AI guess rendered as a precise-looking marker at the state
@@ -302,13 +302,11 @@ def list_map_points(
 
     params: list[object] = []
     if collection_id is not None:
-        # Collection scope mirrors browse_collection: no status clause, and no
-        # search/facets either (browse_collection ignores both).
+        # Collection scope mirrors browse_collection: membership instead of a
+        # status clause, then the same search and facets.
         scope_join = "JOIN collection_items ci ON ci.asset_id = assets.asset_id"
         scope_clause = "ci.collection_id = ?"
         params.append(collection_id)
-        search = None
-        filters = None
     else:
         scope_join = ""
         scope_clause = _status_clause(status)

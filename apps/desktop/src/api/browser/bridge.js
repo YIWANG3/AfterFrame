@@ -395,10 +395,17 @@ function readAnnotationSettings() {
 
 const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-function aggregateTags(limit = 50, needle = "") {
+// Facets describe a folder when one is open, the library otherwise.
+function facetUniverse(collectionId) {
+  if (!collectionId) return assets;
+  const member = new Set(collections.find((c) => c.collection_id === collectionId)?.asset_ids || []);
+  return assets.filter((a) => member.has(a.asset_id));
+}
+
+function aggregateTags(limit = 50, needle = "", universe = assets) {
   const q = needle.toLowerCase();
   const m = new Map();
-  for (const a of assets) {
+  for (const a of universe) {
     for (const t of a.annotation?.tags || []) {
       if (!q || t.toLowerCase().includes(q)) m.set(t, (m.get(t) || 0) + 1);
     }
@@ -725,8 +732,9 @@ export const browserBridge = {
   detectEditors: async () => [],
   // Facets aggregate over the in-memory catalog, mirroring the sidecar's
   // get_facet_values keys (db/browse.py).
-  getFacetValues: async () => {
-    const metas = assets.map((a) => a.image_metadata || {});
+  getFacetValues: async ({ collectionId } = {}) => {
+    const universe = facetUniverse(collectionId);
+    const metas = universe.map((a) => a.image_metadata || {});
     const counts = (values) => {
       const m = new Map();
       for (const v of values) { if (v) m.set(v, (m.get(v) || 0) + 1); }
@@ -742,8 +750,8 @@ export const browserBridge = {
     return {
       cameras: counts(metas.map((m) => m.camera_model)),
       lenses: counts(metas.map((m) => m.lens_model)),
-      tags: aggregateTags(60),
-      extensions: counts(assets.map((a) => fileExt(a.file_name))),
+      tags: aggregateTags(60, "", universe),
+      extensions: counts(universe.map((a) => fileExt(a.file_name))),
       iso: minMax("iso"),
       aperture: minMax("aperture"),
       focal: minMax("focal_length"),
@@ -751,11 +759,12 @@ export const browserBridge = {
       capture_time: times.length ? { min: times[0], max: times[times.length - 1] } : { min: null, max: null },
     };
   },
-  searchFacet: async ({ field, q = "", limit = 50 } = {}) => {
+  searchFacet: async ({ field, q = "", limit = 50, collectionId } = {}) => {
     const needle = String(q).toLowerCase();
+    const universe = facetUniverse(collectionId);
     const pick = (get) => {
       const m = new Map();
-      for (const a of assets) {
+      for (const a of universe) {
         const v = get(a);
         if (v && String(v).toLowerCase().includes(needle)) m.set(v, (m.get(v) || 0) + 1);
       }
@@ -765,7 +774,7 @@ export const browserBridge = {
     if (field === "camera") return pick((a) => a.image_metadata?.camera_model);
     if (field === "lens") return pick((a) => a.image_metadata?.lens_model);
     if (field === "extension") return pick((a) => fileExt(a.file_name));
-    if (field === "tag") return aggregateTags(limit, needle);
+    if (field === "tag") return aggregateTags(limit, needle, universe);
     return [];
   },
   getPreviewSettings: async () => ({ generateHd: false }),
@@ -809,15 +818,14 @@ export const browserBridge = {
       const row = collections.find((c) => c.collection_id === collectionId);
       const member = new Set(row?.asset_ids || []);
       list = list.filter((a) => member.has(a.asset_id));
-    } else {
-      if (status === "rated") list = list.filter((a) => a.app_rating > 0);
-      else if (status === "matched") list = [];
-      if (search) list = list.filter((a) => matchesSearch(a, search));
-      if (filters) {
-        const nonGeo = { ...filters };
-        delete nonGeo.geo;
-        list = list.filter((a) => matchesFacetFilters(a, nonGeo));
-      }
+    } else if (status === "rated") list = list.filter((a) => a.app_rating > 0);
+    else if (status === "matched") list = [];
+    // A folder is narrowed by search and facets like any other scope.
+    if (search) list = list.filter((a) => matchesSearch(a, search));
+    if (filters) {
+      const nonGeo = { ...filters };
+      delete nonGeo.geo;
+      list = list.filter((a) => matchesFacetFilters(a, nonGeo));
     }
     return list
       .filter((a) => a.image_metadata?.gps_latitude != null && a.image_metadata?.gps_longitude != null)
@@ -834,11 +842,14 @@ export const browserBridge = {
         preview_path: a.preview_path,
       }));
   },
-  browseCollection: async (collectionId, { limit = 180, offset = 0 } = {}) => {
+  browseCollection: async (collectionId, { limit = 180, offset = 0, search, filters } = {}) => {
     const row = collections.find((c) => c.collection_id === collectionId);
     if (!row) return [];
     const byId = new Map(assets.map((a) => [a.asset_id, a]));
-    return (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean).slice(offset, offset + limit);
+    let list = (row.asset_ids || []).map((id) => byId.get(id)).filter(Boolean);
+    if (search) list = list.filter((a) => matchesSearch(a, search));
+    if (filters) list = list.filter((a) => matchesFacetFilters(a, filters));
+    return list.slice(offset, offset + limit);
   },
   listCollections: async () => {
     return [...collections].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)).map(publicCollection);

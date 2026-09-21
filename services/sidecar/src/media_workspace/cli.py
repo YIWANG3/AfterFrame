@@ -326,12 +326,14 @@ def build_parser() -> argparse.ArgumentParser:
     set_location_p.add_argument("--clear", action="store_true",
                                 help="Remove the stored location; EXIF GPS (if the file has any) is re-derived")
 
-    subparsers.add_parser("facet-values", parents=[common])
+    facet_values_p = subparsers.add_parser("facet-values", parents=[common])
+    facet_values_p.add_argument("--collection-id", default=None, help="Describe this folder instead of the library")
 
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
     search_facet_p.add_argument("--field", choices=["tag", "camera", "lens"], required=True)
     search_facet_p.add_argument("--q", default="")
     search_facet_p.add_argument("--limit", type=int, default=50)
+    search_facet_p.add_argument("--collection-id", default=None)
 
     detail = subparsers.add_parser("asset-detail", parents=[common])
     detail_group = detail.add_mutually_exclusive_group(required=True)
@@ -380,6 +382,8 @@ def build_parser() -> argparse.ArgumentParser:
     browse_col.add_argument("--collection-id", required=True)
     browse_col.add_argument("--limit", type=int, default=120)
     browse_col.add_argument("--offset", type=int, default=0)
+    browse_col.add_argument("--search", default=None)
+    browse_col.add_argument("--filters", default=None, help="JSON object of facet filters")
 
     quick_reg = subparsers.add_parser("quick-register", parents=[common])
     quick_reg.add_argument("--image-path", type=Path, required=True)
@@ -1434,13 +1438,13 @@ def _cmd_refresh_assets(args, connection, catalog, parser):
 
 def _cmd_facet_values(args, connection, catalog, parser):
     from .db import get_facet_values
-    print(json.dumps(get_facet_values(connection), ensure_ascii=False))
+    print(json.dumps(get_facet_values(connection, args.collection_id), ensure_ascii=False))
     return 0
 
 
 def _cmd_search_facet(args, connection, catalog, parser):
     from .db import search_facet_values
-    print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit), ensure_ascii=False))
+    print(json.dumps(search_facet_values(connection, args.field, args.q, args.limit, args.collection_id), ensure_ascii=False))
     return 0
 
 
@@ -2048,7 +2052,11 @@ def _cmd_set_asset_rating(args, connection, catalog, parser):
 
 def _cmd_browse_collection(args, connection, catalog, parser):
     payload = []
-    for row in browse_collection(connection, args.collection_id, limit=args.limit, offset=args.offset):
+    rows = browse_collection(
+        connection, args.collection_id, limit=args.limit, offset=args.offset,
+        search=args.search, filters=json.loads(args.filters) if args.filters else None,
+    )
+    for row in rows:
         preview_path = None
         if row["preview_relative_path"]:
             preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
