@@ -1,6 +1,8 @@
 # 下一批功能规划：MCP 接入配置、导入后自动分析人脸、手动修正地点、智能合集、相框模板与水印档案
 
-> **状态（2026-09-18）**：规划稿，未开工。来源是对 `docs/` 历史计划的盘点，挑出 5 个未实现且对用户价值高的功能。
+> **状态（2026-09-20）**：进行中。A（MCP 接入配置，#82）和 B（导入后自动分析人脸，#87）已进 main，随 0.5.3 发布。C（手动地点）搁置。
+> **优先级（2026-09-20）**：F（拷贝编辑 / 粘贴编辑）做完后暂停，见 F 节，前提是先设计编辑状态的存储。接下来是 D（智能合集，sidecar 部分已写完，在分支 `feat/smart-collections`）。E（相框模板）因为要编辑模板、比较麻烦，放到最后。
+> 来源是对 `docs/` 历史计划的盘点，挑出未实现且对用户价值高的功能。
 > 每个功能的现状都对照代码核实过（只读代码，未运行）。各功能的原始设计仍以各自的文档为准，本文只负责排期、落点和待决问题。
 
 ## 总览
@@ -9,9 +11,9 @@
 |---|---|---|---|---|
 | 1 | A. 设置里「复制 MCP 接入配置」 | `mcp-parity-plan.md:123` | 0.5 天 | 无 |
 | 1 | B. 导入后自动分析人脸 | `people-recognition-design.md:252` | 0.5 天 | 无 |
-| 2 | C. 手动修正地点，批量指定地点 | `geo-map-design.md:573-574` | 2 到 3 天 | 无 |
-| 3 | D. 智能合集 v1（保存的筛选条件） | `mcp-parity-plan.md:134` | 4 到 5 天 | 无 |
-| 3 | D2. 智能合集 v2（相对日期等规则扩展） | 同上 | 每项 0.5 到 1 天 | D |
+| 搁置 | C. 手动修正地点，批量指定地点（按地名选） | `geo-map-design.md:573-574` | 剩余约 3 天 | 2026-09-18 搁置，sidecar 搜索已存档在分支上 |
+| 3 | D. 智能合集 v1（保存的筛选条件，含「最近 N 天」） | `mcp-parity-plan.md:134` | 5 到 6 天 | 无 |
+| 3 | D2. 智能合集 v2（其余规则扩展） | 同上 | 每项 0.5 到 1 天 | D |
 | 4 | E. 水印档案、相框存为模板、导入自己的 logo | `frame-watermark-plan.md:285-303`、`unified-canvas-plan.md:153-160` | 6 到 8 天 | 需要先拍板一个悬而未决的设计问题 |
 
 排序原则：先做半天能完成、立刻有人受益的（A、B）；再做后端已有、只差界面的（C）；然后是改动面最广的（D）；最后是范围最大、还有设计问题没定的（E）。
@@ -36,7 +38,7 @@
 2. `electron/main.js`：`ipcMain.handle("app:mcp-status", …)`。桥接表加一行 `["getMcpStatus", "app:mcp-status", 0]`。
 3. 新建 `src/components/settings/McpConnectionGroup.jsx`，放在 Integrations 页的编辑器分组上方：
    - 状态点加文字（运行中、端口被占用、出错），URL，工具数量
-   - 两个代码块，各带复制按钮，URL 用实时端口拼出来，不写死
+   - 三个代码块（第三个见下方 Claude Desktop），各带复制按钮，URL 用实时端口拼出来，不写死
      - Claude Code：`claude mcp add --transport http afterframe http://127.0.0.1:<port>/mcp`
      - `.mcp.json` / Cursor：`{"mcpServers":{"afterframe":{"type":"http","url":"…/mcp"}}}`（与仓库自己的 `.mcp.json` 同形）
    - 端口被占用时，提示常见原因（另一个 AfterFrame 实例）和 `AFTERFRAME_MCP_PORT`
@@ -44,7 +46,13 @@
 4. i18n：`settings.json` 的 en 与 zh-CN 各约 12 个 key。
 5. 测试：`e2e/10-settings.spec.js` 加一条（状态为运行中、片段里的端口正确、工具数大于 0）；`getStatus()` 加单测。
 
-**待核实**：Claude Desktop 是否接受 `type: "http"` 的条目，没有确认。上线前验证；不行就只标「Claude Code / Cursor」，或提供 `npx mcp-remote` 的桥接写法。
+**Claude Desktop（2026-09-18 已查）**：`claude_desktop_config.json` 只支持 stdio，没有 `url` 字段，也不认 `type: "http"`，即使是 localhost 也不行。它的「Connectors」是从云端连出去的，够不到本机。所以要给第三个代码块，用 `mcp-remote` 做桥：
+
+```json
+{"mcpServers":{"afterframe":{"command":"npx","args":["-y","mcp-remote","http://127.0.0.1:<port>/mcp"]}}}
+```
+
+旁边注明需要本机装有 Node。这一段上线前用真实的 Claude Desktop 验证一次。
 
 ---
 
@@ -73,41 +81,58 @@
 
 ## C. 手动修正地点，批量指定地点
 
+> **2026-09-18 搁置。** 用户判断地图相关的手动标记不好做，先放一放。已完成并存档的部分：分支 `feat/set-location-by-place`（提交 `5977843`，已推送，未开 PR）里有 sidecar 的地名搜索 `search_places()`、`resolve_place_id()`、繁转简表 `data/t2s.json`（889 字，用 macOS 自带 ICU 生成，无新依赖）和 8 条单测。实测 27 万条地名上首次建索引约 0.6 秒，单次查询 12 到 70 毫秒。重启时从下面的步骤 2 接着做。
+> 实测确认的事实：Wikidata 的 `zh` 标签繁简混排（东京是「東京都」、首尔是「首爾」），各层级 16% 到 45% 的中文名是繁体，不做折叠的话简体输入搜不到。
+>
+> 2026-09-18 修订：原方案「在地图上点击放置」作废。离线底图精度很低，用户既给不出精确 GPS，也没法在地图上点准。改为**按地名选**：用户只需要说出城市或知名景点。
+
+**产品定位**
+
+- 手动定位和 AI 猜的定位是**同一种东西**：一个城市级或景点级的地名，不是精确坐标。区别只是谁选的。
+- 主要场景是「这批照片没有位置」。有 EXIF GPS 的照片一般不需要改，但允许改，手动的优先。
+- 清除时手动和 AI 的定位一起删，保持现在 `--clear` 的行为，不需要改。
+
 **现状**
 
-- 后端只支持单张加坐标：CLI `set-asset-location`（`cli.py:322`）收一个 `--asset-id` 加 `--lat/--lng` 或 `--clear`。MCP 工具是逐张循环调用。
-- 写入的是 `source='manual'`、`precision_level='exact'`，地名字段全空。EXIF 和 AI 的写入路径不会覆盖手动行。
-- **`--clear` 会连 AI 的定位一起删掉**：它删掉现有的任何一行，再从元数据重建 EXIF 行。清除手动定位后，之前的 AI 猜测不会回来，除非重跑 `resolve-ai-locations`。
-- 渲染进程完全够不到这个功能：桥接表里没有对应的行。
-- 地图（`PhotoMap.jsx`，maplibre-gl，离线底图）没有右键、没有空白处点击、没有 drop 处理。
+- 离线地名库 `data/gazetteer.json.gz` 足够支撑这个交互：约 16.6 万个城市、10.2 万个景点、5351 个一级行政区、267 个国家。每条都有英文名、中文名、经纬度，以及 `links`（维基站点链接数，可以当热门程度用）。
+- `asset_locations` 表已经有 `precision_level`（exact / locality / admin1 / country）、`place_id`、`country_code`、`admin1`、`locality`、`landmark` 这些列。**手动选的地名可以和 AI 解析出的定位存成完全一样的形状，只是 `source='manual'`。** 不需要改表。
+- 这顺带解决了原方案的一个风险：手动定位不再是 `place_id` 为空的裸坐标，按地名筛选的模式能匹配到它。
+- 但地名库今天只有「按精确名字查」的索引（`geo_resolver.Gazetteer.lookup`），没有搜索，也没有对渲染进程开放。
+- 后端写入目前只支持单张加坐标（`cli.py:322`），渲染进程完全够不到（桥接表里没有对应的行）。
 - inspector 的位置区块只在 EXIF 有 GPS 时显示，来源写死为 EXIF。手动定位今天在 inspector 里哪都不显示。
-- 一旦用户平移地图，视口筛选会把没有位置的照片从网格里筛掉。所以任何「放置」流程都必须先暂停视口筛选。
 
-**交互方案：选中照片 → 「设置位置…」→ 在地图上点一下**
+**交互**
 
-不做「把照片拖到地图上」，原因：
+选中一张或多张照片 → 右键菜单或 inspector 里的「设置位置…」→ 弹出一个地名搜索框 → 输入「京都」「Golden Gate」→ 下拉列表按热门程度排序，每行显示「名称 · 上级地区 · 国家」和类型（城市 / 景点）→ 选中即写入。
 
-- 桌面版的网格拖拽已经被原生文件拖出占用（`Gallery.jsx:366-407`），没有 HTML5 的 `dragend`，落在地图上的方案很脆。
-- Playwright 驱动不了原生拖拽，没法写 e2e。
-- 点击放置对单张和批量是同一套机制；「放置模式」是显式状态，暂停视口筛选很简单。
+- 单张和批量是同一套机制。
+- 不涉及地图交互，不需要暂停视口筛选，也不和网格的原生拖出冲突。
+- 写入后地图自动出现对应的点（城市级的点按现有规则显示）。
+- 搜索框下方列出「最近用过的地点」，连续给几批照片标同一个城市时不用重复输入。
 
 **步骤**
 
-1. **sidecar 批量化（小）。** `--asset-id` 可重复，一个事务内完成。`--clear` 改成只清 `source='manual'` 的行。补 pytest。MCP 的循环改成一次批量调用。
-2. **桥接（小）。** `commands.setAssetLocations`，桥接表加一行，handler 放 `electron/ipc/browse.js`，写完调 `broadcastCatalogChanged`。
-3. **放置模式（中）。** `App.jsx` 里加 `placing = {assetIds}` 状态，它会展开地图，并给 `useMapViewportFilter` 传 `enabled: false`。`PhotoMap` 加 `placing` 属性：十字光标，`map.on("click")` 返回经纬度，放置期间忽略 marker 点击。`MapDrawer` 顶部一条横幅：「在地图上点击，放置 N 张照片 · Esc 取消」。
-4. **入口（小）。** 网格右键菜单「设置位置…」；inspector 的位置区块改成读 `getAssetLocation`（区分来源，不再只认 EXIF），来源是手动时显示「设置位置…」和「清除手动位置」。
-5. **写入与撤销（小）。** 点击后写入，`bumpCatalogRevision()` 刷新地图，toast 带「撤销」。撤销靠写入前抓的快照恢复；超过 50 张时不抓快照，只提供清除。
-6. **i18n（小）**、**e2e（中）**：新建 `e2e/46-set-location.spec.js`，照 `23-map.spec.js` 的写法，等 `data-map-ready`，用 `map.click`。
-
-**v2**：地名搜索。gazetteer 今天只有精确名索引，没有对渲染进程开放。需要新 CLI `search-places`、桥接和一个 inspector 里的搜索框；同时用现成的反向地理编码给手动点补上地名。
+1. **地名搜索（中）。** `geo_resolver.py` 加 `search_places(query, limit)`：
+   - 对 `en`、`zh`、`aliases` 做前缀优先、子串其次的匹配，范围是景点、城市、一级行政区、国家四层。
+   - 排序：前缀命中优先，其次按 `links` 降序。
+   - 返回 `{place_id, name_en, name_zh, tier, lat, lon, country, admin1}`。
+   - sidecar 是常驻进程，地名库只加载一次。27 万条线性扫一遍的耗时需要实测；不够快就在加载时建一个按首字符分桶的索引。
+   - 新 CLI `search-places --q --limit`，补 pytest。
+2. **按地名写入（小）。** `set-asset-location` 增加 `--place-id`，`--asset-id` 可重复，一个事务内完成。写入时复用 `_resolved()` 的逻辑，填 `precision_level`、`place_id`、地名各列和外接框，`source='manual'`。保留原有的 `--lat/--lng` 给 MCP 用。
+3. **有效位置的优先级（小）。** 取有效位置的 CASE 表达式里让 `manual` 压过 RAW 的 EXIF 行。
+4. **桥接（小）。** `commands.searchPlaces`、`commands.setAssetLocations`，桥接表加两行，handler 放 `electron/ipc/browse.js`，写完调 `broadcastCatalogChanged`。
+5. **地点选择器（中）。** 新建 `src/components/map/PlacePicker.jsx`：输入框加下拉列表，输入防抖约 150ms，键盘上下选择、回车确认、Esc 关闭。中文界面优先显示中文名。
+6. **入口（小）。** 网格右键菜单「设置位置…」；inspector 的位置区块改成读 `getAssetLocation`（区分来源，不再只认 EXIF），显示来源（GPS / AI 推测 / 手动），提供「设置位置…」和「清除位置」。
+7. **写入后（小）。** `bumpCatalogRevision()` 刷新地图，toast「已为 N 张照片设置位置：京都」带「撤销」。撤销靠写入前抓的快照恢复；超过 50 张时不抓快照，只提供清除。
+8. **MCP（小）。** `set_asset_location` 增加 `place_name` 或 `place_id` 参数，agent 也能说「这些是在京都拍的」。新参数写进 `inputSchema`（#79 的测试会强制）。
+9. **i18n（小）**、**e2e（中）**：新建 `e2e/46-set-location.spec.js`：选两张无 GPS 的照片 → 打开选择器 → 输入地名 → 选第一项 → 断言 `getAssetLocation(id).source === "manual"` 且 `precision_level === "locality"` → 地图上 marker 数量增加 → 撤销。全程不需要点地图，Playwright 好写。
 
 **风险**
 
-- dev 下 StrictMode 会把 effect 挂两次，点击监听要注册在只执行一次的构造 effect 里，用 `callbacksRef` 取最新回调。
-- 低缩放级别下点一下的精度很差。考虑要求缩放 ≥ 5，或者弹确认。
-- **RAW 优先的有效位置**：RAW 的 EXIF 行会压过写在图片上的手动定位。要么两边都写，要么在取有效位置的 CASE 表达式里让 manual 优先。需要定一个。
-- 手动定位的 `place_id` 为空，按地名筛选的模式匹配不到它。
+- **地名库的中文名繁简混杂**（样例里有「阿爾及利亞」）。用户输入简体可能搜不到。需要在建索引时做一次繁转简归一化，或者同时索引两种写法。开工前先统计一下繁体条目的比例。
+- 重名地点很多（全世界有很多个 Springfield）。靠「上级地区 · 国家」这一行加热门度排序来区分。
+- 小众地点不在库里（入库门槛是至少 2 个维基站点链接，景点是 5 个）。兜底方案是让用户选到所在的城市。
+- 搜索性能未实测。
 
 ---
 
@@ -142,7 +167,7 @@
 
 每一项都是同样的四处改动：`_facet_clauses` 一个 `add(...)`、web bridge 的 `matchesFacetFilters` 一行、MCP 一个属性、FilterBar 一个控件。
 
-1. `date_within_days`（「最近 30 天」）。这是「会自己更新的合集」最主要的存在理由，建议紧跟 v1。
+1. `date_within_days`（「最近 30 天」）。这是「会自己更新的合集」最主要的存在理由。**已决定并入 v1 一起发。**
 2. `tags_all` / `tags_any` 多标签。
 3. `rating_max` 或 `rating_eq`，支持「未评分」。
 4. 排除条件（NOT）。
@@ -207,15 +232,56 @@
 
 ---
 
-## 待你拍板的事
+## F. 拷贝编辑 / 粘贴编辑（批量处理）
 
-| # | 问题 | 我的建议 |
+> **2026-09-20 暂停，未进 main。** 代码完整（PR #89，草稿，分支 `feat/paste-edits`），在 dev 里试用后用户判断它是半成品：苹果的这个功能建立在「每张照片都保存着自己的编辑状态」之上，可以从任意一张编辑过的照片拷贝、重新打开接着调、随时回溯；AfterFrame 每次保存只生成一个新文件，不记录它是怎么来的。结果是只能在编辑器开着时拷贝，一次粘贴 50 张没法一键撤销，事后也看不出每张图被改了什么。
+>
+> **重启的前提：先设计编辑状态的存储。** 已有的落点：`asset_links.recipe_json` 这一列从建表起就在，目前只被批量拼图用来存排序；`mcp-parity-plan.md:66` 和 `unified-canvas-plan.md` Phase 6 都提过把编辑配方存下来，从未实现。思路：保存时把配方写进「原图 → 产物」的链接，由此得到从图库拷贝编辑、在原图上重新编辑（而不是在烘焙过的产物上再压一遍）、撤销一次粘贴。不照搬苹果的「编辑只存参数不落盘」：AfterFrame 是本地优先，用户在 Finder 和别的软件里看到的必须是真实文件。旧产物没有配方，查不到来源。
+>
+> 不管界面最后怎么做，这个分支里值得保留的部分：`imageDisplaySize`（catalog 里的宽高没应用 EXIF 方向）、`processAndSave` 的 `avoidOverwrite`、`updateToast`、纯几何逻辑 `pasteEdits.js` 和它的单测。
+>
+> 以下是暂停时的设计，原样保留。参照 iPhone 相册的操作模型。
+
+**范围（用户拍板）**：只做容易批量的几何操作。不做调色（应用里本来就没有任何调色功能），不做文字、贴纸、相框的批量。产物放在每张原图的同目录。
+
+**流程**：编辑器里调好一张 → 「拷贝编辑」→ 勾选要带走哪些（只列出这张图上实际改过的）→ 回到网格多选 → 右键「粘贴编辑」→ 顺序执行并显示进度 → 完成提示（成功几张、跳过几张，可在 Finder 中显示）。
+
+**可拷贝的项目**：旋转 90°、翻转、裁剪（默认勾选）；校正角度（默认不勾，它通常是针对某一张调的）。全部走主进程的 `processAndSave`（sharp，全分辨率，不需要编辑器窗口），不经过长边 2200 像素的编辑器 canvas。
+
+**裁剪的粘贴规则**：目标图与源图宽高比一致（容差 1%，比较发生在粘贴的 90° 旋转之后）时套用同一个相对裁剪框，位置也一致；不一致时保留裁剪比例并居中。粘贴了校正角度时，裁剪框一定内接于旋转后的照片，否则四角会留空。
+
+**产物**：原图同目录，`<原名>_edited.<ext>`，重名自动加序号，登记为原图的一个版本。原图不动。
+
+**跳过**：视频、RAW、HEIC（sharp 读不了）。以后可以改用高清预览图当源。
+
+**做不到的一点**：编辑器保存后不保留编辑参数，所以只能在编辑器打开时拷贝，不能像 iPhone 那样对相册里任意一张编辑过的照片拷贝。要支持它，得在保存时把参数存下来（`mcp-parity-plan.md:66` 提过，未实现）。
+
+**步骤**
+
+1. ✅ 纯逻辑 `src/components/editor/pasteEdits.js` 加 14 条单测。
+2. ✅ 剪贴板状态（`src/utils/editClipboard.js`，存 localStorage）和编辑器头部的「拷贝编辑」按钮加勾选面板。
+3. ✅ 网格右键「粘贴编辑」：过滤目标、顺序执行、一个原地更新的进度提示、完成提示（`src/utils/runPasteEdits.js`）。
+4. ✅ 目标图的显示尺寸：catalog 里的宽高是没应用 EXIF 方向的原始像素尺寸，不能用。新增主进程接口 `imageDisplaySize`（只读文件头）。
+5. ✅ i18n（en + zh-CN）、e2e `46-paste-edits.spec.js`。
+   - e2e 顺带抓到一个 main 上已有的 bug：`processAndSave` 保存后保留了源文件的 EXIF 方向标签，竖拍手机照片在别的看图软件里会再被转一次。单独修在 #88。
+6. 以后：MCP 暴露、RAW 和 HEIC 走高清预览、从已保存的版本拷贝。
+
+---
+
+## 已拍板的事（2026-09-18）
+
+| # | 问题 | 结论 |
 |---|---|---|
-| 1 | C 的交互用「点击放置」还是「拖到地图」？ | 点击放置。拖拽和原生文件拖出冲突，也没法写 e2e |
-| 2 | C：RAW 的 EXIF 位置和图片上的手动位置冲突时谁赢？ | 手动优先，改 CASE 表达式 |
-| 3 | C：`--clear` 是否改成只清手动行？ | 是。现在的行为会误删 AI 定位 |
-| 4 | D：智能合集就是「保存的筛选条件」，不做独立的规则引擎？ | 是 |
-| 5 | D：v2 的「最近 N 天」要不要紧跟 v1 一起发？ | 要。否则「今年」会变成固定区间 |
-| 6 | E：接受「动态图层保留 source，改过即 dirty」？ | 接受。不接受的话，存为模板基本做不了 |
-| 7 | E：设置备份里要不要包含 logo 文件？ | 限制大小后内嵌 |
-| 8 | A：Claude Desktop 的配置片段怎么给？ | 先核实；不确定就只标 Claude Code / Cursor |
+| 1 | C 的交互 | **按地名选**（城市或景点级）。不用地图点击，也不用拖拽：底图精度太低，用户给不出精确位置 |
+| 2 | C：RAW 的 EXIF 位置和手动位置冲突 | 主要场景是没有位置的照片；有位置的也允许手动改，手动优先 |
+| 3 | C：清除位置的行为 | 手动和 AI 的定位等价，清除时一起删。保持现有 `--clear` 行为 |
+| 4 | D：智能合集的形态 | 就是保存的筛选条件，不做独立的规则引擎 |
+| 5 | D：「最近 N 天」 | 要，和 v1 一起发 |
+| 6 | E：动态图层保留 source，改过即 dirty | 接受 |
+| 8 | A：Claude Desktop | 不支持本机 HTTP，给 `mcp-remote` 桥接片段 |
+
+## 还没定的事
+
+| # | 问题 | 说明 |
+|---|---|---|
+| 7 | E：「导出设置」的文件里要不要包含用户导入的 logo 图片？ | 应用已有「导出 / 导入设置」功能（`settings-transfer-plan.md`，P1 已实现），用来换电脑时迁移设置。问题是用户自己导入的 logo 图片要不要一起打包进那个文件。到做 E 的第 8 步时再定，不影响前面的任何一步 |

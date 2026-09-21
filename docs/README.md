@@ -23,7 +23,7 @@
 
 | 文档 | 状态 |
 |---|---|
-| [next-features-plan.md](next-features-plan.md) | 2026-09-18 规划稿，未开工：MCP 接入配置、导入后自动分析人脸、手动修正地点、智能合集、相框模板与水印档案（排期、代码落点、待决问题） |
+| [next-features-plan.md](next-features-plan.md) | 进行中：A/B 已进 main（0.5.3），C 手动地点搁置，F 拷贝/粘贴编辑暂停（先要有编辑状态存储），接下来 D 智能合集，最后 E 相框模板 |
 | [geo-map-design.md](geo-map-design.md) | Phase 1（GPS）+ Phase 2（AI 地名离线解析）已实现；Phase 3 未开始 |
 | [mcp-parity-plan.md](mcp-parity-plan.md) | Phase 1–2 已实现（17→34 tools）；Phase 3–4 未开始 |
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
@@ -54,7 +54,6 @@
 | 文档 | 说明 |
 |---|---|
 | [integration-plan.md](integration-plan.md) | 与外部修图软件（Canva 等）的集成，2026-08-16 已全部撤回 |
-| [jev-decision-layer-design.md](jev-decision-layer-design.md) | Jev 决策模型（语义搜索、标签管理、描述体检）的实测与设计，2026-09-18 搁置：推给普通用户的门槛太高；重启条件写在文档头部 |
 | [current-plan.md](current-plan.md) | 2026-05-01 的「当前计划」，早已不是当前；保留仅作时间线参考 |
 
 计划文档的目录名保持 `docs/` 而不是移进 `docs/archive/`，是因为代码注释会直接引用它们
