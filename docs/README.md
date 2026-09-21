@@ -23,7 +23,7 @@
 
 | 文档 | 状态 |
 |---|---|
-| [next-features-plan.md](next-features-plan.md) | 进行中：A/B 已进 main（0.5.3），C 手动地点搁置，F 拷贝/粘贴编辑优先，其后 D 智能合集、E 相框模板（排期、代码落点、已拍板的决定） |
+| [next-features-plan.md](next-features-plan.md) | 进行中：A/B 已进 main（0.5.3），C 手动地点搁置，F 拷贝/粘贴编辑暂停（先要有编辑状态存储），接下来 D 智能合集，最后 E 相框模板 |
 | [geo-map-design.md](geo-map-design.md) | Phase 1（GPS）+ Phase 2（AI 地名离线解析）已实现；Phase 3 未开始 |
 | [mcp-parity-plan.md](mcp-parity-plan.md) | Phase 1–2 已实现（17→34 tools）；Phase 3–4 未开始 |
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
