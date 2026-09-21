@@ -126,6 +126,7 @@ class SmartCollectionTests(unittest.TestCase):
         # but ignored by _facet_clauses would save a condition that does nothing.
         samples = {
             "orientation": "portrait", "asset_type": "image", "people": "with_faces", "annotated": "with",
+            "location_source": "none", "caption_contains": "x", "ocr_contains": "x", "path_contains": "x",
             "geo": {"mode": "bounds", "west": 0, "south": 0, "east": 1, "north": 1}, "date_from": "2025-01-01",
             "date_to": "2025-12-31",
         }

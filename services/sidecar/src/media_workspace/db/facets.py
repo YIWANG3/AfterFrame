@@ -270,6 +270,50 @@ def _in_collection(filters: dict) -> list[Clause]:
     return [(f"assets.asset_id IN (SELECT asset_id FROM collection_items WHERE {cond})", params)]
 
 
+# The asset whose location row counts for a photo: the paired RAW's when it has
+# one, else the photo's own (the same RAW-first rule as _geo_filter_clause, the
+# map and the Inspector).
+_LOCATION_OWNER = """COALESCE(
+    (SELECT reg.raw_asset_id FROM image_lookup_registry reg
+     JOIN asset_locations raw_loc ON raw_loc.asset_id = reg.raw_asset_id
+     WHERE reg.image_asset_id = assets.asset_id LIMIT 1),
+    assets.asset_id)"""
+
+# What the location is based on. "none" is the useful one: the photos that
+# still need a place.
+LOCATION_SOURCES = ("exif", "ai", "manual", "none")
+
+
+def _location_source(filters: dict) -> list[Clause]:
+    values = [v for v in _values(filters.get("location_source")) if v in LOCATION_SOURCES]
+    if not values:
+        return []
+    located = f"EXISTS (SELECT 1 FROM asset_locations loc WHERE loc.asset_id = {_LOCATION_OWNER}" + "{cond})"
+    parts: list[str] = []
+    params: list[object] = []
+    sources = [v for v in values if v != "none"]
+    if sources:
+        cond, cond_params = _in("loc.source", sources)
+        parts.append(located.format(cond=f" AND {cond}"))
+        params.extend(cond_params)
+    if "none" in values:
+        parts.append("NOT " + located.format(cond=""))
+    return [("(" + " OR ".join(parts) + ")", params)]
+
+
+def _contains_facet(name: str, expr: str) -> Facet:
+    """Case-insensitive "contains" on one text field. The search box matches
+    seven fields at once (a camera name hits as readily as a caption); these
+    match exactly one, and can be saved into a smart collection as such."""
+    def clauses(filters: dict) -> list[Clause]:
+        text = str(filters.get(name) or "").strip()
+        if not text:
+            return []
+        escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return [(f"{expr} LIKE ? ESCAPE '\\'", [f"%{escaped}%"])]
+    return Facet(name, (name,), clauses)
+
+
 def _geo(filters: dict) -> list[Clause]:
     clause = _geo_filter_clause(filters.get("geo"))
     return [clause] if clause is not None else []
@@ -291,6 +335,10 @@ FACETS: tuple[Facet, ...] = (
     Facet("people", ("people",), _people),
     Facet("annotated", ("annotated",), _annotated),
     Facet("person_group", ("person_group",), _person_group),
+    Facet("location_source", ("location_source",), _location_source),
+    _contains_facet("caption_contains", "(SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
+    _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
+    _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),
     Facet("geo", ("geo",), _geo),
     Facet("in_collection", ("in_collection",), _in_collection),
 )

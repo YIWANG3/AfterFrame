@@ -8,8 +8,8 @@ import sqlite3
 
 # The facet filters (what the filter bar sends) live in facets.py: one registry
 # that the WHERE builder, the rules validation and the option counts all read.
+from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses
 from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
-from .facets import _facet_clauses
 
 # Shared between list_image_assets and browse_collection — the two SELECTs
 # went out of sync by hand twice before (annotation columns). Single source.
@@ -363,7 +363,23 @@ def get_facet_values(
         tag_params,
     ).fetchall()
 
+    # What each photo's location is based on, including "none" — counted over
+    # the effective location (the paired RAW's first), like the filter itself.
+    source_where, source_params = scope_for("location_source")
+    source_rows = connection.execute(
+        f"""
+        SELECT COALESCE((SELECT loc.source FROM asset_locations loc WHERE loc.asset_id = {_LOCATION_OWNER}), 'none') AS v,
+               COUNT(*) AS c
+        {_FACET_FROM}
+        WHERE {source_where}
+        GROUP BY v
+        """,
+        source_params,
+    ).fetchall()
+    source_counts = {r["v"]: r["c"] for r in source_rows}
+
     return {
+        "location_sources": [{"value": v, "count": source_counts[v]} for v in LOCATION_SOURCES if source_counts.get(v)],
         "cameras": value_counts("camera", "assets.meta_camera_model"),
         "lenses": value_counts("lens", "assets.meta_lens_model"),
         "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
