@@ -92,5 +92,13 @@
   "watchedCatchUpTitle_one": "1 new file in watched folders",
   "watchedCatchUpTitle_other": "{{count}} new files in watched folders",
   "watchedCatchUpMsg": "Importing them now…",
-  "webUnsupportedFiles": "{{count}} file(s) skipped: videos and RAW need the desktop app"
+  "webUnsupportedFiles": "{{count}} file(s) skipped: videos and RAW need the desktop app",
+  "smartCollection": {
+    "saved": "Smart collection saved",
+    "updated": "Smart collection updated",
+    "snapshotDone_one": "Copied {{count}} photo to “{{name}}”",
+    "snapshotDone_other": "Copied {{count}} photos to “{{name}}”",
+    "snapshotName": "{{name}} (snapshot)",
+    "failed": "Could not save the smart collection"
+  }
 }

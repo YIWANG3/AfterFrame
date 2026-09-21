@@ -80,7 +80,10 @@
     "assetsCount_other": "{{count}} 个素材",
     "updated": "更新于 {{time}}",
     "webLibrary": "浏览器图库",
-    "webWelcomeHint": "浏览示例照片，或拖入自己的照片"
+    "webWelcomeHint": "浏览示例照片，或拖入自己的照片",
+    "smartCollections": "智能合集",
+    "snapshotToFolder": "把当前照片复制到一个文件夹",
+    "smartUnreadable": "由更新版本的 AfterFrame 保存"
   },
   "people": {
     "title": "人物",
@@ -162,7 +165,15 @@
     "person": "人物",
     "noNamedPeople": "还没有已命名的人物，先在人物页给他们起名。",
     "mapArea": "当前地图范围",
-    "mapAreaRemove": "移除地图范围筛选"
+    "mapAreaRemove": "移除地图范围筛选",
+    "saveSmart": "存为智能合集",
+    "saveSmartAs": "另存为",
+    "updateSmart": "更新",
+    "updateSmartHint": "把这些条件保存到「{{name}}」",
+    "lastDays_one": "最近 1 天",
+    "lastDays_other": "最近 {{count}} 天",
+    "lastDaysShort_one": "{{count}} 天",
+    "lastDaysShort_other": "{{count}} 天"
   },
   "activity": {
     "title": "后台活动",

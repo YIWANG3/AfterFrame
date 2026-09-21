@@ -71,7 +71,7 @@ export const IPC_METHODS = [
   // ── collections ──
   ["reorderCollections", "workspace:reorder-collections", 1],
   ["listCollections", "workspace:list-collections", 0],
-  ["createCollection", "workspace:create-collection", 2],
+  ["createCollection", "workspace:create-collection", 3],
   ["updateCollection", "workspace:update-collection", 2],
   ["deleteCollection", "workspace:delete-collection", 1],
   ["collectionAddItems", "workspace:collection-add-items", 2],

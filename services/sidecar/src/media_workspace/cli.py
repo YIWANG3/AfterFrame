@@ -1992,6 +1992,9 @@ def _cmd_list_collections(args, connection, catalog, parser):
                 "kind": row["kind"],
                 "parent_collection_id": row["parent_collection_id"],
                 "rules_json": row["rules_json"],
+                # Parsed smart collection rules; None for folders and for rules
+                # this version cannot read.
+                "rules": row.get("rules"),
                 "sort_order": row["sort_order"],
                 "item_count": row["item_count"],
                 "created_at": row["created_at"],

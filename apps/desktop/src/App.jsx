@@ -874,6 +874,10 @@ export default function App() {
     setCompareState({ beforePath: a.image_path, afterPath: b.image_path, layout: "side" });
   }
 
+  const activeSmartCollection = workspace.activeSmartCollectionId
+    ? (workspace.collections || []).find((c) => c.collection_id === workspace.activeSmartCollectionId) || null
+    : null;
+
   function handleCollage(assetIds) {
     if (!assetIds?.length || assetIds.length < 2) return;
     const items = assetIds.map((id) => itemById.get(id)).filter(Boolean);
@@ -1047,6 +1051,23 @@ export default function App() {
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
+          activeSmartCollectionId={workspace.activeSmartCollectionId}
+          onOpenSmartCollection={(collection) => {
+            setViewMode("assets");
+            setPeopleGroup(null);
+            // Its conditions ARE the filter bar's contents: show them.
+            setShowFilters(true);
+            workspace.openSmartCollection(collection);
+          }}
+          onSnapshotSmartCollection={async (collection) => {
+            try {
+              const name = t("smartCollection.snapshotName", { name: collection.name });
+              const folder = await workspace.snapshotSmartCollection(collection, name);
+              if (folder) pushToast({ title: t("smartCollection.snapshotDone", { count: folder.count, name }), ttl: 5000 });
+            } catch (error) {
+              pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+            }
+          }}
           onSelectCollection={(id) => {
             setViewMode("assets");
             setPeopleGroup(null);
@@ -1181,6 +1202,27 @@ export default function App() {
                   personGroup={peopleGroup}
                   onPersonGroup={setPeopleGroup}
                   collectionId={workspace.activeCollectionId}
+                  smart={{
+                    canSave: workspace.canSaveSmartCollection,
+                    dirty: workspace.smartCollectionDirty,
+                    activeName: activeSmartCollection?.name || null,
+                    onSave: async (name) => {
+                      try {
+                        await workspace.saveSmartCollection(name);
+                        pushToast({ title: t("smartCollection.saved"), message: name, ttl: 4000 });
+                      } catch (error) {
+                        pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+                      }
+                    },
+                    onUpdate: async () => {
+                      try {
+                        await workspace.updateSmartCollectionRules(workspace.activeSmartCollectionId);
+                        pushToast({ title: t("smartCollection.updated"), message: activeSmartCollection?.name, ttl: 4000 });
+                      } catch (error) {
+                        pushToast({ title: t("smartCollection.failed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+                      }
+                    },
+                  }}
                 />
               )}
               <div

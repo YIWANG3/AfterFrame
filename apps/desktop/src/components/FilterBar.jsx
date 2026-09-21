@@ -2,11 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
+import InlineEdit from "./InlineEdit";
 
 // Collapsible facet filter bar under the Toolbar. Reads options/ranges from
 // `facetValues` and emits a structured `filters` object matching the sidecar's
@@ -238,24 +239,51 @@ function parseYmd(s) {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+const RELATIVE_DAY_PRESETS = [7, 30, 90, 365];
+
 function DateRangePopover({ captureRange, filters, onChange }) {
   const { t } = useTranslation("nav");
   const from = parseYmd(filters.date_from);
   const to = parseYmd(filters.date_to);
-  const active = !!(from || to);
+  // "Last N days" is relative to today, so a smart collection saved with it
+  // keeps moving with the calendar; a picked range is fixed. One or the other.
+  const withinDays = Number(filters.date_within_days) || 0;
+  const active = !!(from || to || withinDays);
   const fmt = (d) => (d ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "…");
-  const summary = active ? `${fmt(from)} – ${fmt(to)}` : t("filter.date");
+  const summary = withinDays
+    ? t("filter.lastDays", { count: withinDays })
+    : active ? `${fmt(from)} – ${fmt(to)}` : t("filter.date");
   const minD = parseYmd(captureRange?.min);
   const maxD = parseYmd(captureRange?.max);
 
   function setRange(nextFrom, nextTo) {
     let next = setOrDelete(filters, "date_from", nextFrom ? toYmd(nextFrom) : undefined);
     next = setOrDelete(next, "date_to", nextTo ? toYmd(nextTo) : undefined);
-    onChange(next);
+    onChange(setOrDelete(next, "date_within_days", undefined));
+  }
+
+  function setWithinDays(days) {
+    const cleared = setOrDelete(setOrDelete(filters, "date_from", undefined), "date_to", undefined);
+    onChange(setOrDelete(cleared, "date_within_days", days === withinDays ? undefined : days));
   }
 
   return (
     <Popover label={t("filter.date")} active={active} summary={summary} width="auto">
+      <div className="mb-2 flex gap-1" data-filter-within-days="true">
+        {RELATIVE_DAY_PRESETS.map((days) => (
+          <button
+            key={days}
+            type="button"
+            onClick={() => setWithinDays(days)}
+            className={[
+              "h-6 flex-1 rounded-md px-1.5 text-[11px] transition-colors",
+              withinDays === days ? "bg-selected text-text" : "text-muted2 hover:bg-hover hover:text-text",
+            ].join(" ")}
+          >
+            {t("filter.lastDaysShort", { count: days })}
+          </button>
+        ))}
+      </div>
       <Calendar
         className="cal-dark"
         selectRange
@@ -273,7 +301,7 @@ function DateRangePopover({ captureRange, filters, onChange }) {
         <button
           type="button"
           className="mt-2 w-full rounded-md py-1 text-[11px] text-muted2 hover:bg-hover hover:text-text"
-          onClick={() => onChange(setOrDelete(setOrDelete(filters, "date_from", undefined), "date_to", undefined))}
+          onClick={() => onChange(setOrDelete(setOrDelete(setOrDelete(filters, "date_from", undefined), "date_to", undefined), "date_within_days", undefined))}
         >
           {t("filter.reset")}
         </button>
@@ -360,7 +388,43 @@ function PersonFilterOptions({ value, onSelect, onLoaded }) {
   );
 }
 
-export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, collectionId }) {
+// Save the current view (status + search + filters) as a smart collection, or
+// write changed conditions back to the one that is open.
+function SmartCollectionControls({ smart }) {
+  const { t } = useTranslation("nav");
+  const [naming, setNaming] = useState(false);
+  if (!smart?.canSave) return null;
+  if (naming) {
+    return (
+      <span className="w-40" data-smart-name-input="true">
+        <InlineEdit
+          initial=""
+          onConfirm={async (name) => { setNaming(false); await smart.onSave?.(name); }}
+          onCancel={() => setNaming(false)}
+        />
+      </span>
+    );
+  }
+  const button = "flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text";
+  return (
+    <>
+      {smart.dirty && (
+        <button type="button" className={button} onClick={() => smart.onUpdate?.()} title={t("filter.updateSmartHint", { name: smart.activeName })}>
+          <Save className="h-2.5 w-2.5" />
+          {t("filter.updateSmart")}
+        </button>
+      )}
+      {(!smart.activeName || smart.dirty) && (
+        <button type="button" className={button} onClick={() => setNaming(true)}>
+          <ListFilter className="h-2.5 w-2.5" />
+          {smart.activeName ? t("filter.saveSmartAs") : t("filter.saveSmart")}
+        </button>
+      )}
+    </>
+  );
+}
+
+export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, collectionId, smart }) {
   const { t } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -501,6 +565,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           {t("filter.clear", { count: activeCount })}
         </button>
       )}
+      <SmartCollectionControls smart={smart} />
     </div>
   );
 }

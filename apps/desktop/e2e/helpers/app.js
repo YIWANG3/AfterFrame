@@ -67,7 +67,7 @@ async function collectCoverage(app) {
   }
 }
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false } = {}) {
   // Fresh userData so each run starts from a clean slate
   if (reuseUserDataDir && (!path.basename(reuseUserDataDir).startsWith("afterframe-e2e-")
     || fs.realpathSync(path.dirname(reuseUserDataDir)) !== fs.realpathSync(os.tmpdir()))) {
@@ -101,9 +101,14 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
   if (withCatalog && !noCatalog) {
     const seeded = catalogFixture === "people" ? SEEDED_PEOPLE_CATALOG : SEEDED_CATALOG;
     workCatalog = path.join(userDataDir, path.basename(seeded));
-    fs.cpSync(seeded, workCatalog, { recursive: true });
-    relocateFixturePaths(workCatalog);
-    prepareCatalog?.(workCatalog);
+    // keepCatalog: a relaunch that must see what the previous run wrote to the
+    // catalog (with reuseUserDataDir). Without it every launch starts from the
+    // seeded fixture again.
+    if (!(keepCatalog && fs.existsSync(workCatalog))) {
+      fs.cpSync(seeded, workCatalog, { recursive: true });
+      relocateFixturePaths(workCatalog);
+      prepareCatalog?.(workCatalog);
+    }
     env.MEDIA_WORKSPACE_CATALOG = workCatalog;
   }
 

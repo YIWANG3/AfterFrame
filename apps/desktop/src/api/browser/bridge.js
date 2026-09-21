@@ -93,7 +93,18 @@ function hydrateAsset(record, blobs) {
 
 // ── collections (manual albums, sidecar row shape) ──
 const collections = []; // rows carry asset_ids; item_count derives from it
-const publicCollection = ({ asset_ids, ...row }) => ({ ...row, item_count: asset_ids?.length ?? 0 });
+// A smart collection's count is its saved filter run over the library (same
+// predicates browseImages uses), not a membership list.
+function smartCount(rules) {
+  let list = assets;
+  if (rules.status === "rated") list = list.filter((a) => a.app_rating > 0);
+  else if (rules.status === "matched") list = [];
+  if (rules.search) list = list.filter((a) => matchesSearch(a, rules.search));
+  return list.filter((a) => matchesFacetFilters(a, rules.filters || {})).length;
+}
+const publicCollection = ({ asset_ids, ...row }) => (row.kind === "smart"
+  ? { ...row, item_count: row.rules ? smartCount(row.rules) : 0 }
+  : { ...row, item_count: asset_ids?.length ?? 0 });
 let nextCollectionId = 1;
 
 function emitCollectionsChanged() {
@@ -272,6 +283,10 @@ function matchesFacetFilters(asset, filters) {
   const day = meta.capture_time ? String(meta.capture_time).slice(0, 10) : null;
   if (filters.date_from && !(day && day >= String(filters.date_from).slice(0, 10))) return false;
   if (filters.date_to && !(day && day <= String(filters.date_to).slice(0, 10))) return false;
+  if (Number(filters.date_within_days) > 0) {
+    const since = new Date(Date.now() - Number(filters.date_within_days) * 86_400_000).toISOString().slice(0, 10);
+    if (!(day && day >= since)) return false;
+  }
   if (filters.rating_min != null && !(asset.app_rating >= filters.rating_min)) return false;
   if (filters.orientation === "portrait" && !(meta.height > meta.width)) return false;
   if (filters.orientation === "landscape" && !(meta.width > meta.height)) return false;
@@ -865,7 +880,7 @@ export const browserBridge = {
     emitCollectionsChanged();
     return { ok: true };
   },
-  createCollection: async (name, kind = "manual") => {
+  createCollection: async (name, kind = "manual", rules = null) => {
     const now = new Date().toISOString();
     const row = {
       collection_id: `webcol-${Date.now()}-${nextCollectionId++}`,
@@ -873,6 +888,7 @@ export const browserBridge = {
       kind: kind || "manual",
       parent_collection_id: null,
       rules_json: null,
+      rules: kind === "smart" && rules ? { version: 1, status: "all", search: "", filters: {}, ...rules } : null,
       sort_order: Math.max(-1, ...collections.map((c) => c.sort_order || 0)) + 1,
       created_at: now,
       updated_at: now,
@@ -888,6 +904,7 @@ export const browserBridge = {
     if (!row) return null;
     if (typeof updates.name === "string" && updates.name.trim()) row.name = updates.name.trim();
     if (Number.isInteger(updates.sortOrder)) row.sort_order = updates.sortOrder;
+    if (row.kind === "smart" && updates.rules) row.rules = { version: 1, status: "all", search: "", filters: {}, ...updates.rules };
     row.updated_at = new Date().toISOString();
 
     emitCollectionsChanged();

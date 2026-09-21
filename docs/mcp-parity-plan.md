@@ -131,7 +131,7 @@ MCP tool ──▶ main: askRenderer(kind, payload, {timeoutMs})
 | 写 API key / provider 密钥 | 不做（安全）；agent 只读到"已配置的 provider 名" |
 | 切换 / 新建 catalog | 建议只读（`get_catalog_info` 已有）；若要写，加 `switch_catalog(path, confirm)` |
 | 从磁盘删除 | 建议做，`delete_assets{from_disk:true, confirm:true}` → `shell.trashItem`（人能做，且可撤销） |
-| 智能合集 | 产品本身未实现（rules 无人求值），不在本计划内 |
+| 智能合集 | ~~产品本身未实现（rules 无人求值），不在本计划内~~ 2026-09-20 已实现：智能合集 = 保存的筛选条件（`db/smart_rules.py`）。`manage_collections` 的 `create` 带 `rules` 即建智能合集，新增 `update_rules`，`browse` 对两种合集都可用；`search_assets` 增 `date_within_days` |
 | 隐藏 BrowserWindow 兜底 | 先不做；MCP 已要求 App 运行 |
 | 逃生舱 `run_sidecar_command` | 业界共识里的"execute_*"类；建议加但默认关闭（设置开关），供高级用户 |
 

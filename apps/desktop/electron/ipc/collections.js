@@ -18,8 +18,8 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.reorderCollections(collectionIds);
   });
 
-  ipcMain.handle("workspace:create-collection", async (_event, name, kind) => {
-    return await commands.createCollection(name, kind || "manual");
+  ipcMain.handle("workspace:create-collection", async (_event, name, kind, rules) => {
+    return await commands.createCollection(name, kind || "manual", rules || null);
   });
 
   ipcMain.handle("workspace:update-collection", async (_event, collectionId, updates) => {

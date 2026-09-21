@@ -12,8 +12,11 @@ export const browseScopeKey = ({ status, collectionId, search, sort, filters }) 
 // The gallery's browse destination, as one value. Everything that decides
 // what the grid shows lives here — never in separate pieces of state that an
 // async caller could read half-updated.
+// `smartCollectionId` only says which saved filter the scope was opened from
+// (sidebar highlight, "Update" in the filter bar). It is NOT part of the browse
+// key: what the grid shows is decided by status/query/filters alone.
 export const DEFAULT_SCOPE = Object.freeze({
-  status: "all", collectionId: null, query: "", filters: {}, sort: "imported-desc",
+  status: "all", collectionId: null, smartCollectionId: null, query: "", filters: {}, sort: "imported-desc",
 });
 
 export const scopeKeyOf = (scope) => browseScopeKey({
@@ -23,6 +26,48 @@ export const scopeKeyOf = (scope) => browseScopeKey({
   sort: scope.sort,
   filters: scope.filters,
 });
+
+// ── smart collections: a saved scope ─────────────────────────────────────
+// The map viewport is where the user happens to be looking, not a condition.
+const savableFilters = (filters) => Object.fromEntries(
+  Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && value != null && value !== ""),
+);
+
+// What a scope would save as. null when there is nothing to save: a manual
+// folder is membership, not a filter, and an unfiltered library has no condition.
+export function rulesFromScope(scope) {
+  if (!scope || scope.collectionId) return null;
+  const rules = { status: scope.status || "all", search: (scope.query || "").trim(), filters: savableFilters(scope.filters) };
+  if (rules.status === "all" && !rules.search && !Object.keys(rules.filters).length) return null;
+  return rules;
+}
+
+// The scope a smart collection opens as. The current sort is kept: how the
+// user likes the grid ordered is theirs, not the collection's.
+export function scopeFromRules(collection, currentSort) {
+  const rules = collection?.rules;
+  if (!rules) return null;
+  return {
+    status: rules.status || "all",
+    collectionId: null,
+    smartCollectionId: collection.collection_id,
+    query: rules.search || "",
+    filters: { ...(rules.filters || {}) },
+    sort: currentSort || DEFAULT_SCOPE.sort,
+  };
+}
+
+const stable = (value) => JSON.stringify(value, (_key, v) => (
+  v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v
+));
+
+// Has the user changed the conditions since opening this smart collection?
+export function rulesDirty(scope, rules) {
+  if (!rules) return false;
+  const current = rulesFromScope(scope);
+  if (!current) return true;
+  return stable(current) !== stable({ status: rules.status || "all", search: rules.search || "", filters: savableFilters(rules.filters) });
+}
 
 // Fields the client narrows on while the 250ms search debounce is pending.
 // This MUST stay a superset of what the sidecar's `_search_clause`

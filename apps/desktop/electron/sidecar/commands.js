@@ -254,14 +254,19 @@ function createSidecarCommands(callJson) {
       return callJson(["reorder-collections", ...collectionIds.flatMap((id) => ["--collection-id", String(id)])]);
     },
 
-    createCollection(name, kind = "manual") {
-      return callJson(["create-collection", "--name", String(name), "--kind", String(kind)]);
+    // `rules` (smart collections only) is the saved browse destination:
+    // {status, search, filters, sort?}. The sidecar validates it.
+    createCollection(name, kind = "manual", rules = null) {
+      const argv = ["create-collection", "--name", String(name), "--kind", String(kind)];
+      if (rules) argv.push("--rules-json", JSON.stringify(rules));
+      return callJson(argv);
     },
 
-    updateCollection(collectionId, { name, rulesJson, sortOrder } = {}) {
+    updateCollection(collectionId, { name, rules, rulesJson, sortOrder } = {}) {
       const argv = ["update-collection", "--collection-id", String(collectionId)];
       if (name != null) argv.push("--name", String(name));
-      if (rulesJson != null) argv.push("--rules-json", String(rulesJson));
+      if (rules != null) argv.push("--rules-json", JSON.stringify(rules));
+      else if (rulesJson != null) argv.push("--rules-json", String(rulesJson));
       if (sortOrder != null) argv.push("--sort-order", String(sortOrder));
       return callJson(argv);
     },

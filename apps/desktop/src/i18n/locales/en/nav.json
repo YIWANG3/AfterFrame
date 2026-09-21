@@ -81,7 +81,10 @@
     "assetsCount_other": "{{count}} assets",
     "updated": "updated {{time}}",
     "webLibrary": "Browser Library",
-    "webWelcomeHint": "Browse sample photos or drag in your own"
+    "webWelcomeHint": "Browse sample photos or drag in your own",
+    "smartCollections": "Smart collections",
+    "snapshotToFolder": "Copy current photos to a folder",
+    "smartUnreadable": "Saved by a newer version of AfterFrame"
   },
   "people": {
     "title": "People",
@@ -171,7 +174,15 @@
     "person": "Person",
     "noNamedPeople": "No named people yet — name them on the People page first.",
     "mapArea": "Visible map area",
-    "mapAreaRemove": "Remove map area filter"
+    "mapAreaRemove": "Remove map area filter",
+    "saveSmart": "Save as smart collection",
+    "saveSmartAs": "Save as new",
+    "updateSmart": "Update",
+    "updateSmartHint": "Save these conditions to “{{name}}”",
+    "lastDays_one": "Last day",
+    "lastDays_other": "Last {{count}} days",
+    "lastDaysShort_one": "{{count}}d",
+    "lastDaysShort_other": "{{count}}d"
   },
   "activity": {
     "title": "Background Activity",
