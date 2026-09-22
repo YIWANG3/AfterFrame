@@ -151,20 +151,23 @@ function createTaskStarters({
   // Dominant colours for photos whose preview predates the colour filter
   // (new previews get theirs as they are rendered). Nothing to do is the
   // common case after the first pass, so it is answered without a job.
-  async function startColorsTask() {
+  // `force` redoes every photo (Settings ▸ Library, after the extraction
+  // changed); otherwise only the ones still without colours.
+  async function startColorsTask({ force = false, priority = 80 } = {}) {
     const current = await latestJobStatus("colors");
     if (current.running) {
       return current;
     }
     const status = await commands.colorStatus();
-    if (!status || !(status.missing > 0)) {
+    const count = force ? (status?.analyzed || 0) + (status?.missing || 0) : (status?.missing || 0);
+    if (!(count > 0)) {
       return { ...current, running: false, missing: 0 };
     }
-    // Priority below the user's own work (imports, annotation) — a catch-up
-    // must never delay what they just asked for.
-    const job = await createJob("colors", { missing: status.missing }, { priority: 80 });
-    launchSidecarJob(jobArgv.colorsJob({ jobId: job.job_id }));
-    return { ...formatJobStatus(job), missing: status.missing };
+    // The automatic catch-up runs below the user's own work (imports,
+    // annotation); a run they asked for in Settings goes ahead of it.
+    const job = await createJob("colors", { count, force }, { priority });
+    launchSidecarJob(jobArgv.colorsJob({ jobId: job.job_id, force }));
+    return { ...formatJobStatus(job), missing: status?.missing || 0 };
   }
 
   function deriveAiRepaintOutputPath(sourcePath) {

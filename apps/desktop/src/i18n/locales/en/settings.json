@@ -114,6 +114,12 @@
     "videoProxies": "Video playback proxies",
     "videoProxiesHint": "H.264 versions transcoded for clips the player can't decode (e.g. 10-bit HEVC). Safe to delete — regenerated when needed.",
     "openFolder": "Open in Finder",
+    "analysisTitle": "Analysis",
+    "colors": "Colour analysis",
+    "colorsHint": "{{analyzed}} photos have a palette, {{missing}} do not. New photos are analysed as their previews are made; the missing ones are filled in when the library opens.",
+    "colorsRunning": "Analysing… progress is in the activity center, top right.",
+    "colorsAnalyzeMissing": "Analyse missing",
+    "colorsReanalyze": "Re-analyse all",
     "previewsTitle": "Previews",
     "generateHd": "Generate HD previews (2000px)",
     "generateHdHint": "Used to view photos when the original is missing, for collage rendering, and by the AI assistant. Day-to-day viewing uses the original, so most photos never need it. Off by default — saves roughly 0.5–1 MB per photo on disk. Applies to future imports."

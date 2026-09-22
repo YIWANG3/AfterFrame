@@ -45,9 +45,11 @@ _MISSING = """
 """
 
 
-def list_assets_missing_colors(connection: sqlite3.Connection, limit: int | None = None) -> list[sqlite3.Row]:
-    """Photos with a preview on record but no colours yet."""
-    sql = f"SELECT assets.asset_id, preview_entries.relative_path {_MISSING} ORDER BY assets.created_at DESC"
+def list_assets_missing_colors(connection: sqlite3.Connection, limit: int | None = None, *, force: bool = False) -> list[sqlite3.Row]:
+    """Photos with a preview on record but no colours yet; with `force`,
+    every photo with a preview (a re-analysis after the extraction changed)."""
+    scope = _MISSING.split("AND NOT EXISTS")[0] if force else _MISSING
+    sql = f"SELECT assets.asset_id, preview_entries.relative_path {scope} ORDER BY assets.created_at DESC"
     if limit:
         sql += f" LIMIT {int(limit)}"
     return connection.execute(sql).fetchall()

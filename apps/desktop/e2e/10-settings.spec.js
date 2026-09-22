@@ -16,8 +16,10 @@ test.afterAll(async () => {
   if (ctx) await closeApp(ctx.app, ctx.userDataDir);
 });
 
-test("opens with the settings shortcut and shows the AI Annotation tab by default", async () => {
+test("opens with the settings shortcut on the General tab; AI Annotation is a click away", async () => {
   await ctx.window.keyboard.press("Meta+,");
+  await expect(ctx.window.getByText("Appearance")).toBeVisible({ timeout: 5_000 });
+  await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "AI Annotation" }).click();
   await expect(ctx.window.getByText("Auto-annotation providers")).toBeVisible({ timeout: 5_000 });
   await ctx.window.getByRole("button", { name: "Add new provider" }).click();
   await expect(ctx.window.getByText("New Provider", { exact: true })).toBeVisible();

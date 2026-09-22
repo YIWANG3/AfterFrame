@@ -995,17 +995,17 @@ def run_preview_job(
         raise
 
 
-def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | None = None) -> dict[str, Any]:
+def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | None = None, force: bool = False) -> dict[str, Any]:
     """Colours for every photo whose preview predates them. New previews get
     theirs as they are rendered; this is the one-time catch-up, and the
     retry for previews that could not be read."""
     from .db.colors import analyze_asset_colors, list_assets_missing_colors
 
     catalog = ensure_catalog(catalog_path)
-    payload = {"limit": limit, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
+    payload = {"limit": limit, "force": force, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
     try:
-        rows = list_assets_missing_colors(connection, limit=limit)
+        rows = list_assets_missing_colors(connection, limit=limit, force=force)
         total = len(rows)
         analyzed = failed = 0
         for index, row in enumerate(rows, start=1):

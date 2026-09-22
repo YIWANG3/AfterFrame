@@ -31,7 +31,7 @@ const TABS = [
 
 export default function SettingsOverlay({
   open,
-  initialTab = "ai",
+  initialTab = "general",
   onClose,
   theme,
   setTheme,

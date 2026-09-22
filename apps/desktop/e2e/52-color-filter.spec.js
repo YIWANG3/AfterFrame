@@ -64,6 +64,18 @@ test("the Inspector shows the palette; a swatch is a filter", async () => {
   await bar().getByRole("button", { name: /^Clear/ }).click();
 });
 
+test("Settings ▸ Library shows the count and can re-analyse everything", async () => {
+  await ctx.window.keyboard.press("Meta+,");
+  await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Library" }).click();
+  const row = ctx.window.getByText("Colour analysis", { exact: true }).locator("..");
+  await expect(row).toContainText(/1[34] photos have a palette, 0 do not/);
+  await expect(ctx.window.getByRole("button", { name: "Analyse missing" })).toBeDisabled();
+  await ctx.window.getByRole("button", { name: "Re-analyse all" }).click();
+  await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getColorsStatus()), { timeout: 30_000 })
+    .toMatchObject({ running: false, missing: 0 });
+  await ctx.window.keyboard.press("Escape");
+});
+
 test("an agent can search by colour, and reads the palette in get_asset", async () => {
   const tool = async (name, args) => JSON.parse((await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args })).content[0].text);
   expect((await tool("search_assets", { color: "#8c50be", color_tolerance: "strict", limit: 100 })).count)

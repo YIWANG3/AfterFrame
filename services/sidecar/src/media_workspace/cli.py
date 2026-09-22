@@ -568,6 +568,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_colors_job_parser = subparsers.add_parser("run-colors-job", parents=[common])
     run_colors_job_parser.add_argument("--job-id", required=True)
     run_colors_job_parser.add_argument("--limit", type=int)
+    run_colors_job_parser.add_argument("--force", action="store_true", help="re-analyse photos that already have colours")
     subparsers.add_parser("color-status", parents=[common])
 
     run_people_index_parser = subparsers.add_parser("run-people-index-job", parents=[common])
@@ -1335,7 +1336,7 @@ def _cmd_run_preview_job(args, connection, catalog, parser):
 
 
 def _cmd_run_colors_job(args, connection, catalog, parser):
-    print(json.dumps(run_colors_job(connection, catalog.root, args.job_id, limit=args.limit), indent=2))
+    print(json.dumps(run_colors_job(connection, catalog.root, args.job_id, limit=args.limit, force=args.force), indent=2))
     return 0
 
 

@@ -153,6 +153,17 @@ class ColorFilterTest(unittest.TestCase):
         self.assertEqual(color_status(self.connection), {"analyzed": 3, "missing": 0})
         self.assertEqual(self.connection.execute("SELECT status FROM jobs WHERE job_id = 'job-1'").fetchone()[0], "succeeded")
 
+    def test_force_redoes_photos_that_already_have_colours(self):
+        self.render_previews()
+        self.connection.execute("UPDATE asset_colors SET hex = '#000000'")
+        self.connection.execute(
+            "INSERT INTO jobs (job_id, job_type, status, payload_json, result_json) VALUES ('job-2', 'colors', 'queued', '{}', '{}')"
+        )
+        self.connection.commit()
+        self.assertEqual(run_colors_job(self.connection, self.catalog.root, "job-2")["total"], 0)
+        self.assertEqual(run_colors_job(self.connection, self.catalog.root, "job-2", force=True)["total"], 3)
+        self.assertNotEqual(get_asset_colors(self.connection, "image_sea")[0]["hex"], "#000000")
+
     def test_a_second_preview_pass_fills_colours_without_rerendering(self):
         self.render_previews()
         self.connection.execute("DELETE FROM asset_colors WHERE asset_id = 'image_sea'")

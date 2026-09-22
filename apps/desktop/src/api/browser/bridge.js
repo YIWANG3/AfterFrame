@@ -1086,7 +1086,7 @@ export const browserBridge = {
   getImportStatus: async () => importJobStatus(),
   getPreviewStatus: async () => jobStatus(),
   // No colour extraction in the browser: nothing to analyse, ever.
-  getColorsStatus: async () => jobStatus(),
+  getColorsStatus: async () => ({ ...jobStatus(), analyzed: 0, missing: 0 }),
   startColorAnalysis: async () => ({ ...jobStatus(), missing: 0 }),
   getEnrichmentStatus: async () => jobStatus(),
   getActiveJobs: async () => {

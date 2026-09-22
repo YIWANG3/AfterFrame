@@ -123,8 +123,10 @@ function annotationJob({
   return argv;
 }
 
-function colorsJob({ jobId }) {
-  return ["run-colors-job", "--job-id", String(jobId)];
+function colorsJob({ jobId, force = false }) {
+  const argv = ["run-colors-job", "--job-id", String(jobId)];
+  if (force) argv.push("--force");
+  return argv;
 }
 
 function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds }) {

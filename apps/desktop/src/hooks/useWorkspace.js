@@ -131,8 +131,16 @@ export default function useWorkspace({ pushToast } = {}) {
       const job = event.detail;
       pokeJobs(job?.jobId ? { jobId: job.jobId, jobType: "people_index" } : undefined);
     };
+    const onColorsStarted = (event) => {
+      const job = event.detail;
+      pokeJobs(job?.jobId ? { jobId: job.jobId, jobType: "colors" } : undefined);
+    };
     window.addEventListener("people-index:started", onPeopleIndexStarted);
-    return () => window.removeEventListener("people-index:started", onPeopleIndexStarted);
+    window.addEventListener("colors:started", onColorsStarted);
+    return () => {
+      window.removeEventListener("people-index:started", onPeopleIndexStarted);
+      window.removeEventListener("colors:started", onColorsStarted);
+    };
   }, [pokeJobs]);
 
   // theme is a *preference*: "dark" | "light" | "system". "system" follows the

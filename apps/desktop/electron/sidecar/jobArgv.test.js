@@ -57,7 +57,7 @@ const CASES = [
   {
     builder: "colorsJob",
     minimal: { jobId: "j1" },
-    full: { jobId: "j1" },
+    full: { jobId: "j1", force: true },
     neverSent: ["--limit"],
   },
   {

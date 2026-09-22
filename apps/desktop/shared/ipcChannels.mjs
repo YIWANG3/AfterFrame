@@ -85,7 +85,7 @@ export const IPC_METHODS = [
   ["getPreviewStatus", "workspace:preview-status", 0],
   ["startPreviewGeneration", "workspace:preview-start", 1],
   ["getColorsStatus", "workspace:colors-status", 0],
-  ["startColorAnalysis", "workspace:colors-start", 0],
+  ["startColorAnalysis", "workspace:colors-start", 1],
   ["getActiveJobs", "workspace:active-jobs", 0],
   ["cancelJob", "workspace:cancel-job", 1],
   ["pauseJob", "workspace:pause-job", 1],
