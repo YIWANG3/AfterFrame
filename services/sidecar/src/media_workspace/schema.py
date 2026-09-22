@@ -10,7 +10,8 @@ SCHEMA_STATEMENTS = [
         catalog_path TEXT NOT NULL,
         schema_version INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        place_data_version TEXT
     )
     """,
     """

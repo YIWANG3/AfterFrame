@@ -10,6 +10,7 @@ from hashlib import sha1
 from pathlib import Path
 
 from ..schema import SCHEMA_STATEMENTS, SCHEMA_VERSION
+from .locations import refresh_place_fields
 from .migrations import SchemaMigrationError, ensure_column, migrate
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
@@ -111,6 +112,7 @@ def init_db(connection: sqlite3.Connection) -> None:
                 raise SchemaMigrationError("catalog_info is missing its catalog row")
             migrate(connection, int(row["schema_version"]), SCHEMA_VERSION)
             _apply_latest_schema(connection)
+        refresh_place_fields(connection)
 
         connection.commit()
     except Exception:
@@ -121,6 +123,7 @@ def init_db(connection: sqlite3.Connection) -> None:
 def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         connection.execute(statement)
+    _ensure_column(connection, "catalog_info", "place_data_version", "TEXT")
     _ensure_column(connection, "assets", "app_rating", "INTEGER")
     _ensure_column(connection, "raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'")
     _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")

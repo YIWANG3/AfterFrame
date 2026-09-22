@@ -145,7 +145,7 @@ def create_v8_catalog(path: Path) -> sqlite3.Connection:
             "min_longitude, max_longitude, source, precision_level, country_code) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (asset_id, lat, lon, lat, lat, lon, lon, source, precision, country),
         )
-    connection.execute("UPDATE catalog_info SET schema_version = 8")
+    connection.execute("UPDATE catalog_info SET schema_version = 8, place_data_version = NULL")
     connection.commit()
     return connection
 

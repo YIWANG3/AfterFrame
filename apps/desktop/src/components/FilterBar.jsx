@@ -578,11 +578,15 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const regionNames = useMemo(() => {
     try { return new Intl.DisplayNames([chinese ? "zh-CN" : "en"], { type: "region" }); } catch { return null; }
   }, [chinese]);
+  // The everyday name (中国, 韩国, 台湾) comes from the platform's region
+  // names; the gazetteer's formal label (中华人民共和国) is the fallback.
   const countryLabel = (value, option) => {
+    let standard;
+    try { standard = regionNames?.of(String(value)); } catch { standard = undefined; }
+    if (standard && standard !== value) return standard;
     const known = option || countries.find((c) => c.value === value);
     const fromCatalog = known && (chinese ? known.label_zh : known.label_en);
-    if (fromCatalog && fromCatalog !== value) return fromCatalog;
-    try { return regionNames?.of(String(value)) || String(value); } catch { return String(value); }
+    return fromCatalog || String(value);
   };
   const cityLabel = (value, option) => {
     const known = option || cities.find((c) => c.value === value);
@@ -630,6 +634,9 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         // that onto the row when it overflows.
         onWheel={(event) => {
           const el = event.currentTarget;
+          // An open dropdown is portaled to <body>, but React still bubbles
+          // its wheel events here: scrolling a list must not move the row.
+          if (!el.contains(event.target)) return;
           if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
           el.scrollLeft += event.deltaY;
         }}

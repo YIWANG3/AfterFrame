@@ -34,6 +34,7 @@ from collections.abc import Iterable
 from datetime import date, datetime
 from typing import Any
 
+from .country_shapes import load_country_shapes
 from .geo_resolver import load_gazetteer
 
 MEMORY_GAP_DAYS = 3
@@ -113,39 +114,72 @@ class ReverseGeocoder:
         self.admin1 = _GridIndex(payload.get("admin1", []))
         self.countries = _GridIndex(payload.get("countries", []))
         self.country_by_qid = {c["q"]: c for c in payload.get("countries", []) if c.get("q")}
+        # ISO code → the Wikidata country ids a place in it may carry: the
+        # entry itself and, for a territory (Hong Kong, Macau), its parent —
+        # most Hong Kong places say P17 = China.
+        self.qids_by_iso: dict[str, set[str]] = defaultdict(set)
+        for country in self.country_by_qid.values():
+            if country.get("iso"):
+                self.qids_by_iso[country["iso"]].add(country["q"])
+                if country.get("parent"):
+                    self.qids_by_iso[country["iso"]].add(country["parent"])
 
     def lookup(self, lat: float, lon: float) -> dict | None:
         """→ {key, tier, en, zh, country_en, country_zh, country_iso} or None when
         the gazetteer has nothing anywhere near (open ocean). `tier` says what
-        was matched: "locality" (a city), "admin1" or "country"."""
+        was matched: "locality" (a city), "admin1" or "country".
+
+        The country comes from the border polygons when the point is on
+        land; the gazetteer's centroids only decide it at sea. On land the
+        named place is preferred from the same country, so a photo just
+        inside a border is not filed under the bigger city across it."""
+        shapes = load_country_shapes()
+        iso = shapes.country_at(lat, lon) if shapes is not None else None
+        allowed = self.qids_by_iso.get(iso, set()) if iso else set()
+
+        def same_country(item: dict) -> bool:
+            return not allowed or (item.get("country") or "") in allowed or item["q"] in allowed
+
         candidates = self.localities.within(lat, lon, LOCALITY_SEARCH_KM)
+        preferred = [c for c in candidates if same_country(c[0])] or candidates
         scored = None
-        if candidates:
-            scored = max(candidates, key=lambda c: math.log(2 + (c[0].get("links") or 0)) - LOCALITY_KM_PENALTY * c[1])[0]
+        if preferred:
+            scored = max(preferred, key=lambda c: math.log(2 + (c[0].get("links") or 0)) - LOCALITY_KM_PENALTY * c[1])[0]
         for index, max_km, preset in ((self.localities, NEAREST_LOCALITY_KM, scored), (self.admin1, NEAREST_ADMIN1_KM, None)):
-            item = preset if preset is not None else index.nearest(lat, lon, max_km)[0]
+            item = preset
+            if item is None:
+                near = [n for n in index.within(lat, lon, max_km) if same_country(n[0])] or index.within(lat, lon, max_km)
+                item = min(near, key=lambda n: n[1])[0] if near else None
             if item is not None:
-                country = self.country_by_qid.get(item.get("country") or "", {})
-                return {
-                    "key": item["q"],
-                    "tier": "locality" if index is self.localities else "admin1",
-                    "en": item.get("en") or item.get("zh") or item["q"],
-                    "zh": item.get("zh") or item.get("en") or item["q"],
-                    "country_en": country.get("en"),
-                    "country_zh": country.get("zh"),
-                    "country_iso": country.get("iso"),
-                }
+                # A city state or territory too small for the 50m borders
+                # (Macau, Monaco, Vatican City) is its own country entry.
+                own = self.country_by_qid.get(item["q"])
+                if own is not None and own.get("iso"):
+                    iso = own["iso"]
+                return self._place(item, "locality" if index is self.localities else "admin1", iso)
+        if iso:
+            for country in self.country_by_qid.values():
+                if country.get("iso") == iso:
+                    return self._place(country, "country", iso)
         item, _km = self.countries.nearest(lat, lon, 3000.0)
         if item is None:
             return None
+        return self._place(item, "country", None)
+
+    def _place(self, item: dict, tier: str, iso: str | None) -> dict:
+        country = item if tier == "country" else self.country_by_qid.get(item.get("country") or "", {})
+        if iso and country.get("iso") != iso:
+            # The borders say otherwise (a Hong Kong place tagged China):
+            # name the country the borders name.
+            country = next((c for c in self.country_by_qid.values() if c.get("iso") == iso), country)
         return {
             "key": item["q"],
-            "tier": "country",
-            "en": item.get("en") or item["q"],
+            "tier": tier,
+            "en": item.get("en") or item.get("zh") or item["q"],
             "zh": item.get("zh") or item.get("en") or item["q"],
-            "country_en": item.get("en"),
-            "country_zh": item.get("zh"),
-            "country_iso": item.get("iso"),
+            "country_en": country.get("en"),
+            "country_zh": country.get("zh"),
+            "country_iso": country.get("iso"),
         }
 
 
