@@ -126,9 +126,7 @@ export default function useWorkspace({ pushToast } = {}) {
     // palette. A full refresh would re-browse and lose a scrolled position.
     colorsReady: () => {
       loadFacetValues();
-      // The open photo, which need not be the selected card: a version
-      // sibling opened from the Inspector is shown without being in the grid.
-      if (detail?.asset_id) void loadDetail(detail.asset_id);
+      refreshShownDetail();
     },
   };
   const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
@@ -232,6 +230,22 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!queuedRawCount && !queuedExportCount) return null;
     return `Queued changes: ${queuedExportCount} media · ${queuedRawCount} sources`;
   }, [pendingImport]);
+
+  // Re-read the photo the Inspector shows (which need not be the selected
+  // card: a version sibling opened there is shown without being in the grid)
+  // without competing with navigation: the result is applied only if that
+  // photo is still the one shown, and a loadDetail issued meanwhile is not
+  // outranked, since this never bumps the request counter.
+  function refreshShownDetail() {
+    const assetId = detail?.asset_id;
+    if (!assetId) return;
+    void api.getAssetDetailById(assetId)
+      .then((payload) => {
+        if (!payload) return;
+        setDetail((current) => (current?.asset_id === payload.asset_id ? payload : current));
+      })
+      .catch(() => {});
+  }
 
   async function loadDetail(assetId) {
     const requestId = ++detailRequestRef.current;
