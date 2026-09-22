@@ -13,8 +13,12 @@ const browseLength = (filters) => ctx.window.evaluate(
   filters,
 );
 const option = (value) => ctx.window.locator(`[data-facet-option="${value}"]`);
-const optionCounts = () => ctx.window.locator("[data-facet-option]")
-  .evaluateAll((els) => Object.fromEntries(els.map((el) => [el.dataset.facetOption, Number(el.dataset.facetCount)])));
+const optionCounts = async () => {
+  // Options are re-asked after every change; read them once they are current.
+  await expect(ctx.window.locator("[data-filter-bar]")).toHaveAttribute("data-facets-ready", "true");
+  return ctx.window.locator("[data-facet-option]")
+    .evaluateAll((els) => Object.fromEntries(els.map((el) => [el.dataset.facetOption, Number(el.dataset.facetCount)])));
+};
 
 const CANON = "Canon EOS R6m2";
 const HASSELBLAD = "CFV 100C/907X";

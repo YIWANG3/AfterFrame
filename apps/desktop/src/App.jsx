@@ -1232,6 +1232,7 @@ export default function App() {
               {filterBarVisible && (
                 <FilterBar
                   facetValues={workspace.facetValues}
+                  facetsReady={workspace.facetsReady}
                   filters={workspace.filters}
                   onChange={workspace.applyFilters}
                   personGroup={peopleGroup}

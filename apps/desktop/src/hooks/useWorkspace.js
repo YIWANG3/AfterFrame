@@ -216,11 +216,19 @@ export default function useWorkspace({ pushToast } = {}) {
   // the folder, the search text and the other active filters. The request is tagged so a slow answer for the previous folder
   // cannot land on top of the current one.
   const facetRequestRef = useRef(0);
+  // Which view the loaded options belong to: the bar says so (data-facets-ready),
+  // so a count is never read for a view whose options are still on their way.
+  const [facetsFor, setFacetsFor] = useState(null);
   // Reads only refs, so it is stable and refreshAll (not an effect) can call it too.
   const loadFacetValues = useCallback(() => {
     const request = ++facetRequestRef.current;
+    const key = scopeKeyOf(scopeRef.current);
     void api.getFacetValues(facetScopeOf(scopeRef.current))
-      .then((values) => { if (request === facetRequestRef.current) setFacetValues(values); })
+      .then((values) => {
+        if (request !== facetRequestRef.current) return;
+        setFacetValues(values);
+        setFacetsFor(key);
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -1149,6 +1157,7 @@ export default function useWorkspace({ pushToast } = {}) {
     smartCollectionDirty: !!activeSmartCollection && rulesDirty(scope, activeSmartCollection.rules),
     activeBase: scope.collectionId ? null : scope.base,
     facetValues,
+    facetsReady: facetsFor === scopeKey,
     browserLoading,
     browserReady,
     browserLoadingMore,

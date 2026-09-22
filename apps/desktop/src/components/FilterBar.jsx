@@ -741,7 +741,7 @@ function FacetChooser({ hidden, onToggle, slotLabel }) {
   );
 }
 
-export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
+export default function FilterBar({ facetValues, facetsReady = true, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
   const { t, i18n } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -816,6 +816,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
     // at the right edge, so they are never scrolled out of reach.
     <div
       data-filter-bar="true"
+      data-facets-ready={facetsReady ? "true" : "false"}
       className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"
     >
       <div
