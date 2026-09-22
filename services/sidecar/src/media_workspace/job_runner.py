@@ -1002,9 +1002,10 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
     """Colours for every photo whose preview predates them. New previews get
     theirs as they are rendered; this is the one-time catch-up, and the
     retry for previews that could not be read."""
-    from .db.colors import analyze_asset_colors, list_assets_missing_colors
+    from .db.colors import analyze_asset_colors, colors_stale, list_assets_missing_colors, mark_colors_current
 
     catalog = ensure_catalog(catalog_path)
+    force = force or colors_stale(connection)  # an older extraction: redo them all
     payload = {"limit": limit, "force": force, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
     try:
@@ -1024,6 +1025,7 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
                     result={"current_phase": _phase_result({"key": "analyze_colors", "label": "Analyze Colors"}, {"processed": index, "total": total})},
                     progress=_fraction(index, total), commit=True,
                 )
+        mark_colors_current(connection)
         result = {"analyzed": analyzed, "failed": failed, "total": total}
         update_job(
             connection, job_id, status="succeeded",

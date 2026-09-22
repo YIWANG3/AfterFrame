@@ -31,7 +31,7 @@ function ColorAnalysisRow() {
     : t("library.colorsHint", { analyzed: status?.analyzed || 0, missing: status?.missing || 0 });
   return (
     <FieldRow label={t("library.colors")} hint={hint}>
-      <SecondaryButton onClick={() => start(false)} disabled={!status || status.running || !(status.missing > 0)}>
+      <SecondaryButton onClick={() => start(false)} disabled={!status || status.running || !(status.missing > 0 || status.stale)}>
         <span className="inline-flex items-center gap-1.5"><Palette className="h-3.5 w-3.5" />{t("library.colorsAnalyzeMissing")}</span>
       </SecondaryButton>
       <SecondaryButton onClick={() => start(true)} disabled={!status || status.running || total === 0}>

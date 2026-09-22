@@ -11,7 +11,8 @@ SCHEMA_STATEMENTS = [
         schema_version INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        place_data_version TEXT
+        place_data_version TEXT,
+        colors_version TEXT
     )
     """,
     """

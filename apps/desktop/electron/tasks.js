@@ -168,7 +168,9 @@ function createTaskStarters({
       return { ...current, running: false, missing: 0, disabled: true };
     }
     const status = await commands.colorStatus();
-    const count = force ? (status?.analyzed || 0) + (status?.missing || 0) : (status?.missing || 0);
+    // An older extraction's colours (stale) count as all needing redoing.
+    const redoAll = force || status?.stale === true;
+    const count = redoAll ? (status?.analyzed || 0) + (status?.missing || 0) : (status?.missing || 0);
     if (!(count > 0)) {
       return { ...current, running: false, missing: 0 };
     }

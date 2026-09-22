@@ -68,7 +68,7 @@ class PaletteTest(unittest.TestCase):
 PHOTOS = {  # stem: bands
     "sea": (("#2060c0", 0.7), ("#f8f8f8", 0.3)),
     "sunset": (("#e06020", 0.5), ("#f0c040", 0.3), ("#402030", 0.2)),
-    "night": (("#101018", 0.98), ("#ffffff", 0.02)),
+    "night": (("#101018", 0.99), ("#ffffff", 0.01)),
 }
 
 
@@ -119,7 +119,7 @@ class ColorFilterTest(unittest.TestCase):
         self.assertEqual(get_facet_values(self.connection)["colors_analyzed"], 0)
         result = self.render_previews()
         self.assertEqual(result["generated"], 3)
-        self.assertEqual(color_status(self.connection), {"analyzed": 3, "missing": 0})
+        self.assertEqual(color_status(self.connection), {"analyzed": 3, "missing": 0, "stale": False})
         self.assertEqual(get_facet_values(self.connection)["colors_analyzed"], 3)
         sea = get_asset_colors(self.connection, "image_sea")
         self.assertEqual(len(sea), 2)
@@ -150,8 +150,19 @@ class ColorFilterTest(unittest.TestCase):
         result = run_colors_job(self.connection, self.catalog.root, "job-1")
 
         self.assertEqual(result, {"analyzed": 3, "failed": 0, "total": 3})
-        self.assertEqual(color_status(self.connection), {"analyzed": 3, "missing": 0})
+        self.assertEqual(color_status(self.connection), {"analyzed": 3, "missing": 0, "stale": False})
         self.assertEqual(self.connection.execute("SELECT status FROM jobs WHERE job_id = 'job-1'").fetchone()[0], "succeeded")
+
+    def test_colours_from_an_older_extraction_are_redone_on_the_next_run(self):
+        self.render_previews()
+        self.connection.execute("UPDATE catalog_info SET colors_version = 'older'")
+        self.connection.execute(
+            "INSERT INTO jobs (job_id, job_type, status, payload_json, result_json) VALUES ('job-3', 'colors', 'queued', '{}', '{}')"
+        )
+        self.connection.commit()
+        self.assertTrue(color_status(self.connection)["stale"])
+        self.assertEqual(run_colors_job(self.connection, self.catalog.root, "job-3")["total"], 3)
+        self.assertFalse(color_status(self.connection)["stale"])
 
     def test_force_redoes_photos_that_already_have_colours(self):
         self.render_previews()

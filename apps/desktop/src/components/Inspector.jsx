@@ -102,7 +102,7 @@ function PaletteStrip({ colors, onPick }) {
   if (!Array.isArray(colors) || colors.length === 0) return null;
   return (
     <div className="mb-4 flex justify-center">
-      <div className="flex items-center gap-2 rounded-full bg-app/70 px-2.5 py-1.5" data-testid="inspector-palette">
+      <div className="flex items-center gap-1 rounded-full bg-app/70 px-2 py-1.5" data-testid="inspector-palette">
         {colors.map((swatch) => (
           <button
             key={swatch.hex}

@@ -55,7 +55,23 @@ def list_assets_missing_colors(connection: sqlite3.Connection, limit: int | None
     return connection.execute(sql).fetchall()
 
 
-def color_status(connection: sqlite3.Connection) -> dict[str, int]:
+def colors_stale(connection: sqlite3.Connection) -> bool:
+    """True when the catalog's colours were made by an older extraction
+    than this build's: they all need redoing."""
+    from ..colors import COLORS_VERSION
+
+    row = connection.execute("SELECT colors_version FROM catalog_info WHERE catalog_id = 1").fetchone()
+    analyzed = connection.execute("SELECT 1 FROM asset_colors LIMIT 1").fetchone()
+    return analyzed is not None and (row is None or row[0] != COLORS_VERSION)
+
+
+def mark_colors_current(connection: sqlite3.Connection) -> None:
+    from ..colors import COLORS_VERSION
+
+    connection.execute("UPDATE catalog_info SET colors_version = ? WHERE catalog_id = 1", (COLORS_VERSION,))
+
+
+def color_status(connection: sqlite3.Connection) -> dict[str, int | bool]:
     analyzed = connection.execute("SELECT COUNT(DISTINCT asset_id) FROM asset_colors").fetchone()[0]
     missing = connection.execute(f"SELECT COUNT(*) {_MISSING}").fetchone()[0]
-    return {"analyzed": int(analyzed), "missing": int(missing)}
+    return {"analyzed": int(analyzed), "missing": int(missing), "stale": colors_stale(connection)}
