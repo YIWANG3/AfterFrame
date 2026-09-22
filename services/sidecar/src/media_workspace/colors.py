@@ -28,9 +28,13 @@ _MERGE_DISTANCE = 10.0  # ΔE (CIE76) under which two clusters are the same colo
 _SAMPLE_EDGE = 128
 _CLUSTERS = 12
 _BIN = 8  # sRGB values are pooled into bins this wide before clustering
+# Lightness counts less than hue when clustering, so the lit and the shaded
+# parts of one orange facade fall in the same cluster instead of splitting
+# into three browns.
+_L_WEIGHT = 0.6
 # Bump when the extraction changes: every catalog then redoes its colours
 # on the next open (run_colors_job with force).
-COLORS_VERSION = "kmeans-lab-1"
+COLORS_VERSION = "kmeans-lab-2"
 
 # How far (ΔE, CIE76) a swatch may be from the asked-for colour. Around 2.3
 # is a just-noticeable difference; 25 still reads as "the same colour".
@@ -75,10 +79,11 @@ def _srgb_to_lab(rgb):
 
 
 def _cluster(pixels, k: int = _CLUSTERS) -> list[dict]:
-    """Weighted k-means in Lab over the picture's pooled colours. Each
-    cluster is represented by a colour that is actually in the picture (its
-    most populous bin, nudged toward saturation), not by the cluster mean:
-    means of mixed regions come out grey."""
+    """Weighted k-means in Lab (lightness down-weighted) over the picture's
+    pooled colours. Each cluster is shown by a colour that is actually in
+    the picture: the mean of its more saturated half, snapped to the nearest
+    real bin. The plain cluster mean comes out grey (mixed regions), and
+    its heaviest bin comes out dark (shadow pixels outnumber lit ones)."""
     import numpy as np
 
     px = np.asarray(pixels, dtype=np.float64).reshape(-1, 3)
@@ -89,26 +94,27 @@ def _cluster(pixels, k: int = _CLUSTERS) -> list[dict]:
     np.add.at(bins, inverse, px)
     bins /= counts[:, None]
     lab = _srgb_to_lab(bins)
+    space = lab * np.array([_L_WEIGHT, 1.0, 1.0])
     weight = counts.astype(np.float64)
     total = weight.sum()
     k = min(k, len(bins))
 
     rng = np.random.default_rng(0)  # fixed: the same picture gives the same palette
-    centers = [lab[rng.choice(len(lab), p=weight / total)]]
+    centers = [space[rng.choice(len(space), p=weight / total)]]
     for _ in range(1, k):  # k-means++: far, heavy points first
-        nearest = np.min(((lab[:, None, :] - np.array(centers)[None, :, :]) ** 2).sum(-1), axis=1)
+        nearest = np.min(((space[:, None, :] - np.array(centers)[None, :, :]) ** 2).sum(-1), axis=1)
         p = nearest * weight
         if p.sum() <= 0:
             break
-        centers.append(lab[rng.choice(len(lab), p=p / p.sum())])
+        centers.append(space[rng.choice(len(space), p=p / p.sum())])
     c = np.array(centers)
-    assignment = np.zeros(len(lab), dtype=np.int64)
+    assignment = np.zeros(len(space), dtype=np.int64)
     for _ in range(20):
-        assignment = np.argmin(((lab[:, None, :] - c[None, :, :]) ** 2).sum(-1), axis=1)
+        assignment = np.argmin(((space[:, None, :] - c[None, :, :]) ** 2).sum(-1), axis=1)
         for j in range(len(c)):
             members = assignment == j
             if members.any():
-                c[j] = (lab[members] * weight[members, None]).sum(0) / weight[members].sum()
+                c[j] = (space[members] * weight[members, None]).sum(0) / weight[members].sum()
 
     clusters = []
     chroma_all = np.hypot(lab[:, 1], lab[:, 2])
@@ -116,7 +122,9 @@ def _cluster(pixels, k: int = _CLUSTERS) -> list[dict]:
         members = np.flatnonzero(assignment == j)
         if len(members) == 0:
             continue
-        pick = members[np.argmax(weight[members] * (1 + chroma_all[members] / 60))]
+        vivid = members[np.argsort(-chroma_all[members])][: max(1, len(members) // 2)]
+        mean = (lab[vivid] * weight[vivid, None]).sum(0) / weight[vivid].sum()
+        pick = members[np.argmin(((lab[members] - mean) ** 2).sum(1))]
         clusters.append({
             "rgb": tuple(int(round(v)) for v in bins[pick]),
             "lab": tuple(float(v) for v in lab[pick]),
