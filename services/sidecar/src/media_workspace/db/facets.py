@@ -301,6 +301,29 @@ def _location_source(filters: dict) -> list[Clause]:
     return [("(" + " OR ".join(parts) + ")", params)]
 
 
+def _color(filters: dict) -> list[Clause]:
+    """Photos that have a swatch within a Lab distance of any asked colour.
+    `color` is one hex or a list (any of them); `color_tolerance` names how
+    far is still the same colour."""
+    from ..colors import DEFAULT_TOLERANCE, MATCH_MIN_SHARE, TOLERANCES, lab_of, parse_hex
+
+    targets = [rgb for rgb in (parse_hex(v) for v in _values(filters.get("color"))) if rgb is not None]
+    if not targets:
+        return []
+    radius = TOLERANCES.get(str(filters.get("color_tolerance") or DEFAULT_TOLERANCE), TOLERANCES[DEFAULT_TOLERANCE])
+    parts: list[str] = []
+    params: list[object] = []
+    for rgb in targets:
+        lab_l, lab_a, lab_b = lab_of(*rgb)
+        parts.append("((c.l - ?) * (c.l - ?) + (c.a - ?) * (c.a - ?) + (c.b - ?) * (c.b - ?)) <= ?")
+        params.extend([lab_l, lab_l, lab_a, lab_a, lab_b, lab_b, radius * radius])
+    return [(
+        f"EXISTS (SELECT 1 FROM asset_colors c WHERE c.asset_id = assets.asset_id AND c.share >= {MATCH_MIN_SHARE} "
+        f"AND ({' OR '.join(parts)}))",
+        params,
+    )]
+
+
 def _place_facet(name: str, column: str, *, upper: bool = False) -> Facet:
     """Country / city of the effective location. The values are the
     gazetteer's canonical ones (ISO code, English city name), filled from the
@@ -354,6 +377,7 @@ FACETS: tuple[Facet, ...] = (
     Facet("location_source", ("location_source",), _location_source),
     _place_facet("country", "country_code", upper=True),
     _place_facet("city", "city_en"),
+    Facet("color", ("color", "color_tolerance"), _color, modifiers=("color_tolerance",)),
     _contains_facet("caption_contains", "(SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),

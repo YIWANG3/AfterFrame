@@ -47,9 +47,9 @@ test.afterAll(async () => {
 
 test("AfterFrame › Settings… opens the settings overlay", async () => {
   await clickMenu("AfterFrame", "Settings…");
-  await expect(ctx.window.getByText("Auto-annotation providers")).toBeVisible({ timeout: 5_000 });
+  await expect(ctx.window.getByText("Appearance")).toBeVisible({ timeout: 5_000 });
   await ctx.window.keyboard.press("Escape");
-  await expect(ctx.window.getByText("Auto-annotation providers")).toHaveCount(0);
+  await expect(ctx.window.getByText("Appearance")).toHaveCount(0);
 });
 
 test("Edit › Select All, Copy Name, Copy File Path, Delete act on the gallery selection", async () => {

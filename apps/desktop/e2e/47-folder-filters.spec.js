@@ -147,8 +147,13 @@ test("a refined folder can be saved as a smart collection that follows the folde
   await expect(cards()).toHaveCount(4);
 });
 
+// The options are asked for after every change of view; on a slow machine
+// they can still be on their way when the dropdown opens.
+const facetsSettled = () => expect(ctx.window.locator("[data-filter-bar]")).toHaveAttribute("data-facets-ready", "true");
+
 // Camera → count, as the open Camera dropdown shows it.
 async function cameraCounts() {
+  await facetsSettled();
   await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "Camera", exact: true }).click();
   const options = ctx.window.locator("[data-facet-option]");
   await expect(options.first()).toBeVisible();
@@ -193,6 +198,7 @@ test("the dropdown counts describe the folder, and each count is what choosing i
 
 // Option → count, as an open dropdown in the filter bar shows it.
 async function facetCounts(label) {
+  await facetsSettled();
   await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: label, exact: true }).click();
   const options = ctx.window.locator("[data-facet-option]");
   await expect(options.first()).toBeVisible();

@@ -34,6 +34,7 @@ from .db import (
     delete_image_asset_from_catalog,
     find_image_asset_ids_by_stem,
     get_app_setting,
+    get_asset_colors,
     get_duplicate_assets,
     get_image_asset_detail,
     get_image_asset_detail_by_path,
@@ -77,7 +78,15 @@ from .db import (
 )
 from .evaluation import evaluate_ground_truth
 from .ground_truth import export_ground_truth
-from .job_runner import run_ai_repaint_job, run_annotation_job, run_enrichment_job, run_import_job, run_people_index_job, run_preview_job
+from .job_runner import (
+    run_ai_repaint_job,
+    run_annotation_job,
+    run_colors_job,
+    run_enrichment_job,
+    run_import_job,
+    run_people_index_job,
+    run_preview_job,
+)
 from .metadata import iso_mtime
 from .preview_service import PreviewService
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
@@ -458,7 +467,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
     create_job_parser.add_argument("--priority", type=int, default=50)
 
@@ -466,7 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
@@ -487,7 +496,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-active-jobs", parents=[common])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
@@ -539,6 +548,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_import_job_parser.add_argument("--raw-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--image-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--generate-hd", action="store_true", help="also generate 2000px HD previews")
+    run_import_job_parser.add_argument("--skip-colors", action="store_true", help="do not extract dominant colours from the previews")
     run_import_job_parser.add_argument(
         "--respect-tombstones",
         action="store_true",
@@ -555,6 +565,13 @@ def build_parser() -> argparse.ArgumentParser:
     run_preview_job_parser.add_argument("--asset-type", choices=["raw", "image"])
     run_preview_job_parser.add_argument("--limit", type=int)
     run_preview_job_parser.add_argument("--force", action="store_true")
+    run_preview_job_parser.add_argument("--skip-colors", action="store_true", help="do not extract dominant colours")
+
+    run_colors_job_parser = subparsers.add_parser("run-colors-job", parents=[common])
+    run_colors_job_parser.add_argument("--job-id", required=True)
+    run_colors_job_parser.add_argument("--limit", type=int)
+    run_colors_job_parser.add_argument("--force", action="store_true", help="re-analyse photos that already have colours")
+    subparsers.add_parser("color-status", parents=[common])
 
     run_people_index_parser = subparsers.add_parser("run-people-index-job", parents=[common])
     run_people_index_parser.add_argument("--job-id", required=True)
@@ -1294,6 +1311,7 @@ def _cmd_run_import_job(args, connection, catalog, parser):
         image_dirs=args.image_dir,
         mode=args.mode,
         generate_hd=args.generate_hd,
+        analyze_colors=not args.skip_colors,
         respect_tombstones=args.respect_tombstones,
     )
     print(json.dumps(payload, indent=2))
@@ -1315,8 +1333,21 @@ def _cmd_run_preview_job(args, connection, catalog, parser):
         asset_type=args.asset_type,
         limit=args.limit,
         force=args.force,
+        analyze_colors=not args.skip_colors,
     )
     print(json.dumps(payload, indent=2))
+    return 0
+
+
+def _cmd_run_colors_job(args, connection, catalog, parser):
+    print(json.dumps(run_colors_job(connection, catalog.root, args.job_id, limit=args.limit, force=args.force), indent=2))
+    return 0
+
+
+def _cmd_color_status(args, connection, catalog, parser):
+    from .db.colors import color_status
+
+    print(json.dumps(color_status(connection)))
     return 0
 
 
@@ -1723,6 +1754,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
         "feature_vector": json.loads(row["feature_vector_json"] or "{}"),
         "candidates": json.loads(row["candidate_json"] or "[]"),
+        "colors": get_asset_colors(connection, row["asset_id"]),
         "image_preview_path": str((catalog.root / row["image_preview_relative_path"]).resolve())
         if row["image_preview_relative_path"]
         else None,
@@ -2166,6 +2198,8 @@ COMMAND_HANDLERS = {
     "run-import-job": _cmd_run_import_job,
     "run-enrichment-job": _cmd_run_enrichment_job,
     "run-preview-job": _cmd_run_preview_job,
+    "run-colors-job": _cmd_run_colors_job,
+    "color-status": _cmd_color_status,
     "run-people-index-job": _cmd_run_people_index_job,
     "evaluate-ground-truth": _cmd_evaluate_ground_truth,
     "export-ground-truth": _cmd_export_ground_truth,

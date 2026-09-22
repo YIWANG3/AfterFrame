@@ -336,6 +336,7 @@ function matchesFacetFilters(asset, filters) {
     const source = meta.gps_latitude != null && meta.gps_longitude != null ? "exif" : "none";
     if (!sources.includes(source)) return false;
   }
+  if (facetValues(filters.color).length) return false; // no colours in the browser
   // No gazetteer in the browser, so no photo has a country or a city: the
   // chips never show (no options), and a rule naming one matches nothing.
   if (facetValues(filters.country).length || facetValues(filters.city).length) return false;
@@ -741,6 +742,7 @@ export const browserBridge = {
     libraryManagement: false,
     integrations: false, // MCP server etc.
     video: false,        // decoding/proxy/keyframes live in the sidecar
+    colors: false,       // dominant colours come from the sidecar's preview pass
   },
   openExternal: (url) => { window.open(url, "_blank", "noopener"); },
   listPeopleGroups: async () => [],
@@ -1083,6 +1085,9 @@ export const browserBridge = {
   // ── jobs ──
   getImportStatus: async () => importJobStatus(),
   getPreviewStatus: async () => jobStatus(),
+  // No colour extraction in the browser: nothing to analyse, ever.
+  getColorsStatus: async () => ({ ...jobStatus(), analyzed: 0, missing: 0 }),
+  startColorAnalysis: async () => ({ ...jobStatus(), missing: 0 }),
   getEnrichmentStatus: async () => jobStatus(),
   getActiveJobs: async () => {
     const jobs = [];

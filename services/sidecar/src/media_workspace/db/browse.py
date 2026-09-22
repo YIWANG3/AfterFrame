@@ -393,6 +393,9 @@ def get_facet_values(
     return {
         "location_sources": [{"value": v, "count": source_counts[v]} for v in LOCATION_SOURCES if source_counts.get(v)],
         "countries": [_country_option(r["v"], r["c"]) for r in country_rows],
+        # The colour filter takes any colour, so it has no options to count;
+        # the bar only needs to know whether any photo has colours yet.
+        "colors_analyzed": int(connection.execute("SELECT COUNT(DISTINCT asset_id) FROM asset_colors").fetchone()[0]),
         # The most photographed cities; the rest through search_facet_values.
         "cities": _city_options(connection, *scope_for("city"), like="%", limit=60),
         "cameras": value_counts("camera", "assets.meta_camera_model"),

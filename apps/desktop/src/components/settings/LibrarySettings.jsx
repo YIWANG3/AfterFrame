@@ -1,8 +1,45 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, FolderInput, FolderPlus, Trash2 } from "lucide-react";
+import { FolderOpen, FolderInput, FolderPlus, Trash2, Palette } from "lucide-react";
 import api from "../../api";
 import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
+
+// Dominant colours: how many photos have them, and the two ways to run the
+// job by hand — the missing ones (normally done on open), or every photo
+// again (after the extraction changed).
+function ColorAnalysisRow() {
+  const { t } = useTranslation("settings");
+  const [status, setStatus] = useState(null);
+  const refresh = useCallback(async () => {
+    try { setStatus(await api.getColorsStatus()); } catch { setStatus(null); }
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  // While a run is going, keep the numbers moving.
+  useEffect(() => {
+    if (!status?.running) return undefined;
+    const timer = setInterval(refresh, 2000);
+    return () => clearInterval(timer);
+  }, [status?.running, refresh]);
+  const start = async (force) => {
+    const started = await api.startColorAnalysis({ force, priority: 5 });
+    window.dispatchEvent(new CustomEvent("colors:started", { detail: started }));
+    await refresh();
+  };
+  const total = (status?.analyzed || 0) + (status?.missing || 0);
+  const hint = status?.running
+    ? t("library.colorsRunning")
+    : t("library.colorsHint", { analyzed: status?.analyzed || 0, missing: status?.missing || 0 });
+  return (
+    <FieldRow label={t("library.colors")} hint={hint}>
+      <SecondaryButton onClick={() => start(false)} disabled={!status || status.running || !(status.missing > 0 || status.stale)}>
+        <span className="inline-flex items-center gap-1.5"><Palette className="h-3.5 w-3.5" />{t("library.colorsAnalyzeMissing")}</span>
+      </SecondaryButton>
+      <SecondaryButton onClick={() => start(true)} disabled={!status || status.running || total === 0}>
+        {t("library.colorsReanalyze")}
+      </SecondaryButton>
+    </FieldRow>
+  );
+}
 
 // Strip the catalog extension for a friendlier display name.
 function catalogName(p) {
@@ -33,6 +70,7 @@ function OpenFolderButton({ kind, label }) {
 export default function LibrarySettings({ info, summary, onSwitchCatalog, onClose }) {
   const { t } = useTranslation("settings");
   const [generateHd, setGenerateHd] = useState(false);
+  const [analyzeColors, setAnalyzeColors] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [watched, setWatched] = useState([]);
 
@@ -41,6 +79,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
     (async () => {
       const stored = (await api.getPreviewSettings()) || {};
       if (!cancelled) setGenerateHd(stored.generateHd === true);
+      if (!cancelled) setAnalyzeColors(stored.analyzeColors !== false);
       const dirs = await api.getWatchedDirs?.();
       if (!cancelled) setWatched(Array.isArray(dirs) ? dirs : []);
     })();
@@ -50,6 +89,10 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
   const setHd = useCallback((value) => {
     setGenerateHd(value);
     void api.savePreviewSettings({ generateHd: value });
+  }, []);
+  const setColors = useCallback((value) => {
+    setAnalyzeColors(value);
+    void api.savePreviewSettings({ analyzeColors: value });
   }, []);
 
   const catalogPath = info?.catalogPath || null;
@@ -151,6 +194,14 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
           <Toggle on={generateHd} onChange={setHd} />
         </FieldRow>
       </Group>
+      {api.can("colors") && (
+        <Group title={t("library.analysisTitle")}>
+          <FieldRow label={t("library.colorsAuto")} hint={t("library.colorsAutoHint")}>
+            <Toggle on={analyzeColors} onChange={setColors} />
+          </FieldRow>
+          <ColorAnalysisRow />
+        </Group>
+      )}
       <Group title={t("library.cacheStorage")} subtitle={t("library.cacheSubtitle")}>
         <FieldRow label={t("library.depthMaps")} hint={t("library.depthMapsHint")}>
           <OpenFolderButton kind="depth" label={t("library.openFolder")} />

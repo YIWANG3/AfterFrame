@@ -94,7 +94,32 @@ function ThumbnailStrip({ items, icon: Icon, onSelect, testId }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
+// The photo's dominant colours as a row of dots in a pill, most prominent
+// first (Eagle's form). A dot is a filter: click it to find photos with
+// that colour.
+function PaletteStrip({ colors, onPick }) {
+  const { t } = useTranslation("inspector");
+  if (!Array.isArray(colors) || colors.length === 0) return null;
+  return (
+    <div className="mb-4 flex justify-center">
+      <div className="flex items-center gap-1 rounded-full bg-app/70 px-2 py-1.5" data-testid="inspector-palette">
+        {colors.map((swatch) => (
+          <button
+            key={swatch.hex}
+            type="button"
+            title={t("colors.swatch", { hex: swatch.hex.toUpperCase(), share: Math.round((swatch.share || 0) * 100) })}
+            onClick={() => onPick?.(swatch.hex)}
+            data-swatch={swatch.hex}
+            style={{ background: swatch.hex }}
+            className="h-5 w-5 rounded-full border border-white/15 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] transition-transform hover:scale-110 focus:outline-none"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [localRating, setLocalRating] = useState(null);
   const [relinking, setRelinking] = useState(false);
@@ -239,6 +264,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             {formatValue}
           </span>
         </div>
+        <PaletteStrip colors={detail.colors} onPick={onColorFilter} />
 
         <div className="px-0.5">
           <h2 className="text-[13px] font-medium leading-tight text-text" data-testid="inspector-asset-title">{imageName || detail.stem}</h2>

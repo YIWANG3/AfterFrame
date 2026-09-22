@@ -276,7 +276,7 @@ const sidecarCommands = createSidecarCommands(callSidecarJsonAsync);
 const { writeImageWithSourceMetadata } = createImageMetadataWriter({ rootDir, sidecarSrc, isPackaged });
 const {
   formatJobStatus, latestJobStatus, createJob,
-  startEnrichmentTask, startImportTask, startPreviewTask,
+  startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask,
   startAiRepaintTask, startTextImageTask,
 } = createTaskStarters({
   app,
@@ -477,7 +477,7 @@ jobsIpc.register({
   ipcMain,
   getCatalogState: catalog.state,
   formatJobStatus, latestJobStatus,
-  startImportTask, startEnrichmentTask, startPreviewTask,
+  startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask,
   commands: sidecarCommands,
   resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
 });

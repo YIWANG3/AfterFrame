@@ -10,6 +10,7 @@ from hashlib import sha1
 from pathlib import Path
 
 from ..schema import SCHEMA_STATEMENTS, SCHEMA_VERSION
+from .colors import mark_colors_current
 from .locations import refresh_place_fields
 from .migrations import SchemaMigrationError, ensure_column, migrate
 
@@ -113,6 +114,11 @@ def init_db(connection: sqlite3.Connection) -> None:
             migrate(connection, int(row["schema_version"]), SCHEMA_VERSION)
             _apply_latest_schema(connection)
         refresh_place_fields(connection)
+        # No colours yet means nothing from an older extraction to redo: say
+        # so, or the first colours written by a preview pass would look stale
+        # and the catch-up job would redo them all.
+        if is_new or connection.execute("SELECT 1 FROM asset_colors LIMIT 1").fetchone() is None:
+            mark_colors_current(connection)
 
         connection.commit()
     except Exception:
@@ -124,6 +130,7 @@ def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         connection.execute(statement)
     _ensure_column(connection, "catalog_info", "place_data_version", "TEXT")
+    _ensure_column(connection, "catalog_info", "colors_version", "TEXT")
     _ensure_column(connection, "assets", "app_rating", "INTEGER")
     _ensure_column(connection, "raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'")
     _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")

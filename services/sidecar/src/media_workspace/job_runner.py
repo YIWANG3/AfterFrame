@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -547,6 +548,7 @@ def run_import_job(
     image_dirs: list[Path],
     mode: str = "combined",
     generate_hd: bool = True,
+    analyze_colors: bool = True,
     respect_tombstones: bool = False,
 ) -> dict[str, Any]:
     thresholds = Thresholds()
@@ -736,7 +738,7 @@ def run_import_job(
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="image",
                     progress_callback=preview_progress, paths=image_dirs,
-                    force_paths=changed_paths,
+                    force_paths=changed_paths, analyze_colors=analyze_colors,
                 ),
                 # Video poster frames share the standard preview tier (no HD).
                 preview_service.generate_batch(
@@ -938,6 +940,7 @@ def run_preview_job(
     asset_type: str | None = "image",
     limit: int | None = None,
     force: bool = False,
+    analyze_colors: bool = True,
 ) -> dict[str, Any]:
     payload = {
         "kind": kind,
@@ -969,6 +972,7 @@ def run_preview_job(
             limit=limit,
             force=force,
             progress_callback=preview_progress,
+            analyze_colors=analyze_colors,
         )
         update_job(
             connection,
@@ -992,6 +996,57 @@ def run_preview_job(
             progress=0.0,
             error_text=str(error),
         )
+        raise
+
+
+def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | None = None, force: bool = False) -> dict[str, Any]:
+    """Colours for every photo whose preview predates them. New previews get
+    theirs as they are rendered; this is the one-time catch-up, and the
+    retry for previews that could not be read."""
+    from .db.colors import analyze_asset_colors, colors_stale, list_assets_missing_colors, mark_colors_current
+
+    catalog = ensure_catalog(catalog_path)
+    force = force or colors_stale(connection)  # an older extraction: redo them all
+    try:
+        os.nice(5)  # background work: the resident sidecar and the app come first
+    except (AttributeError, OSError):
+        pass
+    payload = {"limit": limit, "force": force, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
+    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
+    try:
+        rows = list_assets_missing_colors(connection, limit=limit, force=force)
+        total = len(rows)
+        analyzed = failed = 0
+        reported_at = time.monotonic()
+        for index, row in enumerate(rows, start=1):
+            # One asset per commit: the extraction is the cost, and a write
+            # transaction held across a batch kept the resident sidecar (which
+            # writes on some reads) waiting for seconds at a time.
+            if analyze_asset_colors(connection, row["asset_id"], catalog.root / row["relative_path"], commit=True):
+                analyzed += 1
+            else:
+                failed += 1
+            if index == total or time.monotonic() - reported_at >= 1.0:
+                reported_at = time.monotonic()
+                _check_cancel(connection, job_id)
+                update_job(
+                    connection, job_id, payload=payload,
+                    result={"current_phase": _phase_result({"key": "analyze_colors", "label": "Analyze Colors"}, {"processed": index, "total": total})},
+                    progress=_fraction(index, total), commit=True,
+                )
+        mark_colors_current(connection)
+        result = {"analyzed": analyzed, "failed": failed, "total": total}
+        update_job(
+            connection, job_id, status="succeeded",
+            payload={**payload, "phase": None, "phase_label": None},
+            result={**result, "current_phase": None}, progress=1.0, error_text=None,
+        )
+        return result
+    except JobCancelled:
+        connection.commit()
+        return _mark_cancelled(connection, job_id, payload)
+    except Exception as error:
+        update_job(connection, job_id, status="failed", payload=payload, result={}, progress=0.0, error_text=str(error))
         raise
 
 

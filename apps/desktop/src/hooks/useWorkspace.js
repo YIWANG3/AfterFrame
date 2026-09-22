@@ -4,7 +4,7 @@ import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/for
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
-import {
+import { isEmptyValue,
   DEFAULT_SCOPE, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
   shouldResetScopeForReveal,
@@ -121,6 +121,18 @@ export default function useWorkspace({ pushToast } = {}) {
       else if (type === "preview") setPreviewTask(task);
       else if (type === "enrichment") setEnrichmentTask(task);
     },
+    // Colours changed nothing about which photos are in the grid or their
+    // order: only the Colour chip (options exist now) and the open photo's
+    // palette. A full refresh would re-browse and lose a scrolled position.
+    colorsReady: () => {
+      loadFacetValues();
+      refreshShownDetail();
+      // A grid narrowed by colour was answered from the colours the catalog
+      // had at the time; new ones can change its membership.
+      if (!isEmptyValue(scopeRef.current.filters?.color)) {
+        void loadBrowser({ scope: scopeRef.current, preserveView: true });
+      }
+    },
   };
   const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
 
@@ -131,8 +143,16 @@ export default function useWorkspace({ pushToast } = {}) {
       const job = event.detail;
       pokeJobs(job?.jobId ? { jobId: job.jobId, jobType: "people_index" } : undefined);
     };
+    const onColorsStarted = (event) => {
+      const job = event.detail;
+      pokeJobs(job?.jobId ? { jobId: job.jobId, jobType: "colors" } : undefined);
+    };
     window.addEventListener("people-index:started", onPeopleIndexStarted);
-    return () => window.removeEventListener("people-index:started", onPeopleIndexStarted);
+    window.addEventListener("colors:started", onColorsStarted);
+    return () => {
+      window.removeEventListener("people-index:started", onPeopleIndexStarted);
+      window.removeEventListener("colors:started", onColorsStarted);
+    };
   }, [pokeJobs]);
 
   // theme is a *preference*: "dark" | "light" | "system". "system" follows the
@@ -196,11 +216,19 @@ export default function useWorkspace({ pushToast } = {}) {
   // the folder, the search text and the other active filters. The request is tagged so a slow answer for the previous folder
   // cannot land on top of the current one.
   const facetRequestRef = useRef(0);
+  // Which view the loaded options belong to: the bar says so (data-facets-ready),
+  // so a count is never read for a view whose options are still on their way.
+  const [facetsFor, setFacetsFor] = useState(null);
   // Reads only refs, so it is stable and refreshAll (not an effect) can call it too.
   const loadFacetValues = useCallback(() => {
     const request = ++facetRequestRef.current;
+    const key = scopeKeyOf(scopeRef.current);
     void api.getFacetValues(facetScopeOf(scopeRef.current))
-      .then((values) => { if (request === facetRequestRef.current) setFacetValues(values); })
+      .then((values) => {
+        if (request !== facetRequestRef.current) return;
+        setFacetValues(values);
+        setFacetsFor(key);
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -215,6 +243,22 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!queuedRawCount && !queuedExportCount) return null;
     return `Queued changes: ${queuedExportCount} media · ${queuedRawCount} sources`;
   }, [pendingImport]);
+
+  // Re-read the photo the Inspector shows (which need not be the selected
+  // card: a version sibling opened there is shown without being in the grid)
+  // without competing with navigation: the result is applied only if that
+  // photo is still the one shown, and a loadDetail issued meanwhile is not
+  // outranked, since this never bumps the request counter.
+  function refreshShownDetail() {
+    const assetId = detail?.asset_id;
+    if (!assetId) return;
+    void api.getAssetDetailById(assetId)
+      .then((payload) => {
+        if (!payload) return;
+        setDetail((current) => (current?.asset_id === payload.asset_id ? payload : current));
+      })
+      .catch(() => {});
+  }
 
   async function loadDetail(assetId) {
     const requestId = ++detailRequestRef.current;
@@ -1113,6 +1157,7 @@ export default function useWorkspace({ pushToast } = {}) {
     smartCollectionDirty: !!activeSmartCollection && rulesDirty(scope, activeSmartCollection.rules),
     activeBase: scope.collectionId ? null : scope.base,
     facetValues,
+    facetsReady: facetsFor === scopeKey,
     browserLoading,
     browserReady,
     browserLoadingMore,

@@ -33,10 +33,11 @@ function enrichmentJob({ jobId }) {
   return ["run-enrichment-job", "--job-id", String(jobId)];
 }
 
-function importJob({ jobId, mode, rawDirs, imageDirs, generateHd, respectTombstones }) {
+function importJob({ jobId, mode, rawDirs, imageDirs, generateHd, respectTombstones, analyzeColors }) {
   const argv = ["run-import-job", "--job-id", String(jobId), "--mode", String(mode)];
   // HD (2000px) previews are opt-in — Settings ▸ Library. Off by default.
   if (generateHd === true) argv.push("--generate-hd");
+  if (analyzeColors === false) argv.push("--skip-colors");
   // Auto imports (watched dirs live + catch-up) must not resurrect files the
   // user removed from the catalog but left on disk. Manual imports omit this
   // so an explicit re-import clears the tombstone.
@@ -46,8 +47,10 @@ function importJob({ jobId, mode, rawDirs, imageDirs, generateHd, respectTombsto
   return argv;
 }
 
-function previewJob({ jobId, kind = "preview", assetType = "image" }) {
-  return ["run-preview-job", "--job-id", String(jobId), "--kind", String(kind), "--asset-type", String(assetType)];
+function previewJob({ jobId, kind = "preview", assetType = "image", analyzeColors }) {
+  const argv = ["run-preview-job", "--job-id", String(jobId), "--kind", String(kind), "--asset-type", String(assetType)];
+  if (analyzeColors === false) argv.push("--skip-colors");
+  return argv;
 }
 
 function aiRepaintJob({
@@ -123,6 +126,12 @@ function annotationJob({
   return argv;
 }
 
+function colorsJob({ jobId, force = false }) {
+  const argv = ["run-colors-job", "--job-id", String(jobId)];
+  if (force) argv.push("--force");
+  return argv;
+}
+
 function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds }) {
   const argv = [
     "run-people-index-job",
@@ -144,4 +153,5 @@ module.exports = {
   textImageJob,
   annotationJob,
   peopleIndexJob,
+  colorsJob,
 };

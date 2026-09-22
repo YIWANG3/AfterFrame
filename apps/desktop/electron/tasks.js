@@ -131,6 +131,7 @@ function createTaskStarters({
       rawDirs,
       imageDirs,
       generateHd: readAppSettings()?.previews?.generateHd === true,
+      analyzeColors: readAppSettings()?.previews?.analyzeColors !== false,
       // Auto imports (watched dirs live + catch-up) respect tombstones; a
       // manual re-import is the user's way to clear one.
       respectTombstones: options?.auto === true,
@@ -144,8 +145,40 @@ function createTaskStarters({
       return current;
     }
     const job = await createJob("preview", { kind, asset_type: "image" });
-    launchSidecarJob(jobArgv.previewJob({ jobId: job.job_id, kind, assetType: "image" }));
+    launchSidecarJob(jobArgv.previewJob({
+      jobId: job.job_id, kind, assetType: "image",
+      analyzeColors: readAppSettings()?.previews?.analyzeColors !== false,
+    }));
     return formatJobStatus(job);
+  }
+
+  // Dominant colours for photos whose preview predates the colour filter
+  // (new previews get theirs as they are rendered). Nothing to do is the
+  // common case after the first pass, so it is answered without a job.
+  // `force` redoes every photo (Settings ▸ Library, after the extraction
+  // changed); otherwise only the ones still without colours.
+  async function startColorsTask({ force = false, priority = 80, auto = false } = {}) {
+    const current = await latestJobStatus("colors");
+    if (current.running) {
+      return current;
+    }
+    // The automatic catch-up honours the switch; a run asked for in
+    // Settings is explicit and goes ahead regardless.
+    if (auto && readAppSettings()?.previews?.analyzeColors === false) {
+      return { ...current, running: false, missing: 0, disabled: true };
+    }
+    const status = await commands.colorStatus();
+    // An older extraction's colours (stale) count as all needing redoing.
+    const redoAll = force || status?.stale === true;
+    const count = redoAll ? (status?.analyzed || 0) + (status?.missing || 0) : (status?.missing || 0);
+    if (!(count > 0)) {
+      return { ...current, running: false, missing: 0 };
+    }
+    // The automatic catch-up runs below the user's own work (imports,
+    // annotation); a run they asked for in Settings goes ahead of it.
+    const job = await createJob("colors", { count, force }, { priority });
+    launchSidecarJob(jobArgv.colorsJob({ jobId: job.job_id, force }));
+    return { ...formatJobStatus(job), missing: status?.missing || 0 };
   }
 
   function deriveAiRepaintOutputPath(sourcePath) {
@@ -357,6 +390,7 @@ function createTaskStarters({
     startImportTask,
     startPreviewTask,
     startAiRepaintTask,
+    startColorsTask,
     startTextImageTask,
     resolveProviderCredentials,
   };

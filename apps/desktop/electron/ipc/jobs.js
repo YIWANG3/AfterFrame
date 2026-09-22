@@ -10,6 +10,7 @@ function register({
   startImportTask,
   startEnrichmentTask,
   startPreviewTask,
+  startColorsTask,
   commands,
   resumePeopleIndexJob,
 }) {
@@ -38,6 +39,18 @@ function register({
     try { return await latestJobStatus("preview"); } catch { return formatJobStatus(null); }
   });
   ipcMain.handle("workspace:preview-start", (_event, kind) => startPreviewTask(kind || "preview"));
+
+  // The latest job plus how many photos have colours and how many still
+  // need them, for Settings ▸ Library.
+  ipcMain.handle("workspace:colors-status", async () => {
+    const empty = emptyStatus();
+    if (empty) return empty;
+    try {
+      const [job, counts] = await Promise.all([latestJobStatus("colors"), commands.colorStatus().catch(() => null)]);
+      return { ...job, analyzed: counts?.analyzed || 0, missing: counts?.missing || 0 };
+    } catch { return formatJobStatus(null); }
+  });
+  ipcMain.handle("workspace:colors-start", (_event, options) => startColorsTask(options || {}));
 
   // ── Unified job handling ───────────────────────────────────────────────────
   // All queued/running jobs across every type, formatted for the renderer.

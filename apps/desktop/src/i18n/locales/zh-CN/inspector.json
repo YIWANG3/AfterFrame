@@ -4,6 +4,9 @@
   "unknown": "未知",
   "notLinked": "未关联",
   "reveal": "在访达中显示",
+  "colors": {
+    "swatch": "{{hex}}，占 {{share}}%，点击按此颜色筛选"
+  },
   "sections": {
     "properties": "属性",
     "source": "源文件",

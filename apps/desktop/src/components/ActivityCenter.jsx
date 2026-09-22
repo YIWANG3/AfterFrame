@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import {
-  Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Pause, Play,
+  Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Palette, Pause, Play,
   CheckCircle2, XCircle, CircleSlash,
 } from "lucide-react";
 
@@ -18,6 +18,7 @@ export const JOB_META = {
   annotation: { label: "AI Annotation", icon: Sparkles },
   ai_repaint: { label: "AI Repaint", icon: Wand2 },
   people_index: { label: "People Recognition", icon: ScanFace },
+  colors: { label: "Colour Analysis", icon: Palette },
 };
 
 export function jobLine(job, t) {

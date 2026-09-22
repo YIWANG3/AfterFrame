@@ -11,6 +11,7 @@ from . import video
 from .catalog import CatalogPaths
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
+from .db.colors import analyze_asset_colors
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -152,6 +153,7 @@ class PreviewService:
         progress_callback=None,
         paths: list[Path] | None = None,
         force_paths: list[Path] | None = None,
+        analyze_colors: bool = True,
     ) -> dict[str, int]:
         rows = list_assets_for_preview(connection, asset_type=asset_type, kind=kind, limit=limit, paths=paths)
         forced = {str(path.resolve()) for path in (force_paths or [])}
@@ -169,6 +171,9 @@ class PreviewService:
         for row in rows:
             row_force = force or str(Path(row["canonical_path"]).resolve()) in forced
             if row["existing_relative_path"] and row["existing_status"] == "ready" and not row_force and self._preview_on_disk(row["asset_id"], kind):
+                # A preview from before colours existed: read its colours now.
+                if analyze_colors and kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
+                    analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"])
                 skipped += 1
                 processed += 1
                 report_progress(
@@ -208,6 +213,10 @@ class PreviewService:
                             status=result.status,
                             commit=False,
                         )
+                        # The thumbnail is the colour sample too: same file,
+                        # already decoded once, a few ms more.
+                        if analyze_colors and kind == "preview" and row["asset_type"] == "image":
+                            analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
                         generated += 1
                     except SourceNotReadyError:
                         # Keep an existing good preview/DB entry. A later watcher

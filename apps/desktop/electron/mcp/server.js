@@ -134,7 +134,7 @@ const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
   "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "orientation", "tag", "tag_match",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
-  "location_source", "country", "city", "caption_contains", "ocr_contains", "path_contains",
+  "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains",
 ];
 
 function facetFiltersFrom(source) {
@@ -247,6 +247,8 @@ function createMcpServer(deps) {
           },
           country: { ...ONE_OR_MANY, description: "Country or region the photo was taken in, as an ISO 3166-1 alpha-2 code (JP, US, FR, HK). Works for GPS, AI-guessed and manual locations alike. A list means any of them." },
           city: { ...ONE_OR_MANY, description: "City the photo was taken in, by its English name as in the offline gazetteer (Tokyo, New York City, Paris). A list means any of them." },
+          color: { ...ONE_OR_MANY, description: "A colour the photo must contain, as hex (#3a7bd5): matches photos with a dominant colour near it. A list means any of them." },
+          color_tolerance: { type: "string", enum: ["strict", "normal", "loose"], description: "How close a photo's colour must be to `color` (default normal)." },
           caption_contains: { type: "string", description: "Text the AI description must contain (that field only, unlike query)" },
           ocr_contains: { type: "string", description: "Text that must appear IN the picture (signs, labels), as read by AI annotation" },
           path_contains: { type: "string", description: "Text the file's folder or name must contain" },
@@ -498,7 +500,7 @@ function createMcpServer(deps) {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets (camera, lens, tag, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
-              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, caption_contains, ocr_contains, path_contains; " +
+              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains; " +
               "plus collection_id to mean 'only photos in that folder'.",
           },
           collection_id: { type: "string" },

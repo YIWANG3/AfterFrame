@@ -4,6 +4,9 @@
   "unknown": "Unknown",
   "notLinked": "Not linked",
   "reveal": "Reveal in Finder",
+  "colors": {
+    "swatch": "{{hex}}, {{share}}% of the picture. Click to filter by this colour"
+  },
   "sections": {
     "properties": "Properties",
     "source": "Source",
