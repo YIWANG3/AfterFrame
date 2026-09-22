@@ -204,6 +204,8 @@
     },
     "country": "Country/Region",
     "city": "City",
+    "addFacet": "Add filter",
+    "rating": "Rating",
     "textContains": "Text",
     "containsPlaceholder": "contains…",
     "contains": {
