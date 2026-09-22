@@ -4,7 +4,7 @@ import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/for
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
-import {
+import { isEmptyValue,
   DEFAULT_SCOPE, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
   shouldResetScopeForReveal,
@@ -127,6 +127,11 @@ export default function useWorkspace({ pushToast } = {}) {
     colorsReady: () => {
       loadFacetValues();
       refreshShownDetail();
+      // A grid narrowed by colour was answered from the colours the catalog
+      // had at the time; new ones can change its membership.
+      if (!isEmptyValue(scopeRef.current.filters?.color)) {
+        void loadBrowser({ scope: scopeRef.current, preserveView: true });
+      }
     },
   };
   const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);

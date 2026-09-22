@@ -114,7 +114,10 @@ def init_db(connection: sqlite3.Connection) -> None:
             migrate(connection, int(row["schema_version"]), SCHEMA_VERSION)
             _apply_latest_schema(connection)
         refresh_place_fields(connection)
-        if is_new:
+        # No colours yet means nothing from an older extraction to redo: say
+        # so, or the first colours written by a preview pass would look stale
+        # and the catch-up job would redo them all.
+        if is_new or connection.execute("SELECT 1 FROM asset_colors LIMIT 1").fetchone() is None:
             mark_colors_current(connection)
 
         connection.commit()

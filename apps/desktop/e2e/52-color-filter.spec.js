@@ -61,12 +61,15 @@ test("pick a preset, type a hex, widen the tolerance", async () => {
 
 test("the Inspector shows the palette; a swatch is a filter", async () => {
   await cards().filter({ hasText: "006-blue" }).first().click();
+  // The Inspector keeps the previous photo (and its palette) until the new
+  // detail arrives: wait for the title, or the swatch read is the old one.
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("006-blue.jpg");
   const strip = ctx.window.locator("[data-testid='inspector-palette']");
   await expect(strip).toBeVisible();
   const swatches = strip.locator("[data-swatch]");
   expect(await swatches.count()).toBeGreaterThanOrEqual(1);
   const hex = await swatches.first().getAttribute("data-swatch");
-  await swatches.first().click();
+  await strip.locator(`[data-swatch="${hex}"]`).click();
   // Both sides settle at their own pace (the grid re-browses, and on the CI
   // VM every sidecar call queues behind the job's polling): compare once
   // both are there.

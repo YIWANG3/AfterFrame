@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -1006,19 +1007,27 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
 
     catalog = ensure_catalog(catalog_path)
     force = force or colors_stale(connection)  # an older extraction: redo them all
+    try:
+        os.nice(5)  # background work: the resident sidecar and the app come first
+    except (AttributeError, OSError):
+        pass
     payload = {"limit": limit, "force": force, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
     try:
         rows = list_assets_missing_colors(connection, limit=limit, force=force)
         total = len(rows)
         analyzed = failed = 0
+        reported_at = time.monotonic()
         for index, row in enumerate(rows, start=1):
-            if analyze_asset_colors(connection, row["asset_id"], catalog.root / row["relative_path"]):
+            # One asset per commit: the extraction is the cost, and a write
+            # transaction held across a batch kept the resident sidecar (which
+            # writes on some reads) waiting for seconds at a time.
+            if analyze_asset_colors(connection, row["asset_id"], catalog.root / row["relative_path"], commit=True):
                 analyzed += 1
             else:
                 failed += 1
-            if index % 50 == 0 or index == total:
-                connection.commit()
+            if index == total or time.monotonic() - reported_at >= 1.0:
+                reported_at = time.monotonic()
                 _check_cancel(connection, job_id)
                 update_job(
                     connection, job_id, payload=payload,
