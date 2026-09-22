@@ -126,7 +126,9 @@ export default function useWorkspace({ pushToast } = {}) {
     // palette. A full refresh would re-browse and lose a scrolled position.
     colorsReady: () => {
       loadFacetValues();
-      if (selectedAssetId) void loadDetail(selectedAssetId);
+      // The open photo, which need not be the selected card: a version
+      // sibling opened from the Inspector is shown without being in the grid.
+      if (detail?.asset_id) void loadDetail(detail.asset_id);
     },
   };
   const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
