@@ -206,6 +206,15 @@
     "city": "City",
     "addFacet": "Add filter",
     "rating": "Rating",
+    "color": "Colour",
+    "colorHexPlaceholder": "Hex, e.g. #3A7BD5",
+    "colorAdd": "Add",
+    "colorRemove": "Remove {{hex}}",
+    "colorTolerance": {
+      "strict": "Strict",
+      "normal": "Normal",
+      "loose": "Loose"
+    },
     "textContains": "Text",
     "containsPlaceholder": "contains…",
     "contains": {
@@ -234,7 +243,8 @@
       "enrichment": "Enrichment",
       "annotation": "AI Annotation",
       "ai_repaint": "AI Repaint",
-      "people_index": "People Recognition"
+      "people_index": "People Recognition",
+      "colors": "Colour analysis"
     }
   },
   "lightbox": {

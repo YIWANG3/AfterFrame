@@ -51,6 +51,7 @@ from .collections import (
     reorder_collections,
     update_collection,
 )
+from .colors import analyze_asset_colors, color_status, get_asset_colors, list_assets_missing_colors, replace_asset_colors
 from .core import RESOLVER_VERSION, _ensure_column, _file_id, _json, connect, init_db, set_catalog_path
 from .jobs import (
     _UNSET,  # sentinel shared with update_job callers

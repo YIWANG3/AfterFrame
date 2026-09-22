@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 SCHEMA_STATEMENTS = [
@@ -373,6 +373,21 @@ SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_place ON asset_locations(place_id)",
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_source ON asset_locations(source)",
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_country ON asset_locations(country_code)",
+    # Dominant colours of a photo (schema 10): up to five swatches from its
+    # preview, most prominent first, with CIELab for the colour filter.
+    """
+    CREATE TABLE IF NOT EXISTS asset_colors (
+        asset_id TEXT NOT NULL,
+        rank INTEGER NOT NULL,
+        hex TEXT NOT NULL,
+        share REAL NOT NULL,
+        l REAL NOT NULL,
+        a REAL NOT NULL,
+        b REAL NOT NULL,
+        PRIMARY KEY (asset_id, rank),
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_city ON asset_locations(city_key)",
     """
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(

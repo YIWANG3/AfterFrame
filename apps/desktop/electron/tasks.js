@@ -148,6 +148,25 @@ function createTaskStarters({
     return formatJobStatus(job);
   }
 
+  // Dominant colours for photos whose preview predates the colour filter
+  // (new previews get theirs as they are rendered). Nothing to do is the
+  // common case after the first pass, so it is answered without a job.
+  async function startColorsTask() {
+    const current = await latestJobStatus("colors");
+    if (current.running) {
+      return current;
+    }
+    const status = await commands.colorStatus();
+    if (!status || !(status.missing > 0)) {
+      return { ...current, running: false, missing: 0 };
+    }
+    // Priority below the user's own work (imports, annotation) — a catch-up
+    // must never delay what they just asked for.
+    const job = await createJob("colors", { missing: status.missing }, { priority: 80 });
+    launchSidecarJob(jobArgv.colorsJob({ jobId: job.job_id }));
+    return { ...formatJobStatus(job), missing: status.missing };
+  }
+
   function deriveAiRepaintOutputPath(sourcePath) {
     const source = path.resolve(sourcePath);
     const ext = ".png";
@@ -357,6 +376,7 @@ function createTaskStarters({
     startImportTask,
     startPreviewTask,
     startAiRepaintTask,
+    startColorsTask,
     startTextImageTask,
     resolveProviderCredentials,
   };

@@ -164,7 +164,7 @@ class CountryCityMigrationTest(unittest.TestCase):
 
         init_db(connection)
 
-        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 9)
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], SCHEMA_VERSION)
         places = {
             row["asset_id"]: (row["country_code"], row["city_en"], row["city_zh"], row["city_key"])
             for row in connection.execute("SELECT * FROM asset_locations").fetchall()
@@ -198,6 +198,22 @@ class CountryCityMigrationTest(unittest.TestCase):
         init_db(connection)
 
         self.assertEqual(list(self.path.parent.glob("*.bak")), [])
+
+
+class ColorsMigrationTest(unittest.TestCase):
+    def test_v9_catalog_gets_the_colours_table(self) -> None:
+        connection = sqlite3.connect(":memory:")
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+        init_db(connection)
+        connection.execute("DROP TABLE asset_colors")
+        connection.execute("UPDATE catalog_info SET schema_version = 9")
+        connection.commit()
+
+        init_db(connection)
+
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 10)
+        self.assertEqual(connection.execute("SELECT COUNT(*) FROM asset_colors").fetchone()[0], 0)
 
 
 class SchemaMigrationTest(unittest.TestCase):

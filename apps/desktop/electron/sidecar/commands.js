@@ -445,6 +445,11 @@ function createSidecarCommands(callJson) {
     },
 
     // ── Jobs ─────────────────────────────────────────────────────────────
+    // How many photos have their dominant colours, and how many still need them.
+    colorStatus() {
+      return callJson(["color-status"]);
+    },
+
     createJob(jobType, payload, { priority } = {}) {
       const argv = ["create-job", "--job-type", String(jobType), "--payload-json", JSON.stringify(payload || {})];
       if (Number.isFinite(priority)) argv.push("--priority", String(priority));

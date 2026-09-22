@@ -230,6 +230,24 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [discoverCatalogKey, workspace.catalogRevision, workspace.browserReady]);
 
+  // Once per catalog: photos whose preview predates the colour filter get
+  // their dominant colours in a background job (nothing to do is answered
+  // without one). New previews bring their colours as they are rendered.
+  const colorsCatchUpRef = useRef(new Set());
+  useEffect(() => {
+    if (!discoverCatalogKey || !workspace.browserReady || !api.can("colors")) return;
+    if (colorsCatchUpRef.current.has(discoverCatalogKey)) return;
+    colorsCatchUpRef.current.add(discoverCatalogKey);
+    void (async () => {
+      try {
+        const started = await api.startColorAnalysis();
+        if (started?.jobId && started.running !== false) {
+          workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "colors" });
+        }
+      } catch { /* best-effort */ }
+    })();
+  }, [discoverCatalogKey, workspace.browserReady]);
+
   // Discover entries open the gallery as a clean destination: no inherited
   // collection/status/query/facets, filter bar shown when there is something
   // to show, map drawer opened (and flown) only for map-shaped entries.
@@ -576,7 +594,7 @@ export default function App() {
     } else if (fin.status === "failed" && fin.jobType !== "ai_repaint") {
       // Generic failure surfacing for the other job types (the editor handles
       // ai_repaint errors inline).
-      const labels = { import: "Import", preview: "Preview generation", enrichment: "Enrichment" };
+      const labels = { import: "Import", preview: "Preview generation", enrichment: "Enrichment", colors: "Colour analysis" };
       pushToast?.({
         title: `${labels[fin.jobType] || fin.jobType} failed`,
         message: fin.error || "Job failed.",
@@ -1360,6 +1378,11 @@ export default function App() {
               onTagFilter={(tag) => {
                 if (!tag) return;
                 workspace.setFilters({ ...(workspace.filters || {}), tag });
+                setShowFilters(true);
+              }}
+              onColorFilter={(hex) => {
+                if (!hex) return;
+                workspace.setFilters({ ...(workspace.filters || {}), color: hex });
                 setShowFilters(true);
               }}
             />

@@ -197,6 +197,15 @@
     "city": "城市",
     "addFacet": "添加筛选",
     "rating": "评分",
+    "color": "颜色",
+    "colorHexPlaceholder": "输入色号，如 #3A7BD5",
+    "colorAdd": "添加",
+    "colorRemove": "移除 {{hex}}",
+    "colorTolerance": {
+      "strict": "严格",
+      "normal": "普通",
+      "loose": "宽松"
+    },
     "textContains": "文字",
     "containsPlaceholder": "包含…",
     "contains": {
@@ -225,7 +234,8 @@
       "enrichment": "元数据补全",
       "annotation": "AI 标注",
       "ai_repaint": "AI 重绘",
-      "people_index": "人物识别"
+      "people_index": "人物识别",
+      "colors": "色彩分析"
     }
   },
   "lightbox": {

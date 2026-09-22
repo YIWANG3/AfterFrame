@@ -995,6 +995,47 @@ def run_preview_job(
         raise
 
 
+def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | None = None) -> dict[str, Any]:
+    """Colours for every photo whose preview predates them. New previews get
+    theirs as they are rendered; this is the one-time catch-up, and the
+    retry for previews that could not be read."""
+    from .db.colors import analyze_asset_colors, list_assets_missing_colors
+
+    catalog = ensure_catalog(catalog_path)
+    payload = {"limit": limit, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
+    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
+    try:
+        rows = list_assets_missing_colors(connection, limit=limit)
+        total = len(rows)
+        analyzed = failed = 0
+        for index, row in enumerate(rows, start=1):
+            if analyze_asset_colors(connection, row["asset_id"], catalog.root / row["relative_path"]):
+                analyzed += 1
+            else:
+                failed += 1
+            if index % 50 == 0 or index == total:
+                connection.commit()
+                _check_cancel(connection, job_id)
+                update_job(
+                    connection, job_id, payload=payload,
+                    result={"current_phase": _phase_result({"key": "analyze_colors", "label": "Analyze Colors"}, {"processed": index, "total": total})},
+                    progress=_fraction(index, total), commit=True,
+                )
+        result = {"analyzed": analyzed, "failed": failed, "total": total}
+        update_job(
+            connection, job_id, status="succeeded",
+            payload={**payload, "phase": None, "phase_label": None},
+            result={**result, "current_phase": None}, progress=1.0, error_text=None,
+        )
+        return result
+    except JobCancelled:
+        connection.commit()
+        return _mark_cancelled(connection, job_id, payload)
+    except Exception as error:
+        update_job(connection, job_id, status="failed", payload=payload, result={}, progress=0.0, error_text=str(error))
+        raise
+
+
 def run_annotation_job(
     connection,
     catalog_path: Path,

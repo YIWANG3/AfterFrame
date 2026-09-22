@@ -33,6 +33,7 @@ export default function useJobs(bridgeRef) {
       else if (meta.jobType === "annotation") final = await api.getAnnotationJobStatus();
       else if (meta.jobType === "ai_repaint") final = await api.getAiRepaintStatus();
       else if (meta.jobType === "people_index") final = await api.getPeopleIndexStatus();
+      else if (meta.jobType === "colors") final = await api.getColorsStatus();
     } catch { /* sidecar hiccup — still emit the finish event below */ }
     const cancelled = final?.status === "cancelled";
 
@@ -62,6 +63,10 @@ export default function useJobs(bridgeRef) {
     } else if (meta.jobType === "enrichment") {
       bridge.mirrorTask("enrichment", final);
       await bridge.refreshAll({ preserveView: true });
+    } else if (meta.jobType === "colors") {
+      // The colour chip appears once photos have colours; the open Inspector
+      // shows its palette on the next detail load.
+      if (!cancelled) await bridge.refreshAll({ preserveView: true });
     } else if (meta.jobType === "ai_repaint") {
       // The job runner registers the repainted file as a new version asset —
       // reload so it appears in the grid without a manual refresh.

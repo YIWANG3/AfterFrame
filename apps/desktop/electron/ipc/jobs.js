@@ -10,6 +10,7 @@ function register({
   startImportTask,
   startEnrichmentTask,
   startPreviewTask,
+  startColorsTask,
   commands,
   resumePeopleIndexJob,
 }) {
@@ -38,6 +39,13 @@ function register({
     try { return await latestJobStatus("preview"); } catch { return formatJobStatus(null); }
   });
   ipcMain.handle("workspace:preview-start", (_event, kind) => startPreviewTask(kind || "preview"));
+
+  ipcMain.handle("workspace:colors-status", async () => {
+    const empty = emptyStatus();
+    if (empty) return empty;
+    try { return await latestJobStatus("colors"); } catch { return formatJobStatus(null); }
+  });
+  ipcMain.handle("workspace:colors-start", () => startColorsTask());
 
   // ── Unified job handling ───────────────────────────────────────────────────
   // All queued/running jobs across every type, formatted for the renderer.

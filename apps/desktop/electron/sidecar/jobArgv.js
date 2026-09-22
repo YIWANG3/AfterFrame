@@ -123,6 +123,10 @@ function annotationJob({
   return argv;
 }
 
+function colorsJob({ jobId }) {
+  return ["run-colors-job", "--job-id", String(jobId)];
+}
+
 function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds }) {
   const argv = [
     "run-people-index-job",
@@ -144,4 +148,5 @@ module.exports = {
   textImageJob,
   annotationJob,
   peopleIndexJob,
+  colorsJob,
 };

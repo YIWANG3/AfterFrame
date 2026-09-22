@@ -363,6 +363,26 @@ def _migrate_to_9(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX IF NOT EXISTS idx_asset_locations_city ON asset_locations(city_key)")
 
 
+def _migrate_to_10(connection: sqlite3.Connection) -> None:
+    """Dominant colours per photo, for the colour filter. The table only:
+    the colours job fills it from the previews already on disk."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_colors (
+            asset_id TEXT NOT NULL,
+            rank INTEGER NOT NULL,
+            hex TEXT NOT NULL,
+            share REAL NOT NULL,
+            l REAL NOT NULL,
+            a REAL NOT NULL,
+            b REAL NOT NULL,
+            PRIMARY KEY (asset_id, rank),
+            FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
@@ -371,6 +391,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     7: _migrate_to_7,
     8: _migrate_to_8,
     9: _migrate_to_9,
+    10: _migrate_to_10,
 }
 
 
