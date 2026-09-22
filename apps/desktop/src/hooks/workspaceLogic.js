@@ -60,7 +60,7 @@ export const facetScopeOf = (scope) => ({
 // The map viewport is where the user happens to be looking, not a condition.
 // A facet value may be a list (several values within one facet are OR); an
 // empty list is no condition. tag_match only tunes `tag` and means nothing alone.
-const isEmptyValue = (value) => value == null || value === "" || (Array.isArray(value) && value.length === 0);
+export const isEmptyValue = (value) => value == null || value === "" || (Array.isArray(value) && value.length === 0);
 const savableFilters = (filters) => {
   const kept = Object.fromEntries(Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && !isEmptyValue(value)));
   if (!Array.isArray(kept.tag)) delete kept.tag_match;

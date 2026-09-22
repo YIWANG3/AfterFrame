@@ -6,6 +6,7 @@ import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFi
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
+import { isEmptyValue } from "../hooks/workspaceLogic";
 import FaceCrop from "./FaceCrop";
 import InlineEdit from "./InlineEdit";
 
@@ -567,6 +568,78 @@ function SmartCollectionControls({ smart }) {
 // for TW, just the island's name.
 const ZH_REGION_LABELS = { TW: "中国台湾", HK: "中国香港", MO: "中国澳门" };
 
+// Which facets sit on the bar is the user's choice: every one is listed
+// under "Add filter", and the unticked ones are kept out of the way. The
+// choice is stored as the HIDDEN set, so a facet added in a later version
+// shows up for everyone. A hidden facet that is filtering (a smart
+// collection's rule, a person picked from the wall) still shows: what is
+// narrowing the grid must always be on the bar.
+export const FACET_SLOTS = [
+  { id: "camera", keys: ["camera"] },
+  { id: "lens", keys: ["lens"] },
+  { id: "tag", keys: ["tag", "tag_match"] },
+  { id: "extension", keys: ["extension"] },
+  { id: "location_source", keys: ["location_source"] },
+  { id: "country", keys: ["country"] },
+  { id: "city", keys: ["city"] },
+  { id: "text", keys: TEXT_FACETS },
+  { id: "people", keys: ["people"], capability: "people" },
+  { id: "annotated", keys: ["annotated"], capability: "annotation" },
+  { id: "person_group", keys: ["person_group"], capability: "people" },
+  { id: "iso", keys: ["iso_min", "iso_max"] },
+  { id: "aperture", keys: ["aperture_min", "aperture_max"] },
+  { id: "focal", keys: ["focal_min", "focal_max"] },
+  { id: "date", keys: ["date_from", "date_to", "date_within_days"] },
+  { id: "rating", keys: ["rating_min"] },
+];
+export const HIDDEN_FACETS_KEY = "afterframe.filterBar.hidden";
+const SLOT_IDS = new Set(FACET_SLOTS.map((slot) => slot.id));
+
+function readHiddenFacets() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(HIDDEN_FACETS_KEY) || "[]");
+    return Array.isArray(stored) ? stored.filter((id) => SLOT_IDS.has(id)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function FacetChooser({ hidden, onToggle, slotLabel }) {
+  const { t } = useTranslation("nav");
+  return (
+    <Popover label={t("filter.addFacet")} width={200}>
+      <div className="popover-scroll -mr-2 max-h-[320px] overflow-y-auto pr-1" data-facet-chooser="true">
+        {FACET_SLOTS.filter((slot) => !slot.capability || api.can(slot.capability)).map((slot) => {
+          const on = !hidden.includes(slot.id);
+          return (
+            <button
+              key={slot.id}
+              type="button"
+              role="checkbox"
+              aria-checked={on}
+              data-facet-slot={slot.id}
+              onClick={() => onToggle(slot.id)}
+              className={[
+                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] hover:bg-hover",
+                on ? "text-text" : "text-muted",
+              ].join(" ")}
+            >
+              <span className={[
+                "flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] border",
+                on ? "border-accent/70 bg-accent/15" : "border-border",
+              ].join(" ")}
+              >
+                {on && <Check className="h-2.5 w-2.5 text-accent" />}
+              </span>
+              <span className="truncate">{slotLabel(slot.id)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </Popover>
+  );
+}
+
 export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
   const { t, i18n } = useTranslation("nav");
   const f = filters || {};
@@ -602,6 +675,22 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   };
   const activeCount = Object.keys(f).filter((key) => key !== "tag_match").length;
 
+  const [hidden, setHidden] = useState(readHiddenFacets);
+  const toggleFacet = (id) => {
+    const next = hidden.includes(id) ? hidden.filter((h) => h !== id) : [...hidden, id];
+    setHidden(next);
+    try { localStorage.setItem(HIDDEN_FACETS_KEY, JSON.stringify(next)); } catch { /* preference only */ }
+  };
+  const slotActive = (id) => FACET_SLOTS.find((slot) => slot.id === id).keys.some((key) => !isEmptyValue(f[key]));
+  const shows = (id) => !hidden.includes(id) || slotActive(id);
+  const slotLabel = (id) => ({
+    camera: t("filter.camera"), lens: t("filter.lens"), tag: t("filter.tag"), extension: t("filter.format"),
+    location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
+    text: t("filter.textContains"), people: t("filter.people"), annotated: t("filter.annotated"),
+    person_group: t("filter.person"), iso: t("filter.iso"), aperture: t("filter.aperture"),
+    focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"),
+  })[id];
+
   const scrollRef = useRef(null);
   const [moreRight, setMoreRight] = useState(false);
   const measureMore = () => {
@@ -618,7 +707,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
     observer.observe(el);
     for (const child of el.children) observer.observe(child);
     return () => observer.disconnect();
-  }, [activeCount, f.geo?.label]);
+  }, [activeCount, f.geo?.label, hidden]);
 
   return (
     // Two parts: the facets scroll sideways when they do not fit; the actions
@@ -652,13 +741,13 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
       {/* A facet with nothing to offer is hidden — unless it is filtering: counts
           follow the other filters, so its options can run out while its own
           pick is still in force, and that pick must stay reachable. */}
-      {(cameras.length > 0 || toList(f.camera).length > 0) && (
+      {shows("camera") && (cameras.length > 0 || toList(f.camera).length > 0) && (
         <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
       )}
-      {(lenses.length > 0 || toList(f.lens).length > 0) && (
+      {shows("lens") && (lenses.length > 0 || toList(f.lens).length > 0) && (
         <ListPopover label={t("filter.lens")} value={f.lens} options={lenses} onSelect={(v) => onChange(setOrDelete(f, "lens", v))} />
       )}
-      {(tags.length > 0 || toList(f.tag).length > 0) && (
+      {shows("tag") && (tags.length > 0 || toList(f.tag).length > 0) && (
         <ListPopover
           label={t("filter.tag")}
           value={f.tag}
@@ -670,16 +759,17 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           onMatchMode={(mode) => onChange(setOrDelete(f, "tag_match", mode === "all" ? "all" : undefined))}
         />
       )}
-      {(extensions.length > 0 || toList(f.extension).length > 0) && (
+      {shows("extension") && (extensions.length > 0 || toList(f.extension).length > 0) && (
         <ListPopover
           label={t("filter.format")}
           value={f.extension}
           options={extensions.map((e) => ({ value: String(e.value).toUpperCase(), count: e.count }))}
+          labelOf={(value) => String(value).toUpperCase()} // a rule saved by an agent may say "jpg"
           onSelect={(v) => onChange(setOrDelete(f, "extension", v))}
         />
       )}
 
-      {(locationSources.length > 0 || toList(f.location_source).length > 0) && (
+      {shows("location_source") && (locationSources.length > 0 || toList(f.location_source).length > 0) && (
         <ListPopover
           label={t("filter.locationSource.label")}
           value={f.location_source}
@@ -688,7 +778,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           onSelect={(v) => onChange(setOrDelete(f, "location_source", v))}
         />
       )}
-      {(countries.length > 0 || toList(f.country).length > 0) && (
+      {shows("country") && (countries.length > 0 || toList(f.country).length > 0) && (
         <ListPopover
           label={t("filter.country")}
           value={f.country}
@@ -698,7 +788,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           onSelect={(v) => onChange(setOrDelete(f, "country", v))}
         />
       )}
-      {(cities.length > 0 || toList(f.city).length > 0) && (
+      {shows("city") && (cities.length > 0 || toList(f.city).length > 0) && (
         <ListPopover
           label={t("filter.city")}
           value={f.city}
@@ -708,12 +798,12 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           onSelect={(v) => onChange(setOrDelete(f, "city", v))}
         />
       )}
-      <TextContainsPopover filters={f} onChange={onChange} />
+      {shows("text") && <TextContainsPopover filters={f} onChange={onChange} />}
 
       {/* Face/annotation-backed filters need their data pipelines (People
           indexing, AI annotation) — hidden where the bridge declares those
           capabilities off (web build). */}
-      {api.can("people") && (
+      {shows("people") && api.can("people") && (
         <button
           type="button"
           onClick={() => onChange(setOrDelete(f, "people", f.people === "with_faces" ? undefined : "with_faces"))}
@@ -728,7 +818,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
       )}
 
       {/* AI annotation presence — cycles off → with → without → off. */}
-      {api.can("annotation") && (
+      {shows("annotated") && api.can("annotation") && (
         <button
           type="button"
           onClick={() => onChange(setOrDelete(f, "annotated",
@@ -744,7 +834,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         </button>
       )}
 
-      {api.can("people") && (
+      {shows("person_group") && api.can("people") && (
         <PersonFilterPopover
           value={f.person_group}
           personGroup={personGroup}
@@ -755,14 +845,15 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         />
       )}
 
-      <RangePopover label={t("filter.iso")} bounds={facetValues?.iso} step={50} minKey="iso_min" maxKey="iso_max" filters={f} onChange={onChange} />
-      <RangePopover label={t("filter.aperture")} bounds={facetValues?.aperture} step={0.1} minKey="aperture_min" maxKey="aperture_max" filters={f} onChange={onChange} prefix="ƒ/" decimals={1} />
-      <RangePopover label={t("filter.focal")} bounds={facetValues?.focal} step={1} minKey="focal_min" maxKey="focal_max" filters={f} onChange={onChange} suffix="mm" />
+      {shows("iso") && <RangePopover label={t("filter.iso")} bounds={facetValues?.iso} step={50} minKey="iso_min" maxKey="iso_max" filters={f} onChange={onChange} />}
+      {shows("aperture") && <RangePopover label={t("filter.aperture")} bounds={facetValues?.aperture} step={0.1} minKey="aperture_min" maxKey="aperture_max" filters={f} onChange={onChange} prefix="ƒ/" decimals={1} />}
+      {shows("focal") && <RangePopover label={t("filter.focal")} bounds={facetValues?.focal} step={1} minKey="focal_min" maxKey="focal_max" filters={f} onChange={onChange} suffix="mm" />}
 
-      <DateRangePopover captureRange={facetValues?.capture_time} filters={f} onChange={onChange} />
+      {shows("date") && <DateRangePopover captureRange={facetValues?.capture_time} filters={f} onChange={onChange} />}
 
       {/* Rating ≥ N */}
-      <div className="flex h-6 items-center gap-0.5 rounded-md border border-border/70 bg-app px-1.5">
+      {shows("rating") && (
+      <div className="flex h-6 items-center gap-0.5 rounded-md border border-border/70 bg-app px-1.5" data-facet-rating="true">
         {[1, 2, 3, 4, 5].map((n) => {
           const on = (f.rating_min || 0) >= n;
           return (
@@ -778,6 +869,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           );
         })}
       </div>
+      )}
 
       {/* Location chip — created by moving the map, removable here. Removing
           it only drops filters.geo; the map drawer stays open. */}
@@ -795,6 +887,7 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         </button>
       )}
 
+      <FacetChooser hidden={hidden} onToggle={toggleFacet} slotLabel={slotLabel} />
       </div>
 
       {(activeCount > 0 || smart?.canSave || smart?.editing) && (
