@@ -167,6 +167,18 @@ All migrations run in one transaction. Do not update `catalog_info.schema_versio
 from feature/domain modules or rely only on `CREATE TABLE IF NOT EXISTS` for an
 existing table change.
 
+Before an upgrade runs, `init_db` copies the database next to itself as
+`<name>.schema<old version>.bak` (once per old version; a new or up-to-date
+catalog is not copied). An upgraded catalog cannot be opened by an older app,
+so that copy is the way back.
+
+Place data (`media_workspace/data/`): `gazetteer.json.gz` (Wikidata, built by
+`research/gazetteer-lab/build_gazetteer.py`) and `countries.json.gz` (Natural
+Earth 50m borders, `research/gazetteer-lab/build_countries.py`). Country and
+city on every location are derived from them; bump
+`db/locations.py::PLACE_DATA_VERSION` after rebuilding either, and catalogs
+redo those fields on their next open.
+
 ## Notes
 
 - The app is not code-signed. Users need to bypass Gatekeeper on first launch.

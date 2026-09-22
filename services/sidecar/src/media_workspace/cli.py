@@ -339,7 +339,7 @@ def build_parser() -> argparse.ArgumentParser:
     facet_values_p.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
 
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
-    search_facet_p.add_argument("--field", choices=["tag", "camera", "lens"], required=True)
+    search_facet_p.add_argument("--field", choices=["tag", "camera", "lens", "city"], required=True)
     search_facet_p.add_argument("--q", default="")
     search_facet_p.add_argument("--limit", type=int, default=50)
     search_facet_p.add_argument("--collection-id", default=None)

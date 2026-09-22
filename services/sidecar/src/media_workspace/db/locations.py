@@ -25,6 +25,108 @@ def _valid_coordinates(latitude: object, longitude: object) -> tuple[float, floa
     return lat, lon
 
 
+_PLACE_COLUMNS = ("country_code", "city_key", "city_en", "city_zh")
+# Bump when the place data or the lookup changes: every catalog then redoes
+# its country/city fields on the next open (init_db), the way the schema 9
+# upgrade filled them the first time.
+PLACE_DATA_VERSION = "ne50-1+gazetteer-1"
+# An AI row placed at a region's or a country's centroid says nothing about
+# which city the photo was taken in.
+_CITY_PRECISIONS = ("exact", "locality")
+
+
+def place_fields(latitude: float, longitude: float, precision_level: str | None = "exact") -> dict[str, str | None]:
+    """Canonical country + city for a coordinate, from the offline gazetteer.
+
+    These are what the Country and City filters match on: an ISO code and the
+    gazetteer's own city (its id, English name, Simplified Chinese name), so
+    "NYC" typed by a model and a GPS fix in Manhattan land on the same option.
+    All None when the gazetteer is unavailable or nothing is near."""
+    from ..discover import load_reverse_geocoder
+    from ..geo_resolver import simplified
+
+    empty: dict[str, str | None] = dict.fromkeys(_PLACE_COLUMNS)
+    geocoder = load_reverse_geocoder()
+    if geocoder is None:
+        return empty
+    place = geocoder.lookup(latitude, longitude)
+    if place is None:
+        return empty
+    fields = {**empty, "country_code": place.get("country_iso")}
+    if place.get("tier") == "locality" and (precision_level or "exact") in _CITY_PRECISIONS:
+        fields.update(
+            city_key=place["key"],
+            city_en=place["en"],
+            city_zh=simplified(place["zh"]),
+        )
+    return fields
+
+
+def _country_for(row: sqlite3.Row | tuple, fields: dict[str, str | None]) -> str | None:
+    """An AI row's country came from what the model said about the picture,
+    which is better evidence than its coordinates (a point at a country's
+    centroid, or in Rome for Vatican City). Coordinates decide otherwise."""
+    source, existing = row[-2], row[-1]
+    if source == "ai" and existing:
+        return existing
+    return fields["country_code"]
+
+
+def _write_place_fields(connection: sqlite3.Connection, location_id: int) -> None:
+    """Fill country/city for one row from its coordinates."""
+    row = connection.execute(
+        "SELECT latitude, longitude, precision_level, source, country_code FROM asset_locations WHERE location_id = ?",
+        (location_id,),
+    ).fetchone()
+    if row is None:
+        return
+    fields = place_fields(float(row[0]), float(row[1]), row[2])
+    connection.execute(
+        "UPDATE asset_locations SET country_code = ?, city_key = ?, city_en = ?, city_zh = ? WHERE location_id = ?",
+        (_country_for(row, fields), fields["city_key"], fields["city_en"], fields["city_zh"], location_id),
+    )
+
+
+def backfill_place_fields(connection: sqlite3.Connection) -> int:
+    """Redo country/city on every location row from the current place data.
+    Returns how many rows were looked at; does nothing when the gazetteer
+    is unavailable."""
+    from ..discover import load_reverse_geocoder
+
+    if load_reverse_geocoder() is None:
+        return 0
+    cache: dict[tuple[float, float, str], dict[str, str | None]] = {}
+    rows = connection.execute(
+        "SELECT location_id, latitude, longitude, precision_level, source, country_code FROM asset_locations"
+    ).fetchall()
+    for row in rows:
+        precision = row[3] or "exact"
+        key = (round(float(row[1]), 3), round(float(row[2]), 3), precision)
+        fields = cache.get(key)
+        if fields is None:
+            fields = cache[key] = place_fields(key[0], key[1], precision)
+        connection.execute(
+            "UPDATE asset_locations SET country_code = ?, city_key = ?, city_en = ?, city_zh = ? WHERE location_id = ?",
+            (_country_for(row, fields), fields["city_key"], fields["city_en"], fields["city_zh"], row[0]),
+        )
+    return len(rows)
+
+
+def refresh_place_fields(connection: sqlite3.Connection) -> bool:
+    """Part of opening a catalog: when the place data is newer than what the
+    catalog was filled with, redo every row. Returns True when it did."""
+    from ..discover import load_reverse_geocoder
+
+    row = connection.execute("SELECT place_data_version FROM catalog_info WHERE catalog_id = 1").fetchone()
+    if row is not None and row[0] == PLACE_DATA_VERSION:
+        return False
+    if load_reverse_geocoder() is None:
+        return False  # keep the old fields; try again when the data is there
+    backfill_place_fields(connection)
+    connection.execute("UPDATE catalog_info SET place_data_version = ? WHERE catalog_id = 1", (PLACE_DATA_VERSION,))
+    return True
+
+
 def upsert_asset_location_from_metadata(
     connection: sqlite3.Connection,
     asset_id: str,
@@ -91,6 +193,7 @@ def upsert_asset_location_from_metadata(
         """,
         (location_id, longitude, longitude, latitude, latitude),
     )
+    _write_place_fields(connection, location_id)
     if commit:
         connection.commit()
 
@@ -161,6 +264,7 @@ def upsert_ai_asset_location(
         (location_id, resolved.min_longitude, resolved.max_longitude,
          resolved.min_latitude, resolved.max_latitude),
     )
+    _write_place_fields(connection, location_id)
     if commit:
         connection.commit()
     return True
@@ -219,6 +323,7 @@ def set_manual_asset_location(
         """,
         (location_id, lon, lon, lat, lat),
     )
+    _write_place_fields(connection, location_id)
     if commit:
         connection.commit()
 

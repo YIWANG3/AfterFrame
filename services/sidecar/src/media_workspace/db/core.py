@@ -10,6 +10,7 @@ from hashlib import sha1
 from pathlib import Path
 
 from ..schema import SCHEMA_STATEMENTS, SCHEMA_VERSION
+from .locations import refresh_place_fields
 from .migrations import SchemaMigrationError, ensure_column, migrate
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
@@ -48,10 +49,43 @@ _FACET_INDEXES = [
 ]
 
 
+def _backup_before_migration(connection: sqlite3.Connection) -> Path | None:
+    """Copy the catalog database next to itself before a schema upgrade.
+
+    A migration is one transaction and rolls back if it fails, so this is not
+    for that. It is for afterwards: migrate() refuses a catalog NEWER than the
+    app, so once upgraded the catalog no longer opens in the version that was
+    fine an hour ago. The copy is the way back. One per old version, never
+    overwritten; in-memory and brand-new catalogs have nothing to keep.
+    """
+    row = connection.execute("PRAGMA database_list").fetchone()
+    db_file = row[2] if row is not None else ""
+    if not db_file:
+        return None
+    try:
+        version = connection.execute("SELECT schema_version FROM catalog_info WHERE catalog_id = 1").fetchone()
+    except sqlite3.OperationalError:
+        return None  # no catalog_info yet: a new catalog
+    if version is None or int(version[0]) >= SCHEMA_VERSION:
+        return None
+    source = Path(db_file)
+    target = source.with_name(f"{source.name}.schema{int(version[0])}.bak")
+    if target.exists():
+        return target
+    # The backup API copies a consistent snapshot, WAL included; a file copy would not.
+    destination = sqlite3.connect(target)
+    try:
+        connection.backup(destination)
+    finally:
+        destination.close()
+    return target
+
+
 def init_db(connection: sqlite3.Connection) -> None:
     if connection.in_transaction:
         raise SchemaMigrationError("init_db requires a connection with no active transaction")
 
+    _backup_before_migration(connection)
     connection.execute("BEGIN IMMEDIATE")
     try:
         tables = {
@@ -78,6 +112,7 @@ def init_db(connection: sqlite3.Connection) -> None:
                 raise SchemaMigrationError("catalog_info is missing its catalog row")
             migrate(connection, int(row["schema_version"]), SCHEMA_VERSION)
             _apply_latest_schema(connection)
+        refresh_place_fields(connection)
 
         connection.commit()
     except Exception:
@@ -88,6 +123,7 @@ def init_db(connection: sqlite3.Connection) -> None:
 def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         connection.execute(statement)
+    _ensure_column(connection, "catalog_info", "place_data_version", "TEXT")
     _ensure_column(connection, "assets", "app_rating", "INTEGER")
     _ensure_column(connection, "raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'")
     _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")

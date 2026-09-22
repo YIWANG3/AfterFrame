@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from media_workspace.db import SCHEMA_VERSION, init_db
 from media_workspace.db.migrations import MIGRATIONS, SchemaMigrationError
+from media_workspace.discover import set_reverse_geocoder_for_tests
 
 
 def create_v5_catalog() -> sqlite3.Connection:
@@ -100,6 +103,101 @@ def create_v5_catalog() -> sqlite3.Connection:
     )
     connection.commit()
     return connection
+
+
+TEST_GAZETTEER = {
+    "countries": [
+        {"q": "Q17", "en": "Japan", "zh": "日本", "iso": "JP", "lat": 36.0, "lon": 138.0},
+        {"q": "Q30", "en": "United States", "zh": "美國", "iso": "US", "lat": 39.8, "lon": -98.6},
+    ],
+    "admin1": [],
+    "localities": [
+        {"q": "Q1490", "en": "Tokyo", "zh": "東京都", "lat": 35.6895, "lon": 139.6917, "country": "Q17", "links": 300},
+        {"q": "Q60", "en": "New York City", "zh": "紐約", "lat": 40.7128, "lon": -74.006, "country": "Q30", "links": 300},
+    ],
+}
+
+
+def create_v8_catalog(path: Path) -> sqlite3.Connection:
+    """A schema 8 catalog file: locations carry coordinates, no canonical city."""
+    connection = sqlite3.connect(path)
+    connection.row_factory = sqlite3.Row
+    init_db(connection)
+    connection.execute("DROP INDEX idx_asset_locations_city")
+    for column in ("city_key", "city_en", "city_zh"):
+        connection.execute(f"ALTER TABLE asset_locations DROP COLUMN {column}")
+    for asset_id in ("gps", "ai-city", "ai-country", "ocean"):
+        connection.execute(
+            "INSERT INTO assets (asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, "
+            "extension, fingerprint, file_size, modified_time) "
+            "VALUES (?, 'export', ?, ?, ?, ?, '.jpg', ?, 1, '2026-01-01T00:00:00')",
+            (asset_id, f"/photos/{asset_id}.jpg", asset_id, asset_id, asset_id, asset_id),
+        )
+    rows = [
+        ("gps", 35.68, 139.76, "exif", "exact", None),
+        ("ai-city", 40.71, -74.0, "ai", "locality", "US"),
+        ("ai-country", 36.0, 138.0, "ai", "country", "JP"),
+        ("ocean", -48.0, -123.0, "exif", "exact", None),
+    ]
+    for asset_id, lat, lon, source, precision, country in rows:
+        connection.execute(
+            "INSERT INTO asset_locations (asset_id, latitude, longitude, min_latitude, max_latitude, "
+            "min_longitude, max_longitude, source, precision_level, country_code) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (asset_id, lat, lon, lat, lat, lon, lon, source, precision, country),
+        )
+    connection.execute("UPDATE catalog_info SET schema_version = 8, place_data_version = NULL")
+    connection.commit()
+    return connection
+
+
+class CountryCityMigrationTest(unittest.TestCase):
+    def setUp(self) -> None:
+        set_reverse_geocoder_for_tests(TEST_GAZETTEER)
+        self.addCleanup(set_reverse_geocoder_for_tests, None)
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "catalog.sqlite3"
+
+    def test_v8_locations_get_their_country_and_city_from_their_coordinates(self) -> None:
+        connection = create_v8_catalog(self.path)
+        self.addCleanup(connection.close)
+
+        init_db(connection)
+
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 9)
+        places = {
+            row["asset_id"]: (row["country_code"], row["city_en"], row["city_zh"], row["city_key"])
+            for row in connection.execute("SELECT * FROM asset_locations").fetchall()
+        }
+        # A GPS fix never named a place before; the Chinese name is Simplified.
+        self.assertEqual(places["gps"], ("JP", "Tokyo", "东京都", "Q1490"))
+        self.assertEqual(places["ai-city"], ("US", "New York City", "纽约", "Q60"))
+        # A point at a country's centroid says nothing about a city.
+        self.assertEqual(places["ai-country"], ("JP", None, None, None))
+        self.assertEqual(places["ocean"], (None, None, None, None))
+
+    def test_the_catalog_is_copied_aside_before_it_is_upgraded(self) -> None:
+        connection = create_v8_catalog(self.path)
+        self.addCleanup(connection.close)
+
+        init_db(connection)
+        init_db(connection)  # an up-to-date catalog is not backed up again
+
+        backups = sorted(p.name for p in self.path.parent.glob("*.bak"))
+        self.assertEqual(backups, ["catalog.sqlite3.schema8.bak"])
+        backup = sqlite3.connect(self.path.with_name(backups[0]))
+        self.addCleanup(backup.close)
+        self.assertEqual(backup.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 8)
+        self.assertEqual(backup.execute("SELECT COUNT(*) FROM asset_locations").fetchone()[0], 4)
+
+    def test_a_new_catalog_is_not_backed_up(self) -> None:
+        connection = sqlite3.connect(self.path)
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+
+        init_db(connection)
+
+        self.assertEqual(list(self.path.parent.glob("*.bak")), [])
 
 
 class SchemaMigrationTest(unittest.TestCase):

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
@@ -163,7 +163,10 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
 
   let shown;
   if (onSearch) shown = q.trim() ? (remote || []) : options;
-  else if (searchable && q) shown = options.filter((o) => String(o.value).toLowerCase().includes(q.toLowerCase()));
+  else if (searchable && q) {
+    const term = q.toLowerCase();
+    shown = options.filter((o) => String(o.value).toLowerCase().includes(term) || String(labelOf(o.value, o)).toLowerCase().includes(term));
+  }
   else shown = options;
   // Counts follow the other active filters, so a picked value can drop out of
   // the list (nothing matches it any more). Keep it, at 0: that is the
@@ -242,7 +245,7 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
                 >
                   {on && <Check className="h-2.5 w-2.5 text-accent" />}
                 </span>
-                <span className="truncate">{labelOf(opt.value)}</span>
+                <span className="truncate">{labelOf(opt.value, opt)}</span>
               </span>
               <span className="shrink-0 text-[10px] tabular-nums text-muted2">{opt.count}</span>
             </button>
@@ -559,14 +562,44 @@ function SmartCollectionControls({ smart }) {
   );
 }
 
+// How mainland Chinese apps word these three in their own country/region
+// pickers; the platform's names are either formal (中国香港特别行政区) or,
+// for TW, just the island's name.
+const ZH_REGION_LABELS = { TW: "中国台湾", HK: "中国香港", MO: "中国澳门" };
+
 export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
-  const { t } = useTranslation("nav");
+  const { t, i18n } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
   const lenses = facetValues?.lenses || [];
   const tags = facetValues?.tags || [];
   const extensions = facetValues?.extensions || [];
   const locationSources = facetValues?.location_sources || [];
+  const countries = facetValues?.countries || [];
+  const cities = facetValues?.cities || [];
+  // Places are stored by their canonical value (ISO code, English city name)
+  // and shown in the interface language.
+  const chinese = String(i18n.language || "").toLowerCase().startsWith("zh");
+  const regionNames = useMemo(() => {
+    try { return new Intl.DisplayNames([chinese ? "zh-CN" : "en"], { type: "region" }); } catch { return null; }
+  }, [chinese]);
+  // The everyday name (中国, 韩国) comes from the platform's region names,
+  // which also settle how territories are worded (中国香港特别行政区); the
+  // gazetteer's formal label (中华人民共和国) is the fallback. The chip is
+  // "Country/Region" for the same reason: ISO 3166 lists both.
+  const countryLabel = (value, option) => {
+    if (chinese && ZH_REGION_LABELS[value]) return ZH_REGION_LABELS[value];
+    let standard;
+    try { standard = regionNames?.of(String(value)); } catch { standard = undefined; }
+    if (standard && standard !== value) return standard;
+    const known = option || countries.find((c) => c.value === value);
+    const fromCatalog = known && (chinese ? known.label_zh : known.label_en);
+    return fromCatalog || String(value);
+  };
+  const cityLabel = (value, option) => {
+    const known = option || cities.find((c) => c.value === value);
+    return (chinese && known?.label_zh) || String(value);
+  };
   const activeCount = Object.keys(f).filter((key) => key !== "tag_match").length;
 
   const scrollRef = useRef(null);
@@ -609,6 +642,9 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
         // that onto the row when it overflows.
         onWheel={(event) => {
           const el = event.currentTarget;
+          // An open dropdown is portaled to <body>, but React still bubbles
+          // its wheel events here: scrolling a list must not move the row.
+          if (!el.contains(event.target)) return;
           if (el.scrollWidth <= el.clientWidth || event.deltaX !== 0 || event.deltaY === 0) return;
           el.scrollLeft += event.deltaY;
         }}
@@ -650,6 +686,26 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
           options={locationSources}
           labelOf={(value) => t(`filter.locationSource.${value}`, { defaultValue: String(value) })}
           onSelect={(v) => onChange(setOrDelete(f, "location_source", v))}
+        />
+      )}
+      {(countries.length > 0 || toList(f.country).length > 0) && (
+        <ListPopover
+          label={t("filter.country")}
+          value={f.country}
+          options={countries}
+          searchable
+          labelOf={countryLabel}
+          onSelect={(v) => onChange(setOrDelete(f, "country", v))}
+        />
+      )}
+      {(cities.length > 0 || toList(f.city).length > 0) && (
+        <ListPopover
+          label={t("filter.city")}
+          value={f.city}
+          options={cities}
+          onSearch={(q) => api.searchFacet({ field: "city", q, limit: 60, ...(facetScope || {}) })}
+          labelOf={cityLabel}
+          onSelect={(v) => onChange(setOrDelete(f, "city", v))}
         />
       )}
       <TextContainsPopover filters={f} onChange={onChange} />
