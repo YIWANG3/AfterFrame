@@ -64,9 +64,7 @@ export default function useJobs(bridgeRef) {
       bridge.mirrorTask("enrichment", final);
       await bridge.refreshAll({ preserveView: true });
     } else if (meta.jobType === "colors") {
-      // The colour chip appears once photos have colours; the open Inspector
-      // shows its palette on the next detail load.
-      if (!cancelled) await bridge.refreshAll({ preserveView: true });
+      if (!cancelled) bridge.colorsReady?.();
     } else if (meta.jobType === "ai_repaint") {
       // The job runner registers the repainted file as a new version asset —
       // reload so it appears in the grid without a manual refresh.

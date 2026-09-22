@@ -121,6 +121,13 @@ export default function useWorkspace({ pushToast } = {}) {
       else if (type === "preview") setPreviewTask(task);
       else if (type === "enrichment") setEnrichmentTask(task);
     },
+    // Colours changed nothing about which photos are in the grid or their
+    // order: only the Colour chip (options exist now) and the open photo's
+    // palette. A full refresh would re-browse and lose a scrolled position.
+    colorsReady: () => {
+      loadFacetValues();
+      if (selectedAssetId) void loadDetail(selectedAssetId);
+    },
   };
   const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
 
