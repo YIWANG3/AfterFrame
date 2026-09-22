@@ -245,7 +245,7 @@ function createMcpServer(deps) {
             anyOf: [{ type: "string", enum: ["exif", "ai", "manual", "none"] }, { type: "array", items: { type: "string", enum: ["exif", "ai", "manual", "none"] } }],
             description: "What the photo's location is based on: exif (GPS), ai (guessed from the image), manual, or none (no location yet). A list means any of them.",
           },
-          country: { ...ONE_OR_MANY, description: "Country the photo was taken in, as an ISO 3166-1 alpha-2 code (JP, US, FR). Works for GPS, AI-guessed and manual locations alike. A list means any of them." },
+          country: { ...ONE_OR_MANY, description: "Country or region the photo was taken in, as an ISO 3166-1 alpha-2 code (JP, US, FR, HK). Works for GPS, AI-guessed and manual locations alike. A list means any of them." },
           city: { ...ONE_OR_MANY, description: "City the photo was taken in, by its English name as in the offline gazetteer (Tokyo, New York City, Paris). A list means any of them." },
           caption_contains: { type: "string", description: "Text the AI description must contain (that field only, unlike query)" },
           ocr_contains: { type: "string", description: "Text that must appear IN the picture (signs, labels), as read by AI annotation" },

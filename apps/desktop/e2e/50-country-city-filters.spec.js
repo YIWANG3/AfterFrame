@@ -43,7 +43,7 @@ test("pick a country, then a city inside it", async () => {
   const inCountry = await browseLength({ country: country.value });
   expect(inCountry).toBe(country.count);
 
-  await bar().getByRole("button", { name: "Country", exact: true }).click();
+  await bar().getByRole("button", { name: "Country/Region", exact: true }).click();
   await expect(option(country.value)).toContainText(country.label_en);
   await expect(option(country.value)).toHaveAttribute("data-facet-count", String(inCountry));
   await option(country.value).click();

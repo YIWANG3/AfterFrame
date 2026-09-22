@@ -202,7 +202,7 @@
       "manual": "Set by hand",
       "none": "No location"
     },
-    "country": "Country",
+    "country": "Country/Region",
     "city": "City",
     "textContains": "Text",
     "containsPlaceholder": "contains…",

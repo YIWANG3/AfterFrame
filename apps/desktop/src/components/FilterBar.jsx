@@ -562,6 +562,11 @@ function SmartCollectionControls({ smart }) {
   );
 }
 
+// How mainland Chinese apps word these three in their own country/region
+// pickers; the platform's names are either formal (中国香港特别行政区) or,
+// for TW, just the island's name.
+const ZH_REGION_LABELS = { TW: "中国台湾", HK: "中国香港", MO: "中国澳门" };
+
 export default function FilterBar({ facetValues, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
   const { t, i18n } = useTranslation("nav");
   const f = filters || {};
@@ -578,9 +583,12 @@ export default function FilterBar({ facetValues, filters, onChange, personGroup,
   const regionNames = useMemo(() => {
     try { return new Intl.DisplayNames([chinese ? "zh-CN" : "en"], { type: "region" }); } catch { return null; }
   }, [chinese]);
-  // The everyday name (中国, 韩国, 台湾) comes from the platform's region
-  // names; the gazetteer's formal label (中华人民共和国) is the fallback.
+  // The everyday name (中国, 韩国) comes from the platform's region names,
+  // which also settle how territories are worded (中国香港特别行政区); the
+  // gazetteer's formal label (中华人民共和国) is the fallback. The chip is
+  // "Country/Region" for the same reason: ISO 3166 lists both.
   const countryLabel = (value, option) => {
+    if (chinese && ZH_REGION_LABELS[value]) return ZH_REGION_LABELS[value];
     let standard;
     try { standard = regionNames?.of(String(value)); } catch { standard = undefined; }
     if (standard && standard !== value) return standard;
