@@ -67,19 +67,24 @@ test("the Inspector shows the palette; a swatch is a filter", async () => {
   expect(await swatches.count()).toBeGreaterThanOrEqual(1);
   const hex = await swatches.first().getAttribute("data-swatch");
   await swatches.first().click();
-  // Both sides settle at their own pace (the grid re-browses, the catch-up
-  // job's finish refresh may land in between): compare once both are there.
-  await expect.poll(async () => (await cards().count()) === (await browseLength({ color: hex }))).toBe(true);
+  // Both sides settle at their own pace (the grid re-browses, and on the CI
+  // VM every sidecar call queues behind the job's polling): compare once
+  // both are there.
+  await expect.poll(async () => (await cards().count()) === (await browseLength({ color: hex })), { timeout: 20_000 }).toBe(true);
   expect(await browseLength({ color: hex })).toBeGreaterThanOrEqual(1);
   await expect(bar().getByRole("button", { name: /^Clear/ })).toBeVisible();
   await bar().getByRole("button", { name: /^Clear/ }).click();
 });
 
 test("Settings ▸ Library shows the count and can re-analyse everything", async () => {
+  // The catch-up job must be over (its dock card says "Colour analysis" too,
+  // and on a slow VM the dock can lag the job by seconds).
+  await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getColorsStatus()), { timeout: 30_000 })
+    .toMatchObject({ running: false, analyzed: 13, missing: 0 });
+  await expect(ctx.window.getByTestId("job-dock-card")).toHaveCount(0, { timeout: 15_000 });
   await ctx.window.keyboard.press("Meta+,");
   await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Library" }).click();
-  const row = ctx.window.getByText("Colour analysis", { exact: true }).locator("..");
-  await expect(row).toContainText(/1[34] photos have a palette, 0 do not/);
+  await expect(ctx.window.getByText(/13 photos have a palette, 0 do not/)).toBeVisible();
   await expect(ctx.window.getByRole("button", { name: "Analyse missing" })).toBeDisabled();
   await ctx.window.getByRole("button", { name: "Re-analyse all" }).click();
   await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getColorsStatus()), { timeout: 30_000 })
