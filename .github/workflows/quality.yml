@@ -125,6 +125,13 @@ jobs:
           e2e/43-sticker-library.spec.js
           e2e/44-discover.spec.js
           e2e/45-collage-single.spec.js
+          e2e/46-smart-collections.spec.js
+          e2e/47-folder-filters.spec.js
+          e2e/48-filter-multiselect.spec.js
+          e2e/49-location-and-text-filters.spec.js
+          e2e/50-country-city-filters.spec.js
+          e2e/51-custom-filter-bar.spec.js
+          e2e/52-color-filter.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

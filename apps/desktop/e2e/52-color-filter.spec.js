@@ -1,7 +1,9 @@
 // Dominant colours: the catch-up job fills them on open for a catalog that
-// predates them, the Inspector shows the palette, and the Colour filter
-// takes any colour.
+// predates them (the seeded one has them, so they are stripped here), the
+// Inspector shows the palette, and the Colour filter takes any colour.
 
+const path = require("path");
+const { execFileSync } = require("child_process");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, mcpCall } = require("./helpers/app");
 
@@ -14,9 +16,15 @@ const browseLength = (filters) => ctx.window.evaluate(
 );
 
 test.beforeAll(async () => {
-  ctx = await launchApp({ testName: "color-filter" });
+  ctx = await launchApp({
+    testName: "color-filter",
+    prepareCatalog(catalogDir) {
+      execFileSync("sqlite3", [path.join(catalogDir, "catalog.sqlite3"),
+        "DELETE FROM asset_colors; UPDATE catalog_info SET colors_version = NULL;"]);
+    },
+  });
   await expect(cards().first()).toBeVisible({ timeout: 15_000 });
-  // The seeded catalog has previews but no colours: a job fills them.
+  // Previews but no colours: the catch-up job fills them on open.
   await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getFacetValues({ status: "all" }).then((f) => f.colors_analyzed)), { timeout: 30_000 })
     .toBeGreaterThanOrEqual(13);
   await ctx.window.getByRole("button", { name: "Filters" }).click();
