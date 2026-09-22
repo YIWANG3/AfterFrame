@@ -59,7 +59,10 @@ test("the Inspector shows the palette; a swatch is a filter", async () => {
   expect(await swatches.count()).toBeGreaterThanOrEqual(1);
   const hex = await swatches.first().getAttribute("data-swatch");
   await swatches.first().click();
-  await expect(cards()).toHaveCount(await browseLength({ color: hex }));
+  // Both sides settle at their own pace (the grid re-browses, the catch-up
+  // job's finish refresh may land in between): compare once both are there.
+  await expect.poll(async () => (await cards().count()) === (await browseLength({ color: hex }))).toBe(true);
+  expect(await browseLength({ color: hex })).toBeGreaterThanOrEqual(1);
   await expect(bar().getByRole("button", { name: /^Clear/ })).toBeVisible();
   await bar().getByRole("button", { name: /^Clear/ }).click();
 });

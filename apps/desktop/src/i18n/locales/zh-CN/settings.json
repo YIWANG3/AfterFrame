@@ -115,6 +115,8 @@
     "videoProxiesHint": "为播放器无法解码的片段(如 10-bit HEVC)转码的 H.264 版本。可放心删除，需要时会重新生成。",
     "openFolder": "在访达中打开",
     "analysisTitle": "分析",
+    "colorsAuto": "自动分析色彩",
+    "colorsAutoHint": "新照片在生成预览时顺带提取主色（每张约 20 毫秒），打开图库时补齐缺的。关掉后只在下面手动运行。",
     "colors": "色彩分析",
     "colorsHint": "{{analyzed}} 张已有色板，{{missing}} 张还没有。新导入的照片在生成预览时自动分析；打开图库时会自动补齐缺的。",
     "colorsRunning": "正在分析…进度见右上角的后台活动。",

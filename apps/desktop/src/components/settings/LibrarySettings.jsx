@@ -70,6 +70,7 @@ function OpenFolderButton({ kind, label }) {
 export default function LibrarySettings({ info, summary, onSwitchCatalog, onClose }) {
   const { t } = useTranslation("settings");
   const [generateHd, setGenerateHd] = useState(false);
+  const [analyzeColors, setAnalyzeColors] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [watched, setWatched] = useState([]);
 
@@ -78,6 +79,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
     (async () => {
       const stored = (await api.getPreviewSettings()) || {};
       if (!cancelled) setGenerateHd(stored.generateHd === true);
+      if (!cancelled) setAnalyzeColors(stored.analyzeColors !== false);
       const dirs = await api.getWatchedDirs?.();
       if (!cancelled) setWatched(Array.isArray(dirs) ? dirs : []);
     })();
@@ -87,6 +89,10 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
   const setHd = useCallback((value) => {
     setGenerateHd(value);
     void api.savePreviewSettings({ generateHd: value });
+  }, []);
+  const setColors = useCallback((value) => {
+    setAnalyzeColors(value);
+    void api.savePreviewSettings({ analyzeColors: value });
   }, []);
 
   const catalogPath = info?.catalogPath || null;
@@ -189,7 +195,10 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
         </FieldRow>
       </Group>
       {api.can("colors") && (
-        <Group title={t("library.analysisTitle")} scope={t("scope.catalog")}>
+        <Group title={t("library.analysisTitle")}>
+          <FieldRow label={t("library.colorsAuto")} hint={t("library.colorsAutoHint")}>
+            <Toggle on={analyzeColors} onChange={setColors} />
+          </FieldRow>
           <ColorAnalysisRow />
         </Group>
       )}

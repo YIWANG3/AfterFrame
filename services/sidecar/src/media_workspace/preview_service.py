@@ -153,6 +153,7 @@ class PreviewService:
         progress_callback=None,
         paths: list[Path] | None = None,
         force_paths: list[Path] | None = None,
+        analyze_colors: bool = True,
     ) -> dict[str, int]:
         rows = list_assets_for_preview(connection, asset_type=asset_type, kind=kind, limit=limit, paths=paths)
         forced = {str(path.resolve()) for path in (force_paths or [])}
@@ -171,7 +172,7 @@ class PreviewService:
             row_force = force or str(Path(row["canonical_path"]).resolve()) in forced
             if row["existing_relative_path"] and row["existing_status"] == "ready" and not row_force and self._preview_on_disk(row["asset_id"], kind):
                 # A preview from before colours existed: read its colours now.
-                if kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
+                if analyze_colors and kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
                     analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"])
                 skipped += 1
                 processed += 1
@@ -214,7 +215,7 @@ class PreviewService:
                         )
                         # The thumbnail is the colour sample too: same file,
                         # already decoded once, a few ms more.
-                        if kind == "preview" and row["asset_type"] == "image":
+                        if analyze_colors and kind == "preview" and row["asset_type"] == "image":
                             analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
                         generated += 1
                     except SourceNotReadyError:

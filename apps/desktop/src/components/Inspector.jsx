@@ -94,26 +94,27 @@ function ThumbnailStrip({ items, icon: Icon, onSelect, testId }) {
   );
 }
 
-// The photo's dominant colours, most prominent first, each as wide as its
-// share of the picture. A swatch is a filter: click it to find photos with
+// The photo's dominant colours as a row of dots in a pill, most prominent
+// first (Eagle's form). A dot is a filter: click it to find photos with
 // that colour.
 function PaletteStrip({ colors, onPick }) {
   const { t } = useTranslation("inspector");
   if (!Array.isArray(colors) || colors.length === 0) return null;
-  const total = colors.reduce((sum, c) => sum + (c.share || 0), 0) || 1;
   return (
-    <div className="mb-4 flex h-5 w-full overflow-hidden rounded-md" data-testid="inspector-palette">
-      {colors.map((swatch) => (
-        <button
-          key={swatch.hex}
-          type="button"
-          title={t("colors.swatch", { hex: swatch.hex.toUpperCase(), share: Math.round((swatch.share || 0) * 100) })}
-          onClick={() => onPick?.(swatch.hex)}
-          data-swatch={swatch.hex}
-          style={{ background: swatch.hex, flexGrow: (swatch.share || 0) / total, flexBasis: 0 }}
-          className="min-w-[10px] transition-[filter] hover:brightness-110 focus:outline-none"
-        />
-      ))}
+    <div className="mb-4 flex justify-center">
+      <div className="flex items-center gap-2 rounded-full bg-app/70 px-2.5 py-1.5" data-testid="inspector-palette">
+        {colors.map((swatch) => (
+          <button
+            key={swatch.hex}
+            type="button"
+            title={t("colors.swatch", { hex: swatch.hex.toUpperCase(), share: Math.round((swatch.share || 0) * 100) })}
+            onClick={() => onPick?.(swatch.hex)}
+            data-swatch={swatch.hex}
+            style={{ background: swatch.hex }}
+            className="h-5 w-5 rounded-full border border-white/15 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] transition-transform hover:scale-110 focus:outline-none"
+          />
+        ))}
+      </div>
     </div>
   );
 }

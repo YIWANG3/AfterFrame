@@ -46,12 +46,12 @@ const CASES = [
   {
     builder: "importJob",
     minimal: { jobId: "j1", mode: "combined" },
-    full: { jobId: "j1", mode: "combined", rawDirs: ["/r"], imageDirs: ["/i"], generateHd: true, respectTombstones: true },
+    full: { jobId: "j1", mode: "combined", rawDirs: ["/r"], imageDirs: ["/i"], generateHd: true, respectTombstones: true, analyzeColors: false },
   },
   {
     builder: "previewJob",
     minimal: { jobId: "j1" },
-    full: { jobId: "j1", kind: "preview-hd", assetType: "image" },
+    full: { jobId: "j1", kind: "preview-hd", assetType: "image", analyzeColors: false },
     neverSent: ["--limit", "--force"],
   },
   {

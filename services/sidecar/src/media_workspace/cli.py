@@ -548,6 +548,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_import_job_parser.add_argument("--raw-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--image-dir", type=Path, action="append", default=[])
     run_import_job_parser.add_argument("--generate-hd", action="store_true", help="also generate 2000px HD previews")
+    run_import_job_parser.add_argument("--skip-colors", action="store_true", help="do not extract dominant colours from the previews")
     run_import_job_parser.add_argument(
         "--respect-tombstones",
         action="store_true",
@@ -564,6 +565,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_preview_job_parser.add_argument("--asset-type", choices=["raw", "image"])
     run_preview_job_parser.add_argument("--limit", type=int)
     run_preview_job_parser.add_argument("--force", action="store_true")
+    run_preview_job_parser.add_argument("--skip-colors", action="store_true", help="do not extract dominant colours")
 
     run_colors_job_parser = subparsers.add_parser("run-colors-job", parents=[common])
     run_colors_job_parser.add_argument("--job-id", required=True)
@@ -1309,6 +1311,7 @@ def _cmd_run_import_job(args, connection, catalog, parser):
         image_dirs=args.image_dir,
         mode=args.mode,
         generate_hd=args.generate_hd,
+        analyze_colors=not args.skip_colors,
         respect_tombstones=args.respect_tombstones,
     )
     print(json.dumps(payload, indent=2))
@@ -1330,6 +1333,7 @@ def _cmd_run_preview_job(args, connection, catalog, parser):
         asset_type=args.asset_type,
         limit=args.limit,
         force=args.force,
+        analyze_colors=not args.skip_colors,
     )
     print(json.dumps(payload, indent=2))
     return 0

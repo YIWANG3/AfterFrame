@@ -547,6 +547,7 @@ def run_import_job(
     image_dirs: list[Path],
     mode: str = "combined",
     generate_hd: bool = True,
+    analyze_colors: bool = True,
     respect_tombstones: bool = False,
 ) -> dict[str, Any]:
     thresholds = Thresholds()
@@ -736,7 +737,7 @@ def run_import_job(
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="image",
                     progress_callback=preview_progress, paths=image_dirs,
-                    force_paths=changed_paths,
+                    force_paths=changed_paths, analyze_colors=analyze_colors,
                 ),
                 # Video poster frames share the standard preview tier (no HD).
                 preview_service.generate_batch(
@@ -938,6 +939,7 @@ def run_preview_job(
     asset_type: str | None = "image",
     limit: int | None = None,
     force: bool = False,
+    analyze_colors: bool = True,
 ) -> dict[str, Any]:
     payload = {
         "kind": kind,
@@ -969,6 +971,7 @@ def run_preview_job(
             limit=limit,
             force=force,
             progress_callback=preview_progress,
+            analyze_colors=analyze_colors,
         )
         update_job(
             connection,

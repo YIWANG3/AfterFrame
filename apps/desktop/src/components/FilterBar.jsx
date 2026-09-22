@@ -592,7 +592,7 @@ function ColorPopover({ filters, onChange }) {
   const toggle = (hex) => set(picked.includes(hex) ? picked.filter((c) => c !== hex) : [...picked, hex]);
   const summary = picked.length ? (
     <span className="flex items-center gap-1">
-      {picked.slice(0, 3).map((hex) => <span key={hex} className="h-3 w-3 rounded-sm border border-black/20" style={{ background: hex }} />)}
+      {picked.slice(0, 3).map((hex) => <span key={hex} className="h-3 w-3 rounded-full border border-black/20" style={{ background: hex }} />)}
       {picked.length > 3 && <span>+{picked.length - 3}</span>}
     </span>
   ) : undefined;
@@ -612,7 +612,7 @@ function ColorPopover({ filters, onChange }) {
               onClick={() => toggle(hex)}
               style={{ background: hex }}
               className={[
-                "h-5 w-5 rounded-md border transition-transform",
+                "h-5 w-5 rounded-full border transition-transform",
                 on ? "scale-110 border-accent ring-2 ring-accent/40" : "border-black/15 hover:scale-110",
               ].join(" ")}
             />
@@ -642,7 +642,7 @@ function ColorPopover({ filters, onChange }) {
         <div className="mt-1.5 flex flex-wrap gap-1">
           {picked.filter((hex) => !COLOR_PRESETS.includes(hex)).map((hex) => (
             <button key={hex} type="button" onClick={() => toggle(hex)} title={t("filter.colorRemove", { hex: hex.toUpperCase() })} className={ACTION_CHIP}>
-              <span className="h-3 w-3 rounded-sm border border-black/20" style={{ background: hex }} />
+              <span className="h-3 w-3 rounded-full border border-black/20" style={{ background: hex }} />
               {hex.toUpperCase()}
               <X className="h-2.5 w-2.5" />
             </button>

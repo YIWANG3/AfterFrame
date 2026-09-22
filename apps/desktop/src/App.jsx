@@ -240,7 +240,7 @@ export default function App() {
     colorsCatchUpRef.current.add(discoverCatalogKey);
     void (async () => {
       try {
-        const started = await api.startColorAnalysis();
+        const started = await api.startColorAnalysis({ auto: true });
         if (started?.jobId && started.running !== false) {
           workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "colors" });
         }

@@ -115,6 +115,8 @@
     "videoProxiesHint": "H.264 versions transcoded for clips the player can't decode (e.g. 10-bit HEVC). Safe to delete — regenerated when needed.",
     "openFolder": "Open in Finder",
     "analysisTitle": "Analysis",
+    "colorsAuto": "Analyse colours automatically",
+    "colorsAutoHint": "New photos get their dominant colours as their previews are made (about 20 ms each); the missing ones are filled in when the library opens. Off, it only runs from the buttons below.",
     "colors": "Colour analysis",
     "colorsHint": "{{analyzed}} photos have a palette, {{missing}} do not. New photos are analysed as their previews are made; the missing ones are filled in when the library opens.",
     "colorsRunning": "Analysing… progress is in the activity center, top right.",

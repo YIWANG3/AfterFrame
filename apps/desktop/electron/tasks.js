@@ -131,6 +131,7 @@ function createTaskStarters({
       rawDirs,
       imageDirs,
       generateHd: readAppSettings()?.previews?.generateHd === true,
+      analyzeColors: readAppSettings()?.previews?.analyzeColors !== false,
       // Auto imports (watched dirs live + catch-up) respect tombstones; a
       // manual re-import is the user's way to clear one.
       respectTombstones: options?.auto === true,
@@ -144,7 +145,10 @@ function createTaskStarters({
       return current;
     }
     const job = await createJob("preview", { kind, asset_type: "image" });
-    launchSidecarJob(jobArgv.previewJob({ jobId: job.job_id, kind, assetType: "image" }));
+    launchSidecarJob(jobArgv.previewJob({
+      jobId: job.job_id, kind, assetType: "image",
+      analyzeColors: readAppSettings()?.previews?.analyzeColors !== false,
+    }));
     return formatJobStatus(job);
   }
 
@@ -153,10 +157,15 @@ function createTaskStarters({
   // common case after the first pass, so it is answered without a job.
   // `force` redoes every photo (Settings ▸ Library, after the extraction
   // changed); otherwise only the ones still without colours.
-  async function startColorsTask({ force = false, priority = 80 } = {}) {
+  async function startColorsTask({ force = false, priority = 80, auto = false } = {}) {
     const current = await latestJobStatus("colors");
     if (current.running) {
       return current;
+    }
+    // The automatic catch-up honours the switch; a run asked for in
+    // Settings is explicit and goes ahead regardless.
+    if (auto && readAppSettings()?.previews?.analyzeColors === false) {
+      return { ...current, running: false, missing: 0, disabled: true };
     }
     const status = await commands.colorStatus();
     const count = force ? (status?.analyzed || 0) + (status?.missing || 0) : (status?.missing || 0);
