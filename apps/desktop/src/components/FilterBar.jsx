@@ -34,13 +34,28 @@ function Popover({ label, active, summary, children, width = 220, excluded = fal
   const panelRef = useRef(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
 
+  // Below the chip when the list fits there; otherwise above it, or pinned to
+  // the window's bottom edge. A chip low on the screen (a group in the
+  // condition-groups dialog, on a small window) must not open off-screen.
+  // Re-placed when the list changes size (options arriving, a search).
   useLayoutEffect(() => {
-    if (!open || !btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    const estWidth = width === "auto" ? 480 : width;
-    let left = r.left;
-    if (left + estWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - estWidth);
-    setPos({ left, top: r.bottom + 4 });
+    if (!open || !btnRef.current) return undefined;
+    function place() {
+      const r = btnRef.current.getBoundingClientRect();
+      const estWidth = width === "auto" ? 480 : width;
+      let left = r.left;
+      if (left + estWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - estWidth);
+      const h = panelRef.current?.offsetHeight || 0;
+      let top = r.bottom + 4;
+      if (h && top + h > window.innerHeight - 8) {
+        top = r.top - 4 - h >= 8 ? r.top - 4 - h : Math.max(8, window.innerHeight - 8 - h);
+      }
+      setPos((prev) => (prev.left === left && prev.top === top ? prev : { left, top }));
+    }
+    place();
+    const observer = panelRef.current ? new ResizeObserver(place) : null;
+    if (observer) observer.observe(panelRef.current);
+    return () => observer?.disconnect();
   }, [open, width]);
 
   useEffect(() => {

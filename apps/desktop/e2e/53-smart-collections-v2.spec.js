@@ -128,6 +128,9 @@ test("ratings: unrated, exactly and at most", async () => {
 });
 
 test("condition groups: any one of them may hold, and they save with the collection", async () => {
+  // The CI runner's window size: a lower group's lists must open on-screen
+  // (they once opened below the window's bottom edge there).
+  await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1080, 720));
   await bar().getByRole("button", { name: "Add filter" }).click();
   await ctx.window.locator("[data-filter-groups-entry]").click();
   await expect(dialog()).toBeVisible();
