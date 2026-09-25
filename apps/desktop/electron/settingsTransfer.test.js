@@ -172,3 +172,26 @@ test("collectExport without secrets never calls decrypt", () => {
   });
   assert.deepEqual(result.tokens, {});
 });
+
+test("watermark: the author and the frame templates travel; templates merge by id", async () => {
+  const mine = { id: "user:a", kind: "layers", name: "Bar", canvas: { pad: { bottom: 0.12 } }, layers: [] };
+  const { bundle } = await buildBundle({
+    settings: { ...SOURCE, watermarkProfile: { author: "Yi" } },
+    frameTemplates: [mine, { id: "bar-id", kind: "layers" }, { id: "user:b", kind: "anchors" }],
+    sections: ["watermark"], includeSecrets: false, decryptToken, appVersion: "0.5.3",
+  });
+  // Only user templates of the layers kind; nothing else from settings.
+  assert.deepEqual(bundle.sections, { watermark: { profile: { author: "Yi" }, templates: [mine] } });
+  assert.deepEqual(summarizeBundle(bundle).sections.watermark, { author: "Yi", templateCount: 1 });
+
+  const local = [{ ...mine, name: "Old name" }, { id: "user:local", kind: "layers", name: "Mine", layers: [] }];
+  const merged = mergeBundle({ settings: { watermarkProfile: { author: "" } }, frameTemplates: local, bundle, sections: ["watermark"] });
+  assert.equal(merged.settings.watermarkProfile.author, "Yi");
+  assert.deepEqual(merged.frameTemplates.map((t) => [t.id, t.name]), [["user:a", "Bar"], ["user:local", "Mine"]]);
+
+  // An empty name in the file never erases the local one; no templates → file untouched.
+  const { bundle: empty } = await buildBundle({ settings: {}, frameTemplates: [], sections: ["watermark"], includeSecrets: false, decryptToken });
+  const kept = mergeBundle({ settings: { watermarkProfile: { author: "Local" } }, frameTemplates: local, bundle: empty, sections: ["watermark"] });
+  assert.equal(kept.settings.watermarkProfile.author, "Local");
+  assert.equal(kept.frameTemplates, null);
+});

@@ -139,7 +139,17 @@
     "lineHeight": "行高",
     "addHandwriting": "AI 手写字",
     "glow": "外发光",
-    "glowIntensity": "强度"
+    "glowIntensity": "强度",
+    "insertInfo": "插入照片信息",
+    "tokens": {
+      "camera_model": "机型",
+      "lens_model": "镜头",
+      "exif": "参数",
+      "date": "日期",
+      "author": "作者",
+      "missing": "这张照片没有这项信息",
+      "noAuthor": "先在「设置 › 水印」里填写作者名"
+    }
   },
   "sticker": {
     "title": "贴纸",
@@ -234,7 +244,18 @@
     "top": "上",
     "bottom": "下",
     "left": "左",
-    "right": "右"
+    "right": "右",
+    "saveTemplate": "存为模板",
+    "saveTemplateHint": "把当前的边框、文字和 logo 存成模板，之后可以套到别的照片上",
+    "rename": "改名",
+    "duplicate": "复制",
+    "delete": "删除",
+    "copyName": "{{name}} 副本",
+    "deleteTitle": "删除模板「{{name}}」？",
+    "deleteMessage": "已经用它加过边框的照片不受影响。",
+    "templateSaved": "已存为模板",
+    "templateSkipped": "{{count}} 个图层只有像素（比如手写贴纸），没有存进模板",
+    "templateFailed": "模板没能保存"
   },
   "handwriting": {
     "title": "AI 手写字",

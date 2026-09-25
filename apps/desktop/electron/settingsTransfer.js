@@ -13,7 +13,7 @@ const pbkdf2 = promisify(crypto.pbkdf2);
 
 const FORMAT = "afterframe-settings";
 const VERSION = 1;
-const SECTIONS = ["general", "repaint", "annotation"];
+const SECTIONS = ["general", "repaint", "annotation", "watermark"];
 const PBKDF2_ITERATIONS = 600_000;
 const MIN_PASSPHRASE_LENGTH = 8;
 const MAX_BUNDLE_BYTES = 5 * 1024 * 1024;
@@ -36,6 +36,13 @@ function styleList(value) {
   return Array.isArray(value) ? value.filter((s) => isObject(s) && typeof s.id === "string" && s.id) : null;
 }
 
+// User frame templates (frame-templates.json): layers and margins, no pixels.
+function frameTemplateList(value) {
+  return Array.isArray(value)
+    ? value.filter((t) => isObject(t) && typeof t.id === "string" && t.id.startsWith("user:") && t.kind === "layers")
+    : [];
+}
+
 // Token namespaces a bundle's sections reference. Keys of deleted providers
 // that linger in aiProviders are deliberately not carried to the new device.
 function referencedTokenNamespaces(sections) {
@@ -50,12 +57,13 @@ function referencedTokenNamespaces(sections) {
  * @param {object} opts
  * @param {object} opts.settings  app settings.json contents
  * @param {Array|null} opts.styles  ai-styles.json contents
+ * @param {Array} [opts.frameTemplates]  frame-templates.json templates
  * @param {string} [opts.theme]  renderer-owned theme preference
  * @param {string[]} opts.sections  subset of SECTIONS
  * @param {boolean} opts.includeSecrets
  * @param {(stored: string) => string|null} opts.decryptToken
  */
-function collectExport({ settings = {}, styles = null, theme, sections, includeSecrets, decryptToken }) {
+function collectExport({ settings = {}, styles = null, frameTemplates = [], theme, sections, includeSecrets, decryptToken }) {
   const wanted = new Set((sections || []).filter((s) => SECTIONS.includes(s)));
   const out = {};
 
@@ -83,6 +91,13 @@ function collectExport({ settings = {}, styles = null, theme, sections, includeS
     const annotation = clone(isObject(settings.aiAnnotation) ? settings.aiAnnotation : {});
     annotation.providers = providerList(annotation.providers);
     out.annotation = annotation;
+  }
+
+  // The name frame text uses for {author}, and the templates saved in the
+  // editor. There are no personal logo files to carry yet.
+  if (wanted.has("watermark")) {
+    const author = typeof settings.watermarkProfile?.author === "string" ? settings.watermarkProfile.author : "";
+    out.watermark = { profile: { author }, templates: clone(frameTemplateList(frameTemplates)) };
   }
 
   const tokens = {};
@@ -143,8 +158,8 @@ async function openSecrets(bundle, passphrase) {
   }
 }
 
-async function buildBundle({ settings, styles, theme, sections, includeSecrets, passphrase, decryptToken, appVersion, now = new Date() }) {
-  const collected = collectExport({ settings, styles, theme, sections, includeSecrets, decryptToken });
+async function buildBundle({ settings, styles, frameTemplates, theme, sections, includeSecrets, passphrase, decryptToken, appVersion, now = new Date() }) {
+  const collected = collectExport({ settings, styles, frameTemplates, theme, sections, includeSecrets, decryptToken });
   const header = { format: FORMAT, version: VERSION, exportedAt: now.toISOString() };
   const bundle = { ...header, appVersion: appVersion || null, sections: collected.sections, secrets: null };
   if (includeSecrets) bundle.secrets = await sealSecrets(collected.tokens, passphrase, header);
@@ -191,7 +206,7 @@ function summarizeBundle(bundle, local = {}) {
     type: typeof p.type === "string" ? p.type : null,
     conflict: localIds.has(p.id),
   }));
-  const { general, repaint, annotation } = bundle.sections;
+  const { general, repaint, annotation, watermark } = bundle.sections;
   return {
     exportedAt: bundle.exportedAt,
     appVersion: bundle.appVersion || null,
@@ -201,6 +216,9 @@ function summarizeBundle(bundle, local = {}) {
         ? { providers: describe(repaint.providers, localRepaintIds), styleCount: styleList(repaint.styles)?.length ?? 0 }
         : null,
       annotation: annotation ? { providers: describe(annotation.providers, localAnnotationIds) } : null,
+      watermark: watermark
+        ? { author: watermark.profile?.author || null, templateCount: frameTemplateList(watermark.templates).length }
+        : null,
     },
     secretCount: bundle.secrets ? Number(bundle.secrets.count) || 0 : 0,
   };
@@ -226,13 +244,14 @@ function pickActive(localActive, importedActive, providers) {
 
 /**
  * Apply the chosen sections of a bundle onto local state.
- * @returns {{ settings: object, styles: Array|null, theme: string|null, locale: string|null, tokenNamespaces: string[] }}
- *   styles is null when ai-styles.json should be left untouched.
+ * @returns {{ settings: object, styles: Array|null, frameTemplates: Array|null, theme: string|null, locale: string|null, tokenNamespaces: string[] }}
+ *   styles / frameTemplates are null when their file should be left untouched.
  */
-function mergeBundle({ settings: localSettings = {}, styles: localStyles = null, bundle, sections }) {
+function mergeBundle({ settings: localSettings = {}, styles: localStyles = null, frameTemplates: localTemplates = [], bundle, sections }) {
   const wanted = new Set((sections || []).filter((s) => SECTIONS.includes(s) && bundle.sections[s]));
   const settings = clone(localSettings) || {};
   let styles = null;
+  let frameTemplates = null;
   let theme = null;
   let locale = null;
 
@@ -272,8 +291,17 @@ function mergeBundle({ settings: localSettings = {}, styles: localStyles = null,
     settings.aiAnnotation = next;
   }
 
+  if (wanted.has("watermark")) {
+    const imported = bundle.sections.watermark;
+    // An empty name in the file does not erase the one set here.
+    const author = typeof imported.profile?.author === "string" ? imported.profile.author.trim() : "";
+    if (author) settings.watermarkProfile = { ...(isObject(settings.watermarkProfile) ? settings.watermarkProfile : {}), author };
+    const importedTemplates = frameTemplateList(imported.templates);
+    if (importedTemplates.length) frameTemplates = mergeById(frameTemplateList(localTemplates), importedTemplates);
+  }
+
   const importedSections = Object.fromEntries([...wanted].map((s) => [s, bundle.sections[s]]));
-  return { settings, styles, theme, locale, tokenNamespaces: referencedTokenNamespaces(importedSections) };
+  return { settings, styles, frameTemplates, theme, locale, tokenNamespaces: referencedTokenNamespaces(importedSections) };
 }
 
 module.exports = {

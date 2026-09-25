@@ -9,7 +9,7 @@ import { FieldRow, Group, Toggle } from "./SettingsPrimitives";
 // (passphrase-sealed) API keys as a .afsettings file — see
 // docs/settings-transfer-plan.md. Desktop only: hidden when the bridge lacks it.
 
-const SECTIONS = ["general", "repaint", "annotation"];
+const SECTIONS = ["general", "repaint", "annotation", "watermark"];
 const MIN_PASSPHRASE = 8;
 const THEME_STORAGE_KEY = "afterframe-theme";
 
@@ -204,6 +204,12 @@ function ImportDialog({ inspected, onClose }) {
     const section = summary.sections[id];
     if (!section) return t("transfer.notInFile");
     if (id === "general") return t("transfer.sections.generalHint");
+    if (id === "watermark") {
+      const parts = [];
+      if (section.author) parts.push(t("transfer.authorName", { name: section.author }));
+      parts.push(t("transfer.templateCount", { count: section.templateCount || 0 }));
+      return parts.join(" · ");
+    }
     const names = section.providers.map((p) => (p.conflict ? `${p.name} (${t("transfer.willOverwrite")})` : p.name));
     const parts = [names.length ? names.join(", ") : t("transfer.noProviders")];
     if (id === "repaint" && section.styleCount) parts.push(t("transfer.styleCount", { count: section.styleCount }));
