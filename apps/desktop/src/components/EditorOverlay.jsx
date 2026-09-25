@@ -807,6 +807,25 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setCanvasPreset(null);
   }
 
+  // "Save as template": the look as it stands (margins, background, every
+  // layer) becomes one of the user's frame templates.
+  async function saveFrameTemplate(name) {
+    const s = editorStateRef.current;
+    try {
+      const res = await frameToolRef.current?.saveTemplate?.(name, {
+        layers: layersRef.current, pad: s.canvas?.pad || {}, bg: s.canvas?.bg || null,
+      });
+      if (!res) return;
+      pushToast?.({
+        title: t("border.templateSaved"),
+        message: res.skipped ? t("border.templateSkipped", { count: res.skipped }) : name,
+        ttl: res.skipped ? 7000 : 4000,
+      });
+    } catch (error) {
+      pushToast?.({ title: t("border.templateFailed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+    }
+  }
+
   // Test backdoor — let E2E specs drive the editor (save to a known path,
   // switch tools, read state …) without the native dialogs. The method table
   // is rebuilt every render so each closure sees the current state, and
@@ -1353,6 +1372,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 frameCellAspect={frameTool.cellAspect}
                 onApplyPreset={applyFramePreset}
                 onClearPreset={clearFramePreset}
+                onSaveTemplate={saveFrameTemplate}
+                onRenameTemplate={(id, name) => frameTool.renameTemplate(id, name)}
+                onDuplicateTemplate={(id, name) => frameTool.duplicateTemplate(id, name)}
+                onDeleteTemplate={(id) => frameTool.deleteTemplate(id)}
+                resolveTokenSource={(source) => frameTool.resolveSource(source)}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
                 onCanvasPad={(patch) => {

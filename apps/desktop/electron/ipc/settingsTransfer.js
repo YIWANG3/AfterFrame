@@ -30,6 +30,16 @@ function register({
   let pendingImport = null;
 
   const stylesPath = () => path.join(path.dirname(getAppSettingsPath()), "ai-styles.json");
+  // Written by ipc/frameTemplates.js; same directory.
+  const frameTemplatesPath = () => path.join(path.dirname(getAppSettingsPath()), "frame-templates.json");
+
+  function readFrameTemplates() {
+    try {
+      return JSON.parse(fs.readFileSync(frameTemplatesPath(), "utf-8"))?.templates || [];
+    } catch {
+      return [];
+    }
+  }
 
   function readStyles() {
     try {
@@ -73,6 +83,7 @@ function register({
       const { bundle, secretCount, unreadable } = await transfer.buildBundle({
         settings: readAppSettings(),
         styles: readStyles(),
+        frameTemplates: readFrameTemplates(),
         theme: typeof options.theme === "string" ? options.theme : undefined,
         sections,
         includeSecrets,
@@ -134,13 +145,15 @@ function register({
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       await backup(getAppSettingsPath(), stamp);
       await backup(stylesPath(), stamp);
+      await backup(frameTemplatesPath(), stamp);
 
       let plan = null;
       await updateAppSettings((current) => {
-        plan = transfer.mergeBundle({ settings: current, styles: readStyles(), bundle, sections });
+        plan = transfer.mergeBundle({ settings: current, styles: readStyles(), frameTemplates: readFrameTemplates(), bundle, sections });
         return plan.settings;
       });
       if (plan.styles) await writeJsonAtomic(stylesPath(), plan.styles);
+      if (plan.frameTemplates) await writeJsonAtomic(frameTemplatesPath(), { version: 1, templates: plan.frameTemplates });
 
       // Keys follow their providers: only namespaces referenced by an imported
       // section are written, so unticking a section also skips its keys.

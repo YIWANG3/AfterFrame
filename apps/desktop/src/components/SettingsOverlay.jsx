@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, UsersRound } from "lucide-react";
+import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound } from "lucide-react";
 import api from "../api";
 import { DesktopOnlyPane } from "./DesktopOnly";
 import GeneralSettings from "./settings/GeneralSettings";
@@ -10,6 +10,7 @@ import LibrarySettings from "./settings/LibrarySettings";
 import IntegrationsSettings from "./settings/IntegrationsSettings";
 import AboutSettings from "./settings/AboutSettings";
 import PeopleSettings from "./settings/PeopleSettings";
+import WatermarkSettings from "./settings/WatermarkSettings";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -24,6 +25,7 @@ const TABS = [
   { id: "ai", key: "ai", icon: Brain, cap: "annotation" },
   { id: "repaint", key: "repaint", icon: Wand2, cap: "aiRepaint" },
   { id: "people", key: "people", icon: UsersRound, cap: "people" },
+  { id: "watermark", key: "watermark", icon: Stamp },
   { id: "library", key: "library", icon: FolderOpen, cap: "libraryManagement" },
   { id: "integrations", key: "integrations", icon: Plug, cap: "integrations" },
   { id: "about", key: "about", icon: Info },
@@ -110,6 +112,7 @@ export default function SettingsOverlay({
                   {tab === "ai" && <AnnotationSettings />}
                   {tab === "repaint" && <RepaintSettings />}
                   {tab === "people" && <PeopleSettings />}
+                  {tab === "watermark" && <WatermarkSettings />}
                   {tab === "library" && (
                     <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
                   )}

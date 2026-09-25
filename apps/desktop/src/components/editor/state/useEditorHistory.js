@@ -11,6 +11,7 @@
 
 import { useRef, useState } from "react";
 import { BASE_STATE, cloneState, stateEquals } from "./editorStateModel";
+import { dropEditedSources } from "../frameUserTemplates";
 
 function cloneLayers(layers) {
   return (layers || []).map((l) => ({ ...l }));
@@ -71,12 +72,19 @@ export function useEditorHistory() {
     return snapshot;
   }
 
-  // Live layer update — no history entry (used per-frame during layer drags).
-  function applyLayers(nextLayers) {
+  function setLayersSnapshot(nextLayers) {
     const snapshot = cloneLayers(nextLayers);
     layersRef.current = snapshot;
     setLayers(snapshot);
     return snapshot;
+  }
+
+  // Live layer update — no history entry (used per-frame during layer drags).
+  // A frame text the user retyped stops being "{camera_model}": it keeps the
+  // words, not the token (so a saved template does too). Undo/redo restore
+  // snapshots as they were and bypass this.
+  function applyLayers(nextLayers) {
+    return setLayersSnapshot(dropEditedSources(nextLayers, layersRef.current));
   }
 
   // True when {state, layers} is value-identical to the current head — recording
@@ -161,7 +169,7 @@ export function useEditorHistory() {
     const entry = historyRef.current[index];
     if (!entry) return;
     apply(entry.state);
-    applyLayers(entry.layers);
+    setLayersSnapshot(entry.layers);
   }
 
   function undo() {

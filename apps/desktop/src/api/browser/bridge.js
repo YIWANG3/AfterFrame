@@ -1133,6 +1133,23 @@ export const browserBridge = {
 
   // ── editor ──
   getFrameLogos: async () => ({ manifest: frameLogoManifest, svgs: frameLogoSvgs }),
+  // Watermark profile and user frame templates: this browser only.
+  getWatermarkProfile: async () => {
+    try { return { author: "", ...(JSON.parse(localStorage.getItem("afterframe.watermarkProfile")) || {}) }; } catch { return { author: "" }; }
+  },
+  saveWatermarkProfile: async (profile) => {
+    const next = { author: String(profile?.author ?? "").replace(/\s+/g, " ").trim().slice(0, 80) };
+    localStorage.setItem("afterframe.watermarkProfile", JSON.stringify(next));
+    return next;
+  },
+  listFrameTemplates: async () => {
+    try { return JSON.parse(localStorage.getItem("afterframe.frameTemplates")) || []; } catch { return []; }
+  },
+  saveFrameTemplates: async (templates) => {
+    const next = (Array.isArray(templates) ? templates : []).filter((t) => t?.kind === "layers" && String(t.id || "").startsWith("user:"));
+    localStorage.setItem("afterframe.frameTemplates", JSON.stringify(next));
+    return next;
+  },
   stickerList: async () => [],
   getTextImageStatus: async () => null,
 

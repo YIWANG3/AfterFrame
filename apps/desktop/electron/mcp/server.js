@@ -1485,7 +1485,8 @@ function createMcpServer(deps) {
       description:
         "Apply a photo frame / EXIF watermark template (the app's Frame presets: white borders with camera, " +
         "lens and exposure text plus brand logo — e.g. classic bottom bar, polaroid, overlay captions). " +
-        "template ids come from get_editor_capabilities frame_templates. EXIF is read from the photo " +
+        "template ids come from get_editor_capabilities frame_templates, which also lists the user's own " +
+        "templates saved in the editor (user: true); their text and logo follow each photo. EXIF is read from the photo " +
         "automatically. Non-destructive: each result is a new derived version. Requires the app window to be open.",
       inputSchema: {
         type: "object",

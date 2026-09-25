@@ -14,7 +14,7 @@
 | 搁置 | C. 手动修正地点，批量指定地点（按地名选） | `geo-map-design.md:573-574` | 剩余约 3 天 | 2026-09-18 搁置，sidecar 搜索已存档在分支上 |
 | 3 | D. 智能合集 v1（保存的筛选条件，含「最近 N 天」） | `mcp-parity-plan.md:134` | 5 到 6 天 | 无 |
 | 3 | D2. 智能合集 v2（其余规则扩展） | 同上 | 每项 0.5 到 1 天 | D |
-| 4 | E. 水印档案、相框存为模板、导入自己的 logo | `frame-watermark-plan.md:285-303`、`unified-canvas-plan.md:153-160` | 6 到 8 天 | 需要先拍板一个悬而未决的设计问题 |
+| 4 | E. 水印档案、相框存为模板、导入自己的 logo（第 7 步导入 logo 之外已实现，2026-09-25） | `frame-watermark-plan.md:285-303`、`unified-canvas-plan.md:153-160` | 6 到 8 天 | 需要先拍板一个悬而未决的设计问题 |
 
 排序原则：先做半天能完成、立刻有人受益的（A、B）；再做后端已有、只差界面的（C）；然后是改动面最广的（D）；最后是范围最大、还有设计问题没定的（E）。
 
@@ -218,6 +218,17 @@
 5. **色彩（schema 10）。** 调研了三种做法（PhotoPrism 固定 16 命名色、Eagle 任意颜色按距离匹配、Rayleigh 88 桶直方图），选了 Eagle 的形态：每张图从 512px 预览取最多 8 个主色（128px 缩图，sRGB 8 级并桶后在 Lab 里加权 k-means 12 簇，每簇取真实存在的像素色而不是均值，均值会发灰；ΔE 10 内合并，占比 1.5% 以下丢弃；但彩度 ≥ 40、占比 ≥ 1% 的鲜艳小块最多保留 2 个，夜景里的红招牌就是这么留下的；`COLORS_VERSION` 变了图库下次打开自动全部重算），存 hex、占比、Lab。筛选取任意颜色（24 色推荐色板 + HEX 输入），三档容差（严格 / 普通 / 宽松 = ΔE 15 / 25 / 40），匹配规则是「有一个占比 ≥ 3% 的色块在容差内」，SQL 里算平方距离；多选是含任意一个；色块不做计数。Inspector 预览下一条色板，按占比分宽，点一下按该色筛选。提取挂在预览生成里（同一份缩图），存量图库打开时自动跑一个低优先级的「色彩分析」任务补齐。web 版没有，隐藏。以后：按颜色排序、以图找相似配色。
 
 ## E. 水印档案、相框存为模板、导入自己的 logo
+
+> **2026-09-25 进度：第 1 到 6 步和第 8 步已实现（分支 `feat/frame-user-templates`），第 7 步「导入自己的 logo」还没做。**
+>
+> - **档案**：`settings.watermarkProfile = {author}`，设置里新增「水印」页（作者名 + 我的边框模板列表，可删除）。web 版存 localStorage。
+> - **来源标记**：套用内置模板时，文字图层带 `tokenSource`（`{content}` 或 `{exif: {fields, labeled, sep}}`），logo 贴纸带 `logoRef: {variant, kind, strict, color}`。改了文字内容就丢掉 `tokenSource`，在 `useEditorHistory.applyLayers` 统一处理；撤销和重做不经过这一步。
+> - **插入照片信息**（计划外补的）：文字工具「图层」标题栏的 `{}` 按钮，插入机型 / 镜头 / 参数 / 日期 / 作者，文字按当前照片解析并带 `tokenSource`。否则 `{author}` 没有地方用得上：内置模板都不含它。
+> - **模板格式与跨宽高比**：`{id: "user:<uuid>", kind: "layers", version: 1, name, canvas: {pad, bg}, layers}`，存在 `userData/afterframe/frame-templates.json`。每个图层钉到离它最近的输出边（左 / 中 / 右，上 / 中 / 下），距离和尺寸都以内容短边为单位（和留白、内置模板的短边 ×1.5 基准一致）；文字重新解析后按贴边的那一侧重新测宽。这是机械的「最近边」约束，不是计划里排除的「从图层反推语义锚点」。logo 不存像素，套用时按新照片的相机重新匹配；只存在 data URL 里的贴纸（手写）不进模板，保存时提示跳过几个。逻辑在 `editor/frameUserTemplates.js`，单测覆盖同一张照片还原、横幅存竖幅用、token 和 logo 缺失。
+> - **界面**：边框区块「存为模板」；用户模板排在内置前面，显示名字，悬停可改名 / 复制 / 删除。改名不改 id。
+> - **MCP**：`get_editor_capabilities` 的 `frame_templates` 带上用户模板（`user: true`），`apply_frame` 用 `renderUserTemplate` 走图层路径。
+> - **设置迁移**：新增「水印」分区，带作者名和模板；模板按 id 合并，文件里的空作者名不覆盖本机。
+> - 测试：`frameUserTemplates.test.js`、`settingsTransfer.test.js`、e2e 54（保存、重启、改名、竖幅异机套用并按原尺寸保存、MCP、设置里删除）。
 
 **两个会改变范围的发现**
 
