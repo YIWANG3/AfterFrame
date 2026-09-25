@@ -19,7 +19,9 @@ test.beforeAll(async () => {
   const nameInput = ctx.window.getByRole("navigation").locator("input");
   await nameInput.fill("Filter me");
   await nameInput.press("Enter");
-  await expect(ctx.window.getByRole("button", { name: /^Filter me/ })).toBeVisible();
+  // Right after launch the create waits on the serial sidecar behind the
+  // startup work (self-heal refresh, facet counts): seconds on CI runners.
+  await expect(ctx.window.getByRole("button", { name: /^Filter me/ })).toBeVisible({ timeout: 15_000 });
   // Four photos in it: two rated five stars, two rated one.
   members = await ctx.window.evaluate(async () => {
     const bridge = window.mediaWorkspace;
