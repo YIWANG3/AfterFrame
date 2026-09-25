@@ -246,6 +246,26 @@ class RealGazetteerSanityTestCase(unittest.TestCase):
                 failures.append(f"{city}: {resolved.precision_level if resolved else 'UNRESOLVED'}")
         self.assertEqual(failures, [])
 
+    def test_country_names_table_matches_the_gazetteer(self):
+        # build_gazetteer.py writes data/country_names.json next to the
+        # gazetteer; a rebuilt gazetteer must ship with a rebuilt table.
+        expected: dict[str, dict] = {}
+        for country in geo_resolver.load_gazetteer().countries_by_qid.values():
+            if country.get("iso"):
+                expected.setdefault(country["iso"], {"en": country.get("en"), "zh": country.get("zh")})
+        table = json.loads(geo_resolver.COUNTRY_NAMES_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(table, expected)
+
+
+class CountryNamesTestCase(unittest.TestCase):
+    def test_country_names_do_not_load_the_gazetteer(self):
+        # The filter bar asks for these on every launch; the gazetteer takes
+        # seconds to load on a slow machine, ahead of everything else queued.
+        geo_resolver.set_gazetteer_for_tests(None)
+        self.assertEqual(geo_resolver.country_names("JP"), {"en": "Japan", "zh": "日本"})
+        self.assertEqual(geo_resolver.country_names("XX"), {"en": "XX", "zh": "XX"})
+        self.assertIsNone(geo_resolver._gazetteer)
+
 
 class AiLocationWriteTestCase(unittest.TestCase):
     def setUp(self):

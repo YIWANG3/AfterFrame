@@ -6,7 +6,9 @@ async function exerciseFolderOrder(page, { reload = false } = {}) {
     await page.getByTitle('New folder', { exact: true }).click();
     await scroll.locator('input').fill(name);
     await scroll.locator('input').press('Enter');
-    await expect(scroll.locator('[data-collection-id]').filter({ hasText: name })).toBeVisible();
+    // Right after launch the create waits on the serial sidecar behind the
+    // startup work (self-heal refresh, facet counts): seconds on CI runners.
+    await expect(scroll.locator('[data-collection-id]').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
   }
   const row = (name) => scroll.locator('[data-collection-id]').filter({ hasText: name });
   const ids = await scroll.locator('[data-collection-id]').evaluateAll((rows) => rows.map((r) => r.dataset.collectionId));
