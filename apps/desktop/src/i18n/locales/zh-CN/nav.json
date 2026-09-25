@@ -184,7 +184,8 @@
     "pickedMore": "{{first}} +{{count}}",
     "match": {
       "any": "含任意一个",
-      "all": "同时含全部"
+      "all": "同时含全部",
+      "exclude": "排除"
     },
     "locationSource": {
       "label": "位置",
@@ -212,6 +213,37 @@
       "caption_contains": "描述",
       "ocr_contains": "画面中的文字",
       "path_contains": "文件夹或文件路径"
+    },
+    "folder": "文件夹",
+    "matchInclude": "包含",
+    "matchExclude": "排除",
+    "excluded": "{{label}}不是 {{value}}",
+    "excludedTag": "不含标签 {{value}}",
+    "excludedFolder": "不在 {{value}}",
+    "excludedPerson": "不含 {{value}}",
+    "ratingExactly": "评分 = {{n}}",
+    "ratingAtMost": "评分 ≤ {{n}}",
+    "ratingMode": {
+      "ge": "至少",
+      "eq": "正好",
+      "le": "至多"
+    },
+    "ratingModeHint": "{{mode}}（点击切换：至少、正好、至多）",
+    "unrated": "未评分",
+    "groups": {
+      "entry": "条件分组（或）…",
+      "chip": "满足任一组（{{count}} 组）",
+      "remove": "移除条件分组",
+      "title": "条件分组",
+      "hint": "照片要满足筛选栏上的全部条件，并且至少满足下面其中一组。同一组里的条件要同时满足。",
+      "group": "第 {{n}} 组",
+      "or": "或",
+      "addGroup": "再加一组",
+      "removeGroup": "删除这一组",
+      "addCondition": "添加条件",
+      "cancel": "取消",
+      "apply": "应用",
+      "needsCondition": "每组至少选一个条件"
     }
   },
   "activity": {

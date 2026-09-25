@@ -2,11 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal, Split } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
-import { isEmptyValue } from "../hooks/workspaceLogic";
+import { activeFilterCount, isEmptyValue } from "../hooks/workspaceLogic";
 import FaceCrop from "./FaceCrop";
 import InlineEdit from "./InlineEdit";
 
@@ -28,19 +28,34 @@ function fmtNum(v, decimals) {
 // Shared popover shell. The panel is portaled to <body> and fixed-positioned
 // under the trigger, so it can't be clipped or covered by sibling panels
 // (e.g. the Inspector) regardless of stacking context.
-function Popover({ label, active, summary, children, width = 220 }) {
+function Popover({ label, active, summary, children, width = 220, excluded = false }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const panelRef = useRef(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
 
+  // Below the chip when the list fits there; otherwise above it, or pinned to
+  // the window's bottom edge. A chip low on the screen (a group in the
+  // condition-groups dialog, on a small window) must not open off-screen.
+  // Re-placed when the list changes size (options arriving, a search).
   useLayoutEffect(() => {
-    if (!open || !btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    const estWidth = width === "auto" ? 480 : width;
-    let left = r.left;
-    if (left + estWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - estWidth);
-    setPos({ left, top: r.bottom + 4 });
+    if (!open || !btnRef.current) return undefined;
+    function place() {
+      const r = btnRef.current.getBoundingClientRect();
+      const estWidth = width === "auto" ? 480 : width;
+      let left = r.left;
+      if (left + estWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - estWidth);
+      const h = panelRef.current?.offsetHeight || 0;
+      let top = r.bottom + 4;
+      if (h && top + h > window.innerHeight - 8) {
+        top = r.top - 4 - h >= 8 ? r.top - 4 - h : Math.max(8, window.innerHeight - 8 - h);
+      }
+      setPos((prev) => (prev.left === left && prev.top === top ? prev : { left, top }));
+    }
+    place();
+    const observer = panelRef.current ? new ResizeObserver(place) : null;
+    if (observer) observer.observe(panelRef.current);
+    return () => observer?.disconnect();
   }, [open, width]);
 
   useEffect(() => {
@@ -61,6 +76,7 @@ function Popover({ label, active, summary, children, width = 220 }) {
         ref={btnRef}
         type="button"
         onClick={() => setOpen((c) => !c)}
+        data-excluded={excluded ? "true" : undefined}
         className={[
           "flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors",
           active ? "border-accent/50 bg-accent/10 text-text" : "border-border/70 bg-app text-muted hover:border-border hover:text-text",
@@ -72,6 +88,7 @@ function Popover({ label, active, summary, children, width = 220 }) {
       {open && createPortal(
         <div
           ref={panelRef}
+          data-popover-panel="true"
           className="fixed z-[12000] rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay"
           style={{ left: pos.left, top: pos.top, width: width === "auto" ? undefined : width }}
         >
@@ -141,10 +158,38 @@ const toList = (value) => (value == null || value === "" ? [] : Array.isArray(va
 const fromList = (list) => (list.length === 0 ? undefined : list.length === 1 ? list[0] : list);
 const sameOption = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
+const MODE_LABELS = { any: "filter.match.any", all: "filter.match.all", include: "filter.matchInclude", exclude: "filter.matchExclude" };
+
+// The switch at the top of a facet's list: include / exclude, and for several
+// tags any / all / exclude ("night AND neon", "none of these").
+function MatchModes({ modes, mode, onMode }) {
+  const { t } = useTranslation("nav");
+  return (
+    <div className="mb-1.5 flex gap-1 rounded-md bg-app p-0.5" data-facet-match="true">
+      {modes.map((option) => (
+        <button
+          key={option}
+          type="button"
+          data-facet-mode={option}
+          aria-pressed={mode === option}
+          onClick={() => onMode(option)}
+          className={[
+            "h-5 flex-1 rounded text-[10px] transition-colors",
+            mode === option ? "bg-selected text-text" : "text-muted2 hover:text-text",
+          ].join(" ")}
+        >
+          {t(MODE_LABELS[option])}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Multi-select list. Ticking several options means "any of these"; the popover
-// stays open so they can be ticked in a row. `matchMode` / `onMatchMode` add the
-// any / all switch that only tags need ("night AND neon").
-function ListPopover({ label, value, options, onSelect, searchable, onSearch, matchMode, onMatchMode, labelOf = String }) {
+// stays open so they can be ticked in a row. `modes` / `mode` / `onMode` add
+// the switch above the options (see MatchModes); in "exclude" the chip reads
+// `excludeKey` ("Camera is not X").
+function ListPopover({ label, value, options, onSelect, searchable, onSearch, modes, mode, onMode, excludeKey = "filter.excluded", labelOf = String }) {
   const { t } = useTranslation("nav");
   const [q, setQ] = useState("");
   const [remote, setRemote] = useState(null);
@@ -181,12 +226,14 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
   const toggle = (option) => onSelect(fromList(isPicked(option)
     ? picked.filter((value_) => !sameOption(value_, option))
     : [...picked, option]));
-  const summary = picked.length > 1
+  const picks = picked.length > 1
     ? t("filter.pickedMore", { first: labelOf(picked[0]), count: picked.length - 1 })
     : picked.length ? labelOf(picked[0]) : undefined;
+  const excluded = mode === "exclude" && picked.length > 0;
+  const summary = excluded ? t(excludeKey, { label, value: picks }) : picks;
 
   return (
-    <Popover label={label} active={picked.length > 0} summary={summary} width={200}>
+    <Popover label={label} active={picked.length > 0} summary={summary} width={200} excluded={excluded}>
       {(searchable || onSearch) && (
         <input
           autoFocus
@@ -196,23 +243,7 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
           className="mb-1.5 w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />
       )}
-      {onMatchMode && picked.length > 1 && (
-        <div className="mb-1.5 flex gap-1 rounded-md bg-app p-0.5" data-facet-match="true">
-          {["any", "all"].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onMatchMode(mode)}
-              className={[
-                "h-5 flex-1 rounded text-[10px] transition-colors",
-                (matchMode || "any") === mode ? "bg-selected text-text" : "text-muted2 hover:text-text",
-              ].join(" ")}
-            >
-              {t(`filter.match.${mode}`)}
-            </button>
-          ))}
-        </div>
-      )}
+      {onMode && modes?.length > 1 && picked.length > 0 && <MatchModes modes={modes} mode={mode} onMode={onMode} />}
       <div className="popover-scroll -mr-2 max-h-[280px] overflow-y-auto pr-1">
         <button
           type="button"
@@ -248,7 +279,7 @@ function ListPopover({ label, value, options, onSelect, searchable, onSearch, ma
                 </span>
                 <span className="truncate">{labelOf(opt.value, opt)}</span>
               </span>
-              <span className="shrink-0 text-[10px] tabular-nums text-muted2">{opt.count}</span>
+              {opt.count != null && <span className="shrink-0 text-[10px] tabular-nums text-muted2">{opt.count}</span>}
             </button>
           );
         })}
@@ -422,20 +453,90 @@ function DateRangePopover({ captureRange, filters, onChange }) {
 // A resident "person" facet: pick any named person straight from the gallery,
 // without a detour through the people wall. Options load when the panel opens
 // so freshly named people always appear.
-function PersonFilterPopover({ value, personGroup, onSelect }) {
+function PersonFilterPopover({ value, personGroup, onSelect, mode, onMode }) {
   const { t } = useTranslation("nav");
   const [known, setKnown] = useState([]);
   const match = (personGroup?.group_id === value ? personGroup : null)
     || known.find((group) => group.group_id === value);
+  const name = match?.name?.trim() || t("filter.person");
+  const excluded = !!value && mode === "exclude";
   return (
     <Popover
       label={t("filter.person")}
       active={!!value}
-      summary={match?.name?.trim() || t("filter.person")}
+      summary={excluded ? t("filter.excludedPerson", { value: name }) : name}
       width={230}
+      excluded={excluded}
     >
+      {value && onMode && <MatchModes modes={["include", "exclude"]} mode={mode} onMode={onMode} />}
       <PersonFilterOptions value={value} onSelect={onSelect} onLoaded={setKnown} />
     </Popover>
+  );
+}
+
+// Stars compared at least / exactly / at most; "Unrated" is at most 0.
+const RATING_MODES = ["ge", "eq", "le"];
+const RATING_SIGNS = { ge: "≥", eq: "=", le: "≤" };
+const RATING_TITLES = { ge: "filter.ratingAtLeast", eq: "filter.ratingExactly", le: "filter.ratingAtMost" };
+function ratingModeOf(f) {
+  if (f.rating_min != null && f.rating_min === f.rating_max) return "eq";
+  if (f.rating_min == null && f.rating_max > 0) return "le";
+  return "ge";
+}
+
+function RatingFilter({ filters, onChange }) {
+  const { t } = useTranslation("nav");
+  const f = filters;
+  const unrated = f.rating_max === 0 && f.rating_min == null;
+  const [mode, setMode] = useState(() => ratingModeOf(f));
+  // A saved rule, Clear or another bar changes the stars from outside; the
+  // switch follows whatever they now say.
+  useEffect(() => {
+    if (f.rating_min != null || f.rating_max > 0) setMode(ratingModeOf(f));
+  }, [f.rating_min, f.rating_max]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stars = unrated ? null : (mode === "le" ? f.rating_max : f.rating_min) ?? null;
+  const apply = (n, nextMode, extra = {}) => {
+    const next = setOrDelete(setOrDelete(f, "rating_min", undefined), "rating_max", undefined);
+    if (n != null && nextMode !== "le") next.rating_min = n;
+    if (n != null && nextMode !== "ge") next.rating_max = n;
+    onChange({ ...next, ...extra });
+  };
+  return (
+    <div className="flex h-6 items-center gap-0.5 rounded-md border border-border/70 bg-app px-1" data-facet-rating="true" data-rating-mode={mode}>
+      <button
+        type="button"
+        data-rating-mode-toggle="true"
+        title={t("filter.ratingModeHint", { mode: t(`filter.ratingMode.${mode}`) })}
+        onClick={() => {
+          const nextMode = RATING_MODES[(RATING_MODES.indexOf(mode) + 1) % RATING_MODES.length];
+          setMode(nextMode);
+          if (stars != null) apply(stars, nextMode);
+        }}
+        className="w-3.5 text-center text-[11px] tabular-nums text-muted transition-colors hover:text-text"
+      >
+        {RATING_SIGNS[mode]}
+      </button>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          title={t(RATING_TITLES[mode], { n })}
+          onClick={() => apply(stars === n ? null : n, mode)}
+          className="p-0.5"
+        >
+          <Star className={["h-3 w-3", stars != null && n <= stars ? "fill-accent text-accent" : "text-muted2"].join(" ")} />
+        </button>
+      ))}
+      <button
+        type="button"
+        data-rating-unrated="true"
+        aria-pressed={unrated}
+        onClick={() => (unrated ? apply(null, mode) : apply(null, mode, { rating_max: 0 }))}
+        className={["ml-0.5 rounded px-1 text-[10px] transition-colors", unrated ? "bg-accent/15 text-text" : "text-muted2 hover:text-text"].join(" ")}
+      >
+        {t("filter.unrated")}
+      </button>
+    </div>
   );
 }
 
@@ -687,11 +788,12 @@ export const FACET_SLOTS = [
   { id: "people", keys: ["people"], capability: "people" },
   { id: "annotated", keys: ["annotated"], capability: "annotation" },
   { id: "person_group", keys: ["person_group"], capability: "people" },
+  { id: "in_collection", keys: ["in_collection"] },
   { id: "iso", keys: ["iso_min", "iso_max"] },
   { id: "aperture", keys: ["aperture_min", "aperture_max"] },
   { id: "focal", keys: ["focal_min", "focal_max"] },
   { id: "date", keys: ["date_from", "date_to", "date_within_days"] },
-  { id: "rating", keys: ["rating_min"] },
+  { id: "rating", keys: ["rating_min", "rating_max"] },
 ];
 export const HIDDEN_FACETS_KEY = "afterframe.filterBar.hidden";
 const SLOT_IDS = new Set(FACET_SLOTS.map((slot) => slot.id));
@@ -705,10 +807,10 @@ function readHiddenFacets() {
   }
 }
 
-function FacetChooser({ hidden, onToggle, slotLabel }) {
+function FacetChooser({ hidden, onToggle, slotLabel, label, onAddGroups }) {
   const { t } = useTranslation("nav");
   return (
-    <Popover label={t("filter.addFacet")} width={200}>
+    <Popover label={label || t("filter.addFacet")} width={200}>
       <div className="popover-scroll -mr-2 max-h-[320px] overflow-y-auto pr-1" data-facet-chooser="true">
         {FACET_SLOTS.filter((slot) => !slot.capability || api.can(slot.capability)).map((slot) => {
           const on = !hidden.includes(slot.id);
@@ -737,11 +839,25 @@ function FacetChooser({ hidden, onToggle, slotLabel }) {
           );
         })}
       </div>
+      {onAddGroups && (
+        <button
+          type="button"
+          data-filter-groups-entry="true"
+          onClick={onAddGroups}
+          className="mt-1 flex w-full items-center gap-2 rounded-md border-t border-border/60 px-2 pb-1 pt-1.5 text-left text-[11px] text-muted hover:bg-hover hover:text-text"
+        >
+          <Split className="h-3 w-3" />
+          {t("filter.groups.entry")}
+        </button>
+      )}
     </Popover>
   );
 }
 
-export default function FilterBar({ facetValues, facetsReady = true, filters, onChange, personGroup, onPersonGroup, facetScope, smart }) {
+// `embedded`: one group inside the condition-groups dialog. It starts with
+// only its active facets showing ("Add condition" reveals the rest), keeps no
+// preferences, and has no actions, map chip or groups of its own.
+export default function FilterBar({ facetValues, facetsReady = true, filters, onChange, personGroup, onPersonGroup, facetScope, smart, folders = [], onEditGroups, embedded = false }) {
   const { t, i18n } = useTranslation("nav");
   const f = filters || {};
   const cameras = facetValues?.cameras || [];
@@ -774,21 +890,47 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     const known = option || cities.find((c) => c.value === value);
     return (chinese && known?.label_zh) || String(value);
   };
-  const activeCount = Object.keys(f).filter((key) => key !== "tag_match" && key !== "color_tolerance").length;
+  const folderLabel = (value) => folders.find((c) => c.collection_id === value)?.name || String(value);
+  const activeCount = activeFilterCount(f);
 
-  const [hidden, setHidden] = useState(readHiddenFacets);
+  const slotActive = (id) => FACET_SLOTS.find((slot) => slot.id === id).keys.some((key) => !isEmptyValue(f[key]));
+  const [hidden, setHidden] = useState(() => (embedded ? FACET_SLOTS.map((slot) => slot.id).filter((id) => !slotActive(id)) : readHiddenFacets()));
   const toggleFacet = (id) => {
     const next = hidden.includes(id) ? hidden.filter((h) => h !== id) : [...hidden, id];
     setHidden(next);
+    if (embedded) return;
     try { localStorage.setItem(HIDDEN_FACETS_KEY, JSON.stringify(next)); } catch { /* preference only */ }
   };
-  const slotActive = (id) => FACET_SLOTS.find((slot) => slot.id === id).keys.some((key) => !isEmptyValue(f[key]));
+  // A group in the dialog must not change which person the main bar shows.
+  const [ownPerson, setOwnPerson] = useState(null);
+  const shownPerson = embedded ? ownPerson : personGroup;
+  const pickPerson = embedded ? setOwnPerson : onPersonGroup;
+
+  // `exclude` flips the facets it names (db/facets.py); the values stay put.
+  const excludedFacets = toList(f.exclude);
+  const withExcluded = (next, facet, on) => {
+    const rest = toList(next.exclude).filter((name) => name !== facet);
+    return setOrDelete(next, "exclude", fromList(on ? [...rest, facet] : rest));
+  };
+  // Emptying a facet also takes it out of `exclude`: with nothing to flip it
+  // would only linger in a saved rule.
+  const setFacet = (key, facet, value) => {
+    const next = setOrDelete(f, key, value);
+    return isEmptyValue(value) ? withExcluded(next, facet, false) : next;
+  };
+  const exclusion = (facet) => ({
+    modes: ["include", "exclude"],
+    mode: excludedFacets.includes(facet) ? "exclude" : "include",
+    onMode: (mode) => onChange(withExcluded(f, facet, mode === "exclude")),
+  });
+  const tagModes = toList(f.tag).length > 1 ? ["any", "all", "exclude"] : ["include", "exclude"];
+  const tagMode = excludedFacets.includes("tag") ? "exclude" : f.tag_match === "all" ? "all" : tagModes[0];
   const shows = (id) => !hidden.includes(id) || slotActive(id);
   const slotLabel = (id) => ({
     camera: t("filter.camera"), lens: t("filter.lens"), tag: t("filter.tag"), extension: t("filter.format"),
     location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
     text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), annotated: t("filter.annotated"),
-    person_group: t("filter.person"), iso: t("filter.iso"), aperture: t("filter.aperture"),
+    person_group: t("filter.person"), in_collection: t("filter.folder"), iso: t("filter.iso"), aperture: t("filter.aperture"),
     focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"),
   })[id];
 
@@ -815,9 +957,10 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     // on what is filtered (Clear, save / update a smart collection) stay put
     // at the right edge, so they are never scrolled out of reach.
     <div
-      data-filter-bar="true"
+      data-filter-bar={embedded ? undefined : "true"}
+      data-filter-group={embedded ? "true" : undefined}
       data-facets-ready={facetsReady ? "true" : "false"}
-      className="flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"
+      className={embedded ? "flex flex-wrap items-center gap-1.5" : "flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-chrome/60 px-2 py-1.5"}
     >
       <div
         ref={scrollRef}
@@ -827,7 +970,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
         // last facet.
         data-more={moreRight ? "true" : undefined}
         onScroll={measureMore}
-        className="filter-bar-scroll flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+        className={`${embedded ? "" : "filter-bar-scroll "}flex min-w-0 flex-1 flex-wrap items-center gap-1.5`}
         // The skin lays the facets out as one sideways-scrolling row. Trackpads
         // scroll it natively; a mouse wheel only has a vertical axis, so map
         // that onto the row when it overflows.
@@ -844,10 +987,10 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           follow the other filters, so its options can run out while its own
           pick is still in force, and that pick must stay reachable. */}
       {shows("camera") && (cameras.length > 0 || toList(f.camera).length > 0) && (
-        <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} onSelect={(v) => onChange(setOrDelete(f, "camera", v))} />
+        <ListPopover label={t("filter.camera")} value={f.camera} options={cameras} {...exclusion("camera")} onSelect={(v) => onChange(setFacet("camera", "camera", v))} />
       )}
       {shows("lens") && (lenses.length > 0 || toList(f.lens).length > 0) && (
-        <ListPopover label={t("filter.lens")} value={f.lens} options={lenses} onSelect={(v) => onChange(setOrDelete(f, "lens", v))} />
+        <ListPopover label={t("filter.lens")} value={f.lens} options={lenses} {...exclusion("lens")} onSelect={(v) => onChange(setFacet("lens", "lens", v))} />
       )}
       {shows("tag") && (tags.length > 0 || toList(f.tag).length > 0) && (
         <ListPopover
@@ -856,9 +999,11 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           options={tags}
           onSearch={(q) => api.searchFacet({ field: "tag", q, limit: 60, ...(facetScope || {}) })}
           // "All" only means something with several tags; a single pick drops it.
-          onSelect={(v) => onChange(setOrDelete(setOrDelete(f, "tag", v), "tag_match", Array.isArray(v) ? f.tag_match : undefined))}
-          matchMode={f.tag_match}
-          onMatchMode={(mode) => onChange(setOrDelete(f, "tag_match", mode === "all" ? "all" : undefined))}
+          onSelect={(v) => onChange(setOrDelete(setFacet("tag", "tag", v), "tag_match", Array.isArray(v) ? f.tag_match : undefined))}
+          modes={tagModes}
+          mode={tagMode}
+          onMode={(mode) => onChange(setOrDelete(withExcluded(f, "tag", mode === "exclude"), "tag_match", mode === "all" ? "all" : undefined))}
+          excludeKey="filter.excludedTag"
         />
       )}
       {shows("extension") && (extensions.length > 0 || toList(f.extension).length > 0) && (
@@ -867,7 +1012,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           value={f.extension}
           options={extensions.map((e) => ({ value: String(e.value).toUpperCase(), count: e.count }))}
           labelOf={(value) => String(value).toUpperCase()} // a rule saved by an agent may say "jpg"
-          onSelect={(v) => onChange(setOrDelete(f, "extension", v))}
+          {...exclusion("extension")}
+          onSelect={(v) => onChange(setFacet("extension", "extension", v))}
         />
       )}
 
@@ -877,7 +1023,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           value={f.location_source}
           options={locationSources}
           labelOf={(value) => t(`filter.locationSource.${value}`, { defaultValue: String(value) })}
-          onSelect={(v) => onChange(setOrDelete(f, "location_source", v))}
+          {...exclusion("location_source")}
+          onSelect={(v) => onChange(setFacet("location_source", "location_source", v))}
         />
       )}
       {shows("country") && (countries.length > 0 || toList(f.country).length > 0) && (
@@ -887,7 +1034,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           options={countries}
           searchable
           labelOf={countryLabel}
-          onSelect={(v) => onChange(setOrDelete(f, "country", v))}
+          {...exclusion("country")}
+          onSelect={(v) => onChange(setFacet("country", "country", v))}
         />
       )}
       {shows("city") && (cities.length > 0 || toList(f.city).length > 0) && (
@@ -897,7 +1045,8 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           options={cities}
           onSearch={(q) => api.searchFacet({ field: "city", q, limit: 60, ...(facetScope || {}) })}
           labelOf={cityLabel}
-          onSelect={(v) => onChange(setOrDelete(f, "city", v))}
+          {...exclusion("city")}
+          onSelect={(v) => onChange(setFacet("city", "city", v))}
         />
       )}
       {shows("text") && <TextContainsPopover filters={f} onChange={onChange} />}
@@ -944,11 +1093,25 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
       {shows("person_group") && api.can("people") && (
         <PersonFilterPopover
           value={f.person_group}
-          personGroup={personGroup}
+          personGroup={shownPerson}
+          {...exclusion("person_group")}
           onSelect={(group) => {
-            onPersonGroup?.(group || null);
-            onChange(setOrDelete(f, "person_group", group?.group_id));
+            pickPerson?.(group || null);
+            onChange(setFacet("person_group", "person_group", group?.group_id));
           }}
+        />
+      )}
+
+      {shows("in_collection") && (folders.length > 0 || toList(f.in_collection).length > 0) && (
+        <ListPopover
+          label={t("filter.folder")}
+          value={f.in_collection}
+          options={folders.map((c) => ({ value: c.collection_id }))}
+          searchable
+          labelOf={folderLabel}
+          {...exclusion("in_collection")}
+          excludeKey="filter.excludedFolder"
+          onSelect={(v) => onChange(setFacet("in_collection", "in_collection", v))}
         />
       )}
 
@@ -958,29 +1121,11 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
 
       {shows("date") && <DateRangePopover captureRange={facetValues?.capture_time} filters={f} onChange={onChange} />}
 
-      {/* Rating ≥ N */}
-      {shows("rating") && (
-      <div className="flex h-6 items-center gap-0.5 rounded-md border border-border/70 bg-app px-1.5" data-facet-rating="true">
-        {[1, 2, 3, 4, 5].map((n) => {
-          const on = (f.rating_min || 0) >= n;
-          return (
-            <button
-              key={n}
-              type="button"
-              title={t("filter.ratingAtLeast", { n })}
-              onClick={() => onChange(setOrDelete(f, "rating_min", f.rating_min === n ? undefined : n))}
-              className="p-0.5"
-            >
-              <Star className={["h-3 w-3", on ? "fill-accent text-accent" : "text-muted2"].join(" ")} />
-            </button>
-          );
-        })}
-      </div>
-      )}
+      {shows("rating") && <RatingFilter filters={f} onChange={onChange} />}
 
       {/* Location chip — created by moving the map, removable here. Removing
           it only drops filters.geo; the map drawer stays open. */}
-      {f.geo && (
+      {f.geo && !embedded && (
         <button
           type="button"
           data-testid="geo-filter-chip"
@@ -994,10 +1139,29 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
         </button>
       )}
 
-      <FacetChooser hidden={hidden} onToggle={toggleFacet} slotLabel={slotLabel} />
+      {/* "Any of these groups": its conditions are edited in the dialog. */}
+      {toList(f.any_of).length > 0 && !embedded && (
+        <button
+          type="button"
+          data-filter-groups="true"
+          onClick={() => onEditGroups?.()}
+          className="flex h-6 items-center gap-1 rounded-md border border-accent/50 bg-accent/10 px-2 text-[11px] text-text transition-colors hover:border-accent"
+        >
+          <Split className="h-3 w-3" />
+          {t("filter.groups.chip", { count: toList(f.any_of).length })}
+        </button>
+      )}
+
+      <FacetChooser
+        hidden={hidden}
+        onToggle={toggleFacet}
+        slotLabel={slotLabel}
+        label={embedded ? t("filter.groups.addCondition") : undefined}
+        onAddGroups={embedded ? undefined : onEditGroups}
+      />
       </div>
 
-      {(activeCount > 0 || smart?.canSave || smart?.editing) && (
+      {!embedded && (activeCount > 0 || smart?.canSave || smart?.editing) && (
         <div data-filter-actions="true" className="filter-bar-actions flex shrink-0 items-center gap-1.5">
           {activeCount > 0 && (
             <button

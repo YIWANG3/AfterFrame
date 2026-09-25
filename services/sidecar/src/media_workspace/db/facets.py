@@ -13,7 +13,12 @@ Semantics, the usual ones for faceted search:
     drone). A facet's value may be a scalar or a list; a scalar is a list of
     one, so filters saved before multi-select read unchanged;
   - tags are the one facet where "all of these" is as natural as "any of
-    these" (night AND neon), so `tag_match: "all"` switches it.
+    these" (night AND neon), so `tag_match: "all"` switches it;
+  - `exclude` lists facets whose sense is flipped: "not this camera", "none of
+    these tags", "not in this folder". The facet keeps its values;
+  - `any_of` is a list of groups, each an ordinary filter dict: a photo must
+    match at least one group, on top of everything else. "(A and B) or C" is
+    `{"any_of": [{A, B}, {C}]}`. Groups do not nest.
 
 Requires the `assets` alias (and `registry` for nothing here); text search is
 not a facet and lives in browse._search_clause.
@@ -24,6 +29,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 Clause = tuple[str, list[object]]
+
+EXCLUDE_KEY = "exclude"
+ANY_OF_KEY = "any_of"
 
 # Precision ranks for filters.geo min_precision: keep everything at least as
 # precise as the requested level.
@@ -180,9 +188,14 @@ def _capture_time(filters: dict) -> list[Clause]:
 
 
 def _rating(filters: dict) -> list[Clause]:
-    if filters.get("rating_min") is None:
-        return []
-    return [("assets.app_rating >= ?", [filters["rating_min"]])]
+    out: list[Clause] = []
+    if filters.get("rating_min") is not None:
+        out.append(("assets.app_rating >= ?", [filters["rating_min"]]))
+    # No rating is stored as NULL or 0; both are 0 stars, so `rating_max: 0`
+    # means "unrated" and "at most 3" includes the unrated.
+    if filters.get("rating_max") is not None:
+        out.append(("COALESCE(assets.app_rating, 0) <= ?", [filters["rating_max"]]))
+    return out
 
 
 _ORIENTATION_SQL = {
@@ -366,7 +379,7 @@ FACETS: tuple[Facet, ...] = (
     _range_facet("focal", "meta_focal"),
     _range_facet("shutter", "meta_shutter"),
     Facet("capture_time", ("date_from", "date_to", "date_within_days"), _capture_time),
-    Facet("rating", ("rating_min",), _rating),
+    Facet("rating", ("rating_min", "rating_max"), _rating),
     Facet("orientation", ("orientation",), _orientation),
     Facet("asset_type", ("asset_type",), _asset_type),
     Facet("tag", ("tag", "tag_match"), _tag, modifiers=("tag_match",)),
@@ -385,14 +398,47 @@ FACETS: tuple[Facet, ...] = (
     Facet("in_collection", ("in_collection",), _in_collection),
 )
 
+FACET_NAMES = frozenset(facet.name for facet in FACETS)
 # Every key a filter dict may carry. Smart collection rules are validated
 # against this, so a saved filter can never name something browse ignores.
-FACET_KEYS = frozenset(key for facet in FACETS for key in facet.keys)
+FACET_KEYS = frozenset(key for facet in FACETS for key in facet.keys) | {EXCLUDE_KEY, ANY_OF_KEY}
 # Keys that only tune another key; never a condition alone.
-FACET_MODIFIER_KEYS = frozenset(key for facet in FACETS for key in facet.modifiers)
+FACET_MODIFIER_KEYS = frozenset(key for facet in FACETS for key in facet.modifiers) | {EXCLUDE_KEY}
 # Counting a facet's options ignores its own keys — with PNG picked, JPG must
 # still say how many JPGs there are, or the dropdown could never switch value.
 FACET_OWN_KEYS: dict[str, frozenset[str]] = {facet.name: frozenset(facet.keys) for facet in FACETS}
+
+
+def _conditions(filters: dict) -> tuple[list[str], list[object]]:
+    """One filter dict's conditions, each a standalone fragment, and their
+    params in the same order. `any_of` is not read here."""
+    excluded = {str(name) for name in _values(filters.get(EXCLUDE_KEY))}
+    conditions: list[str] = []
+    params: list[object] = []
+    for facet in FACETS:
+        facet_clauses = facet.clauses(filters)
+        if not facet_clauses:
+            continue
+        if facet.name in excluded:
+            # NOT NULL is NULL: a photo with no camera recorded must still be
+            # "not this camera", so an unknown reads as no match, then flips.
+            combined = " AND ".join(f"({clause})" for clause, _ in facet_clauses)
+            conditions.append(f"NOT IFNULL(({combined}), 0)")
+        else:
+            conditions.extend(clause for clause, _ in facet_clauses)
+        for _, clause_params in facet_clauses:
+            params.extend(clause_params)
+    return conditions, params
+
+
+def filter_groups(filters: dict | None) -> list[dict]:
+    """The `any_of` groups that hold a condition. An empty group would match
+    every photo and make the whole "or" vacuous; it is ignored instead, the
+    same way an empty facet is."""
+    groups = (filters or {}).get(ANY_OF_KEY)
+    if not isinstance(groups, list):
+        return []
+    return [group for group in groups if isinstance(group, dict) and _conditions(group)[0]]
 
 
 def _facet_clauses(filters: dict | None) -> Clause:
@@ -400,12 +446,14 @@ def _facet_clauses(filters: dict | None) -> Clause:
     dict. Unknown and empty keys are ignored."""
     if not filters:
         return "", []
-    clauses: list[str] = []
-    params: list[object] = []
-    for facet in FACETS:
-        for clause, clause_params in facet.clauses(filters):
-            clauses.append(clause)
-            params.extend(clause_params)
-    if not clauses:
+    conditions, params = _conditions(filters)
+    alternatives: list[str] = []
+    for group in filter_groups(filters):
+        group_conditions, group_params = _conditions(group)
+        alternatives.append("(" + " AND ".join(group_conditions) + ")")
+        params.extend(group_params)
+    if alternatives:
+        conditions.append("(" + " OR ".join(alternatives) + ")")
+    if not conditions:
         return "", []
-    return "AND " + " AND ".join(clauses), params
+    return "AND " + " AND ".join(conditions), params

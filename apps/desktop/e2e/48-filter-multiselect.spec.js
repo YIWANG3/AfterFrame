@@ -81,10 +81,12 @@ test("other facets still narrow it, and their counts are taken inside the picked
 test("tags: any of the picked ones by default, all of them on request", async () => {
   await bar().getByRole("button", { name: "Tag", exact: true }).click();
   await option("night").click();
-  // The any / all switch only appears once there is more than one tag.
-  await expect(ctx.window.locator("[data-facet-match]")).toHaveCount(0);
+  // One tag can be included or excluded; "all of these" needs a second.
+  const allOfThese = ctx.window.locator("[data-facet-match]").getByRole("button", { name: "All of these" });
+  await expect(ctx.window.locator("[data-facet-mode='exclude']")).toBeVisible();
+  await expect(allOfThese).toHaveCount(0);
   await option("neon").click();
-  await expect(ctx.window.locator("[data-facet-match]")).toBeVisible();
+  await expect(allOfThese).toBeVisible();
   await expect(cards()).toHaveCount(3);
 
   await ctx.window.locator("[data-facet-match]").getByRole("button", { name: "All of these" }).click();

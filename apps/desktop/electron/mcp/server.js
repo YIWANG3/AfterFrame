@@ -132,28 +132,62 @@ const ONE_OR_MANY = { anyOf: [{ type: "string" }, { type: "array", items: { type
 // a map area is not something a smart collection saves.)
 const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
-  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "orientation", "tag", "tag_match",
+  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "rating_max", "orientation", "tag", "tag_match",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
   "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains",
 ];
+// The conditions an agent may flip with `exclude`, by the names it sends them
+// under → the sidecar's facet names (db/facets.py).
+const EXCLUDABLE_ARGS = {
+  camera: "camera", lens: "lens", tag: "tag", extension: "extension", orientation: "orientation",
+  asset_type: "asset_type", location_source: "location_source", country: "country", city: "city",
+  color: "color", person_id: "person_group", collection_id: "in_collection",
+  caption_contains: "caption_contains", ocr_contains: "ocr_contains", path_contains: "path_contains",
+};
+const oneOrMany = (value) => (Array.isArray(value) ? value : value == null || value === "" ? [] : [value]);
 
-function facetFiltersFrom(source) {
+function facetFiltersFrom(source, { groups = true } = {}) {
   const filters = {};
   for (const key of FACET_ARG_KEYS) {
     if (source[key] !== undefined && source[key] !== null && source[key] !== "") filters[key] = source[key];
   }
   if (source.person_id) filters.person_group = String(source.person_id);
+  // "The five-star photos of this folder": membership of a folder as a condition.
+  if (source.collection_id) filters.in_collection = String(source.collection_id);
+  const excluded = oneOrMany(source.exclude).map((name) => {
+    if (!EXCLUDABLE_ARGS[name]) throw new Error(`exclude: '${name}' is not a condition that can be excluded (one of ${Object.keys(EXCLUDABLE_ARGS).join(", ")}).`);
+    return EXCLUDABLE_ARGS[name];
+  });
+  if (excluded.length) filters.exclude = excluded;
+  if (source.any_of !== undefined && source.any_of !== null) {
+    if (!groups) throw new Error("any_of groups do not nest.");
+    if (!Array.isArray(source.any_of)) throw new Error("any_of must be a list of condition groups.");
+    filters.any_of = source.any_of.map((group) => facetFiltersFrom(group || {}, { groups: false }));
+  }
   return filters;
 }
 
 // manage_collections `rules` → what the sidecar stores for a smart collection.
 function smartRulesFrom(rules) {
   if (!rules || typeof rules !== "object") throw new Error("rules is required for a smart collection.");
-  const filters = facetFiltersFrom(rules);
-  // "The five-star photos of this folder": membership of a folder as a condition.
-  if (rules.collection_id) filters.in_collection = String(rules.collection_id);
-  return { status: rules.status || "all", search: rules.query ? String(rules.query) : "", filters };
+  return { status: rules.status || "all", search: rules.query ? String(rules.query) : "", filters: facetFiltersFrom(rules) };
 }
+
+// The schema of the conditions above that search_assets and smart collection
+// rules share. any_of groups take the same names (without any_of).
+const EXCLUDE_ARG = {
+  type: "array",
+  items: { type: "string", enum: Object.keys(EXCLUDABLE_ARGS) },
+  description: "Conditions to turn into their opposite: exclude ['camera'] with camera 'X' means NOT shot on X; " +
+    "['tag'] means none of the tags; ['collection_id'] means not in that folder. A photo without the value counts as not matching it.",
+};
+const ANY_OF_ARG = {
+  type: "array",
+  items: { type: "object" },
+  description: "Groups of conditions, at least one of which must hold (OR), on top of the other conditions (AND). " +
+    "Each group is an object with the same condition names (camera, tag, rating_min, collection_id, exclude, ...) AND-combined; groups do not nest. " +
+    "E.g. (5 stars from Canon) or anything tagged 'night': any_of [{camera: 'Canon EOS R5', rating_min: 5}, {tag: 'night'}].",
+};
 
 function createMcpServer(deps) {
   const {
@@ -239,6 +273,7 @@ function createMcpServer(deps) {
           date_to: { type: "string" },
           date_within_days: { type: "number", description: "Captured in the last N days (relative to today)" },
           rating_min: { type: "number", description: "Minimum star rating 1-5" },
+          rating_max: { type: "number", description: "Maximum star rating 0-5; 0 means unrated. With rating_min equal to it: exactly that many stars" },
           orientation: { type: "string", enum: ["portrait", "landscape", "square"] },
           tag: { ...ONE_OR_MANY, description: "Exact tag match. A list means any of them." },
           location_source: {
@@ -260,6 +295,9 @@ function createMcpServer(deps) {
           people: { type: "string", enum: ["with_faces", "without_faces"], description: "Filter by detected faces" },
           person_id: { type: "string", description: "Only photos of this person (a people group id from list_people)" },
           annotated: { type: "string", enum: ["with", "without"], description: "Whether AI annotation exists" },
+          collection_id: { type: "string", description: "Only photos in this folder (a manual collection from manage_collections)" },
+          exclude: EXCLUDE_ARG,
+          any_of: ANY_OF_ARG,
           geo: {
             type: "object",
             description: "Location filter. Either bounds {west,south,east,north} (degrees), or near {lat,lng,km}. " +
@@ -500,8 +538,10 @@ function createMcpServer(deps) {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets (camera, lens, tag, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
-              "date_from, date_to, date_within_days, rating_min, orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains; " +
-              "plus collection_id to mean 'only photos in that folder'.",
+              "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, " +
+              "collection_id ('only photos in that folder'); " +
+              "exclude (a list of those condition names to turn into their opposite: exclude ['collection_id'] = not in that folder); " +
+              "any_of (a list of groups of the same conditions, at least one of which must hold: OR).",
           },
           collection_id: { type: "string" },
           name: { type: "string", description: "For create/rename" },

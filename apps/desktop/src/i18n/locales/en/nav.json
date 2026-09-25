@@ -193,7 +193,8 @@
     "pickedMore": "{{first}} +{{count}}",
     "match": {
       "any": "Any of these",
-      "all": "All of these"
+      "all": "All of these",
+      "exclude": "Exclude"
     },
     "locationSource": {
       "label": "Location",
@@ -221,6 +222,37 @@
       "caption_contains": "Description",
       "ocr_contains": "Text in the picture",
       "path_contains": "Folder or file path"
+    },
+    "folder": "Folder",
+    "matchInclude": "Include",
+    "matchExclude": "Exclude",
+    "excluded": "{{label}} is not {{value}}",
+    "excludedTag": "Without tag {{value}}",
+    "excludedFolder": "Not in {{value}}",
+    "excludedPerson": "Without {{value}}",
+    "ratingExactly": "Rating = {{n}}",
+    "ratingAtMost": "Rating ≤ {{n}}",
+    "ratingMode": {
+      "ge": "At least",
+      "eq": "Exactly",
+      "le": "At most"
+    },
+    "ratingModeHint": "{{mode}} (click to switch: at least, exactly, at most)",
+    "unrated": "Unrated",
+    "groups": {
+      "entry": "Condition groups (or)…",
+      "chip": "Any of {{count}} groups",
+      "remove": "Remove the groups",
+      "title": "Condition groups",
+      "hint": "A photo shows when it matches every condition on the filter bar and at least one of these groups. The conditions inside one group must all hold.",
+      "group": "Group {{n}}",
+      "or": "or",
+      "addGroup": "Add a group",
+      "removeGroup": "Remove this group",
+      "addCondition": "Add condition",
+      "cancel": "Cancel",
+      "apply": "Apply",
+      "needsCondition": "Pick at least one condition in a group"
     }
   },
   "activity": {

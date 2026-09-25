@@ -27,6 +27,8 @@ import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import DiscoverView, { prefetchDiscover } from "./components/DiscoverView";
 import FilterBar from "./components/FilterBar";
+import FilterGroupsDialog from "./components/FilterGroupsDialog";
+import { activeFilterCount } from "./hooks/workspaceLogic";
 import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
 import useMapViewportFilter from "./components/map/useMapViewportFilter";
@@ -899,6 +901,10 @@ export default function App() {
   const activeSmartCollection = workspace.activeSmartCollectionId
     ? (workspace.collections || []).find((c) => c.collection_id === workspace.activeSmartCollectionId) || null
     : null;
+  // The folders a filter can name ("in / not in"), and the dialog that edits
+  // the bar's "any of these groups".
+  const manualFolders = useMemo(() => (workspace.collections || []).filter((c) => c.kind === "manual"), [workspace.collections]);
+  const [filterGroupsOpen, setFilterGroupsOpen] = useState(false);
 
   async function rewriteSmartCollection() {
     try {
@@ -1222,7 +1228,7 @@ export default function App() {
                 onToggleMap={() => setMapExpanded((current) => !current)}
                 showFilters={filterBarVisible}
                 onToggleFilters={() => setShowFilters((v) => !v)}
-                filterCount={Object.keys(workspace.filters || {}).filter((key) => key !== "tag_match").length}
+                filterCount={activeFilterCount(workspace.filters)}
                 activityJobs={workspace.jobs}
                 lastFinishedJob={workspace.lastFinishedJob}
                 onCancelJob={workspace.cancelJob}
@@ -1238,6 +1244,8 @@ export default function App() {
                   personGroup={peopleGroup}
                   onPersonGroup={setPeopleGroup}
                   facetScope={workspace.facetScope}
+                  folders={manualFolders}
+                  onEditGroups={() => setFilterGroupsOpen(true)}
                   smart={{
                     canSave: workspace.canSaveSmartCollection,
                     dirty: workspace.smartCollectionDirty,
@@ -1257,6 +1265,20 @@ export default function App() {
                     onNarrow: () => rewriteSmartCollection(),
                     onSaveEdit: () => rewriteSmartCollection(),
                     onCancelEdit: () => { if (activeSmartCollection) workspace.openSmartCollection(activeSmartCollection); },
+                  }}
+                />
+              )}
+              {filterGroupsOpen && (
+                <FilterGroupsDialog
+                  groups={workspace.filters?.any_of}
+                  folders={manualFolders}
+                  onClose={() => setFilterGroupsOpen(false)}
+                  onApply={(groups) => {
+                    setFilterGroupsOpen(false);
+                    const next = { ...(workspace.filters || {}) };
+                    if (groups.length) next.any_of = groups;
+                    else delete next.any_of;
+                    workspace.applyFilters(next);
                   }}
                 />
               )}
