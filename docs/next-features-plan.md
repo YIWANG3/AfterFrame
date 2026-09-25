@@ -13,7 +13,7 @@
 | 1 | B. 导入后自动分析人脸 | `people-recognition-design.md:252` | 0.5 天 | 无 |
 | 搁置 | C. 手动修正地点，批量指定地点（按地名选） | `geo-map-design.md:573-574` | 剩余约 3 天 | 2026-09-18 搁置，sidecar 搜索已存档在分支上 |
 | 3 | D. 智能合集 v1（保存的筛选条件，含「最近 N 天」） | `mcp-parity-plan.md:134` | 5 到 6 天 | 无 |
-| 3 | D2. 智能合集 v2（其余规则扩展） | 同上 | 每项 0.5 到 1 天 | D |
+| 3 | D2. 智能合集 v2：排除、评分、文件夹、OR 分组（已实现，2026-09-25） | 同上 | 每项 0.5 到 1 天 | D |
 | 4 | E. 水印档案、相框存为模板、导入自己的 logo | `frame-watermark-plan.md:285-303`、`unified-canvas-plan.md:153-160` | 6 到 8 天 | 需要先拍板一个悬而未决的设计问题 |
 
 排序原则：先做半天能完成、立刻有人受益的（A、B）；再做后端已有、只差界面的（C）；然后是改动面最广的（D）；最后是范围最大、还有设计问题没定的（E）。
@@ -158,7 +158,7 @@
 >
 > **落点。** sidecar `db/browse.py` 的 `_base_clause` / `_view_where`（browse、count、locate、地图点、分面计数都接受 `base`）；`hooks/workspaceLogic.js` 的 `rulesFromScope` / `scopeFromRules` / `editScopeFromRules` / `hasRefinement`；`hooks/useWorkspace.js` 的 `goTo()`（所有位置切换的唯一入口）。测试：`tests/test_two_layer_filters.py`、`workspaceLogic.test.js`、e2e 46 / 47。
 >
-> **没做的。** 人物仍然是一个细化条件而不是位置（从人物墙进入时是全新的 scope，但筛选栏里显示人物 chip）；AND 之外的逻辑（OR / NOT / 多值）；编辑嵌套规则里的 base 层。
+> **没做的。** 人物仍然是一个细化条件而不是位置（从人物墙进入时是全新的 scope，但筛选栏里显示人物 chip）；编辑嵌套规则里的 base 层。（OR / NOT / 多值已在 v2 和多选筛选里做了。）
 
 **核心结论：不需要新的规则引擎。** 智能合集就是一份保存下来的 `{status, search, filters, sort}`，由渲染进程解析成普通的浏览 scope，走现有的浏览路径。这样浏览、定位、地图点、排序、翻页都不用改 sidecar，web 版也直接能用。
 
@@ -187,15 +187,15 @@
 
 **v2：按价值排序的规则扩展**
 
-每一项都是同样的四处改动：`_facet_clauses` 一个 `add(...)`、web bridge 的 `matchesFacetFilters` 一行、MCP 一个属性、FilterBar 一个控件。
+1. `date_within_days`（「最近 30 天」）。随 v1 发布。
+2. 多标签任一 / 全部（`tag_match`）。随多选筛选发布（#96）。
+3. **评分（2026-09-25）。** 新增 `rating_max`；「未评分」就是 `rating_max: 0`（NULL 和 0 都算 0 星），「正好 N 星」是上下限相同。筛选栏的星级前面加一个 ≥ / = / ≤ 切换，后面加「未评分」。
+4. **排除条件（2026-09-25）。** `exclude: [维度名…]`，维度的值照常存，被列出的维度整体取反；没有该字段的照片（没记录相机）算「不是」。sidecar 在 `_conditions` 里一处通用实现（`NOT IFNULL((…), 0)`），所以每个维度都能排除。筛选栏：下拉顶部「包含 / 排除」（标签是「含任意一个 / 同时含全部 / 排除」，只选一个标签时是「包含 / 排除」），chip 写「相机不是 X」「不含标签 X」「不在 X」。清空一个维度的值时，它也从 `exclude` 里去掉。
+5. **属于或不属于某个文件夹（2026-09-25）。** 筛选栏新增「文件夹」维度（`in_collection`），配合排除就是「不在某文件夹」。`in_collection` 只看普通文件夹的成员表，智能合集没有成员，所以不会循环。从文件夹里保存时，如果细化条件本身涉及文件夹，当前文件夹改为嵌套在 `base` 里，不和同名键冲突。
+6. 多相机、多镜头。随多选筛选发布（#96）。
+7. **OR 分组（2026-09-25）。** `any_of: [分组…]`，每组是一个普通的筛选字典（可以带 `exclude`），组内 AND、组间 OR，再和其余条件 AND；分组不嵌套，空组忽略。因为放在 filters 里，浏览、计数、定位、地图、智能合集和 MCP 都直接支持。界面：「添加筛选」弹层底部的「条件分组（或）…」打开对话框，每组是一个嵌入的筛选栏（只显示已选的维度，「添加条件」再加），选项取自整个图库；生效后筛选栏上是一个「满足任一组（N 组）」chip，点开继续编辑。
 
-1. `date_within_days`（「最近 30 天」）。这是「会自己更新的合集」最主要的存在理由。**已决定并入 v1 一起发。**
-2. `tags_all` / `tags_any` 多标签。
-3. `rating_max` 或 `rating_eq`，支持「未评分」。
-4. 排除条件（NOT）。
-5. 属于或不属于某个普通合集（需要防循环）。
-6. 多相机、多镜头（IN）。
-7. 通用的 OR 分组。需要单独的规则编辑对话框，延后。
+MCP：`search_assets` 和智能合集规则都接受 `rating_max`、`exclude`（用 agent 看到的名字，`person_id`、`collection_id` 在服务端换成维度名）、`any_of`；`search_assets` 新增 `collection_id`。测试：`tests/test_smart_collections_v2.py`、`workspaceLogic.test.js`、e2e 53。
 
 **风险**
 

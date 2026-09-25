@@ -293,7 +293,37 @@ function matchesSearch(asset, search) {
 // (sidecar db/facets.py).
 const facetValues = (raw) => (raw == null || raw === "" ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => v != null && v !== "");
 
+// The filter keys each facet owns (sidecar db/facets.py FACETS): a facet named
+// in `exclude` is tested on its own and then flipped, and counting a facet's
+// options leaves its own keys out.
+const FACET_OWN_KEYS = {
+  camera: ["camera"], lens: ["lens"], iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
+  focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
+  capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"],
+  orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], extension: ["extension"],
+  people: ["people"], annotated: ["annotated"], person_group: ["person_group"], location_source: ["location_source"],
+  country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
+  ocr_contains: ["ocr_contains"], path_contains: ["path_contains"], geo: ["geo"], in_collection: ["in_collection"],
+};
+const FILTER_MODIFIERS = new Set(["tag_match", "color_tolerance", "exclude"]);
+const holdsCondition = (filters) => Object.entries(filters).some(([key, value]) => key !== "any_of" && !FILTER_MODIFIERS.has(key) && facetValues(value).length > 0);
+
+// `exclude` flips the facets it names (a photo without the value is not a
+// match, so it passes); `any_of` groups need one of them to hold, on top of
+// the rest. Empty groups are ignored, as the sidecar does.
 function matchesFacetFilters(asset, filters) {
+  const { exclude, any_of: groups, ...rest } = filters;
+  for (const name of facetValues(exclude)) {
+    const own = Object.fromEntries((FACET_OWN_KEYS[name] || []).filter((key) => key in rest).map((key) => [key, rest[key]]));
+    for (const key of Object.keys(own)) delete rest[key];
+    if (holdsCondition(own) && matchesFacetConditions(asset, own)) return false;
+  }
+  const alternatives = (Array.isArray(groups) ? groups : []).filter((group) => group && holdsCondition(group));
+  if (alternatives.length && !alternatives.some((group) => matchesFacetFilters(asset, group))) return false;
+  return matchesFacetConditions(asset, rest);
+}
+
+function matchesFacetConditions(asset, filters) {
   const meta = asset.image_metadata || {};
   const cameras = facetValues(filters.camera);
   if (cameras.length && !cameras.includes(meta.camera_model)) return false;
@@ -313,6 +343,8 @@ function matchesFacetFilters(asset, filters) {
     if (!(day && day >= since)) return false;
   }
   if (filters.rating_min != null && !(asset.app_rating >= filters.rating_min)) return false;
+  // Unrated is 0 stars: rating_max 0 means "not rated yet".
+  if (filters.rating_max != null && !((asset.app_rating || 0) <= filters.rating_max)) return false;
   const orientations = facetValues(filters.orientation);
   if (orientations.length) {
     const shape = meta.height > meta.width ? "portrait" : meta.width > meta.height ? "landscape" : meta.width ? "square" : null;
@@ -458,14 +490,8 @@ const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g,
 
 // The photos one facet's options are counted over (sidecar _facet_scope): the
 // folder or status, the search text and every OTHER active filter. A facet's
-// own keys are dropped so its dropdown can still be used to switch value.
-const FACET_OWN_KEYS = {
-  camera: ["camera"], lens: ["lens"], tag: ["tag", "tag_match"], extension: ["extension"],
-  iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
-  focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
-  capture_time: ["date_from", "date_to", "date_within_days"],
-  location_source: ["location_source"],
-};
+// own keys (FACET_OWN_KEYS) are dropped so its dropdown can still be used to
+// switch value.
 function facetUniverse(facet, { collectionId, status = "all", search, filters, base } = {}) {
   let list = assets;
   if (base && !collectionId) list = list.filter((a) => matchesRules(a, base));
