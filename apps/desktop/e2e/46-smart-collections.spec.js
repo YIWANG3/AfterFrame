@@ -65,12 +65,15 @@ test("Clear and the smart collection actions stay put while the facets scroll", 
   expect(after.x).toBeGreaterThanOrEqual(scrollBox.x + scrollBox.width - 1);
   // The bar floats over the photos: the actions need a surface of their own,
   // like the facet chips, or they vanish against an image.
-  // (Base colour only: whichever button the pointer rests on also has a hover gradient.)
+  // Resting colours only: the pointer is still where the star was clicked, and
+  // once a filter is active Clear appears right there, hovered. Move it off
+  // the bar and let the colour transition settle.
+  await window.mouse.move(4, 4);
   const surface = (locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor);
   const chip = await surface(scroller.getByRole("button", { name: "Camera", exact: true }));
   expect(chip).not.toBe("rgba(0, 0, 0, 0)");
-  expect(await surface(actions.getByRole("button", { name: /^Clear/ }))).toBe(chip);
-  expect(await surface(actions.getByRole("button", { name: "Save as smart collection" }))).toBe(chip);
+  await expect.poll(() => surface(actions.getByRole("button", { name: /^Clear/ }))).toBe(chip);
+  await expect.poll(() => surface(actions.getByRole("button", { name: "Save as smart collection" }))).toBe(chip);
   if (process.env.AF_SHOT) {
     await window.evaluate(() => { document.documentElement.dataset.theme = "light"; document.querySelector("[data-testid='gallery-scroll']").scrollTop = 140; });
     await window.waitForTimeout(300);
