@@ -81,7 +81,8 @@ class MultiSelectTests(unittest.TestCase):
             normalize_rules({"filters": {"tag_match": "all"}})
 
     def test_the_registry_is_the_single_source(self):
-        self.assertEqual(FACET_KEYS, {key for facet in FACETS for key in facet.keys})
+        # Plus the two keys that combine facets rather than being one.
+        self.assertEqual(FACET_KEYS, {key for facet in FACETS for key in facet.keys} | {"exclude", "any_of"})
         self.assertEqual(set(FACET_OWN_KEYS), {facet.name for facet in FACETS})
         self.assertEqual(len({facet.name for facet in FACETS}), len(FACETS))  # no duplicate names
 

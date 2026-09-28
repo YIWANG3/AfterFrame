@@ -41,10 +41,16 @@ export const scopeKeyOf = (scope) => browseScopeKey({
 export const COLLECTION_SORTS = ["added-desc", "added-asc"];
 export const sortOutsideFolder = (sort) => (COLLECTION_SORTS.includes(sort) ? DEFAULT_SCOPE.sort : sort);
 
+// Keys that only tune another key (sidecar db/facets.py FACET_MODIFIER_KEYS):
+// never a condition by themselves, so never counted as one.
+export const FILTER_MODIFIER_KEYS = new Set(["tag_match", "color_tolerance", "exclude"]);
+// How many conditions a filter dict holds; a set of "any of" groups is one.
+export const activeFilterCount = (filters) => Object.entries(filters || {})
+  .filter(([key, value]) => !FILTER_MODIFIER_KEYS.has(key) && !isEmptyValue(value)).length;
+
 // Is the user narrowing the place they are in? Drives "the filter bar cannot be
 // hidden while it is filtering" and which actions the bar offers.
-export const hasRefinement = (scope) => !!scope.query.trim()
-  || Object.entries(scope.filters || {}).some(([key, value]) => key !== "tag_match" && !isEmptyValue(value));
+export const hasRefinement = (scope) => !!scope.query.trim() || activeFilterCount(scope.filters) > 0;
 
 // The view facet counts are taken inside (db/browse.py _facet_scope): what
 // the grid is showing, minus the sort, which does not change any count.
@@ -61,9 +67,14 @@ export const facetScopeOf = (scope) => ({
 // A facet value may be a list (several values within one facet are OR); an
 // empty list is no condition. tag_match only tunes `tag` and means nothing alone.
 export const isEmptyValue = (value) => value == null || value === "" || (Array.isArray(value) && value.length === 0);
+const listOf = (value) => (value == null ? [] : Array.isArray(value) ? value : [value]);
+// "Any of" groups are filter dicts themselves; a group with no condition left
+// is dropped, as the sidecar drops it.
 const savableFilters = (filters) => {
-  const kept = Object.fromEntries(Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && !isEmptyValue(value)));
+  const kept = Object.fromEntries(Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && key !== "any_of" && !isEmptyValue(value)));
   if (!Array.isArray(kept.tag)) delete kept.tag_match;
+  const groups = listOf(filters?.any_of).map(savableFilters).filter((group) => activeFilterCount(group) > 0);
+  if (groups.length) kept.any_of = groups;
   return kept;
 };
 
@@ -78,9 +89,16 @@ export function rulesFromScope(scope) {
   if (!scope) return null;
   const search = (scope.query || "").trim();
   const filters = savableFilters(scope.filters);
-  const refined = !!search || Object.keys(filters).length > 0;
+  const refined = !!search || activeFilterCount(filters) > 0;
   if (scope.collectionId) {
-    return refined ? { status: "all", search, filters: { ...filters, in_collection: scope.collectionId } } : null;
+    if (!refined) return null;
+    // When the refinement names folders itself ("not in Published"), the
+    // folder goes underneath instead of into the same key, which would
+    // overwrite it or, excluded, flip it.
+    if (filters.in_collection !== undefined || listOf(filters.exclude).includes("in_collection")) {
+      return { status: "all", search, filters, base: { status: "all", search: "", filters: { in_collection: scope.collectionId } } };
+    }
+    return { status: "all", search, filters: { ...filters, in_collection: scope.collectionId } };
   }
   if (scope.base && !scope.editingRules) {
     return refined ? { status: "all", search, filters, base: scope.base } : null;

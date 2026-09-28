@@ -132,6 +132,7 @@ jobs:
           e2e/50-country-city-filters.spec.js
           e2e/51-custom-filter-bar.spec.js
           e2e/52-color-filter.spec.js
+          e2e/53-smart-collections-v2.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

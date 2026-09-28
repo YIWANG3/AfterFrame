@@ -128,7 +128,7 @@ class SmartCollectionTests(unittest.TestCase):
             "orientation": "portrait", "asset_type": "image", "people": "with_faces", "annotated": "with",
             "location_source": "none", "caption_contains": "x", "ocr_contains": "x", "path_contains": "x",
             "geo": {"mode": "bounds", "west": 0, "south": 0, "east": 1, "north": 1}, "date_from": "2025-01-01",
-            "date_to": "2025-12-31", "color": "#ff0000",
+            "date_to": "2025-12-31", "color": "#ff0000", "any_of": [{"rating_min": 1}],
         }
         from media_workspace.db.facets import FACET_MODIFIER_KEYS
 
@@ -138,6 +138,8 @@ class SmartCollectionTests(unittest.TestCase):
         # A modifier tunes another key: nothing alone, a different clause with it.
         self.assertEqual(_facet_clauses({"tag_match": "all"}), ("", []))
         self.assertNotEqual(_facet_clauses({"tag": ["a", "b"]}), _facet_clauses({"tag": ["a", "b"], "tag_match": "all"}))
+        self.assertEqual(_facet_clauses({"exclude": "camera"}), ("", []))
+        self.assertNotEqual(_facet_clauses({"camera": "X"}), _facet_clauses({"camera": "X", "exclude": "camera"}))
 
 
 if __name__ == "__main__":
