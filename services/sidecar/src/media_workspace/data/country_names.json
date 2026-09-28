@@ -1,0 +1,1038 @@
+{
+"AC": {
+"en": "Ascension",
+"zh": null
+},
+"AD": {
+"en": "Andorra",
+"zh": "安道尔"
+},
+"AE": {
+"en": "United Arab Emirates",
+"zh": "阿拉伯联合酋长国"
+},
+"AF": {
+"en": "Afghanistan",
+"zh": "阿富汗"
+},
+"AG": {
+"en": "Antigua and Barbuda",
+"zh": "安提瓜和巴布达"
+},
+"AI": {
+"en": "Anguilla",
+"zh": "安圭拉"
+},
+"AL": {
+"en": "Albania",
+"zh": "阿爾巴尼亞"
+},
+"AM": {
+"en": "Armenia",
+"zh": "亞美尼亞"
+},
+"AN": {
+"en": "Netherlands Antilles",
+"zh": "荷属安的列斯"
+},
+"AO": {
+"en": "Angola",
+"zh": "安哥拉"
+},
+"AQ": {
+"en": "Antarctic Treaty area",
+"zh": "南极条约地区"
+},
+"AR": {
+"en": "Argentina",
+"zh": "阿根廷"
+},
+"AS": {
+"en": "American Samoa",
+"zh": "美屬薩摩亞"
+},
+"AT": {
+"en": "Austria",
+"zh": "奧地利"
+},
+"AU": {
+"en": "Australia",
+"zh": "澳大利亚"
+},
+"AW": {
+"en": "Aruba",
+"zh": "阿魯巴"
+},
+"AX": {
+"en": "Åland",
+"zh": "奥兰"
+},
+"AZ": {
+"en": "Azerbaijan",
+"zh": "阿塞拜疆"
+},
+"BA": {
+"en": "Bosnia and Herzegovina",
+"zh": "波斯尼亚和黑塞哥维那"
+},
+"BB": {
+"en": "Barbados",
+"zh": "巴巴多斯"
+},
+"BD": {
+"en": "Bangladesh",
+"zh": "孟加拉國"
+},
+"BE": {
+"en": "Belgium",
+"zh": "比利時"
+},
+"BF": {
+"en": "Burkina Faso",
+"zh": "布吉納法索"
+},
+"BG": {
+"en": "Bulgaria",
+"zh": "保加利亚"
+},
+"BH": {
+"en": "Bahrain",
+"zh": "巴林"
+},
+"BI": {
+"en": "Burundi",
+"zh": "蒲隆地"
+},
+"BJ": {
+"en": "Benin",
+"zh": "貝南"
+},
+"BL": {
+"en": "Saint Barthélemy",
+"zh": "聖巴泰勒米"
+},
+"BM": {
+"en": "Bermuda",
+"zh": "百慕大"
+},
+"BN": {
+"en": "Brunei",
+"zh": "汶莱"
+},
+"BO": {
+"en": "Bolivia",
+"zh": "玻利維亞"
+},
+"BQ": {
+"en": "Caribbean Netherlands",
+"zh": "荷蘭加勒比區"
+},
+"BR": {
+"en": "Brazil",
+"zh": "巴西"
+},
+"BS": {
+"en": "The Bahamas",
+"zh": "巴哈馬"
+},
+"BT": {
+"en": "Bhutan",
+"zh": "不丹"
+},
+"BV": {
+"en": "Bouvet Island",
+"zh": "布韦岛"
+},
+"BW": {
+"en": "Botswana",
+"zh": "波札那"
+},
+"BY": {
+"en": "Belarus",
+"zh": "白俄羅斯"
+},
+"BZ": {
+"en": "Belize",
+"zh": "伯利兹"
+},
+"CA": {
+"en": "Canada",
+"zh": "加拿大"
+},
+"CC": {
+"en": "Cocos (Keeling) Islands",
+"zh": "科科斯（基林）群島"
+},
+"CD": {
+"en": "Democratic Republic of the Congo",
+"zh": "刚果民主共和国"
+},
+"CF": {
+"en": "Central African Republic",
+"zh": "中非共和國"
+},
+"CG": {
+"en": "Republic of the Congo",
+"zh": "剛果共和國"
+},
+"CH": {
+"en": "Switzerland",
+"zh": "瑞士"
+},
+"CI": {
+"en": "Ivory Coast",
+"zh": "科特迪瓦"
+},
+"CK": {
+"en": "Cook Islands",
+"zh": "库克群岛"
+},
+"CL": {
+"en": "Chile",
+"zh": "智利"
+},
+"CM": {
+"en": "Cameroon",
+"zh": "喀麦隆"
+},
+"CN": {
+"en": "People's Republic of China",
+"zh": "中华人民共和国"
+},
+"CO": {
+"en": "Colombia",
+"zh": "哥伦比亚"
+},
+"CP": {
+"en": "Clipperton Island",
+"zh": "克利珀頓島"
+},
+"CQ": {
+"en": "Sark",
+"zh": "薩克"
+},
+"CR": {
+"en": "Costa Rica",
+"zh": "哥斯达黎加"
+},
+"CU": {
+"en": "Cuba",
+"zh": "古巴"
+},
+"CV": {
+"en": "Cape Verde",
+"zh": "佛得角"
+},
+"CW": {
+"en": "Curaçao",
+"zh": "库拉索"
+},
+"CX": {
+"en": "Christmas Island",
+"zh": "聖誕島"
+},
+"CY": {
+"en": "Cyprus",
+"zh": "塞浦路斯"
+},
+"CZ": {
+"en": "Czech Republic",
+"zh": "捷克"
+},
+"DD": {
+"en": "German Democratic Republic",
+"zh": "東德"
+},
+"DE": {
+"en": "Germany",
+"zh": "德國"
+},
+"DG": {
+"en": "Diego Garcia",
+"zh": "迪戈加西亚岛"
+},
+"DJ": {
+"en": "Djibouti",
+"zh": "吉布提"
+},
+"DK": {
+"en": "Denmark",
+"zh": "丹麥"
+},
+"DM": {
+"en": "Dominica",
+"zh": "多米尼克"
+},
+"DO": {
+"en": "Dominican Republic",
+"zh": "多明尼加"
+},
+"DZ": {
+"en": "Algeria",
+"zh": "阿爾及利亞"
+},
+"EC": {
+"en": "Ecuador",
+"zh": "厄瓜多尔"
+},
+"EE": {
+"en": "Estonia",
+"zh": "愛沙尼亞"
+},
+"EG": {
+"en": "Egypt",
+"zh": "埃及"
+},
+"EH": {
+"en": "Western Sahara",
+"zh": "西撒哈拉"
+},
+"ER": {
+"en": "Eritrea",
+"zh": "厄立特里亞"
+},
+"ES": {
+"en": "Spain",
+"zh": "西班牙"
+},
+"ET": {
+"en": "Ethiopia",
+"zh": "埃塞俄比亚"
+},
+"FI": {
+"en": "Finland",
+"zh": "芬蘭"
+},
+"FJ": {
+"en": "Fiji",
+"zh": "斐濟"
+},
+"FK": {
+"en": "Falkland Islands",
+"zh": "福克蘭群島"
+},
+"FM": {
+"en": "Federated States of Micronesia",
+"zh": "密克罗尼西亚联邦"
+},
+"FO": {
+"en": "Faroe Islands",
+"zh": "法罗群岛"
+},
+"FR": {
+"en": "France",
+"zh": "法國"
+},
+"GA": {
+"en": "Gabon",
+"zh": "加蓬"
+},
+"GB": {
+"en": "United Kingdom",
+"zh": "英国"
+},
+"GD": {
+"en": "Grenada",
+"zh": "格瑞那達"
+},
+"GE": {
+"en": "Georgia",
+"zh": "格鲁吉亚"
+},
+"GF": {
+"en": "French Guiana",
+"zh": "法屬圭亞那"
+},
+"GG": {
+"en": "Guernsey",
+"zh": "根西"
+},
+"GH": {
+"en": "Ghana",
+"zh": "迦納"
+},
+"GI": {
+"en": "Gibraltar",
+"zh": "直布羅陀"
+},
+"GL": {
+"en": "Greenland",
+"zh": "格陵兰"
+},
+"GM": {
+"en": "The Gambia",
+"zh": "岡比亞"
+},
+"GN": {
+"en": "Guinea",
+"zh": "几内亚"
+},
+"GP": {
+"en": "Guadeloupe",
+"zh": "瓜德羅普"
+},
+"GQ": {
+"en": "Equatorial Guinea",
+"zh": "赤道几内亚"
+},
+"GR": {
+"en": "Greece",
+"zh": "希腊"
+},
+"GS": {
+"en": "South Georgia and the South Sandwich Islands",
+"zh": "南乔治亚和南桑威奇群岛"
+},
+"GT": {
+"en": "Guatemala",
+"zh": "危地马拉"
+},
+"GU": {
+"en": "Guam",
+"zh": "關島"
+},
+"GW": {
+"en": "Guinea-Bissau",
+"zh": "畿內亞比紹"
+},
+"GY": {
+"en": "Guyana",
+"zh": "圭亚那"
+},
+"HK": {
+"en": "Hong Kong",
+"zh": "香港"
+},
+"HM": {
+"en": "Heard Island and McDonald Islands",
+"zh": "赫德島和麥克唐納群島"
+},
+"HN": {
+"en": "Honduras",
+"zh": "洪都拉斯"
+},
+"HR": {
+"en": "Croatia",
+"zh": "克羅地亞"
+},
+"HT": {
+"en": "Haiti",
+"zh": "海地"
+},
+"HU": {
+"en": "Hungary",
+"zh": "匈牙利"
+},
+"ID": {
+"en": "Indonesia",
+"zh": "印度尼西亚"
+},
+"IE": {
+"en": "Ireland",
+"zh": "愛爾蘭共和國"
+},
+"IL": {
+"en": "Israel",
+"zh": "以色列"
+},
+"IM": {
+"en": "Isle of Man",
+"zh": "马恩岛"
+},
+"IN": {
+"en": "India",
+"zh": "印度"
+},
+"IO": {
+"en": "British Indian Ocean Territory",
+"zh": "英屬印度洋領地"
+},
+"IQ": {
+"en": "Iraq",
+"zh": "伊拉克"
+},
+"IR": {
+"en": "Iran",
+"zh": "伊朗"
+},
+"IS": {
+"en": "Iceland",
+"zh": "冰島"
+},
+"IT": {
+"en": "Italy",
+"zh": "意大利"
+},
+"JE": {
+"en": "Jersey",
+"zh": "澤西"
+},
+"JM": {
+"en": "Jamaica",
+"zh": "牙買加"
+},
+"JO": {
+"en": "Jordan",
+"zh": "約旦"
+},
+"JP": {
+"en": "Japan",
+"zh": "日本"
+},
+"KE": {
+"en": "Kenya",
+"zh": "肯尼亚"
+},
+"KG": {
+"en": "Kyrgyzstan",
+"zh": "吉尔吉斯斯坦"
+},
+"KH": {
+"en": "Cambodia",
+"zh": "柬埔寨"
+},
+"KI": {
+"en": "Kiribati",
+"zh": "吉里巴斯"
+},
+"KM": {
+"en": "Comoros",
+"zh": "葛摩"
+},
+"KN": {
+"en": "Saint Kitts and Nevis",
+"zh": "聖克里斯多福及尼維斯"
+},
+"KP": {
+"en": "North Korea",
+"zh": "朝鮮民主主義人民共和國"
+},
+"KR": {
+"en": "South Korea",
+"zh": "大韩民国"
+},
+"KW": {
+"en": "Kuwait",
+"zh": "科威特"
+},
+"KY": {
+"en": "Cayman Islands",
+"zh": "開曼群島"
+},
+"KZ": {
+"en": "Kazakhstan",
+"zh": "哈萨克斯坦"
+},
+"LA": {
+"en": "Laos",
+"zh": "老撾"
+},
+"LB": {
+"en": "Lebanon",
+"zh": "黎巴嫩"
+},
+"LC": {
+"en": "Saint Lucia",
+"zh": "圣卢西亚"
+},
+"LI": {
+"en": "Liechtenstein",
+"zh": "列支敦斯登"
+},
+"LK": {
+"en": "Sri Lanka",
+"zh": "斯里蘭卡"
+},
+"LR": {
+"en": "Liberia",
+"zh": "利比里亞"
+},
+"LS": {
+"en": "Lesotho",
+"zh": "莱索托"
+},
+"LT": {
+"en": "Lithuania",
+"zh": "立陶宛"
+},
+"LU": {
+"en": "Luxembourg",
+"zh": "卢森堡"
+},
+"LV": {
+"en": "Latvia",
+"zh": "拉脫維亞"
+},
+"LY": {
+"en": "Libya",
+"zh": "利比亞"
+},
+"MA": {
+"en": "Morocco",
+"zh": "摩洛哥"
+},
+"MC": {
+"en": "Monaco",
+"zh": "摩納哥"
+},
+"MD": {
+"en": "Moldova",
+"zh": "摩爾多瓦"
+},
+"ME": {
+"en": "Montenegro",
+"zh": "蒙特內哥羅"
+},
+"MF": {
+"en": "Saint-Martin",
+"zh": "法屬聖馬丁"
+},
+"MG": {
+"en": "Madagascar",
+"zh": "馬達加斯加"
+},
+"MH": {
+"en": "Marshall Islands",
+"zh": "馬紹爾群島"
+},
+"MK": {
+"en": "North Macedonia",
+"zh": "北马其顿"
+},
+"ML": {
+"en": "Mali",
+"zh": "马里"
+},
+"MM": {
+"en": "Myanmar",
+"zh": "緬甸"
+},
+"MN": {
+"en": "Mongolia",
+"zh": "蒙古國"
+},
+"MO": {
+"en": "Macau",
+"zh": "澳門"
+},
+"MP": {
+"en": "Northern Mariana Islands",
+"zh": "北马里亚纳群岛"
+},
+"MQ": {
+"en": "Martinique",
+"zh": "馬提尼克"
+},
+"MR": {
+"en": "Mauritania",
+"zh": "毛里塔尼亞"
+},
+"MS": {
+"en": "Montserrat",
+"zh": "蒙塞拉特島"
+},
+"MT": {
+"en": "Malta",
+"zh": "馬耳他"
+},
+"MU": {
+"en": "Mauritius",
+"zh": "毛里求斯"
+},
+"MV": {
+"en": "Maldives",
+"zh": "馬爾代夫"
+},
+"MW": {
+"en": "Malawi",
+"zh": "馬拉威"
+},
+"MX": {
+"en": "Mexico",
+"zh": "墨西哥"
+},
+"MY": {
+"en": "Malaysia",
+"zh": "馬來西亞"
+},
+"MZ": {
+"en": "Mozambique",
+"zh": "莫桑比克"
+},
+"NA": {
+"en": "Namibia",
+"zh": "纳米比亚"
+},
+"NC": {
+"en": "New Caledonia",
+"zh": "新喀里多尼亞"
+},
+"NE": {
+"en": "Niger",
+"zh": "尼日尔"
+},
+"NF": {
+"en": "Norfolk Island",
+"zh": "诺福克岛"
+},
+"NG": {
+"en": "Nigeria",
+"zh": "奈及利亞"
+},
+"NI": {
+"en": "Nicaragua",
+"zh": "尼加拉瓜"
+},
+"NL": {
+"en": "Kingdom of the Netherlands",
+"zh": "荷兰王国"
+},
+"NO": {
+"en": "Norway",
+"zh": "挪威"
+},
+"NP": {
+"en": "Nepal",
+"zh": "尼泊爾"
+},
+"NR": {
+"en": "Nauru",
+"zh": "瑙鲁"
+},
+"NU": {
+"en": "Niue",
+"zh": "紐埃"
+},
+"NZ": {
+"en": "New Zealand",
+"zh": "新西兰"
+},
+"OM": {
+"en": "Oman",
+"zh": "阿曼"
+},
+"PA": {
+"en": "Panama",
+"zh": "巴拿馬"
+},
+"PC": {
+"en": "Trust Territory of the Pacific Islands",
+"zh": "太平洋群島託管地"
+},
+"PE": {
+"en": "Peru",
+"zh": "秘鲁"
+},
+"PF": {
+"en": "French Polynesia",
+"zh": "法屬玻里尼西亞"
+},
+"PG": {
+"en": "Papua New Guinea",
+"zh": "巴布亚新几内亚"
+},
+"PH": {
+"en": "Philippines",
+"zh": "菲律賓"
+},
+"PK": {
+"en": "Pakistan",
+"zh": "巴基斯坦"
+},
+"PL": {
+"en": "Poland",
+"zh": "波蘭"
+},
+"PM": {
+"en": "Saint Pierre and Miquelon",
+"zh": "圣皮埃尔和密克隆"
+},
+"PN": {
+"en": "Pitcairn Islands",
+"zh": "皮特凯恩群岛"
+},
+"PR": {
+"en": "Puerto Rico",
+"zh": "波多黎各"
+},
+"PS": {
+"en": "Palestine",
+"zh": "巴勒斯坦"
+},
+"PT": {
+"en": "Portugal",
+"zh": "葡萄牙"
+},
+"PW": {
+"en": "Palau",
+"zh": "帛琉"
+},
+"PY": {
+"en": "Paraguay",
+"zh": "巴拉圭"
+},
+"QA": {
+"en": "Qatar",
+"zh": "卡塔尔"
+},
+"RE": {
+"en": "Réunion",
+"zh": "留尼汪"
+},
+"RO": {
+"en": "Romania",
+"zh": "羅馬尼亞"
+},
+"RS": {
+"en": "Serbia",
+"zh": "塞爾維亞"
+},
+"RU": {
+"en": "Russia",
+"zh": "俄罗斯"
+},
+"RW": {
+"en": "Rwanda",
+"zh": "卢旺达"
+},
+"SA": {
+"en": "Saudi Arabia",
+"zh": "沙特阿拉伯"
+},
+"SB": {
+"en": "Solomon Islands",
+"zh": "所罗门群岛"
+},
+"SC": {
+"en": "Seychelles",
+"zh": "塞舌尔"
+},
+"SD": {
+"en": "Sudan",
+"zh": "苏丹"
+},
+"SE": {
+"en": "Sweden",
+"zh": "瑞典"
+},
+"SG": {
+"en": "Singapore",
+"zh": "新加坡"
+},
+"SH": {
+"en": "Saint Helena, Ascension and Tristan da Cunha",
+"zh": "圣赫勒拿、阿森松和特里斯坦-达库尼亚"
+},
+"SI": {
+"en": "Slovenia",
+"zh": "斯洛文尼亞"
+},
+"SJ": {
+"en": "Svalbard and Jan Mayen",
+"zh": "斯瓦巴和扬马延"
+},
+"SK": {
+"en": "Slovakia",
+"zh": "斯洛伐克"
+},
+"SL": {
+"en": "Sierra Leone",
+"zh": "塞拉利昂"
+},
+"SM": {
+"en": "San Marino",
+"zh": "圣马力诺"
+},
+"SN": {
+"en": "Senegal",
+"zh": "塞内加尔"
+},
+"SO": {
+"en": "Somalia",
+"zh": "索馬里"
+},
+"SR": {
+"en": "Suriname",
+"zh": "蘇利南"
+},
+"SS": {
+"en": "South Sudan",
+"zh": "南蘇丹"
+},
+"ST": {
+"en": "São Tomé and Príncipe",
+"zh": "圣多美和普林西比"
+},
+"SV": {
+"en": "El Salvador",
+"zh": "薩爾瓦多"
+},
+"SX": {
+"en": "Sint Maarten",
+"zh": "荷屬聖馬丁"
+},
+"SY": {
+"en": "Syria",
+"zh": "敘利亞"
+},
+"SZ": {
+"en": "Eswatini",
+"zh": "斯威士兰"
+},
+"TA": {
+"en": "Tristan da Cunha",
+"zh": null
+},
+"TC": {
+"en": "Turks and Caicos Islands",
+"zh": "特克斯和凯科斯群岛"
+},
+"TD": {
+"en": "Chad",
+"zh": "乍得"
+},
+"TF": {
+"en": "French Southern and Antarctic Lands",
+"zh": "法属南部和南极领地"
+},
+"TG": {
+"en": "Togo",
+"zh": "多哥"
+},
+"TH": {
+"en": "Thailand",
+"zh": "泰國"
+},
+"TJ": {
+"en": "Tajikistan",
+"zh": "塔吉克斯坦"
+},
+"TK": {
+"en": "Tokelau",
+"zh": "托克劳"
+},
+"TL": {
+"en": "Timor-Leste",
+"zh": "東帝汶"
+},
+"TM": {
+"en": "Turkmenistan",
+"zh": "土庫曼"
+},
+"TN": {
+"en": "Tunisia",
+"zh": "突尼西亞"
+},
+"TO": {
+"en": "Tonga",
+"zh": "東加"
+},
+"TR": {
+"en": "Turkey",
+"zh": "土耳其"
+},
+"TT": {
+"en": "Trinidad and Tobago",
+"zh": "千里達及托巴哥"
+},
+"TV": {
+"en": "Tuvalu",
+"zh": "吐瓦魯"
+},
+"TW": {
+"en": "Taiwan",
+"zh": "中華民國"
+},
+"TZ": {
+"en": "Tanzania",
+"zh": "坦桑尼亞"
+},
+"UA": {
+"en": "Ukraine",
+"zh": "烏克蘭"
+},
+"UG": {
+"en": "Uganda",
+"zh": "烏干達"
+},
+"UM": {
+"en": "United States Minor Outlying Islands",
+"zh": "美国本土外小岛屿"
+},
+"US": {
+"en": "United States",
+"zh": "美國"
+},
+"UY": {
+"en": "Uruguay",
+"zh": "烏拉圭"
+},
+"UZ": {
+"en": "Uzbekistan",
+"zh": "乌兹别克斯坦"
+},
+"VA": {
+"en": "Vatican City",
+"zh": "梵蒂岡城國"
+},
+"VC": {
+"en": "Saint Vincent and the Grenadines",
+"zh": "圣文森特和格林纳丁斯"
+},
+"VE": {
+"en": "Venezuela",
+"zh": "委內瑞拉"
+},
+"VG": {
+"en": "British Virgin Islands",
+"zh": "英屬維爾京群島"
+},
+"VI": {
+"en": "United States Virgin Islands",
+"zh": "美屬維爾京群島"
+},
+"VN": {
+"en": "Vietnam",
+"zh": "越南"
+},
+"VU": {
+"en": "Vanuatu",
+"zh": "萬那杜"
+},
+"WF": {
+"en": "Wallis and Futuna",
+"zh": "瓦利斯和富圖納"
+},
+"WS": {
+"en": "Samoa",
+"zh": "萨摩亚"
+},
+"XK": {
+"en": "Kosovo",
+"zh": "科索沃"
+},
+"YE": {
+"en": "Yemen",
+"zh": "也门"
+},
+"YT": {
+"en": "Mayotte",
+"zh": "马约特"
+},
+"YU": {
+"en": "Yugoslavia",
+"zh": "南斯拉夫"
+},
+"ZA": {
+"en": "South Africa",
+"zh": "南非"
+},
+"ZM": {
+"en": "Zambia",
+"zh": "贊比亞"
+},
+"ZW": {
+"en": "Zimbabwe",
+"zh": "津巴布韦"
+}
+}
