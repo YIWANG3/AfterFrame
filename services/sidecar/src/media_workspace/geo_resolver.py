@@ -129,15 +129,28 @@ def simplified(text: str | None) -> str | None:
     return text.translate(_t2s)
 
 
+# The gazetteer's country labels by ISO code, written next to it by
+# build_gazetteer.py. The filter bar asks for country names on every launch;
+# loading the whole gazetteer for ~250 labels took half a second (seconds on
+# CI runners) at the head of the sidecar's serial queue.
+COUNTRY_NAMES_PATH = Path(__file__).parent / "data" / "country_names.json"
+_country_names: dict[str, dict] | None = None
+
+
 def country_names(iso: str | None) -> dict[str, str | None]:
     """ISO code → display names, for the country filter's options."""
-    gazetteer = load_gazetteer()
-    if gazetteer is None or not iso:
+    global _country_names
+    if not iso:
         return {"en": iso, "zh": iso}
-    for country in gazetteer.countries_by_qid.values():
-        if country.get("iso") == iso:
-            return {"en": country.get("en") or iso, "zh": simplified(country.get("zh")) or country.get("en") or iso}
-    return {"en": iso, "zh": iso}
+    if _country_names is None:
+        try:
+            _country_names = json.loads(COUNTRY_NAMES_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _country_names = {}
+    country = _country_names.get(iso)
+    if not country:
+        return {"en": iso, "zh": iso}
+    return {"en": country.get("en") or iso, "zh": simplified(country.get("zh")) or country.get("en") or iso}
 
 
 _gazetteer: Gazetteer | None = None

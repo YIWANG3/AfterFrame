@@ -16,6 +16,12 @@ preview = db.execute("SELECT * FROM preview_entries WHERE asset_id=? AND kind='p
 if preview is None:
     preview = db.execute("SELECT * FROM preview_entries WHERE kind='preview' LIMIT 1").fetchone()
 source = Path(__file__).parent / "test-images" / "001-red.jpg"
+# Every copy is that file, so it carries that file's colours. A photo without
+# them makes launch start the colours catch-up job, whose writes stall the
+# serial sidecar for seconds on CI runners.
+palette = db.execute("""SELECT rank, hex, share, l, a, b FROM asset_colors
+                        JOIN assets USING (asset_id) WHERE assets.stem = '001-red'""").fetchall()
+assert palette, "fixture catalog lost 001-red's colours"
 image_dir = catalog / "navigation-images"
 image_dir.mkdir()
 for i in range(400):
@@ -44,6 +50,8 @@ for i in range(400):
                       (cache_key, asset_id, kind, relative_path, width, height, status)
                       VALUES (?, ?, 'preview', ?, ?, ?, 'ready')""",
                    (asset_id, asset_id, preview["relative_path"], preview["width"], preview["height"]))
+    db.executemany("INSERT INTO asset_colors (asset_id, rank, hex, share, l, a, b) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   [(asset_id, *tuple(c)) for c in palette])
 db.execute("INSERT INTO resource_sets (set_id, primary_asset_id) VALUES ('navigation-set', 'navigation-0000')")
 db.executemany("""INSERT INTO resource_set_items (set_id, asset_id, role, sort_order)
                   VALUES ('navigation-set', ?, ?, ?)""",

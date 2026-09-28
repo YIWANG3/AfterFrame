@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SCOPE,
+  activeFilterCount,
   browseScopeKey,
   chooseSelectionAfterReload,
   editScopeFromRules,
@@ -189,5 +190,35 @@ describe("two layers: where the user is, and the refinement inside it", () => {
     expect(sortOutsideFolder("added-desc")).toBe(DEFAULT_SCOPE.sort);
     expect(sortOutsideFolder("rating-desc")).toBe("rating-desc");
     expect(scopeFromRules(collection, "added-asc").sort).toBe(DEFAULT_SCOPE.sort);
+  });
+});
+
+describe("smart collections v2: exclude, rating, any-of groups", () => {
+  const scope = (extra) => ({ ...DEFAULT_SCOPE, ...extra });
+
+  it("counts conditions, not the keys that only tune them", () => {
+    expect(activeFilterCount({ camera: "X", exclude: "camera", tag: ["a", "b"], tag_match: "all" })).toBe(2);
+    expect(activeFilterCount({ exclude: "camera", color_tolerance: "loose" })).toBe(0);
+    expect(activeFilterCount({ rating_max: 0 })).toBe(1); // unrated is a condition, 0 is not "empty"
+    expect(activeFilterCount({ any_of: [{ camera: "X" }, { tag: "night" }] })).toBe(1);
+    expect(hasRefinement(scope({ filters: { exclude: "camera" } }))).toBe(false);
+  });
+
+  it("saves groups without their empty members", () => {
+    const rules = rulesFromScope(scope({ filters: { any_of: [{ camera: "X", geo: { mode: "bounds" } }, { tag: [] }, {}] } }));
+    expect(rules.filters).toEqual({ any_of: [{ camera: "X" }] });
+    expect(rulesFromScope(scope({ filters: { any_of: [{}] } }))).toBeNull();
+  });
+
+  it("from a folder, a refinement that names folders keeps the folder underneath", () => {
+    // "Five stars in Trip" still merges: nothing collides.
+    expect(rulesFromScope(scope({ collectionId: "trip", filters: { rating_min: 5 } })).filters)
+      .toEqual({ rating_min: 5, in_collection: "trip" });
+    // "In Trip, not in Published": merging would turn it into "not in Trip".
+    const notPublished = rulesFromScope(scope({ collectionId: "trip", filters: { in_collection: "pub", exclude: "in_collection" } }));
+    expect(notPublished).toEqual({
+      status: "all", search: "", filters: { in_collection: "pub", exclude: "in_collection" },
+      base: { status: "all", search: "", filters: { in_collection: "trip" } },
+    });
   });
 });

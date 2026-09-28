@@ -15,12 +15,13 @@ from typing import Any
 
 from .browse import _MAX_BASE_DEPTH as MAX_BASE_DEPTH
 from .browse import _status_clause
-from .facets import FACET_KEYS, FACET_MODIFIER_KEYS
+from .facets import ANY_OF_KEY, EXCLUDE_KEY, FACET_KEYS, FACET_MODIFIER_KEYS, FACET_NAMES, FACET_OWN_KEYS, _values
 
 RULES_VERSION = 1
 
 # The map viewport is a transient view state, not something to save.
 _SAVABLE_FILTER_KEYS = FACET_KEYS - {"geo"}
+_EXCLUDABLE_FACETS = FACET_NAMES - {"geo"}
 
 
 def _clean_filters(filters: dict[str, Any]) -> dict[str, Any]:
@@ -34,6 +35,39 @@ def _clean_filters(filters: dict[str, Any]) -> dict[str, Any]:
                 out[key] = items[0] if len(items) == 1 else items
         elif value not in (None, ""):
             out[key] = value
+    return out
+
+
+def _has_condition(filters: dict[str, Any]) -> bool:
+    # A modifier (tag_match, exclude) tunes another key; it is not a condition by itself.
+    return any(key not in FACET_MODIFIER_KEYS for key in filters)
+
+
+def _normalize_filters(filters: Any, *, in_group: bool = False) -> dict[str, Any]:
+    if not isinstance(filters, dict):
+        raise ValueError("Smart collection filters must be an object")
+    if in_group and ANY_OF_KEY in filters:
+        raise ValueError("Filter groups do not nest")
+    unknown = sorted(set(filters) - _SAVABLE_FILTER_KEYS)
+    if unknown:
+        raise ValueError(f"Unknown smart collection filter(s): {', '.join(unknown)}")
+    out = _clean_filters({key: value for key, value in filters.items() if key != ANY_OF_KEY})
+    excluded = [str(name) for name in _values(out.pop(EXCLUDE_KEY, None))]
+    unknown = sorted(set(excluded) - _EXCLUDABLE_FACETS)
+    if unknown:
+        raise ValueError(f"Unknown filter(s) to exclude: {', '.join(unknown)}")
+    # Only a facet that holds a condition has a sense to flip.
+    excluded = [name for name in dict.fromkeys(excluded)
+                if any(key in out and key not in FACET_MODIFIER_KEYS for key in FACET_OWN_KEYS[name])]
+    if excluded:
+        out[EXCLUDE_KEY] = excluded[0] if len(excluded) == 1 else excluded
+    groups = filters.get(ANY_OF_KEY)
+    if groups not in (None, []):
+        if not isinstance(groups, list):
+            raise ValueError("any_of must be a list of filter groups")
+        kept = [group for group in (_normalize_filters(g, in_group=True) for g in groups) if _has_condition(group)]
+        if kept:
+            out[ANY_OF_KEY] = kept
     return out
 
 
@@ -52,25 +86,17 @@ def normalize_rules(rules: Any, _depth: int = 0) -> dict[str, Any]:
         raise ValueError(f"Unsupported smart collection rules version: {version}")
     status = rules.get("status") or "all"
     _status_clause(status)  # raises ValueError on an unknown status
-    filters = rules.get("filters") or {}
-    if not isinstance(filters, dict):
-        raise ValueError("Smart collection filters must be an object")
-    unknown = sorted(set(filters) - _SAVABLE_FILTER_KEYS)
-    if unknown:
-        raise ValueError(f"Unknown smart collection filter(s): {', '.join(unknown)}")
     out: dict[str, Any] = {
         "version": RULES_VERSION,
         "status": status,
         "search": str(rules.get("search") or "").strip(),
-        "filters": _clean_filters(filters),
+        "filters": _normalize_filters(rules.get("filters") or {}),
     }
     if rules.get("sort"):
         out["sort"] = str(rules["sort"])
     if rules.get("base"):
         out["base"] = normalize_rules(rules["base"], _depth + 1)
-    # A modifier (tag_match) tunes another key; it is not a condition by itself.
-    has_condition = any(key not in FACET_MODIFIER_KEYS for key in out["filters"])
-    if status == "all" and not out["search"] and not has_condition and "base" not in out:
+    if status == "all" and not out["search"] and not _has_condition(out["filters"]) and "base" not in out:
         raise ValueError("A smart collection needs at least one condition")
     return out
 
