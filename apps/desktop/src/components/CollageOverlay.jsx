@@ -9,6 +9,7 @@ import BatchPanel from "./collage/BatchPanel";
 import { TemplateGrid } from "./collage/PanelControls";
 import { getTemplatesForCount } from "./collage/collageTemplates";
 import { computeGroups, orderImages, MAX_TEMPLATE_COUNT } from "./collage/collageBatch";
+import { topLayerOpen } from "../utils/topLayer";
 
 const PANEL_WIDTH = 300;
 const PAGE_SIZE = 48;
@@ -668,6 +669,7 @@ export default function CollageOverlay({ open, items, collections, summary, sour
   useEffect(() => {
     if (!open) return;
     function onKey(e) {
+      if (topLayerOpen()) return; // Settings is over the collage: its keys
       if (e.key === "Escape") {
         if (showPicker) {
           setShowPicker(false);

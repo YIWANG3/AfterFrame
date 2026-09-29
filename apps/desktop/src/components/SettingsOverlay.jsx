@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound } from "lucide-react";
 import api from "../api";
 import { DesktopOnlyPane } from "./DesktopOnly";
+import { TOP_LAYER_ATTR } from "../utils/topLayer";
 import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
 import RepaintSettings from "./settings/RepaintSettings";
@@ -44,24 +45,34 @@ export default function SettingsOverlay({
   const [tab, setTab] = useState(initialTab);
   const { t } = useTranslation("settings");
   const modalRef = useRef(null);
+  const rootRef = useRef(null);
 
   useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
 
+  // Settings opens over whatever view is up (editor, collage, lightbox) and
+  // owns the keyboard while it is: focus moves in, and keys stop at its root
+  // (utils/topLayer.js), so Escape closes Settings alone and nothing typed
+  // here reaches a canvas below.
   useEffect(() => {
-    if (!open) return;
-    function onKey(e) {
-      if (e.key === "Escape") { e.preventDefault(); onClose?.(); }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    if (open && !rootRef.current?.contains(document.activeElement)) rootRef.current?.focus({ preventScroll: true });
+  }, [open]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[3000] flex items-center justify-center bg-app/80 backdrop-blur-sm"
+      ref={rootRef}
+      tabIndex={-1}
+      {...{ [TOP_LAYER_ATTR]: "true" }}
+      className="fixed inset-0 z-[11200] flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        // An inline rename handles its own Escape (and marks it handled).
+        const closeKey = e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key === ",");
+        if (closeKey && !e.defaultPrevented) { e.preventDefault(); onClose?.(); }
+      }}
+      onKeyUp={(e) => e.stopPropagation()}
     >
       <div
         ref={modalRef}
