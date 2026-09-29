@@ -1017,6 +1017,9 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
                 setReplaceIndex(idx);
                 setShowPicker(true);
               }}
+              // The cell under the pointer goes; the side list's Remove is the
+              // same operation, but there the row has to be matched to a cell first.
+              onRemove={(idx) => setImages((prev) => prev.filter((_, i) => i !== idx))}
               onSelectionChange={setSelectedCellIdx}
               onSelectedStateChange={setSelectedCellState}
             />
