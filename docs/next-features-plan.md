@@ -219,7 +219,7 @@ MCP：`search_assets` 和智能合集规则都接受 `rating_max`、`exclude`（
 
 ## E. 水印档案、相框存为模板、导入自己的 logo
 
-> **2026-09-25 进度：第 1 到 6 步和第 8 步已实现（分支 `feat/frame-user-templates`），第 7 步「导入自己的 logo」还没做。**
+> **2026-09-25 进度：第 1 到 6 步和第 8 步已实现（#103）；第 7 步「导入自己的 logo」2026-09-29 实现（分支 `feat/personal-logos`）。**
 >
 > - **档案**：`settings.watermarkProfile = {author}`，设置里新增「水印」页（作者名 + 我的边框模板列表，可删除）。web 版存 localStorage。
 > - **来源标记**：套用内置模板时，文字图层带 `tokenSource`（`{content}` 或 `{exif: {fields, labeled, sep}}`），logo 贴纸带 `logoRef: {variant, kind, strict, color}`。改了文字内容就丢掉 `tokenSource`，在 `useEditorHistory.applyLayers` 统一处理；撤销和重做不经过这一步。
@@ -229,6 +229,7 @@ MCP：`search_assets` 和智能合集规则都接受 `rating_max`、`exclude`（
 > - **MCP**：`get_editor_capabilities` 的 `frame_templates` 带上用户模板（`user: true`），`apply_frame` 用 `renderUserTemplate` 走图层路径。
 > - **设置迁移**：新增「水印」分区，带作者名和模板；模板按 id 合并，文件里的空作者名不覆盖本机。
 > - 测试：`frameUserTemplates.test.js`、`settingsTransfer.test.js`、e2e 54（保存、重启、改名、竖幅异机套用并按原尺寸保存、MCP、设置里删除）。
+> - **我的 logo（第 7 步）**：导入 SVG 或 PNG（主进程文件选择，SVG ≤ 1 MB、PNG ≤ 10 MB，最多 50 个），在主进程用 sharp 统一转成 PNG：SVG 由 librsvg 渲染（不执行脚本；以 buffer 传入，没有外部引用），所以 SVG 文本从不进入渲染进程或 `media://`，也就不需要文本层面的清洗。裁掉透明留白，按高 1200 px 存进 `userData/afterframe/personal-logos/`，清单是 `personal-logos.json`。透明底且可见像素为单色的，标为可换色，渲染时用画布 source-in 着色（和品牌 logo 一样）。编辑器「文字 › 图层 › 我的 logo」放置（原色 / 黑 / 白），图层带 `logoRef: {source: "personal", id, color}`，模板只存引用。设置 › 水印里可导入、改名、删除；删掉的 logo 在模板里直接跳过。**导出设置不打包 logo 文件（用户 2026-09-29 拍板）**，所以换机后模板里的个人 logo 会缺席。web 版没有导入。逻辑：`electron/personalLogos.js`（有单测）、`render/personalLogos.js`；e2e 55。
 
 **两个会改变范围的发现**
 
@@ -327,4 +328,4 @@ MCP：`search_assets` 和智能合集规则都接受 `rating_max`、`exclude`（
 
 | # | 问题 | 说明 |
 |---|---|---|
-| 7 | E：「导出设置」的文件里要不要包含用户导入的 logo 图片？ | 应用已有「导出 / 导入设置」功能（`settings-transfer-plan.md`，P1 已实现），用来换电脑时迁移设置。问题是用户自己导入的 logo 图片要不要一起打包进那个文件。到做 E 的第 8 步时再定，不影响前面的任何一步 |
+| 7 | E：「导出设置」的文件里要不要包含用户导入的 logo 图片？ | **2026-09-29 定：不打包。** 换机后模板里的个人 logo 缺席，其余照常 |

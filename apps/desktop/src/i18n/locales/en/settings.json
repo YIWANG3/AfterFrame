@@ -255,7 +255,7 @@
       "annotation": "AI Annotation",
       "annotationHint": "Providers and annotation settings",
       "watermark": "Watermark",
-      "watermarkHint": "Author name, frame templates"
+      "watermarkHint": "Author name, frame templates (not logo files)"
     },
     "includeKeys": "Include API keys",
     "includeKeysHint": "Keys are encrypted with the password below. Without it, they cannot be imported.",
@@ -308,6 +308,22 @@
     "templatesEmpty": "None yet.",
     "delete": "Delete",
     "deleteTitle": "Delete template “{{name}}”?",
-    "deleteMessage": "Photos already framed with it stay as they are."
+    "deleteMessage": "Photos already framed with it stay as they are.",
+    "logosTitle": "My logos",
+    "logosSubtitle": "Place one from the editor: Text › Layers › My logo. SVG or PNG; a one-colour logo on a transparent background can be recoloured. Settings export does not include logo files.",
+    "importLogo": "Import logo…",
+    "rename": "Rename",
+    "logoTintable": "Recolourable",
+    "logoFixed": "Keeps its colours",
+    "deleteLogoTitle": "Delete logo “{{name}}”?",
+    "deleteLogoMessage": "Templates that use it keep working, without this logo. Photos already exported are not affected.",
+    "logoErrors": {
+      "unsupported_type": "Only SVG and PNG",
+      "too_large": "Too large (SVG up to 1 MB, PNG up to 10 MB)",
+      "invalid_image": "That file could not be read as an image",
+      "empty_image": "There is no mark in that image",
+      "too_many": "You already have 50 logos; delete some first",
+      "failed": "Import failed: {{message}}"
+    }
   }
 }

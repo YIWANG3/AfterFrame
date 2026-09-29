@@ -149,6 +149,21 @@
       "author": "Author",
       "missing": "This photo has no such info",
       "noAuthor": "Set your name in Settings › Watermark first"
+    },
+    "myLogo": {
+      "title": "My logo",
+      "import": "Import…",
+      "black": "Black",
+      "white": "White",
+      "empty": "No logos yet. Import an SVG or PNG; a one-colour logo on a transparent background can be recoloured.",
+      "errors": {
+        "unsupported_type": "Only SVG and PNG",
+        "too_large": "Too large (SVG up to 1 MB, PNG up to 10 MB)",
+        "invalid_image": "That file could not be read as an image",
+        "empty_image": "There is no mark in that image",
+        "too_many": "You already have 50 logos; delete some first",
+        "failed": "Import failed: {{message}}"
+      }
     }
   },
   "sticker": {

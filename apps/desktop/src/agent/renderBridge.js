@@ -20,6 +20,7 @@ import { buildLogoRegistry, prepareLogo } from "../components/editor/render/fram
 import { renderFrame, collectLogoNeeds } from "../components/editor/render/frameRender";
 import { exifFromItem } from "../components/editor/state/useFrameTool";
 import { isUserTemplate, logoElementOf, renderUserTemplate } from "../components/editor/frameUserTemplates";
+import { ensurePersonalLogos, isPersonalLogoRef, personalLogoKey } from "../components/editor/render/personalLogos";
 import api from "../api";
 
 function loadImage(filePath) {
@@ -219,7 +220,7 @@ async function handleFrame(payload) {
   // made of just those logo elements.
   const userLogo = (ref) => collectLogoNeeds({ elements: [logoElementOf(ref)] }, exif, registry, { outH: photo.naturalHeight })[0];
   const logoTemplate = isUserTemplate(template)
-    ? { elements: template.layers.filter((l) => l.logoRef).map((l) => logoElementOf(l.logoRef)) }
+    ? { elements: template.layers.filter((l) => l.logoRef && !isPersonalLogoRef(l.logoRef)).map((l) => logoElementOf(l.logoRef)) }
     : template;
   for (const need of collectLogoNeeds(logoTemplate, exif, registry, { outH: photo.naturalHeight })) {
     const svg = svgs[need.file];
@@ -239,9 +240,13 @@ async function handleFrame(payload) {
       if (layer.type !== "sticker" || layer.logoRef || !layer.stickerPath || stickerImages.has(layer.stickerPath)) continue;
       try { stickerImages.set(layer.stickerPath, await loadImage(layer.stickerPath)); } catch { /* a moved sticker is left out */ }
     }
+    // The user's own logos; one that is gone is left out, like a brand the
+    // camera has no mark for.
+    const personal = await ensurePersonalLogos(template.layers.map((l) => l.logoRef));
     canvas = renderUserTemplate({
       photo, template, exif, profile, measure: measureTextWidthDOM, stickerImages,
       logoFor: (ref) => {
+        if (isPersonalLogoRef(ref)) return personal.get(personalLogoKey(ref)) || null;
         const need = userLogo(ref);
         return need ? logoImages.get(need.key) || null : null;
       },

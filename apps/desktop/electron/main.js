@@ -616,7 +616,10 @@ const saveFileApi = saveFileIpc.register({
 });
 
 frameLogosIpc.register({ ipcMain });
-frameTemplatesIpc.register({ app, ipcMain, readAppSettings, updateAppSettings });
+frameTemplatesIpc.register({
+  app, ipcMain, dialog, sharp, readAppSettings, updateAppSettings,
+  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+});
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.
 // The overlay calls window.__vibepinCapture(rect) → this handler → capturePage.

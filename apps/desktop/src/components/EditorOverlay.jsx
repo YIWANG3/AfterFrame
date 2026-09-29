@@ -896,6 +896,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           stickerPathKind: typeof l.stickerPath === "string"
             ? (l.stickerPath.startsWith("data:") ? "data" : "path")
             : null,
+          logoRef: l.logoRef || null,
           handwriting: l.handwriting
             ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
             : null,

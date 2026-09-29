@@ -149,6 +149,21 @@
       "author": "作者",
       "missing": "这张照片没有这项信息",
       "noAuthor": "先在「设置 › 水印」里填写作者名"
+    },
+    "myLogo": {
+      "title": "我的 logo",
+      "import": "导入…",
+      "black": "黑色",
+      "white": "白色",
+      "empty": "还没有 logo。可以导入 SVG 或 PNG，透明底的单色 logo 能换颜色。",
+      "errors": {
+        "unsupported_type": "只支持 SVG 和 PNG",
+        "too_large": "文件太大（SVG 最大 1 MB，PNG 最大 10 MB）",
+        "invalid_image": "这个文件读不成图片",
+        "empty_image": "图里没有可用的图形",
+        "too_many": "已经有 50 个 logo 了，先删掉一些",
+        "failed": "导入失败：{{message}}"
+      }
     }
   },
   "sticker": {
