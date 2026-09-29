@@ -1386,7 +1386,7 @@ function createMcpServer(deps) {
           template_id: { type: "string", description: "Collage layout id, e.g. '4-grid'; default first layout for the count" },
           per_page: { type: "number", description: "Batch mode: photos per page (2-12)" },
           ratio: { type: "number", description: "Canvas aspect ratio W/H, default 1 (square)" },
-          gap: { type: "number", description: "Gap between cells in export px, default 4" },
+          gap: { type: "number", description: "Gap between cells in export px, default 0" },
           padding: { type: "number", description: "Outer margin in export px, default 0" },
           radius: { type: "number", description: "Cell corner radius in export px, default 0" },
           bg: { type: "string", description: "Background color, default #000000" },
