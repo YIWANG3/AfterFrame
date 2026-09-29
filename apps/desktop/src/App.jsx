@@ -1113,7 +1113,6 @@ export default function App() {
             clearPeopleGroupFilter();
             workspace.selectCollection(id);
           }}
-          onClearCollection={workspace.clearCollection}
           onCreateCollection={workspace.createCollection}
           onReorderCollections={workspace.reorderCollections}
           reorderingCollections={workspace.reorderingCollections}
@@ -1125,19 +1124,19 @@ export default function App() {
           peopleMode={viewMode === "people"}
           discoverMode={viewMode === "discover"}
           onOpenDiscover={() => {
-            workspace.clearCollection?.({ reload: false });
+            workspace.clearCollection();
             setViewMode("discover");
           }}
           onOpenStickerBrowser={() => {
             setViewMode("stickers");
             setPeopleGroup(null);
-            workspace.clearCollection?.({ reload: false });
+            workspace.clearCollection();
             stickerView.refresh();
           }}
           onOpenPeople={() => {
             setViewMode("people");
             setPeopleGroup(null);
-            workspace.clearCollection?.({ reload: false });
+            workspace.clearCollection();
           }}
         /> : <div className="bg-chrome" />}
 
@@ -1206,7 +1205,7 @@ export default function App() {
                 title={workspace.activeCollectionId
                   ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
                   : (activeSmartCollection?.name
-                    || (peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : filterTitle(workspace.status)))}
+                    || (peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : tNav(`browse.${workspace.status}`, filterTitle(workspace.status))))}
                 query={workspace.query}
                 setQuery={workspace.setQuery}
                 sort={workspace.sort}

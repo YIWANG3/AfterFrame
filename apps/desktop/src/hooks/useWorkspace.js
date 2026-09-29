@@ -798,14 +798,16 @@ export default function useWorkspace({ pushToast } = {}) {
     void api.getSummary().then(setSummary).catch(() => {});
   }
 
-  // reload: false leaves the grid as it is (the caller is switching to a view
-  // that is not the gallery) — the new scope is marked as already shown.
-  function clearCollection({ reload = true } = {}) {
-    const current = scopeRef.current;
-    if (!current.collectionId) return;
-    const next = { ...current, collectionId: null, sort: sortOutsideFolder(current.sort) };
-    if (!reload) loadedScopeRef.current = scopeKeyOf(next);
-    setScopeState(next);
+  // Leaving a folder for a view that is not the gallery (People, Discover,
+  // Stickers): the library becomes the place, and the browse effect fetches it
+  // behind that view, so the gallery is right the moment the user is back.
+  // This used to mark the library as already shown instead of browsing it,
+  // while the grid still held the folder — so a status click that then
+  // cleared the grid for its destination found nothing left to browse and
+  // All Assets opened empty, and coming back any other way showed the
+  // folder's photos under the All Assets title.
+  function clearCollection() {
+    if (scopeRef.current.collectionId) goTo({});
   }
 
   // Opening a person is a new browse destination, not an intersection with a
