@@ -492,7 +492,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   const [images, setImages] = useState([]);
   const [template, setTemplate] = useState(null);
   const [canvasRatio, setCanvasRatio] = useState(1);
-  const [gap, setGap] = useState(4);
+  const [gap, setGap] = useState(0);
   const [padding, setPadding] = useState(0);
   const [borderRadius, setBorderRadius] = useState(0);
   const [bgColor, setBgColor] = useState("#000000");
@@ -1005,7 +1005,10 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
               borderRadius={borderRadius}
               bgColor={bgColor}
               exportWidth={exportWidth}
-              className="h-full w-full rounded-md"
+              // No CSS radius on the element: it clipped the corner of whatever
+              // ran to the edge (the photo, the selection ring) that the export
+              // itself does not clip.
+              className="h-full w-full"
               onSwap={(a, b) => {
                 setImages((prev) => {
                   const next = [...prev];
