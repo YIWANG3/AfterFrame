@@ -24,7 +24,6 @@ export default function Sidebar({
   onEditSmartCollection,
   onSnapshotSmartCollection,
   onSelectCollection,
-  onClearCollection,
   onCreateCollection,
   onReorderCollections,
   reorderingCollections = false,
@@ -193,10 +192,7 @@ export default function Sidebar({
               <Fragment key={item.key}>
               <button
                 type="button"
-                onClick={() => {
-                  onClearCollection?.({ reload: false });
-                  setStatus(item.key);
-                }}
+                onClick={() => setStatus(item.key)}
                 className={[
                   "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors",
                   active
