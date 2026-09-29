@@ -157,7 +157,7 @@ export function renderCollagePage({
   images,
   template,
   canvasRatio = 1,
-  gap = 4,
+  gap = 0,
   padding = 0,
   borderRadius = 0,
   bgColor = "#000000",

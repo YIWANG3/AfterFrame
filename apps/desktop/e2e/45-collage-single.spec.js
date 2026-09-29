@@ -112,11 +112,29 @@ test("the cell menu replaces one image through the picker; the image list remove
   await expect(imageRows()).toHaveCount(3);
   await expect.poll(async () => ctx.window.getByTestId("collage-image-list").innerText()).not.toBe(before);
 
-  // Single mode removes through the side panel's image list (the cell menu
-  // only offers Remove on batch pages); the row's button shows on hover.
+  // The side panel's image list removes too; the row's button shows on hover.
   const lastRow = imageRows().last();
   await lastRow.hover();
   await lastRow.getByTitle("Remove", { exact: true }).click();
+  await expect(imageRows()).toHaveCount(2);
+  await expect(ctx.window.getByTitle("Left / Right", { exact: true })).toBeVisible();
+});
+
+test("the cell menu removes the photo under the pointer, no matching it to a list row", async () => {
+  // Two photos, Left / Right: right-click the right cell, and the left one stays.
+  await expect(imageRows()).toHaveCount(2);
+  const keep = await imageRows().first().innerText();
+  const menu = await openCellMenu(0.75, 0.5);
+  await menu.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(imageRows()).toHaveCount(1);
+  expect(await imageRows().first().innerText()).toBe(keep);
+  await expect(ctx.window.getByTestId("collage-cell-menu")).toHaveCount(0);
+  // Back to a pair for the export below.
+  await ctx.window.getByRole("button", { name: "Add images", exact: true }).click();
+  const candidate = ctx.window.locator("[data-picker-item]:not([disabled])").filter({ visible: true }).first();
+  await expect(candidate).toBeVisible({ timeout: 10_000 });
+  await candidate.click({ force: true });
+  await ctx.window.getByRole("button", { name: /^Add 1$/ }).click();
   await expect(imageRows()).toHaveCount(2);
   await expect(ctx.window.getByTitle("Left / Right", { exact: true })).toBeVisible();
 });
@@ -148,4 +166,70 @@ test("Export writes the JPEG at the chosen path and registers it as a version", 
 test("Escape closes the overlay", async () => {
   await ctx.window.keyboard.press("Escape");
   await expect(ctx.window.getByRole("button", { name: "Single", exact: true })).toHaveCount(0);
+});
+
+// Opened from inside a folder, the overlay offers to put the export there; the
+// choice is remembered. Without it, a collage made for a folder had to be
+// found in All Assets and dragged back by hand.
+test("a collage made inside a folder joins that folder while the box is ticked", async () => {
+  test.setTimeout(90_000);
+  await ctx.window.getByTitle("New folder").click();
+  const nameInput = ctx.window.getByRole("navigation").locator("input");
+  await nameInput.fill("Collage home");
+  await nameInput.press("Enter");
+  await expect(ctx.window.getByRole("button", { name: /^Collage home/ })).toBeVisible();
+  const folderId = await ctx.window.evaluate(async () => {
+    const bridge = window.mediaWorkspace;
+    const rows = (await bridge.browseImages({ status: "all", limit: 50 })).filter((r) => r.asset_type !== "video");
+    const folder = (await bridge.listCollections()).find((c) => c.name === "Collage home");
+    await bridge.collectionAddItems(folder.collection_id, rows.slice(0, 2).map((r) => r.asset_id));
+    return folder.collection_id;
+  });
+  // By file name: the sidecar stores the resolved path (/private/var/… for a
+  // macOS temp dir), which is not the string the dialog stub handed out.
+  const folderFiles = () => ctx.window.evaluate((id) => window.mediaWorkspace.browseCollection(id, { limit: 50 })
+    .then((rows) => rows.map((r) => r.image_path.split("/").pop())), folderId);
+  await ctx.window.getByRole("button", { name: /^Collage home/ }).click();
+  await expect(cards()).toHaveCount(2);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-collage-folder-"));
+  const exportTo = async (name) => {
+    const out = path.join(dir, name);
+    await ctx.app.evaluate(({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, out);
+    await ctx.window.waitForTimeout(500);
+    // Earlier toasts linger for 20 s: wait for one more, not for a unique one.
+    const toasts = ctx.window.getByText("Collage exported");
+    const before = await toasts.count();
+    await ctx.window.getByRole("button", { name: "Export", exact: true }).click();
+    await expect(toasts).toHaveCount(before + 1, { timeout: 30_000 });
+    return out;
+  };
+  try {
+    await openSingleCollage();
+    const box = ctx.window.getByTestId("collage-add-to-folder");
+    await expect(box).toBeChecked();
+    await exportTo("home_collage.jpg");
+    await expect.poll(folderFiles, { timeout: 15_000 }).toContain("home_collage.jpg");
+    // The folder behind the overlay shows it too.
+    await ctx.window.keyboard.press("Escape");
+    await expect(cards()).toHaveCount(3);
+
+    // Unticked: the export is registered but stays out of the folder, and the
+    // choice is remembered the next time the overlay opens.
+    await openSingleCollage();
+    await box.uncheck();
+    await exportTo("loose_collage.jpg");
+    await expect.poll(async () => (await callTool("search_assets", { query: "loose_collage", limit: 5 })).count, { timeout: 15_000 }).toBe(1);
+    expect(await folderFiles()).not.toContain("loose_collage.jpg");
+    await ctx.window.keyboard.press("Escape");
+    await expect(cards()).toHaveCount(3);
+    await openSingleCollage();
+    await expect(box).not.toBeChecked();
+    await box.check();
+    await ctx.window.keyboard.press("Escape");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

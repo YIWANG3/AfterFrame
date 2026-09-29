@@ -486,18 +486,43 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
   );
 }
 
-export default function CollageOverlay({ open, items, collections, summary, onClose, onExportComplete }) {
+// Opened from inside a folder, the exported collage can join that folder.
+// The choice is remembered across sessions; it starts on, since the folder is
+// what the user was working in.
+const ADD_TO_FOLDER_KEY = "afterframe-collage-add-to-folder";
+
+export default function CollageOverlay({ open, items, collections, summary, sourceCollectionId, onAddToCollection, onClose, onExportComplete }) {
   const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
   const [images, setImages] = useState([]);
   const [template, setTemplate] = useState(null);
   const [canvasRatio, setCanvasRatio] = useState(1);
-  const [gap, setGap] = useState(4);
+  const [gap, setGap] = useState(0);
   const [padding, setPadding] = useState(0);
   const [borderRadius, setBorderRadius] = useState(0);
   const [bgColor, setBgColor] = useState("#000000");
   const [exportWidth, setExportWidth] = useState(3000);
   const [exporting, setExporting] = useState(false);
+  const [addToFolder, setAddToFolder] = useState(true);
+  // The folder the collage was opened from, if it still exists.
+  const sourceFolder = sourceCollectionId
+    ? (collections || []).find((c) => c.collection_id === sourceCollectionId) || null
+    : null;
+  function toggleAddToFolder(checked) {
+    setAddToFolder(checked);
+    localStorage.setItem(ADD_TO_FOLDER_KEY, checked ? "1" : "0");
+  }
+  // Registered exports join the source folder when the box is ticked. A
+  // failure here is not an export failure: the file is saved and registered.
+  async function joinSourceFolder(assetIds) {
+    const ids = assetIds.filter(Boolean);
+    if (!addToFolder || !sourceFolder || !ids.length) return;
+    try {
+      await onAddToCollection?.(sourceFolder.collection_id, ids);
+    } catch (err) {
+      console.error("[Collage] adding the export to the folder failed:", err);
+    }
+  }
   const [showPicker, setShowPicker] = useState(false);
   const [replaceIndex, setReplaceIndex] = useState(-1);
   const [selectedCellIdx, setSelectedCellIdx] = useState(-1);
@@ -531,6 +556,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
   useEffect(() => {
     if (!open || !items?.length) return;
     hdAttemptedRef.current = new Set();
+    setAddToFolder(localStorage.getItem(ADD_TO_FOLDER_KEY) !== "0");
     setImages(items);
     const templates = getTemplatesForCount(items.length);
     setTemplate(templates[0] || null);
@@ -681,7 +707,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
       const buffer = await blob.arrayBuffer();
       const firstSrc = images[0]?.image_path || null;
       await api.saveImage(savePath, buffer, firstSrc);
-      await api.quickRegister(savePath, firstSrc, sourceAssetIds);
+      const registered = await api.quickRegister(savePath, firstSrc, sourceAssetIds);
+      await joinSourceFolder([registered?.asset_id]);
       onExportComplete?.(savePath);
     } catch (err) {
       console.error("[Collage] export failed:", err);
@@ -786,6 +813,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
     const prefix = (namePrefix || "collage").replace(/[/\\:]/g, "_").trim() || "collage";
     let exportedAny = false;
     let failed = 0;
+    const exportedIds = [];
     try {
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
@@ -798,7 +826,8 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
           const firstSrc = group[0]?.image_path || null;
           const sourceAssetIds = group.map((g) => g.asset_id).filter(Boolean);
           await api.saveImage(savePath, buffer, firstSrc);
-          await api.quickRegister(savePath, firstSrc, sourceAssetIds);
+          const registered = await api.quickRegister(savePath, firstSrc, sourceAssetIds);
+          exportedIds.push(registered?.asset_id);
           exportedAny = true;
         } catch (err) {
           failed += 1;
@@ -807,6 +836,7 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
         setExportProgress({ done: i + 1, total: groups.length });
       }
       if (failed > 0) console.warn(`[Collage] batch export: ${failed}/${groups.length} pages failed`);
+      await joinSourceFolder(exportedIds);
       if (exportedAny) onExportComplete?.(dir);
     } finally {
       setExporting(false);
@@ -850,6 +880,21 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
           )}
         </div>
         <div className="flex items-center gap-2">
+          {sourceFolder && (
+            <label
+              className="flex max-w-[260px] cursor-pointer items-center gap-1.5 text-[11px] text-muted transition-colors hover:text-text"
+              title={t("addToFolder", { name: sourceFolder.name })}
+            >
+              <input
+                type="checkbox"
+                data-testid="collage-add-to-folder"
+                className="h-3.5 w-3.5 accent-[rgb(var(--accent-color))]"
+                checked={addToFolder}
+                onChange={(e) => toggleAddToFolder(e.target.checked)}
+              />
+              <span className="truncate">{t("addToFolder", { name: sourceFolder.name })}</span>
+            </label>
+          )}
           <button
             type="button"
             className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color)/0.12)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgb(var(--accent-color)/0.18)]"
@@ -1005,7 +1050,10 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
               borderRadius={borderRadius}
               bgColor={bgColor}
               exportWidth={exportWidth}
-              className="h-full w-full rounded-md"
+              // No CSS radius on the element: it clipped the corner of whatever
+              // ran to the edge (the photo, the selection ring) that the export
+              // itself does not clip.
+              className="h-full w-full"
               onSwap={(a, b) => {
                 setImages((prev) => {
                   const next = [...prev];
@@ -1017,6 +1065,9 @@ export default function CollageOverlay({ open, items, collections, summary, onCl
                 setReplaceIndex(idx);
                 setShowPicker(true);
               }}
+              // The cell under the pointer goes; the side list's Remove is the
+              // same operation, but there the row has to be matched to a cell first.
+              onRemove={(idx) => setImages((prev) => prev.filter((_, i) => i !== idx))}
               onSelectionChange={setSelectedCellIdx}
               onSelectedStateChange={setSelectedCellState}
             />
