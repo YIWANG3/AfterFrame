@@ -112,11 +112,29 @@ test("the cell menu replaces one image through the picker; the image list remove
   await expect(imageRows()).toHaveCount(3);
   await expect.poll(async () => ctx.window.getByTestId("collage-image-list").innerText()).not.toBe(before);
 
-  // Single mode removes through the side panel's image list (the cell menu
-  // only offers Remove on batch pages); the row's button shows on hover.
+  // The side panel's image list removes too; the row's button shows on hover.
   const lastRow = imageRows().last();
   await lastRow.hover();
   await lastRow.getByTitle("Remove", { exact: true }).click();
+  await expect(imageRows()).toHaveCount(2);
+  await expect(ctx.window.getByTitle("Left / Right", { exact: true })).toBeVisible();
+});
+
+test("the cell menu removes the photo under the pointer, no matching it to a list row", async () => {
+  // Two photos, Left / Right: right-click the right cell, and the left one stays.
+  await expect(imageRows()).toHaveCount(2);
+  const keep = await imageRows().first().innerText();
+  const menu = await openCellMenu(0.75, 0.5);
+  await menu.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(imageRows()).toHaveCount(1);
+  expect(await imageRows().first().innerText()).toBe(keep);
+  await expect(ctx.window.getByTestId("collage-cell-menu")).toHaveCount(0);
+  // Back to a pair for the export below.
+  await ctx.window.getByRole("button", { name: "Add images", exact: true }).click();
+  const candidate = ctx.window.locator("[data-picker-item]:not([disabled])").filter({ visible: true }).first();
+  await expect(candidate).toBeVisible({ timeout: 10_000 });
+  await candidate.click({ force: true });
+  await ctx.window.getByRole("button", { name: /^Add 1$/ }).click();
   await expect(imageRows()).toHaveCount(2);
   await expect(ctx.window.getByTitle("Left / Right", { exact: true })).toBeVisible();
 });
