@@ -14,11 +14,12 @@ import { GROUP_SIZE_OPTIONS, MAX_TEMPLATE_COUNT } from "../components/collage/co
 import { saveEditedImage } from "../components/editor/render/saveImage";
 import { drawLayersOnCanvas } from "../components/editor/render/drawLayers";
 import { isTextLayer, isStickerLayer, isOverlayLayer } from "../components/editor/layerStack";
-import { createDefaultLayer, createStickerLayer, FONT_OPTIONS } from "../components/editor/textState";
+import { createDefaultLayer, createStickerLayer, FONT_OPTIONS, measureTextWidthDOM } from "../components/editor/textState";
 import { FRAME_TEMPLATES } from "../components/editor/frameTemplates";
 import { buildLogoRegistry, prepareLogo } from "../components/editor/render/frameLogos";
 import { renderFrame, collectLogoNeeds } from "../components/editor/render/frameRender";
 import { exifFromItem } from "../components/editor/state/useFrameTool";
+import { isUserTemplate, logoElementOf, renderUserTemplate } from "../components/editor/frameUserTemplates";
 import api from "../api";
 
 function loadImage(filePath) {
@@ -190,16 +191,23 @@ async function handleEdit(payload) {
   return { saved_path: savePath, layers: builtLayers.length, asset };
 }
 
+const userFrameTemplates = async () => (await api.listFrameTemplates?.().catch(() => null)) || [];
+
 // Frame preset render — same flow as frame-lab / the editor's preset preview:
-// renderFrame() composes bg + photo + scrim + generated text/logo layers.
+// renderFrame() composes bg + photo + scrim + generated text/logo layers. A
+// user template (saved from the editor) is its layers placed on this photo
+// (frameUserTemplates.renderUserTemplate), the same placement the editor uses.
 async function handleFrame(payload) {
   const { imagePath, templateId, exifItem, savePath } = payload;
-  const template = FRAME_TEMPLATES.find((t) => t.id === templateId);
+  const mine = await userFrameTemplates();
+  const template = FRAME_TEMPLATES.find((t) => t.id === templateId) || mine.find((t) => t.id === templateId);
   if (!template) {
-    throw new Error(`unknown frame template '${templateId}' — valid: ${FRAME_TEMPLATES.map((t) => t.id).join(", ")}`);
+    const valid = [...FRAME_TEMPLATES, ...mine].map((t) => t.id).join(", ");
+    throw new Error(`unknown frame template '${templateId}' — valid: ${valid}`);
   }
   const photo = await loadImage(imagePath);
   const exif = exifFromItem(exifItem || {});
+  const profile = (await api.getWatermarkProfile?.().catch(() => null)) || {};
   const res = await api.getFrameLogos();
   const registry = res ? buildLogoRegistry(res.manifest) : { byId: new Map() };
   const svgs = res?.svgs || {};
@@ -207,7 +215,13 @@ async function handleFrame(payload) {
   if (typeof document !== "undefined" && document.fonts?.ready) {
     try { await document.fonts.ready; } catch { /* fonts are best-effort */ }
   }
-  for (const need of collectLogoNeeds(template, exif, registry, { outH: photo.naturalHeight })) {
+  // A user template asks for its logos by logoRef: the needs of a template
+  // made of just those logo elements.
+  const userLogo = (ref) => collectLogoNeeds({ elements: [logoElementOf(ref)] }, exif, registry, { outH: photo.naturalHeight })[0];
+  const logoTemplate = isUserTemplate(template)
+    ? { elements: template.layers.filter((l) => l.logoRef).map((l) => logoElementOf(l.logoRef)) }
+    : template;
+  for (const need of collectLogoNeeds(logoTemplate, exif, registry, { outH: photo.naturalHeight })) {
     const svg = svgs[need.file];
     if (svg) {
       logoImages.set(need.key, await prepareLogo(svg, {
@@ -218,7 +232,23 @@ async function handleFrame(payload) {
       }));
     }
   }
-  const canvas = renderFrame({ photo, exif, profile: {}, template, registry, logoImages });
+  let canvas;
+  if (isUserTemplate(template)) {
+    const stickerImages = new Map();
+    for (const layer of template.layers) {
+      if (layer.type !== "sticker" || layer.logoRef || !layer.stickerPath || stickerImages.has(layer.stickerPath)) continue;
+      try { stickerImages.set(layer.stickerPath, await loadImage(layer.stickerPath)); } catch { /* a moved sticker is left out */ }
+    }
+    canvas = renderUserTemplate({
+      photo, template, exif, profile, measure: measureTextWidthDOM, stickerImages,
+      logoFor: (ref) => {
+        const need = userLogo(ref);
+        return need ? logoImages.get(need.key) || null : null;
+      },
+    });
+  } else {
+    canvas = renderFrame({ photo, exif, profile, template, registry, logoImages });
+  }
   const buffer = await canvasToJpegBuffer(canvas);
   await api.saveImage(savePath, buffer, imagePath);
   const asset = await api.quickRegister(savePath, imagePath);
@@ -226,14 +256,19 @@ async function handleFrame(payload) {
 }
 
 // What an agent can ask for — enumerations for edit_asset / apply_frame /
-// render_collage parameter values.
-function handleCapabilities() {
+// render_collage parameter values. Frame templates include the user's own
+// (user: true); their ids never change on rename.
+async function handleCapabilities() {
+  const mine = await userFrameTemplates();
   const collage = {};
   for (const [count, list] of Object.entries(TEMPLATES)) {
     collage[count] = list.map((t) => ({ id: t.id, name: t.name }));
   }
   return {
-    frame_templates: FRAME_TEMPLATES.map((t) => ({ id: t.id, name: t.name, family: t.family })),
+    frame_templates: [
+      ...mine.map((t) => ({ id: t.id, name: t.name, family: "user", user: true })),
+      ...FRAME_TEMPLATES.map((t) => ({ id: t.id, name: t.name, family: t.family })),
+    ],
     fonts: FONT_OPTIONS.map((f) => f.family ?? f),
     collage_templates: collage,
     collage_group_sizes: GROUP_SIZE_OPTIONS,

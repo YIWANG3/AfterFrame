@@ -11,7 +11,12 @@ import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { layersFromDisplay } from "../imageMath";
 import { drawScrim } from "../render/canvasHelpers";
-import { createDefaultLayer, createStickerLayer, measureTextWidthDOM } from "../textState";
+import { createDefaultLayer, createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "../textState";
+import {
+  USER_TEMPLATE_PREFIX, isUserTemplate, layersFromTemplate, logoElementOf, logoRefOf, outputGeometry,
+  renderUserTemplate, resolveSource, templateFromLayers, tokenSourceOf,
+} from "../frameUserTemplates";
+import { localFileUrl } from "../../../utils/format";
 
 // Presets always generate at neutral knob settings (the old FramePanel's
 // text/margin/logo-color knobs retired with the baked pipeline).
@@ -115,6 +120,46 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     : "full";
   const exifKey = JSON.stringify(exif);
 
+  // The watermark profile ({author}) and the user's own templates. Read on
+  // every activation (Settings may have changed the name since); the promise
+  // lets generatePresetLayers wait for the first read.
+  const [profile, setProfile] = useState({});
+  const [userTemplates, setUserTemplates] = useState([]);
+  const userDataRef = useRef(null);
+  function loadUserData() {
+    if (!userDataRef.current) {
+      userDataRef.current = (async () => {
+        const [nextProfile, templates] = await Promise.all([
+          api.getWatermarkProfile?.().catch(() => null),
+          api.listFrameTemplates?.().catch(() => null),
+        ]);
+        setProfile(nextProfile || {});
+        setUserTemplates(Array.isArray(templates) ? templates : []);
+        return { profile: nextProfile || {} };
+      })();
+    }
+    return userDataRef.current;
+  }
+  useEffect(() => {
+    if (!active) return;
+    userDataRef.current = null;
+    loadUserData();
+  }, [active]);
+
+  // Library stickers a user template carries, loaded by path for the thumbnails.
+  const stickerCacheRef = useRef(new Map());
+  async function loadTemplateStickers(tpl) {
+    for (const layer of tpl.layers || []) {
+      const src = layer.type === "sticker" && !layer.logoRef ? layer.stickerPath : null;
+      if (!src || stickerCacheRef.current.has(src)) continue;
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = localFileUrl(src);
+      try { await img.decode(); } catch { continue; }
+      stickerCacheRef.current.set(src, img);
+    }
+  }
+
   // Load the logo registry once; generatePresetLayers awaits this same promise
   // so a preset clicked before the IPC resolves still gets its logo layers.
   function loadLogos() {
@@ -131,6 +176,14 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     return logosPromiseRef.current;
   }
   useEffect(() => { if (active) loadLogos(); }, [active]);
+
+  // A user template asks for logos by logoRef: the same needs as a built-in
+  // template made of just those logo elements.
+  const userLogoTemplate = (tpl) => ({ elements: (tpl.layers || []).filter((l) => l.logoRef).map((l) => logoElementOf(l.logoRef)) });
+  function logoFor(lg, ref) {
+    const need = collectLogoNeeds({ elements: [logoElementOf(ref)] }, exif, lg.registry, { outH: 1600 })[0];
+    return need ? logoCacheRef.current.get(need.key) || null : null;
+  }
 
   async function ensureLogos(lg, tpl, geomH, override) {
     for (const n of collectLogoNeeds(tpl, exif, lg.registry, { outH: geomH }, override)) {
@@ -152,7 +205,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     if (!active || !transformedPreview || !logos) return;
     const key = `${cropKey}|${exifKey}`;
     const prev = thumbsKeyRef.current;
-    if (prev && prev.tp === transformedPreview && prev.key === key && prev.logos === logos) return;
+    if (prev && prev.tp === transformedPreview && prev.key === key && prev.logos === logos
+      && prev.userTemplates === userTemplates && prev.profile === profile) return;
     let alive = true;
     // Debounce: during a wheel pan/zoom the crop changes every tick; without
     // this the full-res buildBaseCanvas + per-template renderFrame + JPEG encode
@@ -172,21 +226,31 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       for (const tpl of FRAME_TEMPLATES) {
         await ensureLogos(logos, tpl, small.height);
         if (!alive) return;
-        const framed = renderFrame({ photo: small, exif, profile: {}, template: tpl, registry: logos.registry, logoImages: logoCacheRef.current });
+        const framed = renderFrame({ photo: small, exif, profile, template: tpl, registry: logos.registry, logoImages: logoCacheRef.current });
         // Size uniform cells to the first (dominant "bar") template's actual
         // output, so cells adapt to the photo orientation and waste little space.
         if (tpl.id === FRAME_TEMPLATES[0].id) repAspect = framed.width / framed.height;
         next.set(tpl.id, framed.toDataURL("image/jpeg", 0.82));
       }
+      for (const tpl of userTemplates) {
+        await ensureLogos(logos, userLogoTemplate(tpl), small.height);
+        await loadTemplateStickers(tpl);
+        if (!alive) return;
+        const framed = renderUserTemplate({
+          photo: small, template: tpl, exif, profile, measure: measureTextWidthDOM,
+          logoFor: (ref) => logoFor(logos, ref), stickerImages: stickerCacheRef.current,
+        });
+        next.set(tpl.id, framed.toDataURL("image/jpeg", 0.82));
+      }
       if (alive) {
-        thumbsKeyRef.current = { tp: transformedPreview, key, logos };
+        thumbsKeyRef.current = { tp: transformedPreview, key, logos, userTemplates, profile };
         setThumbs(next);
         setCellAspect(repAspect);
       }
     })();
     }, 200);
     return () => { alive = false; clearTimeout(timer); };
-  }, [active, transformedPreview, logos, cropKey, exifKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, transformedPreview, logos, cropKey, exifKey, userTemplates, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A frame preset becomes editable LAYERS + canvas margins/background/scrim.
   // Everything is computed on the CROPPED base, matching the composed output
@@ -195,8 +259,10 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   async function generatePresetLayers(tpl) {
     if (!transformedPreview) return null;
     const lg = await loadLogos(); // waits out the registry IPC — no dropped logos
+    const { profile: currentProfile } = await loadUserData();
     await ensureFrameFontsLoaded(); // box.cx is measured below — needs Outfit, not a fallback
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
+    if (isUserTemplate(tpl)) return placeLayers(await userTemplateLayers(tpl, lg, base, currentProfile));
     await ensureLogos(lg, tpl, base.height || 1200);
     const g = geometry(base, tpl, ADJUST);
     const isOverlay = tpl.family === "overlay";
@@ -217,7 +283,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     }
 
     const built = buildFrameLayers(sampleCtx, {
-      template: tpl, exif, profile: {}, geom: g, adjust: ADJUST, factor: g.wref / g.outW,
+      template: tpl, exif, profile: currentProfile, geom: g, adjust: ADJUST, factor: g.wref / g.outW,
       registry: lg.registry, logoImages: logoCacheRef.current,
       logoColor: null, isOverlay,
     });
@@ -264,7 +330,10 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
           }) / g.outW;
           x = anchorX + dir * (domWFrac / 2);
         }
-        return { ...createDefaultLayer({}), ...rest, x, y: cy, align: "center", fromPreset: true };
+        // Where the words came from ({camera_model}, an EXIF row), so "save as
+        // template" can resolve them again for another photo.
+        const tokenSource = tokenSourceOf(tpl.elements[l.ei]);
+        return { ...createDefaultLayer({}), ...rest, x, y: cy, align: "center", fromPreset: true, ...(tokenSource ? { tokenSource } : {}) };
       }
       if (l.type === "sticker") {
         const img = logoCacheRef.current.get(l.stickerPath);
@@ -272,12 +341,47 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
         stickerImages.set(img.src, img);
         return createStickerLayer(
           { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
-          { x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100, fromPreset: true },
+          {
+            x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100, fromPreset: true,
+            // Which mark this is, not its pixels: a saved template finds the
+            // matching logo for the next photo's camera.
+            logoRef: logoRefOf(tpl.elements[l.ei]),
+          },
         );
       }
       return null;
     }).filter(Boolean);
+    return placeLayers({ pad, bg, scrim, stickerImages, layers });
+  }
 
+  // A user template's layers on this photo, as generatePresetLayers returns
+  // them before placing: margins, background, and layers in the output basis.
+  async function userTemplateLayers(tpl, lg, base, currentProfile) {
+    await ensureLogos(lg, userLogoTemplate(tpl), base.height || 1200);
+    const pad = { top: 0, right: 0, bottom: 0, left: 0, ...(tpl.canvas?.pad || {}) };
+    const bg = tpl.canvas?.bg || { color: "#ffffff" };
+    const stickerImages = new Map();
+    const geom = outputGeometry({ fullW: base.width, fullH: base.height, pad });
+    const layers = layersFromTemplate(tpl, {
+      geom, exif, profile: currentProfile, measure: measureTextWidthDOM,
+      logoFor: (ref) => {
+        const img = logoFor(lg, ref);
+        if (img?.src) stickerImages.set(img.src, img);
+        return img;
+      },
+    }).map((l) => {
+      if (l.type === "overlay") return createOverlayLayer({ ...l, fromPreset: true });
+      if (l.type === "sticker") {
+        const { stickerPath, naturalWidth, naturalHeight, sourceLabel, ...rest } = l;
+        return createStickerLayer({ stickerPath, naturalWidth, naturalHeight, sourceLabel }, { ...rest, fromPreset: true });
+      }
+      return { ...createDefaultLayer({}), ...l, fromPreset: true };
+    });
+    return { pad, bg, scrim: null, stickerImages, layers };
+  }
+
+  // Generated layers → STORED layers, plus the canvas treatment.
+  function placeLayers({ pad, bg, scrim, stickerImages, layers }) {
     // Layers are STORED in full-photo coords. The elements above were computed on
     // the cropped base:
     //  • pad=0 → they're in CONTENT (crop) fractions; map content → full photo.
@@ -306,12 +410,45 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     };
   }
 
-  const templates = useMemo(() => FRAME_TEMPLATES, []);
+  // The user's own templates first, then the built-ins.
+  const templates = useMemo(() => [...userTemplates, ...FRAME_TEMPLATES], [userTemplates]);
+
+  async function persistTemplates(next) {
+    const saved = await api.saveFrameTemplates(next);
+    setUserTemplates(Array.isArray(saved) ? saved : next);
+  }
+  // The editor's current look as a new template. `layers` are the STORED
+  // layers; pad/bg the canvas. Returns how many layers could not be kept.
+  async function saveTemplate(name, { layers, pad, bg }) {
+    if (!transformedPreview) return null;
+    const geom = outputGeometry({
+      fullW: transformedPreview.width || transformedPreview.naturalWidth,
+      fullH: transformedPreview.height || transformedPreview.naturalHeight,
+      crop: normalizedCrop, pad,
+    });
+    const id = `${USER_TEMPLATE_PREFIX}${crypto.randomUUID()}`;
+    const { template, skipped } = templateFromLayers({ id, name, layers, geom, pad, bg, measure: measureTextWidthDOM });
+    await persistTemplates([template, ...userTemplates]);
+    return { template, skipped };
+  }
+  // The id never changes: an agent holding it keeps working after a rename.
+  const renameTemplate = (id, name) => persistTemplates(userTemplates.map((t) => (t.id === id ? { ...t, name } : t)));
+  const duplicateTemplate = (id, name) => {
+    const source = userTemplates.find((t) => t.id === id);
+    if (!source) return null;
+    const copy = { ...JSON.parse(JSON.stringify(source)), id: `${USER_TEMPLATE_PREFIX}${crypto.randomUUID()}`, name };
+    const at = userTemplates.indexOf(source) + 1;
+    return persistTemplates([...userTemplates.slice(0, at), copy, ...userTemplates.slice(at)]);
+  };
+  const deleteTemplate = (id) => persistTemplates(userTemplates.filter((t) => t.id !== id));
 
   return {
     templates,
     thumbs, cellAspect,
     generatePresetLayers,
+    saveTemplate, renameTemplate, duplicateTemplate, deleteTemplate,
+    // A token source ({camera_model}, an EXIF row, {author}) for this photo.
+    resolveSource: (source) => resolveSource(source, exif, profile),
     logosReady: !!logos,
   };
 }

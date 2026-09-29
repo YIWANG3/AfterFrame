@@ -33,7 +33,7 @@ const EXIF_VALUES = {
   iso: (e) => (Number(e?.iso) ? String(Math.round(Number(e.iso))) : null),
 };
 
-function formatExif(fields, exif, { labeled = false, sep } = {}) {
+export function formatExif(fields, exif, { labeled = false, sep } = {}) {
   const parts = (fields || [])
     .map((f) => {
       if (labeled) {

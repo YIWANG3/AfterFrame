@@ -33,6 +33,7 @@ const saveFileIpc = require("./ipc/saveFile");
 const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
+const frameTemplatesIpc = require("./ipc/frameTemplates");
 const editorsIpc = require("./ipc/editors");
 const settingsTransferIpc = require("./ipc/settingsTransfer");
 const { createAgentRenderBridge } = require("./agentRender");
@@ -615,6 +616,7 @@ const saveFileApi = saveFileIpc.register({
 });
 
 frameLogosIpc.register({ ipcMain });
+frameTemplatesIpc.register({ app, ipcMain, readAppSettings, updateAppSettings });
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.
 // The overlay calls window.__vibepinCapture(rect) → this handler → capturePage.

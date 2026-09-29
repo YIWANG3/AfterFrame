@@ -7,7 +7,7 @@ import {
   Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend,
+  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend, Braces,
   PanelTop, PanelBottom, PanelLeft, PanelRight,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
@@ -60,6 +60,12 @@ export default function TextPanel({
   frameCellAspect,
   onApplyPreset,
   onClearPreset,
+  onSaveTemplate,
+  onRenameTemplate,
+  onDuplicateTemplate,
+  onDeleteTemplate,
+  // Photo info as a text layer: resolves a token source for this photo.
+  resolveTokenSource,
   canvasPad,
   onCanvasPad,
   onCanvasPadCommit,
@@ -105,6 +111,21 @@ export default function TextPanel({
 
   const addLayer = () => {
     const nl = createDefaultLayer();
+    onLayersChange([...layers, nl]);
+    onSelectionChange(new Set([nl.id]));
+  };
+
+  // "Insert photo info": a text layer that knows it is the camera model (or
+  // the lens, the EXIF row, the date, the author), so a saved template shows
+  // the right one on the next photo. Empty here → nothing to insert.
+  const [tokenMenuOpen, setTokenMenuOpen] = useState(false);
+  const [tokenMissing, setTokenMissing] = useState(null);
+  const addTokenLayer = (key) => {
+    const source = TOKEN_SOURCES[key];
+    const text = resolveTokenSource?.(source) || "";
+    if (!text) { setTokenMissing(key); return; }
+    setTokenMissing(null);
+    const nl = createDefaultLayer({ text, tokenSource: source });
     onLayersChange([...layers, nl]);
     onSelectionChange(new Set([nl.id]));
   };
@@ -225,6 +246,10 @@ export default function TextPanel({
               cellAspect={frameCellAspect}
               onApplyPreset={onApplyPreset}
               onClearPreset={onClearPreset}
+              onSaveTemplate={onSaveTemplate}
+              onRenameTemplate={onRenameTemplate}
+              onDuplicateTemplate={onDuplicateTemplate}
+              onDeleteTemplate={onDeleteTemplate}
               pad={canvasPad}
               onPad={onCanvasPad}
               onPadCommit={onCanvasPadCommit}
@@ -364,9 +389,34 @@ export default function TextPanel({
               disabled={!api.can("stickerExtract")}
               onClick={() => setStickerPickerOpen((v) => !v)}
             />
+            {resolveTokenSource && (
+              <IconBtn icon={Braces} title={t("text.insertInfo")} onClick={() => { setTokenMenuOpen((v) => !v); setTokenMissing(null); }} />
+            )}
             <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />
           </div>
         }>
+          {tokenMenuOpen && (
+            <div className="mb-2" data-token-menu="true">
+              <div className="flex flex-wrap gap-1">
+                {Object.keys(TOKEN_SOURCES).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    data-token={key}
+                    onClick={() => addTokenLayer(key)}
+                    className="rounded-md border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                  >
+                    {t(`text.tokens.${key}`)}
+                  </button>
+                ))}
+              </div>
+              {tokenMissing && (
+                <div className="mt-1 text-[10.5px] text-muted2">
+                  {t(tokenMissing === "author" ? "text.tokens.noAuthor" : "text.tokens.missing")}
+                </div>
+              )}
+            </div>
+          )}
           <LayerList
             layers={layers}
             selectedIds={selectedIds}
@@ -683,6 +733,15 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
     </div>
   );
 }
+
+// What "Insert photo info" offers, as the token sources frame templates use.
+const TOKEN_SOURCES = {
+  camera_model: { content: "{camera_model}" },
+  lens_model: { content: "{lens_model}" },
+  exif: { exif: { fields: ["focal", "aperture", "shutter", "iso"], labeled: false } },
+  date: { content: "{date}" },
+  author: { content: "{author}" },
+};
 
 function IconBtn({ icon: Icon, onClick, title, disabled }) {
   return (

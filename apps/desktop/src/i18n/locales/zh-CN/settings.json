@@ -11,7 +11,8 @@
     "people": "人物",
     "library": "图库",
     "about": "关于",
-    "integrations": "集成"
+    "integrations": "集成",
+    "watermark": "水印"
   },
   "general": {
     "title": "通用",
@@ -252,7 +253,9 @@
       "repaint": "AI 重绘",
       "repaintHint": "服务商、所选模型、风格库",
       "annotation": "AI 标注",
-      "annotationHint": "服务商与标注设置"
+      "annotationHint": "服务商与标注设置",
+      "watermark": "水印",
+      "watermarkHint": "作者名、边框模板"
     },
     "includeKeys": "包含 API 密钥",
     "includeKeysHint": "密钥会用下面的密码加密。忘记密码将无法导入密钥。",
@@ -289,6 +292,22 @@
       "expired": "导入已失效,请重新选择文件",
       "failed": "操作失败:{{message}}",
       "plaintext_storage": "本机钥匙串不可用,密钥以明文保存"
-    }
+    },
+    "authorName": "作者：{{name}}",
+    "templateCount": "{{count}} 个边框模板"
+  },
+  "watermark": {
+    "profileTitle": "水印档案",
+    "profileSubtitle": "边框文字里自动填入的信息。在编辑器里用「文字 › 图层 › 插入照片信息 › 作者」插入，或者用带作者名的模板。",
+    "author": "作者名",
+    "authorHint": "你希望出现在照片上的名字或署名",
+    "authorPlaceholder": "你的名字",
+    "saved": "已保存",
+    "templatesTitle": "我的边框模板",
+    "templatesSubtitle": "在编辑器的「文字 › 边框 › 存为模板」里保存，改名和复制也在那里。",
+    "templatesEmpty": "还没有。",
+    "delete": "删除",
+    "deleteTitle": "删除模板「{{name}}」？",
+    "deleteMessage": "已经用它加过边框的照片不受影响。"
   }
 }

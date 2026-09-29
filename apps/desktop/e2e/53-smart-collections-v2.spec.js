@@ -51,6 +51,10 @@ test.beforeAll(async () => {
     await bridge.setAssetRating(rows.slice(5).map((r) => r.asset_id), 0);
     return folder.collection_id;
   });
+  // Made over the bridge, not the sidebar: the app's folder list only learns
+  // of it on a reload (a launch-time list could otherwise answer after it).
+  await ctx.window.evaluate(() => window.__afterframeTest.refresh());
+  await expect(ctx.window.getByTestId("sidebar-folder-scroll").getByText("Published", { exact: true })).toBeVisible();
   await ctx.window.getByRole("button", { name: "Filters" }).click();
 });
 
@@ -143,10 +147,14 @@ test("condition groups: any one of them may hold, and they save with the collect
   await group(0).getByRole("button", { name: "Camera", exact: true }).click();
   await option(CANON).click();
   await ctx.window.keyboard.press("Escape");
-  // Group 2: unrated.
+  // Group 2: unrated. The app re-rendering while a list is open must not
+  // make Escape close the dialog along with the list (it did on CI).
   await group(1).getByRole("button", { name: "Add condition" }).click();
   await ctx.window.locator("[data-facet-slot='rating']").click();
+  await ctx.window.evaluate(() => window.__afterframeTest.refresh());
   await ctx.window.keyboard.press("Escape");
+  await expect(ctx.window.locator("[data-popover-panel]")).toHaveCount(0);
+  await expect(dialog()).toBeVisible();
   await group(1).locator("[data-rating-unrated]").click();
   await dialog().locator("[data-filter-groups-apply]").click();
   await expect(dialog()).toHaveCount(0);

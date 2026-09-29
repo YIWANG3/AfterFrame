@@ -29,14 +29,19 @@ export default function FilterGroupsDialog({ groups, folders, onApply, onClose }
   }, []);
 
   // Escape closes an open facet list first; only with none open does it
-  // close the dialog (and drop the draft).
+  // close the dialog (and drop the draft). Listen in the CAPTURE phase so this
+  // check runs before the list's own Escape handler removes it: a bubbling
+  // listener is re-added whenever onClose changes (every App render), which
+  // put it after the list's and closed the dialog along with the list.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     function onKey(event) {
-      if (event.key === "Escape" && !document.querySelector("[data-popover-panel]")) onClose();
+      if (event.key === "Escape" && !document.querySelector("[data-popover-panel]")) onCloseRef.current();
     }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, []);
 
   const update = (key, filters) => setDraft((current) => current.map((group) => (group.key === key ? { ...group, filters } : group)));
   const remove = (key) => setDraft((current) => current.filter((group) => group.key !== key));

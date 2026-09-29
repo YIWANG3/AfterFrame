@@ -139,7 +139,17 @@
     "lineHeight": "Line height",
     "addHandwriting": "AI handwriting",
     "glow": "Glow",
-    "glowIntensity": "Intensity"
+    "glowIntensity": "Intensity",
+    "insertInfo": "Insert photo info",
+    "tokens": {
+      "camera_model": "Camera",
+      "lens_model": "Lens",
+      "exif": "Exposure",
+      "date": "Date",
+      "author": "Author",
+      "missing": "This photo has no such info",
+      "noAuthor": "Set your name in Settings › Watermark first"
+    }
   },
   "sticker": {
     "title": "Sticker",
@@ -234,7 +244,18 @@
     "top": "Top",
     "bottom": "Bottom",
     "left": "Left",
-    "right": "Right"
+    "right": "Right",
+    "saveTemplate": "Save as template",
+    "saveTemplateHint": "Keep this border, its text and logo as a template for other photos",
+    "rename": "Rename",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "copyName": "{{name}} copy",
+    "deleteTitle": "Delete template “{{name}}”?",
+    "deleteMessage": "Photos already framed with it stay as they are.",
+    "templateSaved": "Saved as template",
+    "templateSkipped": "{{count}} layer(s) exist only as pixels (a handwriting sticker) and were left out",
+    "templateFailed": "Could not save the template"
   },
   "handwriting": {
     "title": "AI Handwriting",

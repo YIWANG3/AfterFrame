@@ -11,7 +11,8 @@
     "people": "People",
     "library": "Library",
     "about": "About",
-    "integrations": "Integrations"
+    "integrations": "Integrations",
+    "watermark": "Watermark"
   },
   "general": {
     "title": "General",
@@ -252,7 +253,9 @@
       "repaint": "AI Repaint",
       "repaintHint": "Providers, selected models, style library",
       "annotation": "AI Annotation",
-      "annotationHint": "Providers and annotation settings"
+      "annotationHint": "Providers and annotation settings",
+      "watermark": "Watermark",
+      "watermarkHint": "Author name, frame templates"
     },
     "includeKeys": "Include API keys",
     "includeKeysHint": "Keys are encrypted with the password below. Without it, they cannot be imported.",
@@ -289,6 +292,22 @@
       "expired": "This import expired. Choose the file again",
       "failed": "Something went wrong: {{message}}",
       "plaintext_storage": "Keychain encryption is unavailable, so keys were stored unencrypted"
-    }
+    },
+    "authorName": "Author: {{name}}",
+    "templateCount": "{{count}} frame template(s)"
+  },
+  "watermark": {
+    "profileTitle": "Watermark profile",
+    "profileSubtitle": "What frame text fills in for you. Insert “Author” in the editor (Text › Layers › Insert photo info) or use a template that has it.",
+    "author": "Author",
+    "authorHint": "Your name or handle, as it should appear on photos",
+    "authorPlaceholder": "Your name",
+    "saved": "Saved",
+    "templatesTitle": "My frame templates",
+    "templatesSubtitle": "Saved from the editor: Text › Border › Save as template. Rename or duplicate them there.",
+    "templatesEmpty": "None yet.",
+    "delete": "Delete",
+    "deleteTitle": "Delete template “{{name}}”?",
+    "deleteMessage": "Photos already framed with it stay as they are."
   }
 }
