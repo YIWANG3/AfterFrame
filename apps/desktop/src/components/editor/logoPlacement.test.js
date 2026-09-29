@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgroundLightness, layerBoxes, placeLogo } from "./logoPlacement";
+import { backgroundLightness, layerBoxes, placeLogo, placeText } from "./logoPlacement";
 import { outputGeometry } from "./frameUserTemplates";
 
 const measure = (text, { fontPx }) => String(text).length * fontPx * 0.5;
@@ -16,14 +16,23 @@ describe("where my logo goes", () => {
     expect(geom.outW - (spot.cx + spot.width / 2)).toBeCloseTo(0.075 * 2000, 6); // 150px in from the right
   });
 
-  it("moves to the bar's centre, then its left end, when a brand logo sits at the right", () => {
+  it("slides left from the bar's right end to the first gap clear of what is there", () => {
     const geom = outputGeometry({ fullW: 3000, fullH: 2000, pad: BAR });
     const brand = { type: "sticker", x: 2800 / 3000, y: 2120 / 2000, scale: 0.05, naturalWidth: 100, naturalHeight: 100 };
-    const right = placeLogo({ geom, pad: BAR, aspect: 3, occupied: layerBoxes([brand], geom, measure) });
-    expect(right.cx).toBeCloseTo(1500, 6);
-    const text = { type: "text", text: "Canon EOS R5", fontSize: 64, x: 0.5, y: 2120 / 2000 };
-    const left = placeLogo({ geom, pad: BAR, aspect: 3, occupied: layerBoxes([brand, text], geom, measure) });
-    expect(left.cx - left.width / 2).toBeCloseTo(150, 6);
+    const boxes = layerBoxes([brand], geom, measure);
+    const spot = placeLogo({ geom, pad: BAR, aspect: 3, occupied: boxes });
+    // Just left of the brand logo (at x 2725..2875), a 60px gap (0.03 × 2000) between.
+    const gap = 60;
+    expect(spot.cx + spot.width / 2 + gap).toBeLessThanOrEqual(boxes[0].x + 1e-6);
+    expect(boxes[0].x - (spot.cx + spot.width / 2 + gap)).toBeLessThan(gap);
+  });
+
+  it("a full bar gives the spot that overlaps least", () => {
+    const geom = outputGeometry({ fullW: 3000, fullH: 2000, pad: BAR });
+    const wall = [{ x: 0, y: 2000, w: 1400, h: 240 }, { x: 1600, y: 2000, w: 1400, h: 240 }];
+    const spot = placeLogo({ geom, pad: BAR, aspect: 3, occupied: wall });
+    // Over the narrow opening in the middle (any spot across it overlaps as little).
+    expect(Math.abs(spot.cx - 1500)).toBeLessThan(120);
   });
 
   it("a very wide logo is held to under half the bar's width", () => {
@@ -51,5 +60,35 @@ describe("where my logo goes", () => {
     expect(backgroundLightness({ color: "#0c0c0c" })).toBeLessThan(0.1);
     expect(backgroundLightness({ mode: "gradient", gradient: { from: "#000000", to: "#ffffff" } })).toBeCloseTo(0.5, 6);
     expect(backgroundLightness(null)).toBeCloseTo(1, 6); // a margin with no colour set is white
+  });
+
+  it("a line of text goes to a bar's left end, then its centre; with no bar, the photo's bottom-left", () => {
+    const geom = outputGeometry({ fullW: 3000, fullH: 2000, pad: BAR });
+    const widthAt = (fontPx) => 12 * fontPx * 0.5; // a 12-character line
+    const first = placeText({ geom, pad: BAR, widthAt });
+    expect(first.fontPx).toBeCloseTo(240 * 0.2, 6);
+    expect(first.cx - widthAt(first.fontPx) / 2).toBeCloseTo(150, 6);
+    expect(first.cy).toBeCloseTo(2120, 6);
+    // Something at the left end: the line starts just after it, a gap between.
+    const taken = [{ x: 100, y: 2080, w: 400, h: 80 }];
+    const next = placeText({ geom, pad: BAR, widthAt, occupied: taken });
+    const nextLeft = next.cx - widthAt(next.fontPx) / 2;
+    expect(nextLeft - 60).toBeGreaterThanOrEqual(500 - 1e-6);
+    expect(nextLeft - 60 - 500).toBeLessThan(60);
+    // A secondary line is smaller.
+    expect(placeText({ geom, pad: BAR, widthAt, scale: 0.75 }).fontPx).toBeCloseTo(36, 6);
+
+    const bare = outputGeometry({ fullW: 3000, fullH: 2000 });
+    const corner = placeText({ geom: bare, pad: null, widthAt });
+    expect(corner.region).toBe("photo");
+    expect(corner.fontPx).toBeCloseTo(0.035 * 2000, 6);
+    expect(corner.cx - widthAt(corner.fontPx) / 2).toBeCloseTo(150, 6);
+  });
+
+  it("a line too long for the frame is shrunk to fit", () => {
+    const geom = outputGeometry({ fullW: 1000, fullH: 1000, pad: BAR });
+    const widthAt = (fontPx) => 200 * fontPx * 0.5;
+    const spot = placeText({ geom, pad: BAR, widthAt });
+    expect(widthAt(spot.fontPx)).toBeCloseTo(1000 - 2 * 75, 6);
   });
 });

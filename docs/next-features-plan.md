@@ -230,6 +230,7 @@ MCP：`search_assets` 和智能合集规则都接受 `rating_max`、`exclude`（
 > - **设置迁移**：新增「水印」分区，带作者名和模板；模板按 id 合并，文件里的空作者名不覆盖本机。
 > - 测试：`frameUserTemplates.test.js`、`settingsTransfer.test.js`、e2e 54（保存、重启、改名、竖幅异机套用并按原尺寸保存、MCP、设置里删除）。
 > - **我的 logo（第 7 步）**：导入 SVG 或 PNG（主进程文件选择，SVG ≤ 1 MB、PNG ≤ 10 MB，最多 50 个），在主进程用 sharp 统一转成 PNG：SVG 由 librsvg 渲染（不执行脚本；以 buffer 传入，没有外部引用），所以 SVG 文本从不进入渲染进程或 `media://`，也就不需要文本层面的清洗。裁掉透明留白，按高 1200 px 存进 `userData/afterframe/personal-logos/`，清单是 `personal-logos.json`。透明底且可见像素为单色的，标为可换色，渲染时用画布 source-in 着色（和品牌 logo 一样）。编辑器「文字 › 边框 › 我的 logo」点一下就放进边框（`logoPlacement.js`：有底栏放底栏右端，右端已有东西就让到中间、再到左端，高为底栏 40%；没有边框放照片右下角；可换色的按背景深浅配黑或白），也可以把 SVG / PNG 直接拖进编辑器导入并放好。图层带 `logoRef: {source: "personal", id, color}`，模板只存引用。设置 › 水印里也能导入、改名、删除（次要入口）；删掉的 logo 在模板里直接跳过。**导出设置不打包 logo 文件（用户 2026-09-29 拍板）**，所以换机后模板里的个人 logo 会缺席。web 版没有导入。逻辑：`electron/personalLogos.js`（有单测）、`render/personalLogos.js`；e2e 55。
+> - **边框拆成独立工具（2026-09-29，分支 `feat/frame-tool`）**：用户觉得边框混在文字工具里「很混乱」，拆出编辑器第 5 个工具「边框」（文字和贴纸之间），分四块：模板（预设、存为模板、改名 / 复制 / 删除）、画布（留白、底色）、加到边框里（照片信息：机型 / 镜头 / 参数 / 日期 / 作者；自由文字；我的 logo）、边框上的元素（图层列表）。图层分两类：`fromPreset` 即边框图层（`layerStack.isFrameLayer`），其余是照片上的图层；两个工具各自只列、只改自己那类，另一类在画布上照常显示但锁住（`TextCanvas isLocked`）。存模板只存边框图层，套用 / 清除模板不动照片上的文字。从边框工具加的东西都进底栏：文字从左端、logo 从右端起，沿底栏滑到第一个放得下的空位（两侧留 0.03 短边），满了取重叠最少的位置（`logoPlacement.slide`）。文字工具的 `{}` 插入照片信息去掉了，挪到边框工具。选画布预设或拖入 logo 会切到边框工具。e2e 21 / 54 / 55 已按新工具改写。
 
 **两个会改变范围的发现**
 

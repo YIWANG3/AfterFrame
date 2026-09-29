@@ -28,7 +28,7 @@ async function openEditorOn(stem) {
   await window.evaluate((item) => window.__afterframeTest.openEditor(item), row);
   await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(window, { preview: true });
-  await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
   return row;
 }
 async function closeEditor() {
@@ -46,7 +46,7 @@ test.afterAll(async () => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-test("the author set in Settings is what Insert photo info › Author writes", async () => {
+test("the author set in Settings is what the Frame tool's Photo info › Author writes", async () => {
   await window.keyboard.press("Meta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
   const field = window.locator("[data-watermark-author]");
@@ -56,14 +56,17 @@ test("the author set in Settings is what Insert photo info › Author writes", a
   await window.keyboard.press("Escape");
 
   await openEditorOn(LANDSCAPE);
-  await window.getByTitle("Insert photo info").click();
+  await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6m2");
   await window.locator("[data-token='author']").click();
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain(AUTHOR);
 });
 
 test("a preset plus your own text saves as a template that keeps where each part came from", async () => {
-  await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
-  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6m2");
+  // Written on the photo (the Text tool), not part of the frame: not saved.
+  await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  await window.evaluate(() => window.__afterframeTest.addTextLayer("On the photo"));
+  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
 
   await window.locator("[data-save-frame-template]").click();
   const name = window.locator("[data-frame-template-name] input");
@@ -78,8 +81,32 @@ test("a preset plus your own text saves as a template that keeps where each part
   const texts = saved.layers.filter((l) => l.type === "text");
   expect(texts.map((l) => l.tokenSource?.content)).toEqual(expect.arrayContaining(["{camera_model}", "{author}"]));
   expect(JSON.stringify(saved)).not.toContain("data:");
+  expect(JSON.stringify(saved)).not.toContain("On the photo");
   // It is first in the panel, named.
   await expect(window.locator(`[data-frame-template="${saved.id}"]`).first()).toContainText("My bar");
+  await closeEditor();
+});
+
+test("the Frame and Text tools each list their own layers; the frame changes, the photo's text stays", async () => {
+  await openEditorOn(LANDSCAPE);
+  await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  await window.evaluate(() => window.__afterframeTest.addTextLayer("On the photo"));
+  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
+  const [tpl] = await templates();
+  await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6m2");
+  // The Text tool points at the frame's items instead of listing them, and
+  // leaves them alone on the canvas (shown, not pickable); its own stay live.
+  await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  await expect(window.locator("[data-frame-layers-hint]")).toBeVisible();
+  const photoText = (await editorState()).layers.find((l) => l.text === "On the photo");
+  await expect(window.locator("[data-editor-layer-wrapper][data-locked]").first()).toBeAttached();
+  await expect(window.locator(`[data-editor-layer-wrapper="${photoText.id}"]`)).not.toHaveAttribute("data-locked", "true");
+  // Another template, then no frame at all: the photo's text is still there.
+  await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-dark"));
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("On the photo");
+  await window.evaluate(() => window.__afterframeTest.clearFramePreset());
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toEqual(["On the photo"]);
   await closeEditor();
 });
 

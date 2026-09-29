@@ -94,6 +94,9 @@ export default function TextCanvas({
   // Overlays cover the photo content, not any surrounding canvas margins.
   // When omitted (pad=0), the output and photo rect are identical.
   overlayRect = null,
+  // Layers another tool owns (the frame's, seen from the Text tool, and the
+  // photo's, from the Frame tool) are shown but cannot be picked or dragged.
+  isLocked = null,
 }) {
   const dragRef = useRef(null);
   const containerRef = useRef(null);
@@ -295,7 +298,7 @@ export default function TextCanvas({
     return url;
   }, [depthFieldCanvas, depthFieldVersion, depthFeather, alphaCache, urlCache, geomKey, depthMaskGeom]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (tool !== "text" || !imageRect) return null;
+  if ((tool !== "text" && tool !== "frame") || !imageRect) return null;
 
   const scale = imageRect.width / 1920;
 
@@ -378,7 +381,13 @@ export default function TextCanvas({
         };
 
         return (
-          <div key={layer.id} data-editor-layer-wrapper={layer.id} style={wrapperStyle}>
+          <div
+            key={layer.id}
+            data-editor-layer-wrapper={layer.id}
+            data-locked={isLocked?.(layer) ? "true" : undefined}
+            className={isLocked?.(layer) ? "[&_*]:!pointer-events-none" : undefined}
+            style={wrapperStyle}
+          >
             {layer.type === "sticker" ? (
               <StickerLayerEl
                 layer={layer}

@@ -33,7 +33,7 @@ async function openEditorOn(stem) {
   await window.evaluate((item) => window.__afterframeTest.openEditor(item), await rowFor(stem));
   await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(window, { preview: true });
-  await window.evaluate(() => window.__afterframeTest.setTool("text"));
+  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
 }
 async function closeEditor() {
   await window.evaluate(() => window.__afterframeTest.closeEditor());
@@ -44,12 +44,12 @@ async function openWatermarkSettings() {
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
 }
 const personalLayers = (state) => state.layers.filter((l) => l.logoRef?.source === "personal");
-// The portrait (2064×2400) framed by the template: the middle of its bottom
-// bar, where the logo sits, is the logo's black.
-async function darkAtBarCentre(file, tpl) {
+// The portrait (2064×2400, no crop) framed by the template: where the logo
+// sits (output px; the bar adds below, so photo px are output px) is black.
+let logoAt;
+async function darkAt(file, { x, y }) {
   const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
-  const y = Math.round(2400 + (tpl.canvas.pad.bottom * 2064) / 2);
-  const at = (y * info.width + Math.round(info.width / 2)) * info.channels;
+  const at = (y * info.width + x) * info.channels;
   return Math.max(data[at], data[at + 1], data[at + 2]) < 60;
 }
 
@@ -107,12 +107,14 @@ test("clicked in the Border section, it goes into the frame, beside what is ther
   expect((await placed()).y).toBeGreaterThan(1); // below the photo: in the bar
   await window.keyboard.press("Delete");
 
-  // A white bar whose right end holds the camera's logo: the bar's centre, black.
+  // A white bar whose right end holds the camera's logo: just left of it, black.
   await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
   await tile().click();
   await expect.poll(async () => (await placed())?.logoRef?.color).toBe("#141414");
   expect((await placed()).y).toBeGreaterThan(1);
-  expect(Math.abs((await placed()).x - 0.5)).toBeLessThan(0.02);
+  const brand = (await editorState()).layers.find((l) => l.type === "sticker" && l.logoRef && l.logoRef.source !== "personal");
+  expect((await placed()).x).toBeLessThan(brand.x);
+  expect((await placed()).x).toBeGreaterThan(0.5);
   expect(await placed()).toMatchObject({ stickerPathKind: "data", logoRef: { source: "personal", id: svgLogo.id } });
 
   await window.locator("[data-save-frame-template]").click();
@@ -124,13 +126,17 @@ test("clicked in the Border section, it goes into the frame, beside what is ther
   expect(JSON.stringify(tpl)).not.toContain("data:");
   await closeEditor();
 
-  // Another photo, another shape: the logo is in the middle of its bar, black.
+  // Another photo, another shape: the logo is in its bar, black, where the
+  // template pinned it.
   await openEditorOn(PORTRAIT);
   await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
   await expect.poll(async () => personalLayers(await editorState()).length).toBe(1);
+  const onPortrait = personalLayers(await editorState())[0];
+  logoAt = { x: Math.round(onPortrait.x * 2064), y: Math.round(onPortrait.y * 2400) };
+  expect(logoAt.y).toBeGreaterThan(2400); // in the bar below the photo
   const out = path.join(tmp, "portrait-with-logo.jpg");
   await window.evaluate(async (p) => { await window.__afterframeTest.saveAs(p); }, out);
-  expect(await darkAtBarCentre(out, tpl)).toBe(true);
+  expect(await darkAt(out, logoAt)).toBe(true);
   await closeEditor();
 });
 
@@ -140,7 +146,8 @@ test("an agent's apply_frame renders the template with the logo", async () => {
   const portrait = await rowFor(PORTRAIT);
   const { results: [result] } = await tool("apply_frame", { asset_ids: [portrait.asset_id], template: tpl.id });
   expect(result.error).toBeUndefined();
-  expect(await darkAtBarCentre(result.path, tpl)).toBe(true);
+  // The agent's render places it where the editor did.
+  expect(await darkAt(result.path, logoAt)).toBe(true);
 });
 
 test("deleting the logo leaves the template working without it", async () => {

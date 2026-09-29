@@ -24,7 +24,8 @@
       "text": "Text",
       "sticker": "Sticker",
       "repaint": "AI Repaint",
-      "split": "Split"
+      "split": "Split",
+      "frame": "Frame"
     }
   },
   "split": {
@@ -311,5 +312,16 @@
     "missingTextWarn": "The prompt has no {text} — your text above won't be used.",
     "insertText": "Insert {text}",
     "presets": "Style presets"
+  },
+  "frame": {
+    "templates": "Templates",
+    "canvas": "Canvas",
+    "add": "Add to the frame",
+    "info": "Photo info",
+    "freeText": "Text",
+    "newText": "Text",
+    "layers": "In the frame",
+    "layersEmpty": "Nothing in the frame yet: pick a template, or add from above.",
+    "inFrameTool": "{{count}} item(s) in the frame: edit them with the Frame tool."
   }
 }
