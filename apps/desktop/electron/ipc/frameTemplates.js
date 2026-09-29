@@ -1,6 +1,10 @@
 // Watermark profile, user frame templates and the user's own logos
 // (docs/next-features-plan.md §E).
-// The profile ({author}) lives in app settings beside the other preferences;
+// The profile ({author, brandLogos}) lives in app settings beside the other
+// preferences; brandLogos maps a camera brand (a built-in brand id, or
+// "make:<exif make>" for one with no built-in logo), or one model of it
+// ("<brand>#<model>"), to one of my logos, which frames then use in place of
+// the brand's own mark;
 // templates are a plain JSON file under userData/afterframe/, saved and read
 // whole like the AI styles (ai.js). A template is layers plus margins, never
 // pixels: logos are found again for each photo (see
@@ -16,9 +20,24 @@ const TEMPLATES_MAX = 200;
 const LOGOS_MAX = 50;
 const LOGO_NAME_MAX = 40;
 
+const BRAND_LOGOS_MAX = 100;
+// A brand ("canon", "make:<make>"), or one of its models ("dji#fc9184").
+const BRAND_KEY = /^(?:[a-z0-9][a-z0-9-]{0,39}|make:[^\n#]{1,120})(?:#[^\n]{1,120})?$/;
+const LOGO_ID = /^[\w-]{1,64}$/;
+
+function cleanBrandLogos(map) {
+  const out = {};
+  if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+  for (const [key, id] of Object.entries(map)) {
+    if (Object.keys(out).length >= BRAND_LOGOS_MAX) break;
+    if (BRAND_KEY.test(key) && typeof id === "string" && LOGO_ID.test(id)) out[key] = id;
+  }
+  return out;
+}
+
 function cleanProfile(profile) {
   const author = String(profile?.author ?? "").replace(/\s+/g, " ").trim().slice(0, AUTHOR_MAX);
-  return { author };
+  return { author, brandLogos: cleanBrandLogos(profile?.brandLogos) };
 }
 
 // Only what the editor wrote: user ids, the layers kind, a name. Anything else
@@ -65,9 +84,27 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
 
   ipcMain.handle("app:watermark-profile", () => cleanProfile(readAppSettings()?.watermarkProfile));
 
+  // Merged into what is there: saving the name keeps the brand logos.
   ipcMain.handle("app:save-watermark-profile", async (_event, profile) => {
-    const next = cleanProfile(profile);
-    await updateAppSettings((settings) => ({ ...settings, watermarkProfile: next }));
+    let next = null;
+    await updateAppSettings((settings) => {
+      next = cleanProfile({ ...cleanProfile(settings.watermarkProfile), ...(profile || {}) });
+      return { ...settings, watermarkProfile: next };
+    });
+    return next;
+  });
+
+  // A brand's frame logo: one of my logos, or (logoId null) its own again.
+  ipcMain.handle("app:set-brand-logo", async (_event, brandKey, logoId) => {
+    let next = null;
+    await updateAppSettings((settings) => {
+      const current = cleanProfile(settings.watermarkProfile);
+      const brandLogos = { ...current.brandLogos };
+      if (logoId) brandLogos[String(brandKey)] = String(logoId);
+      else delete brandLogos[String(brandKey)];
+      next = cleanProfile({ ...current, brandLogos });
+      return { ...settings, watermarkProfile: next };
+    });
     return next;
   });
 
@@ -133,13 +170,22 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
     return { logos: logos.map(withPath) };
   });
 
-  // Templates that used it keep working; the logo is just left out.
+  // Templates that used it keep working; the logo is just left out. A brand
+  // that used it goes back to its own logo.
   ipcMain.handle("app:delete-personal-logo", async (_event, id) => {
     const logos = readLogos();
     const gone = logos.find((logo) => logo.id === id);
     const rest = logos.filter((logo) => logo.id !== id);
     await saveLogos(rest);
     if (gone) await fs.promises.rm(path.join(logosDir(), path.basename(gone.file)), { force: true });
+    const profile = cleanProfile(readAppSettings()?.watermarkProfile);
+    if (Object.values(profile.brandLogos).includes(id)) {
+      await updateAppSettings((settings) => {
+        const current = cleanProfile(settings.watermarkProfile);
+        const brandLogos = Object.fromEntries(Object.entries(current.brandLogos).filter(([, logoId]) => logoId !== id));
+        return { ...settings, watermarkProfile: { ...current, brandLogos } };
+      });
+    }
     return { logos: rest.map(withPath) };
   });
 }

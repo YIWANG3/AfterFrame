@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgroundLightness, layerBoxes, placeLogo, placeText } from "./logoPlacement";
+import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from "./logoPlacement";
 import { outputGeometry } from "./frameUserTemplates";
 
 const measure = (text, { fontPx }) => String(text).length * fontPx * 0.5;
@@ -90,5 +90,23 @@ describe("where my logo goes", () => {
     const widthAt = (fontPx) => 200 * fontPx * 0.5;
     const spot = placeText({ geom, pad: BAR, widthAt });
     expect(widthAt(spot.fontPx)).toBeCloseTo(1000 - 2 * 75, 6);
+  });
+
+  it("a logo swapped for another shape keeps its end of the bar and its weight", () => {
+    const geom = outputGeometry({ fullW: 3000, fullH: 2000, pad: BAR });
+    // A wordmark (4:1) at the bar's right end: 400 × 100 px, right edge at 2850.
+    const right = { x: 2650 / 3000, y: 2120 / 2000, scale: 400 / 3000, naturalWidth: 400, naturalHeight: 100 };
+    const square = swapLogo({ layer: right, geom, aspect: 1 });
+    const w = square.scale * 3000;
+    expect(square.x * 3000 + w / 2).toBeCloseTo(2850, 6); // right edge held
+    expect(w).toBeCloseTo(100 * (0.85 / 0.45), 6); // a square mark is drawn taller, as templates do
+    // At the left end the left edge is held; in the middle, the centre.
+    const left = { ...right, x: 350 / 3000 };
+    const swapped = swapLogo({ layer: left, geom, aspect: 1 });
+    expect(swapped.x * 3000 - (swapped.scale * 3000) / 2).toBeCloseTo(150, 6);
+    const middle = { ...right, x: 0.5 };
+    expect(swapLogo({ layer: middle, geom, aspect: 1 }).x).toBeCloseTo(0.5, 6);
+    // Same shape: nothing moves.
+    expect(swapLogo({ layer: right, geom, aspect: 4 })).toMatchObject({ x: right.x, scale: right.scale });
   });
 });

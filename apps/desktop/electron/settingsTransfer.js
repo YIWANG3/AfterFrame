@@ -37,6 +37,13 @@ function styleList(value) {
 }
 
 // User frame templates (frame-templates.json): layers and margins, no pixels.
+// { brand: logo id } with only string ids; anything else in a file is dropped
+// (the main process cleans it again on read).
+function brandLogoMap(map) {
+  if (!isObject(map)) return {};
+  return Object.fromEntries(Object.entries(map).filter(([key, id]) => key && typeof id === "string" && id));
+}
+
 function frameTemplateList(value) {
   return Array.isArray(value)
     ? value.filter((t) => isObject(t) && typeof t.id === "string" && t.id.startsWith("user:") && t.kind === "layers")
@@ -93,11 +100,17 @@ function collectExport({ settings = {}, styles = null, frameTemplates = [], them
     out.annotation = annotation;
   }
 
-  // The name frame text uses for {author}, and the templates saved in the
-  // editor. There are no personal logo files to carry yet.
+  // The name frame text uses for {author}, the templates saved in the editor
+  // and which of my logos each camera brand uses. The logo files themselves do
+  // not travel (the user's call): a brand whose logo is not on the other
+  // machine keeps its own there.
   if (wanted.has("watermark")) {
     const author = typeof settings.watermarkProfile?.author === "string" ? settings.watermarkProfile.author : "";
-    out.watermark = { profile: { author }, templates: clone(frameTemplateList(frameTemplates)) };
+    const brandLogos = brandLogoMap(settings.watermarkProfile?.brandLogos);
+    out.watermark = {
+      profile: { author, ...(Object.keys(brandLogos).length ? { brandLogos } : {}) },
+      templates: clone(frameTemplateList(frameTemplates)),
+    };
   }
 
   const tokens = {};
@@ -296,6 +309,12 @@ function mergeBundle({ settings: localSettings = {}, styles: localStyles = null,
     // An empty name in the file does not erase the one set here.
     const author = typeof imported.profile?.author === "string" ? imported.profile.author.trim() : "";
     if (author) settings.watermarkProfile = { ...(isObject(settings.watermarkProfile) ? settings.watermarkProfile : {}), author };
+    // Brand by brand: a brand set here and not in the file keeps its logo.
+    const importedBrandLogos = brandLogoMap(imported.profile?.brandLogos);
+    if (Object.keys(importedBrandLogos).length) {
+      const current = isObject(settings.watermarkProfile) ? settings.watermarkProfile : {};
+      settings.watermarkProfile = { ...current, brandLogos: { ...brandLogoMap(current.brandLogos), ...importedBrandLogos } };
+    }
     const importedTemplates = frameTemplateList(imported.templates);
     if (importedTemplates.length) frameTemplates = mergeById(frameTemplateList(localTemplates), importedTemplates);
   }

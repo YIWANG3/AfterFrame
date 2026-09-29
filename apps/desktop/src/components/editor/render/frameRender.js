@@ -196,6 +196,8 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
     needs.push({
       brandId, variant, color, colorLocked, tintableColors: variant.tintableColors,
       key, heightPx, file: variant.file,
+      // One of my logos standing in for the brand's (withBrandLogos): its id.
+      personal: variant.personal || null,
     });
   }
   return needs;

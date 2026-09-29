@@ -52,7 +52,7 @@ test("the author set in Settings is what the Frame tool's Photo info › Author 
   const field = window.locator("[data-watermark-author]");
   await field.fill(AUTHOR);
   await field.press("Enter");
-  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getWatermarkProfile())).toEqual({ author: AUTHOR });
+  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getWatermarkProfile())).toEqual({ author: AUTHOR, brandLogos: {} });
   await window.keyboard.press("Escape");
 
   await openEditorOn(LANDSCAPE);

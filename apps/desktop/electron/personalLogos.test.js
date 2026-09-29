@@ -26,6 +26,17 @@ test("an SVG becomes a trimmed PNG; one colour on transparent is recolourable", 
   assert.equal(logo.color, "#222222");
 });
 
+test("a mark that reaches the top-left corner is kept whole", async () => {
+  // Two white bars, the first at the very corner: the corner pixel is the
+  // mark, not the background, so only transparency may be trimmed.
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">'
+    + '<rect width="180" height="100" fill="#fff"/><rect x="220" width="180" height="100" fill="#fff"/></svg>');
+  const logo = await processLogo(sharp, svg, "Bars.svg");
+  assert.equal(logo.width / logo.height, 4);
+  assert.equal(logo.tintable, true);
+  assert.equal(logo.color, "#ffffff");
+});
+
 test("several colours keep their own; a small PNG is not enlarged", async () => {
   const logo = await processLogo(sharp, await twoColourPng(), "two.png");
   assert.equal(logo.tintable, false);

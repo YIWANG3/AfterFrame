@@ -72,6 +72,8 @@ export const IPC_METHODS = [
   ["importPersonalLogo", "app:import-personal-logo", 1],
   ["renamePersonalLogo", "app:rename-personal-logo", 2],
   ["deletePersonalLogo", "app:delete-personal-logo", 1],
+  ["setBrandLogo", "app:set-brand-logo", 2],
+  ["listCameraMakes", "workspace:camera-makes", 0],
   ["deleteImageAssets", "workspace:delete-image-assets", 1],
   ["setAssetRating", "workspace:set-asset-rating", 2],
   ["listSystemFonts", "workspace:list-system-fonts", 0],

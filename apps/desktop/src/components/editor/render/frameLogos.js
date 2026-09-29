@@ -19,8 +19,8 @@ export function buildLogoRegistry(manifest) {
 /** EXIF `make` (e.g. "HASSELBLAD") -> brand id, via substring match. */
 export function brandIdForMake(make, registry) {
   if (!make) return null;
-  const m = String(make).toLowerCase();
-  for (const [needle, id] of Object.entries(registry.match)) {
+  const m = normalizeMake(make);
+  for (const [needle, id] of Object.entries(registry.match || {})) {
     if (m.includes(needle)) return id;
   }
   return null;
@@ -42,8 +42,12 @@ function matchesModel(variant, model) {
 /** Pick a variant from a brand by id, or by kind, or the first available.
  *  With `strict`, return null (instead of falling back) when the requested
  *  variant/kind isn't present — lets dual-logo templates skip a missing mark
- *  rather than duplicate the only one a brand has. */
+ *  rather than duplicate the only one a brand has. A brand the user gave one
+ *  of their logos has just that one: it fills every slot but a dual
+ *  template's symbol, which is left out as for a single-mark brand. */
 export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
+  const mine = mineFor(brand, model);
+  if (mine) return strict && variantId === "symbol" ? null : mine;
   if (!brand?.variants?.length) return null;
   const modelVariants = brand.variants.filter((variant) => matchesModel(variant, model));
   if (variantId) {
@@ -64,6 +68,99 @@ export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
     if (strict) return null;
   }
   return modelVariants[0] || brand.variants[0];
+}
+
+/** Every built-in mark a camera shows, in the manifest's order: the brand's
+ *  general marks, with a model's own mark (Luna Ultra) in place of the
+ *  general one of its kind. Sony: α and SONY. */
+export function builtInMarks(brand, model) {
+  const variants = brand?.variants || [];
+  const own = variants.filter((variant) => matchesModel(variant, model));
+  return variants.filter((variant) => (variant.models?.length
+    ? own.includes(variant)
+    : !own.some((mine) => mine.kind === variant.kind)));
+}
+
+// ── A camera brand's logo, chosen by the user ─────────────────────────────
+// watermarkProfile.brandLogos maps a brand to one of my logos (Settings ›
+// Watermark, or the Frame tool): a built-in brand by its id, a camera with no
+// built-in logo by "make:<its EXIF make>". One camera model of a brand can
+// have its own: "<brand key>#<model>" (DJI's FC9184 apart from other DJI).
+// Frames then use that logo wherever they would show the brand's mark, the
+// model's choice first; clearing a choice restores what was under it.
+
+export function normalizeMake(make) {
+  return String(make || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/** Where a camera's logo choice is kept: its built-in brand's id, else
+ *  "make:<make>"; null when EXIF names no make at all. */
+export function brandKeyForExif(exif, registry) {
+  const id = brandIdForExif(exif, registry);
+  if (id) return id;
+  const make = normalizeMake(exif?.make);
+  return make ? `make:${make}` : null;
+}
+
+/** Where one model's own choice is kept; null without a model. */
+export function modelKeyFor(brandKey, model) {
+  const m = normalizeMake(model);
+  return brandKey && m ? `${brandKey}#${m}` : null;
+}
+
+/** My logo standing in for this brand's mark on this model, if any: the
+ *  model's own choice, else the brand's. */
+export function mineFor(brand, model) {
+  const m = normalizeMake(model);
+  return (m && brand?.mineModels?.find((v) => v.model === m)) || brand?.mine || null;
+}
+
+// Built-in marks are sized by kind: a wide wordmark at 0.45 of a slot's
+// height, a square symbol at 0.7 to 1. My logo gets the same by its shape.
+export function logoHeightFactor(aspect) {
+  return Math.min(0.85, Math.max(0.45, 0.9 / Math.sqrt(aspect || 1)));
+}
+
+function myLogoVariant(logo, model) {
+  const aspect = logo.width && logo.height ? logo.width / logo.height : 1;
+  return {
+    id: model ? `mine:${logo.id}:${model}` : `mine:${logo.id}`, kind: "mine", personal: logo.id, name: logo.name, aspect,
+    h: logoHeightFactor(aspect), colorLocked: !logo.tintable, ...(model ? { model } : {}),
+  };
+}
+
+/**
+ * The registry with the user's choices folded in: a brand given one of my
+ * logos shows only that; a model given one shows it, and the rest of the
+ * brand what they did; a camera with no built-in logo becomes a brand of its
+ * own, matched by its make. A choice whose logo was deleted changes nothing.
+ * @param {object} registry      buildLogoRegistry() output (built-in brands)
+ * @param {object} brandLogos    { brandKey | "brandKey#model": personal logo id }
+ * @param {Array}  personalLogos my logos (listPersonalLogos)
+ */
+export function withBrandLogos(registry, brandLogos, personalLogos) {
+  const entries = Object.entries(brandLogos || {});
+  if (!entries.length) return registry;
+  const byId = new Map(registry.byId);
+  const match = { ...(registry.match || {}) };
+  for (const [key, logoId] of entries) {
+    const logo = (personalLogos || []).find((l) => l.id === logoId);
+    if (!logo) continue;
+    const hash = key.indexOf("#");
+    const brandKey = hash < 0 ? key : key.slice(0, hash);
+    const model = hash < 0 ? null : key.slice(hash + 1);
+    let brand = byId.get(brandKey);
+    if (!brand) {
+      if (!brandKey.startsWith("make:") || brandKey.length <= 5) continue;
+      brand = { id: brandKey, name: brandKey.slice(5), variants: [] };
+      match[brandKey.slice(5)] = brandKey;
+    }
+    const mine = myLogoVariant(logo, model);
+    byId.set(brandKey, model
+      ? { ...brand, mineModels: [...(brand.mineModels || []), mine] }
+      : { ...brand, mine });
+  }
+  return { ...registry, byId, match };
 }
 
 function viewBoxAspect(svgText) {

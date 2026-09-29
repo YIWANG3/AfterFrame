@@ -22,8 +22,8 @@ import { createDefaultLayer, createOverlayLayer, createStickerLayer, measureText
 import { FRAME_FONTS } from "./editor/frameTemplates";
 import { isFrameLayer } from "./editor/layerStack";
 import { outputGeometry } from "./editor/frameUserTemplates";
-import { backgroundLightness, layerBoxes, placeLogo, placeText } from "./editor/logoPlacement";
-import { invalidatePersonalLogos, preparePersonalLogo } from "./editor/render/personalLogos";
+import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from "./editor/logoPlacement";
+import { invalidatePersonalLogos, isPersonalLogoRef, preparePersonalLogo } from "./editor/render/personalLogos";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
 import ToolRail from "./editor/components/ToolRail";
@@ -873,6 +873,82 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setSelectedIds(new Set([layer.id]));
   }
 
+  // The camera's logo into the frame, as templates show it: one of the
+  // brand's marks (`variant`: Sony's "symbol" α or its "wordmark"; or the logo
+  // the camera was given), placed like my logos and coloured for what is
+  // behind it. A template finds it again for the next photo's camera.
+  async function placeCameraLogo(variant) {
+    const source = transformedPreview;
+    const tool = frameToolRef.current;
+    if (!source || !tool?.cameraLogo) return;
+    const s = editorStateRef.current;
+    const pad = s.canvas?.pad || {};
+    const fullW = source.width || source.naturalWidth;
+    const fullH = source.height || source.naturalHeight;
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
+    const ref = { variant: variant || "wordmark", kind: null, strict: false, color: "#141414" };
+    const probe = await tool.brandLogoFor(ref);
+    if (!probe) return;
+    const spot = placeLogo({
+      geom, pad, aspect: probe.naturalWidth / Math.max(1, probe.naturalHeight),
+      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
+    });
+    const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
+    if (light < 0.55) ref.color = "#ffffff";
+    const img = (await tool.brandLogoFor(ref)) || probe;
+    stickerImageCache.set(img.src, img);
+    const layer = createStickerLayer(
+      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: await tool.cameraLogoLabel() },
+      {
+        x: (spot.cx - geom.left + geom.cropX) / fullW,
+        y: (spot.cy - geom.top + geom.cropY) / fullH,
+        scale: spot.width / fullW,
+        logoRef: ref,
+        fromPreset: true, // part of the frame
+      },
+    );
+    commitLayers([...layersRef.current, layer]);
+    setSelectedIds(new Set([layer.id]));
+  }
+
+  // Give the camera's brand, or just its model, one of my logos (null: take
+  // that choice back). The
+  // camera logos already in this frame follow, each keeping its end of the
+  // bar and its weight (swapLogo); one with no logo now is taken out. A frame
+  // that had none gets the new logo placed.
+  async function chooseCameraLogo(logo, scope) {
+    const tool = frameToolRef.current;
+    if (!tool) return;
+    const logoId = logo?.id || null;
+    await tool.setCameraLogo(logoId, scope);
+    const source = transformedPreview;
+    if (!source) return;
+    const fullW = source.width || source.naturalWidth;
+    const fullH = source.height || source.naturalHeight;
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad: editorStateRef.current.canvas?.pad || {} });
+    const isCameraLogo = (layer) => layer.type === "sticker" && layer.logoRef && !isPersonalLogoRef(layer.logoRef);
+    const layers = layersRef.current;
+    if (!layers.some(isCameraLogo)) {
+      if (logoId) await placeCameraLogo();
+      return;
+    }
+    const sourceLabel = await frameToolRef.current.cameraLogoLabel();
+    const next = [];
+    for (const layer of layers) {
+      if (!isCameraLogo(layer)) { next.push(layer); continue; }
+      const img = await frameToolRef.current.brandLogoFor(layer.logoRef);
+      if (!img) continue;
+      stickerImageCache.set(img.src, img);
+      next.push({
+        ...layer,
+        ...swapLogo({ layer, geom, aspect: img.naturalWidth / Math.max(1, img.naturalHeight) }),
+        stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel,
+      });
+    }
+    commitLayers(next);
+    setSelectedIds((ids) => new Set([...ids].filter((id) => next.some((l) => l.id === id))));
+  }
+
   // Photo info or free text into the frame: a bar's left end (then its
   // centre, its right end), dark on a light background and light on a dark
   // one; with no bar, the photo's bottom-left corner. Returns whether there
@@ -1537,6 +1613,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 })}
                 onAddFrameText={() => addFrameText({ text: t("frame.newText") })}
                 onPlaceLogo={(logo) => placePersonalLogo(logo)}
+                cameraLogo={frameTool.cameraLogo}
+                brandLogos={frameTool.brandLogos}
+                onPlaceCameraLogo={(variant) => placeCameraLogo(variant)}
+                onChooseCameraLogo={(logo, scope) => chooseCameraLogo(logo, scope)}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
                 onCanvasPad={(patch) => {

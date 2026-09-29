@@ -347,6 +347,8 @@ def build_parser() -> argparse.ArgumentParser:
     facet_values_p.add_argument("--filters", default=None, help="JSON object of the active facet filters")
     facet_values_p.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
 
+    subparsers.add_parser("camera-makes", parents=[common])
+
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
     search_facet_p.add_argument("--field", choices=["tag", "camera", "lens", "city"], required=True)
     search_facet_p.add_argument("--q", default="")
@@ -1490,6 +1492,12 @@ def _cmd_facet_values(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_camera_makes(args, connection, catalog, parser):
+    from .db import camera_makes
+    print(json.dumps(camera_makes(connection), ensure_ascii=False))
+    return 0
+
+
 def _cmd_search_facet(args, connection, catalog, parser):
     from .db import search_facet_values
     print(json.dumps(search_facet_values(
@@ -2210,6 +2218,7 @@ COMMAND_HANDLERS = {
     "refresh-assets": _cmd_refresh_assets,
     "facet-values": _cmd_facet_values,
     "search-facet": _cmd_search_facet,
+    "camera-makes": _cmd_camera_makes,
     "browse-images": _cmd_browse_images,
     "locate-image-asset": _cmd_locate_image_asset,
     "browse-map-points": _cmd_browse_map_points,

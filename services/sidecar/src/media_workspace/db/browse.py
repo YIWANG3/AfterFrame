@@ -490,6 +490,43 @@ def search_facet_values(
     return [{"value": r["v"], "count": r["c"]} for r in rows]
 
 
+def camera_makes(connection: sqlite3.Connection) -> list[dict[str, object]]:
+    """Every camera make in the library, as EXIF writes it ("Canon", "LEICA
+    CAMERA AG"), with how many photos it has and its models, most used first:
+    Settings › Watermark lists them to pick each brand's frame logo. The RAW's
+    make wins over the paired JPEG's, as the editor reads it."""
+    rows = connection.execute(
+        f"""
+        SELECT make, model, COUNT(*) AS c FROM (
+            SELECT
+                COALESCE(
+                    NULLIF(TRIM(json_extract(raw.metadata_json, '$.camera_make')), ''),
+                    NULLIF(TRIM(json_extract(assets.metadata_json, '$.camera_make')), '')
+                ) AS make,
+                COALESCE(NULLIF(raw.meta_camera_model, ''), assets.meta_camera_model) AS model
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            LEFT JOIN assets AS raw ON raw.asset_id = registry.raw_asset_id
+            WHERE {_status_clause("all")}
+        )
+        WHERE make IS NOT NULL
+        GROUP BY make, model
+        ORDER BY c DESC, make, model
+        """
+    ).fetchall()
+    counts: dict[str, int] = {}
+    models: dict[str, list[str]] = {}
+    for row in rows:
+        counts[row["make"]] = counts.get(row["make"], 0) + row["c"]
+        models.setdefault(row["make"], [])
+        if row["model"]:
+            models[row["make"]].append(row["model"])
+    return [
+        {"make": make, "count": count, "models": models[make]}
+        for make, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
 def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
     return connection.execute(
         """

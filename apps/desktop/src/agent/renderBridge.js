@@ -16,7 +16,7 @@ import { drawLayersOnCanvas } from "../components/editor/render/drawLayers";
 import { isTextLayer, isStickerLayer, isOverlayLayer } from "../components/editor/layerStack";
 import { createDefaultLayer, createStickerLayer, FONT_OPTIONS, measureTextWidthDOM } from "../components/editor/textState";
 import { FRAME_TEMPLATES } from "../components/editor/frameTemplates";
-import { buildLogoRegistry, prepareLogo } from "../components/editor/render/frameLogos";
+import { loadLogoRegistry, prepareLogoNeed } from "../components/editor/render/brandLogos";
 import { renderFrame, collectLogoNeeds } from "../components/editor/render/frameRender";
 import { exifFromItem } from "../components/editor/state/useFrameTool";
 import { isUserTemplate, logoElementOf, renderUserTemplate } from "../components/editor/frameUserTemplates";
@@ -209,9 +209,8 @@ async function handleFrame(payload) {
   const photo = await loadImage(imagePath);
   const exif = exifFromItem(exifItem || {});
   const profile = (await api.getWatermarkProfile?.().catch(() => null)) || {};
-  const res = await api.getFrameLogos();
-  const registry = res ? buildLogoRegistry(res.manifest) : { byId: new Map() };
-  const svgs = res?.svgs || {};
+  // Built-in marks with the user's choice of logo for each brand.
+  const { registry, svgs } = await loadLogoRegistry();
   const logoImages = new Map();
   if (typeof document !== "undefined" && document.fonts?.ready) {
     try { await document.fonts.ready; } catch { /* fonts are best-effort */ }
@@ -223,15 +222,8 @@ async function handleFrame(payload) {
     ? { elements: template.layers.filter((l) => l.logoRef && !isPersonalLogoRef(l.logoRef)).map((l) => logoElementOf(l.logoRef)) }
     : template;
   for (const need of collectLogoNeeds(logoTemplate, exif, registry, { outH: photo.naturalHeight })) {
-    const svg = svgs[need.file];
-    if (svg) {
-      logoImages.set(need.key, await prepareLogo(svg, {
-        color: need.color,
-        colorLocked: need.colorLocked,
-        tintableColors: need.tintableColors,
-        heightPx: need.heightPx,
-      }));
-    }
+    const img = await prepareLogoNeed(need, svgs);
+    if (img) logoImages.set(need.key, img);
   }
   let canvas;
   if (isUserTemplate(template)) {

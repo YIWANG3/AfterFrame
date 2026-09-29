@@ -9,6 +9,8 @@
 // insets (0.05 of 1.5 × the short edge). Everything is in output pixels
 // (frameUserTemplates.outputGeometry).
 
+import { logoHeightFactor } from "./render/frameLogos";
+
 const INSET = 0.075; // of the short edge: the built-in bars' 0.05 × 1.5
 const IN_BAND = 0.4; // of the band's height
 const MAX_BAND_WIDTH = 0.45; // of the band's width, for a very wide logo
@@ -146,6 +148,29 @@ export function placeText({ geom, pad, widthAt, occupied = [], scale = 1 }) {
   const cy = band ? band.y + band.h / 2 : g.top + g.contentH - inset - height / 2;
   const spot = slide({ from: 1, left, right, cy, width, height, occupied, gap: GAP * g.short });
   return { ...spot, fontPx, region: edge || "photo" };
+}
+
+/**
+ * A logo layer given another image (its brand's logo was changed): the same
+ * visual weight (heights scaled by logoHeightFactor of each shape, as
+ * templates size marks) and the same end held, the one nearer its side of
+ * the output (a bar's left or right end), else its centre.
+ * @param {object} args.layer  the STORED sticker layer
+ * @param {object} args.geom   outputGeometry() of the photo being edited
+ * @param {number} args.aspect the new image's width / height
+ * @returns {{ x: number, scale: number }} stored x and scale
+ */
+export function swapLogo({ layer, geom, aspect }) {
+  const g = geom;
+  const oldW = (layer.scale ?? 0.4) * g.fullW;
+  const oldAspect = layer.naturalWidth && layer.naturalHeight ? layer.naturalWidth / layer.naturalHeight : 1;
+  const height = (oldW / oldAspect) * (logoHeightFactor(aspect) / logoHeightFactor(oldAspect));
+  const width = height * aspect;
+  const cx = layer.x * g.fullW - g.cropX + g.left;
+  let nextCx = cx;
+  if (cx < g.outW * 0.4) nextCx = cx - oldW / 2 + width / 2;
+  else if (cx > g.outW * 0.6) nextCx = cx + oldW / 2 - width / 2;
+  return { x: (nextCx - g.left + g.cropX) / g.fullW, scale: width / g.fullW };
 }
 
 /** A canvas background's lightness, 0 (black) to 1 (white): a gradient's is

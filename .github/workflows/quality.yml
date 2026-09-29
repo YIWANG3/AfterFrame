@@ -135,6 +135,7 @@ jobs:
           e2e/53-smart-collections-v2.spec.js
           e2e/54-frame-user-templates.spec.js
           e2e/55-personal-logos.spec.js
+          e2e/56-brand-logos.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

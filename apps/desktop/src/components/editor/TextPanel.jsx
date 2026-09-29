@@ -73,6 +73,12 @@ export default function TextPanel({
   onAddFrameInfo,
   onAddFrameText,
   onPlaceLogo,
+  // This photo's camera logo (useFrameTool.cameraLogo): place it, or give
+  // the brand one of my logos (null: its own back). Shown first among the logos.
+  cameraLogo,
+  brandLogos,
+  onPlaceCameraLogo,
+  onChooseCameraLogo,
   canvasPad,
   onCanvasPad,
   onCanvasPadCommit,
@@ -291,7 +297,17 @@ export default function TextPanel({
                   {t(tokenMissing === "author" ? "text.tokens.noAuthor" : "text.tokens.missing")}
                 </div>
               )}
-              {onPlaceLogo && <div className="mt-3"><MyLogosRow onPlace={onPlaceLogo} /></div>}
+              {onPlaceLogo && (
+                <div className="mt-3">
+                  <MyLogosRow
+                    onPlace={onPlaceLogo}
+                    cameraLogo={cameraLogo}
+                    brandLogos={brandLogos}
+                    onPlaceCameraLogo={onPlaceCameraLogo}
+                    onChooseCameraLogo={onChooseCameraLogo}
+                  />
+                </div>
+              )}
             </Section>
             <Section label={t("frame.layers")}>
               {ownLayers.length === 0 && <div className="text-[10.5px] leading-snug text-muted2">{t("frame.layersEmpty")}</div>}

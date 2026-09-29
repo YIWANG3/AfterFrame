@@ -33,6 +33,7 @@ from .browse import (
     _browse_order_clause,
     _facet_clauses,
     browse_collection,
+    camera_makes,
     get_facet_values,
     get_image_asset_detail,
     get_image_asset_detail_by_path,
