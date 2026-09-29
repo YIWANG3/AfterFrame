@@ -229,7 +229,7 @@ MCP：`search_assets` 和智能合集规则都接受 `rating_max`、`exclude`（
 > - **MCP**：`get_editor_capabilities` 的 `frame_templates` 带上用户模板（`user: true`），`apply_frame` 用 `renderUserTemplate` 走图层路径。
 > - **设置迁移**：新增「水印」分区，带作者名和模板；模板按 id 合并，文件里的空作者名不覆盖本机。
 > - 测试：`frameUserTemplates.test.js`、`settingsTransfer.test.js`、e2e 54（保存、重启、改名、竖幅异机套用并按原尺寸保存、MCP、设置里删除）。
-> - **我的 logo（第 7 步）**：导入 SVG 或 PNG（主进程文件选择，SVG ≤ 1 MB、PNG ≤ 10 MB，最多 50 个），在主进程用 sharp 统一转成 PNG：SVG 由 librsvg 渲染（不执行脚本；以 buffer 传入，没有外部引用），所以 SVG 文本从不进入渲染进程或 `media://`，也就不需要文本层面的清洗。裁掉透明留白，按高 1200 px 存进 `userData/afterframe/personal-logos/`，清单是 `personal-logos.json`。透明底且可见像素为单色的，标为可换色，渲染时用画布 source-in 着色（和品牌 logo 一样）。编辑器「文字 › 图层 › 我的 logo」放置（原色 / 黑 / 白），图层带 `logoRef: {source: "personal", id, color}`，模板只存引用。设置 › 水印里可导入、改名、删除；删掉的 logo 在模板里直接跳过。**导出设置不打包 logo 文件（用户 2026-09-29 拍板）**，所以换机后模板里的个人 logo 会缺席。web 版没有导入。逻辑：`electron/personalLogos.js`（有单测）、`render/personalLogos.js`；e2e 55。
+> - **我的 logo（第 7 步）**：导入 SVG 或 PNG（主进程文件选择，SVG ≤ 1 MB、PNG ≤ 10 MB，最多 50 个），在主进程用 sharp 统一转成 PNG：SVG 由 librsvg 渲染（不执行脚本；以 buffer 传入，没有外部引用），所以 SVG 文本从不进入渲染进程或 `media://`，也就不需要文本层面的清洗。裁掉透明留白，按高 1200 px 存进 `userData/afterframe/personal-logos/`，清单是 `personal-logos.json`。透明底且可见像素为单色的，标为可换色，渲染时用画布 source-in 着色（和品牌 logo 一样）。编辑器「文字 › 边框 › 我的 logo」点一下就放进边框（`logoPlacement.js`：有底栏放底栏右端，右端已有东西就让到中间、再到左端，高为底栏 40%；没有边框放照片右下角；可换色的按背景深浅配黑或白），也可以把 SVG / PNG 直接拖进编辑器导入并放好。图层带 `logoRef: {source: "personal", id, color}`，模板只存引用。设置 › 水印里也能导入、改名、删除（次要入口）；删掉的 logo 在模板里直接跳过。**导出设置不打包 logo 文件（用户 2026-09-29 拍板）**，所以换机后模板里的个人 logo 会缺席。web 版没有导入。逻辑：`electron/personalLogos.js`（有单测）、`render/personalLogos.js`；e2e 55。
 
 **两个会改变范围的发现**
 

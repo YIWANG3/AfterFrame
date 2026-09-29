@@ -19,6 +19,7 @@ import { bgToCss } from "../render/canvasHelpers";
 import { isUserTemplate } from "../frameUserTemplates";
 import InlineEdit from "../../InlineEdit";
 import { confirm } from "../../confirm";
+import MyLogosRow from "./MyLogosRow";
 
 const EDGE_KEYS = ["top", "bottom", "left", "right"];
 const EDGE_ICON = { top: PanelTop, bottom: PanelBottom, left: PanelLeft, right: PanelRight };
@@ -27,7 +28,7 @@ const DEFAULT_GRAD = { from: "#ffffff", to: "#000000", fromOpacity: 1, toOpacity
 
 export default function BorderControls({
   templates = [], thumbs, cellAspect, onApplyPreset, onClearPreset, pad, onPad, onPadCommit, bg, onBg,
-  onSaveTemplate, onRenameTemplate, onDuplicateTemplate, onDeleteTemplate,
+  onSaveTemplate, onRenameTemplate, onDuplicateTemplate, onDeleteTemplate, onPlaceLogo,
 }) {
   const { t } = useTranslation("editor");
   // A name being typed: { id: null } saves the current look as a new template,
@@ -154,6 +155,8 @@ export default function BorderControls({
           </div>
         )}
       </div>
+
+      {onPlaceLogo && <MyLogosRow onPlace={onPlaceLogo} />}
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between text-[10px] text-muted2">

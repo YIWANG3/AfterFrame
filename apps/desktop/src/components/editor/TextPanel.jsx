@@ -7,7 +7,7 @@ import {
   Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend, Braces, Stamp, Plus,
+  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend, Braces,
   PanelTop, PanelBottom, PanelLeft, PanelRight,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
@@ -17,7 +17,6 @@ import { localFileUrl as mediaUrlFor } from "../../utils/format";
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
-import { invalidatePersonalLogos, loadPersonalLogos, preparePersonalLogo } from "./render/personalLogos";
 import { isTextLayer, isStickerLayer, isOverlayLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
@@ -67,6 +66,8 @@ export default function TextPanel({
   onDeleteTemplate,
   // Photo info as a text layer: resolves a token source for this photo.
   resolveTokenSource,
+  // My logos: put one in the frame (the editor picks the spot and colour).
+  onPlaceLogo,
   canvasPad,
   onCanvasPad,
   onCanvasPadCommit,
@@ -129,36 +130,6 @@ export default function TextPanel({
     const nl = createDefaultLayer({ text, tokenSource: source });
     onLayersChange([...layers, nl]);
     onSelectionChange(new Set([nl.id]));
-  };
-
-  // "My logo": the user's own logos (Settings › Watermark). One placed here
-  // keeps a logoRef, not just pixels, so a saved template carries it.
-  const [logoMenuOpen, setLogoMenuOpen] = useState(false);
-  const [personalLogos, setPersonalLogos] = useState(null);
-  const [logoError, setLogoError] = useState(null);
-  useEffect(() => {
-    if (!logoMenuOpen) return undefined;
-    let alive = true;
-    loadPersonalLogos({ fresh: true }).then((list) => { if (alive) setPersonalLogos(list); });
-    return () => { alive = false; };
-  }, [logoMenuOpen]);
-  const addPersonalLogo = async (logo, color) => {
-    const img = await preparePersonalLogo(logo, color);
-    const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
-    const nl = createStickerLayer(
-      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: logo.name },
-      { logoRef: { source: "personal", id: logo.id, color: color || null }, scale: Math.min(0.35, 0.06 * aspect) },
-    );
-    onLayersChange([...layers, nl]);
-    onSelectionChange(new Set([nl.id]));
-  };
-  const importPersonalLogo = async () => {
-    setLogoError(null);
-    const res = await api.importPersonalLogo();
-    if (res?.error) { setLogoError(res); return; }
-    if (res?.canceled) return;
-    invalidatePersonalLogos();
-    setPersonalLogos(await loadPersonalLogos({ fresh: true }));
   };
 
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
@@ -281,6 +252,7 @@ export default function TextPanel({
               onRenameTemplate={onRenameTemplate}
               onDuplicateTemplate={onDuplicateTemplate}
               onDeleteTemplate={onDeleteTemplate}
+              onPlaceLogo={onPlaceLogo}
               pad={canvasPad}
               onPad={onCanvasPad}
               onPadCommit={onCanvasPadCommit}
@@ -423,62 +395,9 @@ export default function TextPanel({
             {resolveTokenSource && (
               <IconBtn icon={Braces} title={t("text.insertInfo")} onClick={() => { setTokenMenuOpen((v) => !v); setTokenMissing(null); }} />
             )}
-            <IconBtn icon={Stamp} title={t("text.myLogo.title")} onClick={() => { setLogoMenuOpen((v) => !v); setLogoError(null); }} />
             <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />
           </div>
         }>
-          {logoMenuOpen && (
-            <div className="mb-2" data-personal-logo-menu="true">
-              <div className="grid grid-cols-3 gap-1.5">
-                {(personalLogos || []).map((logo) => (
-                  <div key={logo.id} className="flex flex-col gap-0.5" data-personal-logo={logo.id}>
-                    <button
-                      type="button"
-                      title={logo.name}
-                      onClick={() => addPersonalLogo(logo, null)}
-                      className="flex h-10 items-center justify-center rounded-md border border-border/60 bg-app p-1.5 transition-colors hover:border-border"
-                    >
-                      <img src={mediaUrlFor(logo.path)} alt={logo.name} className="max-h-full max-w-full object-contain" />
-                    </button>
-                    {logo.tintable && (
-                      <div className="flex justify-center gap-1">
-                        {LOGO_TINTS.map((tint) => (
-                          <button
-                            key={tint.color}
-                            type="button"
-                            data-logo-tint={tint.key}
-                            title={t(`text.myLogo.${tint.key}`)}
-                            onClick={() => addPersonalLogo(logo, tint.color)}
-                            className="h-3 w-3 rounded-full border border-border/70"
-                            style={{ background: tint.color }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {api.has("importPersonalLogo") && (
-                  <button
-                    type="button"
-                    data-import-personal-logo="true"
-                    onClick={importPersonalLogo}
-                    className="flex h-10 items-center justify-center gap-1 rounded-md border border-dashed border-border/70 text-[10.5px] text-muted transition-colors hover:border-border hover:text-text"
-                  >
-                    <Plus className="h-3 w-3" />
-                    {t("text.myLogo.import")}
-                  </button>
-                )}
-              </div>
-              {personalLogos && personalLogos.length === 0 && (
-                <div className="mt-1 text-[10.5px] leading-snug text-muted2">{t("text.myLogo.empty")}</div>
-              )}
-              {logoError && (
-                <div className="mt-1 text-[10.5px] text-error">
-                  {t(`text.myLogo.errors.${logoError.error}`, { message: logoError.message || "", defaultValue: t("text.myLogo.errors.failed", { message: logoError.error }) })}
-                </div>
-              )}
-            </div>
-          )}
           {tokenMenuOpen && (
             <div className="mb-2" data-token-menu="true">
               <div className="flex flex-wrap gap-1">
@@ -817,9 +736,6 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
     </div>
   );
 }
-
-// A one-colour logo can be dropped in black or white as well as as drawn.
-const LOGO_TINTS = [{ key: "black", color: "#141414" }, { key: "white", color: "#ffffff" }];
 
 // What "Insert photo info" offers, as the token sources frame templates use.
 const TOKEN_SOURCES = {

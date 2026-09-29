@@ -1,7 +1,8 @@
 // My logos (docs/next-features-plan.md §E step 7): import your own SVG or PNG,
-// place it on a frame (recoloured when it is one colour), save that as a
-// template, and it travels with the template, onto another photo and through
-// apply_frame. Deleting the logo leaves the templates working without it.
+// click it in the editor's Border section and it goes into the frame, beside
+// what is already there and in a colour that suits the background; save that
+// as a template and it travels with the template, onto another photo and
+// through apply_frame. Deleting the logo leaves the templates working without it.
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
@@ -43,6 +44,14 @@ async function openWatermarkSettings() {
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
 }
 const personalLayers = (state) => state.layers.filter((l) => l.logoRef?.source === "personal");
+// The portrait (2064×2400) framed by the template: the middle of its bottom
+// bar, where the logo sits, is the logo's black.
+async function darkAtBarCentre(file, tpl) {
+  const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
+  const y = Math.round(2400 + (tpl.canvas.pad.bottom * 2064) / 2);
+  const at = (y * info.width + Math.round(info.width / 2)) * info.channels;
+  return Math.max(data[at], data[at + 1], data[at + 2]) < 60;
+}
 
 test.beforeAll(async () => {
   // A one-colour mark (its <script> is never run: the file is rasterized) and a two-colour one.
@@ -75,15 +84,36 @@ test("an SVG and a PNG import; one colour can be recoloured, two cannot; junk is
   await window.keyboard.press("Escape");
 });
 
-test("placed in black on a bar and saved as a template, the logo goes with the template", async () => {
+test("clicked in the Border section, it goes into the frame, beside what is there, in a colour that suits it", async () => {
+  const tile = () => window.locator(`[data-my-logo="${svgLogo.id}"] > button`).first();
+  const placed = async () => personalLayers(await editorState())[0];
   await openEditorOn(LANDSCAPE);
-  await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
-  await window.getByTitle("My logo").click();
-  await window.locator(`[data-personal-logo="${svgLogo.id}"] [data-logo-tint="black"]`).click();
+
+  // No frame: the photo's bottom-right corner, coloured for the photo there.
+  await tile().click();
   await expect.poll(async () => personalLayers(await editorState()).length).toBe(1);
-  expect(personalLayers(await editorState())[0]).toMatchObject({
-    stickerPathKind: "data", logoRef: { source: "personal", id: svgLogo.id, color: "#141414" },
-  });
+  const corner = await placed();
+  expect(corner.x).toBeGreaterThan(0.75);
+  expect(corner.y).toBeGreaterThan(0.8);
+  expect(corner.y).toBeLessThan(1);
+  expect(["#ffffff", "#141414"]).toContain(corner.logoRef.color);
+  await window.keyboard.press("Delete"); // it was selected on placing
+  await expect.poll(async () => personalLayers(await editorState()).length).toBe(0);
+
+  // A dark bar: into the bar, white.
+  await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-dark"));
+  await tile().click();
+  await expect.poll(async () => (await placed())?.logoRef?.color).toBe("#ffffff");
+  expect((await placed()).y).toBeGreaterThan(1); // below the photo: in the bar
+  await window.keyboard.press("Delete");
+
+  // A white bar whose right end holds the camera's logo: the bar's centre, black.
+  await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
+  await tile().click();
+  await expect.poll(async () => (await placed())?.logoRef?.color).toBe("#141414");
+  expect((await placed()).y).toBeGreaterThan(1);
+  expect(Math.abs((await placed()).x - 0.5)).toBeLessThan(0.02);
+  expect(await placed()).toMatchObject({ stickerPathKind: "data", logoRef: { source: "personal", id: svgLogo.id } });
 
   await window.locator("[data-save-frame-template]").click();
   await window.locator("[data-frame-template-name] input").fill("With my logo");
@@ -94,16 +124,13 @@ test("placed in black on a bar and saved as a template, the logo goes with the t
   expect(JSON.stringify(tpl)).not.toContain("data:");
   await closeEditor();
 
-  // Another photo, another shape: the logo is there, black, where it was
-  // pinned: the centre of the whole output, bar included.
+  // Another photo, another shape: the logo is in the middle of its bar, black.
   await openEditorOn(PORTRAIT);
   await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
   await expect.poll(async () => personalLayers(await editorState()).length).toBe(1);
   const out = path.join(tmp, "portrait-with-logo.jpg");
   await window.evaluate(async (p) => { await window.__afterframeTest.saveAs(p); }, out);
-  const { data, info } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
-  const at = (Math.round(info.height / 2) * info.width + Math.round(info.width / 2)) * info.channels;
-  expect(Math.max(data[at], data[at + 1], data[at + 2])).toBeLessThan(60);
+  expect(await darkAtBarCentre(out, tpl)).toBe(true);
   await closeEditor();
 });
 
@@ -113,9 +140,7 @@ test("an agent's apply_frame renders the template with the logo", async () => {
   const portrait = await rowFor(PORTRAIT);
   const { results: [result] } = await tool("apply_frame", { asset_ids: [portrait.asset_id], template: tpl.id });
   expect(result.error).toBeUndefined();
-  const { data, info } = await sharp(result.path).raw().toBuffer({ resolveWithObject: true });
-  const at = (Math.round(info.height / 2) * info.width + Math.round(info.width / 2)) * info.channels;
-  expect(Math.max(data[at], data[at + 1], data[at + 2])).toBeLessThan(60);
+  expect(await darkAtBarCentre(result.path, tpl)).toBe(true);
 });
 
 test("deleting the logo leaves the template working without it", async () => {

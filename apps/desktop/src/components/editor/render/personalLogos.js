@@ -28,10 +28,19 @@ export function loadPersonalLogos({ fresh = false } = {}) {
   return listPromise;
 }
 
-/** Forget cached logos and pixels (the list changed). */
+const listeners = new Set();
+/** Called whenever the list changes (an import, a rename, a delete); returns
+ *  the unsubscribe. */
+export function subscribePersonalLogos(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Forget cached logos and pixels (the list changed), and tell the views. */
 export function invalidatePersonalLogos() {
   listPromise = null;
   imageCache.clear();
+  for (const listener of listeners) listener();
 }
 
 export const personalLogoKey = (ref) => `personal:${ref.id}:${ref.color || "orig"}`;

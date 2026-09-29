@@ -310,7 +310,7 @@
     "deleteTitle": "Delete template “{{name}}”?",
     "deleteMessage": "Photos already framed with it stay as they are.",
     "logosTitle": "My logos",
-    "logosSubtitle": "Place one from the editor: Text › Layers › My logo. SVG or PNG; a one-colour logo on a transparent background can be recoloured. Settings export does not include logo files.",
+    "logosSubtitle": "Put one in a frame from the editor: Text › Border › My logos (or drag an SVG/PNG into the editor). A one-colour logo on a transparent background is recoloured to suit where it goes. Settings export does not include logo files.",
     "importLogo": "Import logo…",
     "rename": "Rename",
     "logoTintable": "Recolourable",

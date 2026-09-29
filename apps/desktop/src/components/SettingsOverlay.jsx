@@ -56,6 +56,18 @@ export default function SettingsOverlay({
   useEffect(() => {
     if (open && !rootRef.current?.contains(document.activeElement)) rootRef.current?.focus({ preventScroll: true });
   }, [open]);
+  // Focus can still fall back to <body> (a field blurred on Enter, a dialog
+  // closed): keys aimed at nothing in particular are Settings' too.
+  useEffect(() => {
+    if (!open) return undefined;
+    function onKey(e) {
+      if (e.target !== document.body && e.target !== document.documentElement) return;
+      e.stopPropagation();
+      if (e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key === ",")) { e.preventDefault(); onClose?.(); }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
 
   if (!open) return null;
 
