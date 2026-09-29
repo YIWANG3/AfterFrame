@@ -51,6 +51,10 @@ test.beforeAll(async () => {
     await bridge.setAssetRating(rows.slice(5).map((r) => r.asset_id), 0);
     return folder.collection_id;
   });
+  // Made over the bridge, not the sidebar: the app's folder list only learns
+  // of it on a reload (a launch-time list could otherwise answer after it).
+  await ctx.window.evaluate(() => window.__afterframeTest.refresh());
+  await expect(ctx.window.getByTestId("sidebar-folder-scroll").getByText("Published", { exact: true })).toBeVisible();
   await ctx.window.getByRole("button", { name: "Filters" }).click();
 });
 
