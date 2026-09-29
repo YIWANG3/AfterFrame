@@ -21,6 +21,7 @@
   "images": "Images",
   "cell": "Cell {{n}}",
   "export": "Export",
+  "addToFolder": "Add to \u201c{{name}}\u201d",
   "reset": "Reset",
   "zoom": "Zoom",
   "zoomIn": "Zoom in",

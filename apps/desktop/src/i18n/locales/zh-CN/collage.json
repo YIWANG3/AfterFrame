@@ -21,6 +21,7 @@
   "images": "图片",
   "cell": "单元格 {{n}}",
   "export": "导出",
+  "addToFolder": "导出后加入「{{name}}」",
   "reset": "重置",
   "zoom": "缩放",
   "zoomIn": "放大",

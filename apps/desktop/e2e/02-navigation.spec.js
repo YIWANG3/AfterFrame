@@ -63,4 +63,64 @@ test.describe("Sidebar navigation", () => {
     // restore
     await window.getByRole("button", { name: /All Assets/i }).first().click();
   });
+
+  // Leaving a folder. The status entries used to mark the library as "already
+  // shown" before going there (clearCollection reload:false), so the grid was
+  // cleared for the new place and then never browsed: All Assets opened as
+  // "No assets in this view" until a filter was toggled. The same mark, set on
+  // the way to Discover or People, left the folder's photos on screen under
+  // the All Assets title afterwards.
+  test.describe("leaving a folder", () => {
+    const cards = () => window.locator("[data-gallery-item='true']");
+    const cardIds = () => cards().evaluateAll((els) => els.map((el) => el.dataset.assetId).sort());
+    let library; // every asset in the seeded catalog
+    let members; // the two put in the folder
+
+    test.beforeAll(async () => {
+      await window.getByRole("button", { name: /All Assets/i }).first().click();
+      await expect(cards().first()).toBeVisible({ timeout: 10_000 });
+      await window.getByTitle("New folder").click();
+      const nameInput = window.getByRole("navigation").locator("input");
+      await nameInput.fill("Leave me");
+      await nameInput.press("Enter");
+      await expect(window.getByRole("button", { name: /^Leave me/ })).toBeVisible();
+      ({ library, members } = await window.evaluate(async () => {
+        const bridge = window.mediaWorkspace;
+        const rows = await bridge.browseImages({ status: "all", limit: 1000 });
+        const folder = (await bridge.listCollections()).find((c) => c.name === "Leave me");
+        const picked = rows.slice(0, 2).map((r) => r.asset_id);
+        await bridge.collectionAddItems(folder.collection_id, picked);
+        return { library: rows.map((r) => r.asset_id).sort(), members: [...picked].sort() };
+      }));
+      expect(library.length).toBeGreaterThan(2);
+    });
+
+    const openFolder = async () => {
+      await window.getByRole("button", { name: /^Leave me/ }).click();
+      await expect(cards()).toHaveCount(2);
+      expect(await cardIds()).toEqual(members);
+    };
+    // The whole library, by id: neither empty nor the folder's two.
+    const expectLibrary = async () => {
+      await expect(window.getByTestId("gallery-title")).toHaveText("All Assets");
+      await expect(cards()).toHaveCount(library.length, { timeout: 10_000 });
+      expect(await cardIds()).toEqual(library);
+      await expect(window.getByText("No assets in this view")).toHaveCount(0);
+    };
+
+    test("All Assets shows the library again, not an empty grid", async () => {
+      await openFolder();
+      await window.getByRole("button", { name: /All Assets/i }).first().click();
+      await expectLibrary();
+    });
+
+    test("All Assets after a detour through Discover or People shows the library, not the folder", async () => {
+      for (const view of ["Discover", "People"]) {
+        await openFolder();
+        await window.getByRole("button", { name: view, exact: true }).click();
+        await window.getByRole("button", { name: /All Assets/i }).first().click();
+        await expectLibrary();
+      }
+    });
+  });
 });

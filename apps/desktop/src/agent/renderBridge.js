@@ -72,7 +72,7 @@ async function handleCollage(payload) {
   const canvas = renderCollagePage({
     images, template,
     canvasRatio: canvasRatio || 1,
-    gap: gap ?? 4,
+    gap: gap ?? 0,
     padding: padding ?? 0,
     borderRadius: borderRadius ?? 0,
     bgColor: bgColor || "#000000",
