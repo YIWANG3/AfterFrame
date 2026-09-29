@@ -101,6 +101,13 @@ export default function App() {
   const [layoutItems, setLayoutItems] = useState([]);
   const [compareState, setCompareState] = useState(null);
   const [collageItems, setCollageItems] = useState(null);
+  // The folder the collage was opened from (null in any other view): its
+  // export can join that folder, so it is taken at open time, not at export.
+  const [collageSourceId, setCollageSourceId] = useState(null);
+  function openCollage(items) {
+    setCollageSourceId(workspace.activeCollectionId || null);
+    setCollageItems(items);
+  }
   const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people"
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -733,7 +740,7 @@ export default function App() {
       }
       case "collage": {
         if (items.length < 2) throw new Error("collage view needs at least 2 asset_ids");
-        setCollageItems(items);
+        openCollage(items);
         return { opened: "collage", count: items.length };
       }
       case "people":
@@ -919,7 +926,7 @@ export default function App() {
     if (!assetIds?.length || assetIds.length < 2) return;
     const items = assetIds.map((id) => itemById.get(id)).filter(Boolean);
     if (items.length < 2) return;
-    setCollageItems(items);
+    openCollage(items);
   }
 
   useEffect(() => {
@@ -1504,6 +1511,8 @@ export default function App() {
         items={collageItems}
         collections={workspace.collections}
         summary={workspace.summary}
+        sourceCollectionId={collageSourceId}
+        onAddToCollection={workspace.addToCollection}
         onClose={() => setCollageItems(null)}
         onExportComplete={async (savePath) => {
           await workspace.refreshAll?.();
