@@ -4,32 +4,36 @@
 // apply_frame both load it here, so a choice shows the same everywhere.
 
 import api from "../../../api";
-import { buildLogoRegistry, labelExif, prepareLogo, withBrandLogos } from "./frameLogos";
+import { loadCameraNameTables } from "./cameraNames";
+import { buildLogoRegistry, cameraNamer, labelExif, prepareLogo, withBrandLogos } from "./frameLogos";
 import { ensurePersonalLogos, loadPersonalLogos, personalLogoKey, subscribePersonalLogos } from "./personalLogos";
 
 /**
- * @returns {Promise<{ base: object, registry: object, svgs: object, brandLogos: object, cameraNames: object, personal: Array }>}
+ * @returns {Promise<{ base: object, registry: object, svgs: object, brandLogos: object, cameraNames: object, namer: object, personal: Array }>}
  *   base: the built-in brands only; registry: with the user's choices;
- *   cameraNames: the user's names for models and unknown brands
+ *   cameraNames: the user's names for models and unknown brands;
+ *   namer: frameLogos.cameraNamer over those names and the name tables
  */
 export async function loadLogoRegistry() {
-  const [res, profile, personal] = await Promise.all([
+  const [res, profile, personal, tables] = await Promise.all([
     api.getFrameLogos(),
     api.getWatermarkProfile?.().catch(() => null),
     loadPersonalLogos(),
+    loadCameraNameTables(),
   ]);
   const base = res ? buildLogoRegistry(res.manifest) : { byId: new Map(), match: {} };
   const brandLogos = profile?.brandLogos || {};
   const cameraNames = profile?.cameraNames || {};
+  const namer = cameraNamer(base, cameraNames, tables);
   return {
-    base, registry: withBrandLogos(base, brandLogos, personal, cameraNames), svgs: res?.svgs || {},
-    brandLogos, cameraNames, personal,
+    base, registry: withBrandLogos(base, brandLogos, personal, namer), svgs: res?.svgs || {},
+    brandLogos, cameraNames, namer, personal,
   };
 }
 
 /** EXIF with the camera's display name, for frame text. */
 export function labelledExif(exif, logos) {
-  return logos ? labelExif(exif, logos.base, logos.cameraNames) : exif;
+  return logos ? labelExif(exif, logos.base, logos.namer) : exif;
 }
 
 /** The image for one collectLogoNeeds() need: a built-in mark drawn from its

@@ -4,6 +4,7 @@ import {
   brandKeyForExif,
   buildLogoRegistry,
   builtInMarks,
+  cameraNamer,
   cameraNamesFor,
   labelExif,
   modelDisplayName,
@@ -150,16 +151,42 @@ describe("partial logo tinting", () => {
 
 describe("what a camera is called", () => {
   const registry = buildLogoRegistry({
-    logos: [{ id: "canon", name: "Canon", variants: [] }, { id: "dji", name: "DJI", variants: [{ id: "wordmark", kind: "wordmark", file: "d.svg" }] }],
-    match: { canon: "canon", dji: "dji" },
+    logos: [
+      { id: "canon", name: "Canon", variants: [] }, { id: "nikon", name: "Nikon", variants: [] },
+      { id: "dji", name: "DJI", variants: [{ id: "wordmark", kind: "wordmark", file: "d.svg" }] },
+    ],
+    match: { canon: "canon", nikon: "nikon", dji: "dji" },
   });
 
-  it("shows EXIF as written, except Canon's second-generation m2", () => {
+  it("rules: Canon's m2, Nikon's _2, Sony's ILCE codes; anything else as EXIF writes it", () => {
     expect(modelDisplayName("canon", "Canon EOS R6m2")).toBe("Canon EOS R6 Mark II");
     expect(modelDisplayName("canon", "Canon EOS R5m2")).toBe("Canon EOS R5 Mark II");
     expect(modelDisplayName("canon", "Canon EOS R6 Mark III")).toBe("Canon EOS R6 Mark III");
-    expect(modelDisplayName("sony", "ILCE-7CM2")).toBe("ILCE-7CM2");
+    expect(modelDisplayName("nikon", "NIKON Z5_2")).toBe("Nikon Z5II");
+    expect(modelDisplayName("nikon", "NIKON Z 6_3")).toBe("Nikon Z 6III");
+    expect(modelDisplayName("nikon", "NIKON Z 8")).toBe("NIKON Z 8");
+    expect(modelDisplayName("sony", "ILCE-7CM2")).toBe("Sony α7C II");
+    expect(modelDisplayName("sony", "ILCE-7RM6")).toBe("Sony α7R VI");
+    expect(modelDisplayName("sony", "ILCE-7M4")).toBe("Sony α7 IV");
+    expect(modelDisplayName("sony", "ILCE-7CR")).toBe("Sony α7CR");
+    expect(modelDisplayName("sony", "ILCE-6700")).toBe("Sony α6700");
+    expect(modelDisplayName("sony", "ILCE-7RM4A")).toBe("ILCE-7RM4A"); // no rule fits: as written
     expect(modelDisplayName("hasselblad", "CFV 100C/907X")).toBe("CFV 100C/907X");
+  });
+
+  it("the name tables come before the rules; manual.json before generated.json; the user before both", () => {
+    const tables = {
+      generated: { names: { "nikon corporation": { "nikon z5_2": "Nikon Z5 II (gen)" }, dji: { fc9113: "DJI Air 3S", fc9184: "DJI Air 3S" }, sony: { "ilce-7cm2": "Sony α7C II" } } },
+      manual: { names: { dji: { fc9113: "DJI Air 3S" }, "nikon corporation": { "nikon z5_2": "Nikon Z5II" } }, brands: { "make:yingling innovations pte. ltd.": "Antigravity" } },
+    };
+    const namer = cameraNamer(registry, { "dji#fc8282": "My Air 3" }, tables);
+    expect(cameraNamesFor({ make: "NIKON CORPORATION", camera_model: "NIKON Z5_2" }, registry, namer).modelName).toBe("Nikon Z5II"); // manual
+    expect(cameraNamesFor({ make: "DJI", camera_model: "FC9184" }, registry, namer).modelName).toBe("DJI Air 3S"); // generated
+    expect(cameraNamesFor({ make: "DJI", camera_model: "FC8282" }, registry, namer).modelName).toBe("My Air 3"); // the user
+    expect(cameraNamesFor({ make: "Canon", camera_model: "Canon EOS R6m2" }, registry, namer).modelName).toBe("Canon EOS R6 Mark II"); // the rule
+    expect(cameraNamesFor({ make: "Yingling Innovations Pte. Ltd.", camera_model: "antigravity a1" }, registry, namer).brandName).toBe("Antigravity");
+    // A table's name reaches the brand's other make spellings.
+    expect(cameraNamesFor({ make: "NIKON", camera_model: "NIKON Z5_2" }, registry, namer).modelName).toBe("Nikon Z5II");
   });
 
   it("the user's names win, for a model and for a brand with no built-in logo", () => {
@@ -173,6 +200,17 @@ describe("what a camera is called", () => {
     expect(cameraNamesFor({ make: "", camera_model: "" }, registry)).toBeNull();
     // Frame text reads the display name; matching still reads EXIF.
     expect(labelExif({ make: "DJI", camera_model: "FC9184" }, registry, names)).toMatchObject({ camera_model: "FC9184", camera_label: "Air 3S" });
+  });
+
+  it("models the tables name the same are one camera too: a drone's lenses share its logo", () => {
+    const mine = [{ id: "logo_air", width: 400, height: 100, tintable: true }];
+    const tables = { generated: { names: { dji: { fc9113: "DJI Air 3S", fc9184: "DJI Air 3S", fc8282: "DJI Air 3" } } } };
+    const namer = cameraNamer(registry, {}, tables);
+    expect(namer.sameCamera("dji", "FC9113").sort()).toEqual(["fc9113", "fc9184"]);
+    const reg = withBrandLogos(registry, { "dji#fc9113": "logo_air" }, mine, namer);
+    const brand = reg.byId.get("dji");
+    expect(pickVariant(brand, { variantId: "wordmark", model: "FC9184" })?.personal).toBe("logo_air");
+    expect(pickVariant(brand, { variantId: "wordmark", model: "FC8282" })?.id).toBe("wordmark"); // the Air 3: not the same camera
   });
 
   it("models named the same are one camera: a model logo set on one reaches the other", () => {

@@ -10,7 +10,8 @@ import { useTranslation } from "react-i18next";
 import api from "../../api";
 import { localFileUrl } from "../../utils/format";
 import InlineEdit from "../InlineEdit";
-import { brandKeyForExif, buildLogoRegistry, builtInBrandMarks, modelDisplayName, modelKeyFor, normalizeMake } from "../editor/render/frameLogos";
+import { brandKeyForExif, buildLogoRegistry, builtInBrandMarks, cameraNamer, modelKeyFor, normalizeMake } from "../editor/render/frameLogos";
+import { loadCameraNameTables } from "../editor/render/cameraNames";
 import { setBrandLogo, setCameraName } from "../editor/render/brandLogos";
 import { loadPersonalLogos, subscribePersonalLogos } from "../editor/render/personalLogos";
 import LogoPicker, { LogoMarks } from "../editor/components/LogoPicker";
@@ -45,7 +46,7 @@ function brandRows(makes, base, profile) {
 
 export default function BrandLogosGroup() {
   const { t } = useTranslation("settings");
-  const [data, setData] = useState(null); // { makes, base, svgs, profile }
+  const [data, setData] = useState(null); // { makes, base, svgs, profile, tables }
   const [mine, setMine] = useState([]);
   const [picking, setPicking] = useState(null);
   const [renaming, setRenaming] = useState(null);
@@ -58,11 +59,12 @@ export default function BrandLogosGroup() {
     let alive = true;
     const load = async () => {
       const read = ++readRef.current.latest;
-      const [makes, logos, profile, personal] = await Promise.all([
+      const [makes, logos, profile, personal, tables] = await Promise.all([
         api.listCameraMakes().catch(() => []),
         api.getFrameLogos().catch(() => null),
         api.getWatermarkProfile().catch(() => null),
         loadPersonalLogos(),
+        loadCameraNameTables(),
       ]);
       if (!alive || read !== readRef.current.latest) return;
       setMine(personal);
@@ -71,6 +73,7 @@ export default function BrandLogosGroup() {
         base: buildLogoRegistry(logos?.manifest || { logos: [], match: {} }),
         svgs: logos?.svgs || {},
         profile: { brandLogos: profile?.brandLogos || {}, cameraNames: profile?.cameraNames || {} },
+        tables,
       });
     };
     readRef.current.load = load;
@@ -84,23 +87,24 @@ export default function BrandLogosGroup() {
   if (!api.has("importPersonalLogo") && !mine.length) return null;
 
   const { brandLogos = {}, cameraNames = {} } = data?.profile || {};
+  const namer = data ? cameraNamer(data.base, cameraNames, data.tables) : null;
   const logoOf = (id) => mine.find((logo) => logo.id === id) || null;
   const markOf = (logo) => ({ src: localFileUrl(logo.path), tintable: logo.tintable });
-  // The models of a brand named like `key` (one camera): a choice made on
-  // one is made on them all.
+  // The model keys that are one camera with `key` (named the same): they
+  // share one choice, kept on whichever model it was made on.
   const sameCamera = (key) => {
-    const name = normalizeMake(cameraNames[key]);
-    const brand = key.split("#")[0];
-    return [key, ...Object.keys(cameraNames).filter((other) => name && other !== key
-      && other.startsWith(`${brand}#`) && normalizeMake(cameraNames[other]) === name)];
+    const [brand, model] = key.split("#");
+    return namer.sameCamera(brand, model).map((other) => modelKeyFor(brand, other));
   };
   const modelLogo = (key) => logoOf(brandLogos[key]) || sameCamera(key).map((other) => logoOf(brandLogos[other])).find(Boolean) || null;
 
   async function reload() { await readRef.current.load?.(); }
   async function choose(key, logo) {
     setPicking(null);
-    const keys = key.includes("#") ? sameCamera(key) : [key];
-    for (const each of keys) await setBrandLogo(each, logo?.id || null);
+    if (key.includes("#")) {
+      for (const other of sameCamera(key)) if (other !== key && brandLogos[other]) await setBrandLogo(other, null);
+    }
+    await setBrandLogo(key, logo?.id || null);
     await reload();
   }
   async function rename(key, name) {
@@ -170,7 +174,7 @@ export default function BrandLogosGroup() {
         });
         const brandMine = logoOf(brandLogos[row.key]);
         const brandShown = brandMine ? [markOf(brandMine)] : own;
-        const brandName = cameraNames[row.key] || row.builtIn?.name || row.make;
+        const brandName = namer.brandName(row.key, row.make);
         return (
           <div key={row.key} className="border-b border-border/50 py-2.5 last:border-b-0">
             {line({
@@ -187,7 +191,7 @@ export default function BrandLogosGroup() {
               return line({
                 key, brandKey: row.key, sub: true,
                 own: brandShown, defaultLabel: t("watermark.followBrand"),
-                name: nameCell(key, cameraNames[key] || modelDisplayName(row.key, model), model, true),
+                name: nameCell(key, namer.modelName(row.key, model), model, true),
                 shown: { chosen, marks: chosen ? [markOf(chosen)] : [], empty: t("watermark.followBrand") },
               });
             })}

@@ -7,7 +7,7 @@
 import api from "../../../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES, FRAME_FONTS } from "../frameTemplates";
-import { brandIdForExif, builtInBrandMarks, builtInModelMarks, cameraNamesFor, mineFor, normalizeMake } from "../render/frameLogos";
+import { brandIdForExif, builtInBrandMarks, builtInModelMarks, cameraNamesFor, mineFor, modelKeyFor, normalizeMake } from "../render/frameLogos";
 import { labelledExif, loadLogoRegistry, prepareLogoNeed, setBrandLogo, subscribeBrandLogos } from "../render/brandLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { layersFromDisplay } from "../imageMath";
@@ -225,7 +225,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   function brandLabel(lg, level) {
     const id = brandIdForExif(exif, lg.registry);
     const brand = id ? lg.registry.byId.get(id) : null;
-    const names = cameraNamesFor(exif, lg.base, lg.cameraNames);
+    const names = cameraNamesFor(exif, lg.base, lg.namer);
     if (level === "brand") return brand?.mine?.name || names?.brandName || undefined;
     return mineFor(brand, exif.camera_model)?.name || names?.brandName || undefined;
   }
@@ -236,7 +236,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   // Frame tool's camera logo rows.
   const cameraLogo = useMemo(() => {
     if (!logos) return null;
-    const names = cameraNamesFor(exif, logos.base, logos.cameraNames);
+    const names = cameraNamesFor(exif, logos.base, logos.namer);
     if (!names) return null;
     const builtIn = logos.base.byId.get(names.brandKey) || null;
     const brand = logos.registry.byId.get(names.brandKey);
@@ -282,18 +282,20 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
 
   /** Give this camera's brand ("brand") or its model ("model") one of my
    *  logos, or (null) take that choice back; resolves once the registry has
-   *  been read again. A model named like others (one camera) sets them all. */
+   *  been read again. Models named the same are one camera with one choice,
+   *  kept on this model (the registry lends it to the others). */
   async function setCameraLogo(logoId, scope = "brand") {
     if (!cameraLogo) return;
-    let keys = [cameraLogo.brandKey];
-    if (scope === "model") {
-      if (!cameraLogo.modelKey) return;
-      const names = logos?.cameraNames || {};
-      const mine = normalizeMake(names[cameraLogo.modelKey]);
-      keys = [cameraLogo.modelKey, ...Object.keys(names).filter((key) => mine && key !== cameraLogo.modelKey
-        && key.startsWith(`${cameraLogo.brandKey}#`) && normalizeMake(names[key]) === mine)];
+    if (scope !== "model") await setBrandLogo(cameraLogo.brandKey, logoId);
+    else if (cameraLogo.modelKey) {
+      const { brandKey, model, modelKey } = cameraLogo;
+      const chosen = logos?.brandLogos || {};
+      for (const other of logos?.namer.sameCamera(brandKey, model) || []) {
+        const key = modelKeyFor(brandKey, other);
+        if (key !== modelKey && chosen[key]) await setBrandLogo(key, null);
+      }
+      await setBrandLogo(modelKey, logoId);
     }
-    for (const key of keys) await setBrandLogo(key, logoId);
     await loadLogos();
   }
 

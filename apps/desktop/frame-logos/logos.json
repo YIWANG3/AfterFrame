@@ -230,6 +230,7 @@
     "lumix": "lumix",
     "ricoh": "ricoh",
     "insta360": "insta360",
-    "arashi vision": "insta360"
+    "arashi vision": "insta360",
+    "osmo": "dji"
   }
 }

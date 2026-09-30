@@ -1,6 +1,6 @@
 # DJI camera model codes (EXIF)
 
-What DJI drones and handhelds write in EXIF `Make` / `Model`, per camera. Researched 2026-09-30 from Wikimedia Commons file metadata (and its table [DJI camera model names](https://commons.wikimedia.org/wiki/DJI_camera_model_names)), lensfun, Flickr EXIF pages and DJI SDK sources; each code was confirmed by at least one independent source unless marked. Used for reference only: the app shows EXIF models as written (plus Canon's `m2` → `Mark II`), and the user renames models in Settings (models named the same are one camera).
+What DJI drones and handhelds write in EXIF `Make` / `Model`, per camera. Researched 2026-09-30 from Wikimedia Commons file metadata (and its table [DJI camera model names](https://commons.wikimedia.org/wiki/DJI_camera_model_names)), lensfun, Flickr EXIF pages and DJI SDK sources; each code was confirmed by at least one independent source unless marked. The app names them from `apps/desktop/camera-names/manual.json` ("DJI Air 3S"; see [camera-name-rules.md](camera-name-rules.md)): a drone's cameras named the same are one camera, sharing a model logo.
 
 `Make` is `DJI` unless noted. The Hasselblad-branded main cameras write `Make: Hasselblad`, so they count as the Hasselblad brand (decided 2026-09-30).
 
@@ -59,5 +59,5 @@ Notes
 
 - A multi-camera drone writes a different code per lens (Air 3S: FC9113 + FC9184). Focal length alone cannot tell drones apart: the 70mm module (19.35mm) is shared by FC8284, FC4382, FC9184 and FC9284.
 - The Osmo Pocket 4P writes the same code for both lenses.
-- Osmo 360 writes `Make: Osmo`, which no built-in brand matches: it shows as a brand of its own until renamed.
+- Osmo 360 writes `Make: Osmo`: `frame-logos/logos.json` matches `osmo` to DJI.
 - Test samples with these EXIFs are in `~/Desktop/Export/dpreview/` (DPReview originals: Mavic 3 Pro ×4, Air 3 ×2, Air 2S ×1); DPReview has no gallery for the Air 3S, Mavic 4 Pro, Mini 4 Pro, Mini 5 Pro, Pocket 3 or Osmo Action.

@@ -4,7 +4,8 @@
 // (this model only; models named the same are one camera, a drone's lenses).
 // Templates use the model's, else the brand's. A custom logo (a signature)
 // is for every photo and never offered as a camera's. Frame text names the
-// camera as the app shows it (Canon's R6m2 as R6 Mark II, or the user's name).
+// camera as the app shows it (Canon's R6m2 as R6 Mark II, a drone's camera
+// code by the name table, or the user's name).
 // Settings › Watermark lists brands with their models, to rename and choose.
 
 const { test, expect } = require("@playwright/test");
@@ -27,6 +28,8 @@ const svgFile = (name, body) => {
 const CANON = "0Y1A6707-9"; // Canon EOS R6m2, 2400×1600
 const OTHER_CANON = "IMG_0695-Enhanced-NR-3"; // Canon EOS 6D
 const UNKNOWN = "001-red"; // given Antigravity's EXIF below
+const AIR_WIDE = "002-orange"; // given the DJI Air 3S's two cameras below:
+const AIR_TELE = "004-green"; // FC9113 (24mm) and FC9184 (70mm)
 const HASSELBLAD = "B0016108"; // CFV 100C/907X; two built-in marks: the H and the wordmark
 const UNKNOWN_KEY = "make:yingling innovations pte. ltd.";
 const R6_KEY = "canon#canon eos r6m2";
@@ -89,6 +92,10 @@ test.beforeAll(async () => {
         UPDATE assets SET metadata_json = json_set(COALESCE(metadata_json, '{}'),
           '$.camera_make', 'Yingling Innovations Pte. Ltd.', '$.camera_model', 'antigravity a1')
           WHERE stem = '${UNKNOWN}';
+        UPDATE assets SET metadata_json = json_set(COALESCE(metadata_json, '{}'), '$.camera_make', 'DJI', '$.camera_model', 'FC9113')
+          WHERE stem = '${AIR_WIDE}';
+        UPDATE assets SET metadata_json = json_set(COALESCE(metadata_json, '{}'), '$.camera_make', 'DJI', '$.camera_model', 'FC9184')
+          WHERE stem = '${AIR_TELE}';
       `]);
     },
   }));
@@ -211,11 +218,32 @@ test("models named the same are one camera: they share a model logo, and frame t
   await window.evaluate(([key, id]) => window.mediaWorkspace.setBrandLogo(key, id), [R6_KEY, wide.id]);
 });
 
+test("a drone's two cameras, one to the name table: frame text names the drone, one model logo serves both", async () => {
+  const lens = await importLogo({ filePath: svgFile("Air.svg", 'viewBox="0 0 200 100"><rect width="90" height="100" fill="#fff"/><rect x="110" width="90" height="100" fill="#fff"/>'), kind: "camera", brand: "dji" });
+  await openEditorOn(AIR_WIDE, "bar-id");
+  await expect(modelRow().locator('[data-change-camera-logo="model"]')).toContainText("DJI Air 3S");
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("DJI Air 3S");
+  await modelRow().locator('[data-set-camera-logo="model"]').click();
+  await choose(camera(), lens.id);
+  await expect.poll(async () => aspectOf(await cameraLogoLayer())).toBeCloseTo(2, 0);
+  expect((await profile()).brandLogos).toMatchObject({ "dji#fc9113": lens.id }); // kept on the one it was chosen on
+  await closeEditor();
+
+  await openEditorOn(AIR_TELE, "bar-id"); // the other camera
+  await expect(modelRow()).toHaveAttribute("data-camera-logo-choice", lens.id);
+  await expect.poll(async () => (await cameraLogoLayer()) && aspectOf(await cameraLogoLayer())).toBeCloseTo(2, 0);
+  // Default here takes it off the drone.
+  await modelRow().locator('[data-change-camera-logo="model"]').click();
+  await choose(camera(), null);
+  await expect.poll(async () => Object.keys((await profile()).brandLogos).filter((key) => key.startsWith("dji"))).toEqual([]);
+  await closeEditor();
+});
+
 test("a camera with no built-in logo is given one of its own; Canon's are not offered", async () => {
   await openEditorOn(UNKNOWN, "bar-id");
   await expect.poll(async () => (await editorState()).layers.length).toBeGreaterThan(0);
   expect(await cameraLogoLayer()).toBeNull();
-  await expect(brandRow().locator('[data-change-camera-logo="brand"]')).toContainText("Yingling Innovations Pte. Ltd.");
+  await expect(brandRow().locator('[data-change-camera-logo="brand"]')).toContainText("Antigravity"); // the table's name for its make
   await brandRow().locator('[data-set-camera-logo="brand"]').click();
   await expect(camera().locator(`[data-logo-picker] [data-pick-logo="${round.id}"]`)).toHaveCount(0);
   await choose(camera(), drone.id);
@@ -301,6 +329,8 @@ test("Settings › Watermark: brands with their models, renamed and reset there;
   await expect(r6).toContainText("Canon EOS R6m2"); // with what EXIF says beside it
   await expect(r6).toHaveAttribute("data-brand-logo-choice", wide.id);
   await expect(unknown).toHaveAttribute("data-brand-logo-choice", drone.id);
+  await expect(unknown.locator("[data-rename-camera]").first()).toContainText("Antigravity");
+  await expect(unknown.locator("[data-rename-camera]").first()).toContainText("Yingling Innovations Pte. Ltd.");
 
   // Rename a model: Hasselblad's back as the body it is on.
   await cfv.locator("[data-rename-camera]").click();
