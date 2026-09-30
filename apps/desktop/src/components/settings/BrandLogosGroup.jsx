@@ -1,65 +1,57 @@
-// Settings › Watermark › Camera logos: every camera brand in the library with
-// the logo its frames show, which is the brand's own mark or one of my logos
-// given to it; a camera with no built-in mark can be given one here. A model
-// given its own logo (in the Frame tool) is listed under its brand. The
-// Frame tool's Logo row (the camera cell's chooser) changes the same choices.
+// Settings › Watermark › Camera logos: every camera in the library, a brand
+// and its models under it. A brand's logo is its built-in marks or a camera
+// logo of mine, for every model; a model's is its own, or the brand's. Click
+// a model's name to rename it (a drone's lenses named the same are one
+// camera, sharing a model logo); a brand with no built-in logo can be named
+// too. The Frame tool's camera logo rows change the same choices.
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../../api";
 import { localFileUrl } from "../../utils/format";
-import { brandKeyForExif, buildLogoRegistry, builtInMarks, normalizeMake } from "../editor/render/frameLogos";
-import { setBrandLogo } from "../editor/render/brandLogos";
+import InlineEdit from "../InlineEdit";
+import { brandKeyForExif, buildLogoRegistry, builtInBrandMarks, modelDisplayName, modelKeyFor, normalizeMake } from "../editor/render/frameLogos";
+import { setBrandLogo, setCameraName } from "../editor/render/brandLogos";
 import { loadPersonalLogos, subscribePersonalLogos } from "../editor/render/personalLogos";
 import LogoPicker, { LogoMarks } from "../editor/components/LogoPicker";
 import { Group, SecondaryButton } from "./SettingsPrimitives";
 
-// The library's makes grouped by brand: "Leica Camera AG" and "LEICA CAMERA
-// AG" are one Leica. A brand given a logo that no photo here has (from
-// another catalog) is listed too, so the choice can be undone.
-function brandRows(makes, manifest, brandLogos) {
-  const base = buildLogoRegistry(manifest || { logos: [], match: {} });
+// The library's makes grouped by brand ("Leica Camera AG" and "LEICA CAMERA
+// AG" are one Leica), each with its models as EXIF writes them. Brands and
+// models only named or given a logo here (another catalog) are listed too.
+function brandRows(makes, base, profile) {
   const rows = new Map();
+  const rowFor = (key, make) => {
+    if (!rows.has(key)) {
+      const builtIn = base.byId.get(key) || null;
+      rows.set(key, { key, make, builtIn, count: 0, models: new Map() });
+    }
+    return rows.get(key);
+  };
   for (const { make, count, models } of makes || []) {
     const key = brandKeyForExif({ make, camera_model: models?.[0] || "" }, base);
     if (!key) continue;
-    const builtIn = base.byId.get(key) || null;
-    const row = rows.get(key) || { key, name: builtIn?.name || make, count: 0, models: [], builtIn };
+    const row = rowFor(key, make);
     row.count += count;
-    for (const model of models || []) if (!row.models.includes(model)) row.models.push(model);
-    rows.set(key, row);
+    for (const model of models || []) row.models.set(normalizeMake(model), model);
   }
-  for (const choiceKey of Object.keys(brandLogos || {})) {
+  for (const choiceKey of [...Object.keys(profile.brandLogos || {}), ...Object.keys(profile.cameraNames || {})]) {
     const [key, model] = choiceKey.split("#");
-    if (!rows.has(key)) {
-      const builtIn = base.byId.get(key) || null;
-      rows.set(key, { key, name: builtIn?.name || key.replace(/^make:/, ""), count: 0, models: [], builtIn });
-    }
-    // A model with its own logo: named as EXIF writes it, when a photo has it.
-    if (model) {
-      const row = rows.get(key);
-      row.own = [...(row.own || []), { key: choiceKey, name: row.models.find((m) => normalizeMake(m) === model) || model }];
-    }
+    const row = rowFor(key, key.replace(/^make:/, ""));
+    if (model && !row.models.has(model)) row.models.set(model, model);
   }
   return [...rows.values()];
 }
 
-// The brand's own marks (Sony: α and SONY), each { src, tintable }.
-function ownMarks(row, svgs) {
-  return builtInMarks(row.builtIn, row.models[0]).flatMap((variant) => {
-    const svg = svgs?.[variant.file];
-    return svg ? [{ src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, tintable: !variant.colorLocked && !variant.tintableColors?.length }] : [];
-  });
-}
-
 export default function BrandLogosGroup() {
   const { t } = useTranslation("settings");
-  const [data, setData] = useState(null); // { makes, manifest, svgs, brandLogos }
+  const [data, setData] = useState(null); // { makes, base, svgs, profile }
   const [mine, setMine] = useState([]);
   const [picking, setPicking] = useState(null);
-  // Reads overlap (a logo imported from the chooser announces itself while
-  // the brand's choice is still being saved): only the latest one lands, so
-  // an older read never puts back a choice from before.
+  const [renaming, setRenaming] = useState(null);
+  // Reads overlap (a logo uploaded from a chooser announces itself while the
+  // choice is still being saved): only the latest one lands, so an older read
+  // never puts back a choice from before.
   const readRef = useRef({ latest: 0, load: null });
 
   useEffect(() => {
@@ -73,9 +65,13 @@ export default function BrandLogosGroup() {
         loadPersonalLogos(),
       ]);
       if (!alive || read !== readRef.current.latest) return;
-      const brandLogos = profile?.brandLogos || {};
       setMine(personal);
-      setData({ makes, manifest: logos?.manifest, svgs: logos?.svgs || {}, brandLogos });
+      setData({
+        makes,
+        base: buildLogoRegistry(logos?.manifest || { logos: [], match: {} }),
+        svgs: logos?.svgs || {},
+        profile: { brandLogos: profile?.brandLogos || {}, cameraNames: profile?.cameraNames || {} },
+      });
     };
     readRef.current.load = load;
     load();
@@ -84,33 +80,63 @@ export default function BrandLogosGroup() {
     return () => { alive = false; unsubscribe(); };
   }, []);
 
-  async function choose(key, logo) {
-    setPicking(null);
-    await setBrandLogo(key, logo?.id || null);
-    await readRef.current.load?.();
-  }
-
-  // Nothing to choose from where logos cannot be imported and none exist (web).
+  // Nothing to choose from where logos cannot be uploaded and none exist (web).
   if (!api.has("importPersonalLogo") && !mine.length) return null;
 
-  const rows = data ? brandRows(data.makes, data.manifest, data.brandLogos) : [];
+  const { brandLogos = {}, cameraNames = {} } = data?.profile || {};
   const logoOf = (id) => mine.find((logo) => logo.id === id) || null;
-  const markOf = (logo) => (logo ? { src: localFileUrl(logo.path), tintable: logo.tintable } : null);
-  // One line: a brand, or (sub) one of its models with its own logo. `own`
-  // is what "Default" gives: the brand's marks, or for a model the brand's logo.
-  function line({ key, name, meta, own, sub = false, rankOf }) {
-    const chosen = logoOf(data.brandLogos[key]);
-    const shown = chosen ? [markOf(chosen)] : own;
+  const markOf = (logo) => ({ src: localFileUrl(logo.path), tintable: logo.tintable });
+  // The models of a brand named like `key` (one camera): a choice made on
+  // one is made on them all.
+  const sameCamera = (key) => {
+    const name = normalizeMake(cameraNames[key]);
+    const brand = key.split("#")[0];
+    return [key, ...Object.keys(cameraNames).filter((other) => name && other !== key
+      && other.startsWith(`${brand}#`) && normalizeMake(cameraNames[other]) === name)];
+  };
+  const modelLogo = (key) => logoOf(brandLogos[key]) || sameCamera(key).map((other) => logoOf(brandLogos[other])).find(Boolean) || null;
+
+  async function reload() { await readRef.current.load?.(); }
+  async function choose(key, logo) {
+    setPicking(null);
+    const keys = key.includes("#") ? sameCamera(key) : [key];
+    for (const each of keys) await setBrandLogo(each, logo?.id || null);
+    await reload();
+  }
+  async function rename(key, name) {
+    setRenaming(null);
+    await setCameraName(key, name);
+    await reload();
+  }
+
+  const nameCell = (key, shown, original, sub) => (renaming === key ? (
+    <div className="max-w-xs rounded border border-border bg-app text-[12px]">
+      <InlineEdit initial={cameraNames[key] || shown} onConfirm={(name) => rename(key, name)} onCancel={() => setRenaming(null)} />
+    </div>
+  ) : (
+    <button
+      type="button"
+      data-rename-camera={key}
+      title={t("watermark.renameCamera")}
+      onClick={() => setRenaming(key)}
+      className={`block max-w-full truncate text-left text-text hover:underline ${sub ? "text-[11.5px]" : "text-[12px]"}`}
+    >
+      {shown}
+      {original && original !== shown && <span className="ml-1.5 text-[10.5px] text-muted2">{original}</span>}
+    </button>
+  ));
+
+  function line({ key, name, meta, shown, own, defaultLabel, brandKey, sub = false }) {
     return (
-      <div key={key} data-brand-logo-row={key} data-brand-logo-choice={chosen?.id || ""} className={sub ? "mt-2 pl-6" : ""}>
+      <div key={key} data-brand-logo-row={key} data-brand-logo-choice={shown.chosen?.id || ""} className={sub ? "mt-2 pl-6" : ""}>
         <div className="flex items-center gap-3">
           <div className={`flex shrink-0 items-center justify-center rounded bg-checker p-1 text-text ${sub ? "h-7 w-20" : "h-8 w-24"}`}>
-            {shown.length
-              ? <LogoMarks marks={shown} />
-              : <span className="text-[10px] text-muted2">{t("watermark.brandNone")}</span>}
+            {shown.marks.length
+              ? <LogoMarks marks={shown.marks} />
+              : <span className="text-[10px] text-muted2">{shown.empty}</span>}
           </div>
           <div className="min-w-0 flex-1">
-            <span className={`block truncate text-text ${sub ? "text-[11.5px]" : "text-[12px]"}`}>{name}</span>
+            {name}
             {meta && <span className="block truncate text-[10.5px] text-muted2" title={meta}>{meta}</span>}
           </div>
           <SecondaryButton onClick={() => setPicking((open) => (open === key ? null : key))}>
@@ -120,8 +146,12 @@ export default function BrandLogosGroup() {
         {picking === key && (
           <div className={`mt-2 max-w-sm ${sub ? "pl-[92px]" : "pl-[108px]"}`}>
             <LogoPicker
-              selectedId={chosen?.id || null} defaultMarks={own}
-              rankOf={rankOf} onPick={(logo) => choose(key, logo)}
+              selectedId={shown.chosen?.id || null}
+              defaultMarks={own}
+              defaultLabel={defaultLabel}
+              rankOf={(logo) => (logo.kind === "camera" && logo.brand === brandKey ? 0 : Infinity)}
+              importOptions={{ kind: "camera", brand: brandKey }}
+              onPick={(logo) => choose(key, logo)}
             />
           </div>
         )}
@@ -129,30 +159,38 @@ export default function BrandLogosGroup() {
     );
   }
 
+  const rows = data ? brandRows(data.makes, data.base, data.profile) : [];
   return (
     <Group title={t("watermark.brandsTitle")} subtitle={t("watermark.brandsSubtitle")}>
       {data && rows.length === 0 && <div className="py-3 text-[11px] text-muted2">{t("watermark.brandsEmpty")}</div>}
       {rows.map((row) => {
-        const own = ownMarks(row, data.svgs);
-        const brandMark = markOf(logoOf(data.brandLogos[row.key]));
-        // This brand's logos first in its chooser, then ones no camera uses;
-        // another brand's are left out.
-        const used = Object.entries(data.brandLogos);
-        const rankOf = (logo) => {
-          const keys = used.filter(([, id]) => id === logo.id).map(([key]) => key);
-          if (!keys.length) return 1;
-          return keys.some((key) => key === row.key || key.startsWith(`${row.key}#`)) ? 0 : Infinity;
-        };
+        const own = builtInBrandMarks(row.builtIn).flatMap((variant) => {
+          const svg = data.svgs[variant.file];
+          return svg ? [{ src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, tintable: !variant.colorLocked && !variant.tintableColors?.length }] : [];
+        });
+        const brandMine = logoOf(brandLogos[row.key]);
+        const brandShown = brandMine ? [markOf(brandMine)] : own;
+        const brandName = cameraNames[row.key] || row.builtIn?.name || row.make;
         return (
           <div key={row.key} className="border-b border-border/50 py-2.5 last:border-b-0">
             {line({
-              key: row.key, name: row.name, own, rankOf,
-              meta: [row.count ? t("watermark.brandCount", { count: row.count }) : null, row.models.slice(0, 3).join(", ")].filter(Boolean).join(" · "),
+              key: row.key, brandKey: row.key, own,
+              name: row.builtIn
+                ? <span className="block truncate text-[12px] text-text">{brandName}</span>
+                : nameCell(row.key, brandName, row.make, false),
+              meta: row.count ? t("watermark.brandCount", { count: row.count }) : null,
+              shown: { chosen: brandMine, marks: brandShown, empty: t("watermark.brandNone") },
             })}
-            {(row.own || []).map((model) => line({
-              key: model.key, name: model.name, sub: true, rankOf,
-              own: brandMark ? [brandMark] : own,
-            }))}
+            {[...row.models.entries()].map(([norm, model]) => {
+              const key = modelKeyFor(row.key, model) || `${row.key}#${norm}`;
+              const chosen = modelLogo(key);
+              return line({
+                key, brandKey: row.key, sub: true,
+                own: brandShown, defaultLabel: t("watermark.followBrand"),
+                name: nameCell(key, cameraNames[key] || modelDisplayName(row.key, model), model, true),
+                shown: { chosen, marks: chosen ? [markOf(chosen)] : [], empty: t("watermark.followBrand") },
+              });
+            })}
           </div>
         );
       })}

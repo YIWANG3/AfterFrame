@@ -257,8 +257,6 @@
     "templateSaved": "已存为模板",
     "templateSkipped": "{{count}} 个图层只有像素（比如手写贴纸），没有存进模板",
     "templateFailed": "模板没能保存",
-    "importLogo": "导入",
-    "importLogoHint": "导入 SVG 或 PNG（也可以直接拖进编辑器），会放进边框里；透明底的单色 logo 会自动配成合适的颜色。",
     "placeLogo": "放进边框",
     "dropLogo": "松开，导入为我的 logo",
     "logoImported": "已添加 logo",
@@ -323,13 +321,18 @@
     "layersEmpty": "边框里还没有东西。选一个模板，或从上面添加。",
     "inFrameTool": "边框里有 {{count}} 个元素，在「边框」工具里编辑。",
     "placeCameraLogo": "放进边框",
-    "logos": "Logo",
-    "cameraLogoFor": "{{name}} 照片用的 logo",
-    "chooseCameraLogo": "选择 {{name}} 照片用的 logo",
     "logoDefault": "默认",
     "logoNone": "无",
-    "allOfBrand": "所有 {{name}}",
-    "importMine": "签名/logo",
-    "importMineHint": "导入签名、工作室标志等 SVG 或 PNG，所有照片都能用"
+    "cameraLogos": "相机 logo",
+    "customLogos": "自定义",
+    "levelBrand": "品牌",
+    "levelModel": "机型",
+    "brandLogoFor": "{{name}} 的品牌 logo，所有机型都用",
+    "modelLogoFor": "{{name}} 的机型 logo，只这个机型用",
+    "followBrand": "跟随品牌",
+    "uploadCustom": "上传",
+    "uploadCustomHint": "上传签名、工作室标志等 SVG 或 PNG，可以一次选多张，所有照片都能用",
+    "uploadCamera": "上传",
+    "uploadCameraHint": "上传 SVG 或 PNG，作为这台相机的 logo"
   }
 }

@@ -496,9 +496,10 @@ const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g,
 function readWatermarkProfile() {
   try {
     const stored = JSON.parse(localStorage.getItem("afterframe.watermarkProfile")) || {};
-    return { author: String(stored.author || ""), brandLogos: stored.brandLogos && typeof stored.brandLogos === "object" ? stored.brandLogos : {} };
+    const map = (value) => (value && typeof value === "object" ? value : {});
+    return { author: String(stored.author || ""), brandLogos: map(stored.brandLogos), cameraNames: map(stored.cameraNames) };
   } catch {
-    return { author: "", brandLogos: {} };
+    return { author: "", brandLogos: {}, cameraNames: {} };
   }
 }
 
@@ -877,6 +878,16 @@ export const browserBridge = {
       capture_time: times.length ? { min: times[0], max: times[times.length - 1] } : { min: null, max: null },
     };
   },
+  setCameraName: async (key, name) => {
+    const current = readWatermarkProfile();
+    const cameraNames = { ...current.cameraNames };
+    const clean = typeof name === "string" ? name.trim() : "";
+    if (clean) cameraNames[String(key)] = clean.slice(0, 40);
+    else delete cameraNames[String(key)];
+    const next = { ...current, cameraNames };
+    localStorage.setItem("afterframe.watermarkProfile", JSON.stringify(next));
+    return next;
+  },
   listCameraMakes: async () => {
     const makes = new Map();
     for (const asset of facetUniverse("camera", {})) {
@@ -1191,6 +1202,7 @@ export const browserBridge = {
     const next = {
       author: String(profile?.author ?? current.author).replace(/\s+/g, " ").trim().slice(0, 80),
       brandLogos: profile?.brandLogos && typeof profile.brandLogos === "object" ? { ...profile.brandLogos } : current.brandLogos,
+      cameraNames: profile?.cameraNames && typeof profile.cameraNames === "object" ? { ...profile.cameraNames } : current.cameraNames,
     };
     localStorage.setItem("afterframe.watermarkProfile", JSON.stringify(next));
     return next;

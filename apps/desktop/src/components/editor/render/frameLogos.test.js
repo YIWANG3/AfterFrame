@@ -4,6 +4,9 @@ import {
   brandKeyForExif,
   buildLogoRegistry,
   builtInMarks,
+  cameraNamesFor,
+  labelExif,
+  modelDisplayName,
   logoHeightFactor,
   modelKeyFor,
   pickVariant,
@@ -144,3 +147,42 @@ describe("partial logo tinting", () => {
       .toBe('<svg color="#141414"><path fill="currentColor"/><g color="#FFFFFF"><path fill="currentColor"/></g><path fill="#E2001A"/></svg>');
   });
 });
+
+describe("what a camera is called", () => {
+  const registry = buildLogoRegistry({
+    logos: [{ id: "canon", name: "Canon", variants: [] }, { id: "dji", name: "DJI", variants: [{ id: "wordmark", kind: "wordmark", file: "d.svg" }] }],
+    match: { canon: "canon", dji: "dji" },
+  });
+
+  it("shows EXIF as written, except Canon's second-generation m2", () => {
+    expect(modelDisplayName("canon", "Canon EOS R6m2")).toBe("Canon EOS R6 Mark II");
+    expect(modelDisplayName("canon", "Canon EOS R5m2")).toBe("Canon EOS R5 Mark II");
+    expect(modelDisplayName("canon", "Canon EOS R6 Mark III")).toBe("Canon EOS R6 Mark III");
+    expect(modelDisplayName("sony", "ILCE-7CM2")).toBe("ILCE-7CM2");
+    expect(modelDisplayName("hasselblad", "CFV 100C/907X")).toBe("CFV 100C/907X");
+  });
+
+  it("the user's names win, for a model and for a brand with no built-in logo", () => {
+    expect(cameraNamesFor({ make: "Canon", camera_model: "Canon EOS R6m2" }, registry)).toEqual({
+      brandKey: "canon", modelKey: "canon#canon eos r6m2", brandName: "Canon", modelName: "Canon EOS R6 Mark II",
+    });
+    const names = { "dji#fc9184": "Air 3S", "make:yingling innovations pte. ltd.": "影翎" };
+    expect(cameraNamesFor({ make: "DJI", camera_model: "FC9184" }, registry, names).modelName).toBe("Air 3S");
+    expect(cameraNamesFor({ make: "Yingling Innovations Pte. Ltd.", camera_model: "antigravity a1" }, registry, names))
+      .toMatchObject({ brandName: "影翎", modelName: "antigravity a1" });
+    expect(cameraNamesFor({ make: "", camera_model: "" }, registry)).toBeNull();
+    // Frame text reads the display name; matching still reads EXIF.
+    expect(labelExif({ make: "DJI", camera_model: "FC9184" }, registry, names)).toMatchObject({ camera_model: "FC9184", camera_label: "Air 3S" });
+  });
+
+  it("models named the same are one camera: a model logo set on one reaches the other", () => {
+    const mine = [{ id: "logo_air", width: 400, height: 100, tintable: true }];
+    const names = { "dji#fc9113": "Air 3S", "dji#fc9184": "air 3s", "dji#fc2204": "Mini 2" };
+    const reg = withBrandLogos(registry, { "dji#fc9184": "logo_air" }, mine, names);
+    const brand = reg.byId.get("dji");
+    expect(pickVariant(brand, { variantId: "wordmark", model: "FC9184" })?.personal).toBe("logo_air");
+    expect(pickVariant(brand, { variantId: "wordmark", model: "FC9113" })?.personal).toBe("logo_air"); // the other lens
+    expect(pickVariant(brand, { variantId: "wordmark", model: "FC2204" })?.id).toBe("wordmark"); // another drone
+  });
+});
+

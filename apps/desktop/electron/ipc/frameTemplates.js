@@ -35,9 +35,33 @@ function cleanBrandLogos(map) {
   return out;
 }
 
+// The user's names for a model ("dji#fc9184": "Air 3S") or for a brand with
+// no built-in logo; models of a brand named the same are one camera.
+const CAMERA_NAME_MAX = 40;
+function cleanCameraNames(map) {
+  const out = {};
+  if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+  for (const [key, name] of Object.entries(map)) {
+    if (Object.keys(out).length >= BRAND_LOGOS_MAX * 2) break;
+    const clean = typeof name === "string" ? name.replace(/\s+/g, " ").trim().slice(0, CAMERA_NAME_MAX) : "";
+    if (BRAND_KEY.test(key) && clean) out[key] = clean;
+  }
+  return out;
+}
+
 function cleanProfile(profile) {
   const author = String(profile?.author ?? "").replace(/\s+/g, " ").trim().slice(0, AUTHOR_MAX);
-  return { author, brandLogos: cleanBrandLogos(profile?.brandLogos) };
+  return { author, brandLogos: cleanBrandLogos(profile?.brandLogos), cameraNames: cleanCameraNames(profile?.cameraNames) };
+}
+
+// What a logo is for: "custom" (a signature, a studio mark: every photo) or
+// "camera" (one brand's, `brand` its key). Logos from before the split are
+// the camera's that uses them, else custom.
+function logoKind(logo, brandLogos) {
+  if (logo.kind === "camera" && typeof logo.brand === "string" && logo.brand) return { kind: "camera", brand: logo.brand };
+  if (logo.kind === "custom") return { kind: "custom" };
+  const key = Object.keys(brandLogos || {}).find((k) => brandLogos[k] === logo.id);
+  return key ? { kind: "camera", brand: key.split("#")[0] } : { kind: "custom" };
 }
 
 // Only what the editor wrote: user ids, the layers kind, a name. Anything else
@@ -79,10 +103,29 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
       return [];
     }
   }
-  const withPath = (logo) => ({ ...logo, path: path.join(logosDir(), path.basename(logo.file)) });
+  const withPath = (logo) => ({
+    ...logo,
+    ...logoKind(logo, cleanProfile(readAppSettings()?.watermarkProfile).brandLogos),
+    path: path.join(logosDir(), path.basename(logo.file)),
+  });
   const saveLogos = (logos) => writeJson(logosManifest(), { version: 1, logos });
 
   ipcMain.handle("app:watermark-profile", () => cleanProfile(readAppSettings()?.watermarkProfile));
+
+  // Name a model or an unknown brand (null or empty: back to what EXIF says).
+  ipcMain.handle("app:set-camera-name", async (_event, key, name) => {
+    let next = null;
+    await updateAppSettings((settings) => {
+      const current = cleanProfile(settings.watermarkProfile);
+      const cameraNames = { ...current.cameraNames };
+      const clean = typeof name === "string" ? name.trim() : "";
+      if (clean) cameraNames[String(key)] = clean;
+      else delete cameraNames[String(key)];
+      next = cleanProfile({ ...current, cameraNames });
+      return { ...settings, watermarkProfile: next };
+    });
+    return next;
+  });
 
   // Merged into what is there: saving the name keeps the brand logos.
   ipcMain.handle("app:save-watermark-profile", async (_event, profile) => {
@@ -95,7 +138,15 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
   });
 
   // A brand's frame logo: one of my logos, or (logoId null) its own again.
+  // The logo becomes that brand's (a camera logo), and stays so after.
   ipcMain.handle("app:set-brand-logo", async (_event, brandKey, logoId) => {
+    if (logoId) {
+      const brand = String(brandKey).split("#")[0];
+      const logos = readLogos();
+      if (logos.some((logo) => logo.id === logoId && (logo.kind !== "camera" || logo.brand !== brand))) {
+        await saveLogos(logos.map((logo) => (logo.id === logoId ? { ...logo, kind: "camera", brand } : logo)));
+      }
+    }
     let next = null;
     await updateAppSettings((settings) => {
       const current = cleanProfile(settings.watermarkProfile);
@@ -124,39 +175,70 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
     return next;
   });
 
-  ipcMain.handle("app:personal-logos", () => ({ logos: readLogos().map(withPath) }));
+  // Logos from before the camera / custom split get their kind written once,
+  // so a camera logo set back to default stays that brand's.
+  ipcMain.handle("app:personal-logos", async () => {
+    const logos = readLogos();
+    if (logos.some((logo) => !logo.kind)) {
+      const brandLogos = cleanProfile(readAppSettings()?.watermarkProfile).brandLogos;
+      await saveLogos(logos.map((logo) => (logo.kind ? logo : { ...logo, ...logoKind(logo, brandLogos) })));
+      return { logos: readLogos().map(withPath) };
+    }
+    return { logos: logos.map(withPath) };
+  });
 
-  // `filePath` skips the open dialog (the e2e specs; nothing else sends one).
-  // Failures come back as { error: code }: thrown IPC errors lose their code.
-  ipcMain.handle("app:import-personal-logo", async (_event, filePath) => {
+  // One logo file into my logos. Throws LogoError for a file that is no logo.
+  async function importOne(source, kindOf) {
+    const logos = readLogos();
+    if (logos.length >= LOGOS_MAX) throw new LogoError("too_many");
+    const stat = await fs.promises.stat(source);
+    if (stat.size > 10 * 1024 * 1024) throw new LogoError("too_large");
+    const processed = await processLogo(sharp, await fs.promises.readFile(source), source);
+    const id = `logo_${crypto.randomUUID().slice(0, 8)}`;
+    const file = `${id}.png`;
+    await fs.promises.mkdir(logosDir(), { recursive: true });
+    await fs.promises.writeFile(path.join(logosDir(), file), processed.png);
+    const name = path.basename(source).replace(/\.[^.]+$/, "").trim().slice(0, LOGO_NAME_MAX) || id;
+    const logo = {
+      id, name, file, width: processed.width, height: processed.height,
+      tintable: processed.tintable, color: processed.color, createdAt: new Date().toISOString(), ...kindOf,
+    };
+    await saveLogos([...logos, logo]);
+    return withPath(logo);
+  }
+
+  // `options`: a file path (skips the dialog: the e2e specs), or
+  // { kind: "custom" | "camera", brand, multiple }. A camera logo is that
+  // brand's; `multiple` lets the dialog pick several (custom logos).
+  // Returns { logo, logos } (logo: the first), or { error: code } when
+  // nothing could be imported: thrown IPC errors lose their code.
+  ipcMain.handle("app:import-personal-logo", async (_event, options) => {
+    const opts = typeof options === "string" ? { filePath: options } : (options || {});
+    const brand = typeof opts.brand === "string" ? opts.brand.split("#")[0] : "";
+    const kindOf = opts.kind === "camera" && BRAND_KEY.test(brand) ? { kind: "camera", brand } : { kind: "custom" };
     try {
-      let source = typeof filePath === "string" && filePath ? filePath : null;
-      if (!source) {
+      let sources = typeof opts.filePath === "string" && opts.filePath ? [opts.filePath] : null;
+      if (!sources) {
         const picked = await dialog.showOpenDialog(getMainWindow(), {
-          properties: ["openFile"],
+          properties: opts.multiple ? ["openFile", "multiSelections"] : ["openFile"],
           filters: [{ name: "Logo", extensions: ["svg", "png"] }],
         });
-        if (picked.canceled || !picked.filePaths?.[0]) return { canceled: true };
-        source = picked.filePaths[0];
+        if (picked.canceled || !picked.filePaths?.length) return { canceled: true };
+        sources = picked.filePaths;
       }
-      const logos = readLogos();
-      if (logos.length >= LOGOS_MAX) return { error: "too_many" };
-      const stat = await fs.promises.stat(source);
-      if (stat.size > 10 * 1024 * 1024) return { error: "too_large" };
-      const processed = await processLogo(sharp, await fs.promises.readFile(source), source);
-      const id = `logo_${crypto.randomUUID().slice(0, 8)}`;
-      const file = `${id}.png`;
-      await fs.promises.mkdir(logosDir(), { recursive: true });
-      await fs.promises.writeFile(path.join(logosDir(), file), processed.png);
-      const name = path.basename(source).replace(/\.[^.]+$/, "").trim().slice(0, LOGO_NAME_MAX) || id;
-      const logo = {
-        id, name, file, width: processed.width, height: processed.height,
-        tintable: processed.tintable, color: processed.color, createdAt: new Date().toISOString(),
-      };
-      await saveLogos([...logos, logo]);
-      return { logo: withPath(logo) };
+      const imported = [];
+      let firstError = null;
+      for (const source of sources) {
+        try {
+          imported.push(await importOne(source, kindOf));
+        } catch (error) {
+          if (!(error instanceof LogoError)) console.error("[personal-logos] import failed:", error);
+          firstError ??= error instanceof LogoError ? { error: error.code } : { error: "failed", message: error?.message || String(error) };
+        }
+      }
+      if (!imported.length) return firstError || { error: "failed" };
+      return { logo: imported[0], logos: imported, ...(firstError ? { skipped: sources.length - imported.length } : {}) };
     } catch (error) {
-      if (error instanceof LogoError) return { error: error.code };
       console.error("[personal-logos] import failed:", error);
       return { error: "failed", message: error?.message || String(error) };
     }

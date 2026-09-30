@@ -4,12 +4,13 @@
 // apply_frame both load it here, so a choice shows the same everywhere.
 
 import api from "../../../api";
-import { buildLogoRegistry, prepareLogo, withBrandLogos } from "./frameLogos";
+import { buildLogoRegistry, labelExif, prepareLogo, withBrandLogos } from "./frameLogos";
 import { ensurePersonalLogos, loadPersonalLogos, personalLogoKey, subscribePersonalLogos } from "./personalLogos";
 
 /**
- * @returns {Promise<{ base: object, registry: object, svgs: object, brandLogos: object }>}
- *   base: the built-in brands only; registry: with the user's choices
+ * @returns {Promise<{ base: object, registry: object, svgs: object, brandLogos: object, cameraNames: object, personal: Array }>}
+ *   base: the built-in brands only; registry: with the user's choices;
+ *   cameraNames: the user's names for models and unknown brands
  */
 export async function loadLogoRegistry() {
   const [res, profile, personal] = await Promise.all([
@@ -19,7 +20,16 @@ export async function loadLogoRegistry() {
   ]);
   const base = res ? buildLogoRegistry(res.manifest) : { byId: new Map(), match: {} };
   const brandLogos = profile?.brandLogos || {};
-  return { base, registry: withBrandLogos(base, brandLogos, personal), svgs: res?.svgs || {}, brandLogos };
+  const cameraNames = profile?.cameraNames || {};
+  return {
+    base, registry: withBrandLogos(base, brandLogos, personal, cameraNames), svgs: res?.svgs || {},
+    brandLogos, cameraNames, personal,
+  };
+}
+
+/** EXIF with the camera's display name, for frame text. */
+export function labelledExif(exif, logos) {
+  return logos ? labelExif(exif, logos.base, logos.cameraNames) : exif;
 }
 
 /** The image for one collectLogoNeeds() need: a built-in mark drawn from its
@@ -45,6 +55,13 @@ const listeners = new Set();
  *  whoever shows frames. */
 export async function setBrandLogo(brandKey, logoId) {
   const profile = await api.setBrandLogo(brandKey, logoId || null);
+  for (const listener of listeners) listener();
+  return profile;
+}
+
+/** Name a model or an unknown brand (empty: back to EXIF), and tell. */
+export async function setCameraName(key, name) {
+  const profile = await api.setCameraName(key, name || null);
   for (const listener of listeners) listener();
   return profile;
 }

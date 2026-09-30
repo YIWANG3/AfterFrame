@@ -13,7 +13,7 @@ const { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall } = require
 let app, window, userDataDir, mcpPort;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-user-frame-"));
 const AUTHOR = "Yi Test";
-const LANDSCAPE = "0Y1A6707-9"; // Canon EOS R6m2, 2400×1600
+const LANDSCAPE = "0Y1A6707-9"; // Canon EOS R6m2 (frame text: "Canon EOS R6 Mark II"), 2400×1600
 const PORTRAIT = "B0016108"; // CFV 100C/907X, 2064×2400
 
 const rowFor = (stem) => window.evaluate(
@@ -52,12 +52,12 @@ test("the author set in Settings is what the Frame tool's Photo info › Author 
   const field = window.locator("[data-watermark-author]");
   await field.fill(AUTHOR);
   await field.press("Enter");
-  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getWatermarkProfile())).toEqual({ author: AUTHOR, brandLogos: {} });
+  await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getWatermarkProfile())).toEqual({ author: AUTHOR, brandLogos: {}, cameraNames: {} });
   await window.keyboard.press("Escape");
 
   await openEditorOn(LANDSCAPE);
   await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
-  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6m2");
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6 Mark II");
   await window.locator("[data-token='author']").click();
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain(AUTHOR);
 });
@@ -94,7 +94,7 @@ test("the Frame and Text tools each list their own layers; the frame changes, th
   await window.evaluate(() => window.__afterframeTest.setTool("frame"));
   const [tpl] = await templates();
   await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
-  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6m2");
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6 Mark II");
   // The Text tool points at the frame's items instead of listing them, and
   // leaves them alone on the canvas (shown, not pickable); its own stay live.
   await window.evaluate(() => window.__afterframeTest.setTool("text"));
@@ -134,7 +134,7 @@ test("on a portrait photo from another camera the template is re-resolved and sa
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("CFV 100C/907X");
   const state = await editorState();
   expect(state.layers.map((l) => l.text)).toContain(AUTHOR);
-  expect(state.layers.map((l) => l.text)).not.toContain("Canon EOS R6m2");
+  expect(state.layers.map((l) => l.text)).not.toContain("Canon EOS R6 Mark II");
   expect(state.canvasPad.bottom).toBeCloseTo(tpl.canvas.pad.bottom, 6);
 
   // Saved at the photo's own size, the bar added below it.

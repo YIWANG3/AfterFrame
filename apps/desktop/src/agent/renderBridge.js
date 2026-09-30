@@ -16,7 +16,7 @@ import { drawLayersOnCanvas } from "../components/editor/render/drawLayers";
 import { isTextLayer, isStickerLayer, isOverlayLayer } from "../components/editor/layerStack";
 import { createDefaultLayer, createStickerLayer, FONT_OPTIONS, measureTextWidthDOM } from "../components/editor/textState";
 import { FRAME_TEMPLATES } from "../components/editor/frameTemplates";
-import { loadLogoRegistry, prepareLogoNeed } from "../components/editor/render/brandLogos";
+import { labelledExif, loadLogoRegistry, prepareLogoNeed } from "../components/editor/render/brandLogos";
 import { renderFrame, collectLogoNeeds } from "../components/editor/render/frameRender";
 import { exifFromItem } from "../components/editor/state/useFrameTool";
 import { isUserTemplate, logoElementOf, renderUserTemplate } from "../components/editor/frameUserTemplates";
@@ -207,10 +207,12 @@ async function handleFrame(payload) {
     throw new Error(`unknown frame template '${templateId}' — valid: ${valid}`);
   }
   const photo = await loadImage(imagePath);
-  const exif = exifFromItem(exifItem || {});
   const profile = (await api.getWatermarkProfile?.().catch(() => null)) || {};
-  // Built-in marks with the user's choice of logo for each brand.
-  const { registry, svgs } = await loadLogoRegistry();
+  // Built-in marks with the user's choice of logo for each brand; frame text
+  // names the camera as the app shows it.
+  const logos = await loadLogoRegistry();
+  const { registry, svgs } = logos;
+  const exif = labelledExif(exifFromItem(exifItem || {}), logos);
   const logoImages = new Map();
   if (typeof document !== "undefined" && document.fonts?.ready) {
     try { await document.fonts.ready; } catch { /* fonts are best-effort */ }

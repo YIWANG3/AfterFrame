@@ -1,6 +1,6 @@
-// Settings › Watermark: the name frame text uses for {author}, the user's own
-// logos, which logo each camera brand's frames show, and the frame templates
-// saved from the editor (Frame › Templates › Save as template).
+// Settings › Watermark: the name frame text uses for {author}, my custom
+// logos (a signature, a studio mark), each camera's logos and names, and the
+// frame templates saved from the editor (Frame › Templates › Save as template).
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Pencil, Plus, Trash2 } from "lucide-react";
@@ -56,7 +56,7 @@ export default function WatermarkSettings() {
   }
   async function importLogo() {
     setLogoError(null);
-    const res = await api.importPersonalLogo();
+    const res = await api.importPersonalLogo({ kind: "custom", multiple: true });
     if (res?.error) { setLogoError(res); return; }
     if (res?.canceled) return;
     logosChanged(await api.listPersonalLogos());
@@ -97,7 +97,8 @@ export default function WatermarkSettings() {
         </FieldRow>
       </Group>
       <Group title={t("watermark.logosTitle")} subtitle={t("watermark.logosSubtitle")}>
-        {(logos || []).map((logo) => (
+        {/* Custom logos: camera logos are the brands' (below). */}
+        {(logos || []).filter((logo) => logo.kind !== "camera").map((logo) => (
           <div key={logo.id} data-settings-logo={logo.id} className="flex items-center gap-3 border-b border-border/50 py-2.5 last:border-b-0">
             <div className="flex h-8 w-20 shrink-0 items-center justify-center rounded bg-checker p-1 text-text">
               <LogoPreview src={localFileUrl(logo.path)} tintable={logo.tintable} />

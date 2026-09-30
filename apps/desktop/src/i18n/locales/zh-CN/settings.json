@@ -303,8 +303,8 @@
     "authorHint": "你希望出现在照片上的名字或署名",
     "authorPlaceholder": "你的名字",
     "saved": "已保存",
-    "brandsTitle": "相机品牌 logo",
-    "brandsSubtitle": "每个相机品牌在边框上用的 logo，选「默认」换回品牌自己的。",
+    "brandsTitle": "相机 logo",
+    "brandsSubtitle": "每台相机的 logo。品牌 logo 旗下所有机型都用，机型 logo 只给这个机型。点名字可以改名，名字相同的机型算同一台（比如无人机的几个镜头）。",
     "brandsEmpty": "图库里还没有带相机信息的照片。",
     "brandCount_one": "{{count}} 张",
     "brandCount_other": "{{count}} 张",
@@ -316,9 +316,9 @@
     "delete": "删除",
     "deleteTitle": "删除模板「{{name}}」？",
     "deleteMessage": "已经用它加过边框的照片不受影响。",
-    "logosTitle": "我的 logo",
-    "logosSubtitle": "在编辑器的「边框」里点一下就放进边框，也可以把 SVG 或 PNG 直接拖进编辑器。单色 logo 会自动配色。导出设置不包含 logo 文件。",
-    "importLogo": "导入 logo…",
+    "logosTitle": "自定义",
+    "logosSubtitle": "签名、工作室标志这类，所有照片都能用：在编辑器的「边框」里点一下放进边框，也可以把 SVG 或 PNG 拖进编辑器。单色的会自动配色。导出设置不包含 logo 文件。",
+    "importLogo": "上传…",
     "rename": "改名",
     "logoTintable": "可换颜色",
     "logoFixed": "保持原色",
@@ -331,6 +331,8 @@
       "empty_image": "图里没有可用的图形",
       "too_many": "已经有 50 个 logo 了，先删掉一些",
       "failed": "导入失败：{{message}}"
-    }
+    },
+    "renameCamera": "改名",
+    "followBrand": "跟随品牌"
   }
 }

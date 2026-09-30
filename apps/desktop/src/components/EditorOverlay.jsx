@@ -873,11 +873,11 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setSelectedIds(new Set([layer.id]));
   }
 
-  // The camera's logo into the frame, as templates show it: one of the
-  // brand's marks (`variant`: Sony's "symbol" α or its "wordmark"; or the logo
-  // the camera was given), placed like my logos and coloured for what is
-  // behind it. A template finds it again for the next photo's camera.
-  async function placeCameraLogo(variant) {
+  // One of the camera's logos into the frame: from the brand row (`level`
+  // "brand": Sony's "symbol" α or its "wordmark", or the brand's logo of mine)
+  // or the model row (its own logo), placed like my logos and coloured for
+  // what is behind it. A template finds it again for the next photo's camera.
+  async function placeCameraLogo({ level = "brand", variant } = {}) {
     const source = transformedPreview;
     const tool = frameToolRef.current;
     if (!source || !tool?.cameraLogo) return;
@@ -886,7 +886,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const fullW = source.width || source.naturalWidth;
     const fullH = source.height || source.naturalHeight;
     const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
-    const ref = { variant: variant || "wordmark", kind: null, strict: false, color: "#141414" };
+    const ref = { variant: variant || "wordmark", kind: null, strict: false, color: "#141414", ...(level === "brand" ? { scope: "brand" } : {}) };
     const probe = await tool.brandLogoFor(ref);
     if (!probe) return;
     const spot = placeLogo({
@@ -898,7 +898,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const img = (await tool.brandLogoFor(ref)) || probe;
     stickerImageCache.set(img.src, img);
     const layer = createStickerLayer(
-      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: await tool.cameraLogoLabel() },
+      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: await tool.cameraLogoLabel(level) },
       {
         x: (spot.cx - geom.left + geom.cropX) / fullW,
         y: (spot.cy - geom.top + geom.cropY) / fullH,
@@ -929,10 +929,10 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     const isCameraLogo = (layer) => layer.type === "sticker" && layer.logoRef && !isPersonalLogoRef(layer.logoRef);
     const layers = layersRef.current;
     if (!layers.some(isCameraLogo)) {
-      if (logoId) await placeCameraLogo();
+      if (logoId) await placeCameraLogo({ level: scope === "model" ? "model" : "brand" });
       return;
     }
-    const sourceLabel = await frameToolRef.current.cameraLogoLabel();
+    const labels = { brand: await frameToolRef.current.cameraLogoLabel("brand"), any: await frameToolRef.current.cameraLogoLabel() };
     const next = [];
     for (const layer of layers) {
       if (!isCameraLogo(layer)) { next.push(layer); continue; }
@@ -942,7 +942,8 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       next.push({
         ...layer,
         ...swapLogo({ layer, geom, aspect: img.naturalWidth / Math.max(1, img.naturalHeight) }),
-        stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel,
+        stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+        sourceLabel: layer.logoRef.scope === "brand" ? labels.brand : labels.any,
       });
     }
     commitLayers(next);
@@ -1614,8 +1615,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 onAddFrameText={() => addFrameText({ text: t("frame.newText") })}
                 onPlaceLogo={(logo) => placePersonalLogo(logo)}
                 cameraLogo={frameTool.cameraLogo}
-                brandLogos={frameTool.brandLogos}
-                onPlaceCameraLogo={(variant) => placeCameraLogo(variant)}
+                onPlaceCameraLogo={(mark) => placeCameraLogo(mark)}
                 onChooseCameraLogo={(logo, scope) => chooseCameraLogo(logo, scope)}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}

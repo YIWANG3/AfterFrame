@@ -18,6 +18,7 @@ import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
 import MyLogosRow from "./components/MyLogosRow";
+import CameraLogosBlock from "./components/CameraLogosBlock";
 import { isTextLayer, isStickerLayer, isOverlayLayer, isFrameLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
@@ -76,7 +77,6 @@ export default function TextPanel({
   // This photo's camera logo (useFrameTool.cameraLogo): place it, or give
   // the brand one of my logos (null: its own back). Shown first among the logos.
   cameraLogo,
-  brandLogos,
   onPlaceCameraLogo,
   onChooseCameraLogo,
   canvasPad,
@@ -297,15 +297,16 @@ export default function TextPanel({
                   {t(tokenMissing === "author" ? "text.tokens.noAuthor" : "text.tokens.missing")}
                 </div>
               )}
+              {cameraLogo && onChooseCameraLogo && (
+                <div className="mt-3">
+                  <div className="mb-1.5 text-[10px] text-muted2">{t("frame.cameraLogos")}</div>
+                  <CameraLogosBlock cameraLogo={cameraLogo} onPlace={onPlaceCameraLogo} onChoose={onChooseCameraLogo} />
+                </div>
+              )}
               {onPlaceLogo && (
                 <div className="mt-3">
-                  <MyLogosRow
-                    onPlace={onPlaceLogo}
-                    cameraLogo={cameraLogo}
-                    brandLogos={brandLogos}
-                    onPlaceCameraLogo={onPlaceCameraLogo}
-                    onChooseCameraLogo={onChooseCameraLogo}
-                  />
+                  <div className="mb-1.5 text-[10px] text-muted2">{t("frame.customLogos")}</div>
+                  <MyLogosRow onPlace={onPlaceLogo} />
                 </div>
               )}
             </Section>

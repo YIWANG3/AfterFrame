@@ -59,7 +59,13 @@ export function logoRefOf(el) {
 }
 // A logoRef as a one-element template, for collectLogoNeeds / prepareLogo.
 export function logoElementOf(ref) {
-  return { type: "logo", variant: ref.variant ?? undefined, kind: ref.kind ?? undefined, strict: !!ref.strict, color: ref.color ?? undefined, style: { size: 0.05 } };
+  return {
+    type: "logo", variant: ref.variant ?? undefined, kind: ref.kind ?? undefined, strict: !!ref.strict, color: ref.color ?? undefined,
+    // scope "brand": one of the brand's marks, placed from the brand row, not
+    // the model's own logo (templates give the model's when it has one).
+    brandOnly: ref.scope === "brand",
+    style: { size: 0.05 },
+  };
 }
 
 export function resolveSource(source, exif, profile) {

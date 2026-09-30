@@ -70,6 +70,54 @@ export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
   return modelVariants[0] || brand.variants[0];
 }
 
+// ── What a camera is called ──────────────────────────────────────────────
+// Models are shown as EXIF writes them, with one rule: Canon writes a second
+// generation body as "R6m2", shown "R6 Mark II". The user can name any model
+// (and a brand with no built-in logo) in Settings; their name wins. Models of
+// a brand given the same name are one camera (a drone's lenses: FC9113 and
+// FC9184), and share a model logo.
+
+const ROMAN = { 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII", 9: "IX" };
+
+export function modelDisplayName(brandId, model) {
+  const m = String(model || "").trim();
+  return brandId === "canon" ? m.replace(/(\w)m([2-9])$/, (_, c, n) => `${c} Mark ${ROMAN[n]}`) : m;
+}
+
+/**
+ * @param {object} exif          { make, camera_model }
+ * @param {object} registry      built-in brands (buildLogoRegistry)
+ * @param {object} cameraNames   { brandKey | modelKey: the user's name }
+ * @returns {{ brandKey, modelKey, brandName, modelName }|null} null with no make
+ */
+export function cameraNamesFor(exif, registry, cameraNames = {}) {
+  const brandKey = brandKeyForExif(exif, registry);
+  if (!brandKey) return null;
+  const model = String(exif?.camera_model || "").trim();
+  const modelKey = modelKeyFor(brandKey, model);
+  return {
+    brandKey, modelKey,
+    brandName: cameraNames[brandKey] || registry.byId.get(brandKey)?.name || String(exif?.make || "").trim(),
+    modelName: (modelKey && cameraNames[modelKey]) || modelDisplayName(brandKey, model),
+  };
+}
+
+/** EXIF with the camera's display name for frame text ({camera_model}). */
+export function labelExif(exif, registry, cameraNames) {
+  const names = cameraNamesFor(exif, registry, cameraNames);
+  return names?.modelName ? { ...exif, camera_label: names.modelName } : exif;
+}
+
+/** The brand's own general marks (every model shows them). */
+export function builtInBrandMarks(brand) {
+  return (brand?.variants || []).filter((variant) => !variant.models?.length);
+}
+
+/** Built-in marks for this model alone (Insta360's Luna Ultra lockup). */
+export function builtInModelMarks(brand, model) {
+  return (brand?.variants || []).filter((variant) => matchesModel(variant, model));
+}
+
 /** Every built-in mark a camera shows, in the manifest's order: the brand's
  *  general marks, with a model's own mark (Luna Ultra) in place of the
  *  general one of its kind. Sony: α and SONY. */
@@ -137,8 +185,10 @@ function myLogoVariant(logo, model) {
  * @param {object} registry      buildLogoRegistry() output (built-in brands)
  * @param {object} brandLogos    { brandKey | "brandKey#model": personal logo id }
  * @param {Array}  personalLogos my logos (listPersonalLogos)
+ * @param {object} [cameraNames] the user's model names: models of a brand with
+ *   the same name are one camera, and share a model logo set on any of them
  */
-export function withBrandLogos(registry, brandLogos, personalLogos) {
+export function withBrandLogos(registry, brandLogos, personalLogos, cameraNames = {}) {
   const entries = Object.entries(brandLogos || {});
   if (!entries.length) return registry;
   const byId = new Map(registry.byId);
@@ -159,6 +209,20 @@ export function withBrandLogos(registry, brandLogos, personalLogos) {
     byId.set(brandKey, model
       ? { ...brand, mineModels: [...(brand.mineModels || []), mine] }
       : { ...brand, mine });
+  }
+  // A model logo reaches the models named the same (a drone's other lens).
+  const sameName = (a, b) => normalizeMake(a) === normalizeMake(b);
+  for (const [brandKey, brand] of byId) {
+    if (!brand.mineModels?.length) continue;
+    const extra = [];
+    for (const [key, name] of Object.entries(cameraNames || {})) {
+      if (!key.startsWith(`${brandKey}#`) || !name) continue;
+      const model = key.slice(brandKey.length + 1);
+      if (brand.mineModels.some((v) => v.model === model)) continue;
+      const donor = brand.mineModels.find((v) => sameName(cameraNames[`${brandKey}#${v.model}`], name));
+      if (donor) extra.push({ ...donor, id: `${donor.id}~${model}`, model });
+    }
+    if (extra.length) byId.set(brandKey, { ...brand, mineModels: [...brand.mineModels, ...extra] });
   }
   return { ...registry, byId, match };
 }

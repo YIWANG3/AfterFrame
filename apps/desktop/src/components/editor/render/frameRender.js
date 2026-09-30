@@ -73,7 +73,8 @@ export function resolveTokens(str, exif, profile, coveredFields = new Set()) {
   return String(str).replace(/\{(\w+)\}/g, (_, key) => {
     if (coveredFields.has(key)) return "";
     switch (key) {
-      case "camera_model": return exif?.camera_model || "";
+      // The camera's display name (the user's, or Canon's R6m2 as R6 Mark II).
+      case "camera_model": return exif?.camera_label || exif?.camera_model || "";
       case "lens_model": return exif?.lens_model || "";
       case "date": return captureDate(exif);
       case "author": return profile?.author || "";
@@ -183,7 +184,9 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
   for (const el of template.elements) {
     if (el.type !== "logo" || !brand) continue;
     const variant = pickVariant(brand, {
-      variantId: el.variant, kind: el.kind, strict: el.strict, model: exif?.camera_model,
+      variantId: el.variant, kind: el.kind, strict: el.strict,
+      // A brand mark placed as such skips the model's own logo.
+      model: el.brandOnly ? undefined : exif?.camera_model,
     });
     if (!variant) continue;
     const color = logoColorFor(el, variant, logoColor);
@@ -270,7 +273,9 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     template.elements.forEach((el, index) => {
       if (el.type !== "logo") return;
       const variant = pickVariant(brand, {
-        variantId: el.variant, kind: el.kind, strict: el.strict, model: exif?.camera_model,
+        variantId: el.variant, kind: el.kind, strict: el.strict,
+      // A brand mark placed as such skips the model's own logo.
+      model: el.brandOnly ? undefined : exif?.camera_model,
       });
       if (!variant) return;
       const color = logoColorFor(el, variant, logoColor);

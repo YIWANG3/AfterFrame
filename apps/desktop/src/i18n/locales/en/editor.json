@@ -257,8 +257,6 @@
     "templateSaved": "Saved as template",
     "templateSkipped": "{{count}} layer(s) exist only as pixels (a handwriting sticker) and were left out",
     "templateFailed": "Could not save the template",
-    "importLogo": "Import",
-    "importLogoHint": "Import an SVG or PNG (or drag one into the editor). It goes into the frame; a one-colour logo on a transparent background is recoloured to suit it.",
     "placeLogo": "Put in the frame",
     "dropLogo": "Drop to add as my logo",
     "logoImported": "Logo added",
@@ -323,13 +321,18 @@
     "layersEmpty": "Nothing in the frame yet: pick a template, or add from above.",
     "inFrameTool": "{{count}} item(s) in the frame: edit them with the Frame tool.",
     "placeCameraLogo": "Put in the frame",
-    "logos": "Logo",
-    "cameraLogoFor": "Logo for {{name}} photos",
-    "chooseCameraLogo": "Choose the logo for {{name}} photos",
     "logoDefault": "Default",
     "logoNone": "None",
-    "allOfBrand": "All {{name}}",
-    "importMine": "My logo",
-    "importMineHint": "Import a signature, a studio mark… (SVG or PNG) to use on every photo"
+    "cameraLogos": "Camera logo",
+    "customLogos": "Custom",
+    "levelBrand": "Brand",
+    "levelModel": "Model",
+    "brandLogoFor": "{{name}} logo, for every model",
+    "modelLogoFor": "{{name}} logo, for this model only",
+    "followBrand": "Brand's",
+    "uploadCustom": "Upload",
+    "uploadCustomHint": "Upload a signature, a studio mark… (SVG or PNG, several at once) to use on every photo",
+    "uploadCamera": "Upload",
+    "uploadCameraHint": "Upload an SVG or PNG as this camera's logo"
   }
 }

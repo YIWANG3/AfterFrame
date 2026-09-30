@@ -304,7 +304,7 @@
     "authorPlaceholder": "Your name",
     "saved": "Saved",
     "brandsTitle": "Camera logos",
-    "brandsSubtitle": "The logo each camera brand's frames use. Choose Default to go back to the brand's own.",
+    "brandsSubtitle": "Each camera's logo. A brand's is for every model of it; a model's is for that model only. Click a name to rename it: models named the same are one camera (a drone's lenses).",
     "brandsEmpty": "No photos with camera information yet.",
     "brandCount_one": "{{count}} photo",
     "brandCount_other": "{{count}} photos",
@@ -316,9 +316,9 @@
     "delete": "Delete",
     "deleteTitle": "Delete template “{{name}}”?",
     "deleteMessage": "Photos already framed with it stay as they are.",
-    "logosTitle": "My logos",
-    "logosSubtitle": "Click one in the editor's Frame tool to put it in the frame, or drag an SVG or PNG into the editor. One-colour logos are recoloured to suit. Settings export does not include logo files.",
-    "importLogo": "Import logo…",
+    "logosTitle": "Custom",
+    "logosSubtitle": "A signature, a studio mark… for every photo: click one in the editor's Frame tool, or drag an SVG or PNG into the editor. One-colour logos are recoloured to suit. Settings export does not include logo files.",
+    "importLogo": "Upload…",
     "rename": "Rename",
     "logoTintable": "Recolourable",
     "logoFixed": "Keeps its colours",
@@ -331,6 +331,8 @@
       "empty_image": "There is no mark in that image",
       "too_many": "You already have 50 logos; delete some first",
       "failed": "Import failed: {{message}}"
-    }
+    },
+    "renameCamera": "Rename",
+    "followBrand": "Brand's"
   }
 }

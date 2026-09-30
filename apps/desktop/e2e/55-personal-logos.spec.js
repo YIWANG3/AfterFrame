@@ -161,7 +161,7 @@ test("deleting the logo leaves the template working without it", async () => {
   const [tpl] = await templates();
   await openEditorOn(LANDSCAPE);
   await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
-  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6m2");
+  await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6 Mark II");
   expect(personalLayers(await editorState())).toHaveLength(0);
   await closeEditor();
 });
