@@ -72,6 +72,7 @@ function buildExifPayload(metadata) {
     },
     IFD2: {
       ...(dateTime ? { DateTimeOriginal: dateTime } : {}),
+      ...(metadata.lens_make ? { LensMake: String(metadata.lens_make) } : {}),
       ...(metadata.lens_model ? { LensModel: String(metadata.lens_model) } : {}),
       ...(metadata.iso != null ? { ISOSpeedRatings: String(metadata.iso) } : {}),
       ...(aperture ? { FNumber: aperture } : {}),

@@ -32,6 +32,23 @@ class CameraMakesTests(unittest.TestCase):
             raw_asset_id=None, feature_vector={},
         ))
 
+    def test_lens_make_is_stored_with_the_photo(self):
+        path = Path(self.directory.name) / "lens.jpg"
+        path.write_bytes(b"jpg")
+        candidate = ImageCandidate(
+            asset_id="image_lens", path=path, stem="lens", normalized_stem="lens", stem_key="lens",
+            extension=".jpg", fingerprint="fp-lens", file_size=3, modified_time="2026-01-01T00:00:00",
+            capture_time=None, rating=None, camera_make="FUJIFILM", camera_model="X-T5",
+            lens_model="atx-m 23mm F1.4 X", software=None, iso=None, aperture=None, shutter_speed=None,
+            focal_length=None, flash=None, white_balance=None, color_space=None, lens_specification=None,
+            gps_latitude=None, gps_longitude=None, width=600, height=400, lens_make="Tokina",
+        )
+        upsert_image_asset(self.connection, candidate)
+        row = self.connection.execute(
+            "SELECT json_extract(metadata_json, '$.lens_make') AS lens_make FROM assets WHERE asset_id = 'image_lens'"
+        ).fetchone()
+        self.assertEqual(row["lens_make"], "Tokina")
+
     def test_makes_with_counts_and_models_most_used_first(self):
         self.add("a", "Canon", "Canon EOS R6m2")
         self.add("b", "Canon", "Canon EOS R6m2")

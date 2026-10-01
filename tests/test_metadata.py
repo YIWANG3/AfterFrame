@@ -255,6 +255,29 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
             self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
 
+    def test_lens_make_is_read_when_written_and_empty_when_blank(self) -> None:
+        # A third-party lens: LensMake names it (Tamron on Fujifilm), or the
+        # field is there but blank (Tamron on a Nikon body writes spaces).
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for name, lens_make, expected in (("tamron", "TAMRON", "TAMRON"), ("blank", "     ", None), ("none", None, None)):
+                exif = [(0xA434, 2, "E 70-180mm F2.8 A056")]
+                if lens_make is not None:
+                    exif.append((0xA433, 2, lens_make))
+                tiff = _build_tiff(ifd0=[(0x010F, 2, "SONY"), (0x0110, 2, "ILCE-7M4")], exif=exif)
+                path = Path(temp_dir) / f"{name}.jpg"
+                path.write_bytes(_build_jpeg_with_exif(tiff, width=600, height=400))
+                candidate = extract_image_candidate(path)
+                self.assertEqual(candidate.lens_model, "E 70-180mm F2.8 A056")
+                self.assertEqual(candidate.lens_make, expected, name)
+
+            tiff = _build_tiff(
+                ifd0=[(0x010F, 2, "NIKON CORPORATION"), (0x0110, 2, "NIKON Z 8"), (0x0100, 4, 6000), (0x0101, 4, 4000)],
+                exif=[(0xA434, 2, "LAOWA FFII 12mm F2.8 C&D Dreamer"), (0xA433, 2, "LAOWA")],
+            )
+            path = Path(temp_dir) / "DSC_0001.NEF"
+            path.write_bytes(b"\x00" * 344 + tiff + b"\x00" * 256)
+            self.assertEqual(extract_raw_metadata(path).lens_make, "LAOWA")
+
     def test_extract_raw_metadata_matcher_profile_skips_nonessential_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             tiff = _build_tiff(
@@ -264,7 +287,7 @@ class MetadataExtractionTest(unittest.TestCase):
                     (0x0101, 4, 4000),
                     (0x0132, 2, "2026:01:11 15:03:52"),
                 ],
-                exif=[(0xA434, 2, "RF24-70mm F2.8 L IS USM")],
+                exif=[(0xA434, 2, "RF24-70mm F2.8 L IS USM"), (0xA433, 2, "Canon")],
             )
             path = Path(temp_dir) / "0Y1A7001.CR3"
             path.write_bytes(b"\x00" * 1024 + tiff)
@@ -275,6 +298,7 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
             self.assertIsNone(metadata.camera_make)
             self.assertIsNone(metadata.lens_model)
+            self.assertIsNone(metadata.lens_make)
             self.assertIsNone(metadata.iso)
             self.assertIsNone(metadata.width)
             self.assertIsNone(metadata.height)

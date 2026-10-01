@@ -42,6 +42,19 @@ test("buildExifPayload maps sidecar metadata onto sharp's IFD layout", () => {
   assert.equal(exif.IFD3.GPSLongitude, "74/1 0/1 108/5");
 });
 
+test("a framed copy keeps the lens maker: LensMake is written and reads back", async () => {
+  const exif = buildExifPayload({ camera_make: "SONY", camera_model: "ILCE-7M4", lens_make: "TAMRON", lens_model: "E 70-180mm F2.8 A056" });
+  assert.equal(exif.IFD2.LensMake, "TAMRON");
+  assert.equal(buildExifPayload({ camera_model: "X", lens_make: null }).IFD2, undefined);
+  // libvips writes only the tags it knows by name: check this one survives.
+  const sharp = require("sharp");
+  const exifr = require("exifr");
+  const jpeg = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#888" } }).withExif(exif).jpeg().toBuffer();
+  const read = await exifr.parse(jpeg);
+  assert.equal(read.LensMake, "TAMRON");
+  assert.equal(read.LensModel, "E 70-180mm F2.8 A056");
+});
+
 test("buildExifPayload drops empty directories and returns null for nothing", () => {
   const exif = buildExifPayload({ camera_model: "X" });
   assert.deepEqual(Object.keys(exif), ["IFD0"]);  // no exposure data → no IFD2, no GPS → no IFD3

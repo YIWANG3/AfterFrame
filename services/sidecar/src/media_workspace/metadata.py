@@ -429,6 +429,7 @@ def _extract_tiff_metadata(
             "camera_make": camera_make,
             "camera_model": camera_model,
             "lens_model": None,
+            "lens_make": None,
             "software": None,
             "iso": None,
             "aperture": None,
@@ -451,6 +452,7 @@ def _extract_tiff_metadata(
     if not isinstance(height, int):
         height = exif_ifd.get(0xA003) if isinstance(exif_ifd.get(0xA003), int) else None
     lens_model = _coerce_ascii(exif_ifd.get(0xA434))
+    lens_make = _coerce_ascii(exif_ifd.get(0xA433))
     software = _coerce_ascii(ifd0.get(0x0131))
     iso = _coerce_int(exif_ifd.get(0x8827))
     aperture = _coerce_float(exif_ifd.get(0x829D)) or _coerce_float(exif_ifd.get(0x9202))
@@ -469,6 +471,7 @@ def _extract_tiff_metadata(
         "camera_make": camera_make,
         "camera_model": camera_model,
         "lens_model": lens_model,
+        "lens_make": lens_make,
         "software": software,
         "iso": iso,
         "aperture": aperture,
@@ -514,6 +517,7 @@ def _merge_metadata(candidates: list[dict[str, Any]]) -> dict[str, Any]:
         "camera_make": None,
         "camera_model": None,
         "lens_model": None,
+        "lens_make": None,
         "software": None,
         "iso": None,
         "aperture": None,
@@ -610,6 +614,7 @@ def extract_raw_metadata(
         camera_make=metadata["camera_make"],
         camera_model=metadata["camera_model"],
         lens_model=metadata["lens_model"],
+        lens_make=metadata.get("lens_make"),
         software=metadata["software"],
         iso=metadata["iso"],
         aperture=metadata["aperture"],
@@ -654,6 +659,7 @@ def extract_image_candidate(path: Path, fingerprint_mode: str = "head-tail") -> 
         camera_make=metadata["camera_make"],
         camera_model=metadata["camera_model"],
         lens_model=metadata["lens_model"],
+        lens_make=metadata.get("lens_make"),
         software=metadata["software"],
         iso=metadata["iso"],
         aperture=metadata["aperture"],

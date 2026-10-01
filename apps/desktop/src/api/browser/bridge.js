@@ -142,6 +142,7 @@ async function readExifMetadata(file) {
       // Sidecar field name — frame brand auto-match reads camera_make.
       camera_make: exif.Make || null,
       lens_model: exif.LensModel || null,
+      lens_make: exif.LensMake || null,
       aperture: exif.FNumber ?? null,
       shutter_speed: exif.ExposureTime ?? null,
       iso: exif.ISO ?? null,

@@ -36,6 +36,8 @@ class RawMetadata:
     metadata_level: str
     fingerprint_level: str
     enrichment_status: str
+    # Last, with a default: older constructors do not pass it.
+    lens_make: str | None = None
 
     @property
     def aspect_ratio(self) -> float | None:
@@ -73,6 +75,8 @@ class ImageCandidate:
     gps_longitude: float | None
     width: int | None
     height: int | None
+    # Last, with a default: older constructors do not pass it.
+    lens_make: str | None = None
 
     @property
     def aspect_ratio(self) -> float | None:
