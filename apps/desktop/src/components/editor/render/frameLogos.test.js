@@ -153,9 +153,10 @@ describe("what a camera is called", () => {
   const registry = buildLogoRegistry({
     logos: [
       { id: "canon", name: "Canon", variants: [] }, { id: "nikon", name: "Nikon", variants: [] },
+      { id: "sony", name: "Sony", variants: [] },
       { id: "dji", name: "DJI", variants: [{ id: "wordmark", kind: "wordmark", file: "d.svg" }] },
     ],
-    match: { canon: "canon", nikon: "nikon", dji: "dji" },
+    match: { canon: "canon", nikon: "nikon", sony: "sony", dji: "dji" },
   });
 
   it("rules: Canon's m2, Nikon's _2, Sony's ILCE codes; anything else as EXIF writes it", () => {
@@ -174,9 +175,9 @@ describe("what a camera is called", () => {
     expect(modelDisplayName("hasselblad", "CFV 100C/907X")).toBe("CFV 100C/907X");
   });
 
-  it("the name tables come before the rules; manual.json before generated.json; the user before both", () => {
+  it("the user, then manual.json, then the rules, then generated.json", () => {
     const tables = {
-      generated: { names: { "nikon corporation": { "nikon z5_2": "Nikon Z5 II (gen)" }, dji: { fc9113: "DJI Air 3S", fc9184: "DJI Air 3S" }, sony: { "ilce-7cm2": "Sony α7C II" } } },
+      generated: { names: { "nikon corporation": { "nikon z5_2": "Nikon Z5 II (gen)" }, dji: { fc9113: "DJI Air 3S", fc9184: "DJI Air 3S" }, sony: { "ilce-7cm2": "Sony Alpha 7C Mark II", "dsc-rx100m3": "Sony Cyber-shot DSC-RX100 III" } } },
       manual: { names: { dji: { fc9113: "DJI Air 3S" }, "nikon corporation": { "nikon z5_2": "Nikon Z5II" } }, brands: { "make:yingling innovations pte. ltd.": "Antigravity" } },
     };
     const namer = cameraNamer(registry, { "dji#fc8282": "My Air 3" }, tables);
@@ -184,6 +185,8 @@ describe("what a camera is called", () => {
     expect(cameraNamesFor({ make: "DJI", camera_model: "FC9184" }, registry, namer).modelName).toBe("DJI Air 3S"); // generated
     expect(cameraNamesFor({ make: "DJI", camera_model: "FC8282" }, registry, namer).modelName).toBe("My Air 3"); // the user
     expect(cameraNamesFor({ make: "Canon", camera_model: "Canon EOS R6m2" }, registry, namer).modelName).toBe("Canon EOS R6 Mark II"); // the rule
+    expect(cameraNamesFor({ make: "SONY", camera_model: "ILCE-7CM2" }, registry, namer).modelName).toBe("Sony α7C II"); // the rule over generated
+    expect(cameraNamesFor({ make: "SONY", camera_model: "DSC-RX100M3" }, registry, namer).modelName).toBe("Sony Cyber-shot DSC-RX100 III"); // no rule
     expect(cameraNamesFor({ make: "Yingling Innovations Pte. Ltd.", camera_model: "antigravity a1" }, registry, namer).brandName).toBe("Antigravity");
     // A table's name reaches the brand's other make spellings.
     expect(cameraNamesFor({ make: "NIKON", camera_model: "NIKON Z5_2" }, registry, namer).modelName).toBe("Nikon Z5II");

@@ -4,11 +4,11 @@ app 里相机叫什么名字（界面上的品牌名、机型名，以及边框�
 
 1. **用户改的名字**：设置 › 水印 › 相机 logo 里点机型名改，存在 `watermarkProfile.cameraNames`。
 2. **手工表** `apps/desktop/camera-names/manual.json`：随 app 发布，发现显示成代码的新机型就加一行。
-3. **生成表** `apps/desktop/camera-names/generated.json`：从 Wikidata 和 Wikimedia Commons（都是 CC0）生成，见 `camera-names/README.md`。
-4. **规则**：只有三条。
+3. **规则**：只有三条，在 `apps/desktop/shared/cameraNameRules.mjs`。
    - 佳能：`EOS R6m2` 显示为 `EOS R6 Mark II`。
    - 尼康：`NIKON Z5_2` 显示为 `Nikon Z5II`。
    - 索尼：`ILCE-7CM2` 显示为 `Sony α7C II`，`ILCE-7CR` 显示为 `Sony α7CR`。
+4. **生成表** `apps/desktop/camera-names/generated.json`：从 Wikidata 和 Wikimedia Commons（都是 CC0）生成，见 `camera-names/README.md`。只收白名单里的厂商：这些年还在出相机的厂商，加上华为、荣耀、小米（Redmi、POCO）、OPPO、一加、realme、vivo（iQOO）这几家国产手机；只翻译看不懂的型号代码，规则能命名的不收。子品牌手机按子品牌叫（Honor 10 Lite、Redmi Note 13 Pro+）。
 5. **EXIF 原文**。
 
 代码在 `frameLogos.cameraNamer`，读表在 `render/cameraNames.js`。编辑器、设置页和 agent 的 apply_frame 都走同一个 namer。
@@ -53,5 +53,5 @@ EXIF 厂商里包含 `frame-logos/logos.json` 的 `match` 字样就归到那个�
 ## 什么时候加表
 
 - 显示成代码、看不出是什么相机：加手工表。
-- 生成表里的名字不对：在手工表里写同一个键覆盖，不要改 generated.json（重新生成会冲掉）。
+- 生成表里的名字不对或没用：写进 `apps/desktop/scripts/camera-names/corrections.mjs`（改名或删掉，附原因），重新生成。不要直接改 generated.json，重新生成会冲掉。
 - 只是大小写或前缀不统一（`LEICA M11-P`）：不管，按 EXIF 原文。

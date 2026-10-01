@@ -7,6 +7,10 @@
 // the dev harness, or from the main process / media:// in the app). This module
 // only turns text + color into pixels.
 
+import { modelDisplayName } from "../../../../shared/cameraNameRules.mjs";
+
+export { modelDisplayName };
+
 /** Parse the `logos.json` manifest into a lookup-friendly shape. */
 export function buildLogoRegistry(manifest) {
   const byId = new Map();
@@ -71,31 +75,15 @@ export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
 }
 
 // ── What a camera is called ──────────────────────────────────────────────
-// A model's name, first found wins: the user's name for it (Settings); the
-// name tables (camera-names/manual.json, hand-kept, over generated.json,
-// built from CC0 sources), looked up by the EXIF make, then by the brand (all
-// of a brand's makes: "NIKON CORPORATION" and "NIKON"); a few rules (Canon
-// "R6m2" -> "R6 Mark II", Nikon "Z5_2" -> "Z5II", Sony "ILCE-7CM2" ->
-// "α7C II"); else EXIF as written. Models of a brand with the same name are
+// A model's name, first found wins: the user's name for it (Settings);
+// camera-names/manual.json (hand-kept); the rules (shared/cameraNameRules:
+// Canon "R6m2" -> "R6 Mark II", Nikon "Z5_2" -> "Z5II", Sony "ILCE-7CM2" ->
+// "α7C II"); camera-names/generated.json (built from CC0 sources, for the
+// makers still selling cameras); else EXIF as written. A table is looked up
+// by the EXIF make, then by the brand (all of a brand's makes: "NIKON
+// CORPORATION" and "NIKON"). Models of a brand with the same name are
 // one camera (a drone's lenses: FC9113 and FC9184 are both "DJI Air 3S") and
 // share a model logo.
-
-const ROMAN = { 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII", 9: "IX" };
-
-/** The rules alone: a model as a brand's rule names it, else as written. */
-export function modelDisplayName(brandId, model) {
-  const m = String(model || "").trim();
-  if (brandId === "canon") return m.replace(/(\w)m([2-9])$/, (_, c, n) => `${c} Mark ${ROMAN[n]}`);
-  if (brandId === "nikon") {
-    const gen = /^(?:nikon\s+)?(.*?)_([2-9])$/i.exec(m);
-    if (gen) return `Nikon ${gen[1]}${ROMAN[gen[2]]}`;
-  }
-  if (brandId === "sony") {
-    const alpha = /^ilce-(\d+)([a-z]*?)(?:m([2-9]))?$/i.exec(m);
-    if (alpha) return `Sony α${alpha[1]}${alpha[2].toUpperCase()}${alpha[3] ? ` ${ROMAN[alpha[3]]}` : ""}`;
-  }
-  return m;
-}
 
 /**
  * Names cameras for one registry, the user's names and the name tables.
@@ -104,16 +92,28 @@ export function modelDisplayName(brandId, model) {
  * @param {object} [tables]     { manual, generated }: camera-names/*.json
  */
 export function cameraNamer(registry, cameraNames = {}, tables = null) {
-  const byMake = {};
-  const byBrand = {};
-  // Generated first, so manual.json overwrites it.
-  for (const layer of [tables?.generated?.names, tables?.manual?.names]) {
-    for (const [make, models] of Object.entries(layer || {})) {
+  const layer = (names) => {
+    const byMake = {};
+    const byBrand = {};
+    for (const [make, models] of Object.entries(names || {})) {
       const brandKey = brandKeyForExif({ make, camera_model: "" }, registry);
       for (const [model, name] of Object.entries(models || {})) {
         (byMake[make] ||= {})[model] = name;
         if (brandKey) (byBrand[brandKey] ||= {})[model] = name;
       }
+    }
+    // A model's name in this table: by the EXIF make, else by the brand.
+    return (brandKey, m, make) => (make != null && byMake[normalizeMake(make)]?.[m]) || byBrand[brandKey]?.[m] || null;
+  };
+  const manual = layer(tables?.manual?.names);
+  const generated = layer(tables?.generated?.names);
+  const inTables = new Map(); // brand key -> the models the tables name
+  for (const names of [tables?.manual?.names, tables?.generated?.names]) {
+    for (const [make, models] of Object.entries(names || {})) {
+      const brandKey = brandKeyForExif({ make, camera_model: "" }, registry);
+      if (!brandKey) continue;
+      if (!inTables.has(brandKey)) inTables.set(brandKey, new Set());
+      for (const model of Object.keys(models || {})) inTables.get(brandKey).add(model);
     }
   }
   const brandNames = tables?.manual?.brands || {};
@@ -122,17 +122,19 @@ export function cameraNamer(registry, cameraNames = {}, tables = null) {
   function modelName(brandKey, model, make) {
     const m = normalizeMake(model);
     const key = modelKeyFor(brandKey, model);
+    const ruled = modelDisplayName(brandKey, model);
     return (key && cameraNames[key])
-      || (make != null && byMake[normalizeMake(make)]?.[m])
-      || byBrand[brandKey]?.[m]
-      || modelDisplayName(brandKey, model);
+      || manual(brandKey, m, make)
+      || (ruled !== String(model || "").trim() ? ruled : null)
+      || generated(brandKey, m, make)
+      || ruled;
   }
   function brandName(brandKey, make) {
     return cameraNames[brandKey] || registry.byId.get(brandKey)?.name || brandNames[brandKey] || String(make || "").trim();
   }
   /** Every model of a brand the tables or the user name (normalized). */
   function modelsOf(brandKey) {
-    const models = new Set(Object.keys(byBrand[brandKey] || {}));
+    const models = new Set(inTables.get(brandKey) || []);
     for (const key of Object.keys(cameraNames)) if (key.startsWith(`${brandKey}#`)) models.add(key.slice(brandKey.length + 1));
     return [...models];
   }
