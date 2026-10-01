@@ -81,3 +81,9 @@ e2e-web/.artifacts/
 
 # Local-only UI experiments and their photo assets
 /apps/desktop/lg-demo-electron/
+
+# Version the desktop app icons used by electron-builder.
+!/apps/desktop/build/
+/apps/desktop/build/*
+!/apps/desktop/build/icon.png
+!/apps/desktop/build/icon.icns
