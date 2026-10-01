@@ -196,6 +196,34 @@ test("a Chinese phone's code is named; a sub-brand's phone goes by the sub-brand
   });
 });
 
+test("phone names in each brand's own spelling", () => {
+  assert.equal(normalizeBrandSpelling("Huawei Nova 8"), "Huawei nova 8");
+  assert.equal(normalizeBrandSpelling("Huawei P9 Lite Mini"), "Huawei P9 lite mini");
+  assert.equal(normalizeBrandSpelling("Huawei P Smart (2019)"), "Huawei P smart (2019)");
+  assert.equal(normalizeBrandSpelling("Huawei Mate 40 Pro Plus"), "Huawei Mate 40 Pro+");
+  assert.equal(normalizeBrandSpelling("Honor 10 Lite"), "Honor 10 Lite"); // Honor writes Lite
+  assert.equal(normalizeBrandSpelling("vivo iQOO 9 SE"), "iQOO 9 SE");
+  assert.equal(normalizeBrandSpelling("vivo V21E 5G"), "vivo V21e 5G");
+  assert.equal(normalizeBrandSpelling("vivo Y15S"), "vivo Y15s");
+  assert.equal(normalizeBrandSpelling("realme Narzo 20A"), "realme narzo 20A");
+  assert.equal(normalizeBrandSpelling("realme NARZO 70 Pro 5G"), "realme NARZO 70 Pro 5G");
+  assert.equal(normalizeBrandSpelling("DJI Zenmuse X5S"), "DJI Zenmuse X5S"); // only vivo's letters
+});
+
+test("a phone model an app appended to, or a name with a market's tag, is left to EXIF", () => {
+  const { names: out, stats } = names(null, [
+    "realme,RMX2050 (RMX2050),realme Narzo 20A",
+    "HUAWEI,MHA-L29 (Camera Super Pixel),Huawei Mate 9",
+    "OnePlus,ONEPLUS A6013 P3XL,OnePlus 6T",
+    "OnePlus,ONEPLUS A5010(shot on gcam),OnePlus 5T",
+    "Xiaomi,21091116AC,Redmi Note 11 (China)",
+    "realme,RMX2050,realme Narzo 20A",
+  ].join("\n"));
+  assert.deepEqual(out, { realme: { rmx2050: "realme narzo 20A" } });
+  assert.equal(stats.droppedByReason["catmapping: an app's model"], 4);
+  assert.equal(stats.droppedByReason["catmapping: a market's tag in the name"], 1);
+});
+
 test("a phone under a camera maker's name, or a name with another brand, is dropped", () => {
   assert.equal(namedWithItsBrand("panasonic", "Panasonic Lumix DC-G9 II"), true);
   assert.equal(namedWithItsBrand("panasonic", "Lumix DC-G9 II"), true);

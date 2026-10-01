@@ -63,11 +63,24 @@ export function normalizeBrandSpelling(name) {
 // Sony's A-mount and E-mount bodies are "α" and a number, as the rules name
 // them; a sub-brand's phone goes by the sub-brand ("Huawei Honor 10 Lite" is
 // sold as "Honor 10 Lite", "Xiaomi Redmi Note 13" as "Redmi Note 13").
-const houseStyle = (s) => s
-  .replace(/^Sony Alpha (?=\d)/i, "Sony α")
-  .replace(/^Huawei (?=Honor\b)/i, "")
-  .replace(/^Xiaomi (?=(?:Redmi|POCO)\b)/i, "")
-  .replace(/^(?:Xiaomi )?Poco(?:phone)?\b/i, "POCO");
+// Huawei writes nova, lite and P smart in lower case (Honor writes Lite);
+// iQOO is vivo's sub-brand; vivo writes its letter suffixes in lower case
+// (V21e, Y15s); realme's narzo before the 70 is lower case.
+const houseStyle = (s) => {
+  let name = s
+    .replace(/^Sony Alpha (?=\d)/i, "Sony α")
+    .replace(/^Huawei (?=Honor\b)/i, "")
+    .replace(/^Xiaomi (?=(?:Redmi|POCO)\b)/i, "")
+    .replace(/^(?:Xiaomi )?Poco(?:phone)?\b/i, "POCO")
+    .replace(/^vivo (?=iQOO\b)/i, "")
+    .replace(/^realme Narzo (?=(?:[1-6]\d[A-Za-z]?|N\d)\b)/, "realme narzo ");
+  if (/^Huawei /.test(name)) {
+    name = name.replace(/\bNova\b/g, "nova").replace(/\bLite\b/g, "lite").replace(/\blite Mini\b/g, "lite mini")
+      .replace(/\bP Smart\b/g, "P smart").replace(/ Pro Plus\b/g, " Pro+");
+  }
+  if (/^(?:vivo|iQOO) /.test(name)) name = name.replace(/\b([XYVSTUZ]\d{1,3})([SEX])\b/g, (_, code, letter) => code + letter.toLowerCase());
+  return name;
+};
 
 // ── Which makers ─────────────────────────────────────────────────────────
 // Only these makers' devices are named, by the EXIF Make they write now (a
@@ -141,6 +154,16 @@ export function namedWithItsBrand(makeKey, name) {
 // Ericsson's), Japanese carriers' Panasonic and Casio handsets, Leica's and
 // Kodak's phones.
 const PHONE_NAME = /\b(?:xperia|ericsson|softbank|docomo|g'?z ?one|leitz phone|ektra|eluga|phone)\b/i;
+
+// A phone model with something a camera app appended: GCam ports add the
+// device's codename ("RMX2050 (RMX2050)") or a profile ("ONEPLUS A6013 P3XL"),
+// other apps their own name ("MHA-L29 (Camera Super Pixel)"). Stock firmware
+// writes the bare model, which the table has.
+const APP_SUFFIX = /\s\([^)]*\)$|\s(?:n6p|n5x|n5|p2xl|p3xl|pxl|p3)$|gcam|shot on|lib google/;
+
+// A name with a market's tag ("Redmi Note 11 (China)", "POCO M4 5G (India)"):
+// without it, it can name another phone; left to EXIF.
+const MARKET_TAG = /\s\((?:India|Global|China|Europe|International|[A-Z]{2})\)$/;
 
 // An EXIF model no camera writes as it is: in brackets or quotes, one
 // person's camera, or a digital back and the body or lens it was on
@@ -529,7 +552,10 @@ export function wikidataCandidates(sparqlJson) {
 export function judge(c) {
   c.name = normalizeBrandSpelling(c.label);
   if (!MAKES.has(normKey(c.make))) return "maker not on the list";
-  if (!PHONE_BRANDS.has(MAKES.get(normKey(c.make))) && PHONE_NAME.test(c.name)) return "a phone";
+  const phone = PHONE_BRANDS.has(MAKES.get(normKey(c.make)));
+  if (!phone && PHONE_NAME.test(c.name)) return "a phone";
+  if (phone && APP_SUFFIX.test(normKey(c.rawModel ?? c.model))) return "an app's model";
+  if (MARKET_TAG.test(c.name)) return "a market's tag in the name";
   if (!namedWithItsBrand(c.make, c.name)) return "not named with its brand";
   const raw = String(c.rawModel ?? c.model).trim();
   if (modelDisplayName(MAKES.get(normKey(c.make)).toLowerCase(), raw) !== raw) return "a rule names it";
