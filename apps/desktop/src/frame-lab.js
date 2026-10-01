@@ -23,7 +23,31 @@ const BRANDS = [
   { label: "Sony", exif: { camera_model: "ILCE-7CR", lens_model: "FE 35mm F1.4 GM", make: "Sony", focal_length: 35, aperture: 1.4, shutter_speed: 1/320, iso: 125, capture_time: "2024-08-02T11:00:00Z" } },
   { label: "Insta360", exif: { camera_model: "Insta360 X5", lens_model: "", make: "Arashi Vision Inc.", focal_length: 6, aperture: 2, shutter_speed: 1/500, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
   { label: "Luna Ultra", exif: { camera_model: "Insta360 Luna Ultra", lens_model: "Summicron", make: "Arashi Vision Inc.", focal_length: 14, aperture: 2, shutter_speed: 1/250, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
+  { label: "Pentax", exif: { camera_model: "PENTAX K-3 Mark III", lens_model: "HD PENTAX-DA 20-40mm F2.8-4 ED Limited", make: "RICOH IMAGING COMPANY, LTD.", focal_length: 31, aperture: 4, shutter_speed: 1/250, iso: 200, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Sigma", exif: { camera_model: "fp L", lens_model: "45mm F2.8 DG DN | Contemporary 019", make: "SIGMA", focal_length: 45, aperture: 2.8, shutter_speed: 1/200, iso: 100, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Olympus", exif: { camera_model: "E-M1MarkIII", lens_model: "OLYMPUS M.12-40mm F2.8", make: "OLYMPUS CORPORATION", focal_length: 25, aperture: 2.8, shutter_speed: 1/320, iso: 200, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "OM System", exif: { camera_model: "OM-1", lens_model: "M.Zuiko Digital ED 12-40mm F2.8 PRO II", make: "OM Digital Solutions", focal_length: 25, aperture: 2.8, shutter_speed: 1/320, iso: 200, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Phase One", exif: { camera_model: "IQ4 150MP", lens_model: "Schneider Kreuznach LS 80mm f/2.8", make: "Phase One A/S", focal_length: 80, aperture: 8, shutter_speed: 1/125, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "GoPro", exif: { camera_model: "HERO12 Black", lens_model: "", make: "GoPro", focal_length: 3, aperture: 2.5, shutter_speed: 1/1000, iso: 100, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Parrot", exif: { camera_model: "ANAFI Ai", lens_model: "", make: "Parrot", focal_length: 4, aperture: 2.2, shutter_speed: 1/1000, iso: 100, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Autel", exif: { camera_model: "XT705", lens_model: "", make: "Autel Robotics", focal_length: 10, aperture: 2.8, shutter_speed: 1/1000, iso: 100, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Antigravity", exif: { camera_model: "antigravity a1", lens_model: "", make: "Yingling Innovations Pte. Ltd.", focal_length: 2, aperture: 2, shutter_speed: 1/1000, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
+  { label: "Xiaomi", exif: { camera_model: "2211133C", lens_model: "", make: "Xiaomi", focal_length: 6, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Redmi", exif: { camera_model: "Redmi Note 13 Pro+", lens_model: "", make: "Xiaomi", focal_length: 6, aperture: 1.7, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "POCO", exif: { camera_model: "22111317PG", lens_model: "", make: "POCO", focal_length: 6, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Huawei", exif: { camera_model: "ELS-NX9", lens_model: "", make: "HUAWEI", focal_length: 7, aperture: 1.9, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "Honor", exif: { camera_model: "ANY-NX1", lens_model: "", make: "HONOR", focal_length: 6, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "OPPO", exif: { camera_model: "CPH2385", lens_model: "", make: "OPPO", focal_length: 4, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "vivo", exif: { camera_model: "V2309A", lens_model: "", make: "vivo", focal_length: 6, aperture: 1.6, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "iQOO", exif: { camera_model: "I2220", lens_model: "", make: "vivo", focal_length: 6, aperture: 1.9, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "OnePlus", exif: { camera_model: "CPH2581", lens_model: "", make: "OnePlus", focal_length: 6, aperture: 1.6, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "realme", exif: { camera_model: "RMX3241", lens_model: "", make: "realme", focal_length: 4, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
 ];
+
+// ?brands=Pentax,OPPO&templates=bar-id,... shows only those (labels / template ids).
+const params = new URLSearchParams(location.search);
+const onlyBrands = params.get("brands")?.split(",").map((x) => x.trim().toLowerCase());
+const onlyTemplates = params.get("templates")?.split(",").map((x) => x.trim());
 
 function samplePhoto(w = 1400) {
   const h = Math.round(w * 0.667); // landscape 3:2 — matches typical camera output
@@ -64,7 +88,7 @@ async function run() {
     await document.fonts.ready;
     const photo = samplePhoto();
     const root = document.getElementById("root");
-    for (const brand of BRANDS) {
+    for (const brand of BRANDS.filter((b) => !onlyBrands || onlyBrands.includes(b.label.toLowerCase()))) {
       const sec = document.createElement("div");
       sec.className = "brand";
       const h2 = document.createElement("h2");
@@ -72,7 +96,7 @@ async function run() {
       sec.appendChild(h2);
       const grid = document.createElement("div");
       grid.className = "grid";
-      for (const tpl of FRAME_TEMPLATES) {
+      for (const tpl of FRAME_TEMPLATES.filter((t) => !onlyTemplates || onlyTemplates.includes(t.id))) {
         const logoImages = await logosFor(tpl, brand.exif, photo);
         const out = renderFrame({ photo, exif: brand.exif, profile: {}, template: tpl, registry, logoImages });
         const cell = document.createElement("div");

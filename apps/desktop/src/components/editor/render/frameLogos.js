@@ -20,12 +20,15 @@ export function buildLogoRegistry(manifest) {
   return { byId, match: manifest.match || {} };
 }
 
-/** EXIF `make` (e.g. "HASSELBLAD") -> brand id, via substring match. */
+/** EXIF `make` (e.g. "HASSELBLAD") -> brand id, via substring match. The
+ *  first needle found wins (logos.json lists the specific ones first: "redmi"
+ *  before "xiaomi", "pentax" before "ricoh"); a needle mapped to null names no
+ *  brand ("fujitsu" before "fuji"). */
 export function brandIdForMake(make, registry) {
   if (!make) return null;
   const m = normalizeMake(make);
   for (const [needle, id] of Object.entries(registry.match || {})) {
-    if (m.includes(needle)) return id;
+    if (m.includes(needle)) return id || null;
   }
   return null;
 }
@@ -258,7 +261,9 @@ export function withBrandLogos(registry, brandLogos, personalLogos, cameraNames 
   const entries = Object.entries(brandLogos || {});
   if (!entries.length) return registry;
   const byId = new Map(registry.byId);
-  const match = { ...(registry.match || {}) };
+  // A make given one of my logos is matched before the built-in needles, so a
+  // needle that names no brand (FUJITSU, kept from Fujifilm) cannot hide it.
+  const own = {};
   for (const [key, logoId] of entries) {
     const logo = (personalLogos || []).find((l) => l.id === logoId);
     if (!logo) continue;
@@ -269,13 +274,17 @@ export function withBrandLogos(registry, brandLogos, personalLogos, cameraNames 
     if (!brand) {
       if (!brandKey.startsWith("make:") || brandKey.length <= 5) continue;
       brand = { id: brandKey, name: brandKey.slice(5), variants: [] };
-      match[brandKey.slice(5)] = brandKey;
+      own[brandKey.slice(5)] = brandKey;
     }
     const mine = myLogoVariant(logo, model);
     byId.set(brandKey, model
       ? { ...brand, mineModels: [...(brand.mineModels || []), mine] }
       : { ...brand, mine });
   }
+  const match = Object.fromEntries([
+    ...Object.entries(own),
+    ...Object.entries(registry.match || {}).filter(([needle]) => !(needle in own)),
+  ]);
   // A model logo reaches the models named the same (a drone's other lens).
   const names = namerOf(registry, cameraNames);
   for (const [brandKey, brand] of byId) {

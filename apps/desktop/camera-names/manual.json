@@ -1,8 +1,6 @@
 {
   "about": "Hand-kept camera display names by EXIF make and model; they win over generated.json. Keys are the EXIF Make / Model with spaces collapsed, trimmed and lower-cased. Add a line when a camera shows a raw code (see docs/camera-name-rules.md and docs/dji-camera-models.md).",
-  "brands": {
-    "make:yingling innovations pte. ltd.": "Antigravity"
-  },
+  "brands": {},
   "names": {
     "dji": {
       "fc9113": "DJI Air 3S",

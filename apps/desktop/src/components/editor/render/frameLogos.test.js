@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   brandIdForExif,
@@ -15,6 +18,8 @@ import {
   withBrandLogos,
 } from "./frameLogos";
 import { collectLogoNeeds } from "./frameRender";
+
+const LOGOS_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../../frame-logos");
 
 const manifest = {
   logos: [{
@@ -227,3 +232,61 @@ describe("what a camera is called", () => {
   });
 });
 
+
+describe("the bundled logos (frame-logos/logos.json)", () => {
+  const shipped = JSON.parse(readFileSync(join(LOGOS_DIR, "logos.json"), "utf8"));
+  const registry = buildLogoRegistry(shipped);
+  const brandOf = (make, model) => brandIdForExif({ make, camera_model: model }, registry);
+
+  it("every variant's file is there, and its aspect is the file's", () => {
+    for (const brand of shipped.logos) {
+      for (const variant of brand.variants) {
+        const svg = readFileSync(join(LOGOS_DIR, variant.file), "utf8");
+        const box = /viewBox\s*=\s*"([^"]+)"/.exec(svg)?.[1].trim().split(/[\s,]+/).map(Number);
+        if (!box || !variant.file.endsWith(".svg")) continue;
+        expect(variant.aspect, variant.file).toBeCloseTo(box[2] / box[3], 0);
+      }
+    }
+  });
+
+  it("sub-brands and brands inside other names come first", () => {
+    expect(brandOf("Xiaomi", "2201117SG")).toBe("xiaomi");
+    expect(brandOf("Xiaomi", "Redmi Note 8 Pro")).toBe("redmi");
+    expect(brandOf("POCO", "22111317PG")).toBe("poco");
+    expect(brandOf("vivo", "iQOO 12")).toBe("iqoo");
+    expect(brandOf("vivo", "V2145A")).toBe("vivo");
+    expect(brandOf("HONOR", "ANY-NX1")).toBe("honor");
+    expect(brandOf("HUAWEI", "ELS-NX9")).toBe("huawei");
+    expect(brandOf("OPPO", "CPH2385")).toBe("oppo");
+    expect(brandOf("OnePlus", "CPH2581")).toBe("oneplus");
+    expect(brandOf("realme", "RMX3241")).toBe("realme");
+    expect(brandOf("RICOH IMAGING COMPANY, LTD.", "PENTAX K-3 Mark III")).toBe("pentax");
+    expect(brandOf("RICOH IMAGING COMPANY, LTD.", "RICOH GR III")).toBe("ricoh");
+    expect(brandOf("PENTAX RICOH IMAGING", "GR")).toBe("ricoh"); // the 2013 GR's early firmware
+    expect(brandOf("PENTAX Corporation", "PENTAX K-x")).toBe("pentax");
+    expect(brandOf("OM Digital Solutions", "OM-1")).toBe("omsystem");
+    expect(brandOf("OLYMPUS CORPORATION", "E-M1MarkIII")).toBe("olympus");
+    expect(brandOf("Yingling Innovations Pte. Ltd.", "antigravity a1")).toBe("antigravity");
+    expect(brandOf("Hasselblad", "L2D-20c")).toBe("hasselblad");
+    expect(brandOf("Osmo", "OQ001")).toBe("dji");
+    expect(brandOf("Autel Robotics", "XT705")).toBe("autel");
+    expect(brandOf("Phase One A/S", "IQ4 150MP")).toBe("phaseone");
+    expect(brandOf("SIGMA", "fp L")).toBe("sigma");
+  });
+
+  it("a needle that names no brand stops the search; my logo for that make still applies", () => {
+    expect(brandOf("FUJITSU", "F-51B")).toBeNull(); // not Fujifilm
+    expect(brandOf("FUJIFILM", "X-T5")).toBe("fujifilm");
+    expect(brandOf("SIGMA_MOBILE", "X-TREME_PQ38")).toBeNull(); // a rugged phone, not Sigma
+    const mine = [{ id: "logo_f", name: "F", tintable: true, width: 300, height: 100 }];
+    const withMine = withBrandLogos(registry, { "make:fujitsu": "logo_f" }, mine);
+    expect(brandIdForExif({ make: "FUJITSU", camera_model: "F-51B" }, withMine)).toBe("make:fujitsu");
+  });
+
+  it("lens makers are not matched on Make", () => {
+    for (const id of ["tamron", "tokina", "laowa", "voigtlander"]) {
+      expect(Object.values(shipped.match)).not.toContain(id);
+      expect(registry.byId.get(id).tags).toContain("lens");
+    }
+  });
+});

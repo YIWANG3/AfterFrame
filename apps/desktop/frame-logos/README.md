@@ -16,8 +16,12 @@ frame-logos/
   TRADEMARKS.md         legal notice
   hasselblad/  symbol.svg  wordmark.svg  lockup-h.svg
   fujifilm/    …
-  canon/  nikon/  sony/  dji/  leica/
+  canon/  nikon/  sony/  dji/  leica/  lumix/  ricoh/  insta360/ …
+  xiaomi/  huawei/  oppo/  vivo/ …      phones
+  tamron/  tokina/  laowa/  voigtlander/  lens makers (tags: lens)
 ```
+
+Where each file comes from and how it was edited: `TRADEMARKS.md`.
 
 ## How to add a brand
 
@@ -28,7 +32,11 @@ frame-logos/
      is an acceptable fallback.
 2. Fill that brand's `variants` array in `logos.json` (`file` is relative to this
    dir, i.e. `<brand>/<variant>.svg`).
-3. (Optional) Map the EXIF `make` to the brand id in the `match` table.
+3. (Optional) Map the EXIF `make` to the brand id in the `match` table. The
+   first needle found in the lowercased "make model" wins, so put specific
+   needles before generic ones ("redmi" before "xiaomi", "pentax" before
+   "ricoh"); a needle mapped to `null` names no brand ("fujitsu" before
+   "fuji"). Lens makers (tag `lens`) are not matched on Make.
 
 ## logos.json schema
 

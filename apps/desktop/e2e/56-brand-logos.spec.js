@@ -27,16 +27,16 @@ const svgFile = (name, body) => {
 };
 const CANON = "0Y1A6707-9"; // Canon EOS R6m2, 2400×1600
 const OTHER_CANON = "IMG_0695-Enhanced-NR-3"; // Canon EOS 6D
-const UNKNOWN = "001-red"; // given Antigravity's EXIF below
+const UNKNOWN = "001-red"; // given a maker with no built-in logo below
 const AIR_WIDE = "002-orange"; // given the DJI Air 3S's two cameras below:
 const AIR_TELE = "004-green"; // FC9113 (24mm) and FC9184 (70mm)
 const HASSELBLAD = "B0016108"; // CFV 100C/907X; two built-in marks: the H and the wordmark
-const UNKNOWN_KEY = "make:yingling innovations pte. ltd.";
+const UNKNOWN_KEY = "make:acme optics";
 const R6_KEY = "canon#canon eos r6m2";
 const SIXD_KEY = "canon#canon eos 6d";
 let round; // Canon's brand logo of mine (1:1)
 let wide; // the R6m2's model logo (4:1)
-let drone; // the Antigravity's (3:1)
+let drone; // the Acme's (3:1)
 let signature; // custom
 
 const rowFor = (stem) => window.evaluate(
@@ -90,7 +90,7 @@ test.beforeAll(async () => {
     prepareCatalog(catalogDir) {
       execFileSync("sqlite3", [path.join(catalogDir, "catalog.sqlite3"), `
         UPDATE assets SET metadata_json = json_set(COALESCE(metadata_json, '{}'),
-          '$.camera_make', 'Yingling Innovations Pte. Ltd.', '$.camera_model', 'antigravity a1')
+          '$.camera_make', 'Acme Optics', '$.camera_model', 'Acme One')
           WHERE stem = '${UNKNOWN}';
         UPDATE assets SET metadata_json = json_set(COALESCE(metadata_json, '{}'), '$.camera_make', 'DJI', '$.camera_model', 'FC9113')
           WHERE stem = '${AIR_WIDE}';
@@ -243,7 +243,7 @@ test("a camera with no built-in logo is given one of its own; Canon's are not of
   await openEditorOn(UNKNOWN, "bar-id");
   await expect.poll(async () => (await editorState()).layers.length).toBeGreaterThan(0);
   expect(await cameraLogoLayer()).toBeNull();
-  await expect(brandRow().locator('[data-change-camera-logo="brand"]')).toContainText("Antigravity"); // the table's name for its make
+  await expect(brandRow().locator('[data-change-camera-logo="brand"]')).toContainText("Acme Optics"); // its make, as written
   await brandRow().locator('[data-set-camera-logo="brand"]').click();
   await expect(camera().locator(`[data-logo-picker] [data-pick-logo="${round.id}"]`)).toHaveCount(0);
   await choose(camera(), drone.id);
@@ -329,15 +329,15 @@ test("Settings › Watermark: brands with their models, renamed and reset there;
   await expect(r6).toContainText("Canon EOS R6m2"); // with what EXIF says beside it
   await expect(r6).toHaveAttribute("data-brand-logo-choice", wide.id);
   await expect(unknown).toHaveAttribute("data-brand-logo-choice", drone.id);
-  await expect(unknown.locator("[data-rename-camera]").first()).toContainText("Antigravity");
-  await expect(unknown.locator("[data-rename-camera]").first()).toContainText("Yingling Innovations Pte. Ltd.");
+  await expect(unknown.locator("[data-rename-camera]").first()).toContainText("Acme Optics");
 
   // Rename a model: Hasselblad's back as the body it is on.
   await cfv.locator("[data-rename-camera]").click();
   await cfv.locator("input").fill("907X");
   await cfv.locator("input").press("Enter");
-  await expect(cfv.locator("[data-rename-camera]")).toContainText("907X");
-  expect((await profile()).cameraNames).toEqual({ "hasselblad#cfv 100c/907x": "907X" });
+  // "CFV 100C/907X" already contains 907X: wait for the save, not the text.
+  await expect.poll(async () => (await profile()).cameraNames).toEqual({ "hasselblad#cfv 100c/907x": "907X" });
+  await expect(cfv.locator("[data-rename-camera]")).toHaveText(/^907X/);
 
   // An upload from a chooser is that brand's camera logo, chosen at once.
   const uploaded = svgFile("Uploaded.svg", 'viewBox="0 0 320 80"><rect x="10" y="10" width="300" height="60" fill="#333"/>');

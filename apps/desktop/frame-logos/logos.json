@@ -1,5 +1,5 @@
 {
-  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md.",
+  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here.",
   "logos": [
     {
       "id": "hasselblad",
@@ -215,10 +215,391 @@
           ]
         }
       ]
+    },
+    {
+      "id": "xiaomi",
+      "name": "Xiaomi",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "symbol",
+          "kind": "symbol",
+          "file": "xiaomi/symbol.svg",
+          "aspect": 1,
+          "h": 0.8,
+          "color": "#ff6900"
+        }
+      ]
+    },
+    {
+      "id": "redmi",
+      "name": "Redmi",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "redmi/wordmark.svg",
+          "aspect": 4.31,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "poco",
+      "name": "POCO",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "poco/wordmark.svg",
+          "aspect": 3.31,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "huawei",
+      "name": "Huawei",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "huawei/wordmark.svg",
+          "aspect": 5.83,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "honor",
+      "name": "Honor",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "honor/wordmark.svg",
+          "aspect": 5.18,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "oppo",
+      "name": "OPPO",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "oppo/wordmark.svg",
+          "aspect": 4.2,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "vivo",
+      "name": "vivo",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "vivo/wordmark.svg",
+          "aspect": 3.8,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "iqoo",
+      "name": "iQOO",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "iqoo/wordmark.svg",
+          "aspect": 4.22,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "oneplus",
+      "name": "OnePlus",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "symbol",
+          "kind": "symbol",
+          "file": "oneplus/symbol.svg",
+          "aspect": 1,
+          "h": 0.8,
+          "color": "#f5010c"
+        }
+      ]
+    },
+    {
+      "id": "realme",
+      "name": "realme",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "realme/wordmark.svg",
+          "aspect": 4.42,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "pentax",
+      "name": "Pentax",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "pentax/wordmark.svg",
+          "aspect": 5.25,
+          "h": 0.45,
+          "color": "#ef120a"
+        }
+      ]
+    },
+    {
+      "id": "sigma",
+      "name": "Sigma",
+      "tags": [
+        "camera",
+        "lens"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "sigma/wordmark.svg",
+          "aspect": 4.24,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "olympus",
+      "name": "Olympus",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "olympus/wordmark.svg",
+          "aspect": 8,
+          "h": 0.45,
+          "color": "#08107b"
+        }
+      ]
+    },
+    {
+      "id": "omsystem",
+      "name": "OM System",
+      "tags": [
+        "camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "omsystem/wordmark.svg",
+          "aspect": 8.65,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "phaseone",
+      "name": "Phase One",
+      "tags": [
+        "camera",
+        "medium-format"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "phaseone/wordmark.svg",
+          "aspect": 7.19,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "gopro",
+      "name": "GoPro",
+      "tags": [
+        "camera",
+        "action-camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "gopro/wordmark.svg",
+          "aspect": 7.3,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "parrot",
+      "name": "Parrot",
+      "tags": [
+        "camera",
+        "drone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "parrot/wordmark.svg",
+          "aspect": 3.97,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "autel",
+      "name": "Autel Robotics",
+      "tags": [
+        "camera",
+        "drone"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "autel/wordmark.svg",
+          "aspect": 5.28,
+          "h": 0.45,
+          "color": "#e1251b"
+        }
+      ]
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity",
+      "tags": [
+        "camera",
+        "drone",
+        "360-camera"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "antigravity/wordmark.svg",
+          "aspect": 14.26,
+          "h": 0.32
+        }
+      ]
+    },
+    {
+      "id": "tamron",
+      "name": "Tamron",
+      "tags": [
+        "lens"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "tamron/wordmark.svg",
+          "aspect": 6.49,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "tokina",
+      "name": "Tokina",
+      "tags": [
+        "lens"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "tokina/wordmark.svg",
+          "aspect": 6.67,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "laowa",
+      "name": "Laowa",
+      "tags": [
+        "lens"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "laowa/wordmark.svg",
+          "aspect": 3.97,
+          "h": 0.45
+        }
+      ]
+    },
+    {
+      "id": "voigtlander",
+      "name": "Voigtländer",
+      "tags": [
+        "lens"
+      ],
+      "variants": [
+        {
+          "id": "wordmark",
+          "kind": "wordmark",
+          "file": "voigtlander/wordmark.svg",
+          "aspect": 5.19,
+          "h": 0.45
+        }
+      ]
     }
   ],
   "match": {
     "hasselblad": "hasselblad",
+    "fujitsu": null,
     "fujifilm": "fujifilm",
     "fuji": "fujifilm",
     "canon": "canon",
@@ -228,9 +609,33 @@
     "leica": "leica",
     "panasonic": "lumix",
     "lumix": "lumix",
+    "pentax ricoh imaging gr": "ricoh",
+    "pentax": "pentax",
+    "asahi optical": "pentax",
     "ricoh": "ricoh",
     "insta360": "insta360",
     "arashi vision": "insta360",
-    "osmo": "dji"
+    "osmo": "dji",
+    "yingling": "antigravity",
+    "antigravity": "antigravity",
+    "sigma_mobile": null,
+    "sigma": "sigma",
+    "om digital solutions": "omsystem",
+    "olympus": "olympus",
+    "phase one": "phaseone",
+    "phaseone": "phaseone",
+    "gopro": "gopro",
+    "parrot": "parrot",
+    "autel": "autel",
+    "redmi": "redmi",
+    "poco": "poco",
+    "xiaomi": "xiaomi",
+    "iqoo": "iqoo",
+    "vivo": "vivo",
+    "oneplus": "oneplus",
+    "oppo": "oppo",
+    "realme": "realme",
+    "honor": "honor",
+    "huawei": "huawei"
   }
 }
