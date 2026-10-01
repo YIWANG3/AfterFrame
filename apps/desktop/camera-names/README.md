@@ -34,7 +34,8 @@ model as written.
 `generated.json` only translates **codes** (DJI `FC9113` is `DJI Air 3S`,
 Sony `DSC-RX100M3` is `Sony Cyber-shot DSC-RX100 III`, OPPO `CPH2385` is
 `OPPO A57s`) for the **makers on the whitelist**: makers still selling cameras,
-and the big Chinese phone makers. A model that already reads as the camera's name (`Canon EOS 6D`,
+and big Chinese phone makers (not Huawei and Honor: a review found one in six
+of their names was another market's phone or a sibling's). A model that already reads as the camera's name (`Canon EOS 6D`,
 `CFV 100C/907X`) is shown as EXIF writes it.
 
 ## Sources
@@ -62,14 +63,17 @@ without attribution requirements.
   `FUJIFILM`, `Panasonic`, `LEICA CAMERA AG`, `OM Digital Solutions`,
   `RICOH IMAGING COMPANY, LTD.`, `Hasselblad`, `SIGMA`, `Phase One`, `DJI`,
   `Osmo`, `Arashi Vision`, `Insta360`, `GoPro`, `Autel Robotics`, `Parrot`,
-  `Skydio`, `Yingling Innovations Pte. Ltd.` (Antigravity). Phones: Huawei,
-  Honor, Xiaomi (`Redmi`, `POCO`), OPPO, OnePlus, realme, vivo (`iQOO`).
-  Other phones (Samsung, ZTE, Lenovo, Transsion...), makers out of cameras
+  `Skydio`, `Yingling Innovations Pte. Ltd.` (Antigravity). Phones: Xiaomi
+  (`Redmi`, `POCO`), OPPO, OnePlus, realme, vivo (`iQOO`). Other phones
+  (Huawei, Honor, Samsung, ZTE, Lenovo, Transsion...), makers out of cameras
   (Kodak, Casio, Minolta), Makes only old cameras write
   (`OLYMPUS IMAGING CORP.`, `PENTAX Corporation`) and anything typed into
   Make are left out. A phone sold under a camera maker's name (Sony's Xperia)
   is dropped, and so is a name that starts with another brand. A sub-brand's
-  phone goes by the sub-brand (`Honor 10 Lite`, `Redmi Note 13 Pro+`).
+  phone goes by the sub-brand (`Redmi Note 13 Pro+`, `iQOO 9 SE`), in the
+  brand's spelling (`vivo V21e`, `realme narzo 20A`). A phone model a camera
+  app appended to (GCam's `RMX2050 (RMX2050)`) and a name with a market's tag
+  (`Redmi Note 11 (China)`) are left to EXIF.
 - **Models a camera writes**: no brackets or quotes, no digital back on a
   body (`Ixpress 96 - Hasselblad H1`), no lens after the model
   (`GXR MOUNT A12_Summicron-M 35`), and a Canon model starts with `Canon`.

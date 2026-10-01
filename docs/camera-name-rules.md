@@ -8,7 +8,7 @@ app 里相机叫什么名字（界面上的品牌名、机型名，以及边框�
    - 佳能：`EOS R6m2` 显示为 `EOS R6 Mark II`。
    - 尼康：`NIKON Z5_2` 显示为 `Nikon Z5II`。
    - 索尼：`ILCE-7CM2` 显示为 `Sony α7C II`，`ILCE-7CR` 显示为 `Sony α7CR`。
-4. **生成表** `apps/desktop/camera-names/generated.json`：从 Wikidata 和 Wikimedia Commons（都是 CC0）生成，见 `camera-names/README.md`。只收白名单里的厂商：这些年还在出相机的厂商，加上华为、荣耀、小米（Redmi、POCO）、OPPO、一加、realme、vivo（iQOO）这几家国产手机；只翻译看不懂的型号代码，规则能命名的不收。子品牌手机按子品牌叫（Honor 10 Lite、Redmi Note 13 Pro+）。
+4. **生成表** `apps/desktop/camera-names/generated.json`：从 Wikidata 和 Wikimedia Commons（都是 CC0）生成，见 `camera-names/README.md`。只收白名单里的厂商：这些年还在出相机的厂商，加上小米（Redmi、POCO）、OPPO、一加、realme、vivo（iQOO）这几家国产手机；只翻译看不懂的型号代码，规则能命名的不收。子品牌手机按子品牌叫（Redmi Note 13 Pro+、iQOO 9 SE）。华为、荣耀不收：抽查发现约六分之一配成了别的市场或兄弟机型的名字，这两家的照片显示 EXIF 原文，常用机型以后手工加进手工表。
 5. **EXIF 原文**。
 
 代码在 `frameLogos.cameraNamer`，读表在 `render/cameraNames.js`。编辑器、设置页和 agent 的 apply_frame 都走同一个 namer。

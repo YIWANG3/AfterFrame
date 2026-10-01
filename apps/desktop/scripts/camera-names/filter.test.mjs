@@ -164,6 +164,8 @@ test("only makers still selling cameras, and the big Chinese phone makers, by th
   assert.equal(MAKES.get("yingling innovations pte. ltd."), "Antigravity");
   assert.equal(MAKES.get("oppo"), "OPPO");
   assert.equal(MAKES.has("zte"), false);
+  assert.equal(MAKES.has("huawei"), false); // one in six named another market's phone
+  assert.equal(MAKES.has("honor"), false);
   assert.equal(MAKES.has("olympus imaging corp."), false);
   assert.equal(MAKES.has("samsung"), false);
   const { names: out, stats } = names(null, [
@@ -178,30 +180,22 @@ test("only makers still selling cameras, and the big Chinese phone makers, by th
 });
 
 test("a Chinese phone's code is named; a sub-brand's phone goes by the sub-brand", () => {
-  assert.equal(normalizeBrandSpelling("Huawei Honor 10 Lite"), "Honor 10 Lite");
   assert.equal(normalizeBrandSpelling("Xiaomi Redmi Note 13 Pro+"), "Redmi Note 13 Pro+");
   assert.equal(normalizeBrandSpelling("Xiaomi Pocophone F1"), "POCO F1");
   assert.equal(normalizeBrandSpelling("OPPO A57s"), "OPPO A57s");
   const { names: out } = names(null, [
     "HUAWEI,ELS-NX9,Huawei P40 Pro",
-    "HUAWEI,HRY-LX1MEB,Huawei Honor 10 Lite",
     "Xiaomi,23090RA98C,Xiaomi Redmi Note 13 Pro+",
     "OPPO,CPH2385,OPPO A57s",
     "Xiaomi,Redmi Note 9 Pro,Xiaomi Redmi Note 9 Pro",
   ].join("\n"));
   assert.deepEqual(out, {
-    huawei: { "els-nx9": "Huawei P40 Pro", "hry-lx1meb": "Honor 10 Lite" },
     oppo: { cph2385: "OPPO A57s" },
     xiaomi: { "23090ra98c": "Redmi Note 13 Pro+" },
   });
 });
 
 test("phone names in each brand's own spelling", () => {
-  assert.equal(normalizeBrandSpelling("Huawei Nova 8"), "Huawei nova 8");
-  assert.equal(normalizeBrandSpelling("Huawei P9 Lite Mini"), "Huawei P9 lite mini");
-  assert.equal(normalizeBrandSpelling("Huawei P Smart (2019)"), "Huawei P smart (2019)");
-  assert.equal(normalizeBrandSpelling("Huawei Mate 40 Pro Plus"), "Huawei Mate 40 Pro+");
-  assert.equal(normalizeBrandSpelling("Honor 10 Lite"), "Honor 10 Lite"); // Honor writes Lite
   assert.equal(normalizeBrandSpelling("vivo iQOO 9 SE"), "iQOO 9 SE");
   assert.equal(normalizeBrandSpelling("vivo V21E 5G"), "vivo V21e 5G");
   assert.equal(normalizeBrandSpelling("vivo Y15S"), "vivo Y15s");
@@ -213,7 +207,7 @@ test("phone names in each brand's own spelling", () => {
 test("a phone model an app appended to, or a name with a market's tag, is left to EXIF", () => {
   const { names: out, stats } = names(null, [
     "realme,RMX2050 (RMX2050),realme Narzo 20A",
-    "HUAWEI,MHA-L29 (Camera Super Pixel),Huawei Mate 9",
+    "Xiaomi,M2101K7BI (Camera Super Pixel),Redmi Note 10S",
     "OnePlus,ONEPLUS A6013 P3XL,OnePlus 6T",
     "OnePlus,ONEPLUS A5010(shot on gcam),OnePlus 5T",
     "Xiaomi,21091116AC,Redmi Note 11 (China)",

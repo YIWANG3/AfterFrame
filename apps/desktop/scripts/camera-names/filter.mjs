@@ -61,31 +61,27 @@ export function normalizeBrandSpelling(name) {
 }
 
 // Sony's A-mount and E-mount bodies are "α" and a number, as the rules name
-// them; a sub-brand's phone goes by the sub-brand ("Huawei Honor 10 Lite" is
-// sold as "Honor 10 Lite", "Xiaomi Redmi Note 13" as "Redmi Note 13").
-// Huawei writes nova, lite and P smart in lower case (Honor writes Lite);
-// iQOO is vivo's sub-brand; vivo writes its letter suffixes in lower case
-// (V21e, Y15s); realme's narzo before the 70 is lower case.
+// them; a sub-brand's phone goes by the sub-brand ("Xiaomi Redmi Note 13" is
+// sold as "Redmi Note 13", "vivo iQOO 9 SE" as "iQOO 9 SE"); vivo writes its
+// letter suffixes in lower case (V21e, Y15s); realme's narzo before the 70 is
+// lower case.
 const houseStyle = (s) => {
   let name = s
     .replace(/^Sony Alpha (?=\d)/i, "Sony α")
-    .replace(/^Huawei (?=Honor\b)/i, "")
     .replace(/^Xiaomi (?=(?:Redmi|POCO)\b)/i, "")
     .replace(/^(?:Xiaomi )?Poco(?:phone)?\b/i, "POCO")
     .replace(/^vivo (?=iQOO\b)/i, "")
     .replace(/^realme Narzo (?=(?:[1-6]\d[A-Za-z]?|N\d)\b)/, "realme narzo ");
-  if (/^Huawei /.test(name)) {
-    name = name.replace(/\bNova\b/g, "nova").replace(/\bLite\b/g, "lite").replace(/\blite Mini\b/g, "lite mini")
-      .replace(/\bP Smart\b/g, "P smart").replace(/ Pro Plus\b/g, " Pro+");
-  }
   if (/^(?:vivo|iQOO) /.test(name)) name = name.replace(/\b([XYVSTUZ]\d{1,3})([SEX])\b/g, (_, code, letter) => code + letter.toLowerCase());
   return name;
 };
 
 // ── Which makers ─────────────────────────────────────────────────────────
 // Only these makers' devices are named, by the EXIF Make they write now (a
-// key, normKey), with the brand: makers still selling cameras, and the big
-// Chinese phone makers (their EXIF models are codes: "ELS-NX9", "2211133C").
+// key, normKey), with the brand: makers still selling cameras, and big
+// Chinese phone makers (their EXIF models are codes: "2211133C", "CPH2385").
+// Not Huawei and Honor: a review found one in six of their names was another
+// market's or a sibling's, the sources filing one phone under one name.
 // Everything else is left to its EXIF: other phones, a maker out of cameras
 // (Kodak, Casio, Minolta), a Make only old cameras write
 // (FUJI PHOTO FILM, OLYMPUS IMAGING CORP., PENTAX Corporation), a model or a
@@ -111,7 +107,6 @@ const CAMERA_MAKES = [
   ["yingling innovations pte. ltd.", "Antigravity"],
 ];
 const PHONE_MAKES = [
-  ["huawei", "Huawei"], ["honor", "Honor"],
   ["xiaomi", "Xiaomi"], ["redmi", "Redmi"], ["poco", "POCO"],
   ["oppo", "OPPO"], ["oneplus", "OnePlus"], ["realme", "realme"],
   ["vivo", "vivo"], ["iqoo", "iQOO"],
@@ -126,8 +121,6 @@ const MODEL_PREFIX = new Map([["canon", "canon "]]);
 // The brands a maker's devices may be named with: its own, a sister brand,
 // DJI for the Hasselblad cameras on DJI drones.
 const NAMED_AS = {
-  Huawei: ["Huawei", "Honor"],
-  Honor: ["Honor", "Huawei"],
   Xiaomi: ["Xiaomi", "Redmi", "POCO"],
   Redmi: ["Redmi", "Xiaomi"],
   POCO: ["POCO", "Xiaomi"],
@@ -157,7 +150,7 @@ const PHONE_NAME = /\b(?:xperia|ericsson|softbank|docomo|g'?z ?one|leitz phone|e
 
 // A phone model with something a camera app appended: GCam ports add the
 // device's codename ("RMX2050 (RMX2050)") or a profile ("ONEPLUS A6013 P3XL"),
-// other apps their own name ("MHA-L29 (Camera Super Pixel)"). Stock firmware
+// other apps their own name ("... (Camera Super Pixel)"). Stock firmware
 // writes the bare model, which the table has.
 const APP_SUFFIX = /\s\([^)]*\)$|\s(?:n6p|n5x|n5|p2xl|p3xl|pxl|p3)$|gcam|shot on|lib google/;
 
