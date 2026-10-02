@@ -278,7 +278,8 @@ test("custom logos: uploaded from their row, several at once, for every photo, n
   await stubDialog([svgFile("Studio A.svg", 'viewBox="0 0 200 60"><rect x="5" y="5" width="190" height="50" rx="8" fill="#222"/>'),
     svgFile("Studio B.svg", 'viewBox="0 0 60 60"><circle cx="30" cy="30" r="25" fill="#222"/>')]);
   await customRow().locator("[data-import-my-logo]").click();
-  await expect(customRow().locator("[data-my-logo]")).toHaveCount(3);
+  // Two SVGs through sharp: 4 s on a quick runner, past 15 s on a slow one.
+  await expect(customRow().locator("[data-my-logo]")).toHaveCount(3, { timeout: 30_000 });
   expect((await editorState()).layers.filter((l) => l.logoRef?.source === "personal")).toHaveLength(1);
   await closeEditor();
 });
