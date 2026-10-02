@@ -21,6 +21,7 @@ const BRANDS = [
   { label: "Lumix", exif: { camera_model: "DC-S5M2", lens_model: "LUMIX S 20-60mm F3.5-5.6", make: "Panasonic", focal_length: 35, aperture: 4, shutter_speed: 1/200, iso: 200, capture_time: "2024-09-10T12:00:00Z" } },
   { label: "Ricoh", exif: { camera_model: "RICOH GR III", lens_model: "GR 18.3mm F2.8", make: "RICOH IMAGING COMPANY, LTD.", focal_length: 28, aperture: 2.8, shutter_speed: 1/250, iso: 400, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "Sony", exif: { camera_model: "ILCE-7CR", lens_model: "FE 35mm F1.4 GM", make: "Sony", focal_length: 35, aperture: 1.4, shutter_speed: 1/320, iso: 125, capture_time: "2024-08-02T11:00:00Z" } },
+  { label: "DJI", exif: { camera_model: "FC8482", lens_model: "", make: "DJI", focal_length: 7, aperture: 2.8, shutter_speed: 1/1000, iso: 100, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "Insta360", exif: { camera_model: "Insta360 X5", lens_model: "", make: "Arashi Vision Inc.", focal_length: 6, aperture: 2, shutter_speed: 1/500, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
   { label: "Luna Ultra", exif: { camera_model: "Insta360 Luna Ultra", lens_model: "Summicron", make: "Arashi Vision Inc.", focal_length: 14, aperture: 2, shutter_speed: 1/250, iso: 100, capture_time: "2026-07-15T11:00:00Z" } },
   { label: "Pentax", exif: { camera_model: "PENTAX K-3 Mark III", lens_model: "HD PENTAX-DA 20-40mm F2.8-4 ED Limited", make: "RICOH IMAGING COMPANY, LTD.", focal_length: 31, aperture: 4, shutter_speed: 1/250, iso: 200, capture_time: "2024-09-12T15:00:00Z" } },
@@ -69,25 +70,51 @@ function samplePhoto(w = 1400) {
   return c;
 }
 
+// ?photo=/sample-photos/sample-03.jpg renders over that image instead.
+async function loadPhoto(url, w = 1400) {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = w; c.height = Math.round(w * (img.naturalHeight / img.naturalWidth));
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
 // ?compare=1 shows each template's bottom strip before and after a sizing
 // change, brand by brand. "Before" is a saved copy of the old logos.json and
-// frameTemplates.js in test-results/before/ (git show <rev>:<path> > ...); with
-// none there, only the current strip is shown.
-const before = {
-  manifest: Object.values(import.meta.glob("/test-results/before/logos.json", { import: "default", eager: true }))[0],
-  templates: Object.values(import.meta.glob("/test-results/before/frameTemplates.js", { import: "FRAME_TEMPLATES", eager: true }))[0],
-};
-
-// The old engine drew a symbol in a wordmark slot at the symbol's own height.
-function beforeRegistry(manifest) {
-  const reg = buildLogoRegistry(manifest);
-  for (const [id, brand] of reg.byId) {
-    const symbol = brand.variants?.find((v) => v.kind === "symbol");
-    if (symbol && !brand.variants.some((v) => v.kind === "wordmark" || v.kind === "lockup")) {
-      reg.byId.set(id, { ...brand, variants: [...brand.variants, { ...symbol, id: "wordmark", kind: "wordmark" }] });
-    }
+// frameTemplates.js in test-results/before/ (git show <rev>:<path> > ...),
+// drawn by today's engine; with none there, only the current strip is shown.
+// Read fresh each visit: Vite does not watch test-results/, so an import
+// would keep the first copy it saw.
+async function loadBefore() {
+  const t = Date.now();
+  try {
+    const manifest = await (await fetch(`/test-results/before/logos.json?t=${t}`)).json();
+    const { FRAME_TEMPLATES: templates } = await import(/* @vite-ignore */ `/test-results/before/frameTemplates.js?t=${t}`);
+    return { manifest, templates };
+  } catch {
+    return {};
   }
-  return reg;
+}
+
+// ?h=hasselblad/symbol:0.6,sony/symbol:0.8 adds a column with those heights
+// (h2=, h3= one more column each); xiaomi/as-wordmark:0.5 draws a symbol-only
+// brand's symbol at 0.5 in wordmark slots. ?before=0 leaves out "before".
+function withHeights(base, spec) {
+  const byId = new Map(base.byId);
+  for (const part of spec.split(",")) {
+    const [key, value] = part.split(":");
+    const [id, variantId] = (key || "").trim().split("/");
+    const h = Number(value);
+    const brand = byId.get(id);
+    if (!brand || !Number.isFinite(h)) continue;
+    let variants = brand.variants.map((v) => (v.id === variantId ? { ...v, h } : v));
+    const symbol = variants.find((v) => v.kind === "symbol");
+    if (variantId === "as-wordmark" && symbol) variants = [...variants, { ...symbol, id: "wordmark", kind: "wordmark", h }];
+    byId.set(id, { ...brand, variants });
+  }
+  return { ...base, byId };
 }
 
 async function logosFor(tpl, exif, photo, reg = registry) {
@@ -115,9 +142,11 @@ function bottomStrip(canvas, frac = 0.165) {
 }
 
 async function runCompare(photo, root) {
+  const before = params.get("before") === "0" ? {} : await loadBefore();
   const columns = [
-    ...(before.manifest && before.templates ? [["改前", beforeRegistry(before.manifest), before.templates]] : []),
+    ...(before.manifest && before.templates ? [["改前", buildLogoRegistry(before.manifest), before.templates]] : []),
     ["现在", registry, FRAME_TEMPLATES],
+    ...["h", "h2", "h3"].filter((k) => params.get(k)).map((k, i) => [`提议 ${i + 1}`, withHeights(registry, params.get(k)), FRAME_TEMPLATES]),
   ];
   const ids = onlyTemplates || ["margin-logo", "margin-gold", "border-stack", "bar-id"];
   root.className = "";
@@ -148,8 +177,10 @@ const asStrip = (canvas) => { canvas.className = "strip"; return canvas; };
 
 async function run() {
   try {
+    // Canvas text does not ask for a font, so load the frame's weights first.
+    await Promise.all(["300", "400", "500", "600"].map((w) => document.fonts.load(`${w} 40px Outfit`)));
     await document.fonts.ready;
-    const photo = samplePhoto();
+    const photo = params.get("photo") ? await loadPhoto(params.get("photo")) : samplePhoto();
     const root = document.getElementById("root");
     if (params.get("compare")) { await runCompare(photo, root); return; }
     for (const brand of BRANDS.filter((b) => !onlyBrands || onlyBrands.includes(b.label.toLowerCase()))) {

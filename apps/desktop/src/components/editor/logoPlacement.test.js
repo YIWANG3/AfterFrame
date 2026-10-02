@@ -99,7 +99,7 @@ describe("where my logo goes", () => {
     const square = swapLogo({ layer: right, geom, aspect: 1 });
     const w = square.scale * 3000;
     expect(square.x * 3000 + w / 2).toBeCloseTo(2850, 6); // right edge held
-    expect(w).toBeCloseTo(100 * (0.85 / 0.45), 6); // a square mark is drawn taller, as templates do
+    expect(w).toBeCloseTo(100 * (0.68 / 0.45), 6); // a square mark is drawn taller, as templates do
     // At the left end the left edge is held; in the middle, the centre.
     const left = { ...right, x: 350 / 3000 };
     const swapped = swapLogo({ layer: left, geom, aspect: 1 });

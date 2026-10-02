@@ -66,11 +66,19 @@ spot colors remain intact). Product lockups may also declare `covers`, such as
 logo is actually rendered.
 
 `h` is the logo's height as a fraction of the template slot's size, so one slot
-suits every brand. A wordmark is 0.45 and a square symbol up to 0.85; a
-wordmark wider than 5.5:1 gets 0.45 × sqrt(5.5 / aspect), so long ones do not
-run across the frame; then every `h` × 0.85 (`frameLogos.LOGO_SCALE`). A
-symbol standing in for a wordmark (a brand with no wordmark, as Xiaomi) is
-capped at `SYMBOL_IN_WORDMARK_SLOT`. A new logo: `logoHeightFactor(aspect)`.
+suits every brand. It follows the shape of the logo's ink:
+`frameLogos.logoHeightFactor(aspect)` gives a wordmark 0.383, a square mark
+0.578 (about twice the camera name's capitals beside it; Hasselblad's solid H
+at 0.85 stood as tall as both lines of text), `0.68 / sqrt(aspect)` between, and a
+wordmark wider than 5.5:1 is shortened by sqrt(5.5 / aspect) so it does not run
+across the frame. For a new logo, crop the SVG to its ink and use
+`logoHeightFactor(aspect)`. If the SVG has padding around its ink, add
+`"ink": { "fill": <ink height / SVG height>, "aspect": <ink width / ink height> }`
+and divide by the fill (DJI's mark fills 49% of its SVG). A mark may be set
+lower by eye, never higher: Sony's α is a lowercase letter, and DJI's letters
+are bold. `frameLogos.test.js` checks every built-in `h` against the rule. A
+compact mark in a wordmark slot (a brand with no wordmark, as Xiaomi, or a
+square logo of mine) is capped at `SYMBOL_IN_WORDMARK_SLOT`.
 
 The brand is auto-detected from EXIF and bound to the logo slot. In the UI the
 user can switch **variants within that same brand** only — never swap to another

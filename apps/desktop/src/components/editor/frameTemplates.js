@@ -254,11 +254,11 @@ export const FRAME_TEMPLATES = [
     canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.15 }, bg: { type: "solid", color: "#ffffff" } },
     elements: [
       { type: "logo", variant: "symbol", strict: true,
-        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.026 },
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.022 },
         soloAnchor: { dy: 0 },
         style: { size: 0.062 } },
       { type: "logo", variant: "wordmark", strict: true,
-        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.034 },
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.03 },
         soloAnchor: { dy: 0 },
         style: { size: 0.06 } },
     ],

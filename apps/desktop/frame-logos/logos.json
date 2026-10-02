@@ -1,5 +1,5 @@
 {
-  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here. h: the logo's height as a fraction of the template slot's size; a wordmark wider than 5.5:1 gets 0.45 × sqrt(5.5 / aspect), then every h × 0.85 (2026-10 sizing, frameLogos.LOGO_SCALE).",
+  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here. h: the logo's height as a fraction of the template slot's size, at most frameLogos.logoHeightFactor(ink aspect) / ink fill (a test checks it): wordmarks 0.383, wider than 5.5:1 shorter by sqrt(5.5 / aspect), square marks 0.578; set lower by eye for a light or bold mark (Sony's α, DJI). ink: {fill, aspect} only for an SVG with padding around its ink (fill = ink height / SVG height). See README.md.",
   "logos": [
     {
       "id": "hasselblad",
@@ -15,14 +15,15 @@
           "kind": "symbol",
           "file": "hasselblad/symbol.svg",
           "aspect": 1.26,
-          "h": 0.85
+          "h": 0.578
         },
         {
           "id": "wordmark",
           "kind": "wordmark",
           "file": "hasselblad/wordmark.svg",
           "aspect": 10.58,
-          "h": 0.276
+          "h": 0.276,
+          "ink": { "fill": 0.802, "aspect": 13.04 }
         }
       ]
     },
@@ -92,6 +93,7 @@
           "file": "sony/symbol.svg",
           "aspect": 0.95,
           "h": 0.85,
+          "ink": { "fill": 0.477, "aspect": 1.38 },
           "color": "#f47521"
         },
         {
@@ -118,7 +120,8 @@
           "kind": "wordmark",
           "file": "dji/wordmark.svg",
           "aspect": 1.0,
-          "h": 0.595
+          "h": 0.82,
+          "ink": { "fill": 0.488, "aspect": 1.71 }
         }
       ]
     },
@@ -136,7 +139,7 @@
           "file": "leica/symbol.svg",
           "aspect": 1.0,
           "colorLocked": true,
-          "h": 0.612
+          "h": 0.578
         }
       ]
     },
@@ -228,7 +231,7 @@
           "kind": "symbol",
           "file": "xiaomi/symbol.svg",
           "aspect": 1,
-          "h": 0.68,
+          "h": 0.578,
           "color": "#ff6900"
         }
       ]
@@ -357,7 +360,7 @@
           "kind": "symbol",
           "file": "oneplus/symbol.svg",
           "aspect": 1,
-          "h": 0.68,
+          "h": 0.578,
           "color": "#f5010c"
         }
       ]

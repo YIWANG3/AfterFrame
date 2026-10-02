@@ -233,22 +233,29 @@ export function mineFor(brand, model) {
 }
 
 // How tall a mark is, as a fraction of its template slot's size (variant h in
-// logos.json): wordmarks 0.45 and symbols about 1, so a square symbol and a
-// short wide wordmark weigh about the same; a wordmark wider than WIDE_LOGO
-// is shortened by sqrt(WIDE_LOGO / aspect) so it does not run long; then
+// logos.json), by the shape of its ink: a wordmark 0.45, a compact mark up
+// to SQUARE_MARK (0.8 / sqrt(aspect) between), so a square symbol and a short
+// wide wordmark weigh about the same; a wordmark wider than WIDE_LOGO is
+// shortened by sqrt(WIDE_LOGO / aspect) so it does not run long; then
 // everything × LOGO_SCALE (logos were a size too large beside the frame's
-// text). logos.json holds the result for the built-in marks; my logo gets
-// the same by its shape.
+// text). logos.json holds the result for the built-in marks, divided by the
+// ink's share of the SVG's height where it has padding, or less for a light
+// or bold mark (Sony's α, DJI); my logo gets it by its shape.
 export const WIDE_LOGO = 5.5;
 export const LOGO_SCALE = 0.85;
-// A brand with only a symbol (Xiaomi's MI, OnePlus's 1+) fills a wordmark
-// slot with it at about a wordmark's height, not its own larger one.
+// Hasselblad's solid H at h 0.85 stood as tall as the two lines of text
+// beside it in the bars; 0.68 (× LOGO_SCALE = 0.578) puts a square mark at
+// about twice the camera name's capitals.
+const SQUARE_MARK = 0.68;
+// A compact mark (a brand with only a symbol, as Xiaomi's MI, or a square
+// logo of mine) fills a wordmark slot at about a wordmark's height, not its
+// own larger one.
 export const SYMBOL_IN_WORDMARK_SLOT = 0.55 * LOGO_SCALE;
 
-/** h for one of my logos, by its shape, on the built-in marks' scale. */
+/** h for a mark whose ink is `aspect` wide to 1 tall, on the built-in marks' scale. */
 export function logoHeightFactor(aspect) {
   const a = aspect || 1;
-  const h = a > WIDE_LOGO ? 0.45 * Math.sqrt(WIDE_LOGO / a) : Math.min(0.85, Math.max(0.45, 0.9 / Math.sqrt(a)));
+  const h = a > WIDE_LOGO ? 0.45 * Math.sqrt(WIDE_LOGO / a) : Math.min(SQUARE_MARK, Math.max(0.45, 0.8 / Math.sqrt(a)));
   return h * LOGO_SCALE;
 }
 
@@ -256,7 +263,8 @@ export function logoHeightFactor(aspect) {
 export function logoHeightFor(variant, el) {
   const h = variant?.h ?? 1;
   const wantsWordmark = el?.variant === "wordmark" || el?.kind === "wordmark";
-  return variant?.kind === "symbol" && wantsWordmark ? Math.min(h, SYMBOL_IN_WORDMARK_SLOT) : h;
+  const compact = variant?.kind === "symbol" || variant?.kind === "mine";
+  return compact && wantsWordmark ? Math.min(h, SYMBOL_IN_WORDMARK_SLOT) : h;
 }
 
 function myLogoVariant(logo, model) {
