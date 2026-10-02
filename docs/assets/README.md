@@ -4,7 +4,7 @@ UI 截图按界面语言归档：`cn/` 为简体中文，`en/` 为英文；各�
 
 - `*.png`：保留完整应用界面的高清素材，裁剪边界见下表。
 - 同名 `*.webp`：网页展示版本，保留 PNG 的像素尺寸、比例与透明边缘，质量 95。
-- 根目录的 `logo.png` 用于应用标志，`editor-handwriting-gallery.jpg` 为手写字摄影作品展示图。
+- 根目录的 `logo.png` 用于应用标志（与 `apps/desktop/build/icon.png` 同一张图：圆角已做进图片，四角透明，各处不再用 CSS 加圆角），`editor-handwriting-gallery.jpg` 为手写字摄影作品展示图。
 - 本目录用于官网和文档，不属于示例图库。
 
 ## 截图边界与来源

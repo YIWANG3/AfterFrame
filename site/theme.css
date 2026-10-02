@@ -29,7 +29,6 @@ a, button { -webkit-tap-highlight-color: transparent; }
 /* Same column as the page: .layout / .feature are min(1440px, 100%) with 24px side padding, so the bar is 1440 − 48 wide with 24px insets — edges line up at every width. */
 header { position: fixed; inset: 16px 24px auto; z-index: 20; max-width: 1392px; margin: auto; min-height: 64px; padding: 10px 14px 10px 20px; display: flex; align-items: center; gap: 12px; border-radius: 22px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); box-shadow: 0 8px 32px rgb(0 0 0 / 16%); }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 650; letter-spacing: -.045em; white-space: nowrap; }
-.brand img { border-radius: 9px; }
 nav { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 nav a, .language { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 12px; font-size: 13px; color: var(--muted); transition: background .18s, color .18s; }
 nav a:hover, .language:hover { color: var(--text); background: var(--nav-hover); }
@@ -110,7 +109,7 @@ html[lang="zh-CN"] h1, html[lang="zh-CN"] h2 { letter-spacing: 0; line-height: 1
   font-display: swap;
 }
 .brand { font-family: "AfterFrame Brand", Georgia, serif; font-size: 23px; font-weight: 400; letter-spacing: 0; }
-.brand img { width: 34px; height: 34px; border-radius: 9px; }
+.brand img { width: 34px; height: 34px; }
 @media (max-width: 800px) { .brand { font-size: 21px; } .brand img { width: 28px; height: 28px; } }
 @media (max-width: 400px) { .brand { font-size: 19px; } .brand img { width: 25px; height: 25px; } }
 
