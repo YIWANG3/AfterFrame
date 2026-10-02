@@ -383,6 +383,22 @@
       ]
     },
     {
+      "id": "apple",
+      "name": "Apple",
+      "tags": [
+        "phone"
+      ],
+      "variants": [
+        {
+          "id": "symbol",
+          "kind": "symbol",
+          "file": "apple/symbol.svg",
+          "aspect": 0.81,
+          "h": 0.578
+        }
+      ]
+    },
+    {
       "id": "pentax",
       "name": "Pentax",
       "tags": [
@@ -640,6 +656,7 @@
     "oppo": "oppo",
     "realme": "realme",
     "honor": "honor",
-    "huawei": "huawei"
+    "huawei": "huawei",
+    "apple": "apple"
   }
 }

@@ -57,6 +57,18 @@ describe("frame logo selection", () => {
     expect(pickVariant(brand, { variantId: "wordmark", model: "Insta360 X5" })?.id).toBe("wordmark");
   });
 
+  it("never draws one model's own mark on another, even when a template asks for it by name", () => {
+    // A template saved on a Luna Ultra photo holds variant "luna-ultra".
+    expect(pickVariant(brand, { variantId: "luna-ultra", model: "Insta360 X5" })?.id).toBe("wordmark");
+    expect(pickVariant(brand, { variantId: "luna-ultra", model: "Insta360 Luna Ultra" })?.id).toBe("luna-ultra");
+    expect(pickVariant(brand, { variantId: "luna-ultra", model: "Insta360 X5", strict: true })?.id).toBe("wordmark");
+    // A brand whose only wordmark is one model's has none for the others.
+    const one = { variants: [{ id: "symbol", kind: "symbol" }, { id: "pro", kind: "wordmark", models: ["pro"] }] };
+    expect(pickVariant(one, { variantId: "pro", model: "Lite" })?.id).toBe("symbol");
+    expect(pickVariant(one, { variantId: "wordmark", model: "Lite", strict: true })).toBeNull();
+    expect(pickVariant(one, { kind: "wordmark", model: "Lite" })?.id).toBe("symbol");
+  });
+
   it("lists every mark a camera shows, a model's own in place of the general one", () => {
     expect(builtInMarks(brand, "Insta360 X5").map((v) => v.id)).toEqual(["wordmark"]);
     expect(builtInMarks(brand, "Luna Ultra").map((v) => v.id)).toEqual(["luna-ultra"]);
@@ -169,6 +181,17 @@ describe("how tall a logo is drawn", () => {
     expect(h["hasselblad/symbol"]).toBeCloseTo(0.68 * LOGO_SCALE, 3);
     expect(h["xiaomi/symbol"]).toBeCloseTo(0.68 * LOGO_SCALE, 3);
     expect(h["canon/wordmark"]).toBeCloseTo(0.45 * LOGO_SCALE, 2);
+  });
+
+  it("an iPhone gets Apple's logo, in a wordmark slot at a wordmark's height", () => {
+    const registry = buildLogoRegistry(shipped);
+    const exif = { make: "Apple", camera_model: "iPhone 15 Pro" };
+    expect(brandIdForExif(exif, registry)).toBe("apple");
+    const [wordSlot] = collectLogoNeeds({ elements: [{ type: "logo", variant: "wordmark", style: { size: 0.1 } }] }, exif, registry, { outH: 1000 });
+    expect(wordSlot.variant).toMatchObject({ id: "symbol", file: "apple/symbol.svg" });
+    expect(logoHeightFor(wordSlot.variant, { variant: "wordmark" })).toBeCloseTo(SYMBOL_IN_WORDMARK_SLOT, 6);
+    // A dual template's wordmark slot stays empty, as for any one-mark brand.
+    expect(collectLogoNeeds({ elements: [{ type: "logo", variant: "wordmark", strict: true }] }, exif, registry, { outH: 1000 })).toEqual([]);
   });
 
   it("a long built-in wordmark is shorter, so it does not run across the frame", () => {

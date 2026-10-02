@@ -160,9 +160,20 @@ test.describe("Batch collage", () => {
       for (let k = 0; k < d.length; k += 97) h = (h * 31 + d[k]) >>> 0;
       return h;
     }, idx);
+    // The pages may still be drawing after the regroup above (on a slow CI VM
+    // page 1 was read half drawn): take a page's pixels once three reads in a
+    // row agree.
+    const settled = async (idx) => {
+      const reads = [];
+      await expect.poll(async () => {
+        reads.push(await pixelsOf(idx));
+        return reads.length >= 3 && reads.slice(-3).every((h) => h === reads.at(-1));
+      }, { timeout: 15_000, intervals: [300] }).toBe(true);
+      return reads.at(-1);
+    };
     const cards = window.locator("[data-testid='batch-page-card']");
-    const p1a = await pixelsOf(0);
-    const p2a = await pixelsOf(1);
+    const p1a = await settled(0);
+    const p2a = await settled(1);
 
     // Card button (hover-revealed) → popover scoped to that page
     await cards.nth(1).hover();
