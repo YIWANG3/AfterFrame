@@ -66,9 +66,6 @@ header .brand {
   letter-spacing: -0.05em;
   text-transform: none;
 }
-header .brand img {
-  border-radius: 7px;
-}
 header > a:last-child {
   justify-self: end;
   padding-bottom: 3px;

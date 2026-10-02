@@ -61,9 +61,6 @@ a {
   font-weight: 800;
   letter-spacing: -0.04em;
 }
-.brand img {
-  border-radius: 9px;
-}
 nav {
   display: flex;
   align-items: center;
@@ -372,7 +369,6 @@ h2 {
 }
 .closing-logo {
   margin-bottom: 28px;
-  border-radius: 22px;
 }
 .closing h2 {
   max-width: 820px;

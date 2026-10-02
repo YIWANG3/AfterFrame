@@ -16,7 +16,7 @@ export default function WelcomeOverlay({ onCreate, onOpen, onSample, sampleBusy 
   return (
     <div className="flex h-full w-full items-center justify-center px-6">
       <div className="flex w-[440px] max-w-full flex-col items-center text-center">
-        <img src={logo} alt="AfterFrame" className="h-20 w-20 rounded-2xl" />
+        <img src={logo} alt="AfterFrame" className="h-20 w-20" />
         <h1 className="mt-5 text-[20px] font-semibold text-text">{t("welcome.title")}</h1>
         <p className="mt-2 text-[13px] leading-relaxed text-muted">{t(web ? "welcome.webSubtitle" : "welcome.subtitle")}</p>
 
