@@ -1,7 +1,7 @@
 {
   "about": "Camera display names by EXIF make and model, generated from CC0 sources. Regenerate with node apps/desktop/scripts/camera-names/build.mjs; review the diff.",
   "license": "CC0 1.0",
-  "generated": "2026-10-01",
+  "generated": "2026-10-02",
   "sources": [
     {
       "name": "Wikidata: items with an Exif model (P2009) and Exif make (P2010)",
@@ -98,7 +98,7 @@
       "i2017": "iQOO 8 Pro",
       "i2018": "iQOO Z5",
       "i2019": "iQOO 9 SE",
-      "i2126": "iQOO Neo 6",
+      "i2126": "iQOO Z6 Pro 5G",
       "i2127": "iQOO Z6 5G",
       "i2202": "iQOO Neo 6",
       "i2206": "iQOO Z6 44W",

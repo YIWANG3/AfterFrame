@@ -90,4 +90,5 @@ export const CORRECTIONS = [
   ["vivo", "v2311", "vivo Y56 5G", "there is no V56; Play lists Y56 5G"],
   ["vivo", "v2152", "vivo Y21G", "the Y21G, not a V"],
   ["iqoo", "i1928", "iQOO 3 5G", "the 5G model"],
+  ["iqoo", "i2126", "iQOO Z6 Pro 5G", "the Z6 Pro (phonedb, retail listings); the Neo 6 is I2202"],
 ];

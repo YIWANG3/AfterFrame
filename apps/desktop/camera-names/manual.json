@@ -55,6 +55,10 @@
       "l2d-20c": "DJI Mavic 3",
       "l3d-100c": "DJI Mavic 4 Pro"
     },
+    "panasonic": {
+      "dc-s5m2": "Panasonic Lumix DC-S5 II",
+      "dc-s5m2x": "Panasonic Lumix DC-S5 IIX"
+    },
     "insta360": {
       "luna ultra": "Insta360 Luna Ultra"
     },
