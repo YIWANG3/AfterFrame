@@ -185,6 +185,11 @@ function createSidecarCommands(callJson) {
       return callJson(["facet-values", ...facetViewArgv(view)]);
     },
 
+    // Every EXIF make in the library with its photo count and models.
+    cameraMakes() {
+      return callJson(["camera-makes"]).then((rows) => rows || []);
+    },
+
     searchFacet({ field, q = "", limit, ...view } = {}) {
       const argv = ["search-facet", "--field", String(field)];
       if (q) argv.push("--q", String(q));

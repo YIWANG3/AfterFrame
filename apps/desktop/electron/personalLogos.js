@@ -85,10 +85,15 @@ async function processLogo(sharp, buffer, fileName) {
   // One flat colour everywhere (all white, all transparent) has no mark.
   const { channels } = await sharp(flat).stats();
   if (channels.every((channel) => channel.min === channel.max)) throw new LogoError("empty_image");
-  // Trim the empty margin so the logo is sized by its mark.
+  // Trim the empty margin so the logo is sized by its mark: the transparent
+  // one when there is transparency (the top-left pixel may be the mark
+  // itself), else the colour of the top-left corner (a mark on white).
+  const hasTransparency = channels[3].min < 255;
   let trimmed;
   try {
-    trimmed = await sharp(flat).trim({ threshold: 1 }).png().toBuffer();
+    trimmed = await sharp(flat)
+      .trim(hasTransparency ? { background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 1 } : { threshold: 1 })
+      .png().toBuffer();
   } catch {
     throw new LogoError("empty_image");
   }

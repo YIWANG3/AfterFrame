@@ -142,6 +142,7 @@ async function readExifMetadata(file) {
       // Sidecar field name — frame brand auto-match reads camera_make.
       camera_make: exif.Make || null,
       lens_model: exif.LensModel || null,
+      lens_make: exif.LensMake || null,
       aperture: exif.FNumber ?? null,
       shutter_speed: exif.ExposureTime ?? null,
       iso: exif.ISO ?? null,
@@ -492,6 +493,17 @@ const normalizeTag = (t) => String(t || "").trim().toLowerCase().replace(/\s+/g,
 // folder or status, the search text and every OTHER active filter. A facet's
 // own keys (FACET_OWN_KEYS) are dropped so its dropdown can still be used to
 // switch value.
+
+function readWatermarkProfile() {
+  try {
+    const stored = JSON.parse(localStorage.getItem("afterframe.watermarkProfile")) || {};
+    const map = (value) => (value && typeof value === "object" ? value : {});
+    return { author: String(stored.author || ""), brandLogos: map(stored.brandLogos), cameraNames: map(stored.cameraNames) };
+  } catch {
+    return { author: "", brandLogos: {}, cameraNames: {} };
+  }
+}
+
 function facetUniverse(facet, { collectionId, status = "all", search, filters, base } = {}) {
   let list = assets;
   if (base && !collectionId) list = list.filter((a) => matchesRules(a, base));
@@ -867,6 +879,31 @@ export const browserBridge = {
       capture_time: times.length ? { min: times[0], max: times[times.length - 1] } : { min: null, max: null },
     };
   },
+  setCameraName: async (key, name) => {
+    const current = readWatermarkProfile();
+    const cameraNames = { ...current.cameraNames };
+    const clean = typeof name === "string" ? name.trim() : "";
+    if (clean) cameraNames[String(key)] = clean.slice(0, 40);
+    else delete cameraNames[String(key)];
+    const next = { ...current, cameraNames };
+    localStorage.setItem("afterframe.watermarkProfile", JSON.stringify(next));
+    return next;
+  },
+  listCameraMakes: async () => {
+    const makes = new Map();
+    for (const asset of facetUniverse("camera", {})) {
+      const meta = asset.image_metadata || {};
+      const make = String(meta.camera_make || "").trim();
+      if (!make) continue;
+      const entry = makes.get(make) || { make, count: 0, models: new Map() };
+      entry.count += 1;
+      if (meta.camera_model) entry.models.set(meta.camera_model, (entry.models.get(meta.camera_model) || 0) + 1);
+      makes.set(make, entry);
+    }
+    return [...makes.values()]
+      .sort((a, b) => b.count - a.count || a.make.localeCompare(b.make))
+      .map(({ make, count, models }) => ({ make, count, models: [...models.entries()].sort((a, b) => b[1] - a[1]).map(([m]) => m) }));
+  },
   searchFacet: async ({ field, q = "", limit = 50, ...view } = {}) => {
     const needle = String(q).toLowerCase();
     const universe = facetUniverse(field, view);
@@ -1160,11 +1197,23 @@ export const browserBridge = {
   // ── editor ──
   getFrameLogos: async () => ({ manifest: frameLogoManifest, svgs: frameLogoSvgs }),
   // Watermark profile and user frame templates: this browser only.
-  getWatermarkProfile: async () => {
-    try { return { author: "", ...(JSON.parse(localStorage.getItem("afterframe.watermarkProfile")) || {}) }; } catch { return { author: "" }; }
-  },
+  getWatermarkProfile: async () => readWatermarkProfile(),
   saveWatermarkProfile: async (profile) => {
-    const next = { author: String(profile?.author ?? "").replace(/\s+/g, " ").trim().slice(0, 80) };
+    const current = readWatermarkProfile();
+    const next = {
+      author: String(profile?.author ?? current.author).replace(/\s+/g, " ").trim().slice(0, 80),
+      brandLogos: profile?.brandLogos && typeof profile.brandLogos === "object" ? { ...profile.brandLogos } : current.brandLogos,
+      cameraNames: profile?.cameraNames && typeof profile.cameraNames === "object" ? { ...profile.cameraNames } : current.cameraNames,
+    };
+    localStorage.setItem("afterframe.watermarkProfile", JSON.stringify(next));
+    return next;
+  },
+  setBrandLogo: async (brandKey, logoId) => {
+    const current = readWatermarkProfile();
+    const brandLogos = { ...current.brandLogos };
+    if (logoId) brandLogos[String(brandKey)] = String(logoId);
+    else delete brandLogos[String(brandKey)];
+    const next = { ...current, brandLogos };
     localStorage.setItem("afterframe.watermarkProfile", JSON.stringify(next));
     return next;
   },

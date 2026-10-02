@@ -7,7 +7,7 @@ import {
   Trash2, Type,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend, Braces,
+  Columns2, Rows2, ChevronDown, Undo2, Redo2, RotateCcw, Link, Unlink, Layers, Sparkles, GripVertical, FolderOpen, Cannabis, X, Brush, Blend,
   PanelTop, PanelBottom, PanelLeft, PanelRight,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
@@ -17,7 +17,9 @@ import { localFileUrl as mediaUrlFor } from "../../utils/format";
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
-import { isTextLayer, isStickerLayer, isOverlayLayer, layerLabel } from "./layerStack";
+import MyLogosRow from "./components/MyLogosRow";
+import CameraLogosBlock from "./components/CameraLogosBlock";
+import { isTextLayer, isStickerLayer, isOverlayLayer, isFrameLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
   createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, getBgPadding,
@@ -64,10 +66,19 @@ export default function TextPanel({
   onRenameTemplate,
   onDuplicateTemplate,
   onDeleteTemplate,
-  // Photo info as a text layer: resolves a token source for this photo.
-  resolveTokenSource,
-  // My logos: put one in the frame (the editor picks the spot and colour).
+  // "text": what is written on the photo. "frame": the frame (templates,
+  // canvas, photo info, my logos, frame text); the layer inspectors below are
+  // shared.
+  mode = "text",
+  // Frame mode: add to the frame; the editor picks the spot and the colour.
+  onAddFrameInfo,
+  onAddFrameText,
   onPlaceLogo,
+  // This photo's camera logo (useFrameTool.cameraLogo): place it, or give
+  // the brand one of my logos (null: its own back). Shown first among the logos.
+  cameraLogo,
+  onPlaceCameraLogo,
+  onChooseCameraLogo,
   canvasPad,
   onCanvasPad,
   onCanvasPadCommit,
@@ -75,6 +86,10 @@ export default function TextPanel({
   onCanvasBg,
 }) {
   const { t } = useTranslation("editor");
+  const frameMode = mode === "frame";
+  // Each tool lists its own layers: the frame's, or the photo's.
+  const ownLayers = layers.filter((l) => isFrameLayer(l) === frameMode);
+  const otherCount = layers.length - ownLayers.length;
   const selected = layers.filter((l) => selectedIds.has(l.id));
   const selectedText = selected.filter(isTextLayer);
   const current = selected.length === 1 ? selected[0] : null;
@@ -86,7 +101,7 @@ export default function TextPanel({
   // layout never collapses (avoids jumpy UX).
   const editTarget = currentIsText
     ? current
-    : ((currentIsSticker || currentIsOverlay) ? null : (layers.filter(isTextLayer).slice(-1)[0] || null));
+    : ((currentIsSticker || currentIsOverlay) ? null : (ownLayers.filter(isTextLayer).slice(-1)[0] || null));
 
   // Style edits (sliders, scrubbers, toggles, typing) apply live and coalesce
   // into ONE undo step per gesture — a run of same-target/same-field edits is
@@ -117,19 +132,13 @@ export default function TextPanel({
     onSelectionChange(new Set([nl.id]));
   };
 
-  // "Insert photo info": a text layer that knows it is the camera model (or
-  // the lens, the EXIF row, the date, the author), so a saved template shows
-  // the right one on the next photo. Empty here → nothing to insert.
-  const [tokenMenuOpen, setTokenMenuOpen] = useState(false);
+  // Photo info in the frame: a text layer that knows it is the camera model
+  // (or the lens, the EXIF row, the date, the author), so a saved template
+  // shows the right one on the next photo. Nothing to show → nothing added.
   const [tokenMissing, setTokenMissing] = useState(null);
-  const addTokenLayer = (key) => {
-    const source = TOKEN_SOURCES[key];
-    const text = resolveTokenSource?.(source) || "";
-    if (!text) { setTokenMissing(key); return; }
-    setTokenMissing(null);
-    const nl = createDefaultLayer({ text, tokenSource: source });
-    onLayersChange([...layers, nl]);
-    onSelectionChange(new Set([nl.id]));
+  const addFrameInfo = async (key) => {
+    const added = await onAddFrameInfo?.(key, TOKEN_SOURCES[key]);
+    setTokenMissing(added ? null : key);
   };
 
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
@@ -184,7 +193,7 @@ export default function TextPanel({
       <div className="h-full overflow-y-auto">
         {/* Presets — compact horizontal strip like the frame presets; the
             chevron expands to the full grid. */}
-        <Section label={t("text.presets")} action={
+        {!frameMode && <Section label={t("text.presets")} action={
           <button
             type="button"
             title={presetsExpanded ? t("border.collapse") : t("border.expand")}
@@ -236,43 +245,95 @@ export default function TextPanel({
               </div>
             );
           })()}
-        </Section>
+        </Section>}
 
-        {/* Border / frame — presets that drop text+logo layers + margins, plus
-            manual canvas margins & background. Replaces the standalone frame tool. */}
-        {onCanvasPad ? (
-          <Section label={t("border.title")}>
-            <BorderControls
-              templates={framePresets}
-              thumbs={frameThumbs}
-              cellAspect={frameCellAspect}
-              onApplyPreset={onApplyPreset}
-              onClearPreset={onClearPreset}
-              onSaveTemplate={onSaveTemplate}
-              onRenameTemplate={onRenameTemplate}
-              onDuplicateTemplate={onDuplicateTemplate}
-              onDeleteTemplate={onDeleteTemplate}
-              onPlaceLogo={onPlaceLogo}
-              pad={canvasPad}
-              onPad={onCanvasPad}
-              onPadCommit={onCanvasPadCommit}
-              bg={canvasBg}
-              onBg={onCanvasBg}
-            />
-          </Section>
-        ) : null}
+        {/* The Frame tool: templates, the canvas around the photo, and what
+            goes into the frame, in the order a frame is made. */}
+        {frameMode && onCanvasPad && (
+          <>
+            <Section label={t("frame.templates")}>
+              <BorderControls
+                part="templates"
+                templates={framePresets}
+                thumbs={frameThumbs}
+                cellAspect={frameCellAspect}
+                onApplyPreset={onApplyPreset}
+                onClearPreset={onClearPreset}
+                onSaveTemplate={onSaveTemplate}
+                onRenameTemplate={onRenameTemplate}
+                onDuplicateTemplate={onDuplicateTemplate}
+                onDeleteTemplate={onDeleteTemplate}
+              />
+            </Section>
+            <Section label={t("frame.canvas")}>
+              <BorderControls part="canvas" pad={canvasPad} onPad={onCanvasPad} onPadCommit={onCanvasPadCommit} bg={canvasBg} onBg={onCanvasBg} />
+            </Section>
+            <Section label={t("frame.add")}>
+              <div className="mb-1.5 text-[10px] text-muted2">{t("frame.info")}</div>
+              <div className="flex flex-wrap gap-1" data-token-menu="true">
+                {Object.keys(TOKEN_SOURCES).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    data-token={key}
+                    onClick={() => addFrameInfo(key)}
+                    className="rounded-md border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                  >
+                    {t(`text.tokens.${key}`)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  data-frame-text="true"
+                  onClick={() => onAddFrameText?.()}
+                  className="flex items-center gap-1 rounded-md border border-dashed border-border/70 px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                >
+                  <Type className="h-3 w-3" />
+                  {t("frame.freeText")}
+                </button>
+              </div>
+              {tokenMissing && (
+                <div className="mt-1 text-[10.5px] text-muted2">
+                  {t(tokenMissing === "author" ? "text.tokens.noAuthor" : "text.tokens.missing")}
+                </div>
+              )}
+              {cameraLogo && onChooseCameraLogo && (
+                <div className="mt-3">
+                  <div className="mb-1.5 text-[10px] text-muted2">{t("frame.cameraLogos")}</div>
+                  <CameraLogosBlock cameraLogo={cameraLogo} onPlace={onPlaceCameraLogo} onChoose={onChooseCameraLogo} />
+                </div>
+              )}
+              {onPlaceLogo && (
+                <div className="mt-3">
+                  <div className="mb-1.5 text-[10px] text-muted2">{t("frame.customLogos")}</div>
+                  <MyLogosRow onPlace={onPlaceLogo} />
+                </div>
+              )}
+            </Section>
+            <Section label={t("frame.layers")}>
+              {ownLayers.length === 0 && <div className="text-[10.5px] leading-snug text-muted2">{t("frame.layersEmpty")}</div>}
+              <LayerList
+                layers={ownLayers}
+                selectedIds={selectedIds}
+                onSelect={selectLayer}
+                onLayersChange={(next) => onLayersChange(mergeOwnLayers(layers, next, frameMode))}
+                onDelete={(id) => (onDeleteLayer || deleteLayer)(id)}
+              />
+            </Section>
+          </>
+        )}
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
             cached and shared by every text layer's z position slider. Without a
             depth backend (web build) the section advertises the desktop app. */}
-        {!api.has("computeDepth") && (
+        {!frameMode && !api.has("computeDepth") && (
           <Section label={t("text.depth.title")}>
             <div className="w-full rounded-md border border-border/40 bg-app px-3 py-2 text-left text-[11px] leading-snug text-muted2">
               {t("desktop.hint", { ns: "common" })}
             </div>
           </Section>
         )}
-        {api.has("computeDepth") && <Section label={t("text.depth.title")} action={
+        {!frameMode && api.has("computeDepth") && <Section label={t("text.depth.title")} action={
           hasSceneDepth ? (
             <button
               type="button"
@@ -370,8 +431,9 @@ export default function TextPanel({
           </div>
         </Section>}
 
-        {/* Layers — overlay + text + sticker */}
-        <Section label={t("text.layers")} action={
+        {/* Layers written on the photo — overlay + text + sticker. The frame's
+            own layers are listed (and added) in the Frame tool. */}
+        {!frameMode && <Section label={t("text.layers")} action={
           <div className="flex items-center gap-0.5">
             <IconBtn
               icon={Blend}
@@ -392,43 +454,19 @@ export default function TextPanel({
               disabled={!api.can("stickerExtract")}
               onClick={() => setStickerPickerOpen((v) => !v)}
             />
-            {resolveTokenSource && (
-              <IconBtn icon={Braces} title={t("text.insertInfo")} onClick={() => { setTokenMenuOpen((v) => !v); setTokenMissing(null); }} />
-            )}
             <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />
           </div>
         }>
-          {tokenMenuOpen && (
-            <div className="mb-2" data-token-menu="true">
-              <div className="flex flex-wrap gap-1">
-                {Object.keys(TOKEN_SOURCES).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    data-token={key}
-                    onClick={() => addTokenLayer(key)}
-                    className="rounded-md border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
-                  >
-                    {t(`text.tokens.${key}`)}
-                  </button>
-                ))}
-              </div>
-              {tokenMissing && (
-                <div className="mt-1 text-[10.5px] text-muted2">
-                  {t(tokenMissing === "author" ? "text.tokens.noAuthor" : "text.tokens.missing")}
-                </div>
-              )}
-            </div>
-          )}
           <LayerList
-            layers={layers}
+            layers={ownLayers}
             selectedIds={selectedIds}
             onSelect={selectLayer}
-            onLayersChange={onLayersChange}
+            onLayersChange={(next) => onLayersChange(mergeOwnLayers(layers, next, frameMode))}
             onDelete={(id) => (onDeleteLayer || deleteLayer)(id)}
           />
+          {otherCount > 0 && <div className="mt-1.5 text-[10.5px] text-muted2" data-frame-layers-hint="true">{t("frame.inFrameTool", { count: otherCount })}</div>}
           {selectedText.length >= 2 && <AlignBar layers={selectedText} onLayersChange={onLayersChange} allLayers={layers} />}
-        </Section>
+        </Section>}
 
         {currentIsSticker && current && (
           <StickerLayerInspector
@@ -737,7 +775,17 @@ function LayerList({ layers, selectedIds, onSelect, onLayersChange, onDelete }) 
   );
 }
 
-// What "Insert photo info" offers, as the token sources frame templates use.
+// A tool's layer list reorders only its own layers: put them back into the
+// whole stack in the slots they held, the other tool's layers untouched.
+function mergeOwnLayers(all, reorderedOwn, frameMode) {
+  const queue = [...reorderedOwn];
+  const kept = new Set(reorderedOwn.map((l) => l.id));
+  return all
+    .filter((l) => isFrameLayer(l) !== frameMode || kept.has(l.id))
+    .map((l) => (isFrameLayer(l) === frameMode ? queue.shift() : l));
+}
+
+// What "Photo info" offers, as the token sources frame templates use.
 const TOKEN_SOURCES = {
   camera_model: { content: "{camera_model}" },
   lens_model: { content: "{lens_model}" },

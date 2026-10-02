@@ -1,6 +1,6 @@
-// Settings › Watermark: the name frame text uses for {author}, the user's own
-// logos, and the frame templates saved from the editor (Text › Border › Save
-// as template).
+// Settings › Watermark: the name frame text uses for {author}, my custom
+// logos (a signature, a studio mark), each camera's logos and names, and the
+// frame templates saved from the editor (Frame › Templates › Save as template).
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Pencil, Plus, Trash2 } from "lucide-react";
@@ -10,6 +10,8 @@ import InlineEdit from "../InlineEdit";
 import { localFileUrl } from "../../utils/format";
 import { invalidatePersonalLogos } from "../editor/render/personalLogos";
 import { FieldRow, Group, IconActionButton, SecondaryButton, TextInput } from "./SettingsPrimitives";
+import BrandLogosGroup from "./BrandLogosGroup";
+import { LogoPreview } from "../editor/components/LogoPicker";
 
 export default function WatermarkSettings() {
   const { t } = useTranslation("settings");
@@ -54,7 +56,7 @@ export default function WatermarkSettings() {
   }
   async function importLogo() {
     setLogoError(null);
-    const res = await api.importPersonalLogo();
+    const res = await api.importPersonalLogo({ kind: "custom", multiple: true });
     if (res?.error) { setLogoError(res); return; }
     if (res?.canceled) return;
     logosChanged(await api.listPersonalLogos());
@@ -95,10 +97,11 @@ export default function WatermarkSettings() {
         </FieldRow>
       </Group>
       <Group title={t("watermark.logosTitle")} subtitle={t("watermark.logosSubtitle")}>
-        {(logos || []).map((logo) => (
+        {/* Custom logos: camera logos are the brands' (below). */}
+        {(logos || []).filter((logo) => logo.kind !== "camera").map((logo) => (
           <div key={logo.id} data-settings-logo={logo.id} className="flex items-center gap-3 border-b border-border/50 py-2.5 last:border-b-0">
-            <div className="flex h-8 w-20 shrink-0 items-center justify-center rounded bg-[var(--fill-2)] p-1">
-              <img src={localFileUrl(logo.path)} alt="" className="max-h-full max-w-full object-contain" />
+            <div className="flex h-8 w-20 shrink-0 items-center justify-center rounded bg-checker p-1 text-text">
+              <LogoPreview src={localFileUrl(logo.path)} tintable={logo.tintable} />
             </div>
             <div className="min-w-0 flex-1">
               {renaming === logo.id ? (
@@ -135,6 +138,7 @@ export default function WatermarkSettings() {
           </div>
         )}
       </Group>
+      <BrandLogosGroup />
       <Group title={t("watermark.templatesTitle")} subtitle={t("watermark.templatesSubtitle")}>
         {templates && templates.length === 0 && (
           <div className="py-3 text-[11px] text-muted2">{t("watermark.templatesEmpty")}</div>

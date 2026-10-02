@@ -195,3 +195,21 @@ test("watermark: the author and the frame templates travel; templates merge by i
   assert.equal(kept.settings.watermarkProfile.author, "Local");
   assert.equal(kept.frameTemplates, null);
 });
+
+test("watermark: which of my logos each brand uses travels, merged brand by brand", async () => {
+  const { bundle } = await buildBundle({
+    settings: { watermarkProfile: { author: "Yi", brandLogos: { canon: "logo_a", "make:yingling innovations pte. ltd.": "logo_b", bad: 7 }, cameraNames: { "dji#fc9184": "Air 3S" } } },
+    frameTemplates: [], sections: ["watermark"], includeSecrets: false, decryptToken,
+  });
+  assert.deepEqual(bundle.sections.watermark.profile, {
+    author: "Yi", brandLogos: { canon: "logo_a", "make:yingling innovations pte. ltd.": "logo_b" }, cameraNames: { "dji#fc9184": "Air 3S" },
+  });
+  const merged = mergeBundle({
+    settings: { watermarkProfile: { author: "Local", brandLogos: { canon: "logo_old", sony: "logo_s" } } },
+    frameTemplates: [], bundle, sections: ["watermark"],
+  });
+  assert.deepEqual(merged.settings.watermarkProfile.brandLogos, {
+    canon: "logo_a", sony: "logo_s", "make:yingling innovations pte. ltd.": "logo_b",
+  });
+  assert.deepEqual(merged.settings.watermarkProfile.cameraNames, { "dji#fc9184": "Air 3S" });
+});

@@ -47,6 +47,7 @@ print(json.dumps({
     "camera_make": meta.camera_make,
     "camera_model": meta.camera_model,
     "lens_model": meta.lens_model,
+    "lens_make": meta.lens_make,
     "software": meta.software,
     "iso": meta.iso,
     "aperture": meta.aperture,

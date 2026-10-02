@@ -68,6 +68,17 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
+  ipcMain.handle("workspace:camera-makes", async () => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return [];
+    try {
+      return await commands.cameraMakes();
+    } catch (err) {
+      console.warn("[workspace:camera-makes] sidecar error:", err.message);
+      return [];
+    }
+  });
+
   ipcMain.handle("workspace:search-facet", async (_event, options) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
     if (!currentCatalogPath || !catalogHasDb()) return [];

@@ -1,0 +1,25 @@
+<svg viewBox="0 -0.03 1346 201.9" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
+ xmlns:svg="http://www.w3.org/2000/svg">
+ <defs>
+  <style type="text/css">
+   <![CDATA[
+    .fil0 {fill:#2A3E92;fill-rule:nonzero}
+   ]]>
+  </style>
+ </defs>
+ <g id="Слой_x0020_1">
+  <metadata id="CorelCorpID_0Corel-Layer"/>
+  <polygon id="path3221" class="fil0" points="0,0 255,0 255,44 154,44 154,202 102,202 102,45 0,45 "/>
+  <polygon id="path3223" class="fil0" points="509,0 558,0 558,119 563,119 669,47 741,47 623,124 741,202 669,202 563,128 558,128 558,202 509,202 "/>
+  <polygon id="path3225" class="fil0" points="773,0 820,0 820,33 773,33 "/>
+  <polygon id="path3227" class="fil0" points="773,47 820,47 820,202 773,202 "/>
+  <path id="path3229" class="fil0" d="M848 47l189 0c27,0 42,14 42,39l0 116 -48 0 0 -111c0,0 0,-10 -7,-10 -9,0 -129,0 -129,0l0 121 -47 0 0 -155z"/>
+  <g>
+   <path id="path3231" class="fil0" d="M293 47c-30,0 -48,12 -48,34 0,0 0,54 0,85 0,22 19,36 48,36l143 0c30,0 46,-13 46,-36l0 -85c0,-22 -18,-34 -46,-34l-143 0zm134 119c-10,0 -124,0 -124,0 0,0 -10,1 -10,-10 0,-8 0,-65 0,-65 0,0 1,-9 11,-10l121 0c0,0 11,-2 11,12 0,13 0,61 0,61 0,0 1,12 -9,12z"/>
+  </g>
+  <g>
+   <path id="path3233" class="fil0" d="M1108 47l0 34c0,0 175,0 182,0 7,0 8,9 8,9l0 19c0,0 -124,0 -155,0 -22,0 -35,14 -35,33 0,0 0,24 0,24 0,22 12,36 35,36l203 0c0,0 0,-72 0,-112 0,-39 -21,-43 -42,-43l-196 0zm189 119l-145 0 0 -24 145 0 0 24z"/>
+  </g>
+ </g>
+</svg>

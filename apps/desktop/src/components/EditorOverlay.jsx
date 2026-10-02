@@ -18,10 +18,12 @@ import {
   bgToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
-import { createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "./editor/textState";
+import { createDefaultLayer, createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "./editor/textState";
+import { FRAME_FONTS } from "./editor/frameTemplates";
+import { isFrameLayer } from "./editor/layerStack";
 import { outputGeometry } from "./editor/frameUserTemplates";
-import { backgroundLightness, layerBoxes, placeLogo } from "./editor/logoPlacement";
-import { invalidatePersonalLogos, preparePersonalLogo } from "./editor/render/personalLogos";
+import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from "./editor/logoPlacement";
+import { invalidatePersonalLogos, isPersonalLogoRef, preparePersonalLogo } from "./editor/render/personalLogos";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
 import ToolRail from "./editor/components/ToolRail";
@@ -292,6 +294,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const viewTransformRef = useRef(IDENTITY_VIEW_TRANSFORM);
   viewTransformRef.current = viewTransform;
   const [tool, setTool] = useState("crop");
+  // The two tools that edit layers on the composed canvas: Text (what is
+  // written on the photo) and Frame (the frame around it).
+  const layerTool = tool === "text" || tool === "frame";
   const [message, setMessage] = useState("");
   // Split export destination: target folder (null = the original's folder)
   // and whether to create a <stem>_split subfolder inside it. Not part of the
@@ -666,12 +671,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   // crop-space photo. The canvas element remounts when the mode flips, so the
   // draw effect keys on it too.
   const padActive = hasPad(editorState.canvas?.pad);
-  const screenOutputView = tool === "text" ? transformOutputView(outputView, viewTransform) : outputView;
+  const screenOutputView = layerTool ? transformOutputView(outputView, viewTransform) : outputView;
   const screenOutputRect = screenOutputView?.rect ?? null;
   const screenImageRect = tool === "split"
     ? (splitTool.splitImageRect || imageRect)
-    : tool === "text" ? (screenOutputView?.photoRect || imageRect) : imageRect;
-  const composedView = tool === "text" && padActive && screenOutputView ? screenOutputView : null;
+    : layerTool ? (screenOutputView?.photoRect || imageRect) : imageRect;
+  const composedView = layerTool && padActive && screenOutputView ? screenOutputView : null;
   // The two draw effects below key on presence, not identity: imageRect is a
   // fresh object every render and composedView flips with the tool.
   const composedActive = !!composedView;
@@ -780,7 +785,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   // Presets are generated on the cropped/transformed photo and applied as
   // editable layers + canvas margins (unified canvas model).
   const frameTool = useFrameTool({
-    active: tool === "text",
+    active: tool === "frame",
     item,
     transformedPreview,
     normalizedCrop,
@@ -819,7 +824,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     applyLayers(res ? [...(presetOverlay ? [presetOverlay] : []), ...cur, ...res.layers] : cur);
     commitCurrent();
     resetViewToFit(nextState);
-    setTool("text");
+    setTool("frame");
   }
 
   async function applyFramePreset(tpl) {
@@ -861,10 +866,124 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
         y: (spot.cy - geom.top + geom.cropY) / fullH,
         scale: spot.width / fullW,
         logoRef: { source: "personal", id: logo.id, color },
+        fromPreset: true, // part of the frame
       },
     );
     commitLayers([...layersRef.current, layer]);
     setSelectedIds(new Set([layer.id]));
+  }
+
+  // One of the camera's logos into the frame: from the brand row (`level`
+  // "brand": Sony's "symbol" α or its "wordmark", or the brand's logo of mine)
+  // or the model row (its own logo), placed like my logos and coloured for
+  // what is behind it. A template finds it again for the next photo's camera.
+  async function placeCameraLogo({ level = "brand", variant } = {}) {
+    const source = transformedPreview;
+    const tool = frameToolRef.current;
+    if (!source || !tool?.cameraLogo) return;
+    const s = editorStateRef.current;
+    const pad = s.canvas?.pad || {};
+    const fullW = source.width || source.naturalWidth;
+    const fullH = source.height || source.naturalHeight;
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
+    const ref = { variant: variant || "wordmark", kind: null, strict: false, color: "#141414", ...(level === "brand" ? { scope: "brand" } : {}) };
+    const probe = await tool.brandLogoFor(ref);
+    if (!probe) return;
+    const spot = placeLogo({
+      geom, pad, aspect: probe.naturalWidth / Math.max(1, probe.naturalHeight),
+      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
+    });
+    const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
+    if (light < 0.55) ref.color = "#ffffff";
+    const img = (await tool.brandLogoFor(ref)) || probe;
+    stickerImageCache.set(img.src, img);
+    const layer = createStickerLayer(
+      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: await tool.cameraLogoLabel(level) },
+      {
+        x: (spot.cx - geom.left + geom.cropX) / fullW,
+        y: (spot.cy - geom.top + geom.cropY) / fullH,
+        scale: spot.width / fullW,
+        logoRef: ref,
+        fromPreset: true, // part of the frame
+      },
+    );
+    commitLayers([...layersRef.current, layer]);
+    setSelectedIds(new Set([layer.id]));
+  }
+
+  // Give the camera's brand, or just its model, one of my logos (null: take
+  // that choice back). The
+  // camera logos already in this frame follow, each keeping its end of the
+  // bar and its weight (swapLogo); one with no logo now is taken out. A frame
+  // that had none gets the new logo placed.
+  async function chooseCameraLogo(logo, scope) {
+    const tool = frameToolRef.current;
+    if (!tool) return;
+    const logoId = logo?.id || null;
+    await tool.setCameraLogo(logoId, scope);
+    const source = transformedPreview;
+    if (!source) return;
+    const fullW = source.width || source.naturalWidth;
+    const fullH = source.height || source.naturalHeight;
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad: editorStateRef.current.canvas?.pad || {} });
+    const isCameraLogo = (layer) => layer.type === "sticker" && layer.logoRef && !isPersonalLogoRef(layer.logoRef);
+    const layers = layersRef.current;
+    if (!layers.some(isCameraLogo)) {
+      if (logoId) await placeCameraLogo({ level: scope === "model" ? "model" : "brand" });
+      return;
+    }
+    const labels = { brand: await frameToolRef.current.cameraLogoLabel("brand"), any: await frameToolRef.current.cameraLogoLabel() };
+    const next = [];
+    for (const layer of layers) {
+      if (!isCameraLogo(layer)) { next.push(layer); continue; }
+      const img = await frameToolRef.current.brandLogoFor(layer.logoRef);
+      if (!img) continue;
+      stickerImageCache.set(img.src, img);
+      next.push({
+        ...layer,
+        ...swapLogo({ layer, geom, aspect: img.naturalWidth / Math.max(1, img.naturalHeight) }),
+        stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+        sourceLabel: layer.logoRef.scope === "brand" ? labels.brand : labels.any,
+      });
+    }
+    commitLayers(next);
+    setSelectedIds((ids) => new Set([...ids].filter((id) => next.some((l) => l.id === id))));
+  }
+
+  // Photo info or free text into the frame: a bar's left end (then its
+  // centre, its right end), dark on a light background and light on a dark
+  // one; with no bar, the photo's bottom-left corner. Returns whether there
+  // was anything to add (a photo without a lens has no lens line).
+  function addFrameText({ text, tokenSource = null, secondary = false }) {
+    const source = transformedPreview;
+    if (!source || !text) return false;
+    const s = editorStateRef.current;
+    const pad = s.canvas?.pad || {};
+    const fullW = source.width || source.naturalWidth;
+    const fullH = source.height || source.naturalHeight;
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
+    const family = FRAME_FONTS.grotesk;
+    const widthAt = (fontPx) => measureTextWidthDOM(text, { fontPx, weight: 400, family });
+    const spot = placeText({
+      geom, pad, widthAt, scale: secondary ? 0.75 : 1,
+      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
+    });
+    const onPhoto = spot.region === "photo";
+    const light = onPhoto
+      ? photoLightness(source, geom, { cx: spot.cx, cy: spot.cy, width: widthAt(spot.fontPx), height: spot.fontPx * 1.2 })
+      : backgroundLightness(s.canvas?.bg);
+    const layer = createDefaultLayer({
+      text, ...(tokenSource ? { tokenSource } : {}),
+      fontFamily: family, fontWeight: 400, fontSize: (spot.fontPx * 1920) / fullW,
+      fillColor: light < 0.55 ? "#f4f4f4" : "#1a1a1a",
+      shadow: onPhoto, shadowColor: light < 0.55 ? "#000000" : "#ffffff",
+      x: (spot.cx - geom.left + geom.cropX) / fullW,
+      y: (spot.cy - geom.top + geom.cropY) / fullH,
+      fromPreset: true, // part of the frame
+    });
+    commitLayers([...layersRef.current, layer]);
+    setSelectedIds(new Set([layer.id]));
+    return true;
   }
 
   // An SVG or PNG dragged in from Finder becomes one of my logos, placed at once.
@@ -888,7 +1007,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       }
       if (!res?.logo) continue;
       invalidatePersonalLogos();
-      setTool("text");
+      setTool("frame");
       await placePersonalLogo(res.logo);
       pushToast?.({ title: t("border.logoImported"), message: res.logo.name, ttl: 3000 });
     }
@@ -899,8 +1018,9 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   async function saveFrameTemplate(name) {
     const s = editorStateRef.current;
     try {
+      // Only the frame: what is written on the photo stays with the photo.
       const res = await frameToolRef.current?.saveTemplate?.(name, {
-        layers: layersRef.current, pad: s.canvas?.pad || {}, bg: s.canvas?.bg || null,
+        layers: layersRef.current.filter(isFrameLayer), pad: s.canvas?.pad || {}, bg: s.canvas?.bg || null,
       });
       if (!res) return;
       pushToast?.({
@@ -1133,17 +1253,17 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
       event.preventDefault();
       void handleQuickSave();
     }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && tool === "text" && selectedIds.size > 0) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c" && layerTool && selectedIds.size > 0) {
       event.preventDefault();
       copySelection();
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && tool === "text") {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v" && layerTool) {
       event.preventDefault();
       pasteClipboard();
       return;
     }
-    if ((event.key === "Delete" || event.key === "Backspace") && tool === "text" && selectedIds.size > 0) {
+    if ((event.key === "Delete" || event.key === "Backspace") && layerTool && selectedIds.size > 0) {
       event.preventDefault();
       deleteSelection();
       return;
@@ -1209,6 +1329,12 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   const selectTool = (next) => {
     setTool(next);
     if (next !== "text") setDepthMapVisible(false);
+    // Text and Frame each edit their own layers: a selection that belongs to
+    // the other tool is dropped on the way in.
+    if (next === "text" || next === "frame") {
+      const frame = next === "frame";
+      setSelectedIds((ids) => new Set([...ids].filter((id) => isFrameLayer(layersRef.current.find((l) => l.id === id)) === frame)));
+    }
   };
 
   return (
@@ -1353,7 +1479,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 Wrappers use zIndex: auto so DOM order = paint order; later siblings paint on top.
                 The side panel (z=20) and crop overlay (z=10) stay above the entire stack
                 regardless of how many layers the user adds. */}
-            {tool === "text" && (
+            {layerTool && (
               <div className="absolute inset-0 isolate">
                 <TextCanvas
                   layers={displayLayers}
@@ -1371,6 +1497,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                   onSelectionChange={setSelectedIds}
                   onLayersChange={applyLayersDisplay}
                   onLayersCommit={commitCurrent}
+                  isLocked={(layer) => isFrameLayer(layer) !== (tool === "frame")}
                   tool={tool}
                   depthFieldCanvas={depthFieldCanvasRef.current}
                   depthFieldVersion={depthFieldVersion}
@@ -1446,7 +1573,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 onApply={handleApply}
                 canApply={loadState === "ready"}
               />
-            ) : tool === "text" ? (
+            ) : layerTool ? (
               <TextPanel
                 layers={displayLayers}
                 selectedIds={selectedIds}
@@ -1481,8 +1608,15 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 onRenameTemplate={(id, name) => frameTool.renameTemplate(id, name)}
                 onDuplicateTemplate={(id, name) => frameTool.duplicateTemplate(id, name)}
                 onDeleteTemplate={(id) => frameTool.deleteTemplate(id)}
-                resolveTokenSource={(source) => frameTool.resolveSource(source)}
+                mode={tool}
+                onAddFrameInfo={(key, tokenSource) => addFrameText({
+                  text: frameTool.resolveSource(tokenSource), tokenSource, secondary: key === "lens_model" || key === "exif",
+                })}
+                onAddFrameText={() => addFrameText({ text: t("frame.newText") })}
                 onPlaceLogo={(logo) => placePersonalLogo(logo)}
+                cameraLogo={frameTool.cameraLogo}
+                onPlaceCameraLogo={(mark) => placeCameraLogo(mark)}
+                onChooseCameraLogo={(logo, scope) => chooseCameraLogo(logo, scope)}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
                 onCanvasPad={(patch) => {

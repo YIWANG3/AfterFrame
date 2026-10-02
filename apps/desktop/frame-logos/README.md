@@ -16,8 +16,12 @@ frame-logos/
   TRADEMARKS.md         legal notice
   hasselblad/  symbol.svg  wordmark.svg  lockup-h.svg
   fujifilm/    …
-  canon/  nikon/  sony/  dji/  leica/
+  canon/  nikon/  sony/  dji/  leica/  lumix/  ricoh/  insta360/ …
+  xiaomi/  huawei/  oppo/  vivo/ …      phones
+  tamron/  tokina/  laowa/  voigtlander/  lens makers (tags: lens)
 ```
+
+Where each file comes from and how it was edited: `TRADEMARKS.md`.
 
 ## How to add a brand
 
@@ -28,7 +32,11 @@ frame-logos/
      is an acceptable fallback.
 2. Fill that brand's `variants` array in `logos.json` (`file` is relative to this
    dir, i.e. `<brand>/<variant>.svg`).
-3. (Optional) Map the EXIF `make` to the brand id in the `match` table.
+3. (Optional) Map the EXIF `make` to the brand id in the `match` table. The
+   first needle found in the lowercased "make model" wins, so put specific
+   needles before generic ones ("redmi" before "xiaomi", "pentax" before
+   "ricoh"); a needle mapped to `null` names no brand ("fujitsu" before
+   "fuji"). Lens makers (tag `lens`) are not matched on Make.
 
 ## logos.json schema
 
@@ -56,6 +64,23 @@ Variant fields: `id`, `kind` (`symbol`|`wordmark`|`lockup`), `orientation`
 spot colors remain intact). Product lockups may also declare `covers`, such as
 `["camera_model"]`, to suppress duplicate text only in templates where that
 logo is actually rendered.
+
+`h` is the logo's height as a fraction of the template slot's size, so one slot
+suits every brand. It follows the shape of the logo's ink:
+`frameLogos.logoHeightFactor(aspect)` gives a wordmark 0.383, a square mark
+0.578 (about twice the camera name's capitals beside it; Hasselblad's solid H
+at 0.85 stood as tall as both lines of text), `0.68 / sqrt(aspect)` between, and a
+wordmark wider than 5.5:1 is shortened by sqrt(5.5 / aspect) so it does not run
+across the frame. For a new logo, crop the SVG to its ink and use
+`logoHeightFactor(aspect)`. If the SVG has padding around its ink, add
+`"ink": { "fill": <ink height / SVG height>, "aspect": <ink width / ink height> }`
+and divide by the fill (DJI's mark fills 49% of its SVG). A lockup with a
+second line is sized by its name line the same way (Luna Ultra's name is 38% of
+the lockup's height, the CO-ENGINEERED WITH Leica row the rest). A mark may be set
+lower by eye, never higher: Sony's α is a lowercase letter, and DJI's letters
+are bold. `frameLogos.test.js` checks every built-in `h` against the rule. A
+compact mark in a wordmark slot (a brand with no wordmark, as Xiaomi, or a
+square logo of mine) is capped at `SYMBOL_IN_WORDMARK_SLOT`.
 
 The brand is auto-detected from EXIF and bound to the logo slot. In the UI the
 user can switch **variants within that same brand** only — never swap to another

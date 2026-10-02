@@ -24,7 +24,8 @@
       "text": "文字",
       "sticker": "贴纸",
       "repaint": "AI 重绘",
-      "split": "切图"
+      "split": "切图",
+      "frame": "边框"
     }
   },
   "split": {
@@ -256,9 +257,6 @@
     "templateSaved": "已存为模板",
     "templateSkipped": "{{count}} 个图层只有像素（比如手写贴纸），没有存进模板",
     "templateFailed": "模板没能保存",
-    "myLogos": "我的 logo",
-    "importLogo": "导入",
-    "importLogoHint": "导入 SVG 或 PNG（也可以直接拖进编辑器），会放进边框里；透明底的单色 logo 会自动配成合适的颜色。",
     "placeLogo": "放进边框",
     "dropLogo": "松开，导入为我的 logo",
     "logoImported": "已添加 logo",
@@ -311,5 +309,30 @@
     "missingTextWarn": "Prompt 中没有 {text}，上方输入的文字不会被写入画面。",
     "insertText": "补回 {text}",
     "presets": "风格预设"
+  },
+  "frame": {
+    "templates": "模板",
+    "canvas": "画布",
+    "add": "加到边框里",
+    "info": "照片信息",
+    "freeText": "文字",
+    "newText": "文字",
+    "layers": "边框上的元素",
+    "layersEmpty": "边框里还没有东西。选一个模板，或从上面添加。",
+    "inFrameTool": "边框里有 {{count}} 个元素，在「边框」工具里编辑。",
+    "placeCameraLogo": "放进边框",
+    "logoDefault": "默认",
+    "logoNone": "无",
+    "cameraLogos": "相机 logo",
+    "customLogos": "自定义",
+    "levelBrand": "品牌",
+    "levelModel": "机型",
+    "brandLogoFor": "{{name}} 的品牌 logo，所有机型都用",
+    "modelLogoFor": "{{name}} 的机型 logo，只这个机型用",
+    "followBrand": "跟随品牌",
+    "uploadCustom": "上传",
+    "uploadCustomHint": "上传签名、工作室标志等 SVG 或 PNG，可以一次选多张，所有照片都能用",
+    "uploadCamera": "上传",
+    "uploadCameraHint": "上传 SVG 或 PNG，作为这台相机的 logo"
   }
 }

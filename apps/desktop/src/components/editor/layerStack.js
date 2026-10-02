@@ -16,6 +16,15 @@ export function isStickerLayer(layer) {
   return layer && layer.type === LAYER_TYPES.STICKER;
 }
 
+// Part of the frame (the Frame tool): what a template made, and what was
+// added from the Frame tool (photo info, my logo, frame text). A template
+// saves only these; applying or clearing one replaces only these, so what is
+// written on the photo itself (the Text tool) stays. Stored as fromPreset,
+// the name it had when only templates made frame layers.
+export function isFrameLayer(layer) {
+  return !!layer?.fromPreset;
+}
+
 export function isOverlayLayer(layer) {
   return layer && layer.type === LAYER_TYPES.OVERLAY;
 }

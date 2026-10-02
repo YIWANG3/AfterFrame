@@ -37,6 +37,13 @@ function styleList(value) {
 }
 
 // User frame templates (frame-templates.json): layers and margins, no pixels.
+// { key: string } (a brand's logo id, a model's name) with only strings;
+// anything else in a file is dropped (the main process cleans it on read).
+function brandLogoMap(map) {
+  if (!isObject(map)) return {};
+  return Object.fromEntries(Object.entries(map).filter(([key, id]) => key && typeof id === "string" && id));
+}
+
 function frameTemplateList(value) {
   return Array.isArray(value)
     ? value.filter((t) => isObject(t) && typeof t.id === "string" && t.id.startsWith("user:") && t.kind === "layers")
@@ -93,11 +100,22 @@ function collectExport({ settings = {}, styles = null, frameTemplates = [], them
     out.annotation = annotation;
   }
 
-  // The name frame text uses for {author}, and the templates saved in the
-  // editor. There are no personal logo files to carry yet.
+  // The name frame text uses for {author}, the templates saved in the editor
+  // and which of my logos each camera brand uses. The logo files themselves do
+  // not travel (the user's call): a brand whose logo is not on the other
+  // machine keeps its own there.
   if (wanted.has("watermark")) {
     const author = typeof settings.watermarkProfile?.author === "string" ? settings.watermarkProfile.author : "";
-    out.watermark = { profile: { author }, templates: clone(frameTemplateList(frameTemplates)) };
+    const brandLogos = brandLogoMap(settings.watermarkProfile?.brandLogos);
+    const cameraNames = brandLogoMap(settings.watermarkProfile?.cameraNames);
+    out.watermark = {
+      profile: {
+        author,
+        ...(Object.keys(brandLogos).length ? { brandLogos } : {}),
+        ...(Object.keys(cameraNames).length ? { cameraNames } : {}),
+      },
+      templates: clone(frameTemplateList(frameTemplates)),
+    };
   }
 
   const tokens = {};
@@ -296,6 +314,13 @@ function mergeBundle({ settings: localSettings = {}, styles: localStyles = null,
     // An empty name in the file does not erase the one set here.
     const author = typeof imported.profile?.author === "string" ? imported.profile.author.trim() : "";
     if (author) settings.watermarkProfile = { ...(isObject(settings.watermarkProfile) ? settings.watermarkProfile : {}), author };
+    // Brand by brand, name by name: one set here and not in the file stays.
+    for (const field of ["brandLogos", "cameraNames"]) {
+      const importedMap = brandLogoMap(imported.profile?.[field]);
+      if (!Object.keys(importedMap).length) continue;
+      const current = isObject(settings.watermarkProfile) ? settings.watermarkProfile : {};
+      settings.watermarkProfile = { ...current, [field]: { ...brandLogoMap(current[field]), ...importedMap } };
+    }
     const importedTemplates = frameTemplateList(imported.templates);
     if (importedTemplates.length) frameTemplates = mergeById(frameTemplateList(localTemplates), importedTemplates);
   }

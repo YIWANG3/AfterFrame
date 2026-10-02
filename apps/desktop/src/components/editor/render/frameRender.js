@@ -11,7 +11,7 @@
 import { drawLayersOnCanvas } from "./drawLayers";
 import { drawScrim } from "./canvasHelpers";
 import { FRAME_FONTS } from "../frameTemplates";
-import { brandIdForExif, pickVariant } from "./frameLogos";
+import { brandIdForExif, logoHeightFor, pickVariant } from "./frameLogos";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
 } from "../../../utils/format";
@@ -73,7 +73,8 @@ export function resolveTokens(str, exif, profile, coveredFields = new Set()) {
   return String(str).replace(/\{(\w+)\}/g, (_, key) => {
     if (coveredFields.has(key)) return "";
     switch (key) {
-      case "camera_model": return exif?.camera_model || "";
+      // The camera's display name (the user's, or Canon's R6m2 as R6 Mark II).
+      case "camera_model": return exif?.camera_label || exif?.camera_model || "";
       case "lens_model": return exif?.lens_model || "";
       case "date": return captureDate(exif);
       case "author": return profile?.author || "";
@@ -183,7 +184,9 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
   for (const el of template.elements) {
     if (el.type !== "logo" || !brand) continue;
     const variant = pickVariant(brand, {
-      variantId: el.variant, kind: el.kind, strict: el.strict, model: exif?.camera_model,
+      variantId: el.variant, kind: el.kind, strict: el.strict,
+      // A brand mark placed as such skips the model's own logo.
+      model: el.brandOnly ? undefined : exif?.camera_model,
     });
     if (!variant) continue;
     const color = logoColorFor(el, variant, logoColor);
@@ -192,10 +195,12 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
     // Prepare at a generous size so the same cached logo stays crisp in both the
     // small thumbnails and the big preview (cache is keyed by color, not size).
     const heightPx = Math.min(1400, Math.max(320,
-      Math.round((el.style?.size || 0.05) * (variant.h ?? 1) * (geom?.outH || 1600) * 2.5)));
+      Math.round((el.style?.size || 0.05) * logoHeightFor(variant, el) * (geom?.outH || 1600) * 2.5)));
     needs.push({
       brandId, variant, color, colorLocked, tintableColors: variant.tintableColors,
       key, heightPx, file: variant.file,
+      // One of my logos standing in for the brand's (withBrandLogos): its id.
+      personal: variant.personal || null,
     });
   }
   return needs;
@@ -268,7 +273,9 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
     template.elements.forEach((el, index) => {
       if (el.type !== "logo") return;
       const variant = pickVariant(brand, {
-        variantId: el.variant, kind: el.kind, strict: el.strict, model: exif?.camera_model,
+        variantId: el.variant, kind: el.kind, strict: el.strict,
+      // A brand mark placed as such skips the model's own logo.
+      model: el.brandOnly ? undefined : exif?.camera_model,
       });
       if (!variant) return;
       const color = logoColorFor(el, variant, logoColor);
@@ -339,7 +346,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       // brand's mark at a consistent visual weight. drawLayers wants the sticker
       // scale as a WIDTH fraction of the output, so convert via the real aspect.
       const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : (variant.aspect || 1);
-      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text;
+      const heightFrac = (el.style?.size || 0.05) * logoHeightFor(variant, el) * adj.text;
       const scale = heightFrac * aspect * factor;
       // In a narrow side strip a wide wordmark won't fit horizontally — rotate it
       // to read vertically. Square-ish marks (symbols/roundels) stay upright.

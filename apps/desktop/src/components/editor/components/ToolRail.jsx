@@ -3,8 +3,16 @@
 // handler (which also resets the depth-map overlay for non-text tools).
 // Extracted from EditorOverlay (Phase 4).
 
-import { Crop, Type, Cannabis, Sparkles, Columns3 } from "lucide-react";
+import { Crop, Type, Cannabis, Sparkles, Columns3, createLucideIcon } from "lucide-react";
 import api from "../../../api";
+
+// The Frame tool: a photo in a frame with an info bar below it. (Lucide's
+// Frame is a hash mark that reads as Crop next to it.)
+const PhotoFrame = createLucideIcon("photo-frame", [
+  ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2", key: "frame" }],
+  ["rect", { x: "7", y: "7", width: "10", height: "7", rx: "1", key: "photo" }],
+  ["path", { d: "M8 17.5h4", key: "bar" }],
+]);
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -34,6 +42,7 @@ export default function ToolRail({ tool, onSelect, t }) {
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
       <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
+      <ToolTab active={tool === "frame"} icon={PhotoFrame} label={t("overlay.tools.frame")} onClick={() => onSelect("frame")} />
       {api.can("stickerExtract") ? (
         <ToolTab active={tool === "sticker"} icon={Cannabis} label={t("overlay.tools.sticker")} onClick={() => onSelect("sticker")} />
       ) : (

@@ -632,7 +632,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] .tracking-\[0\.14em\].text-muted2 { color: rgb(var(--muted-text)); }
 [data-editor-wheel-scope="panel"], .fixed.inset-0.z-\[10100\] .rounded-xl.border.bg-chrome\/95 { border-color: transparent; background: var(--pop); }
 /* 面板底栏(重置 / 撤销 / 重做 / Apply):浮在面板底部的玻璃条,内容从它底下滚过;滚动区底部让位 52px。
-   四个面板的底栏都是 `.border-t.px-3.py-2`;AI 面板未激活时整块 .hidden,其底栏不算数 */
+   四个面板的底栏都是 `.border-t.px-3.py-2`;AI 面板未激活时整块 .hidden,其底栏不算数。
+   面板里限高的小滚动区(下拉、logo 选单 max-h-44)不是主滚动区,不让位 */
 [data-editor-wheel-scope="panel"] { position: relative; }
 [data-editor-wheel-scope="panel"] .border-t.px-3.py-2 {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
@@ -640,7 +641,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
 }
 [data-editor-wheel-scope="panel"]:has(> .border-t.px-3.py-2, > :not(.hidden) .border-t.px-3.py-2)
-  .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]) { padding-bottom: 52px; }
+  .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]):not([class*="max-h-44"]) { padding-bottom: 52px; }
 /* 面板内小控件圆角按高度定(同心):≤24 高 6px,28 / 30 / 32 高 8px。
    根因:Tailwind 的 rounded(4px)没跟着皮肤重映射,而 rounded-md 被映射成 10px,同一行里 4 与 10 混用 */
 [data-editor-wheel-scope="panel"] :is(.h-5, .h-6)[class*="rounded"]:not(.rounded-full) { border-radius: 6px; }

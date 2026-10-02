@@ -1,7 +1,10 @@
-// "My logos" in the editor's Border section: the user's own logos where frames
-// are made. Click one to put it in the frame (the editor decides where and in
-// what colour: logoPlacement.js); hover one to rename or delete it; the last
-// cell imports a new one. Settings › Watermark lists the same logos.
+// "Custom" in the Frame tool: my logos that belong to no camera (a
+// signature, a studio mark), for every photo. Click one to put it in the
+// frame (the editor decides where and in what colour: logoPlacement.js);
+// hover one to rename or delete it. The last cell uploads more, several at a
+// time; a single one is placed at once. Camera logos are the row above
+// (CameraLogosBlock) and never show here. Settings › Watermark › Custom
+// lists the same logos.
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,6 +14,9 @@ import { localFileUrl } from "../../../utils/format";
 import InlineEdit from "../../InlineEdit";
 import { confirm } from "../../confirm";
 import { invalidatePersonalLogos, loadPersonalLogos, subscribePersonalLogos } from "../render/personalLogos";
+import { LOGO_TILE, LogoPreview } from "./LogoPicker";
+
+const CAPTION = "mt-0.5 truncate px-0.5 text-center text-[9.5px] text-muted2";
 
 export default function MyLogosRow({ onPlace }) {
   const { t } = useTranslation("editor");
@@ -28,13 +34,13 @@ export default function MyLogosRow({ onPlace }) {
     return () => { alive = false; unsubscribe(); };
   }, []);
 
-  async function importLogo() {
+  async function upload() {
     setError(null);
-    const res = await api.importPersonalLogo();
+    const res = await api.importPersonalLogo({ kind: "custom", multiple: true });
     if (res?.error) { setError(res); return; }
-    if (res?.canceled || !res?.logo) return;
+    if (res?.canceled || !res?.logos?.length) return;
     invalidatePersonalLogos();
-    onPlace?.(res.logo);
+    if (res.logos.length === 1) onPlace?.(res.logos[0]);
   }
   async function remove(logo) {
     const ok = await confirm({
@@ -46,22 +52,22 @@ export default function MyLogosRow({ onPlace }) {
     invalidatePersonalLogos();
   }
 
-  // Nothing to show where logos cannot be imported and none exist (web).
-  if (!canImport && !logos?.length) return null;
+  const custom = (logos || []).filter((logo) => logo.kind !== "camera");
+  // Nothing to show where logos cannot be uploaded and there are none (web).
+  if (!canImport && !custom.length) return null;
 
   return (
     <div data-my-logos="true">
-      <div className="mb-1.5 text-[10px] text-muted2">{t("border.myLogos")}</div>
       <div className="grid grid-cols-3 gap-1.5">
-        {(logos || []).map((logo) => (
+        {custom.map((logo) => (
           <div key={logo.id} className="group relative" data-my-logo={logo.id}>
             <button
               type="button"
               title={`${logo.name} · ${t("border.placeLogo")}`}
               onClick={() => onPlace?.(logo)}
-              className="flex h-10 w-full items-center justify-center rounded-md border border-border/60 bg-app p-1.5 transition-colors hover:border-border"
+              className={LOGO_TILE}
             >
-              <img src={localFileUrl(logo.path)} alt={logo.name} className="max-h-full max-w-full object-contain" />
+              <LogoPreview src={localFileUrl(logo.path)} tintable={logo.tintable} alt={logo.name} />
             </button>
             {renaming === logo.id ? (
               <div className="mt-0.5 rounded border border-border/70 bg-app text-[10px]">
@@ -76,7 +82,7 @@ export default function MyLogosRow({ onPlace }) {
                 />
               </div>
             ) : (
-              <div className="truncate px-0.5 text-center text-[9.5px] text-muted2">{logo.name}</div>
+              <div className={CAPTION}>{logo.name}</div>
             )}
             <div className="absolute right-0.5 top-0.5 hidden gap-0.5 group-hover:flex">
               <button
@@ -100,12 +106,12 @@ export default function MyLogosRow({ onPlace }) {
           <button
             type="button"
             data-import-my-logo="true"
-            title={t("border.importLogoHint")}
-            onClick={importLogo}
-            className="flex h-10 items-center justify-center gap-1 rounded-md border border-dashed border-border/70 text-[10.5px] text-muted transition-colors hover:border-border hover:text-text"
+            title={t("frame.uploadCustomHint")}
+            onClick={upload}
+            className="flex h-10 items-center justify-center gap-1 rounded-md border border-dashed border-border/70 px-1 text-[10.5px] text-muted transition-colors hover:border-border hover:text-text"
           >
-            <Plus className="h-3 w-3" />
-            {t("border.importLogo")}
+            <Plus className="h-3 w-3 shrink-0" />
+            {t("frame.uploadCustom")}
           </button>
         )}
       </div>

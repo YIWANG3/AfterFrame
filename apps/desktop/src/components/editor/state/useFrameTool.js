@@ -7,7 +7,8 @@
 import api from "../../../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FRAME_TEMPLATES, FRAME_FONTS } from "../frameTemplates";
-import { buildLogoRegistry, prepareLogo } from "../render/frameLogos";
+import { brandIdForExif, builtInBrandMarks, builtInModelMarks, cameraNamesFor, mineFor, modelKeyFor, normalizeMake } from "../render/frameLogos";
+import { labelledExif, loadLogoRegistry, prepareLogoNeed, setBrandLogo, subscribeBrandLogos } from "../render/brandLogos";
 import { renderFrame, collectLogoNeeds, geometry, buildFrameLayers } from "../render/frameRender";
 import { layersFromDisplay } from "../imageMath";
 import { drawScrim } from "../render/canvasHelpers";
@@ -18,6 +19,10 @@ import {
 } from "../frameUserTemplates";
 import { localFileUrl } from "../../../utils/format";
 import { ensurePersonalLogos, isPersonalLogoRef, personalLogoKey } from "../render/personalLogos";
+
+// The choices a registry was read with (or a profile holds): logos per brand
+// and model, and the user's camera names.
+const choicesOf = (p) => JSON.stringify([p?.brandLogos || {}, p?.cameraNames || {}]);
 
 // Presets always generate at neutral knob settings (the old FramePanel's
 // text/margin/logo-color knobs retired with the baked pipeline).
@@ -105,7 +110,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     return () => { alive = false; };
   }, [item?.asset_id]);
 
-  const [logos, setLogos] = useState(null); // { registry, svgs }
+  const [logos, setLogos] = useState(null); // loadLogoRegistry(): { base, registry, svgs, brandLogos }
   const [thumbs, setThumbs] = useState(new Map()); // templateId -> dataURL
   const [cellAspect, setCellAspect] = useState(0.8); // uniform thumb cell w/h, adapts to the photo
   const logosPromiseRef = useRef(null);
@@ -141,11 +146,13 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     }
     return userDataRef.current;
   }
+  // Read again on each visit to the tool and each photo opened: the editor
+  // can stay in the Frame tool from one photo to the next.
   useEffect(() => {
     if (!active) return;
     userDataRef.current = null;
     loadUserData();
-  }, [active]);
+  }, [active, item?.asset_id]);
 
   // Library stickers a user template carries, loaded by path for the thumbnails.
   const stickerCacheRef = useRef(new Map());
@@ -163,20 +170,33 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
 
   // Load the logo registry once; generatePresetLayers awaits this same promise
   // so a preset clicked before the IPC resolves still gets its logo layers.
+  // The registry carries the user's choice of logo for each camera brand.
   function loadLogos() {
     if (!logosPromiseRef.current) {
-      logosPromiseRef.current = (async () => {
-        const res = await api.getFrameLogos();
-        const next = res
-          ? { registry: buildLogoRegistry(res.manifest), svgs: res.svgs || {} }
-          : { registry: { byId: new Map() }, svgs: {} };
-        setLogos(next);
+      const read = loadLogoRegistry().then((next) => {
+        // A read overtaken by a newer one (a choice saved meanwhile) is dropped.
+        if (logosPromiseRef.current === read) setLogos(next);
         return next;
-      })();
+      });
+      logosPromiseRef.current = read;
     }
     return logosPromiseRef.current;
   }
   useEffect(() => { if (active) loadLogos(); }, [active]);
+  // A brand given another logo (here or in Settings), or my logos changed:
+  // read the registry again, if it was read (thumbnails redraw with it).
+  function reloadLogos() {
+    if (!logosPromiseRef.current) return;
+    logosPromiseRef.current = null;
+    loadLogos();
+  }
+  useEffect(() => subscribeBrandLogos(reloadLogos), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The profile is read again on each visit to the tool: choices changed
+  // where nothing announced them (a settings import) are picked up then.
+  useEffect(() => {
+    if (!logos || !profile) return;
+    if (choicesOf(profile) !== choicesOf(logos)) reloadLogos();
+  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A user template asks for brand logos by logoRef: the same needs as a
   // built-in template made of just those logo elements. The user's own logos
@@ -194,14 +214,89 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   async function ensureLogos(lg, tpl, geomH, override) {
     for (const n of collectLogoNeeds(tpl, exif, lg.registry, { outH: geomH }, override)) {
       if (logoCacheRef.current.has(n.key)) continue;
-      const svg = lg.svgs[n.file];
-      if (svg) logoCacheRef.current.set(n.key, await prepareLogo(svg, {
-        color: n.color,
-        colorLocked: n.colorLocked,
-        tintableColors: n.tintableColors,
-        heightPx: n.heightPx,
-      }));
+      const img = await prepareLogoNeed(n, lg.svgs);
+      if (img) logoCacheRef.current.set(n.key, img);
     }
+  }
+
+  // A camera logo layer's name in the layer list: the logo it shows, which is
+  // the brand ("Canon") or the name of my logo the brand was given.
+  // `level` "brand": a brand mark placed from the brand row (not the model's).
+  function brandLabel(lg, level) {
+    const id = brandIdForExif(exif, lg.registry);
+    const brand = id ? lg.registry.byId.get(id) : null;
+    const names = cameraNamesFor(exif, lg.base, lg.namer);
+    if (level === "brand") return brand?.mine?.name || names?.brandName || undefined;
+    return mineFor(brand, exif.camera_model)?.name || names?.brandName || undefined;
+  }
+
+  // ── This photo's camera logos ───────────────────────────────────────────
+  // The camera's brand and model (as the app names them), the built-in marks
+  // of each, and which of my logos the brand and the model were given: the
+  // Frame tool's camera logo rows.
+  const cameraLogo = useMemo(() => {
+    if (!logos) return null;
+    const names = cameraNamesFor(exif, logos.base, logos.namer);
+    if (!names) return null;
+    const builtIn = logos.base.byId.get(names.brandKey) || null;
+    const brand = logos.registry.byId.get(names.brandKey);
+    const model = String(exif.camera_model || "").trim();
+    const toMarks = (variants) => variants.flatMap((variant) => {
+      const svg = logos.svgs[variant.file];
+      // One colour is tinted by frames, unlike Leica's red dot or a two-colour lockup.
+      return svg ? [{
+        id: variant.id,
+        src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+        tintable: !variant.colorLocked && !variant.tintableColors?.length,
+      }] : [];
+    });
+    return {
+      ...names, model,
+      // Mine, for the whole brand / for this model (its own or one named the
+      // same: a drone's other lens). A deleted logo is no choice.
+      brandChoice: brand?.mine?.personal || null,
+      modelChoice: (model && brand?.mineModels?.find((v) => v.model === normalizeMake(model))?.personal) || null,
+      brandMarks: toMarks(builtInBrandMarks(builtIn)),
+      modelMarks: toMarks(builtInModelMarks(builtIn, model)),
+    };
+  }, [logos, exifKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** The image a brand logoRef shows on this photo now (its mark, or the logo
+   *  chosen for the brand); null when the camera has none. */
+  async function brandLogoFor(ref) {
+    const lg = await loadLogos();
+    const need = collectLogoNeeds({ elements: [logoElementOf(ref)] }, exif, lg.registry, { outH: 1600 })[0];
+    if (!need) return null;
+    if (!logoCacheRef.current.has(need.key)) {
+      const img = await prepareLogoNeed(need, lg.svgs);
+      if (img) logoCacheRef.current.set(need.key, img);
+    }
+    return logoCacheRef.current.get(need.key) || null;
+  }
+
+  /** The layer-list name of this camera's logo as it stands now (`level`
+   *  "brand": of the brand's, whatever the model has). */
+  async function cameraLogoLabel(level) {
+    return brandLabel(await loadLogos(), level);
+  }
+
+  /** Give this camera's brand ("brand") or its model ("model") one of my
+   *  logos, or (null) take that choice back; resolves once the registry has
+   *  been read again. Models named the same are one camera with one choice,
+   *  kept on this model (the registry lends it to the others). */
+  async function setCameraLogo(logoId, scope = "brand") {
+    if (!cameraLogo) return;
+    if (scope !== "model") await setBrandLogo(cameraLogo.brandKey, logoId);
+    else if (cameraLogo.modelKey) {
+      const { brandKey, model, modelKey } = cameraLogo;
+      const chosen = logos?.brandLogos || {};
+      for (const other of logos?.namer.sameCamera(brandKey, model) || []) {
+        const key = modelKeyFor(brandKey, other);
+        if (key !== modelKey && chosen[key]) await setBrandLogo(key, null);
+      }
+      await setBrandLogo(modelKey, logoId);
+    }
+    await loadLogos();
   }
 
   // Small framed previews of every template, so the panel shows what each looks
@@ -232,7 +327,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       for (const tpl of FRAME_TEMPLATES) {
         await ensureLogos(logos, tpl, small.height);
         if (!alive) return;
-        const framed = renderFrame({ photo: small, exif, profile, template: tpl, registry: logos.registry, logoImages: logoCacheRef.current });
+        const framed = renderFrame({ photo: small, exif: labelledExif(exif, logos), profile, template: tpl, registry: logos.registry, logoImages: logoCacheRef.current });
         // Size uniform cells to the first (dominant "bar") template's actual
         // output, so cells adapt to the photo orientation and waste little space.
         if (tpl.id === FRAME_TEMPLATES[0].id) repAspect = framed.width / framed.height;
@@ -244,7 +339,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
         const personal = await personalLogosOf(tpl);
         if (!alive) return;
         const framed = renderUserTemplate({
-          photo: small, template: tpl, exif, profile, measure: measureTextWidthDOM,
+          photo: small, template: tpl, exif: labelledExif(exif, logos), profile, measure: measureTextWidthDOM,
           logoFor: (ref) => logoFor(logos, ref, personal), stickerImages: stickerCacheRef.current,
         });
         next.set(tpl.id, framed.toDataURL("image/jpeg", 0.82));
@@ -265,8 +360,14 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   // renders.
   async function generatePresetLayers(tpl) {
     if (!transformedPreview) return null;
-    const lg = await loadLogos(); // waits out the registry IPC — no dropped logos
+    let lg = await loadLogos(); // waits out the registry IPC — no dropped logos
     const { profile: currentProfile } = await loadUserData();
+    // Choices changed unannounced since the registry was read (a settings
+    // import): read it again before a template picks this camera's logo.
+    if (choicesOf(currentProfile) !== choicesOf(lg)) {
+      logosPromiseRef.current = null;
+      lg = await loadLogos();
+    }
     await ensureFrameFontsLoaded(); // box.cx is measured below — needs Outfit, not a fallback
     const base = buildBaseCanvas(transformedPreview, normalizedCrop);
     if (isUserTemplate(tpl)) return placeLayers(await userTemplateLayers(tpl, lg, base, currentProfile));
@@ -290,7 +391,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     }
 
     const built = buildFrameLayers(sampleCtx, {
-      template: tpl, exif, profile: currentProfile, geom: g, adjust: ADJUST, factor: g.wref / g.outW,
+      template: tpl, exif: labelledExif(exif, lg), profile: currentProfile, geom: g, adjust: ADJUST, factor: g.wref / g.outW,
       registry: lg.registry, logoImages: logoCacheRef.current,
       logoColor: null, isOverlay,
     });
@@ -347,7 +448,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
         if (!img?.src) return null;
         stickerImages.set(img.src, img);
         return createStickerLayer(
-          { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
+          { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: brandLabel(lg) },
           {
             x: cx, y: cy, scale: l.scale, rotation: l.rotation ?? 0, opacity: l.opacity ?? 100, fromPreset: true,
             // Which mark this is, not its pixels: a saved template finds the
@@ -371,7 +472,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     const stickerImages = new Map();
     const geom = outputGeometry({ fullW: base.width, fullH: base.height, pad });
     const layers = layersFromTemplate(tpl, {
-      geom, exif, profile: currentProfile, measure: measureTextWidthDOM,
+      geom, exif: labelledExif(exif, lg), profile: currentProfile, measure: measureTextWidthDOM,
       logoFor: (ref) => {
         const img = logoFor(lg, ref, personal);
         if (img?.src) stickerImages.set(img.src, img);
@@ -381,7 +482,8 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       if (l.type === "overlay") return createOverlayLayer({ ...l, fromPreset: true });
       if (l.type === "sticker") {
         const { stickerPath, naturalWidth, naturalHeight, sourceLabel, ...rest } = l;
-        return createStickerLayer({ stickerPath, naturalWidth, naturalHeight, sourceLabel }, { ...rest, fromPreset: true });
+        const label = l.logoRef && !isPersonalLogoRef(l.logoRef) ? brandLabel(lg) : sourceLabel;
+        return createStickerLayer({ stickerPath, naturalWidth, naturalHeight, sourceLabel: label }, { ...rest, fromPreset: true });
       }
       return { ...createDefaultLayer({}), ...l, fromPreset: true };
     });
@@ -456,7 +558,10 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     generatePresetLayers,
     saveTemplate, renameTemplate, duplicateTemplate, deleteTemplate,
     // A token source ({camera_model}, an EXIF row, {author}) for this photo.
-    resolveSource: (source) => resolveSource(source, exif, profile),
+    resolveSource: (source) => resolveSource(source, labelledExif(exif, logos), profile),
     logosReady: !!logos,
+    cameraLogo, brandLogoFor, cameraLogoLabel, setCameraLogo,
+    // Which of my logos cameras use ({ brand or brand#model: logo id }).
+    brandLogos: logos?.brandLogos || null,
   };
 }
