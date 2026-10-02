@@ -1,4 +1,4 @@
-// Rebuild the lightweight documentation/site images from the untouched PNGs.
+// Rebuild the lightweight documentation/site images from the canonical PNGs (macOS menu bar removed).
 // Run from the repository root after installing apps/desktop dependencies:
 // node site/scripts/build-screenshots.mjs
 import { readdir } from 'node:fs/promises';
@@ -7,15 +7,22 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(new URL('../../apps/desktop/package.json', import.meta.url));
 const sharp = require('sharp');
-for (const language of ['cn', 'en']) {
-  const directory = new URL(`../../docs/assets/${language}/`, import.meta.url);
-  for (const name of (await readdir(directory)).filter((name) => name.endsWith('.png')).sort()) {
-    const input = fileURLToPath(new URL(name, directory));
+async function rebuild(directory, label) {
+  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.isDirectory()) {
+      await rebuild(new URL(`${entry.name}/`, directory), `${label}/${entry.name}`);
+      continue;
+    }
+    if (!entry.name.endsWith('.png')) continue;
+    const input = fileURLToPath(new URL(entry.name, directory));
     const output = input.replace(/\.png$/, '.webp');
     const info = await sharp(input)
-      .resize({ width: 2000, withoutEnlargement: true })
-      .webp({ quality: 88, effort: 6 })
+      // Keep native resolution for large Retina website figures.
+      .webp({ quality: 95, effort: 6 })
       .toFile(output);
-    console.log(`${language}/${name}: ${info.width} × ${info.height}, ${Math.round(info.size / 1024)} KB`);
+    console.log(`${label}/${entry.name}: ${info.width} × ${info.height}, ${Math.round(info.size / 1024)} KB`);
   }
+}
+for (const language of ['cn', 'en']) {
+  await rebuild(new URL(`../../docs/assets/${language}/`, import.meta.url), language);
 }

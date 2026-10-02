@@ -1,4 +1,4 @@
-@import url("theme.css");
+@import url("theme.css?v=20261001-lightglow2");
 .layout { width: min(1440px, 100%); margin: auto; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; padding: 108px 24px 0; }
 aside { position: sticky; top: 108px; align-self: start; max-height: calc(100svh - 132px); overflow-y: auto; padding: 24px 12px; border-radius: 20px; background: var(--surface); }
 aside p { margin: 0 12px 18px; font-size: 12px; font-weight: 600; color: var(--muted); }
@@ -38,3 +38,26 @@ pre { margin-top: 28px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .layout .intro { padding: 48px 24px; border-radius: 24px; }
   .note, .rows div { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
+
+/* Carry the same spectrum into the guide without changing its reading layout. */
+.layout section { position: relative; isolation: isolate; }
+.layout .intro { background: transparent; }
+.layout :is(.intro, #library, #edit, #mcp, .end)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent), linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-composite: intersect;
+}
+.layout .intro::before { background: var(--glow-warm); }
+.layout #library::before { background: var(--glow-library); }
+.layout #edit::before { background: var(--glow-warm); }
+.layout #mcp::before { background: var(--glow-cool); }
+.layout .end { margin-top: 32px; border-radius: 0; background: transparent; }
+.layout .end::before { background: var(--glow-spectrum); }
+[data-theme="light"] .layout section::before { opacity: .90; }
+
+/* Keep the settings dialog at its native logical size. */
+.layout #mcp figure { max-width: 880px; margin-inline: auto; }

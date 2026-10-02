@@ -8,6 +8,9 @@
   const apply = () => {
     const theme = preference || (system.matches ? 'dark' : 'light');
     document.documentElement.dataset.theme = theme;
+    document.querySelectorAll('source[data-theme-light]').forEach(source => {
+      source.media = theme === 'light' ? 'all' : 'not all';
+    });
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#f5f5f7' : '#080809');
     if (button) {
       const zh = document.documentElement.lang.startsWith('zh');
