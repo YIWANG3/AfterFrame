@@ -1,5 +1,5 @@
 {
-  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here. h: the logo's height as a fraction of the template slot's size, at most frameLogos.logoHeightFactor(ink aspect) / ink fill (a test checks it): wordmarks 0.383, wider than 5.5:1 shorter by sqrt(5.5 / aspect), square marks 0.578; set lower by eye for a light or bold mark (Sony's α, DJI). ink: {fill, aspect} only for an SVG with padding around its ink (fill = ink height / SVG height). See README.md.",
+  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here. h: the logo's height as a fraction of the template slot's size, at most frameLogos.logoHeightFactor(ink aspect) / ink fill (a test checks it): wordmarks 0.383, wider than 5.5:1 shorter by sqrt(5.5 / aspect), square marks 0.578; set lower by eye for a light or bold mark (Sony's α, DJI). ink: {fill, aspect} only for an SVG with padding around its ink (fill = ink height / SVG height), or a lockup, whose name line is sized as the wordmark (Luna Ultra). See README.md.",
   "logos": [
     {
       "id": "hasselblad",
@@ -206,7 +206,8 @@
           "kind": "wordmark",
           "file": "insta360/insta360-luna-ultra.svg",
           "aspect": 5.37,
-          "h": 0.383,
+          "h": 0.67,
+          "ink": { "fill": 0.382, "aspect": 12.29 },
           "models": [
             "luna ultra"
           ],

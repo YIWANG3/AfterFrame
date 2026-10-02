@@ -74,7 +74,9 @@ wordmark wider than 5.5:1 is shortened by sqrt(5.5 / aspect) so it does not run
 across the frame. For a new logo, crop the SVG to its ink and use
 `logoHeightFactor(aspect)`. If the SVG has padding around its ink, add
 `"ink": { "fill": <ink height / SVG height>, "aspect": <ink width / ink height> }`
-and divide by the fill (DJI's mark fills 49% of its SVG). A mark may be set
+and divide by the fill (DJI's mark fills 49% of its SVG). A lockup with a
+second line is sized by its name line the same way (Luna Ultra's name is 38% of
+the lockup's height, the CO-ENGINEERED WITH Leica row the rest). A mark may be set
 lower by eye, never higher: Sony's α is a lowercase letter, and DJI's letters
 are bold. `frameLogos.test.js` checks every built-in `h` against the rule. A
 compact mark in a wordmark slot (a brand with no wordmark, as Xiaomi, or a

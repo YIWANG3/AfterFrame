@@ -90,8 +90,9 @@ async function loadPhoto(url, w = 1400) {
 async function loadBefore() {
   const t = Date.now();
   try {
-    const manifest = await (await fetch(`/test-results/before/logos.json?t=${t}`)).json();
-    const { FRAME_TEMPLATES: templates } = await import(/* @vite-ignore */ `/test-results/before/frameTemplates.js?t=${t}`);
+    const manifest = await (await fetch(`/test-results/before/logos.json?fresh=${t}`)).json();
+    // not ?t=, which Vite strips (its own HMR stamp) and so serves the cached module
+    const { FRAME_TEMPLATES: templates } = await import(/* @vite-ignore */ `/test-results/before/frameTemplates.js?fresh=${t}`);
     return { manifest, templates };
   } catch {
     return {};
