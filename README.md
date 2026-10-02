@@ -57,7 +57,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 ### Browse & Organize
 - Grid, tiles, justified, and waterfall layout modes
 - Sort by imported time, captured time, rating, or name
-- Smart collections and manual folders
+- Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
 - Star rating system (imports Lightroom XMP ratings)
 - Virtual-scroll gallery that handles 10,000+ images smoothly
@@ -66,7 +66,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 ### Search & Filter
 - Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
-- Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, and star rating — combined live
+- Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, star rating, colour (any colour, matched against each photo's dominant colours), country and city, location source, and description / text in the picture / path — combined live. Tick several values of one facet, and choose which facets sit on the bar
+- Filters refine where you are: inside a folder, the filter bar and search cover that folder, with counts to match
 - Tag filtering: click any tag in the inspector, or pick from a searchable tag list (server-side search, scales to thousands of tags)
 
 ### People
@@ -74,6 +75,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Review and name suggested groups, choose a cover, merge matches, or move incorrectly grouped faces
 - Select and delete multiple incorrect groups at once; deleted groups stay excluded from later rescans
 - Filter the gallery by person or open every matching photo directly from the People view
+- Optionally analyze faces right after import (People settings)
 
 ![People recognition](docs/assets/en/people.webp)
 
@@ -103,13 +105,13 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 - **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, rotation, outline (with opacity), shadow, and outer-glow controls as text layers
 
-- **Collage** maker with 8 layout templates, adjustable gap/padding/border-radius, background color, and high-res export. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
+- **Collage** maker with 77 layout templates for 1 to 12 photos, adjustable gap/padding/border-radius, background color, and high-res export. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
 
 ![Batch collage](docs/assets/en/collage-batch.webp)
 
 ![Single collage editor](docs/assets/en/collage.webp)
 
-- **Frame** — brand-aware camera watermark frames driven by EXIF. Pick from 20+ presets (bottom bars, dual-logo, and vertical side-strip layouts), rendered with real brand logos and colors for Hasselblad, Sony, Canon, Nikon, Leica, Fujifilm, Lumix, and Ricoh, plus a clean generic set. Adaptive light/dark contrast, a logo color picker (original / black / white / grey / gold), text and margin scaling, and export at the original resolution
+- **Frame** — brand-aware camera watermark frames driven by EXIF, in a Frame tool of their own. Pick from 20+ presets (bottom bars, dual-logo, and vertical side-strip layouts) or save your own as templates, rendered with real brand logos and colors for Hasselblad, Sony, Canon, Nikon, Leica, Fujifilm, Lumix, Ricoh, Pentax, Sigma, Olympus / OM System, Phase One, DJI, Insta360, GoPro, Xiaomi, OPPO, vivo, OnePlus, Huawei, Honor and more, plus a clean generic set. Import your own logos (a signature, a studio mark), or give a camera brand or one model a logo of your own. Camera model codes show as product names (DJI FC9184 as DJI Air 3S), and any camera can be renamed. Adaptive light/dark contrast, a logo color picker (original / black / white / grey / gold), text and margin scaling, and export at the original resolution
 
 ![Frame — Hasselblad wordmark](docs/assets/en/frame-hasselblad.webp)
 
