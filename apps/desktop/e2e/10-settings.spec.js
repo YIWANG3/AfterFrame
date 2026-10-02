@@ -3,7 +3,7 @@
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
 let ctx;
 
@@ -113,6 +113,44 @@ test("Escape closes settings and restores the gallery", async () => {
   await ctx.window.keyboard.press("Escape");
   await expect(ctx.window.getByText("Auto-annotation providers")).toHaveCount(0);
   await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible();
+});
+
+test("Settings opens over the editor and a collage, and keeps its keys to itself", async () => {
+  const w = ctx.window;
+  const settingsOnTop = () => w.evaluate(() => !!document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.closest("[data-top-layer]"));
+
+  // Over the editor: Delete / Backspace in Settings leave the selected layer
+  // alone, and Escape closes Settings, not the editor.
+  const photo = await w.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 20 }).then((rows) => rows.find((r) => r.asset_type !== "video")));
+  await w.evaluate((item) => window.__afterframeTest.openEditor(item), photo);
+  await waitForEditor(w, { preview: true });
+  await w.evaluate(() => window.__afterframeTest.setTool("text"));
+  await w.evaluate(() => window.__afterframeTest.addTextLayer("keep me"));
+  await w.keyboard.press("Meta+,");
+  await expect.poll(settingsOnTop).toBe(true);
+  await w.keyboard.press("Backspace");
+  await w.keyboard.press("Delete");
+  expect(await w.evaluate(() => window.__afterframeTest.getLayerCount())).toBe(1);
+  await w.keyboard.press("Escape");
+  await expect(w.locator("[data-top-layer]")).toHaveCount(0);
+  expect(await w.evaluate(() => window.__afterframeTest.getEditorOpen())).toBe(true);
+  await w.evaluate(() => window.__afterframeTest.closeEditor());
+
+  // Over a collage (whose Escape listener hears keys first): Escape closes
+  // Settings only; the next one closes the collage.
+  const cards = w.locator("[data-gallery-item='true']");
+  await cards.nth(0).click();
+  await cards.nth(1).click({ modifiers: ["Shift"] });
+  await cards.nth(0).click({ button: "right" });
+  await w.getByText(/^Collage$/).click();
+  await expect(w.getByTestId("collage-canvas")).toBeVisible({ timeout: 10_000 });
+  await w.keyboard.press("Meta+,");
+  await expect.poll(settingsOnTop).toBe(true);
+  await w.keyboard.press("Escape");
+  await expect(w.locator("[data-top-layer]")).toHaveCount(0);
+  await expect(w.getByTestId("collage-canvas")).toBeVisible();
+  await w.keyboard.press("Escape");
+  await expect(w.getByTestId("collage-canvas")).toHaveCount(0);
 });
 
 test("auto-analyze faces on import stays silent when no model is installed", async () => {

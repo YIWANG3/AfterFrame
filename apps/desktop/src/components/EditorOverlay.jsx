@@ -18,7 +18,10 @@ import {
   bgToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
-import { createOverlayLayer } from "./editor/textState";
+import { createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "./editor/textState";
+import { outputGeometry } from "./editor/frameUserTemplates";
+import { backgroundLightness, layerBoxes, placeLogo } from "./editor/logoPlacement";
+import { invalidatePersonalLogos, preparePersonalLogo } from "./editor/render/personalLogos";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
 import ToolRail from "./editor/components/ToolRail";
@@ -246,6 +249,27 @@ function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeSta
     </div>
   );
 }
+
+// How light the photo is under a spot (output px): the corner a logo is put in
+// when there is no bar. 0 is black, 1 white.
+function photoLightness(source, geom, spot) {
+  const sample = document.createElement("canvas");
+  sample.width = 8;
+  sample.height = 8;
+  const ctx = sample.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(
+    source,
+    spot.cx - spot.width / 2 - geom.left + geom.cropX, spot.cy - spot.height / 2 - geom.top + geom.cropY, spot.width, spot.height,
+    0, 0, 8, 8,
+  );
+  const { data } = ctx.getImageData(0, 0, 8, 8);
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 4) sum += (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+  return sum / (data.length / 4);
+}
+
+const isLogoFileDrag = (event) => [...(event.dataTransfer?.items || [])]
+  .some((entry) => entry.kind === "file" && (entry.type === "image/svg+xml" || entry.type === "image/png"));
 
 export default function EditorOverlay({ open, item, onClose, onSaveComplete, pushToast }) {
   const { t } = useTranslation("editor");
@@ -807,6 +831,69 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
     setCanvasPreset(null);
   }
 
+  // "My logo" into the frame. Where and at what size come from logoPlacement
+  // (a bar's right end, or beside what is already there; the photo's corner
+  // with no bar); a recolourable logo goes black on a light background and
+  // white on a dark one; the others keep their colours.
+  async function placePersonalLogo(logo) {
+    const source = transformedPreview;
+    if (!source || !logo) return;
+    const s = editorStateRef.current;
+    const pad = s.canvas?.pad || {};
+    const fullW = source.width || source.naturalWidth;
+    const fullH = source.height || source.naturalHeight;
+    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
+    const spot = placeLogo({
+      geom, pad, aspect: logo.width / Math.max(1, logo.height),
+      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
+    });
+    let color = null;
+    if (logo.tintable) {
+      const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
+      color = light < 0.55 ? "#ffffff" : "#141414";
+    }
+    const img = await preparePersonalLogo(logo, color);
+    stickerImageCache.set(img.src, img);
+    const layer = createStickerLayer(
+      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: logo.name },
+      {
+        x: (spot.cx - geom.left + geom.cropX) / fullW,
+        y: (spot.cy - geom.top + geom.cropY) / fullH,
+        scale: spot.width / fullW,
+        logoRef: { source: "personal", id: logo.id, color },
+      },
+    );
+    commitLayers([...layersRef.current, layer]);
+    setSelectedIds(new Set([layer.id]));
+  }
+
+  // An SVG or PNG dragged in from Finder becomes one of my logos, placed at once.
+  const [logoDropActive, setLogoDropActive] = useState(false);
+  const canImportLogo = api.has("importPersonalLogo");
+  async function handleLogoDrop(event) {
+    setLogoDropActive(false);
+    const files = [...(event.dataTransfer?.files || [])].filter((file) => /\.(svg|png)$/i.test(file.name));
+    if (!canImportLogo || !files.length) return;
+    event.preventDefault();
+    for (const file of files) {
+      const filePath = api.getPathForFile(file) || file.path;
+      if (!filePath) continue;
+      const res = await api.importPersonalLogo(filePath);
+      if (res?.error) {
+        pushToast?.({
+          title: t(`border.logoErrors.${res.error}`, { message: res.message || "", defaultValue: t("border.logoErrors.failed", { message: res.error }) }),
+          tone: "error", ttl: 6000,
+        });
+        continue;
+      }
+      if (!res?.logo) continue;
+      invalidatePersonalLogos();
+      setTool("text");
+      await placePersonalLogo(res.logo);
+      pushToast?.({ title: t("border.logoImported"), message: res.logo.name, ttl: 3000 });
+    }
+  }
+
   // "Save as template": the look as it stands (margins, background, every
   // layer) becomes one of the user's frame templates.
   async function saveFrameTemplate(name) {
@@ -896,6 +983,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
           stickerPathKind: typeof l.stickerPath === "string"
             ? (l.stickerPath.startsWith("data:") ? "data" : "path")
             : null,
+          logoRef: l.logoRef || null,
           handwriting: l.handwriting
             ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
             : null,
@@ -1124,7 +1212,24 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
   };
 
   return (
-    <div className="fixed inset-0 z-[10100] flex flex-col bg-app text-text">
+    <div
+      className="fixed inset-0 z-[10100] flex flex-col bg-app text-text"
+      onDragOver={(event) => {
+        if (!canImportLogo || !isLogoFileDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        if (!logoDropActive) setLogoDropActive(true);
+      }}
+      onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setLogoDropActive(false); }}
+      onDrop={handleLogoDrop}
+    >
+      {logoDropActive && (
+        <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-app/60" data-logo-drop-hint="true">
+          <div className="rounded-xl border border-dashed border-border bg-chrome px-6 py-4 text-[13px] text-text shadow-overlay">
+            {t("border.dropLogo")}
+          </div>
+        </div>
+      )}
       <EditorHeader
         sourceLabel={sourceLabel}
         edited={edited}
@@ -1377,6 +1482,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
                 onDuplicateTemplate={(id, name) => frameTool.duplicateTemplate(id, name)}
                 onDeleteTemplate={(id) => frameTool.deleteTemplate(id)}
                 resolveTokenSource={(source) => frameTool.resolveSource(source)}
+                onPlaceLogo={(logo) => placePersonalLogo(logo)}
                 canvasPad={editorState.canvas?.pad}
                 canvasBg={editorState.canvas?.bg}
                 onCanvasPad={(patch) => {

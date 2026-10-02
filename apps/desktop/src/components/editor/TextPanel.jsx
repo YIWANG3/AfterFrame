@@ -66,6 +66,8 @@ export default function TextPanel({
   onDeleteTemplate,
   // Photo info as a text layer: resolves a token source for this photo.
   resolveTokenSource,
+  // My logos: put one in the frame (the editor picks the spot and colour).
+  onPlaceLogo,
   canvasPad,
   onCanvasPad,
   onCanvasPadCommit,
@@ -250,6 +252,7 @@ export default function TextPanel({
               onRenameTemplate={onRenameTemplate}
               onDuplicateTemplate={onDuplicateTemplate}
               onDeleteTemplate={onDeleteTemplate}
+              onPlaceLogo={onPlaceLogo}
               pad={canvasPad}
               onPad={onCanvasPad}
               onPadCommit={onCanvasPadCommit}

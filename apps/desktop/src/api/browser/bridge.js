@@ -1171,6 +1171,8 @@ export const browserBridge = {
   listFrameTemplates: async () => {
     try { return JSON.parse(localStorage.getItem("afterframe.frameTemplates")) || []; } catch { return []; }
   },
+  // No file import in the browser: its logo list stays empty.
+  listPersonalLogos: async () => ({ logos: [] }),
   saveFrameTemplates: async (templates) => {
     const next = (Array.isArray(templates) ? templates : []).filter((t) => t?.kind === "layers" && String(t.id || "").startsWith("user:"));
     localStorage.setItem("afterframe.frameTemplates", JSON.stringify(next));

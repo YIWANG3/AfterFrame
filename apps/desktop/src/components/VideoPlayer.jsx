@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { topLayerOpen } from "../utils/topLayer";
 
 // mm:ss (or h:mm:ss) for the scrubber readout.
 function fmtTime(seconds) {
@@ -53,6 +54,7 @@ export default function VideoPlayer({ src, onError }) {
   // Spacebar toggles play while a video is open.
   useEffect(() => {
     function onKey(e) {
+      if (topLayerOpen()) return; // Settings is open over the player: a space is typing
       if (e.code === "Space") { e.preventDefault(); e.stopPropagation(); togglePlay(); }
     }
     window.addEventListener("keydown", onKey, true);

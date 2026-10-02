@@ -17,6 +17,7 @@ import {
   renderUserTemplate, resolveSource, templateFromLayers, tokenSourceOf,
 } from "../frameUserTemplates";
 import { localFileUrl } from "../../../utils/format";
+import { ensurePersonalLogos, isPersonalLogoRef, personalLogoKey } from "../render/personalLogos";
 
 // Presets always generate at neutral knob settings (the old FramePanel's
 // text/margin/logo-color knobs retired with the baked pipeline).
@@ -177,10 +178,15 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   }
   useEffect(() => { if (active) loadLogos(); }, [active]);
 
-  // A user template asks for logos by logoRef: the same needs as a built-in
-  // template made of just those logo elements.
-  const userLogoTemplate = (tpl) => ({ elements: (tpl.layers || []).filter((l) => l.logoRef).map((l) => logoElementOf(l.logoRef)) });
-  function logoFor(lg, ref) {
+  // A user template asks for brand logos by logoRef: the same needs as a
+  // built-in template made of just those logo elements. The user's own logos
+  // (source: "personal") come from ensurePersonalLogos instead.
+  const userLogoTemplate = (tpl) => ({
+    elements: (tpl.layers || []).filter((l) => l.logoRef && !isPersonalLogoRef(l.logoRef)).map((l) => logoElementOf(l.logoRef)),
+  });
+  const personalLogosOf = (tpl) => ensurePersonalLogos((tpl.layers || []).map((l) => l.logoRef));
+  function logoFor(lg, ref, personal) {
+    if (isPersonalLogoRef(ref)) return personal?.get(personalLogoKey(ref)) || null;
     const need = collectLogoNeeds({ elements: [logoElementOf(ref)] }, exif, lg.registry, { outH: 1600 })[0];
     return need ? logoCacheRef.current.get(need.key) || null : null;
   }
@@ -235,10 +241,11 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
       for (const tpl of userTemplates) {
         await ensureLogos(logos, userLogoTemplate(tpl), small.height);
         await loadTemplateStickers(tpl);
+        const personal = await personalLogosOf(tpl);
         if (!alive) return;
         const framed = renderUserTemplate({
           photo: small, template: tpl, exif, profile, measure: measureTextWidthDOM,
-          logoFor: (ref) => logoFor(logos, ref), stickerImages: stickerCacheRef.current,
+          logoFor: (ref) => logoFor(logos, ref, personal), stickerImages: stickerCacheRef.current,
         });
         next.set(tpl.id, framed.toDataURL("image/jpeg", 0.82));
       }
@@ -358,6 +365,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
   // them before placing: margins, background, and layers in the output basis.
   async function userTemplateLayers(tpl, lg, base, currentProfile) {
     await ensureLogos(lg, userLogoTemplate(tpl), base.height || 1200);
+    const personal = await personalLogosOf(tpl);
     const pad = { top: 0, right: 0, bottom: 0, left: 0, ...(tpl.canvas?.pad || {}) };
     const bg = tpl.canvas?.bg || { color: "#ffffff" };
     const stickerImages = new Map();
@@ -365,7 +373,7 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     const layers = layersFromTemplate(tpl, {
       geom, exif, profile: currentProfile, measure: measureTextWidthDOM,
       logoFor: (ref) => {
-        const img = logoFor(lg, ref);
+        const img = logoFor(lg, ref, personal);
         if (img?.src) stickerImages.set(img.src, img);
         return img;
       },

@@ -255,7 +255,7 @@
       "annotation": "AI 标注",
       "annotationHint": "服务商与标注设置",
       "watermark": "水印",
-      "watermarkHint": "作者名、边框模板"
+      "watermarkHint": "作者名、边框模板（不含 logo 文件）"
     },
     "includeKeys": "包含 API 密钥",
     "includeKeysHint": "密钥会用下面的密码加密。忘记密码将无法导入密钥。",
@@ -308,6 +308,22 @@
     "templatesEmpty": "还没有。",
     "delete": "删除",
     "deleteTitle": "删除模板「{{name}}」？",
-    "deleteMessage": "已经用它加过边框的照片不受影响。"
+    "deleteMessage": "已经用它加过边框的照片不受影响。",
+    "logosTitle": "我的 logo",
+    "logosSubtitle": "在编辑器的「文字 › 边框 › 我的 logo」里点一下就会放进边框，也可以直接把 SVG 或 PNG 拖进编辑器。透明底的单色 logo 会自动配成合适的颜色。导出设置不包含 logo 文件。",
+    "importLogo": "导入 logo…",
+    "rename": "改名",
+    "logoTintable": "可换颜色",
+    "logoFixed": "保持原色",
+    "deleteLogoTitle": "删除 logo「{{name}}」？",
+    "deleteLogoMessage": "用了它的模板照常可用，只是不再显示这个 logo。已经导出的照片不受影响。",
+    "logoErrors": {
+      "unsupported_type": "只支持 SVG 和 PNG",
+      "too_large": "文件太大（SVG 最大 1 MB，PNG 最大 10 MB）",
+      "invalid_image": "这个文件读不成图片",
+      "empty_image": "图里没有可用的图形",
+      "too_many": "已经有 50 个 logo 了，先删掉一些",
+      "failed": "导入失败：{{message}}"
+    }
   }
 }
