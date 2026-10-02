@@ -1,19 +1,24 @@
-@import url("theme.css");
-.hero { padding: 138px 24px 0; overflow: hidden; text-align: center; background: var(--surface); }
+@import url("theme.css?v=20261001-lightglow2");
+.hero { padding: 138px 32px 48px; overflow: hidden; text-align: center; background: var(--surface); }
 .hero-copy { max-width: 760px; margin: auto; }
 .hero-copy .eyebrow { color: var(--text); font-size: clamp(24px, 3vw, 36px); font-weight: 600; letter-spacing: -.04em; text-transform: none; margin-bottom: 14px; }
 .hero h1 { font-size: clamp(42px, 5.2vw, 72px); }
 .hero-copy > p:not(.eyebrow) { max-width: 590px; margin: 22px auto 0; font-size: 17px; line-height: 1.65; color: var(--muted); }
 .hero .actions { justify-content: center; }
-.hero-screen { max-width: 1180px; margin: 54px auto 0; }
+.hero-screen { max-width: 1392px; margin: 54px auto 0; }
 .hero dl { display: none; }
 .strip { padding: 28px 24px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .strip p { margin: 0; }
-.feature { max-width: 1440px; margin: 20px auto; padding: clamp(64px, 7vw, 112px) clamp(24px, 5vw, 80px); display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr); gap: clamp(32px, 6vw, 88px); align-items: center; }
-/* The card shares the header's column: 1440 − 48 wide, 24px insets below that. */
-.feature.reverse { width: min(1392px, calc(100% - 48px)); background: var(--surface); border-radius: 32px; }
-.feature:has(> figure:first-child) { grid-template-columns: minmax(0, 1.3fr) minmax(0, .85fr); }
+.feature { width: min(1392px, calc(100% - 64px)); margin: 0 auto; padding: clamp(64px, 7vw, 104px) 0; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr); gap: clamp(32px, 6vw, 88px); align-items: center; }
 .feature-heading { min-width: 0; max-width: 460px; }
+/* Put interface screenshots below the copy, at the full content width. */
+.feature:not(#handwriting) { display: flex; flex-direction: column; align-items: stretch; gap: 40px; }
+.feature:not(#handwriting) > .feature-heading { order: 0; max-width: none; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1fr); gap: 18px 64px; align-items: start; }
+.feature:not(#handwriting) > .screen { order: 1; width: 100%; }
+.feature:not(#handwriting) .feature-heading .eyebrow { grid-column: 1 / -1; margin-bottom: 0; }
+.feature:not(#handwriting) .feature-heading h2 { grid-column: 1; grid-row: 2 / span 3; }
+.feature:not(#handwriting) .feature-heading > :is(p:not(.eyebrow), .arrow, .command) { grid-column: 2; margin-top: 0; }
+.feature:not(#handwriting) .feature-heading .arrow { justify-self: start; }
 .feature-heading > p:not(.eyebrow) { font-size: 16px; line-height: 1.8; color: var(--muted); margin: 24px 0 0; }
 .arrow { margin-top: 26px; font-size: 13px; min-height: 40px; }
 .handwriting-showcase { max-width: 480px; justify-self: center; }
@@ -22,13 +27,174 @@
 .closing .eyebrow { margin-top: 26px; }
 .closing h2 { margin-bottom: 32px; }
 @media (max-width: 800px) {
-  .hero { padding: 112px 20px 0; }
+  .hero { padding: 112px 20px 32px; }
   .hero-copy > p:not(.eyebrow) { font-size: 15px; }
   .hero-screen { margin-top: 36px; }
-  .feature, .feature:has(> figure:first-child) { grid-template-columns: minmax(0, 1fr); padding: 60px 24px; gap: 32px; }
-  .feature.reverse { width: calc(100% - 24px); padding-inline: 20px; border-radius: 24px; }
+  .feature { width: calc(100% - 36px); grid-template-columns: minmax(0, 1fr); padding: 56px 0; gap: 28px; }
+  .feature:not(#handwriting) { gap: 28px; }
+  .feature:not(#handwriting) > .feature-heading { display: block; }
+  .feature:not(#handwriting) .feature-heading .eyebrow { margin-bottom: 16px; }
+  .feature:not(#handwriting) .feature-heading > p:not(.eyebrow) { margin-top: 20px; }
+  .feature:not(#handwriting) .feature-heading > :is(.arrow, .command) { margin-top: 24px; }
   .feature > figure { order: 2; }
   .feature-heading { max-width: 580px; }
   .handwriting-showcase { max-width: 420px; }
   .closing { padding: 88px 24px; }
 }
+
+/* Neon light stays behind the content; screenshots preserve their own colors. */
+.hero, .closing {
+  --text: #f5f3ee;
+  --muted: #a8a8af;
+  --primary-ink: #101012;
+  --primary-hover: #ffffff;
+  --fill: #1c1c20;
+  --fill-hover: #29292e;
+  position: relative;
+  isolation: isolate;
+  background: var(--bg);
+  color: var(--text);
+}
+/* Carry the dark masthead into the active page theme beneath the product view. */
+.hero { background: var(--bg); }
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 900px;
+  max-height: 100%;
+  mask-image: linear-gradient(to bottom, #000, #000 55%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000, #000 55%, transparent 100%);
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 82% 23%, rgb(255 58 30 / 30%), transparent 47%),
+              radial-gradient(ellipse at 88% 43%, rgb(255 164 44 / 27%), transparent 45%),
+              radial-gradient(ellipse at 83% 60%, rgb(145 244 54 / 29%), transparent 45%),
+              radial-gradient(ellipse at 70% 73%, rgb(22 211 207 / 26%), transparent 48%),
+              radial-gradient(ellipse at 47% 88%, rgb(98 61 226 / 20%), transparent 48%);
+}
+.hero-masthead {
+  max-width: 1392px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: 490px;
+}
+.hero-copy { position: relative; z-index: 1; max-width: 620px; margin: 0; text-align: left; }
+.hero-copy .brand-wordmark {
+  font-family: "AfterFrame Brand", Georgia, serif;
+  font-size: clamp(42px, 4.5vw, 60px);
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-bottom: 22px;
+}
+.hero h1 { font-size: clamp(48px, 5.2vw, 80px); letter-spacing: -.035em; }
+.hero-copy > p:not(.eyebrow) { margin-left: 0; max-width: 560px; }
+.hero .actions { justify-content: flex-start; }
+.hero-copy > p.hero-availability:not(.eyebrow) {
+  margin-top: 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: .025em;
+  color: #84848d;
+}
+.brand-stage {
+  position: absolute;
+  top: -210px;
+  right: calc((100vw - min(100vw, 1440px)) / 2 - 400px);
+  width: 2020px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 1;
+  mask-image: linear-gradient(90deg, transparent 35%, #000 57%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 35%, #000 57%);
+}
+.brand-stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  mix-blend-mode: screen;
+  /* Keep the upper corner in the masthead and fade before product imagery. */
+  mask-image: linear-gradient(to bottom, #000 30%, transparent 48%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 48%);
+}
+.hero-screen { position: relative; z-index: 1; margin-top: 64px; background: transparent; box-shadow: none; }
+.strip { position: relative; padding-block: 32px; }
+/* Spread the logo spectrum across the page, with a different emphasis per section. */
+.feature { position: relative; isolation: isolate; }
+.feature:is(#library, #handwriting, #agent)::before {
+  content: "";
+  position: absolute;
+  inset: -140px 0;
+  z-index: -1;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent), linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
+  mask-composite: intersect;
+}
+#library::before {
+  background: var(--glow-library);
+}
+#handwriting::before {
+  background: var(--glow-warm);
+}
+#agent::before {
+  background: var(--glow-cool);
+}
+[data-theme="light"] .feature::before { opacity: .95; }
+.feature-heading .eyebrow { padding-left: 14px; border-left: 1px solid var(--muted); }
+.closing { margin-top: 40px; padding-block: 136px; overflow: hidden; }
+.closing::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--glow-spectrum);
+  mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+}
+.closing > .brand-wordmark {
+  font-family: "AfterFrame Brand", Georgia, serif;
+  font-size: clamp(44px, 5vw, 64px);
+  line-height: 1.2;
+  margin: 8px 0 16px;
+}
+.closing .eyebrow { margin: 0 0 28px; font-size: 11px; letter-spacing: .12em; }
+.closing h2 { font-size: clamp(34px, 3.7vw, 48px); }
+@keyframes phosphor-breathe { 0%, 100% { opacity: .82; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .brand-stage img { animation: phosphor-breathe 6s ease-in-out infinite; }
+}
+@media (max-width: 800px) {
+  .hero-masthead { display: block; min-height: 0; }
+  .feature:is(#library, #handwriting, #agent)::before { inset-block: -80px; }
+  .brand-stage { width: 1100px; top: -130px; right: -300px; opacity: .38; }
+  .hero-copy { max-width: 580px; margin: auto; text-align: center; }
+  .hero-copy .brand-wordmark { margin-bottom: 16px; font-size: 38px; }
+  .hero h1 { font-size: clamp(38px, 6.2vw, 52px); }
+  .hero-copy > p:not(.eyebrow) { margin-inline: auto; }
+  .hero .actions { justify-content: center; }
+  .hero-screen { margin-top: 40px; }
+  .closing { padding-block: 72px; }
+  .closing > .brand-wordmark { font-size: 38px; }
+}
+
+/* Light has its own native white-ground neon render and pale spectrum. */
+[data-theme="light"] :is(.hero, .closing) {
+  --text: #1d1d1f; --muted: #66666e; --primary-ink: #fff; --primary-hover: #39393e;
+  --fill: #e9e9ed; --fill-hover: #dedee4; background: #fff; color: var(--text);
+}
+[data-theme="light"] .hero-copy > p.hero-availability:not(.eyebrow) { color: var(--muted); }
+[data-theme="light"] .brand-stage img { mix-blend-mode: multiply; filter: saturate(1.18); }
+[data-theme="light"] .hero::before {
+  opacity: .95;
+  background: radial-gradient(ellipse at 82% 23%, rgb(255 58 30 / 44%), transparent 47%),
+              radial-gradient(ellipse at 88% 43%, rgb(255 164 44 / 40%), transparent 45%),
+              radial-gradient(ellipse at 83% 60%, rgb(145 244 54 / 42%), transparent 45%),
+              radial-gradient(ellipse at 70% 73%, rgb(22 211 207 / 38%), transparent 48%),
+              radial-gradient(ellipse at 47% 88%, rgb(98 61 226 / 30%), transparent 48%);
+}
+[data-theme="light"] .closing::before { opacity: .86; }
+#agent > .screen { max-width: 880px; margin-inline: auto; }
+
+@media (max-width: 800px) { [data-theme="light"] .brand-stage { opacity: .58; } }

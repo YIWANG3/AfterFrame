@@ -46,8 +46,8 @@ h1 { font-size: clamp(44px, 5.5vw, 80px); }
 h2 { font-size: clamp(34px, 3.7vw, 56px); }
 p { text-wrap: pretty; }
 figure { margin: 0; }
-/* UI screenshots already contain the app's own corners. Do not mask them again. */
-.screen, .layout figure { border: 0; border-radius: 0; overflow: visible; background: var(--surface); box-shadow: var(--shadow); }
+/* Preserve the screenshot window bounds; PNG/WebP contain native transparent corners. */
+.screen, .layout figure { border: 0; border-radius: 0; overflow: visible; background: transparent; box-shadow: none; }
 figure img { display: block; width: 100%; height: auto; }
 .screen-note, figure figcaption { padding: 14px 20px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .command, pre { padding: 20px; border: 0; border-radius: 16px; background: var(--surface-raised); color: var(--text); font: 12px/1.8 var(--mono); overflow: auto; }
@@ -80,7 +80,7 @@ html[lang="zh-CN"] h1, html[lang="zh-CN"] h2 { letter-spacing: 0; line-height: 1
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f5f5f7;
+  --bg: #ffffff;
   --surface: #ffffff;
   --surface-raised: #eeeef1;
   --text: #1d1d1f;
@@ -99,3 +99,68 @@ html[lang="zh-CN"] h1, html[lang="zh-CN"] h2 { letter-spacing: 0; line-height: 1
 .theme-toggle .moon, [data-theme="light"] .theme-toggle .sun { display: none; }
 [data-theme="light"] .theme-toggle .moon { display: block; }
 @media (max-width: 400px) { header { gap: 2px; padding-inline: 10px; } .brand { font-size: 15px; gap: 5px; } .brand img { width: 22px; height: 22px; } .language { padding-inline: 6px; } .download { padding-inline: 10px; } .theme-toggle { width: 34px; } }
+
+/* The brand font uses the same Nanum Myeongjo glyphs as the rendered logo.
+   This local, renamed OFL subset contains only the AfterFrame wordmark. */
+@font-face {
+  font-family: "AfterFrame Brand";
+  src: url("assets/brand/afterframe-wordmark.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+.brand { font-family: "AfterFrame Brand", Georgia, serif; font-size: 23px; font-weight: 400; letter-spacing: 0; }
+.brand img { width: 34px; height: 34px; border-radius: 9px; }
+@media (max-width: 800px) { .brand { font-size: 21px; } .brand img { width: 28px; height: 28px; } }
+@media (max-width: 400px) { .brand { font-size: 19px; } .brand img { width: 25px; height: 25px; } }
+
+/* Shared neon palette for the landing page and usage guide. */
+:root {
+  --glow-library: radial-gradient(ellipse 44% 48% at 12% 28%, rgb(255 84 32 / 25%), transparent 72%),
+              radial-gradient(ellipse 44% 50% at 22% 46%, rgb(255 201 62 / 21%), transparent 72%),
+              radial-gradient(ellipse 48% 52% at 30% 68%, rgb(139 229 53 / 22%), transparent 72%),
+              radial-gradient(ellipse 44% 48% at 49% 78%, rgb(25 211 188 / 17%), transparent 72%);
+  --glow-warm: radial-gradient(ellipse 45% 48% at 65% 24%, rgb(248 237 201 / 13%), transparent 72%),
+              radial-gradient(ellipse 50% 50% at 79% 36%, rgb(255 56 33 / 27%), transparent 72%),
+              radial-gradient(ellipse 46% 52% at 80% 58%, rgb(255 154 40 / 22%), transparent 72%),
+              radial-gradient(ellipse 46% 50% at 49% 72%, rgb(225 66 130 / 15%), transparent 72%);
+  --glow-cool: radial-gradient(ellipse 46% 50% at 15% 31%, rgb(126 233 52 / 24%), transparent 72%),
+              radial-gradient(ellipse 48% 52% at 28% 55%, rgb(16 210 181 / 23%), transparent 72%),
+              radial-gradient(ellipse 46% 52% at 44% 76%, rgb(42 128 237 / 18%), transparent 72%);
+  --glow-spectrum: radial-gradient(ellipse at 15% 30%, rgb(249 236 198 / 8%), transparent 45%),
+              radial-gradient(ellipse at 8% 100%, rgb(255 61 34 / 22%), transparent 43%),
+              radial-gradient(ellipse at 29% 105%, rgb(255 133 35 / 24%), transparent 43%),
+              radial-gradient(ellipse at 48% 108%, rgb(255 205 58 / 17%), transparent 40%),
+              radial-gradient(ellipse at 67% 96%, rgb(115 226 46 / 18%), transparent 40%),
+              radial-gradient(ellipse at 86% 80%, rgb(20 198 204 / 20%), transparent 42%),
+              radial-gradient(ellipse at 100% 50%, rgb(39 105 235 / 15%), transparent 42%),
+              radial-gradient(ellipse at 100% 110%, rgb(106 56 224 / 19%), transparent 40%);
+}
+
+/* Stronger spectral diffusion against a white surface. */
+:root[data-theme="light"] {
+  --glow-library: radial-gradient(ellipse 44% 48% at 12% 28%, rgb(255 84 32 / 41%), transparent 72%),
+              radial-gradient(ellipse 44% 50% at 22% 46%, rgb(255 201 62 / 35%), transparent 72%),
+              radial-gradient(ellipse 48% 52% at 30% 68%, rgb(139 229 53 / 36%), transparent 72%),
+              radial-gradient(ellipse 44% 48% at 49% 78%, rgb(25 211 188 / 28%), transparent 72%);
+  --glow-warm: radial-gradient(ellipse 45% 48% at 65% 24%, rgb(248 237 201 / 21%), transparent 72%),
+              radial-gradient(ellipse 50% 50% at 79% 36%, rgb(255 56 33 / 45%), transparent 72%),
+              radial-gradient(ellipse 46% 52% at 80% 58%, rgb(255 154 40 / 36%), transparent 72%),
+              radial-gradient(ellipse 46% 50% at 49% 72%, rgb(225 66 130 / 25%), transparent 72%);
+  --glow-cool: radial-gradient(ellipse 46% 50% at 15% 31%, rgb(126 233 52 / 40%), transparent 72%),
+              radial-gradient(ellipse 48% 52% at 28% 55%, rgb(16 210 181 / 38%), transparent 72%),
+              radial-gradient(ellipse 46% 52% at 44% 76%, rgb(42 128 237 / 30%), transparent 72%);
+  --glow-spectrum: radial-gradient(ellipse at 15% 30%, rgb(249 236 198 / 13%), transparent 45%),
+              radial-gradient(ellipse at 8% 100%, rgb(255 61 34 / 36%), transparent 43%),
+              radial-gradient(ellipse at 29% 105%, rgb(255 133 35 / 40%), transparent 43%),
+              radial-gradient(ellipse at 48% 108%, rgb(255 205 58 / 28%), transparent 40%),
+              radial-gradient(ellipse at 67% 96%, rgb(115 226 46 / 30%), transparent 40%),
+              radial-gradient(ellipse at 86% 80%, rgb(20 198 204 / 33%), transparent 42%),
+              radial-gradient(ellipse at 100% 50%, rgb(39 105 235 / 25%), transparent 42%),
+              radial-gradient(ellipse at 100% 110%, rgb(106 56 224 / 31%), transparent 40%);
+}
+figure:not(.brand-stage) > img { border-radius: 12px; box-shadow: var(--shadow); }
+.themed-shot > img { border-radius: 0; filter: drop-shadow(0 16px 28px rgb(0 0 0 / 12%)); }
+.themed-shot { display: block; }
+
+/* Transparent outer corners are encoded in the media, including both settings variants. */

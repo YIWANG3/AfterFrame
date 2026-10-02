@@ -12,8 +12,8 @@
     <meta name="theme-color" content="#080809" />
     <title>AfterFrame — 本地优先的照片工作台</title>
     <link rel="icon" href="assets/logo.png" />
-    <script src="theme.js"></script>
-    <link rel="stylesheet" href="workspace.css" />
+    <script src="theme.js?v=20261001-window6"></script>
+    <link rel="stylesheet" href="workspace.css?v=20261001-lightglow2" />
   </head>
   <body>
     <a class="skip" href="#main">跳至正文</a>
@@ -40,8 +40,9 @@
     </header>
     <main id="main">
       <section class="hero" id="top">
+        <div class="hero-masthead">
         <div class="hero-copy">
-          <p class="eyebrow">AfterFrame</p>
+          <p class="eyebrow brand-wordmark">AfterFrame</p>
           <h1>所有照片，<br />都在一处。</h1>
           <p>
             把不同文件夹和硬盘里的照片放进同一个目录中浏览、筛选、评分、打标签和建立收藏。原片仍留在原来的位置。
@@ -55,14 +56,26 @@
               >在线体验 <span>→</span></a
             >
           </div>
+          <p class="hero-availability">Apple Silicon · macOS · 本地优先</p>
+        </div>
+        <figure class="brand-stage" aria-hidden="true">
+          <picture class="brand-art">
+            <source data-theme-light srcset="assets/brand/logo-backdrop-white.webp?v=20261001-glow1" media="(prefers-color-scheme: light)" width="3200" height="3200" />
+            <img src="assets/brand/logo-backdrop-black.webp?v=20261001-window6" alt="AfterFrame 彩色霓虹相框标志"
+            width="3200" height="3200" fetchpriority="high" decoding="async" />
+          </picture>
+        </figure>
         </div>
         <figure class="screen hero-screen">
-<img
-            src="assets/cn/library.webp"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/cn/light/library.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="4320" height="2760" />
+            <img
+            src="assets/cn/library.webp?v=20261001-window6"
             alt="AfterFrame 中文版照片图库"
-            width="2000"
-            height="1299"
+            width="3024"
+            height="1898"
           />
+          </picture>
         </figure>
       </section>
       <section class="strip">
@@ -80,23 +93,29 @@
           >
         </div>
         <figure class="screen">
-<img
-            src="assets/cn/library-actions.webp"
-            alt="AfterFrame 中文版图库导入与标注操作"
-            width="2000"
-            height="1299"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/cn/light/library-actions.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="4320" height="2760" />
+            <img
+            src="assets/cn/library-actions.webp?v=20261001-window6"
+            alt="AfterFrame 中文版图库操作菜单"
+            width="3024"
+            height="1898"
           />
+          </picture>
         </figure>
       </section>
       <section class="feature reverse" id="tools">
         <figure class="screen">
-<img
-            src="assets/en/editor-text-depth.webp"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/en/light/editor-text-depth.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="4320" height="2760" />
+            <img
+            src="assets/en/editor-text-depth.webp?v=20261001-window6"
             alt="AfterFrame 深度感知文字编辑器（英文界面）"
-            width="2000"
-            height="1299"
+            width="3024"
+            height="1898"
             loading="lazy"
           />
+          </picture>
         </figure>
         <div class="feature-heading">
           <p class="eyebrow">02 / 文字与相框</p>
@@ -138,24 +157,30 @@
           </p>
         </div>
         <figure class="screen">
-<img
-            src="assets/cn/collage-batch.webp"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/cn/light/collage-batch.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="4320" height="2760" />
+            <img
+            src="assets/cn/collage-batch.webp?v=20261001-window6"
             alt="AfterFrame 中文版拼图编辑器"
-            width="2000"
-            height="1299"
+            width="3024"
+            height="1898"
             loading="lazy"
           />
+          </picture>
         </figure>
       </section>
       <section class="feature" id="ai">
         <figure class="screen">
-<img
-            src="assets/cn/ai-repaint-compare.webp"
-            alt="AfterFrame AI 重绘前后对比"
-            width="2000"
-            height="1299"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/cn/light/ai-repaint.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="4320" height="2760" />
+            <img
+            src="assets/cn/ai-repaint-compare.webp?v=20261001-window6"
+            alt="AfterFrame AI 重绘工具"
+            width="3024"
+            height="1898"
             loading="lazy"
           />
+          </picture>
         </figure>
         <div class="feature-heading">
           <p class="eyebrow">05 / AI 重绘</p>
@@ -187,24 +212,30 @@
           >
         </div>
         <figure class="screen">
-<img
-            src="assets/en/agent-mcp.webp"
-            alt="AfterFrame MCP 操作图库（英文界面）"
-            width="2000"
-            height="1184"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/en/light/agent-mcp.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="2640" height="2040" />
+            <img
+            src="assets/en/agent-mcp.webp?v=20261001-window6"
+            alt="AfterFrame MCP 连接设置（英文界面）"
+            width="2640"
+            height="2040"
             loading="lazy"
           />
+          </picture>
         </figure>
       </section>
       <section class="feature" id="people">
         <figure class="screen">
-<img
-            src="assets/cn/people.webp"
+<picture class="themed-shot">
+            <source data-theme-light srcset="assets/cn/light/people.webp?v=20261001-window6" media="(prefers-color-scheme: light)" width="4320" height="2760" />
+            <img
+            src="assets/cn/people.webp?v=20261001-window6"
             alt="AfterFrame 中文版本地人物识别"
-            width="2000"
-            height="1299"
+            width="3024"
+            height="1898"
             loading="lazy"
           />
+          </picture>
           <figcaption class="screen-note">
             演示人物图像由 AI 生成，不对应真实人物。
           </figcaption>
@@ -218,8 +249,8 @@
         </div>
       </section>
       <section class="closing">
-        <img src="assets/logo.png" alt="" width="48" height="48" />
-        <p class="eyebrow">AfterFrame for macOS</p>
+        <p class="brand-wordmark">AfterFrame</p>
+        <p class="eyebrow">Apple Silicon · macOS</p>
         <h2>开始整理<br />你的相册。</h2>
         <a
           class="primary"

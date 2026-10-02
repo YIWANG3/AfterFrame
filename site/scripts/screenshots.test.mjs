@@ -16,7 +16,7 @@ test('asset root contains only the shared logo and handwriting artwork', async (
   ]);
 });
 
-test('UI screenshots preserve their own app corners and full height', async () => {
+test('UI screenshot frames preserve full height', async () => {
   const theme = await readFile(new URL('site/theme.css', root), 'utf8');
   const workspace = await readFile(new URL('site/workspace.css', root), 'utf8');
   const rules = [...`${theme}\n${workspace}`.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
@@ -49,7 +49,7 @@ for (const file of ['index.html', 'workspace-zh.html', 'guide.html', 'guide-zh.h
     const images = [...html.matchAll(/<img\b[^>]*>/gs)].map(([tag]) => tag);
     assert.ok(images.length >= 7);
     for (const tag of images) {
-      const src = tag.match(/src="([^"]+)"/)?.[1];
+      const src = tag.match(/src="([^"]+)"/)?.[1]?.split('?')[0];
       assert.ok(src?.startsWith('assets/'));
       const path = new URL(`docs/${src}`, root);
       await access(path);
@@ -61,3 +61,44 @@ for (const file of ['index.html', 'workspace-zh.html', 'guide.html', 'guide-zh.h
     }
   });
 }
+
+for (const file of ['index.html', 'workspace-zh.html', 'guide.html', 'guide-zh.html']) {
+  test(`${file}: every UI screenshot has a light source with matching dimensions`, async () => {
+    const html = await readFile(new URL(`site/${file}`, root), 'utf8');
+    const pictures = [...html.matchAll(/<picture class="themed-shot">(.*?)<\/picture>/gs)];
+    const uiImages = [...html.matchAll(/src="assets\/(cn|en)\/[^/]+\.webp(?:\?[^"]*)?"/g)];
+    assert.equal(pictures.length, uiImages.length);
+    for (const [, picture] of pictures) {
+      const source = picture.match(/<source\b[^>]*>/s)?.[0];
+      assert.ok(source?.includes('data-theme-light'));
+      const src = source.match(/srcset="([^"]+)"/)?.[1]?.split('?')[0];
+      assert.match(src, /^assets\/(cn|en)\/light\/[^/]+\.webp$/);
+      const metadata = await sharp(fileURLToPath(new URL(`docs/${src}`, root))).metadata();
+      assert.equal(Number(source.match(/width="(\d+)"/)?.[1]), metadata.width, src);
+      assert.equal(Number(source.match(/height="(\d+)"/)?.[1]), metadata.height, src);
+    }
+  });
+}
+
+// High-density UI captures must retain native pixels in the served WebP.
+test('all screenshot variants retain native PNG resolution', async () => {
+  for (const language of ['cn', 'en']) {
+    for (const variant of ['', '/light']) {
+      const folder = new URL(`docs/assets/${language}${variant}/`, root);
+      for (const name of (await readdir(folder)).filter(name => name.endsWith('.png'))) {
+        const png = await sharp(fileURLToPath(new URL(name, folder))).metadata();
+        const webp = await sharp(fileURLToPath(new URL(name.replace(/\.png$/, '.webp'), folder))).metadata();
+        assert.deepEqual([webp.width, webp.height], [png.width, png.height], name);
+        assert.ok(png.width >= 2640, `${language}${variant}/${name} must be a native HD capture`);
+      }
+    }
+  }
+});
+
+test('home pages have a separate white-ground logo for light mode', async () => {
+  for (const file of ['index.html', 'workspace-zh.html']) {
+    const html = await readFile(new URL(`site/${file}`, root), 'utf8');
+    assert.match(html, /data-theme-light[^>]+logo-backdrop-white\.webp/);
+    assert.match(html, /src="assets\/brand\/logo-backdrop-black\.webp(?:\?[^"]*)?"/);
+  }
+});
