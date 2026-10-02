@@ -57,6 +57,9 @@ export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
   if (mine) return strict && variantId === "symbol" ? null : mine;
   if (!brand?.variants?.length) return null;
   const modelVariants = brand.variants.filter((variant) => matchesModel(variant, model));
+  // A mark kept for some models (Luna Ultra's lockup) is not another model's,
+  // even when a template saved on one of them asks for it by name.
+  const general = brand.variants.filter((variant) => !variant.models?.length);
   if (variantId) {
     // A model-specific wordmark supersedes the generic wordmark. This keeps
     // templates brand-agnostic while allowing product lines such as Luna Ultra
@@ -64,17 +67,20 @@ export function pickVariant(brand, { variantId, kind, strict, model } = {}) {
     const modelVariant = modelVariants.find((x) => x.id === variantId || x.kind === variantId);
     if (modelVariant) return modelVariant;
     const v = brand.variants.find((x) => x.id === variantId);
-    if (v) return v;
+    if (v && !v.models?.length) return v;
+    // Another model's own mark: the brand's general one of that kind.
+    const sameKind = v && general.find((x) => x.kind === v.kind);
+    if (sameKind) return sameKind;
     if (strict) return null;
   }
   if (kind) {
     const modelVariant = modelVariants.find((x) => x.kind === kind);
     if (modelVariant) return modelVariant;
-    const v = brand.variants.find((x) => x.kind === kind);
+    const v = general.find((x) => x.kind === kind);
     if (v) return v;
     if (strict) return null;
   }
-  return modelVariants[0] || brand.variants[0];
+  return modelVariants[0] || general[0] || null;
 }
 
 // ── What a camera is called ──────────────────────────────────────────────

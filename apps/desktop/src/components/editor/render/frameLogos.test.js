@@ -57,6 +57,18 @@ describe("frame logo selection", () => {
     expect(pickVariant(brand, { variantId: "wordmark", model: "Insta360 X5" })?.id).toBe("wordmark");
   });
 
+  it("never draws one model's own mark on another, even when a template asks for it by name", () => {
+    // A template saved on a Luna Ultra photo holds variant "luna-ultra".
+    expect(pickVariant(brand, { variantId: "luna-ultra", model: "Insta360 X5" })?.id).toBe("wordmark");
+    expect(pickVariant(brand, { variantId: "luna-ultra", model: "Insta360 Luna Ultra" })?.id).toBe("luna-ultra");
+    expect(pickVariant(brand, { variantId: "luna-ultra", model: "Insta360 X5", strict: true })?.id).toBe("wordmark");
+    // A brand whose only wordmark is one model's has none for the others.
+    const one = { variants: [{ id: "symbol", kind: "symbol" }, { id: "pro", kind: "wordmark", models: ["pro"] }] };
+    expect(pickVariant(one, { variantId: "pro", model: "Lite" })?.id).toBe("symbol");
+    expect(pickVariant(one, { variantId: "wordmark", model: "Lite", strict: true })).toBeNull();
+    expect(pickVariant(one, { kind: "wordmark", model: "Lite" })?.id).toBe("symbol");
+  });
+
   it("lists every mark a camera shows, a model's own in place of the general one", () => {
     expect(builtInMarks(brand, "Insta360 X5").map((v) => v.id)).toEqual(["wordmark"]);
     expect(builtInMarks(brand, "Luna Ultra").map((v) => v.id)).toEqual(["luna-ultra"]);
