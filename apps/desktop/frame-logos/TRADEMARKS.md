@@ -43,6 +43,7 @@ shapes are as published.
 | `iqoo/wordmark.svg` | [Commons File:IQOO_logo.svg](https://commons.wikimedia.org/wiki/File:IQOO_logo.svg) | PD-textlogo | viewBox widened to the clipped letters |
 | `oneplus/symbol.svg` | [simple-icons `oneplus`](https://github.com/simple-icons/simple-icons/blob/develop/icons/oneplus.svg) | CC0 1.0 | viewBox cropped |
 | `realme/wordmark.svg` | [Commons File:Realme_logo_SVG.svg](https://commons.wikimedia.org/wiki/File:Realme_logo_SVG.svg) | PD-textlogo | yellow box removed |
+| `apple/symbol.svg` | [Commons File:Apple_logo_black.svg](https://commons.wikimedia.org/wiki/File:Apple_logo_black.svg) | public domain (simple shape) | viewBox added. Apple's trademark guidelines allow its logo only with written permission; it is here on the same terms as the others and goes on request |
 | `pentax/wordmark.svg` | [Commons File:Pentax_wordmark.svg](https://commons.wikimedia.org/wiki/File:Pentax_wordmark.svg) | PD-textlogo | viewBox cropped |
 | `sigma/wordmark.svg` | [Commons File:Sigma's new updated logo revealed, February 2025.svg](https://commons.wikimedia.org/wiki/File:Sigma%27s_new_updated_logo_revealed,_February_2025.svg) | PD-textlogo | viewBox cropped |
 | `olympus/wordmark.svg` | [Commons File:Olympus_Corporation_logo.svg](https://commons.wikimedia.org/wiki/File:Olympus_Corporation_logo.svg) | PD-textlogo | yellow underline and both ® removed |

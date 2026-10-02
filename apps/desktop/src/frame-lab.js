@@ -42,6 +42,7 @@ const BRANDS = [
   { label: "vivo", exif: { camera_model: "V2309A", lens_model: "", make: "vivo", focal_length: 6, aperture: 1.6, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "iQOO", exif: { camera_model: "I2301", lens_model: "", make: "iQOO", focal_length: 6, aperture: 1.9, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "OnePlus", exif: { camera_model: "CPH2581", lens_model: "", make: "OnePlus", focal_length: 6, aperture: 1.6, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "iPhone", exif: { camera_model: "iPhone 15 Pro", lens_model: "iPhone 15 Pro back triple camera 6.765mm f/1.78", make: "Apple", focal_length: 6.765, aperture: 1.78, shutter_speed: 1/120, iso: 64, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "realme", exif: { camera_model: "RMX3241", lens_model: "", make: "realme", focal_length: 4, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
 ];
 

@@ -183,6 +183,17 @@ describe("how tall a logo is drawn", () => {
     expect(h["canon/wordmark"]).toBeCloseTo(0.45 * LOGO_SCALE, 2);
   });
 
+  it("an iPhone gets Apple's logo, in a wordmark slot at a wordmark's height", () => {
+    const registry = buildLogoRegistry(shipped);
+    const exif = { make: "Apple", camera_model: "iPhone 15 Pro" };
+    expect(brandIdForExif(exif, registry)).toBe("apple");
+    const [wordSlot] = collectLogoNeeds({ elements: [{ type: "logo", variant: "wordmark", style: { size: 0.1 } }] }, exif, registry, { outH: 1000 });
+    expect(wordSlot.variant).toMatchObject({ id: "symbol", file: "apple/symbol.svg" });
+    expect(logoHeightFor(wordSlot.variant, { variant: "wordmark" })).toBeCloseTo(SYMBOL_IN_WORDMARK_SLOT, 6);
+    // A dual template's wordmark slot stays empty, as for any one-mark brand.
+    expect(collectLogoNeeds({ elements: [{ type: "logo", variant: "wordmark", strict: true }] }, exif, registry, { outH: 1000 })).toEqual([]);
+  });
+
   it("a long built-in wordmark is shorter, so it does not run across the frame", () => {
     const long = variants.filter(([, v]) => v.kind === "wordmark" && v.aspect > WIDE_LOGO);
     expect(long.length).toBeGreaterThan(5);
