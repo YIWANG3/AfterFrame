@@ -39,7 +39,7 @@ const BRANDS = [
   { label: "Honor", exif: { camera_model: "ANY-NX1", lens_model: "", make: "HONOR", focal_length: 6, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "OPPO", exif: { camera_model: "CPH2385", lens_model: "", make: "OPPO", focal_length: 4, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "vivo", exif: { camera_model: "V2309A", lens_model: "", make: "vivo", focal_length: 6, aperture: 1.6, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
-  { label: "iQOO", exif: { camera_model: "I2220", lens_model: "", make: "vivo", focal_length: 6, aperture: 1.9, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
+  { label: "iQOO", exif: { camera_model: "I2301", lens_model: "", make: "iQOO", focal_length: 6, aperture: 1.9, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "OnePlus", exif: { camera_model: "CPH2581", lens_model: "", make: "OnePlus", focal_length: 6, aperture: 1.6, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
   { label: "realme", exif: { camera_model: "RMX3241", lens_model: "", make: "realme", focal_length: 4, aperture: 1.8, shutter_speed: 1/500, iso: 50, capture_time: "2024-09-12T15:00:00Z" } },
 ];
@@ -69,9 +69,30 @@ function samplePhoto(w = 1400) {
   return c;
 }
 
-async function logosFor(tpl, exif, photo) {
+// ?compare=1 shows each template's bottom strip before and after a sizing
+// change, brand by brand. "Before" is a saved copy of the old logos.json and
+// frameTemplates.js in test-results/before/ (git show <rev>:<path> > ...); with
+// none there, only the current strip is shown.
+const before = {
+  manifest: Object.values(import.meta.glob("/test-results/before/logos.json", { import: "default", eager: true }))[0],
+  templates: Object.values(import.meta.glob("/test-results/before/frameTemplates.js", { import: "FRAME_TEMPLATES", eager: true }))[0],
+};
+
+// The old engine drew a symbol in a wordmark slot at the symbol's own height.
+function beforeRegistry(manifest) {
+  const reg = buildLogoRegistry(manifest);
+  for (const [id, brand] of reg.byId) {
+    const symbol = brand.variants?.find((v) => v.kind === "symbol");
+    if (symbol && !brand.variants.some((v) => v.kind === "wordmark" || v.kind === "lockup")) {
+      reg.byId.set(id, { ...brand, variants: [...brand.variants, { ...symbol, id: "wordmark", kind: "wordmark" }] });
+    }
+  }
+  return reg;
+}
+
+async function logosFor(tpl, exif, photo, reg = registry) {
   const logoImages = new Map();
-  for (const n of collectLogoNeeds(tpl, exif, registry, { outH: photo.height })) {
+  for (const n of collectLogoNeeds(tpl, exif, reg, { outH: photo.height })) {
     const txt = svgFor(n.file);
     if (txt) logoImages.set(n.key, await prepareLogo(txt, {
       color: n.color,
@@ -83,11 +104,54 @@ async function logosFor(tpl, exif, photo) {
   return logoImages;
 }
 
+// The frame's bottom strip (padding and what is in it), for side-by-side views.
+function bottomStrip(canvas, frac = 0.165) {
+  const h = Math.round(canvas.height * frac);
+  const out = document.createElement("canvas");
+  out.width = canvas.width; out.height = h;
+  out.getContext("2d").drawImage(canvas, 0, canvas.height - h, canvas.width, h, 0, 0, canvas.width, h);
+  out.className = "strip";
+  return out;
+}
+
+async function runCompare(photo, root) {
+  const columns = [
+    ...(before.manifest && before.templates ? [["改前", beforeRegistry(before.manifest), before.templates]] : []),
+    ["现在", registry, FRAME_TEMPLATES],
+  ];
+  const ids = onlyTemplates || ["margin-logo", "margin-gold", "border-stack", "bar-id"];
+  root.className = "";
+  root.style.setProperty("--cols", columns.length);
+  for (const id of ids) {
+    const name = FRAME_TEMPLATES.find((t) => t.id === id)?.name ?? id;
+    const sec = document.createElement("div");
+    sec.className = "brand";
+    sec.innerHTML = `<h2>${name} · ${id}</h2><div class="cmp-head"><span></span>${columns.map(([label]) => `<span>${label}</span>`).join("")}</div>`;
+    for (const brand of BRANDS.filter((b) => !onlyBrands || onlyBrands.includes(b.label.toLowerCase()))) {
+      const row = document.createElement("div");
+      row.className = "cmp-row";
+      row.innerHTML = `<span class="cmp-label">${brand.label}</span>`;
+      for (const [, reg, templates] of columns) {
+        const tpl = templates.find((t) => t.id === id);
+        if (!tpl) { row.appendChild(document.createElement("span")); continue; }
+        const logoImages = await logosFor(tpl, brand.exif, photo, reg);
+        const out = renderFrame({ photo, exif: brand.exif, profile: {}, template: tpl, registry: reg, logoImages });
+        row.appendChild(params.get("compare") === "full" ? asStrip(out) : bottomStrip(out));
+      }
+      sec.appendChild(row);
+    }
+    root.appendChild(sec);
+  }
+}
+
+const asStrip = (canvas) => { canvas.className = "strip"; return canvas; };
+
 async function run() {
   try {
     await document.fonts.ready;
     const photo = samplePhoto();
     const root = document.getElementById("root");
+    if (params.get("compare")) { await runCompare(photo, root); return; }
     for (const brand of BRANDS.filter((b) => !onlyBrands || onlyBrands.includes(b.label.toLowerCase()))) {
       const sec = document.createElement("div");
       sec.className = "brand";

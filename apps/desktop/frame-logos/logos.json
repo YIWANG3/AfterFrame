@@ -1,5 +1,5 @@
 {
-  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here.",
+  "_note": "A brand = a set of variants. Drop files into <brand>/ subdir, then add to that brand's variants[]. file paths are relative to this dir. accent = approximate brand color for the optional dot/wordmark. colorLocked:true = keep original colors, do NOT tint (e.g. Leica red dot, Nikon yellow badge). See README.md / TRADEMARKS.md. match: the first needle found in the lowercased 'make model' wins, so specific needles come first; a needle mapped to null is no brand (FUJITSU is not Fujifilm). Brands tagged lens are matched on the lens fields, not here. h: the logo's height as a fraction of the template slot's size; a wordmark wider than 5.5:1 gets 0.45 × sqrt(5.5 / aspect), then every h × 0.85 (2026-10 sizing, frameLogos.LOGO_SCALE).",
   "logos": [
     {
       "id": "hasselblad",
@@ -15,14 +15,14 @@
           "kind": "symbol",
           "file": "hasselblad/symbol.svg",
           "aspect": 1.26,
-          "h": 1.0
+          "h": 0.85
         },
         {
           "id": "wordmark",
           "kind": "wordmark",
           "file": "hasselblad/wordmark.svg",
           "aspect": 10.58,
-          "h": 0.45
+          "h": 0.276
         }
       ]
     },
@@ -39,7 +39,7 @@
           "kind": "wordmark",
           "file": "fujifilm/wordmark.svg",
           "aspect": 6.01,
-          "h": 0.45
+          "h": 0.366
         }
       ]
     },
@@ -56,7 +56,7 @@
           "kind": "wordmark",
           "file": "canon/wordmark.svg",
           "aspect": 4.78,
-          "h": 0.45,
+          "h": 0.383,
           "color": "#cc0011"
         }
       ]
@@ -74,7 +74,7 @@
           "kind": "wordmark",
           "file": "nikon/wordmark.svg",
           "aspect": 3.62,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -91,7 +91,7 @@
           "kind": "symbol",
           "file": "sony/symbol.svg",
           "aspect": 0.95,
-          "h": 1.0,
+          "h": 0.85,
           "color": "#f47521"
         },
         {
@@ -99,7 +99,7 @@
           "kind": "wordmark",
           "file": "sony/wordmark.svg",
           "aspect": 5.68,
-          "h": 0.45
+          "h": 0.376
         }
       ]
     },
@@ -118,7 +118,7 @@
           "kind": "wordmark",
           "file": "dji/wordmark.svg",
           "aspect": 1.0,
-          "h": 0.7
+          "h": 0.595
         }
       ]
     },
@@ -136,7 +136,7 @@
           "file": "leica/symbol.svg",
           "aspect": 1.0,
           "colorLocked": true,
-          "h": 0.72
+          "h": 0.612
         }
       ]
     },
@@ -152,14 +152,14 @@
           "kind": "wordmark",
           "file": "lumix/wordmark.svg",
           "aspect": 5.14,
-          "h": 0.45
+          "h": 0.383
         },
         {
           "id": "corp",
           "kind": "wordmark",
           "file": "panasonic/wordmark.svg",
           "aspect": 6.54,
-          "h": 0.45
+          "h": 0.351
         }
       ]
     },
@@ -175,7 +175,7 @@
           "kind": "wordmark",
           "file": "ricoh/wordmark.svg",
           "aspect": 5.54,
-          "h": 0.45,
+          "h": 0.381,
           "color": "#d7063b"
         }
       ]
@@ -196,14 +196,14 @@
           "kind": "wordmark",
           "file": "insta360/wordmark.svg",
           "aspect": 5.28,
-          "h": 0.45
+          "h": 0.383
         },
         {
           "id": "luna-ultra",
           "kind": "wordmark",
           "file": "insta360/insta360-luna-ultra.svg",
           "aspect": 5.37,
-          "h": 0.45,
+          "h": 0.383,
           "models": [
             "luna ultra"
           ],
@@ -228,7 +228,7 @@
           "kind": "symbol",
           "file": "xiaomi/symbol.svg",
           "aspect": 1,
-          "h": 0.8,
+          "h": 0.68,
           "color": "#ff6900"
         }
       ]
@@ -245,7 +245,7 @@
           "kind": "wordmark",
           "file": "redmi/wordmark.svg",
           "aspect": 4.31,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -261,7 +261,7 @@
           "kind": "wordmark",
           "file": "poco/wordmark.svg",
           "aspect": 3.31,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -277,7 +277,7 @@
           "kind": "wordmark",
           "file": "huawei/wordmark.svg",
           "aspect": 5.83,
-          "h": 0.45
+          "h": 0.372
         }
       ]
     },
@@ -293,7 +293,7 @@
           "kind": "wordmark",
           "file": "honor/wordmark.svg",
           "aspect": 5.18,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -309,7 +309,7 @@
           "kind": "wordmark",
           "file": "oppo/wordmark.svg",
           "aspect": 4.2,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -325,7 +325,7 @@
           "kind": "wordmark",
           "file": "vivo/wordmark.svg",
           "aspect": 3.8,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -341,7 +341,7 @@
           "kind": "wordmark",
           "file": "iqoo/wordmark.svg",
           "aspect": 4.22,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -357,7 +357,7 @@
           "kind": "symbol",
           "file": "oneplus/symbol.svg",
           "aspect": 1,
-          "h": 0.8,
+          "h": 0.68,
           "color": "#f5010c"
         }
       ]
@@ -374,7 +374,7 @@
           "kind": "wordmark",
           "file": "realme/wordmark.svg",
           "aspect": 4.42,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -390,7 +390,7 @@
           "kind": "wordmark",
           "file": "pentax/wordmark.svg",
           "aspect": 5.25,
-          "h": 0.45,
+          "h": 0.383,
           "color": "#ef120a"
         }
       ]
@@ -408,7 +408,7 @@
           "kind": "wordmark",
           "file": "sigma/wordmark.svg",
           "aspect": 4.24,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -424,7 +424,7 @@
           "kind": "wordmark",
           "file": "olympus/wordmark.svg",
           "aspect": 8,
-          "h": 0.45,
+          "h": 0.317,
           "color": "#08107b"
         }
       ]
@@ -441,7 +441,7 @@
           "kind": "wordmark",
           "file": "omsystem/wordmark.svg",
           "aspect": 8.65,
-          "h": 0.45
+          "h": 0.305
         }
       ]
     },
@@ -458,7 +458,7 @@
           "kind": "wordmark",
           "file": "phaseone/wordmark.svg",
           "aspect": 7.19,
-          "h": 0.45
+          "h": 0.335
         }
       ]
     },
@@ -475,7 +475,7 @@
           "kind": "wordmark",
           "file": "gopro/wordmark.svg",
           "aspect": 7.3,
-          "h": 0.45
+          "h": 0.332
         }
       ]
     },
@@ -492,7 +492,7 @@
           "kind": "wordmark",
           "file": "parrot/wordmark.svg",
           "aspect": 3.97,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -509,7 +509,7 @@
           "kind": "wordmark",
           "file": "autel/wordmark.svg",
           "aspect": 5.28,
-          "h": 0.45,
+          "h": 0.383,
           "color": "#e1251b"
         }
       ]
@@ -528,7 +528,7 @@
           "kind": "wordmark",
           "file": "antigravity/wordmark.svg",
           "aspect": 14.26,
-          "h": 0.32
+          "h": 0.238
         }
       ]
     },
@@ -544,7 +544,7 @@
           "kind": "wordmark",
           "file": "tamron/wordmark.svg",
           "aspect": 6.49,
-          "h": 0.45
+          "h": 0.352
         }
       ]
     },
@@ -560,7 +560,7 @@
           "kind": "wordmark",
           "file": "tokina/wordmark.svg",
           "aspect": 6.67,
-          "h": 0.45
+          "h": 0.347
         }
       ]
     },
@@ -576,7 +576,7 @@
           "kind": "wordmark",
           "file": "laowa/wordmark.svg",
           "aspect": 3.97,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     },
@@ -592,7 +592,7 @@
           "kind": "wordmark",
           "file": "voigtlander/wordmark.svg",
           "aspect": 5.19,
-          "h": 0.45
+          "h": 0.383
         }
       ]
     }

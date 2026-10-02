@@ -11,7 +11,7 @@
 import { drawLayersOnCanvas } from "./drawLayers";
 import { drawScrim } from "./canvasHelpers";
 import { FRAME_FONTS } from "../frameTemplates";
-import { brandIdForExif, pickVariant } from "./frameLogos";
+import { brandIdForExif, logoHeightFor, pickVariant } from "./frameLogos";
 import {
   formatAperture, formatShutterSpeed, formatFocalLength, formatISO,
 } from "../../../utils/format";
@@ -195,7 +195,7 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
     // Prepare at a generous size so the same cached logo stays crisp in both the
     // small thumbnails and the big preview (cache is keyed by color, not size).
     const heightPx = Math.min(1400, Math.max(320,
-      Math.round((el.style?.size || 0.05) * (variant.h ?? 1) * (geom?.outH || 1600) * 2.5)));
+      Math.round((el.style?.size || 0.05) * logoHeightFor(variant, el) * (geom?.outH || 1600) * 2.5)));
     needs.push({
       brandId, variant, color, colorLocked, tintableColors: variant.tintableColors,
       key, heightPx, file: variant.file,
@@ -346,7 +346,7 @@ export function buildFrameLayers(ctx, { template, exif, profile, geom, adjust, f
       // brand's mark at a consistent visual weight. drawLayers wants the sticker
       // scale as a WIDTH fraction of the output, so convert via the real aspect.
       const aspect = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : (variant.aspect || 1);
-      const heightFrac = (el.style?.size || 0.05) * (variant.h ?? 1) * adj.text;
+      const heightFrac = (el.style?.size || 0.05) * logoHeightFor(variant, el) * adj.text;
       const scale = heightFrac * aspect * factor;
       // In a narrow side strip a wide wordmark won't fit horizontally — rotate it
       // to read vertically. Square-ish marks (symbols/roundels) stay upright.

@@ -6,11 +6,11 @@ const measure = (text, { fontPx }) => String(text).length * fontPx * 0.5;
 const BAR = { top: 0, right: 0, bottom: 0.12, left: 0 };
 
 describe("where my logo goes", () => {
-  it("into a bottom bar: its right end, 40% of the bar tall, centred in it", () => {
+  it("into a bottom bar: its right end, 34% of the bar tall, centred in it", () => {
     const geom = outputGeometry({ fullW: 3000, fullH: 2000, pad: BAR });
     const spot = placeLogo({ geom, pad: BAR, aspect: 3 });
     expect(spot.region).toBe("bottom");
-    expect(spot.height).toBeCloseTo(0.12 * 2000 * 0.4, 6); // 96px
+    expect(spot.height).toBeCloseTo(0.12 * 2000 * 0.4 * 0.85, 6); // 81.6px
     expect(spot.width).toBeCloseTo(spot.height * 3, 6);
     expect(spot.cy).toBeCloseTo(2000 + 240 / 2, 6);
     expect(geom.outW - (spot.cx + spot.width / 2)).toBeCloseTo(0.075 * 2000, 6); // 150px in from the right
@@ -51,7 +51,7 @@ describe("where my logo goes", () => {
     const geom = outputGeometry({ fullW: 3000, fullH: 2000, crop: { x: 0.1, y: 0, width: 0.8, height: 1 }, pad: thin });
     const spot = placeLogo({ geom, pad: thin, aspect: 2 });
     expect(spot.region).toBe("photo");
-    expect(spot.height).toBeCloseTo(0.06 * 2000, 6);
+    expect(spot.height).toBeCloseTo(0.06 * 0.85 * 2000, 6);
     expect(geom.left + geom.contentW - (spot.cx + spot.width / 2)).toBeCloseTo(0.075 * 2000, 6);
   });
 

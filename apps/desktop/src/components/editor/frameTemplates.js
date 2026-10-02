@@ -84,19 +84,19 @@ export const FRAME_TEMPLATES = [
   // ───────────────────────── 留白 Margin ─────────────────────────
   {
     id: "margin-logo", name: "留白 · 标志居中", family: "margin",
-    canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.15 }, bg: { type: "solid", color: "#ffffff" } },
+    canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.14 }, bg: { type: "solid", color: "#ffffff" } },
     elements: [
       { type: "logo", variant: "wordmark",
         anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.012 },
         style: { size: 0.085 } },
       { type: "exif", labeled: true, fields: ["aperture", "shutter", "iso"],
-        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.04 },
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.037 },
         style: { font: "grotesk", weight: 400, size: 0.0155, color: "#6e6e6e" } },
     ],
   },
   {
     id: "margin-gold", name: "留白 · 金标", family: "margin",
-    canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.14 }, bg: { type: "solid", color: "#fbfaf7" } },
+    canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.125 }, bg: { type: "solid", color: "#fbfaf7" } },
     elements: [
       { type: "logo", variant: "wordmark", color: "#b08d4c",
         anchor: { region: "bottom", h: "center", v: "center", inset: 0.05 },
@@ -105,10 +105,10 @@ export const FRAME_TEMPLATES = [
   },
   {
     id: "border-stack", name: "白边 · 居中", family: "margin",
-    canvas: { pad: { top: 0.045, left: 0.045, right: 0.045, bottom: 0.2 }, bg: { type: "solid", color: "#ffffff" } },
+    canvas: { pad: { top: 0.045, left: 0.045, right: 0.045, bottom: 0.19 }, bg: { type: "solid", color: "#ffffff" } },
     elements: [
       { type: "logo", variant: "symbol",
-        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.052 },
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.048 },
         style: { size: 0.06 } },
       { type: "text", content: "{camera_model}", group: "info",
         anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.032 },
@@ -135,7 +135,7 @@ export const FRAME_TEMPLATES = [
   },
   {
     id: "margin-tb", name: "留白 · 上下分置", family: "margin",
-    canvas: { pad: { top: 0.1, left: 0.05, right: 0.05, bottom: 0.1 }, bg: { type: "solid", color: "#ffffff" } },
+    canvas: { pad: { top: 0.09, left: 0.05, right: 0.05, bottom: 0.09 }, bg: { type: "solid", color: "#ffffff" } },
     elements: [
       { type: "logo", variant: "wordmark",
         anchor: { region: "top", h: "center", v: "center", inset: 0.05 },
@@ -251,14 +251,14 @@ export const FRAME_TEMPLATES = [
   // ───────────────────────── 双标 Dual ─────────────────────────
   {
     id: "dual-stack", name: "双标 · 居中", family: "dual",
-    canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.16 }, bg: { type: "solid", color: "#ffffff" } },
+    canvas: { pad: { top: 0.05, left: 0.05, right: 0.05, bottom: 0.15 }, bg: { type: "solid", color: "#ffffff" } },
     elements: [
       { type: "logo", variant: "symbol", strict: true,
-        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.03 },
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: -0.026 },
         soloAnchor: { dy: 0 },
         style: { size: 0.062 } },
       { type: "logo", variant: "wordmark", strict: true,
-        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.04 },
+        anchor: { region: "bottom", h: "center", v: "center", inset: 0.05, dy: 0.034 },
         soloAnchor: { dy: 0 },
         style: { size: 0.06 } },
     ],

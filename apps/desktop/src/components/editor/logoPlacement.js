@@ -9,12 +9,12 @@
 // insets (0.05 of 1.5 × the short edge). Everything is in output pixels
 // (frameUserTemplates.outputGeometry).
 
-import { logoHeightFactor } from "./render/frameLogos";
+import { LOGO_SCALE, logoHeightFactor } from "./render/frameLogos";
 
 const INSET = 0.075; // of the short edge: the built-in bars' 0.05 × 1.5
-const IN_BAND = 0.4; // of the band's height
+const IN_BAND = 0.4 * LOGO_SCALE; // of the band's height, on the marks' scale
 const MAX_BAND_WIDTH = 0.45; // of the band's width, for a very wide logo
-const CORNER = 0.06; // of the short edge, with no band
+const CORNER = 0.06 * LOGO_SCALE; // of the short edge, with no band
 const MAX_CORNER_WIDTH = 0.3; // of the photo's width
 const MIN_BAND = 0.03; // short edges: thinner than this is a border line, not a bar
 

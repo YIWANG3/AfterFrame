@@ -65,6 +65,13 @@ spot colors remain intact). Product lockups may also declare `covers`, such as
 `["camera_model"]`, to suppress duplicate text only in templates where that
 logo is actually rendered.
 
+`h` is the logo's height as a fraction of the template slot's size, so one slot
+suits every brand. A wordmark is 0.45 and a square symbol up to 0.85; a
+wordmark wider than 5.5:1 gets 0.45 × sqrt(5.5 / aspect), so long ones do not
+run across the frame; then every `h` × 0.85 (`frameLogos.LOGO_SCALE`). A
+symbol standing in for a wordmark (a brand with no wordmark, as Xiaomi) is
+capped at `SYMBOL_IN_WORDMARK_SLOT`. A new logo: `logoHeightFactor(aspect)`.
+
 The brand is auto-detected from EXIF and bound to the logo slot. In the UI the
 user can switch **variants within that same brand** only — never swap to another
 brand (the watermark must reflect the actual camera).

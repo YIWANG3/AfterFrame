@@ -11,8 +11,12 @@ import {
   cameraNamesFor,
   labelExif,
   modelDisplayName,
+  LOGO_SCALE,
   logoHeightFactor,
+  logoHeightFor,
   modelKeyFor,
+  SYMBOL_IN_WORDMARK_SLOT,
+  WIDE_LOGO,
   pickVariant,
   recolorSvgColors,
   withBrandLogos,
@@ -133,8 +137,9 @@ describe("a brand's logo chosen by the user", () => {
   });
 
   it("is sized and coloured like a built-in mark of its shape", () => {
-    expect(logoHeightFactor(4)).toBeCloseTo(0.45, 6); // a wordmark
-    expect(logoHeightFactor(1)).toBeCloseTo(0.85, 6); // a square symbol
+    expect(logoHeightFactor(4)).toBeCloseTo(0.45 * 0.85, 6); // a wordmark
+    expect(logoHeightFactor(1)).toBeCloseTo(0.85 * 0.85, 6); // a square symbol
+    expect(logoHeightFactor(11)).toBeCloseTo(0.45 * Math.sqrt(0.5) * 0.85, 6); // a long one: its width grows as the root of its length
     const registry = withBrandLogos(base, { hasselblad: "logo_wide", insta360: "logo_round" }, mine);
     const exif = { make: "Hasselblad", camera_model: "X2D" };
     const [need] = collectLogoNeeds({ elements: [{ type: "logo", variant: "wordmark", color: "#ffffff", style: { size: 0.1 } }] }, exif, registry, { outH: 1000 });
@@ -143,6 +148,28 @@ describe("a brand's logo chosen by the user", () => {
     // A multi-colour logo keeps its colours.
     const [locked] = collectLogoNeeds({ elements: [{ type: "logo", variant: "wordmark", color: "#ffffff" }] }, { make: "Insta360" }, registry, { outH: 1000 });
     expect(locked).toMatchObject({ personal: "logo_round", colorLocked: true });
+  });
+});
+
+describe("how tall a logo is drawn", () => {
+  const shipped = JSON.parse(readFileSync(join(LOGOS_DIR, "logos.json"), "utf8"));
+
+  it("a long built-in wordmark is shorter, so it does not run across the frame", () => {
+    const long = shipped.logos.flatMap((l) => l.variants.filter((v) => v.kind === "wordmark" && v.aspect > WIDE_LOGO).map((v) => [l.id, v]));
+    expect(long.length).toBeGreaterThan(5);
+    for (const [id, v] of long) expect(v.h, id).toBeCloseTo(logoHeightFactor(v.aspect), 2);
+    // and none stands taller than a 4:1 one
+    for (const l of shipped.logos) for (const v of l.variants) {
+      if (v.kind === "wordmark" && v.aspect > 2) expect(v.h, l.id).toBeLessThanOrEqual(0.45 * LOGO_SCALE + 0.001);
+    }
+  });
+
+  it("a symbol standing in for a wordmark is drawn smaller than in its own slot", () => {
+    const symbol = { kind: "symbol", h: 0.8 * LOGO_SCALE };
+    expect(logoHeightFor(symbol, { variant: "wordmark" })).toBeCloseTo(SYMBOL_IN_WORDMARK_SLOT, 6);
+    expect(logoHeightFor(symbol, { variant: "symbol" })).toBeCloseTo(0.8 * LOGO_SCALE, 6);
+    expect(logoHeightFor({ kind: "wordmark", h: 0.3 }, { variant: "wordmark" })).toBe(0.3);
+    expect(logoHeightFor({ kind: "symbol", h: 0.4 }, { variant: "wordmark" })).toBe(0.4); // already small
   });
 });
 

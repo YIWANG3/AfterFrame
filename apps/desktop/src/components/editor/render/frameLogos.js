@@ -232,10 +232,31 @@ export function mineFor(brand, model) {
   return (m && brand?.mineModels?.find((v) => v.model === m)) || brand?.mine || null;
 }
 
-// Built-in marks are sized by kind: a wide wordmark at 0.45 of a slot's
-// height, a square symbol at 0.7 to 1. My logo gets the same by its shape.
+// How tall a mark is, as a fraction of its template slot's size (variant h in
+// logos.json): wordmarks 0.45 and symbols about 1, so a square symbol and a
+// short wide wordmark weigh about the same; a wordmark wider than WIDE_LOGO
+// is shortened by sqrt(WIDE_LOGO / aspect) so it does not run long; then
+// everything × LOGO_SCALE (logos were a size too large beside the frame's
+// text). logos.json holds the result for the built-in marks; my logo gets
+// the same by its shape.
+export const WIDE_LOGO = 5.5;
+export const LOGO_SCALE = 0.85;
+// A brand with only a symbol (Xiaomi's MI, OnePlus's 1+) fills a wordmark
+// slot with it at about a wordmark's height, not its own larger one.
+export const SYMBOL_IN_WORDMARK_SLOT = 0.55 * LOGO_SCALE;
+
+/** h for one of my logos, by its shape, on the built-in marks' scale. */
 export function logoHeightFactor(aspect) {
-  return Math.min(0.85, Math.max(0.45, 0.9 / Math.sqrt(aspect || 1)));
+  const a = aspect || 1;
+  const h = a > WIDE_LOGO ? 0.45 * Math.sqrt(WIDE_LOGO / a) : Math.min(0.85, Math.max(0.45, 0.9 / Math.sqrt(a)));
+  return h * LOGO_SCALE;
+}
+
+/** The height factor a template's logo element gives `variant`. */
+export function logoHeightFor(variant, el) {
+  const h = variant?.h ?? 1;
+  const wantsWordmark = el?.variant === "wordmark" || el?.kind === "wordmark";
+  return variant?.kind === "symbol" && wantsWordmark ? Math.min(h, SYMBOL_IN_WORDMARK_SLOT) : h;
 }
 
 function myLogoVariant(logo, model) {
