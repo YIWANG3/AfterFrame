@@ -1,6 +1,6 @@
 # Windows 支持：现状评估与方案
 
-> **状态（2026-10-03）**：开始实施。Windows 开发机已就绪（第 9 节），真机基线见第 10 节，按第 11 节的小分支方式推进。阶段 1 的第一项已随 0.5.6 发布（#114）。
+> **状态（2026-10-03）**：阶段 1、2 的大部分已经做成 11 个 PR（#116–#126），都在开发机上验证过，等合并，见第 12 节。还没做的：sidecar 打包（spec 不在仓库里）、安装包和签名、视频，以及阶段 3 的深度、抠图、人物。
 > 起因（2026-10-02）：社媒上要 Windows 版的反馈很多。
 > 依据：对 `439f397`（0.5.5）做了三路代码审计（Electron 主进程、Python sidecar、前端/打包/CI），关键结论都抽查核实过，性能数据是在本机实测的；第 10 节是在 Windows 真机上跑出来的结果。
 > 文中行号以 `439f397` 为准，0.5.6（#113、#114）改过的文件里行号有偏移。路径如果不以 `services/`、`tests/`、`docs/`、`scripts/` 开头，就是相对 `apps/desktop/` 而言。
@@ -391,3 +391,49 @@ Python 的 34 个：
   - 阶段 2 完成前不发布 Windows 安装包，用户感知不到变化。
 - **Windows CI**：先加成"失败不阻塞合并"的提醒；等第 10 节的失败都修完，再改成必须通过，防止日常改动又把 Windows 弄坏。
 - **顺序**：按第 6 节阶段 1、阶段 2 的列表，一项一个 PR。
+
+## 12. 进展（2026-10-03）
+
+每项一个 `win/*` 分支，Mac CI 和 e2e 都跑过，也都在开发机上实际验证过。
+
+| PR | 分支 | 内容 | 基于 |
+|---|---|---|---|
+| #116 | `win/window-chrome` | 窗口外壳：系统标题栏按钮、可调大小和贴靠、☰ 菜单、Ctrl+, | main |
+| #117 | `win/sidecar-stdio` | sidecar 全程 UTF-8，开发时用 `python`，子进程不弹控制台 | main |
+| #118 | `win/preview-pillow` | 预览改用 Pillow（含 HEIC），读不了的格式在 Mac 上退回 sips | main |
+| #119 | `win/capabilities` | 深度、抠图、人物在 Windows 上置灰并提示"目前仅 macOS 版支持" | #116 |
+| #120 | `win/paths` | Windows 路径下的文件名和路径缩写；导入整张卡时跳过回收站等系统目录 | main |
+| #121 | `win/copy-and-fonts` | "访达"改成"文件资源管理器"、⌘ 改成 Ctrl+；雅黑字体；`<html lang>` | #116 |
+| #122 | `win/single-instance` | 单实例；拖到 exe 上或用"打开方式"打开的文件会被导入；冷启动时带的文件不再丢（Mac 也有这个问题） | #119 |
+| #123 | `win/file-picker` | 导入拆成"导入文件…"和"导入文件夹…"（Windows 的对话框不能两者兼选） | #122 |
+| #124 | `win/tests-windows` | 单测在 Windows 上全部通过，CI 加 Windows job（失败不阻塞合并） | main |
+| #125 | `win/heic-originals` | HEIC 原图能在大图和编辑器里打开（sidecar 转码代替 sips） | #118 |
+| #126 | `win/raw-previews` | RAW 预览用相机内嵌的 JPEG | #125 |
+
+**合并顺序**：#117、#118、#120、#124 互不依赖，先合哪个都行。然后按两条链依次合：
+- #116 → #119、#121 → #122 → #123；
+- #118 → #125 → #126。
+
+11 个分支两两试合并过（55 对），只有一处冲突：#125/#126 和 #116 那条链（#116、#119、#121、#122、#123）都往 `package.json` 的 `test:electron` 这一行加了测试。后合并的那一边要手动保留两边的条目。仓库默认 squash 合并，而且合并后不删分支，所以叠在上面的 PR 不会自动改指向 main，每合一个都需要把下一个 rebase 到 main 上。
+
+**第 10 节基线结论的更正**：
+- allowlist 和 transport 的两个失败也是测试本身的问题，不是产品 bug：
+  - allowlist 的测试用 POSIX 正则模拟 `/tmp → /private/tmp`；
+  - transport 的产品代码早就绕开了进程组，只是断言写死了 POSIX 信号的退出码。
+- 32 个 `WinError 32` 全是测试自己开的 SQLite 连接，产品代码都关了（在开发机上逐个跟踪过连接）。
+- 把这 11 个 PR 全部合在一起后，开发机上仓库根目录的 Python 196/196、sidecar 59/59、Electron 主进程 139/139、前端 235/235 全部通过，ruff 和 mypy 也干净。GitHub 的 `windows-latest` 跑 #124 也是全绿。
+
+**还没做的**：
+
+| 项 | 卡在哪 |
+|---|---|
+| sidecar 打包 | `media-workspace.spec` 和 `entry.py` 被 `.gitignore` 忽略，不在仓库里。要先放进仓库（阶段 1 那一项），Windows 版才能构建 |
+| 安装包（`dist:win`）和签名 | 依赖上一项；签名方式见第 7 节第 3 条 |
+| 视频封面和 HEVC 转码 | Swift 写的 `video-tool`；Windows 上要用 ffmpeg 或者在渲染进程里截帧 |
+| RAW 的尺寸 | Windows 上取自 EXIF，有的格式记的是预览图的尺寸（DNG 样例是 256×144，实际是 1024×576）；可以改读全分辨率的 SubIFD |
+| 真实 RAW 文件验证 | 仓库里只有两个小 DNG；CR3/NEF/ARW 还没在 Windows 上试过 |
+| 深度、抠图、人物 | 阶段 3，ONNX Runtime |
+| Windows e2e | e2e 里用到了只有 macOS 才有的辅助程序 |
+| 中文字体本地子集、Mica | 体验优化，不阻塞 |
+
+第 7 节第 5 条（RAW 一致性）：#126 先采用"首版只显示内嵌的 JPEG 预览"。要和 Mac 一样出图，需要引入 LibRaw（rawpy）。
