@@ -8,6 +8,7 @@ import api from "../api";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, RotateCcw, ChevronRight, X, Plus, Wand2, MapPinOff, LoaderCircle } from "lucide-react";
+import { LOCKED_HINT_KEY } from "./DesktopOnly";
 import {
   subscribe,
   getVersion,
@@ -288,14 +289,14 @@ export default function AnnotationsSection({
           <button
             type="button"
             disabled
-            title={t("desktop.hint", { ns: "common" })}
+            title={t(LOCKED_HINT_KEY, { ns: "common" })}
             className="flex w-full cursor-default items-center justify-center gap-1.5 rounded-md border border-border/40 bg-app px-3 py-1.5 text-[11px] font-medium text-muted2"
           >
             <Sparkles className="h-3 w-3" />
             {t("annotate")}
           </button>
           <div className="mt-2 text-[10px] leading-snug text-muted2">
-            {t("desktop.hint", { ns: "common" })}
+            {t(LOCKED_HINT_KEY, { ns: "common" })}
           </div>
         </Section>
       );

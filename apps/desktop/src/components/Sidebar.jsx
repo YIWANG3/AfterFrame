@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
-import { DesktopHint } from "./DesktopOnly";
+import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
@@ -212,7 +212,7 @@ export default function Sidebar({
           })}
           <button
             type="button"
-            title={!api.can("stickerExtract") ? tc("desktop.hint") : undefined}
+            title={!api.can("stickerExtract") ? tc(LOCKED_HINT_KEY) : undefined}
             onClick={api.can("stickerExtract") ? (e) => { e.currentTarget.blur(); onOpenStickerBrowser?.(); } : undefined}
             className={[
               "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
@@ -230,7 +230,7 @@ export default function Sidebar({
           </button>
           <button
             type="button"
-            title={!api.can("people") ? tc("desktop.hint") : undefined}
+            title={!api.can("people") ? tc(LOCKED_HINT_KEY) : undefined}
             onClick={api.can("people") ? (e) => { e.currentTarget.blur(); onOpenPeople?.(); } : undefined}
             className={[
               "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",

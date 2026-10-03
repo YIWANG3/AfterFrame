@@ -9,6 +9,7 @@
     "close": "Close"
   },
   "desktop": {
+    "macOnly": "Available in the macOS app for now",
     "hint": "This feature is available in the AfterFrame desktop app",
     "get": "Get the desktop app",
     "try": "Try the desktop app",

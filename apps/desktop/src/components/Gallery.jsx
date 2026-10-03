@@ -16,6 +16,7 @@ function formatDuration(seconds) {
 import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
+import { LOCKED_HINT_KEY } from "./DesktopOnly";
 
 const GAP = 12;
 const TILE_GAP = 2;
@@ -172,7 +173,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
         "flex w-full rounded-[6px] items-center justify-between px-3 py-1.5 text-left text-[12px]",
         locked ? "cursor-default text-muted2" : "cursor-pointer text-muted hover:bg-hover hover:text-text",
       ].join(" ")}
-      title={locked ? tc("desktop.hint") : undefined}
+      title={locked ? tc(LOCKED_HINT_KEY) : undefined}
       onClick={locked ? undefined : onClick}
     >
       <span className="flex items-center gap-2.5">

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound } from "lucide-react";
 import api from "../api";
-import { DesktopOnlyPane } from "./DesktopOnly";
+import { DesktopOnlyPane, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { TOP_LAYER_ATTR } from "../utils/topLayer";
 import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
@@ -115,7 +115,7 @@ export default function SettingsOverlay({
                   key={entry.id}
                   type="button"
                   onClick={() => setTab(entry.id)}
-                  title={locked ? t("desktop.hint", { ns: "common" }) : undefined}
+                  title={locked ? t(LOCKED_HINT_KEY, { ns: "common" }) : undefined}
                   className={[
                     "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",
                     active ? "bg-accent/10 text-accent" : locked ? "text-muted2 hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",

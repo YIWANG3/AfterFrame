@@ -9,6 +9,11 @@ import api from "../api";
 
 export const DESKTOP_SITE_URL = "https://yiwang3.github.io/AfterFrame/";
 
+// The hint on a locked feature. The web build points at the desktop app; the
+// desktop app (Windows) only locks what is macOS-only for now
+// (electron/capabilities.js), so it must not advertise itself.
+export const LOCKED_HINT_KEY = api.capabilities.web ? "desktop.hint" : "desktop.macOnly";
+
 export function openDesktopSite() {
   if (api.has("openExternal")) api.openExternal(DESKTOP_SITE_URL);
   else window.open(DESKTOP_SITE_URL, "_blank", "noopener");
@@ -35,6 +40,16 @@ export function DesktopHint() {
 // links to the download; the content stays visible but dimmed and inert.
 export function DesktopOnlyPane({ children }) {
   const { t } = useTranslation("common");
+  if (!api.capabilities.web) {
+    return (
+      <div>
+        <div className="mb-5 rounded-lg border border-border/60 bg-app px-3.5 py-2.5 text-[12px] text-muted">{t(LOCKED_HINT_KEY)}</div>
+        <div className="pointer-events-none select-none opacity-45" aria-disabled="true">
+          {children}
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <button

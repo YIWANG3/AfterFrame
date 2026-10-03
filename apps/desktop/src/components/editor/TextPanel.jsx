@@ -24,6 +24,7 @@ import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
   createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, getBgPadding,
 } from "./textState";
+import { LOCKED_HINT_KEY } from "../DesktopOnly";
 import {
   alignLeft, alignCenterH, alignRight,
   alignTop, alignCenterV, alignBottom,
@@ -325,15 +326,16 @@ export default function TextPanel({
 
         {/* Scene depth — image-level metadata. One ML inference per image; results
             cached and shared by every text layer's z position slider. Without a
-            depth backend (web build) the section advertises the desktop app. */}
-        {!frameMode && !api.has("computeDepth") && (
+            depth engine (the web build; Windows for now, api.can("depth")) the
+            section says where it is available instead. */}
+        {!frameMode && !(api.has("computeDepth") && api.can("depth")) && (
           <Section label={t("text.depth.title")}>
             <div className="w-full rounded-md border border-border/40 bg-app px-3 py-2 text-left text-[11px] leading-snug text-muted2">
-              {t("desktop.hint", { ns: "common" })}
+              {t(LOCKED_HINT_KEY, { ns: "common" })}
             </div>
           </Section>
         )}
-        {!frameMode && api.has("computeDepth") && <Section label={t("text.depth.title")} action={
+        {!frameMode && api.has("computeDepth") && api.can("depth") && <Section label={t("text.depth.title")} action={
           hasSceneDepth ? (
             <button
               type="button"
@@ -442,7 +444,7 @@ export default function TextPanel({
             />
             <IconBtn
               icon={Brush}
-              title={api.has("startTextImage") ? t("text.addHandwriting") : `${t("text.addHandwriting")} · ${t("desktop.hint", { ns: "common" })}`}
+              title={api.has("startTextImage") ? t("text.addHandwriting") : `${t("text.addHandwriting")} · ${t(LOCKED_HINT_KEY, { ns: "common" })}`}
               disabled={!api.has("startTextImage")}
               onClick={() => setHandwritingOpen(true)}
             />
@@ -450,7 +452,7 @@ export default function TextPanel({
               icon={Cannabis}
               title={api.can("stickerExtract")
                 ? (stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer"))
-                : `${t("text.addStickerLayer")} · ${t("desktop.hint", { ns: "common" })}`}
+                : `${t("text.addStickerLayer")} · ${t(LOCKED_HINT_KEY, { ns: "common" })}`}
               disabled={!api.can("stickerExtract")}
               onClick={() => setStickerPickerOpen((v) => !v)}
             />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
+import { LOCKED_HINT_KEY } from "./DesktopOnly";
 import {
   ChevronDown,
   Plus,
@@ -281,7 +282,7 @@ export default function Toolbar({
                           "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium transition-colors",
                           locked ? "cursor-default text-muted2" : "cursor-pointer text-text hover:bg-hover",
                         ].join(" ")}
-                        title={locked ? tc("desktop.hint") : undefined}
+                        title={locked ? tc(LOCKED_HINT_KEY) : undefined}
                         onClick={async () => {
                           if (locked) return;
                           setMenuOpen(false);

@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   // "darwin" | "win32" | "linux": picks the window shell (main.jsx adds
   // html.platform-<name>); feature availability goes through capabilities.
   platform: process.platform,
+  // Features this platform lacks, declared false (see electron/capabilities.js).
+  capabilities: (() => { try { return ipcRenderer.sendSync("app:capabilities"); } catch { return {}; } })(),
   onWatchedImport: (callback) => {
     const listener = (_event, paths) => callback(paths);
     ipcRenderer.on("workspace:watched-import", listener);
