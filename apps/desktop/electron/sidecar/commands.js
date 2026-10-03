@@ -453,6 +453,11 @@ function createSidecarCommands(callJson) {
     readImageMetadata(imagePath) {
       return callJson(["read-image-metadata", "--path", String(imagePath)]);
     },
+    // A full-size JPEG of an original the renderer can't decode (HEIC where
+    // there is no sips); media:// serves it in the original's place.
+    transcodeImage(sourcePath, outputPath) {
+      return callJson(["transcode-image", "--source", String(sourcePath), "--output", String(outputPath)]);
+    },
 
     // ── Jobs ─────────────────────────────────────────────────────────────
     // How many photos have their dominant colours, and how many still need them.

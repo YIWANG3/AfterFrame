@@ -111,6 +111,23 @@ def render_pillow_preview(source: Path, target: Path, size: int) -> None:
     frame.save(target, "JPEG", **options)
 
 
+# JPEG's own limit: a "preview" this large is the image at full size.
+_JPEG_MAX_EDGE = 65535
+
+
+def transcode_to_jpeg(source: Path, target: Path) -> None:
+    """The full-size JPEG Electron shows in place of an original the renderer
+    can't decode: HEIC/HEIF where there is no sips (Windows). Same handling as
+    previews (orientation tag, ICC profile, transparency), and written beside
+    the target then renamed in, so a concurrent reader never sees half a file."""
+    partial = target.with_name(f".{target.name}.{os.getpid()}.partial")
+    try:
+        render_pillow_preview(source, partial, _JPEG_MAX_EDGE)
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
 @dataclass(slots=True)
 class PreviewResult:
     asset_id: str

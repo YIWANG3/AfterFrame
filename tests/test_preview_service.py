@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+import io
+import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
 from PIL import Image, ImageCms
 
+from media_workspace import cli
 from media_workspace.catalog import ensure_catalog
-from media_workspace.preview_service import PreviewService, SourceNotReadyError, render_pillow_preview
+from media_workspace.preview_service import (
+    PreviewService,
+    SourceNotReadyError,
+    _register_heif,
+    render_pillow_preview,
+    transcode_to_jpeg,
+)
 
 GENERIC_CMYK = Path("/System/Library/ColorSync/Profiles/Generic CMYK Profile.icc")
 HEIC_FIXTURE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "heic" / "iphone-style.heic"
@@ -225,6 +235,41 @@ class PillowPreviewTest(unittest.TestCase):
             with Image.open(target) as preview:
                 self.assertEqual(max(preview.size), 256)
                 self.assertEqual(preview.format, "JPEG")
+
+    def test_heic_transcodes_to_a_full_size_jpeg(self) -> None:
+        """What media:// serves in place of a HEIC original where there is no sips."""
+        _register_heif()
+        with Image.open(HEIC_FIXTURE) as original:
+            full_size = original.size
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "original.jpg"
+            transcode_to_jpeg(HEIC_FIXTURE, target)
+            with Image.open(target) as jpeg:
+                self.assertEqual(jpeg.format, "JPEG")
+                self.assertEqual(jpeg.size, full_size)
+            self.assertEqual(sorted(p.name for p in Path(temp_dir).iterdir()), ["original.jpg"])
+
+    def test_transcode_image_needs_no_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = Path(temp_dir) / "never.afcatalog"
+            target = Path(temp_dir) / "original.jpg"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = cli.main(["transcode-image", "--catalog", str(catalog), "--source", str(HEIC_FIXTURE), "--output", str(target)])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out.getvalue()), {"output": str(target)})
+            self.assertTrue(target.is_file())
+            self.assertFalse(catalog.exists())
+
+    def test_a_failed_transcode_leaves_nothing_behind(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "broken.heic"
+            source.write_bytes(b"not an image")
+            target = Path(temp_dir) / "out" / "original.jpg"
+            target.parent.mkdir()
+            with self.assertRaises(OSError):
+                transcode_to_jpeg(source, target)
+            self.assertEqual(list(target.parent.iterdir()), [])
 
     def test_sixteen_bit_greyscale_is_scaled_not_clipped(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

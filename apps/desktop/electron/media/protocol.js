@@ -1,7 +1,8 @@
 // The media:// scheme: images (and anything that is not video) come to the
 // renderer through here, gated by the allowlist. HEIC/HEIF originals are
-// transcoded to JPEG with macOS `sips` on first request and cached on disk,
-// keyed by path + mtime + size, because Chromium cannot decode them. Video
+// transcoded to JPEG on first request and cached on disk, keyed by path +
+// mtime + size, because Chromium cannot decode them: with macOS `sips`, or
+// elsewhere with the `convert` main.js passes (the sidecar's Pillow). Video
 // goes through ./httpServer.js instead (see there). Extracted from main.js
 // (review 2026-09-16 §2).
 
@@ -13,8 +14,19 @@ const { pathToFileURL } = require("node:url");
 
 const HEIC_RE = /\.(heic|heif)$/i;
 
-function createHeicTranscoder({ cacheDir }) {
-  return function transcodeHeicToJpeg(srcPath) {
+// macOS: Image I/O through sips.
+async function sipsToJpeg(srcPath, outPath) {
+  const result = spawnSync("sips", ["-s", "format", "jpeg", srcPath, "--out", outPath], {
+    timeout: 30000,
+  });
+  if (result.status !== 0) throw new Error(`sips failed: ${result.stderr?.toString() || result.error?.message}`);
+}
+
+// convert(srcPath, outPath) writes the JPEG. Requests for the same file while
+// it converts share one conversion.
+function createHeicTranscoder({ cacheDir, convert = sipsToJpeg }) {
+  const converting = new Map();
+  return async function transcodeHeicToJpeg(srcPath) {
     try {
       const stat = fs.statSync(srcPath);
       const key = crypto
@@ -24,21 +36,21 @@ function createHeicTranscoder({ cacheDir }) {
       const outPath = path.join(cacheDir, `${key}.jpg`);
       if (fs.existsSync(outPath)) return outPath;
       fs.mkdirSync(cacheDir, { recursive: true });
-      const result = spawnSync("sips", ["-s", "format", "jpeg", srcPath, "--out", outPath], {
-        timeout: 30000,
-      });
-      if (result.status === 0 && fs.existsSync(outPath)) return outPath;
-      console.error("[media] sips HEIC transcode failed:", result.stderr?.toString());
+      if (!converting.has(outPath)) {
+        converting.set(outPath, Promise.resolve(convert(srcPath, outPath)).finally(() => converting.delete(outPath)));
+      }
+      await converting.get(outPath);
+      if (fs.existsSync(outPath)) return outPath;
     } catch (err) {
-      console.error("[media] HEIC transcode error:", err);
+      console.error("[media] HEIC transcode failed:", err?.message || err);
     }
     return null;
   };
 }
 
 // Must run after app.whenReady(). `allowlist` is ./allowlist.js.
-function registerMediaProtocol({ protocol, net, allowlist, heicCacheDir }) {
-  const transcodeHeicToJpeg = createHeicTranscoder({ cacheDir: heicCacheDir });
+function registerMediaProtocol({ protocol, net, allowlist, heicCacheDir, convertHeic }) {
+  const transcodeHeicToJpeg = createHeicTranscoder({ cacheDir: heicCacheDir, convert: convertHeic });
   protocol.handle("media", async (request) => {
     // Strip any ?query — the renderer appends a cache-bust token (?r=…) to force
     // an <img> reload after a preview file is regenerated in place; it's not part
@@ -52,7 +64,7 @@ function registerMediaProtocol({ protocol, net, allowlist, heicCacheDir }) {
     }
     const existsOnDisk = fs.existsSync(resolved);
     if (existsOnDisk && HEIC_RE.test(resolved)) {
-      const jpeg = transcodeHeicToJpeg(resolved);
+      const jpeg = await transcodeHeicToJpeg(resolved);
       if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
       // Fall through to original on failure (will surface the load error).
     }
