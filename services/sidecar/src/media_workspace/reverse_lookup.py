@@ -22,7 +22,7 @@ from .db import (
     upsert_registry,
     upsert_video_asset,
 )
-from .file_types import is_macos_metadata
+from .file_types import is_ignored_path
 from .metadata import (
     camera_stem_token,
     extract_image_candidate,
@@ -568,14 +568,14 @@ MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | DEFAULT_RAW_EXTENSIONS
 def iter_image_files(image_paths: list[Path]):
     for image_path in image_paths:
         image_path = image_path.resolve()
-        if is_macos_metadata(image_path):
+        if is_ignored_path(image_path):
             continue
         if image_path.is_file():
             if image_path.suffix.lower() in MEDIA_EXTENSIONS:
                 yield image_path
             continue
         for path in sorted(image_path.rglob("*")):
-            if not is_macos_metadata(path) and path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
+            if not is_ignored_path(path) and path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
                 yield path
 
 

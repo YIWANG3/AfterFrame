@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { RotateCw } from "lucide-react";
 import api from "../api";
+import { fileName } from "../utils/format";
 
 export default function DevStaleNotice() {
   const [state, setState] = useState(null);
@@ -24,7 +25,7 @@ export default function DevStaleNotice() {
   }, []);
 
   if (!state?.stale) return null;
-  const names = state.files.map((file) => file.split("/").pop()).join(", ");
+  const names = state.files.map((file) => fileName(file)).join(", ");
   return (
     <div
       data-dev-stale="true"

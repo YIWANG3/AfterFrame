@@ -2,7 +2,7 @@ import api from "../api";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid, ArrowUpDown, Search } from "lucide-react";
-import { localFileUrl } from "../utils/format";
+import { fileName, localFileUrl } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
 import CollagePanel from "./collage/CollagePanel";
 import BatchPanel from "./collage/BatchPanel";
@@ -695,7 +695,7 @@ export default function CollageOverlay({ open, items, collections, summary, sour
 
       // Derive filename from source images
       const sourceAssetIds = images.map((img) => img.asset_id).filter(Boolean);
-      const firstStem = images[0]?.stem || images[0]?.image_path?.split("/").pop()?.replace(/\.[^.]+$/, "") || "collage";
+      const firstStem = images[0]?.stem || fileName(images[0]?.image_path).replace(/\.[^.]+$/, "") || "collage";
       const allSameSet = images.length > 1 && images.every((img) => img.resource_set_id && img.resource_set_id === images[0].resource_set_id);
       const baseStem = allSameSet ? (images[0].primary_stem || firstStem) : firstStem;
       const defaultName = `${baseStem}_collage.jpg`;

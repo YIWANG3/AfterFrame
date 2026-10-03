@@ -28,6 +28,25 @@ def is_macos_metadata(path: Path) -> bool:
     return path.name.startswith("._") or "__MACOSX" in path.parts
 
 
+# Folders a volume's system keeps. Importing a whole card or drive (E:\, or
+# /Volumes/CARD) walks into them, and the Recycle Bin and macOS's .Trashes
+# hold deleted photos that would come back as new imports.
+_SYSTEM_FOLDERS = {
+    "$recycle.bin", "recycler", "recycled", "system volume information",  # Windows
+    ".trashes", ".spotlight-v100", ".fseventsd", ".temporaryitems", ".documentrevisions-v100",  # macOS volumes
+}
+
+
+def in_system_folder(path: Path) -> bool:
+    return any(part.lower() in _SYSTEM_FOLDERS or part.startswith(".Trash-") for part in path.parts)
+
+
+def is_ignored_path(path: Path) -> bool:
+    """Not one of the user's files: an AppleDouble companion, or anything in
+    a volume's system folders."""
+    return is_macos_metadata(path) or in_system_folder(path)
+
+
 def _read_signature(path: Path, limit: int = RAW_SIGNATURE_SAMPLE_BYTES) -> bytes:
     with path.open("rb") as handle:
         return handle.read(limit)
@@ -74,7 +93,7 @@ def _detect_tiff_raw_format(data: bytes) -> str | None:
 
 
 def detect_raw_format(path: Path) -> str | None:
-    if is_macos_metadata(path):
+    if is_ignored_path(path):
         return None
     extension = path.suffix.lower()
     if extension in DEFAULT_RAW_EXTENSIONS:
@@ -89,4 +108,4 @@ def is_raw_file(path: Path) -> bool:
 
 
 def is_source_file(path: Path) -> bool:
-    return not is_macos_metadata(path) and (is_raw_file(path) or path.suffix.lower() in DEFAULT_IMAGE_EXTENSIONS)
+    return not is_ignored_path(path) and (is_raw_file(path) or path.suffix.lower() in DEFAULT_IMAGE_EXTENSIONS)

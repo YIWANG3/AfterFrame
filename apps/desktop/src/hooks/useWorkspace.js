@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { collapseRootPaths, mergeRoots, determineImportMode } from "../utils/format";
+import { collapseRootPaths, mergeRoots, determineImportMode, fileName } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
@@ -928,7 +928,7 @@ export default function useWorkspace({ pushToast } = {}) {
       pushToast?.({
         title: t("watchPromptTitle"),
         message: fresh.length === 1
-          ? t("watchPromptMsg", { dir: fresh[0].split("/").filter(Boolean).pop() || fresh[0] })
+          ? t("watchPromptMsg", { dir: fileName(fresh[0]) || fresh[0] })
           : t("watchPromptMsgN", { count: fresh.length }),
         ttl: 12000,
         actions: [{ label: t("watchAdd"), primary: true, onClick: () => fresh.forEach((d) => api.addWatchedDir?.(d)) }],

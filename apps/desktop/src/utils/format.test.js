@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   collapseRootPaths,
   determineImportMode,
+  escapePathLabel,
   fileName,
   formatBytes,
   mergeRoots,
@@ -25,6 +26,19 @@ describe("path helpers", () => {
       "D:/Exports",
     ]);
     expect(fileName("C:\\Photos\\frame.jpg")).toBe("frame.jpg");
+  });
+
+  it("takes a folder's name with or without a trailing separator", () => {
+    expect(fileName("C:\\Photos\\2026 Trip\\")).toBe("2026 Trip");
+    expect(fileName("/Users/me/Pictures/")).toBe("Pictures");
+    expect(fileName("C:\\Users\\me\\Pictures\\中文相册\\莫罗岩.jpg")).toBe("莫罗岩.jpg");
+  });
+
+  it("shortens long paths with their own separator", () => {
+    expect(escapePathLabel("/Users/me/Pictures/2026/trip/a.jpg")).toBe(".../2026/trip/a.jpg");
+    expect(escapePathLabel("C:\\Users\\me\\Pictures\\2026\\a.jpg")).toBe("...\\Pictures\\2026\\a.jpg");
+    expect(escapePathLabel("/short/a.jpg")).toBe("/short/a.jpg");
+    expect(escapePathLabel("")).toBe("Not linked");
   });
 });
 

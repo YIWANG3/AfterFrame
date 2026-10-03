@@ -314,7 +314,7 @@ export default function App() {
     Object.assign((window.__afterframeTest ??= {}), {
       openEditor(pathOrItem) {
         const item = typeof pathOrItem === "string"
-          ? { image_path: pathOrItem, stem: pathOrItem.split("/").pop() }
+          ? { image_path: pathOrItem, stem: fileName(pathOrItem) }
           : pathOrItem;
         setEditorItem(item);
       },
@@ -482,7 +482,7 @@ export default function App() {
       .map((id) => itemById.get(id)?.image_path)
       .filter(Boolean);
     if (!paths.length) return;
-    const texts = field === "name" ? paths.map((p) => p.split("/").pop()) : paths;
+    const texts = field === "name" ? paths.map((p) => fileName(p)) : paths;
     await api.copyText(texts.join("\n"));
     pushToast?.({
       title: t(field === "name" ? "copiedName" : "copiedPath", { count: texts.length }),

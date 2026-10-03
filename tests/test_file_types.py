@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from media_workspace.file_types import detect_raw_format, is_raw_file
+from media_workspace.file_types import detect_raw_format, in_system_folder, is_ignored_path, is_raw_file
+from media_workspace.reverse_lookup import iter_image_files
+from media_workspace.scanner import iter_candidate_paths
 
 
 class FileTypesTest(unittest.TestCase):
@@ -36,6 +38,41 @@ class FileTypesTest(unittest.TestCase):
             self.assertIsNone(detect_raw_format(path))
             self.assertFalse(is_raw_file(path))
 
+
+class SystemFolderTest(unittest.TestCase):
+    """A whole-card import must not bring back what's in the volume's trash."""
+
+    def test_system_folders_are_recognised_in_any_case(self) -> None:
+        for path in (
+            Path("E:/$RECYCLE.BIN/S-1-5-21/IMG_0001.JPG"),
+            Path("E:/System Volume Information/x.jpg"),
+            Path("/Volumes/CARD/.Trashes/501/IMG_0002.JPG"),
+            Path("/media/card/.Trash-1000/files/IMG_0003.JPG"),
+            Path("D:/$Recycle.Bin/IMG_0004.JPG"),
+        ):
+            self.assertTrue(in_system_folder(path), path)
+            self.assertTrue(is_ignored_path(path), path)
+        for path in (Path("/Users/me/Pictures/Trash talk/IMG_0005.JPG"), Path("E:/DCIM/100CANON/IMG_0006.JPG")):
+            self.assertFalse(in_system_folder(path), path)
+        self.assertTrue(is_ignored_path(Path("/Volumes/CARD/DCIM/._IMG_0007.JPG")))
+
+    def test_card_imports_skip_the_recycle_bin_and_trashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            card = Path(temp_dir) / "CARD"
+            keep = card / "DCIM" / "100CANON" / "IMG_0001.JPG"
+            deleted = card / "$RECYCLE.BIN" / "S-1-5-21" / "IMG_0002.JPG"
+            trashed = card / ".Trashes" / "501" / "IMG_0003.JPG"
+            for path in (keep, deleted, trashed):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"\xff\xd8\xff\xd9")
+            self.assertEqual([p.name for p in iter_image_files([card])], ["IMG_0001.JPG"])
+            raw = card / "DCIM" / "100CANON" / "IMG_0001.CR3"
+            raw_deleted = card / "$RECYCLE.BIN" / "S-1-5-21" / "IMG_0002.CR3"
+            for path in (raw, raw_deleted):
+                path.write_bytes(b"raw")
+            walked = [p.name for p in iter_candidate_paths(card)]
+            self.assertIn("IMG_0001.CR3", walked)
+            self.assertNotIn("IMG_0002.CR3", walked)
 
 if __name__ == "__main__":
     unittest.main()
