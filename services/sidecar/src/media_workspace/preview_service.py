@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import BinaryIO
 
 from PIL import Image, ImageCms
 
@@ -16,6 +17,7 @@ from .catalog import CatalogPaths
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
 from .db.colors import analyze_asset_colors
+from .raw_preview import render_raw_preview
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -71,7 +73,7 @@ def _cmyk_to_srgb(image: Image.Image, icc_profile: bytes) -> Image.Image:
     return image.convert("RGB")
 
 
-def render_pillow_preview(source: Path, target: Path, size: int) -> None:
+def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orientation: int | None = None) -> None:
     """A JPEG with the long edge at most `size`, matching what sips -Z gave:
 
     - pixels stay as stored and the EXIF orientation tag is carried over
@@ -83,10 +85,12 @@ def render_pillow_preview(source: Path, target: Path, size: int) -> None:
 
     Unlike sips it never enlarges a small image. JPEG sources decode at a
     reduced scale (draft), which is where most of the time goes.
+    `orientation` overrides the source's own tag: a RAW's embedded JPEG
+    carries the RAW's (raw_preview.py).
     """
     _register_heif()
     with Image.open(source) as image:
-        orientation = image.getexif().get(_ORIENTATION_TAG)
+        orientation = orientation or image.getexif().get(_ORIENTATION_TAG)
         icc_profile = image.info.get("icc_profile")
         image.draft("RGB", (size, size))
         if image.mode == "CMYK" and icc_profile:
@@ -229,7 +233,12 @@ class PreviewService:
             # so its preview IS the ceiling. The HD tier is rendered at full native
             # resolution via sips (Image I/O demosaic) so the lightbox can show real
             # detail / focus; the thumbnail tier stays a small QuickLook render.
-            if kind == "preview-hd":
+            # Without Image I/O (Windows) both come from the JPEG the camera
+            # embedded, the HD tier at that JPEG's full size.
+            if shutil.which("sips") is None:
+                size = KIND_SIZES[kind] if kind != "preview-hd" else _JPEG_MAX_EDGE
+                rendered = self._atomic(output_path, lambda tmp: render_raw_preview(source_path, tmp, size), validate=validate)
+            elif kind == "preview-hd":
                 rendered = self._render_raw_fullres(source_path, output_path, validate=validate)
             else:
                 rendered = self._render_with_quicklook(
