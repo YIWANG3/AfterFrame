@@ -100,6 +100,7 @@ class PeopleIndexJobTest(unittest.TestCase):
             )
             self.assertEqual(fourth_result["skipped"], 1)
             self.assertEqual(len(worker_log.read_text().splitlines()), 2)
+            connection.close()
 
     def test_paused_job_resumes_from_the_last_committed_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -156,6 +157,7 @@ class PeopleIndexJobTest(unittest.TestCase):
             self.assertEqual(resumed["processed"], 2)
             self.assertEqual(resumed["groups"], 1)
             self.assertEqual(get_job(connection, job["job_id"])["status"], "succeeded")
+            connection.close()
 
     def test_candidates_appear_mid_scan_with_periodic_clustering(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -207,9 +209,10 @@ class PeopleIndexJobTest(unittest.TestCase):
                 )
             self.assertEqual(len(calls), 3, "expected 2 interim clustering passes + 1 final")
             self.assertEqual(result["groups"], 1)
+            connection.close()
 
     def _write_fake_worker(self, root: Path) -> Path:
-        worker = root / "fake-people-worker.py"
+        script = root / "fake-people-worker.py"
         embedding = [1.0 / math.sqrt(512)] * 512
         code = f'''#!{sys.executable}
 import json
@@ -228,9 +231,15 @@ for line in sys.stdin:
         response = {{"id": request["id"], "ok": True, "skipped": False, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": [{{"bounding_box": [0.1, 0.1, 0.5, 0.5], "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.1, 0.3, 0.2, 0.3], "confidence": 1.0, "quality": "standard", "embedding": embedding}}], "error": None}}
     print(json.dumps(response), flush=True)
 '''
-        worker.write_text(code, encoding="utf-8")
-        worker.chmod(worker.stat().st_mode | os.stat(worker).st_mode | 0o111)
-        return worker
+        script.write_text(code, encoding="utf-8")
+        if os.name == "nt":
+            # Windows runs programs, not scripts with a #! line: wrap it in a
+            # .cmd that hands it to this Python, as npm does for its scripts.
+            worker = root / "fake-people-worker.cmd"
+            worker.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+            return worker
+        script.chmod(script.stat().st_mode | 0o111)
+        return script
 
 
 if __name__ == "__main__":

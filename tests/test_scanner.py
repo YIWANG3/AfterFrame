@@ -30,6 +30,7 @@ class ScannerTest(unittest.TestCase):
             self.assertEqual(result["metadata_profile"], "full")
             self.assertEqual(result["commits"], 1)
             self.assertEqual(summary(connection)["raw_assets"], 1)
+            connection.close()
 
     def test_scan_raw_directory_recurses_nested_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -50,6 +51,7 @@ class ScannerTest(unittest.TestCase):
             self.assertEqual(result["indexed"], 1)
             self.assertEqual(result["skipped"], 1)
             self.assertEqual(summary(connection)["raw_assets"], 1)
+            connection.close()
 
     def test_enrich_raw_assets_upgrades_matcher_level_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -87,6 +89,7 @@ class ScannerTest(unittest.TestCase):
             self.assertEqual(after["fingerprint_level"], "head-only")
             self.assertEqual(summary(connection)["raw_fast_only"], 0)
             self.assertEqual(summary(connection)["raw_enriched"], 1)
+            connection.close()
 
 
 if __name__ == "__main__":

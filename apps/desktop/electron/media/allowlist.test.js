@@ -4,14 +4,19 @@ const path = require("node:path");
 const { createMediaAllowlist } = require("./allowlist");
 
 // No disk: realpath maps /tmp → /private/tmp like macOS, everything else is
-// its own canonical form; roots are files unless listed as directories.
+// its own canonical form; roots are files unless listed as directories. Paths
+// arrive resolved (C:\tmp\… on Windows), so the map uses resolved forms.
+const TMP = path.resolve("/tmp");
+const PRIVATE_TMP = path.resolve("/private/tmp");
+const fakeRealpath = (p) => (p === TMP || p.startsWith(TMP + path.sep) ? PRIVATE_TMP + p.slice(TMP.length) : p);
+
 function harness({ catalog = "/tmp/lib.afcatalog", roots = [], dirs = [] } = {}) {
   let loads = 0;
   const gate = createMediaAllowlist({
     getCatalogPath: () => catalog,
     catalogHasDb: () => true,
     loadCatalogRoots: async () => { loads += 1; return roots.map((p) => ({ path: p })); },
-    realpath: (p) => p.replace(/^\/tmp(\/|$)/, "/private/tmp$1"),
+    realpath: fakeRealpath,
     isDirectory: (p) => dirs.includes(p),
   });
   return { gate, loads: () => loads };

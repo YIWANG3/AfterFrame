@@ -53,6 +53,7 @@ class EvaluationTest(unittest.TestCase):
             self.assertEqual(result["summary"]["correct_match"], 1)
             self.assertEqual(result["summary"]["precision"], 1.0)
             self.assertEqual(result["summary"]["recall"], 1.0)
+            connection.close()
 
 
 if __name__ == "__main__":

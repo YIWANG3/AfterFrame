@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -1007,10 +1008,11 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
 
     catalog = ensure_catalog(catalog_path)
     force = force or colors_stale(connection)  # an older extraction: redo them all
-    try:
-        os.nice(5)  # background work: the resident sidecar and the app come first
-    except (AttributeError, OSError):
-        pass
+    if sys.platform != "win32":  # Windows has no nice(); a check mypy follows on every platform
+        try:
+            os.nice(5)  # background work: the resident sidecar and the app come first
+        except OSError:
+            pass
     payload = {"limit": limit, "force": force, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
     try:

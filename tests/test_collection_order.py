@@ -16,14 +16,13 @@ class CollectionOrderTests(unittest.TestCase):
             reorder_collections(connection, [ids[2], ids[0], ids[1]])
             connection.close()
             connection = connect(path)
-            self.addCleanup(connection.close)
             new_id = create_collection(connection, 'A new folder')['collection_id']
             self.assertEqual([row['collection_id'] for row in list_collections(connection)], [ids[2], ids[0], ids[1], new_id])
+            connection.close()
 
     def test_stale_or_duplicate_order_leaves_existing_order_intact(self):
         with tempfile.TemporaryDirectory() as directory:
             connection = connect(Path(directory) / 'catalog.sqlite')
-            self.addCleanup(connection.close)
             init_db(connection)
             ids = [create_collection(connection, name)['collection_id'] for name in ['B', 'A']]
             smart = create_collection(connection, 'Smart', 'smart', '{"filters": {"rating_min": 5}}')['collection_id']
@@ -34,3 +33,4 @@ class CollectionOrderTests(unittest.TestCase):
                 self.assertEqual(list_collections(connection), before)
             reorder_collections(connection, list(reversed(ids)))
             self.assertEqual([row['collection_id'] for row in list_collections(connection) if row['kind'] == 'manual'], list(reversed(ids)))
+            connection.close()

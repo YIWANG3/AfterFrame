@@ -41,6 +41,7 @@ class ReverseLookupTest(unittest.TestCase):
             self.assertEqual(result["deferred_files"], 1)
             self.assertEqual(result["newly_added"], 0)
             self.assertIsNone(get_registry(connection, export))
+            connection.close()
 
     def test_explicit_refresh_defers_incomplete_jpeg_before_metadata_update(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -59,6 +60,7 @@ class ReverseLookupTest(unittest.TestCase):
             self.assertEqual(result["deferred_files"], 1)
             self.assertEqual(result["newly_added"], 0)
             self.assertIsNone(get_registry(connection, export))
+            connection.close()
 
     def test_overwrite_reports_changed_path_and_preserves_asset_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -80,6 +82,7 @@ class ReverseLookupTest(unittest.TestCase):
 
             self.assertEqual(second["changed_paths"], [str(export.resolve())])
             self.assertEqual(second_asset_id, first_asset_id)
+            connection.close()
 
     def test_plain_files_resolve_by_stem_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -119,6 +122,7 @@ class ReverseLookupTest(unittest.TestCase):
 
             candidates = json.loads(registry["candidate_json"])
             self.assertEqual(candidates[0]["stem_key"], "b0023524")
+            connection.close()
 
     def test_plain_files_without_stem_match_stay_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -142,6 +146,7 @@ class ReverseLookupTest(unittest.TestCase):
 
             self.assertEqual(decision.status, "unmatched")
             self.assertIsNone(decision.raw_asset_id)
+            connection.close()
 
     def test_batch_resolve_reports_status_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -172,6 +177,7 @@ class ReverseLookupTest(unittest.TestCase):
             self.assertEqual(result["processed"], 2)
             self.assertEqual(result["status_counts"]["pending_confirmation"], 1)
             self.assertEqual(result["status_counts"]["unmatched"], 1)
+            connection.close()
 
     def test_img_sequence_without_matching_number_stays_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -203,6 +209,7 @@ class ReverseLookupTest(unittest.TestCase):
             self.assertEqual(decision.status, "unmatched")
             self.assertIsNone(decision.raw_asset_id)
             self.assertEqual(load_raw_candidates_by_camera_token(connection, "img-4274"), [])
+            connection.close()
 
     def test_export_path_reuses_existing_asset_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -230,6 +237,7 @@ class ReverseLookupTest(unittest.TestCase):
 
             self.assertEqual(reused_asset_id, asset_id)
             self.assertEqual(summary(connection)["image_assets"], 1)
+            connection.close()
 
     def test_cleanup_orphan_image_assets_migrates_preview(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -296,6 +304,7 @@ class ReverseLookupTest(unittest.TestCase):
             ).fetchone()
             self.assertIsNotNone(preview_row)
             self.assertEqual(preview_row["relative_path"], "previews/orphan.jpg")
+            connection.close()
 
 
 if __name__ == "__main__":
