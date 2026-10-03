@@ -51,6 +51,7 @@ const { registerMediaProtocol } = require("./media/protocol");
 const { createMediaHttpServer } = require("./media/httpServer");
 const { createAppShell } = require("./appShell");
 const { desktopCapabilities } = require("./capabilities");
+const { claimSingleInstance, launchPaths } = require("./singleInstance");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
 
@@ -60,6 +61,24 @@ const nativeDragIpc = require("./ipc/nativeDrag");
 if (process.env.AFTERFRAME_USER_DATA) {
   app.setPath("userData", process.env.AFTERFRAME_USER_DATA);
 }
+
+// One instance per userData on Windows and Linux (./singleInstance.js; the
+// lock lives in userData, so it's taken after the override above). A later
+// launch hands its files to this one, which comes forward and imports them;
+// the later launch quits before anything starts (see whenReady).
+const isFirstInstance = claimSingleInstance({
+  app,
+  onSecondInstance: (paths) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+    }
+    for (const file of paths) appShell.queueExternalImport(file);
+  },
+});
+if (!isFirstInstance) app.quit();
 
 // Enable the platform HEVC decoder (macOS VideoToolbox) so <video> can play
 // HEVC/hvc1 clips (iPhone / 剪映 exports). Must run before app ready, else the
@@ -718,6 +737,7 @@ app.on("open-file", (event, filePath) => {
 });
 
 app.whenReady().then(async () => {
+  if (!isFirstInstance) return;
   // Baseline allowlist entries that don't depend on the catalog. The whole
   // userData dir is app-owned (settings, sticker library, depth-cache …) —
   // allowing only the afterframe/ subdir broke depth-field loading.
@@ -742,6 +762,13 @@ app.whenReady().then(async () => {
   }
   appShell.installMenu();
   appShell.createWindow();
+  // Files this launch was opened with: on Windows and Linux they arrive as
+  // arguments (dropped on the .exe, "Open with"); macOS sends open-file.
+  if (process.platform !== "darwin") {
+    for (const file of launchPaths(process.argv, { defaultApp: Boolean(process.defaultApp) })) {
+      appShell.queueExternalImport(file);
+    }
+  }
   try { watcherApi.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
 
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
