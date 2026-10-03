@@ -23,15 +23,21 @@ else
   echo "build-native: Xcode not found, falling back to default xcrun toolchain"
 fi
 
-# helpers to compile: name -> source. (depth/sticker still run via interpreter
-# today; add them here when migrating those to precompiled binaries.)
+# helpers to compile: name -> source -> oldest macOS it runs on. The target is
+# required: without it swiftc builds for the build machine's macOS, and 0.5.5
+# shipped video-tool and people-worker that refused to start below macOS 26.
+# Each is the oldest the source compiles for; newer APIs inside are behind
+# #available (video-tool's HEVC transcode needs 15, extract-sticker's Vision
+# request 14).
 build() {
-  local name="$1" src="$2"
-  echo "build-native: compiling $src -> $OUT_DIR/$name"
-  xcrun -sdk macosx swiftc -O "$NATIVE_DIR/$src" -o "$OUT_DIR/$name"
+  local name="$1" src="$2" min_macos="$3"
+  echo "build-native: compiling $src -> $OUT_DIR/$name (macOS $min_macos+)"
+  xcrun -sdk macosx swiftc -O -target "arm64-apple-macos$min_macos" "$NATIVE_DIR/$src" -o "$OUT_DIR/$name"
 }
 
-build video-tool video-tool.swift
-build people-worker people-worker.swift
+build video-tool video-tool.swift 13.0
+build people-worker people-worker.swift 12.0
+build compute-depth compute-depth.swift 12.0
+build extract-sticker extract-sticker.swift 14.0
 
 echo "build-native: done"

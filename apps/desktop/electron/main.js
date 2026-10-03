@@ -21,7 +21,6 @@ const crypto = require("node:crypto");
 const sharp = require("sharp");
 
 const { makeT } = require("./i18n");
-const { findSwiftRuntime } = require("./ipc/swiftRuntime");
 const stickerIpc = require("./ipc/stickers");
 const depthIpc = require("./ipc/depth");
 const collectionsIpc = require("./ipc/collections");
@@ -692,12 +691,10 @@ depthIpc.register({
   app, ipcMain, dialog,
   isPackaged,
   readAppSettings, updateAppSettings,
-  findSwiftRuntime,
 });
 stickerIpc.register({
   app, ipcMain,
   isPackaged,
-  findSwiftRuntime,
   addAllowedMediaDir,
 });
 
