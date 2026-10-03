@@ -18,7 +18,7 @@ const TINY_JPEG = Buffer.from(
 );
 
 // Files per import: the job has to outlast the dock's first poll (see below).
-const IMPORT_SIZE = 5000;
+const IMPORT_SIZE = 3000;
 
 function makeImportDir(prefix, count) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${prefix}-`));
@@ -64,9 +64,9 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
   test.setTimeout(120_000);
   // Big enough that the job is still running when the dock's first poll
   // lands (about 2 s in). Previews no longer spawn a process per file, so
-  // tiny files import at about 1.6 ms each: 300, the size this once used,
-  // finished 0.6 s after the card showed locally and before it on CI. 5000
-  // run about 10 s locally.
+  // tiny files import at about 1.6 ms each locally and about 5 ms on CI: 300,
+  // the size this once used, finished 0.6 s after the card showed locally
+  // and before it on CI. 3000 run about 6.5 s locally and 15 s on CI.
   const dir = makeImportDir("dock", IMPORT_SIZE);
   try {
     // Fire and don't await — import_directory blocks until the job ends
@@ -83,7 +83,15 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
       return { background: css.backgroundColor, radius: css.borderRadius, shadow: css.boxShadow };
     });
 
-    const result = await importPromise;
+    // import_directory returns after 25 s even if the job is still running
+    // (the CI VM can take that long); then follow the job to its end.
+    let result = await importPromise;
+    if (result.status === "running") {
+      await expect(async () => {
+        result = await callTool("get_job_status", { job_id: result.job_id });
+        expect(result.status).not.toBe("running");
+      }).toPass({ timeout: 60_000 });
+    }
     expect(result.status).toBe("succeeded");
 
     // Dock self-dismisses once nothing is running
