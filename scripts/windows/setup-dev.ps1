@@ -108,6 +108,9 @@ if (-not (Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction Silentl
   New-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -DisplayName "OpenSSH Server (sshd)" `
     -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 | Out-Null
 }
+# On Windows 10/11 the rule the capability creates covers only the Private
+# profile, and a cloud VM's network is Public: without this SSH stays blocked.
+Set-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -Profile Any -Enabled True
 
 # ---- 4. who may connect ------------------------------------------------------
 Step "Restrict SSH and Remote Desktop"
