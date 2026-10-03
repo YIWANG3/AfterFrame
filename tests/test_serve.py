@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,10 +19,11 @@ class ServeProtocolTest(unittest.TestCase):
             catalog = Path(temp_dir) / "demo.afcatalog"
             env = {**os.environ, "PYTHONPATH": str(SIDECAR_SRC)}
             proc = subprocess.Popen(
-                ["python3", "-m", "media_workspace", "--catalog", str(catalog), "serve"],
+                [sys.executable, "-m", "media_workspace", "--catalog", str(catalog), "serve"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
                 env=env,
             )
             try:
@@ -76,7 +78,7 @@ class ServeProtocolTest(unittest.TestCase):
             catalog = Path(temp_dir) / "demo.afcatalog"
             env = {**os.environ, "PYTHONPATH": str(SIDECAR_SRC)}
             proc = subprocess.Popen(
-                ["python3", "-m", "media_workspace", "--catalog", str(catalog), "serve"],
+                [sys.executable, "-m", "media_workspace", "--catalog", str(catalog), "serve"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 text=True,
@@ -99,6 +101,42 @@ class ServeProtocolTest(unittest.TestCase):
                 self.assertEqual(proc.wait(timeout=10), 0)
                 proc.stdout.close()
 
+
+    def test_non_ascii_survives_a_legacy_code_page(self) -> None:
+        # Windows pipes default to the ANSI code page. Under cp1252 the
+        # request below could not even be read: 坡 is E5 9D A1 in UTF-8 and
+        # 0x9D is undefined in cp1252, so the serve loop died on
+        # UnicodeDecodeError (山坡上的麋鹿.jpg is an ordinary file name). Once
+        # read, writing real Chinese back raised UnicodeEncodeError. The
+        # sidecar now switches its own streams to UTF-8.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog = Path(temp_dir) / "demo.afcatalog"
+            env = {**os.environ, "PYTHONPATH": str(SIDECAR_SRC), "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+            proc = subprocess.Popen(
+                [sys.executable, "-m", "media_workspace", "--catalog", str(catalog), "serve"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                env=env,
+            )
+            try:
+                self.assertTrue(json.loads(proc.stdout.readline())["ready"])
+
+                def call(request_id, argv):
+                    proc.stdin.write(json.dumps({"id": request_id, "argv": argv}, ensure_ascii=False) + "\n")
+                    proc.stdin.flush()
+                    return json.loads(proc.stdout.readline())
+
+                bad = call(1, ["山坡-命令"])
+                self.assertNotEqual(bad["code"], 0)
+                self.assertIn("山坡-命令", bad["error"])
+                # Still serving after writing it.
+                self.assertEqual(call(2, ["summary", "--json"])["code"], 0)
+            finally:
+                proc.stdin.close()
+                self.assertEqual(proc.wait(timeout=10), 0)
+                proc.stdout.close()
 
 if __name__ == "__main__":
     unittest.main()

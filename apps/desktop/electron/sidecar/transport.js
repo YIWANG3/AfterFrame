@@ -8,7 +8,22 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 
-function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath, getCatalogPath, spawnProcess = spawn }) {
+// Every sidecar process: UTF-8 on its pipes whatever the system code page
+// (Windows pipes default to the ANSI one, cp1252 or GBK, and Chinese text
+// either garbles or crashes the process with UnicodeEncodeError; the sidecar
+// also reconfigures its streams, for builds that ignore PYTHON* variables),
+// and no console window on Windows.
+const UTF8_ENV = { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
+const HIDDEN = { windowsHide: true };
+
+// The dev sidecar's interpreter. Windows has no python3 of its own: the name
+// resolves to the Microsoft Store stub, so use python there.
+// AFTERFRAME_PYTHON overrides it (a venv, a specific version).
+function devPython(platform, env = process.env) {
+  return env.AFTERFRAME_PYTHON || (platform === "win32" ? "python" : "python3");
+}
+
+function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath, getCatalogPath, spawnProcess = spawn, platform = process.platform }) {
   const processes = new Set();
   const pausedCatalogs = new Set();
   const catalogGenerations = new Map();
@@ -102,7 +117,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     let spawned;
     try {
       const { cmd, args, env } = sidecarCommand(["serve"]);
-      spawned = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env }), getCatalogPath());
+      spawned = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env, ...HIDDEN }), getCatalogPath());
     } catch (err) {
       console.warn("[sidecar:resident] failed to start:", err.message);
       return null;
@@ -234,7 +249,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       const { cmd, args, env } = sidecarCommand(sanitized);
       console.log("[sidecar:async]", cmd, args.join(" "));
       const t0 = Date.now();
-      const child = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv } }), getCatalogPath());
+      const child = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, ...HIDDEN }), getCatalogPath());
 
       const timer = setTimeout(() => {
         console.error("[sidecar:async] TIMEOUT after", timeoutMs, "ms — killing child");
@@ -268,9 +283,9 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     return payload ? JSON.parse(payload) : null;
   }
 
-  // Sidecar: packaged = standalone binary, dev = python3 -m media_workspace
+  // Sidecar: packaged = standalone binary, dev = python -m media_workspace
   const sidecarBin = isPackaged
-    ? path.join(resourcesPath, "sidecar", "media-workspace", "media-workspace")
+    ? path.join(resourcesPath, "sidecar", "media-workspace", platform === "win32" ? "media-workspace.exe" : "media-workspace")
     : null;
 
   // Bundled AVFoundation video helper — the sidecar shells out to it for video
@@ -296,7 +311,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       return {
         cmd: sidecarBin,
         args: ["--catalog", getCatalogPath(), ...command],
-        env: { ...process.env, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
+        env: { ...process.env, ...UTF8_ENV, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
       };
     }
     // Coverage runs (npm run e2e:coverage) wrap the dev sidecar in
@@ -313,16 +328,16 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       : [];
     const pythonPath = [sidecarSrc, process.env.AFTERFRAME_SIDECAR_COVERAGE_PYLIB].filter(Boolean).join(path.delimiter);
     return {
-      cmd: "python3",
+      cmd: devPython(platform),
       args: [...coverageArgs, "-m", "media_workspace", "--catalog", getCatalogPath(), ...command],
-      env: { ...process.env, PYTHONPATH: pythonPath, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
+      env: { ...process.env, ...UTF8_ENV, PYTHONPATH: pythonPath, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
     };
   }
 
   function spawnDetachedSidecar(command) {
     const { sanitized, secretEnv } = extractSecretEnv(command);
     const { cmd, args, env } = sidecarCommand(sanitized);
-    return trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore" }), getCatalogPath(), true);
+    return trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore", ...HIDDEN }), getCatalogPath(), true);
   }
 
   // `command` is always the product of sidecar/jobArgv.js (the one module
@@ -371,4 +386,4 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   };
 }
 
-module.exports = { createSidecarTransport };
+module.exports = { createSidecarTransport, devPython };

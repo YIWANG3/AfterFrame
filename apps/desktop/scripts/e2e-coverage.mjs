@@ -42,6 +42,9 @@ const MERGED = path.join(COV, "merged");
 const REPORT = path.join(COV, "report");
 const PYLIB = path.join(DESKTOP, ".coverage-tools", "pylib");
 const SIDECAR_SRC = path.join(REPO, "services", "sidecar", "src");
+// Same interpreter choice as the app's dev sidecar (electron/sidecar/transport.js):
+// python3 on Windows is the Microsoft Store stub.
+const PYTHON = process.env.AFTERFRAME_PYTHON || (process.platform === "win32" ? "python" : "python3");
 
 const args = process.argv.slice(2);
 const reportOnly = args.includes("--report-only");
@@ -56,10 +59,10 @@ function run(cmd, cmdArgs, opts = {}) {
 }
 
 function ensurePyCoverage() {
-  const probe = spawnSync("python3", ["-c", "import coverage"], { env: { ...process.env, PYTHONPATH: PYLIB }, stdio: "ignore" });
+  const probe = spawnSync(PYTHON, ["-c", "import coverage"], { env: { ...process.env, PYTHONPATH: PYLIB }, stdio: "ignore" });
   if (probe.status === 0) return true;
   console.log(`[coverage] installing Python coverage into ${path.relative(DESKTOP, PYLIB)} (no system Python changes)`);
-  return run("python3", ["-m", "pip", "install", "--quiet", "--target", PYLIB, "coverage"]) === 0;
+  return run(PYTHON, ["-m", "pip", "install", "--quiet", "--target", PYLIB, "coverage"]) === 0;
 }
 
 function jsonFilesIn(dir) {
@@ -128,7 +131,7 @@ if (!reportOnly) {
 
     console.log("[coverage] unit: sidecar (unittest)");
     const unitRc = sidecarRc(path.join(UNIT, "sidecar"));
-    if (run("python3", ["-m", "coverage", "run", "--parallel-mode",
+    if (run(PYTHON, ["-m", "coverage", "run", "--parallel-mode",
       "--rcfile", unitRc, "--data-file", path.join(UNIT, "sidecar", ".coverage"),
       "--source", "media_workspace",
       "-m", "unittest", "discover", "-s", "tests",
@@ -184,10 +187,10 @@ function sidecarReport(dirs, dataFile, outDir) {
   const parts = dirs.filter((d) => fs.existsSync(d) && fs.readdirSync(d).some((f) => f.startsWith(".coverage.")));
   if (!parts.length && !fs.existsSync(dataFile)) return null;
   fs.mkdirSync(path.dirname(dataFile), { recursive: true });
-  if (parts.length) run("python3", ["-m", "coverage", "combine", "--quiet", "--data-file", dataFile, ...parts], { env: pyEnv });
+  if (parts.length) run(PYTHON, ["-m", "coverage", "combine", "--quiet", "--data-file", dataFile, ...parts], { env: pyEnv });
   fs.mkdirSync(outDir, { recursive: true });
-  run("python3", ["-m", "coverage", "html", "--quiet", "--data-file", dataFile, "-d", outDir], { env: pyEnv });
-  run("python3", ["-m", "coverage", "json", "--quiet", "--data-file", dataFile, "-o", path.join(outDir, "coverage.json")], { env: pyEnv });
+  run(PYTHON, ["-m", "coverage", "html", "--quiet", "--data-file", dataFile, "-d", outDir], { env: pyEnv });
+  run(PYTHON, ["-m", "coverage", "json", "--quiet", "--data-file", dataFile, "-o", path.join(outDir, "coverage.json")], { env: pyEnv });
   const j = JSON.parse(fs.readFileSync(path.join(outDir, "coverage.json"), "utf8"));
   return { lines: { pct: Number(j.totals.percent_covered.toFixed(2)), covered: j.totals.covered_lines, total: j.totals.num_statements } };
 }
