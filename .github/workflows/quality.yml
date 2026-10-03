@@ -144,3 +144,68 @@ jobs:
           path: apps/desktop/e2e/.artifacts/
           include-hidden-files: true
           retention-days: 7
+
+  windows:
+    # The unit suites, lint and the build on Windows (docs/windows-support-plan.md).
+    # Informational for now: it reports and doesn't gate merges. Each check
+    # runs even when one before it failed, so one red suite doesn't hide the
+    # others. No Electron E2E here: it needs Windows engines for the
+    # macOS-only helpers first.
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      # The runner converts checkouts to CRLF; keep the repository's LF
+      # endings, as scripts/windows/setup-dev.ps1 does on a dev machine.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/sidecar/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install Python sidecar
+        run: python -m pip install -e "services/sidecar[dev]"
+      # The unit suites run on Node and jsdom, not Electron.
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      # The root package.json scripts are POSIX shell (VAR=… python3 …), so
+      # the steps below call each suite directly.
+      - name: Lint desktop
+        if: ${{ !cancelled() }}
+        run: npm run lint --prefix apps/desktop
+      - name: Lint sidecar
+        if: ${{ !cancelled() }}
+        working-directory: services/sidecar
+        run: |
+          python -m ruff check . ../../tests
+          python -m mypy --config-file pyproject.toml
+      - name: Build renderer
+        if: ${{ !cancelled() }}
+        run: npm run build --prefix apps/desktop
+      - name: Renderer tests
+        if: ${{ !cancelled() }}
+        run: npm run test:renderer --prefix apps/desktop
+      - name: Electron main tests
+        if: ${{ !cancelled() }}
+        run: npm run test:electron --prefix apps/desktop
+      - name: Sidecar tests
+        if: ${{ !cancelled() }}
+        env:
+          PYTHONPATH: services/sidecar/src
+        run: python -m unittest discover -s services/sidecar/tests
+      - name: Repository Python tests
+        if: ${{ !cancelled() }}
+        env:
+          PYTHONPATH: services/sidecar/src
+        run: python -m unittest discover -s tests
