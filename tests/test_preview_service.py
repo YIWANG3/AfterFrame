@@ -161,9 +161,10 @@ class PillowPreviewTest(unittest.TestCase):
     def render(self, source: Path, size: int = 512) -> Image.Image:
         target = source.with_name(f"preview-{source.stem}.jpg")
         render_pillow_preview(source, target, size)
-        image = Image.open(target)
-        image.load()
-        return image
+        # A copy (info and EXIF included) so the file is closed before the
+        # temp dir goes: Windows can't delete an open file.
+        with Image.open(target) as image:
+            return image.copy()
 
     def test_orientation_tag_and_icc_profile_carry_over_like_sips(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -198,9 +199,10 @@ class PillowPreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "heic-preview.jpg"
             render_pillow_preview(HEIC_FIXTURE, target, 256)
-            preview = Image.open(target)
-            self.assertEqual(max(preview.size), 256)
-            self.assertEqual(preview.format, "JPEG")
+            # Closed before the temp dir goes: Windows can't delete an open file.
+            with Image.open(target) as preview:
+                self.assertEqual(max(preview.size), 256)
+                self.assertEqual(preview.format, "JPEG")
 
     def test_sixteen_bit_greyscale_is_scaled_not_clipped(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
