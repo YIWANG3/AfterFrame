@@ -167,7 +167,7 @@ export const IPC_METHODS = [
   ["stickerToggleStar", "workspace:sticker-toggle-star", 1],
   ["stickerCleanupScratch", "workspace:sticker-cleanup-scratch", 1],
   // ── files & external ──
-  ["pickDirectories", "workspace:pick-directories", 1],
+  ["pickDirectories", "workspace:pick-directories", 2],
   ["createCatalog", "workspace:create-catalog", 0],
   ["pickCatalog", "workspace:pick-catalog", 0],
   ["openSampleCatalog", "workspace:open-sample-catalog", 0],

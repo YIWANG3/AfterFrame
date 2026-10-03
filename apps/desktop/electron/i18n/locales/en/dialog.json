@@ -1,4 +1,10 @@
 {
   "relinkTitle": "Relink to file",
-  "relinkMessage": "Choose the moved or renamed original file"
+  "relinkMessage": "Choose the moved or renamed original file",
+  "importTitle": "Import files or folders",
+  "importFilesTitle": "Import files",
+  "importFoldersTitle": "Import folders",
+  "addRawTitle": "Add raw source files or folders",
+  "addRawFilesTitle": "Add raw source files",
+  "addRawFoldersTitle": "Add raw source folders"
 }

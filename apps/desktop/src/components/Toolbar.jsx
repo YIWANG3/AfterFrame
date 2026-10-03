@@ -12,6 +12,7 @@ import {
   Grid2x2,
   LayoutDashboard,
   Columns2,
+  FolderInput,
   FolderPlus,
   ImagePlus,
   Play,
@@ -33,13 +34,22 @@ const DISPLAY_MODES = [
 
 const LIBRARY_SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
+// Windows and Linux dialogs can't pick files and folders at once, so Import
+// is two entries there (electron/importDialog.js). Not on the web: no platform.
+const SPLIT_IMPORT = Boolean(api.platform) && api.platform !== "darwin";
+
 // `cap` marks entries a bridge may declare unavailable (api.can) — the web
 // bridge hides RAW sources, sidecar tasks and AI annotation.
 const MENU_SECTIONS = [
   {
     key: "library",
     items: [
-      { key: "import", icon: ImagePlus, action: "processed" },
+      ...(SPLIT_IMPORT
+        ? [
+          { key: "importFiles", icon: ImagePlus, action: "processedFiles" },
+          { key: "importFolder", icon: FolderInput, action: "processedFolders" },
+        ]
+        : [{ key: "import", icon: ImagePlus, action: "processed" }]),
       { key: "addRawSources", icon: FolderPlus, action: "sources", cap: "rawSources" },
     ],
   },
@@ -250,6 +260,8 @@ export default function Toolbar({
   }, [menuOpen]);
   const actionMap = {
     processed: onAddProcessed,
+    processedFiles: () => onAddProcessed?.("files"),
+    processedFolders: () => onAddProcessed?.("folders"),
     sources: onAddSources,
     import: onRunImport,
     enrichment: onRunEnrichment,

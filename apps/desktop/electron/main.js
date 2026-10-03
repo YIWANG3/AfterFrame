@@ -52,6 +52,7 @@ const { createMediaHttpServer } = require("./media/httpServer");
 const { createAppShell } = require("./appShell");
 const { desktopCapabilities } = require("./capabilities");
 const { claimSingleInstance, launchPaths } = require("./singleInstance");
+const { importDialogOptions } = require("./importDialog");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
 
@@ -402,11 +403,13 @@ ipcMain.handle("workspace:roots", async () => {
   }
 });
 
-ipcMain.handle("workspace:pick-directories", async (_event, kind) => {
-  const result = await dialog.showOpenDialog({
-    title: kind === "image" ? "Import files or folders" : "Add raw source files or folders",
-    properties: ["openFile", "openDirectory", "multiSelections"],
-  });
+// pick: "files" | "folders" from Import Files… / Import Folder… on Windows and
+// Linux, whose dialogs can't take both (./importDialog.js). There the dialog
+// is modal to the window; macOS keeps its free-standing panel.
+ipcMain.handle("workspace:pick-directories", async (event, kind, pick) => {
+  const options = importDialogOptions({ platform: process.platform, kind, pick, t: makeT(currentLocale) });
+  const parent = process.platform === "darwin" ? null : BrowserWindow.fromWebContents(event.sender);
+  const result = await (parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options));
   return result.canceled ? [] : result.filePaths;
 });
 

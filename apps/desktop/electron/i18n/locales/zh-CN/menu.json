@@ -26,6 +26,8 @@
   "newCatalog": "新建图库",
   "openCatalog": "打开图库…",
   "import": "导入",
+  "importFiles": "导入文件…",
+  "importFolder": "导入文件夹…",
   "addRawSources": "添加 RAW 源",
   "runImport": "运行导入流程",
   "runEnrichment": "运行元数据补全",

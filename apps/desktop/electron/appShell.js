@@ -12,6 +12,7 @@
 //   platform              process.platform (a parameter so tests can pick)
 
 const { windowChromeOptions, WIN_SYMBOL_COLOR } = require("./windowChrome");
+const { splitsImport } = require("./importDialog");
 
 // Menu roles that only mean something on macOS; elsewhere they are omitted.
 const MAC_ONLY_ROLES = new Set(["services", "hide", "hideOthers", "unhide", "zoom", "front"]);
@@ -168,7 +169,12 @@ function createAppShell({
           { label: t("menu.newCatalog"), accelerator: "CmdOrCtrl+N", click: () => sendMenuAction("catalog:new") },
           { label: t("menu.openCatalog"), accelerator: "CmdOrCtrl+O", click: () => sendMenuAction("catalog:open") },
           { type: "separator" },
-          { label: t("menu.import"), click: () => sendMenuAction("import:pick-export") },
+          ...(splitsImport(platform)
+            ? [
+              { label: t("menu.importFiles"), click: () => sendMenuAction("import:pick-export-files") },
+              { label: t("menu.importFolder"), click: () => sendMenuAction("import:pick-export-folders") },
+            ]
+            : [{ label: t("menu.import"), click: () => sendMenuAction("import:pick-export") }]),
           { label: t("menu.addRawSources"), click: () => sendMenuAction("import:pick-source") },
           { type: "separator" },
           { label: t("menu.runImport"), accelerator: "CmdOrCtrl+I", click: () => sendMenuAction("import:start") },
