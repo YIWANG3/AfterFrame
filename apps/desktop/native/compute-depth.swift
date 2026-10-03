@@ -12,15 +12,34 @@ import AppKit
 
 func usage() -> Never {
     FileHandle.standardError.write(Data(
-        "Usage: compute-depth <input-image> <output-png> [model-path]\n".utf8
+        "Usage: compute-depth <input-image> <output-png> [model-path] [--compiled-model <path.mlmodelc>]\n".utf8
     ))
     exit(64)
 }
 
-guard CommandLine.arguments.count >= 3 else { usage() }
-let inputPath = CommandLine.arguments[1]
-let outputPath = CommandLine.arguments[2]
-let modelArg: String? = CommandLine.arguments.count >= 4 ? CommandLine.arguments[3] : nil
+// --compiled-model: where to keep the compiled model between runs. Core ML
+// caches the Neural Engine build of a compiled model by its location, so
+// compiling into a fresh temp directory every run (as this tool once did)
+// paid that build — about 16 s on an M-series Mac — for every photo.
+var positional: [String] = []
+var compiledModelArg: String?
+var argIndex = 1
+while argIndex < CommandLine.arguments.count {
+    let arg = CommandLine.arguments[argIndex]
+    if arg == "--compiled-model" {
+        guard argIndex + 1 < CommandLine.arguments.count else { usage() }
+        compiledModelArg = CommandLine.arguments[argIndex + 1]
+        argIndex += 2
+        continue
+    }
+    positional.append(arg)
+    argIndex += 1
+}
+
+guard positional.count >= 2 else { usage() }
+let inputPath = positional[0]
+let outputPath = positional[1]
+let modelArg: String? = positional.count >= 3 ? positional[2] : nil
 
 guard FileManager.default.fileExists(atPath: inputPath) else {
     FileHandle.standardError.write(Data("Input not found: \(inputPath)\n".utf8))
@@ -50,9 +69,37 @@ guard FileManager.default.fileExists(atPath: modelURL.path) else {
 
 // MARK: - Load model + run inference
 
+// The compiled model to load: the model itself when it already is one,
+// otherwise the copy kept at --compiled-model (compiled there on first use),
+// otherwise a throwaway compile.
+func compiledModelURL() throws -> URL {
+    if modelURL.pathExtension == "mlmodelc" { return modelURL }
+    guard let cachePath = compiledModelArg else { return try MLModel.compileModel(at: modelURL) }
+    let fm = FileManager.default
+    let cacheURL = URL(fileURLWithPath: cachePath)
+    if fm.fileExists(atPath: cacheURL.path) { return cacheURL }
+    let compiled = try MLModel.compileModel(at: modelURL)
+    try fm.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    // Move next to the cache first (a cross-volume move is a copy that can be
+    // cut short), then rename into place, so the cache path never holds a
+    // partial model.
+    let staging = cacheURL.deletingLastPathComponent()
+        .appendingPathComponent(".\(cacheURL.lastPathComponent).\(ProcessInfo.processInfo.processIdentifier)")
+    try? fm.removeItem(at: staging)
+    try fm.moveItem(at: compiled, to: staging)
+    do {
+        try fm.moveItem(at: staging, to: cacheURL)
+    } catch {
+        // Another run put it there first; use theirs.
+        try? fm.removeItem(at: staging)
+        if !fm.fileExists(atPath: cacheURL.path) { throw error }
+    }
+    return cacheURL
+}
+
 let visionModel: VNCoreMLModel
 do {
-    let compiledURL = try MLModel.compileModel(at: modelURL)
+    let compiledURL = try compiledModelURL()
     let cfg = MLModelConfiguration()
     cfg.computeUnits = .all
     let mlModel = try MLModel(contentsOf: compiledURL, configuration: cfg)

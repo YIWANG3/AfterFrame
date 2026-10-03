@@ -1,16 +1,19 @@
 // Scene depth (Depth Anything V2) — IPC handlers for on-device depth inference.
 // Output PNGs are cached per (source file fingerprint + active model) so the
-// renderer rarely re-runs swift on the same image.
+// renderer rarely re-runs the depth tool on the same image.
 
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
+const { createCompiledModelCache } = require("./compiledModelCache");
 
-function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateAppSettings, findSwiftRuntime }) {
-  const depthScriptPath = isPackaged
-    ? path.join(process.resourcesPath, "native", "compute-depth.swift")
-    : path.join(__dirname, "..", "..", "native", "compute-depth.swift");
+function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateAppSettings }) {
+  // Precompiled by scripts/build-native.sh (it once ran as a `swift` script,
+  // which needs Xcode or the Command Line Tools on the user's Mac).
+  const depthToolPath = isPackaged
+    ? path.join(process.resourcesPath, "native", "bin", "compute-depth")
+    : path.join(__dirname, "..", "..", "native", "bin", "compute-depth");
 
   const bundledDepthModelPath = isPackaged
     ? path.join(process.resourcesPath, "native", "DepthAnythingV2SmallF16.mlpackage")
@@ -28,6 +31,11 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
   // automatically.
   const depthCacheDir = path.join(app.getPath("userData"), "depth-cache");
   try { fs.mkdirSync(depthCacheDir, { recursive: true }); } catch (_) {}
+
+  const compiledModels = createCompiledModelCache({
+    dir: path.join(app.getPath("userData"), "depth-models"),
+    appVersion: app.getVersion(),
+  });
 
   function depthCachePath(sourcePath, modelPath) {
     try {
@@ -64,15 +72,18 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
     }
     if (checkOnly) return null;
 
-    if (!fs.existsSync(depthScriptPath)) {
-      throw new Error(`Depth script missing at ${depthScriptPath}`);
+    if (!fs.existsSync(depthToolPath)) {
+      throw new Error(`Depth tool missing at ${depthToolPath}`);
     }
-    const runtime = findSwiftRuntime();
-    const env = { ...process.env };
-    if (runtime.developerDir) env.DEVELOPER_DIR = runtime.developerDir;
+    const args = [sourcePath, outputPath, modelPath];
+    const compiledModelPath = compiledModels.pathFor(modelPath);
+    if (compiledModelPath) {
+      if (!fs.existsSync(compiledModelPath)) compiledModels.pruneExcept(compiledModelPath);
+      args.push("--compiled-model", compiledModelPath);
+    }
 
     return await new Promise((resolve, reject) => {
-      const child = spawn(runtime.binary, [depthScriptPath, sourcePath, outputPath, modelPath], { env });
+      const child = spawn(depthToolPath, args);
       let stdout = "";
       let stderr = "";
       child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });

@@ -1,9 +1,9 @@
-// Scene depth (Depth Anything V2) — exercises the swift CLI + useSceneDepth
-// hook + IPC depth handlers. Gated on macOS + Xcode toolchain because the
-// model needs swift to run.
+// Scene depth (Depth Anything V2) — exercises the compute-depth tool +
+// useSceneDepth hook + IPC depth handlers. Gated on macOS because the model
+// runs on Core ML; the tool itself comes from `npm run build:native` (a
+// missing build fails here rather than skipping).
 
 const { test, expect } = require("@playwright/test");
-const fs = require("node:fs");
 const path = require("node:path");
 const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
@@ -13,9 +13,7 @@ const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
 // gradient gave the inference nothing real to estimate).
 const DEPTH_FIXTURE = REAL_IMAGE_PATHS.find((p) => path.basename(p) === "0Y1A6707-9.jpg");
 
-const isMacOSWithXcode = () =>
-  process.platform === "darwin" &&
-  fs.existsSync("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift");
+const onMacOS = () => process.platform === "darwin";
 
 test.describe("Scene depth", () => {
   let app, window, userDataDir;
@@ -42,7 +40,7 @@ test.describe("Scene depth", () => {
   });
 
   test("clicking Generate runs depth inference and shows 'Depth ready'", async ({}, testInfo) => {
-    test.skip(!isMacOSWithXcode(), "Depth inference needs macOS + Xcode toolchain");
+    test.skip(!onMacOS(), "Depth inference needs macOS (Core ML)");
 
     await window.getByRole("button", { name: /Generate scene depth/i }).click();
     // First-run model load on Apple Silicon takes ~10-30s; allow 90s to be safe
@@ -52,7 +50,7 @@ test.describe("Scene depth", () => {
   });
 
   test("show-depth-map toggle becomes available after generation", async ({}, testInfo) => {
-    test.skip(!isMacOSWithXcode(), "Depth-dependent UI");
+    test.skip(!onMacOS(), "Depth-dependent UI");
     // 'Show depth map' label is unique to the post-generation state
     await expect(window.getByText(/Show depth map/i)).toBeVisible();
   });

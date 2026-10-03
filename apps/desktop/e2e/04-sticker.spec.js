@@ -1,17 +1,17 @@
 // Sticker tool functional tests — exercises the Create new flow end-to-end.
-// On macOS 14+ with Xcode installed, the swift CLI runs for real and we
-// verify a sticker lands in the library. On other systems we skip gracefully.
+// On macOS 14+ the extract-sticker tool runs for real and we verify a
+// sticker lands in the library. On other systems we skip gracefully. The tool
+// comes from `npm run build:native`; a missing build fails rather than skips.
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
+const os = require("node:os");
 const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
-const isMacOSWithXcode = () => {
-  return process.platform === "darwin" &&
-    fs.existsSync("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift");
-};
+// macOS 14 (Darwin 23) is where Vision's subject lifting starts.
+const onMacOS14 = () => process.platform === "darwin" && Number(os.release().split(".")[0]) >= 23;
 
 test.describe("Sticker tool", () => {
   let app, window, userDataDir, fixturePath;
@@ -47,7 +47,7 @@ test.describe("Sticker tool", () => {
   });
 
   test("Detect subjects → either instance found or 'No subject' toast", async ({ }, testInfo) => {
-    test.skip(!isMacOSWithXcode(), "Sticker extraction needs macOS 14+ with Xcode toolchain");
+    test.skip(!onMacOS14(), "Sticker extraction needs macOS 14+");
     // The first Vision request on a cold CI runner is slow: this passed at
     // 21.7 s on one run and timed out at 30 s on the next, on a run where the
     // whole suite took 14 minutes instead of 10. Locally it takes about 2 s.
@@ -64,16 +64,15 @@ test.describe("Sticker tool", () => {
   });
 });
 
-// Real detection path — gated on the Swift/VisionKit toolchain like 07-depth.
+// Real detection path — gated on macOS 14+ like 43-sticker-library.
 // This is the regression guard for the media-allowlist class of bugs: the
 // detect-scratch dir lives under the system temp root, and a previous release
 // 403'd every cutout preview (broken-image icons) while the SCRIPTED tests
 // passed — they never asserted the images actually decode.
-const os = require("node:os");
 
-test.describe("Sticker detection (real swift run)", () => {
+test.describe("Sticker detection (real extract-sticker run)", () => {
   test("detected cutouts actually render — media:// allowlist guard", async () => {
-    test.skip(!isMacOSWithXcode(), "needs macOS + Xcode toolchain");
+    test.skip(!onMacOS14(), "needs macOS 14+");
     test.setTimeout(120_000);
 
     const { app, window, userDataDir } = await launchApp({ testName: "sticker-detect" });

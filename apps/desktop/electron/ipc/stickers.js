@@ -1,7 +1,8 @@
 // Sticker extraction & library — IPC handlers for the Sticker tool.
 // Manifest-based storage at ~/Library/Application Support/AfterFrame/stickers/
-// with a library.json index. Swift CLI (extract-sticker.swift) does the
-// VisionKit segmentation; renderer bakes outline into the PNG before save.
+// with a library.json index. A precompiled Swift CLI (extract-sticker.swift →
+// native/bin/extract-sticker) does the VisionKit segmentation; renderer bakes
+// outline into the PNG before save.
 
 const path = require("path");
 const fs = require("fs");
@@ -11,10 +12,10 @@ const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
 
-function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaDir }) {
-  const stickerExtractScriptPath = isPackaged
-    ? path.join(process.resourcesPath, "native", "extract-sticker.swift")
-    : path.join(__dirname, "..", "..", "native", "extract-sticker.swift");
+function register({ app, ipcMain, isPackaged, addAllowedMediaDir }) {
+  const stickerToolPath = isPackaged
+    ? path.join(process.resourcesPath, "native", "bin", "extract-sticker")
+    : path.join(__dirname, "..", "..", "native", "bin", "extract-sticker");
 
   const stickerLibraryDir = path.join(app.getPath("userData"), "stickers");
   try { fs.mkdirSync(stickerLibraryDir, { recursive: true }); } catch (_) {}
@@ -91,7 +92,7 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaD
     return stickers;
   });
 
-  // Run swift segmentation, return manifest + extracted instance PNG paths.
+  // Run the segmentation tool, return manifest + extracted instance PNG paths.
   // Caller cleans up the scratch dir via sticker-cleanup-scratch.
   //
   // Optional `region` (normalized 0..1 {x,y,w,h}) constrains detection to a
@@ -105,8 +106,8 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaD
     if (!sourcePath || !fs.existsSync(sourcePath)) {
       throw new Error(`Source not found: ${sourcePath}`);
     }
-    if (!fs.existsSync(stickerExtractScriptPath)) {
-      throw new Error(`Sticker script missing at ${stickerExtractScriptPath}`);
+    if (!fs.existsSync(stickerToolPath)) {
+      throw new Error(`Sticker tool missing at ${stickerToolPath}`);
     }
 
     const scratchDir = path.join(
@@ -119,8 +120,8 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaD
     // explicitly the moment it exists.
     addAllowedMediaDir?.(scratchDir);
 
-    // Region pre-crop: feed swift a cropped image instead of the full source.
-    let inputForSwift = sourcePath;
+    // Region pre-crop: feed the tool a cropped image instead of the full source.
+    let inputForTool = sourcePath;
     const region = options?.region;
     if (region && Number.isFinite(region.x) && Number.isFinite(region.w) && region.w > 0 && region.h > 0) {
       const croppedPath = path.join(scratchDir, "cropped.png");
@@ -138,15 +139,11 @@ function register({ app, ipcMain, isPackaged, findSwiftRuntime, addAllowedMediaD
         .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
         .png()
         .toFile(croppedPath);
-      inputForSwift = croppedPath;
+      inputForTool = croppedPath;
     }
 
-    const runtime = findSwiftRuntime();
-    const env = { ...process.env };
-    if (runtime.developerDir) env.DEVELOPER_DIR = runtime.developerDir;
-
     await new Promise((resolve, reject) => {
-      const child = spawn(runtime.binary, [stickerExtractScriptPath, inputForSwift, scratchDir], { env });
+      const child = spawn(stickerToolPath, [inputForTool, scratchDir]);
       let stderr = "";
       child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
       child.on("error", reject);

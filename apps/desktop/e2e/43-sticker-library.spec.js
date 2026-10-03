@@ -4,8 +4,8 @@
 // thumbnail and library.json under userData/stickers) → star from the
 // panel → place it as a layer through the text tool's picker → the
 // Stickers view lists it, its inspector toggles the star, and the context
-// menu's Delete removes the files. Gated on the Swift/VisionKit toolchain
-// like 04 and 07.
+// menu's Delete removes the files. Gated on macOS 14+ (Vision's subject
+// lifting) like 04.
 
 const fs = require("node:fs");
 const os = require("node:os");
@@ -13,9 +13,9 @@ const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
-const isMacOSWithXcode = () =>
-  process.platform === "darwin" &&
-  fs.existsSync("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift");
+// macOS 14 is Darwin 23. The extract-sticker tool itself comes from
+// `npm run build:native`; a missing build fails here rather than skipping.
+const onMacOS14 = () => process.platform === "darwin" && Number(os.release().split(".")[0]) >= 23;
 
 let ctx;
 let subjectPath;
@@ -29,7 +29,7 @@ const manifest = () => {
 const state = () => ctx.window.evaluate(() => window.__afterframeTest.getState());
 
 test.beforeAll(async () => {
-  test.skip(!isMacOSWithXcode(), "sticker extraction needs macOS + the Xcode toolchain");
+  test.skip(!onMacOS14(), "sticker extraction needs macOS 14+");
   const sharp = require("sharp");
   subjectPath = path.join(os.tmpdir(), `af-sticker-lib-${Date.now()}.png`);
   await sharp(Buffer.from(
