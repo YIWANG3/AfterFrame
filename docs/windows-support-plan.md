@@ -7,7 +7,7 @@
 
 ## 0. 结论
 
-- **能做，但现在直接打包是用不了的**：图片显示不出来，中文环境下 sidecar 会崩，窗口没有关闭按钮。详见第 2 节。
+- **能做，但现在直接打包是用不了的**：预览全部生成失败（JPEG 退回显示原图，HEIC、RAW、视频看不到）；sidecar 一输出中文就崩，筛选栏和发现页在所有 Windows 上都坏；窗口没有关闭按钮。详见第 2 节，都已在真机上确认。
 - **核心卖点基本都是跨平台的**：图库、筛选、编辑、相框、拼图、切图、AI 重绘/标注、MCP 都写在 JS、Node、Python 里。绑死在苹果框架上的只有 4 个功能：深度感知文字、主体抠图、人物识别、视频。
 - **平台专属代码占比很小**：前端、Electron、sidecar 合计约 6.3 万行。涉及平台的文件约 1.8k 行（按整个文件算），加上 Swift 1.3k 行，不到 5%。
 - **方向是"调用约定统一，各平台用各自的引擎"**：Mac 继续用 CoreML、Vision、AVFoundation，不降级；Windows 换成自己的引擎。不要走"两边都用同一套"的路子（理由见 5.1）。
@@ -43,7 +43,7 @@
 - RAW 的 AI 标注会退回读原文件，而 Pillow 读不了 RAW（`annotation.py:501-515`）；
 - RAW 尺寸用 `sips` 读（`reverse_lookup.py:451-472`），在 Windows 上会返回预览图的尺寸，而不是传感器尺寸。
 
-**真机已确认**（第 10 节）：Python 测试日志里有多处 `preview generation failed: [WinError 2] The system cannot find the file specified`，就是找不到 `sips`。
+**真机已确认**（第 10 节）：Python 测试日志里有多处 `preview generation failed: [WinError 2] The system cannot find the file specified`，就是找不到 `sips`。在开发机上实际运行 App 导入 30 个文件，预览生成 0 个、失败 30 个。实际表现比"图片显示不出来"好一些：JPEG、PNG 这类浏览器能直接解码的格式，图库会退回去直接显示原图（能看到，但照片多了会慢、占内存）；HEIC、RAW、视频则只显示 "No preview"。主进程的 HEIC 转码也失败了（`[media] sips HEIC transcode failed`）。
 
 ### 2.2 sidecar 的 stdio 编码
 
@@ -54,13 +54,16 @@ Windows 下的管道默认使用系统的 ANSI 代码页：中文系统是 GBK�
 - 遇到无法编码的字符（cp1252 遇到任何中文，GBK 遇到 emoji）会抛 `UnicodeEncodeError`，直接中断常驻进程；
 - 波及的不只是文件路径，所有中文内容都会受影响。**这一项对国内用户是第一优先级。**
 
+**真机已确认，而且比预想的范围更广**（英文系统、代码页 1252、只导入英文文件夹）：sidecar 在返回筛选栏取值（`facet-values`）和"发现"页（`discover-collections`）时就报 `UnicodeEncodeError: 'charmap' codec can't encode characters`。因为 App 内置的地名数据里有中文，这两个命令直接输出中文就会崩。所以**筛选栏和发现页在所有 Windows 上都会坏**，不分系统语言。反过来，浏览图库、显示中文文件名基本正常：导入任务通过命令行参数传递路径（Windows 的命令行是 Unicode 的），而大部分命令输出 JSON 时把中文转义成了 `\uXXXX`。
+
 ### 2.3 窗口外壳按 macOS 写死
 
 `electron/appShell.js:47-55` 设置了 `titleBarStyle: "hiddenInset"`、`trafficLightPosition` 和 `transparent: true`。
 
 - Windows 上会没有最小化、最大化、关闭按钮，也没有系统阴影；透明窗口在 Windows 上还有缩放和贴靠的已知限制。
 - 前端把自己裁成 26px 圆角（`src/index.css:412-414`），并给红绿灯预留了位置（`:403`、`:448`）。
-- 菜单栏大概率不显示，有 5 个只在菜单里出现的操作会没有入口（`appShell.js:139,157,160-163`）：临时 catalog、添加 RAW 源、运行补全、生成预览、校验文件。
+- ~~菜单栏大概率不显示~~ **真机上菜单栏是显示的**（窗口顶部有 AfterFrame / File / Edit / View / Window），所以那 5 个只在菜单里出现的操作（`appShell.js:139,157,160-163`：临时 catalog、添加 RAW 源、运行补全、生成预览、校验文件）在 Windows 上有入口。没有窗口按钮这一条在真机上确认了：右上角是空的，只能用 Alt+F4 关闭。
+- 窗口最小尺寸是 1080×720（`appShell.js:44-45`）。在开发机 1102×742 的远程桌面里，窗口比可用区域还高，底部被任务栏挡住。小屏幕或高缩放比例的 Windows 笔记本很常见，最小尺寸要按工作区来定。
 - 有几个菜单 role 只在 macOS 上有意义：services、hide、hideOthers、unhide、zoom、front（`appShell.js:141-145,210-212`）。
 - 液态玻璃效果是纯 CSS 的 `backdrop-filter`，没用 `vibrancy`，这部分可以直接用。
 
