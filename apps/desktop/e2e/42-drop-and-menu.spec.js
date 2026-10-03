@@ -135,3 +135,33 @@ test("files handed over by macOS open-file are batched and imported", async () =
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// A launch with files (a dock drop that starts the app; on Windows the files
+// it was opened with) hands them over before there is a window. They were
+// lost twice over: the flush on did-finish-load gave up because isLoading()
+// is still true there, and the page imported before its catalog had loaded.
+// Replaces the window, so it runs last; macOS only, where the app outlives
+// its last window.
+test("files handed over before the window exists are imported once it has loaded", async () => {
+  test.skip(process.platform !== "darwin", "needs the app to outlive its window");
+  test.setTimeout(90_000);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-launchfile-"));
+  const file = path.join(dir, "launch_file.jpg");
+  fs.writeFileSync(file, TINY_JPEG);
+  try {
+    const before = (await bridge(() => window.mediaWorkspace.getSummary())).image_assets;
+    const reopened = ctx.app.waitForEvent("window");
+    await ctx.app.evaluate(({ app, BrowserWindow }, p) => {
+      BrowserWindow.getAllWindows()[0].destroy();
+      app.emit("open-file", { preventDefault() {} }, p);
+      // After the 50 ms batch has found no window, as on a cold launch.
+      setTimeout(() => app.emit("activate"), 150);
+    }, file);
+    ctx.window = await reopened;
+    await expect(ctx.window.getByRole("button", { name: `All Assets ${before + 1}` })).toBeVisible({ timeout: 30_000 });
+    const names = await bridge(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 100 })).map((r) => r.image_path.split("/").pop()));
+    expect(names).toContain("launch_file.jpg");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

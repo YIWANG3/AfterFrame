@@ -10,6 +10,17 @@ for (const [method, channel, arity] of ipcRenderer.sendSync("app:ipc-methods")) 
   invokers[method] = (...args) => ipcRenderer.invoke(channel, ...args.slice(0, arity));
 }
 
+// Files to import can arrive before the page listens: a launch with files
+// (a dock drop that starts the app, or on Windows the files it was opened
+// with) is sent as soon as the page has loaded, and the page subscribes only
+// once its catalog has. Hold those for the first subscriber.
+const externalImportListeners = new Set();
+const earlyExternalImports = [];
+ipcRenderer.on("workspace:external-import", (_event, paths) => {
+  if (!externalImportListeners.size) earlyExternalImports.push(...paths);
+  for (const listener of externalImportListeners) listener(paths);
+});
+
 contextBridge.exposeInMainWorld("mediaWorkspace", {
   ...invokers,
   // Resolve the absolute filesystem path of a dropped File (Electron 30+).
@@ -18,11 +29,12 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
   getPathForFile: (file) => {
     try { return webUtils.getPathForFile(file); } catch { return null; }
   },
-  // Listen for files dropped on the dock icon / Finder "Open With" / open-files.
+  // Listen for files dropped on the dock icon / Finder "Open With" / open-files,
+  // or named by a second launch on Windows; ones that came early arrive first.
   onExternalImport: (callback) => {
-    const listener = (_event, paths) => callback(paths);
-    ipcRenderer.on("workspace:external-import", listener);
-    return () => ipcRenderer.removeListener("workspace:external-import", listener);
+    externalImportListeners.add(callback);
+    if (earlyExternalImports.length) callback(earlyExternalImports.splice(0));
+    return () => externalImportListeners.delete(callback);
   },
   // Agent (MCP) asked the app to reveal assets in the gallery. The renderer
   // answers on a per-request channel so the agent learns what was found.

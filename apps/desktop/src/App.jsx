@@ -618,17 +618,21 @@ export default function App() {
   }, [workspace.lastFinishedJob]);
 
   // Drag-and-drop import: works for files dropped from Finder onto the gallery,
-  // and (via main.js `open-file`) for files dropped onto the dock icon.
+  // and (via main.js `open-file`) for files dropped onto the dock icon, or on
+  // Windows the files a launch names. Subscribe once the catalog info has
+  // loaded: files that start the app arrive before it, and importing then
+  // would report "no catalog". The bridge holds them until we listen.
   const externalImportRef = useRef(null);
   externalImportRef.current = (paths, opts) => {
     if (paths?.length) workspace.addImagesFromPaths(paths, opts);
   };
+  const catalogInfoLoaded = Boolean(workspace.info);
   useEffect(() => {
-    if (!api.has("onExternalImport")) return undefined;
+    if (!catalogInfoLoaded || !api.has("onExternalImport")) return undefined;
     // Register once; the old deps re-registered on every render (fresh
     // function identity) which would now accumulate listeners.
     return api.onExternalImport((paths) => externalImportRef.current?.(paths));
-  }, []);
+  }, [catalogInfoLoaded]);
 
   // Watched directories: live FSEvents adds/overwrites (main → renderer) reuse the same
   // import path as drag-drop / Finder-open (via externalImportRef). Marked
