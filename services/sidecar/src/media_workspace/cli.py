@@ -87,7 +87,7 @@ from .job_runner import (
     run_people_index_job,
     run_preview_job,
 )
-from .metadata import iso_mtime
+from .metadata import extract_image_candidate, iso_mtime
 from .preview_service import PreviewService
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
@@ -715,6 +715,11 @@ def build_parser() -> argparse.ArgumentParser:
     list_anno_models_p.add_argument("--api-key")
     list_anno_models_p.add_argument("--base-url")
 
+    # The source's structured EXIF for an edited export (Electron rebuilds it
+    # with sharp's withExif — sharp cannot copy EXIF between pixel buffers).
+    read_meta_p = subparsers.add_parser("read-image-metadata", parents=[common])
+    read_meta_p.add_argument("--path", type=Path, required=True)
+
     return parser
 
 
@@ -778,6 +783,27 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"ok": True, "models": models}, ensure_ascii=False))
         except Exception as e:  # noqa: BLE001
             print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
+        return 0
+
+    if args.command == "read-image-metadata":
+        meta = extract_image_candidate(args.path)
+        print(json.dumps({
+            "capture_time": meta.capture_time,
+            "camera_make": meta.camera_make,
+            "camera_model": meta.camera_model,
+            "lens_model": meta.lens_model,
+            "lens_make": meta.lens_make,
+            "software": meta.software,
+            "iso": meta.iso,
+            "aperture": meta.aperture,
+            "shutter_speed": meta.shutter_speed,
+            "focal_length": meta.focal_length,
+            "flash": meta.flash,
+            "white_balance": meta.white_balance,
+            "color_space": meta.color_space,
+            "gps_latitude": meta.gps_latitude,
+            "gps_longitude": meta.gps_longitude,
+        }, ensure_ascii=False))
         return 0
 
     catalog = ensure_catalog(args.catalog)

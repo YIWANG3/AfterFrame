@@ -449,6 +449,11 @@ function createSidecarCommands(callJson) {
       return callJson(argv).then((rows) => rows || []);
     },
 
+    // The source's structured EXIF fields, for re-attaching to an edited export.
+    readImageMetadata(imagePath) {
+      return callJson(["read-image-metadata", "--path", String(imagePath)]);
+    },
+
     // ── Jobs ─────────────────────────────────────────────────────────────
     // How many photos have their dominant colours, and how many still need them.
     colorStatus() {

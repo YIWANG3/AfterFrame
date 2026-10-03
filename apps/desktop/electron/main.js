@@ -274,7 +274,9 @@ const sidecarCommands = createSidecarCommands(callSidecarJsonAsync);
 // starters — both lived here until review 2026-09-16 §2. See ./imageMetadata.js
 // and ./tasks.js; the module-level names below are what the ipc/mcp modules
 // receive through their register() deps.
-const { writeImageWithSourceMetadata } = createImageMetadataWriter({ rootDir, sidecarSrc, isPackaged });
+const { writeImageWithSourceMetadata } = createImageMetadataWriter({
+  readSourceMetadata: (sourcePath) => sidecarCommands.readImageMetadata(sourcePath),
+});
 const {
   formatJobStatus, latestJobStatus, createJob,
   startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask,

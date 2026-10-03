@@ -10,7 +10,9 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
+const exifr = require("exifr");
 const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
 
 async function openEditorOnFirstAsset(window) {
   // Wait for gallery, single-click to select, press E to open editor (the
@@ -174,5 +176,26 @@ test.describe("Save pipeline", () => {
     expect(meta.format).toBe("jpeg");
     expect(meta.width).toBe(before.height);
     expect(meta.height).toBe(before.width);
+  });
+
+  // Canvas exports (frame, text, collage, split) hand main the pixels plus the
+  // original's path; main re-attaches its EXIF through the resident sidecar.
+  // Packaged builds once read it with a `python3 -c` import of sidecar source
+  // they don't ship, so every framed export lost its camera data.
+  test("canvas export carries the source photo's EXIF", async () => {
+    const source = REAL_IMAGE_PATHS[0];
+    const expected = await exifr.parse(source);
+    expect(expected.Make).toBeTruthy(); // a real camera file, not a bare fixture
+    const out = path.join(tmpDir, "exif-carry.jpg");
+    const pixels = await sharp({ create: { width: 64, height: 48, channels: 3, background: "#808080" } }).png().toBuffer();
+    await window.evaluate(async ({ p, bytes, src }) => {
+      await window.mediaWorkspace.saveImage(p, new Uint8Array(bytes).buffer, src);
+    }, { p: out, bytes: [...pixels], src: source });
+
+    const exif = await exifr.parse(out);
+    expect(exif.Make).toBe(expected.Make);
+    expect(exif.Model).toBe(expected.Model);
+    expect(exif.ISO).toBe(expected.ISO);
+    expect(exif.FNumber).toBe(expected.FNumber);
   });
 });
