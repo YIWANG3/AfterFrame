@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+
+from PIL import Image
 
 from . import video
 from .catalog import CatalogPaths
@@ -20,6 +23,65 @@ KIND_SIZES = {
     "preview": 512,
     "preview-hd": 2000,
 }
+
+_PREVIEW_JPEG_QUALITY = 90  # sips-sized files (~46 KB vs 49 KB for a 512px preview)
+_ORIENTATION_TAG = 0x0112
+
+# These are the user's own photos, not untrusted uploads: a 200-megapixel
+# stitched panorama is a photo, not a decompression bomb (Pillow refuses past
+# ~179 MP by default, before draft() could shrink the decode).
+Image.MAX_IMAGE_PIXELS = max(Image.MAX_IMAGE_PIXELS or 0, 1_000_000_000)
+
+_heif_registered = False
+
+
+def _register_heif() -> None:
+    """HEIC/HEIF (iPhone) through pillow-heif, once per process."""
+    global _heif_registered
+    if _heif_registered:
+        return
+    try:
+        import pillow_heif
+
+        pillow_heif.register_heif_opener()
+    except ImportError:  # no wheel for this platform: HEIC then fails to open
+        pass
+    _heif_registered = True
+
+
+def render_pillow_preview(source: Path, target: Path, size: int) -> None:
+    """A JPEG with the long edge at most `size`, matching what sips -Z gave:
+
+    - pixels stay as stored and the EXIF orientation tag is carried over
+      (viewers rotate, exactly as with the sips previews);
+    - the ICC profile is kept, so Display P3 photos keep their colour;
+    - transparency is flattened onto white.
+
+    Unlike sips it never enlarges a small image. JPEG sources decode at a
+    reduced scale (draft), which is where most of the time goes.
+    """
+    _register_heif()
+    with Image.open(source) as image:
+        orientation = image.getexif().get(_ORIENTATION_TAG)
+        icc_profile = image.info.get("icc_profile")
+        image.draft("RGB", (size, size))
+        if image.mode in ("I;16", "I;16B", "I;16L", "I"):
+            frame = image.convert("I").point(lambda value: value * (1 / 257)).convert("L").convert("RGB")
+        elif image.has_transparency_data:
+            rgba = image.convert("RGBA")
+            frame = Image.new("RGB", rgba.size, (255, 255, 255))
+            frame.paste(rgba, mask=rgba.getchannel("A"))
+        else:
+            frame = image.convert("RGB")
+    frame.thumbnail((size, size), Image.Resampling.LANCZOS)
+    options: dict = {"quality": _PREVIEW_JPEG_QUALITY}
+    if icc_profile:
+        options["icc_profile"] = icc_profile
+    if orientation and orientation != 1:
+        exif = Image.Exif()
+        exif[_ORIENTATION_TAG] = orientation
+        options["exif"] = exif.tobytes()
+    frame.save(target, "JPEG", **options)
 
 
 @dataclass(slots=True)
@@ -130,7 +192,7 @@ class PreviewService:
                     source_path, output_path, KIND_SIZES[kind], validate=validate
                 )
         else:
-            rendered = self._render_with_sips(
+            rendered = self._render_image(
                 source_path, output_path, KIND_SIZES[kind], validate=validate
             )
 
@@ -253,6 +315,23 @@ class PreviewService:
                 raise
         connection.commit()
         return {"generated": generated, "skipped": skipped, "failed": failed, "deferred": deferred, "total": total}
+
+    def _render_image(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
+        """Processed images (JPEG, PNG, HEIC, TIFF, WebP, AVIF) render with
+        Pillow on every platform; Windows has no sips. A file Pillow can't
+        read falls back to sips where it exists (macOS's Image I/O reads a
+        few formats Pillow doesn't), so nothing that rendered before fails."""
+        try:
+            return self._render_with_pillow(source_path, output_path, size, validate=validate)
+        except SourceNotReadyError:
+            raise
+        except Exception:
+            if shutil.which("sips") is None:
+                raise
+            return self._render_with_sips(source_path, output_path, size, validate=validate)
+
+    def _render_with_pillow(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
+        return self._atomic(output_path, lambda tmp: render_pillow_preview(source_path, tmp, size), validate=validate)
 
     def _render_with_sips(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         return self._atomic(output_path, lambda tmp: subprocess.run(

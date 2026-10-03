@@ -4,7 +4,6 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from PIL import Image
 
@@ -103,17 +102,9 @@ class ColorFilterTest(unittest.TestCase):
         return sorted(row["stem"] for row in list_image_assets(self.connection, "all", filters=filters))
 
     def render_previews(self):
-        """Previews through the service; sips is replaced by a plain resize."""
-        service = PreviewService(self.catalog)
-
-        def fake_sips(source, output, size, validate=None):
-            with Image.open(source) as image:
-                image.thumbnail((size, size))
-                image.save(output)
-            return output
-
-        with patch.object(PreviewService, "_render_with_sips", side_effect=fake_sips):
-            return service.generate_batch(self.connection, kind="preview", asset_type="image")
+        """Previews through the real service: images render with Pillow on
+        every platform, so this needs no stand-in for sips."""
+        return PreviewService(self.catalog).generate_batch(self.connection, kind="preview", asset_type="image")
 
     def test_previews_bring_their_colours_and_the_filter_finds_by_shade(self):
         self.assertEqual(get_facet_values(self.connection)["colors_analyzed"], 0)
