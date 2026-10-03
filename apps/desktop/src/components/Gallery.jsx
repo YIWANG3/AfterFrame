@@ -268,7 +268,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
           ))}
         </MenuItem>
       )}
-      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut="⌘↵" locked={!api.can("fileSystem")} onClick={() => { onReveal?.(item.image_path); onClose(); }} />
+      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut={api.platform === "win32" ? "Ctrl+↵" : "⌘↵"} locked={!api.can("fileSystem")} onClick={() => { onReveal?.(item.image_path); onClose(); }} />
       <MenuItem
         icon={RefreshCw}
         label={t("gallery.menu.refreshFromDisk", { count: assetIds?.length || 1 })}

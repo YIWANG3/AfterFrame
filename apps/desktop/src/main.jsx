@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import "./i18n";
+import i18n from "./i18n";
 import "./index.css";
 import "./fonts";
 
@@ -17,6 +17,11 @@ if (/Electron/i.test(navigator.userAgent)) {
 }
 import "./ui/scrollFlag";
 import api from "./api";
+
+// <html lang> follows the UI language (index.html ships "en"), so Chinese
+// renders with Chinese glyph forms rather than a Japanese fallback face.
+document.documentElement.lang = i18n.language;
+i18n.on("languageChanged", (lng) => { document.documentElement.lang = lng; });
 
 // vibepin annotation overlay (dev only) — Alt+A to mark up the live UI, the
 // daemon on :7331 collects feedback and Claude Code picks it up. Stripped in

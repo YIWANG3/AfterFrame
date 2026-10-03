@@ -99,7 +99,8 @@ body {
   overflow: hidden;
   background: rgb(var(--app-bg));
   color: rgb(var(--text-color));
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  /* Windows: Segoe UI, and Microsoft YaHei for Chinese (after PingFang SC, so a Mac with Office's YaHei keeps PingFang) */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   font-size: 13px;
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
