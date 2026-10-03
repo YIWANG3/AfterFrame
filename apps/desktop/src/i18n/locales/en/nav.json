@@ -1,4 +1,7 @@
 {
+  "window": {
+    "menu": "Menu"
+  },
   "browse": {
     "all": "All Assets",
     "recent": "Recently Added",

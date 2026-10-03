@@ -53,6 +53,9 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
     return () => ipcRenderer.removeListener("workspace:catalog-changed", listener);
   },
   isPackaged: ipcRenderer.sendSync("workspace:is-packaged"),
+  // "darwin" | "win32" | "linux": picks the window shell (main.jsx adds
+  // html.platform-<name>); feature availability goes through capabilities.
+  platform: process.platform,
   onWatchedImport: (callback) => {
     const listener = (_event, paths) => callback(paths);
     ipcRenderer.on("workspace:watched-import", listener);

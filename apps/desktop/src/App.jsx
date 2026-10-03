@@ -42,6 +42,7 @@ import DevStaleNotice from "./components/DevStaleNotice";
 import { ConfirmHost, confirm } from "./components/confirm";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
+import WindowTitleBar from "./components/WindowTitleBar";
 
 const MAP_EXPANDED_KEY = "afterframe-map-expanded";
 const MAP_HEIGHT_KEY = "afterframe-map-height";
@@ -1082,6 +1083,7 @@ export default function App() {
 
   return (
     <div className="noise-overlay h-full overflow-hidden bg-app text-text">
+      {api.platform === "win32" ? <WindowTitleBar /> : null}
       <div className="relative grid h-full min-w-0 overflow-hidden" style={layoutStyle}>
         {showSidebar ? <Sidebar
           info={workspace.info}

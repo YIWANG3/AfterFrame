@@ -909,3 +909,30 @@ html.electron .discover-drag-region { pointer-events: auto; -webkit-app-region: 
 }
 .sidebar-folder-row[data-folder-insertion="before"]::after { top: 0; }
 .sidebar-folder-row[data-folder-insertion="after"]::after { bottom: 0; }
+
+/* ───────── Windows 窗口外壳(html.platform-win32,见 electron/windowChrome.js) ─────────
+   不透明窗口 + 36px 自绘标题条;原生最小化 / 最大化(含贴靠布局)/ 关闭按钮由 titleBarOverlay 画在标题条右端。
+   上面这些 macOS 规则(26px 圆角裁剪、透明底、给红绿灯让位的 44px / 88px)在这里一一撤回;Windows 11 自己会给窗口画圆角 */
+html.platform-win32 { --win-titlebar-h: 36px; }
+html.platform-win32.fs { --win-titlebar-h: 0px; }
+html.platform-win32, html.platform-win32 body { background: rgb(var(--app-bg)); }
+html.platform-win32 #root { clip-path: none; }
+html.platform-win32 .noise-overlay { padding-top: var(--win-titlebar-h); }
+.window-titlebar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20000;
+  height: var(--win-titlebar-h); display: flex; align-items: center; gap: 4px; padding: 0 8px;
+  background: rgb(var(--app-bg)); color: rgb(var(--text-color) / .62);
+  font-size: 12px; user-select: none; -webkit-app-region: drag;
+}
+html.platform-win32.fs .window-titlebar { display: none; }
+.window-titlebar-menu {
+  -webkit-app-region: no-drag; display: grid; place-items: center;
+  height: 28px; width: 32px; border-radius: 6px; color: rgb(var(--text-color) / .8);
+}
+.window-titlebar-menu:hover { background: var(--fill-2); color: rgb(var(--text-color)); }
+.window-titlebar-title { padding-left: 2px; letter-spacing: .01em; }
+/* 窗口按钮在标题条里,侧栏头部不用给红绿灯让 44px */
+html.platform-win32 .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
+/* 全屏覆盖层(灯箱 / 编辑器 / 拼图 / 设置 / 对话框)从标题条下面开始,头部右侧的动作和关闭钮不会被窗口按钮盖住 */
+html.platform-win32 .fixed.inset-0 { top: var(--win-titlebar-h); }
+html.platform-win32 .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-left: 24px; }   /* 灯箱头部:不用给红绿灯让 88px,回到 px-6 */

@@ -53,6 +53,9 @@ export const IPC_METHODS = [
   ["verifyAssets", "workspace:verify-assets", 1],
   ["relinkAsset", "workspace:relink-asset", 1],
   ["setLocale", "app:set-locale", 1],
+  // Windows title strip (WindowTitleBar.jsx); answer false on macOS.
+  ["popupAppMenu", "window:popup-app-menu", 2],
+  ["setTitleBarTheme", "window:set-titlebar-theme", 1],
   ["exportSettings", "settings:export", 1],
   ["inspectSettingsImport", "settings:import-inspect", 0],
   ["applySettingsImport", "settings:import-apply", 1],

@@ -9,6 +9,8 @@ import { IPC_METHOD_NAMES } from "../../shared/ipcChannels.mjs";
 
 const api = {
   get isPackaged() { return bridge().isPackaged; },
+  // Desktop only ("darwin" | "win32" | "linux"); undefined in the web build.
+  get platform() { return bridge().platform; },
   // Capability check — facade methods always exist, so guards that previously
   // tested `window.mediaWorkspace?.method` must ask the bridge instead.
   has: (method) => typeof bridge()[method] === "function",
