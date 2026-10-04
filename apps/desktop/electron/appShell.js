@@ -35,7 +35,7 @@ function createAppShell({
   // ── external "Open With…" / dock-icon drop import ──
   // macOS fires `open-file` once per dropped file. We batch them in a 50ms
   // window then push the list to the renderer. If the window isn't ready yet
-  // (cold launch via dock drop), we queue and flush after `did-finish-load`.
+  // (a launch with files), we queue and flush once it has stopped loading.
   let pendingExternalImports = [];
   let externalImportFlushTimer = null;
   function flushExternalImports() {
@@ -82,10 +82,14 @@ function createAppShell({
     window.webContents.on("preload-error", (_event, preloadPath_, error) => {
       console.error(`[renderer:preload-error] ${preloadPath_}`, error);
     });
-    window.webContents.on("did-finish-load", () => {
-      // Cold-launch via dock drop arrives before any window exists, so the
-      // open-file events sit in `pendingExternalImports` until we're ready.
+    // A launch with files (a dock drop that starts the app, or on Windows the
+    // files it was opened with) queues them before the page has loaded. Flush
+    // on did-stop-loading, not did-finish-load: isLoading() is still true
+    // during did-finish-load, so a flush there gave up and they were never sent.
+    window.webContents.on("did-stop-loading", () => {
       if (pendingExternalImports.length) flushExternalImports();
+    });
+    window.webContents.on("did-finish-load", () => {
       // vibepin overlay (dev only): ⌥A to drop a pin on any UI element, type a
       // note, Send → posts to the local daemon on :7331 → /vpin picks it up.
       // The daemon must be running (see .vibepin/ + README); harmless if it isn't.
