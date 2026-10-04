@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Cpu, Download, FolderPlus, LoaderCircle, Play, Trash2, UsersRound } from "lucide-react";
+import { AlertCircle, Check, Cpu, FolderPlus, LoaderCircle, Play, Trash2, UsersRound } from "lucide-react";
 import api from "../../api";
 import { Callout, FieldRow, Group, PrimaryButton, SecondaryButton, Toggle } from "./SettingsPrimitives";
 
 function emptySettings() {
-  return { activeModelKey: null, activeModel: null, models: [], automaticDownloads: false, autoIndexOnImport: false, download: { available: false } };
+  return { activeModelKey: null, activeModel: null, models: [], autoIndexOnImport: false };
 }
 
 function formatSize(bytes) {
@@ -14,8 +14,19 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(bytes >= 1024 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
+// Shown inside the group whose action failed, so it's in view next to the
+// button that was clicked.
+function ErrorNote({ message }) {
+  return (
+    <div role="alert" className="mb-3 flex gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{message}
+    </div>
+  );
+}
+
 function ModelRow({ model, active, busy, onActivate, onRemove, t }) {
   const unverified = model.license === "Unverified custom model";
+  const builtIn = model.source === "bundled";
   return (
     <div className="flex items-center gap-3 border-b border-border/50 py-3 last:border-b-0">
       <div className={[
@@ -32,6 +43,7 @@ function ModelRow({ model, active, busy, onActivate, onRemove, t }) {
           {!model.available && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-400" aria-label={t("people.modelMissing")} />}
         </div>
         <div className="mt-0.5 truncate text-[11px] text-muted2">
+          {builtIn && `${t("people.builtIn")} · `}
           {t("people.modelMeta", { version: model.version || "—", size: formatSize(model.sizeBytes), dimensions: model.embeddingDimensions || "—" })}
         </div>
         {unverified && <div className="mt-0.5 text-[10px] text-warn">{t("people.unverified")}</div>}
@@ -39,7 +51,7 @@ function ModelRow({ model, active, busy, onActivate, onRemove, t }) {
       {!active && model.available && (
         <SecondaryButton disabled={busy} onClick={() => onActivate(model.key)}>{t("people.useModel")}</SecondaryButton>
       )}
-      {!active && (
+      {!active && !builtIn && (
         <button
           type="button"
           disabled={busy}
@@ -72,7 +84,7 @@ export default function PeopleSettings() {
 
   useEffect(() => {
     let cancelled = false;
-    refresh().catch((reason) => { if (!cancelled) setError(reason?.message || String(reason)); });
+    refresh().catch((reason) => { if (!cancelled) setError({ scope: "model", message: reason?.message || String(reason) }); });
     return () => { cancelled = true; };
   }, [refresh]);
 
@@ -92,7 +104,7 @@ export default function PeopleSettings() {
       await action();
       await refresh();
     } catch (reason) {
-      setError(reason?.message || String(reason));
+      setError({ scope: name === "index" ? "index" : "model", message: reason?.message || String(reason) });
     } finally {
       setBusy(null);
     }
@@ -114,7 +126,9 @@ export default function PeopleSettings() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] font-medium text-text">{model.name}</div>
-              <div className="mt-0.5 text-[11px] text-muted2">{t("people.activeModelHint", { size: formatSize(model.sizeBytes) })}</div>
+              <div className="mt-0.5 text-[11px] text-muted2">
+                {t(model.source === "bundled" ? "people.builtInModelHint" : "people.activeModelHint", { size: formatSize(model.sizeBytes) })}
+              </div>
             </div>
             <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">{t("people.ready")}</span>
           </div>
@@ -122,14 +136,6 @@ export default function PeopleSettings() {
           <div className="px-1 py-5 text-center text-[11px] text-muted2">{t("people.noModel")}</div>
         )}
         <FieldRow label={t("people.installModel")} hint={t("people.installModelHint")}>
-          {settings.download?.available && (
-            <PrimaryButton disabled={!!busy} onClick={() => perform("download", () => api.downloadOfficialPeopleModel())}>
-              <span className="inline-flex items-center gap-1.5">
-                {busy === "download" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                {busy === "download" ? t("people.downloading") : t("people.downloadModel", { size: formatSize(settings.download.sizeBytes) })}
-              </span>
-            </PrimaryButton>
-          )}
           <SecondaryButton disabled={!!busy} onClick={() => perform("install", () => api.pickPeopleModel())}>
             <span className="inline-flex items-center gap-1.5">
               {busy === "install" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
@@ -137,12 +143,10 @@ export default function PeopleSettings() {
             </span>
           </SecondaryButton>
         </FieldRow>
-        <FieldRow label={t("people.automaticDownload")} hint={t("people.automaticDownloadHint")}>
-          <Toggle on={settings.automaticDownloads} disabled={!settings.download?.available} onChange={(value) => perform("updates", () => api.setPeopleAutomaticDownloads(value))} />
-        </FieldRow>
         <FieldRow label={t("people.autoIndexOnImport")} hint={t("people.autoIndexOnImportHint")}>
           <Toggle on={settings.autoIndexOnImport} disabled={!model?.available} onChange={(value) => perform("autoIndex", () => api.setPeopleAutoIndexOnImport(value))} />
         </FieldRow>
+        {error?.scope === "model" && <ErrorNote message={error.message} />}
       </Group>
 
       {settings.models?.length > 0 && (
@@ -182,10 +186,10 @@ export default function PeopleSettings() {
             </PrimaryButton>
           </FieldRow>
         )}
+        {error?.scope === "index" && <ErrorNote message={error.message} />}
       </Group>
 
       <Callout>{t("people.privacy")}</Callout>
-      {error && <div role="alert" className="mt-3 flex gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{error}</div>}
     </div>
   );
 }

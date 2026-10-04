@@ -79,6 +79,9 @@ if [[ -n "$APP" ]]; then
   codesign --verify --deep --strict "$APP"
   spctl --assess --type execute --verbose=2 "$APP"   # expect: accepted / Notarized Developer ID
   xcrun stapler validate "$APP"
+  # People recognition has no download fallback since the model was bundled.
+  [[ -f "$APP/Contents/Resources/native/FaceEmbedding.mlpackage/Manifest.json" ]] \
+    || { echo "✗ The face model is missing from the app (npm run fetch:people-model)." >&2; exit 1; }
 fi
 
 SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"

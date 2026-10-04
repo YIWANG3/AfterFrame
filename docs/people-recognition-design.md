@@ -1,6 +1,7 @@
 # 本地人物识别与聚类设计
 
 状态：**已实现**（2026-09-17 回填）。落地位置：`apps/desktop/electron/ipc/people.js`（模型安装、任务启动 / 恢复）、`services/sidecar/src/media_workspace/db/people.py`（人脸、分组、聚类）、`apps/desktop/native/people-worker.swift`（Core ML 推理）、`apps/desktop/src/components/PeopleView.jsx`（人物墙）。e2e：`18-people-flows`、`12-people-view`。本文其余部分是当时的设计稿，实现以代码为准。  
+2026-10-03 更新：ArcFace R100 改为随 App 内置，不再在线下载，原因见第 2 节第 2 条和 4.1。  
 默认模型：**ArcFace R100**  
 相关原型：[人物与模型交互 Mock](prototypes/people-arcface-ui.html)  
 相关旧调研：[people-faces-plan.md](people-faces-plan.md)（其中 Vision FeaturePrint 路线已不再是实现方案）
@@ -15,7 +16,7 @@ AfterFrame 为本地照片图库提供类似系统相册的“人物”能力：
 
 - 人脸检测、质量评估、五点对齐、身份 embedding 与同一人候选聚类。
 - 人物候选页、人物筛选、照片详情中的人物列表。
-- macOS 本地模型下载、模型版本管理和兼容模型导入。
+- macOS 内置模型、模型版本管理和兼容模型导入。
 
 不在本期范围：
 
@@ -27,8 +28,11 @@ AfterFrame 为本地照片图库提供类似系统相册的“人物”能力：
 ## 2. 已确定的产品决策
 
 1. **本地优先。** 原始图片、人脸裁剪、embedding、人物名称和候选关系均留在用户设备与当前 catalog 中。
-2. **默认识别器为 ArcFace R100。** 它以独立模型包形式下载，而不进入 App 安装包。每个发布的模型包必须锁定来源、版本、SHA-256 和许可证记录。
-3. **模型不能阻塞应用。** 检测、embedding、聚类、模型下载和重建索引都是可暂停/取消/恢复的持久化后台任务；React 渲染线程不参与推理。
+2. **默认识别器为 ArcFace R100，随 App 内置。** 每个发布的模型必须锁定来源、版本、SHA-256 和许可证记录。
+   - 最初的设计是作为独立模型包下载、不进安装包。0.5.5 用的就是这个方案，发布后在国内基本下不下来：Hugging Face 在国内访问不了，下载代码又不走系统代理，也没有超时和进度，按钮会一直转（#127）。
+   - 2026-10 改为内置。代价是 DMG 大约多 110 MB（253 MB → 约 360 MB），每个用户都要下载这部分，不管用不用人物识别。换来的是装好就能用、完全不联网，也不用再维护镜像、代理、断点续传这一套。
+   - 权重超过 GitHub 单文件 100 MB 的限制，所以不提交进仓库，由构建脚本在打包时下载并校验，见 4.1。
+3. **模型不能阻塞应用。** 检测、embedding、聚类和重建索引都是可暂停/取消/恢复的持久化后台任务；React 渲染线程不参与推理。
 4. **首次安装不自动扫全库。** 模型就绪后，用户明确选择“分析整个图库”或“只分析以后导入的照片”。
 5. **候选优先于断言。** 自动结果先是“人物候选”；只有用户确认后才成为可命名、可筛选的人物。
 6. **模型向量绝不混用。** 不同模型或不同版本拥有独立 embedding 空间和人物索引。切换模型不会重解释旧向量，而是提示用户建立新的索引。
@@ -72,30 +76,21 @@ Catalog SQLite + face thumbnail cache
 
 ### 3.2 任务所有权
 
-sidecar job runner 是人物任务的唯一状态来源：它创建 `people_model_download` / `people_index` jobs、启动和终止 Worker 子进程、写入 face records 和 job checkpoint，并运行聚类。Electron main 不解析 Worker 输出，也不直接写 catalog；它只复用现有 transport 启动 sidecar job，并将 `PEOPLE_WORKER_PATH`、模型目录等已解析路径注入环境。
+sidecar job runner 是人物任务的唯一状态来源：它创建 `people_index` jobs、启动和终止 Worker 子进程、写入 face records 和 job checkpoint，并运行聚类。Electron main 不解析 Worker 输出，也不直接写 catalog；它只复用现有 transport 启动 sidecar job，并将 `PEOPLE_WORKER_PATH`、模型目录等已解析路径注入环境。
 
 人物聚类明确归属 **sidecar**，不在 Worker 内执行。Worker 只做可替换的检测、对齐、质量评分和 embedding；sidecar 在写入 face records 后用产品侧、锁定版本的 NumPy 实现候选查找和 complete-link / cannot-link 约束，并在同一数据库事务中写 membership 审计和 checkpoint。NumPy 是发布 sidecar 的显式依赖，不能借用 `research/` 虚拟环境；阶段 2 要验证其打包体积和大图库性能。
 
 ## 4. 模型获取、更新与兼容性
 
-### 4.1 官方模型下载
+### 4.1 内置模型
 
-首次点击“下载并启用”后才创建 `people_model_download` 任务。下载确认页必须说明：
+- **位置：** `Contents/Resources/native/FaceEmbedding.mlpackage`，和深度模型放在一起。来源、版本、SHA-256 和许可证都写在 `apps/desktop/electron/peopleModel.js` 里。
+- **构建：** `npm run fetch:people-model`（`apps/desktop/scripts/fetch-people-model.mjs`）下载锁定版本的压缩包，校验压缩包的 SHA-256 和解包后的目录哈希，再用 People Worker 自检一次，然后放到 `native/`，由 electron-builder 打进 App。`dist`、`dist:mac`、`pack` 都会先运行这一步，`npm run dev` 运行时失败也不会中断。`scripts/release.sh` 会检查打包后的 App 里确实有这个模型。
+- **运行：** 用户没有选择其他模型时，内置模型就是当前模型；它不能被移除，也不写进设置。
+- **兼容 0.5.5 的下载：** 内置模型和 0.5.5 下载的是同一个文件，key 相同（`arcface-r100-coreml@b51b655@743cae41246e637e`），所以已经建好的人物索引继续有效。0.5.5 下载到 `people-models/` 的那份副本在启动时删除，释放约 125 MB 空间。暂停中的人物任务恢复时，会改用内置模型的当前路径。
+- **更新：** 模型跟着 App 版本走，换模型就是发新版本。原先设计的“自动下载已批准的模型更新”（原 4.2）不再需要，已删除。
 
-- 模型名称、版本、下载体积、许可证与来源；
-- 保存位置：`~/Library/Application Support/AfterFrame/Models/<model-id>/<version>/`；
-- 联网仅用于获取模型包，照片、人脸裁剪、embedding 和名称不会上传；
-- 可取消，下载完成后校验 SHA-256、清单与 Core ML 可加载性，再标记为可用。
-
-下载失败可重试；具备可信 HTTP Range 支持时可恢复临时下载。未通过哈希或清单验证的临时文件必须删除，不能被 Worker 加载。
-
-下载体积由发布 manifest 中的精确 `download_size` 决定。当前研究 ONNX 文件约 249 MB，但生产 Core ML 包预计约 **130–250 MB**（取决于 FP16 / 量化方案）；产品文案和磁盘预检必须展示最终发布包的真实大小，不能写死 249 MB。
-
-### 4.2 自动下载的定义
-
-应用**不会**在安装后或进入人物页时静默下载人物模型。
-
-用户完成首次下载后，可单独开启“允许下载已批准的模型更新”。它只适用于同一模型、同一许可证语义下的已签名补丁。以下情况永远重新询问：模型切换、许可证变化、体积显著变化、下载源变化或主版本升级。
+用户仍然可以在设置中选择其他兼容模型（4.4），走原来的验证和复制流程。
 
 ### 4.3 兼容模型
 
@@ -103,7 +98,7 @@ sidecar job runner 是人物任务的唯一状态来源：它创建 `people_mode
 
 | 层级 | 例子 | 行为 |
 |---|---|---|
-| 推荐 | ArcFace R100 | 默认高精度模型；官方校验下载。 |
+| 推荐 | ArcFace R100 | 默认高精度模型；随 App 内置。 |
 | 待评估候选 | ArcFace R50 | 尚未在本项目完成精度、Core ML 转换和回归验证；不能在发布版中显示为可安装。 |
 | 实验性 | AuraFace R100、用户导入包 | 不自动成为默认模型；明确标注实验性，建立独立索引。 |
 
@@ -220,7 +215,7 @@ JobDock 仅显示一张紧凑卡片，例如：`分析人物 · 512 / 4,287 · �
 ## 9. 隐私、安全与故障处理
 
 - 不把图片、裁剪图、embedding 或人名发送到 AfterFrame 服务或第三方模型服务。
-- 模型包下载只允许 HTTPS 和批准的 manifest；校验失败、磁盘空间不足、Core ML 加载失败都必须显示可操作错误。
+- 内置模型在构建时校验，不在运行时联网；用户导入的模型校验失败、Core ML 加载失败都必须显示可操作错误。
 - Worker 崩溃时，job runner 保留最后完成的持久 cursor；有有效 checkpoint 的人物 job 可重试/恢复，不能损坏已成功写入的 face records。
 - “清除人物数据”删除 catalog 中的人脸、embedding、候选、名称、`people_asset_index` 记录，**以及该 catalog 的全部 face thumbnail cache**；不删除原始照片。模型文件另有“移除模型”操作。
 - 模型文件通过版本路径与 manifest hash 隔离，不能由任意本地路径覆盖官方模型。
@@ -235,7 +230,7 @@ JobDock 仅显示一张紧凑卡片，例如：`分析人物 · 512 / 4,287 · �
 
 ### 阶段 1：模型与任务基础设施
 
-- 官方模型 manifest、下载、校验、移除、恢复下载。
+- 官方模型的来源和校验信息；（2026-10 起）构建时下载并内置，不在运行时下载。
 - 预编译并打包 People Worker；Electron main 传递 `PEOPLE_WORKER_PATH`，sidecar 直接管理其子进程与 NDJSON。
 - jobs schema 的 priority、pause、持久 resume cursor、可恢复状态机、按优先级调度和 JobDock/Activity Center 映射。
 - 最小 schema（含 `people_asset_index`）与单张手动分析、模型专属缓存键。
@@ -259,13 +254,13 @@ JobDock 仅显示一张紧凑卡片，例如：`分析人物 · 512 / 4,287 · �
 - 人物任务不会冻结图库滚动、编辑、导入或退出；取消与恢复可验证。
 - 任何照片中的已确认人物都能在 Inspector 准确呈现；群像缩略图不显示姓名标签，且“包含人物”图标语义为检测到合格脸、非已确认人物。
 - 同一模型版本的重复扫描不重复计算；不同模型版本不会混用向量。
-- 下载校验、离线、磁盘不足、Worker 崩溃和模型不兼容均有可理解且可恢复的提示。
-- 在用户授权前没有模型下载、全库扫描或网络传输。
+- 离线、磁盘不足、Worker 崩溃和模型不兼容均有可理解且可恢复的提示。
+- 在用户授权前没有全库扫描或网络传输；人物识别全程不联网。
 
 ## 11. 实现前仍需确认的问题
 
 1. macOS 原生 detector/landmarks 与研究基线的最终对齐质量是否足够；如不足，选择哪一个已审批的本地 detector。
-2. 官方 ArcFace R100 发布包的最终 Core ML 格式、签名/manifest 托管位置以及升级策略。
+2. ~~官方 ArcFace R100 发布包的最终 Core ML 格式、签名/manifest 托管位置以及升级策略。~~ 已定：Core ML mlpackage 随 App 内置，跟随 App 版本升级（4.1）。
 3. 标注评估集的构成和最低 pair precision / recall 门槛。
 4. 对被用户手动合并的“同一张照片内两张脸”的极少数反射/双重曝光场景，是否需要提供覆盖 cannot-link 的高级操作。
 5. 最终 Core ML 包的精确体积、量化方式和 manifest 托管位置；发布文案以该结果为准。
