@@ -54,29 +54,35 @@ function composeOrientations(steps) {
 function register({
   ipcMain,
   dialog,
+  dialogParent = () => null,
   rootDir,
   writeImageWithSourceMetadata,
   addAllowedMediaDir,
 }) {
-  ipcMain.handle("workspace:pick-save-path", async (_event, options) => {
-    const result = await dialog.showSaveDialog({
+  // dialogParent(event): the window a dialog is modal to, or null (macOS).
+  ipcMain.handle("workspace:pick-save-path", async (event, options) => {
+    const parent = dialogParent(event);
+    const dialogOptions = {
       title: "Save edited image",
       defaultPath: options?.defaultPath || path.join(rootDir, "data", "edited-image.jpg"),
       buttonLabel: "Save Image",
       filters: Array.isArray(options?.filters) ? options.filters : undefined,
-    });
+    };
+    const result = await (parent ? dialog.showSaveDialog(parent, dialogOptions) : dialog.showSaveDialog(dialogOptions));
     if (result.canceled || !result.filePath) return null;
     return result.filePath;
   });
 
   // Directory picker for batch export (e.g. batch collage → N files).
-  ipcMain.handle("workspace:pick-directory", async (_event, options) => {
-    const result = await dialog.showOpenDialog({
+  ipcMain.handle("workspace:pick-directory", async (event, options) => {
+    const parent = dialogParent(event);
+    const dialogOptions = {
       title: options?.title || "Choose export folder",
       defaultPath: options?.defaultPath || undefined,
       buttonLabel: options?.buttonLabel || "Export Here",
       properties: ["openDirectory", "createDirectory"],
-    });
+    };
+    const result = await (parent ? dialog.showOpenDialog(parent, dialogOptions) : dialog.showOpenDialog(dialogOptions));
     if (result.canceled || !result.filePaths?.length) return null;
     return result.filePaths[0];
   });

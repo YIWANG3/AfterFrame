@@ -53,6 +53,7 @@ const { createAppShell } = require("./appShell");
 const { desktopCapabilities } = require("./capabilities");
 const { claimSingleInstance, launchPaths } = require("./singleInstance");
 const { importDialogOptions } = require("./importDialog");
+const { catalogDialogOptions } = require("./catalogDialog");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
 
@@ -403,13 +404,26 @@ ipcMain.handle("workspace:roots", async () => {
   }
 });
 
+// Windows and Linux make a dialog modal to the window that asked for it, so it
+// can't slip behind the window and leave it clickable; macOS keeps its
+// free-standing panels.
+const dialogParent = (event) => (process.platform === "darwin" ? null : BrowserWindow.fromWebContents(event.sender));
+
+function showOpenDialogFor(event, options) {
+  const parent = dialogParent(event);
+  return parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options);
+}
+
+function showSaveDialogFor(event, options) {
+  const parent = dialogParent(event);
+  return parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options);
+}
+
 // pick: "files" | "folders" from Import Files… / Import Folder… on Windows and
-// Linux, whose dialogs can't take both (./importDialog.js). There the dialog
-// is modal to the window; macOS keeps its free-standing panel.
+// Linux, whose dialogs can't take both (./importDialog.js).
 ipcMain.handle("workspace:pick-directories", async (event, kind, pick) => {
   const options = importDialogOptions({ platform: process.platform, kind, pick, t: makeT(currentLocale) });
-  const parent = process.platform === "darwin" ? null : BrowserWindow.fromWebContents(event.sender);
-  const result = await (parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options));
+  const result = await showOpenDialogFor(event, options);
   return result.canceled ? [] : result.filePaths;
 });
 
@@ -420,8 +434,8 @@ ipcMain.handle("workspace:register-roots", (_event, rootType, paths) => {
 // Handwriting reference image (style-transfer source). The chosen file is fed
 // to the text-image job as --ref-image; allow it through media:// so the modal
 // can show a thumbnail.
-ipcMain.handle("workspace:pick-handwriting-ref", async () => {
-  const result = await dialog.showOpenDialog({
+ipcMain.handle("workspace:pick-handwriting-ref", async (event) => {
+  const result = await showOpenDialogFor(event, {
     title: "Choose reference image",
     properties: ["openFile"],
     filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
@@ -432,27 +446,21 @@ ipcMain.handle("workspace:pick-handwriting-ref", async () => {
   return filePath;
 });
 
-ipcMain.handle("workspace:pick-catalog", async () => {
+ipcMain.handle("workspace:pick-catalog", async (event) => {
   const defaultDir = isPackaged
     ? app.getPath("documents")
     : path.join(rootDir, "data");
-  const result = await dialog.showOpenDialog({
-    title: "Choose catalog",
-    properties: ["openDirectory"],
-    defaultPath: defaultDir,
-  });
+  const options = catalogDialogOptions({ action: "open", defaultDir, t: makeT(currentLocale) });
+  const result = await showOpenDialogFor(event, options);
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.handle("workspace:create-catalog", async () => {
+ipcMain.handle("workspace:create-catalog", async (event) => {
   const defaultDir = isPackaged
     ? path.join(app.getPath("documents"), "AfterFrame")
     : path.join(rootDir, "data");
-  const result = await dialog.showSaveDialog({
-    title: "Create catalog",
-    defaultPath: path.join(defaultDir, "untitled.afcatalog"),
-    buttonLabel: "Create Catalog",
-  });
+  const options = catalogDialogOptions({ action: "create", defaultDir, t: makeT(currentLocale) });
+  const result = await showSaveDialogFor(event, options);
   if (result.canceled || !result.filePath) {
     return null;
   }
@@ -646,7 +654,7 @@ ipcMain.handle("app:copy-text", (_event, text) => {
 ipcMain.handle("app:mcp-status", () => mcpServerApi?.getStatus() ?? { status: "starting" });
 
 const saveFileApi = saveFileIpc.register({
-  ipcMain, dialog,
+  ipcMain, dialog, dialogParent,
   rootDir,
   writeImageWithSourceMetadata,
   addAllowedMediaDir,

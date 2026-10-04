@@ -6,5 +6,8 @@
   "importFoldersTitle": "Import folders",
   "addRawTitle": "Add raw source files or folders",
   "addRawFilesTitle": "Add raw source files",
-  "addRawFoldersTitle": "Add raw source folders"
+  "addRawFoldersTitle": "Add raw source folders",
+  "openCatalogTitle": "Open catalog",
+  "newCatalogTitle": "New catalog",
+  "newCatalogButton": "Create Catalog"
 }
