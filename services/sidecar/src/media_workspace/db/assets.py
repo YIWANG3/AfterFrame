@@ -11,7 +11,7 @@ from hashlib import sha1
 from pathlib import Path
 
 from ..models import ImageCandidate, MatchDecision, RawMetadata
-from .core import RESOLVER_VERSION, _file_id, _json
+from .core import RESOLVER_VERSION, _file_id, _json, _preview_cache_key
 from .locations import upsert_asset_location_from_metadata
 from .resource_sets import get_resource_set_for_asset, link_assets
 
@@ -694,7 +694,6 @@ def upsert_preview_entry(
     status: str,
     commit: bool = True,
 ) -> None:
-    cache_key = sha1(f"{asset_id}:{kind}".encode()).hexdigest()[:20]
     connection.execute(
         """
         INSERT INTO preview_entries (cache_key, asset_id, kind, relative_path, width, height, status)
@@ -706,10 +705,38 @@ def upsert_preview_entry(
             status = excluded.status,
             updated_at = CURRENT_TIMESTAMP
         """,
-        (f"preview_{cache_key}", asset_id, kind, relative_path, width, height, status),
+        (_preview_cache_key(asset_id, kind), asset_id, kind, relative_path, width, height, status),
     )
     if commit:
         connection.commit()
+
+
+def dedupe_preview_entries(connection: sqlite3.Connection, commit: bool = True) -> int:
+    """One preview row per (asset, kind); returns how many rows it removed.
+
+    split_shared_asset_ids used to share the original's previews under its
+    own key, so the first regeneration added a second row and the browse join
+    showed the photo four times. Keeps a ready row, the one regeneration
+    writes when there is one. The files stay: a shared row points at another
+    asset's preview."""
+    groups = connection.execute(
+        "SELECT asset_id, kind FROM preview_entries GROUP BY asset_id, kind HAVING COUNT(*) > 1"
+    ).fetchall()
+    removed = 0
+    for asset_id, kind in groups:
+        own_key = _preview_cache_key(asset_id, kind)
+        rows = connection.execute(
+            "SELECT cache_key, status, updated_at FROM preview_entries WHERE asset_id = ? AND kind = ?",
+            (asset_id, kind),
+        ).fetchall()
+        keep = max(rows, key=lambda r: (r["status"] == "ready", r["cache_key"] == own_key, r["updated_at"]))
+        removed += connection.execute(
+            "DELETE FROM preview_entries WHERE asset_id = ? AND kind = ? AND cache_key != ?",
+            (asset_id, kind, keep["cache_key"]),
+        ).rowcount
+    if commit and removed:
+        connection.commit()
+    return removed
 
 
 def upsert_catalog_root(connection: sqlite3.Connection, root_type: str, path: Path, commit: bool = True) -> None:

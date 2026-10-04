@@ -10,7 +10,7 @@ from hashlib import sha1
 from pathlib import Path
 from uuid import uuid4
 
-from .core import _file_id, _json
+from .core import _file_id, _json, _preview_cache_key
 
 
 def _link_id(parent_asset_id: str, child_asset_id: str, relation_type: str) -> str:
@@ -417,12 +417,23 @@ def split_shared_asset_ids(connection: sqlite3.Connection, commit: bool = True) 
                 FROM collection_items WHERE asset_id = ?
             """, (new_id, old_id))
 
-            # Share preview_entries (same preview file, different asset_id)
-            connection.execute("""
-                INSERT OR IGNORE INTO preview_entries (cache_key, asset_id, kind, relative_path, width, height, status)
-                SELECT ? || '_' || kind, ?, kind, relative_path, width, height, status
-                FROM preview_entries WHERE asset_id = ?
-            """, (new_id, new_id, old_id))
+            # Share preview_entries (same preview file, different asset_id),
+            # under the key upsert_preview_entry uses and only for kinds the
+            # asset lacks. A second row per kind (a later regeneration under
+            # its own key, or an asset adopted with previews of its own) shows
+            # the photo four times in the gallery.
+            for entry in connection.execute(
+                "SELECT kind, relative_path, width, height, status FROM preview_entries WHERE asset_id = ?",
+                (old_id,),
+            ).fetchall():
+                connection.execute("""
+                    INSERT INTO preview_entries (cache_key, asset_id, kind, relative_path, width, height, status)
+                    SELECT ?, ?, ?, ?, ?, ?, ?
+                    WHERE NOT EXISTS (SELECT 1 FROM preview_entries WHERE asset_id = ? AND kind = ?)
+                """, (
+                    _preview_cache_key(new_id, entry["kind"]), new_id, entry["kind"], entry["relative_path"],
+                    entry["width"], entry["height"], entry["status"], new_id, entry["kind"],
+                ))
 
             split_count += 1
 

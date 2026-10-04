@@ -493,6 +493,12 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     preexisting = existing is not None
     # Its size is LibRaw's, cropped to the image the camera delivers.
     metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
+    # A photo is one file, so key it by path like images and videos. Keyed by
+    # content alone, byte-identical copies (a re-downloaded "x (1).3FR") were
+    # one asset whose size and mtime matched only one of them: the other card
+    # read as changed on disk, and the gallery repaired and re-rendered both
+    # in a loop. A path that already is a RAW asset keeps it (upsert_raw_asset).
+    metadata.asset_id = stable_asset_id("raw", metadata.fingerprint, str(resolved))
     # Imported RAW is a browseable photo in its own right, NOT a reverse-lookup
     # source: a sibling JPG imported the same way won't bind it as its "raw
     # source". Only the dedicated "Add RAW source" flow registers RAW as a
