@@ -1,4 +1,4 @@
-"""RAW previews without a RAW decoder: the JPEG the camera embedded in the file.
+"""RAW previews without a RAW decoder: the image the camera embedded in the file.
 
 macOS renders RAW through Image I/O (QuickLook and sips). Windows has
 neither, and Pillow can't demosaic. Nearly every RAW format carries the
@@ -9,7 +9,12 @@ Image I/O, the preview is that JPEG, scaled like any other.
 The file is scanned for JPEG start markers rather than parsed per format.
 Each hit is walked marker by marker. Only 8-bit Huffman frames that Pillow
 decodes are kept (baseline, extended, progressive), which skips the lossless
-JPEG that CR2 and many DNGs use for the raw data itself. The largest one wins.
+JPEG that CR2 and many DNGs use for the raw data itself.
+
+Hasselblad 3FR and FFF (and older TIFF-based RAWs) can carry the preview
+uncompressed instead: an RGB image in one of the file's TIFF directories. Those
+are found by walking the directories (the IFD chain and SubIFDs) for
+uncompressed 8- or 16-bit RGB. The largest preview of either kind wins.
 """
 
 from __future__ import annotations
@@ -18,11 +23,16 @@ import mmap
 from io import BytesIO
 from pathlib import Path
 
-from .metadata import _iter_embedded_tiff_offsets, _parse_tiff_ifd, _read_u32
+import numpy as np
+from PIL import Image
+
+from .metadata import _iter_embedded_tiff_offsets, _parse_tiff_ifd, _read_u16, _read_u32
 
 _SOI = b"\xff\xd8\xff"
 _DECODABLE_SOF = {0xC0, 0xC1, 0xC2}
 _ORIENTATION_TAG = 0x0112
+_TIFF_MAGIC = (b"II*\x00", b"MM\x00*")
+_SUBIFDS_TAG = 0x014A
 # The RAW's own TIFF IFD0 (orientation) sits near the start in every format.
 _HEAD_BYTES = 512 * 1024
 
@@ -78,6 +88,70 @@ def _frame_end(buf, pos: int) -> int | None:
             pos = ff + 2 + ((buf[ff + 2] << 8) | buf[ff + 3])
 
 
+def _as_list(value) -> list:
+    return value if isinstance(value, list) else [value]
+
+
+def _rgb_directory(buf, tags: dict) -> tuple[int, int, int, int, list, list] | None:
+    """(width, height, bytes per sample, area, strip offsets, strip byte
+    counts) of a TIFF directory holding an uncompressed 8- or 16-bit RGB
+    image, the form Hasselblad's previews take; None for anything else (the
+    raw CFA data, a JPEG-compressed or planar image)."""
+    width, height = tags.get(0x0100), tags.get(0x0101)
+    bits = _as_list(tags.get(0x0102))
+    offsets, counts = _as_list(tags.get(0x0111)), _as_list(tags.get(0x0117))
+    if not (isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0):
+        return None
+    if tags.get(0x0103) != 1 or tags.get(0x0106) != 2 or tags.get(0x011C, 1) != 1:
+        return None
+    if len(bits) != 3 or len(set(bits)) != 1 or bits[0] not in (8, 16) or tags.get(0x0115, 3) != 3:
+        return None
+    if not offsets or len(offsets) != len(counts) or not all(isinstance(v, int) for v in offsets + counts):
+        return None
+    depth = bits[0] // 8
+    if sum(counts) < width * height * 3 * depth or any(o + c > len(buf) for o, c in zip(offsets, counts, strict=True)):
+        return None
+    return width, height, depth, width * height, offsets, counts
+
+
+def _tiff_rgb_previews(buf) -> list[tuple[int, int, int, int, list, list]]:
+    """Every uncompressed RGB image in the file's TIFF directories."""
+    if buf[:4] not in _TIFF_MAGIC:
+        return []
+    little = buf[:2] == b"II"
+    found: list[tuple[int, int, int, int, list, list]] = []
+    seen: set[int] = set()
+    queue = [_read_u32(buf, 4, little)]
+    while queue and len(seen) < 32:
+        offset = queue.pop(0)
+        if not isinstance(offset, int) or offset <= 0 or offset in seen or offset + 2 > len(buf):
+            continue
+        seen.add(offset)
+        tags = _parse_tiff_ifd(buf, 0, offset, little)
+        end = offset + 2 + _read_u16(buf, offset, little) * 12
+        if end + 4 <= len(buf):
+            queue.append(_read_u32(buf, end, little))
+        queue += [v for v in _as_list(tags.get(_SUBIFDS_TAG)) if isinstance(v, int)]
+        rgb = _rgb_directory(buf, tags)
+        if rgb:
+            found.append(rgb)
+    return found
+
+
+def _rgb_as_tiff(buf, rgb: tuple[int, int, int, int, list, list], little: bool) -> bytes:
+    """The RGB image as an in-memory TIFF Pillow opens (16-bit scaled to 8)."""
+    width, height, depth, _area, offsets, counts = rgb
+    data = b"".join(buf[o : o + c] for o, c in zip(offsets, counts, strict=True))[: width * height * 3 * depth]
+    if depth == 1:
+        image = Image.frombytes("RGB", (width, height), data)
+    else:
+        samples = np.frombuffer(data, dtype="<u2" if little else ">u2").reshape(height, width, 3)
+        image = Image.fromarray((samples >> 8).astype(np.uint8), "RGB")
+    out = BytesIO()
+    image.save(out, "TIFF")
+    return out.getvalue()
+
+
 def _orientation(head: bytes) -> int | None:
     for base in _iter_embedded_tiff_offsets(head)[:8]:
         if base + 8 > len(head):
@@ -89,10 +163,11 @@ def _orientation(head: bytes) -> int | None:
     return None
 
 
-def embedded_jpeg(path: Path) -> tuple[bytes, int | None] | None:
-    """The largest decodable JPEG embedded in `path` and the RAW's EXIF
-    orientation (the embedded image is stored unrotated, like the sensor
-    data), or None when there is none."""
+def embedded_preview(path: Path) -> tuple[bytes, int | None] | None:
+    """The largest preview embedded in `path`, as image bytes Pillow opens (a
+    JPEG, or an uncompressed RGB image wrapped as TIFF), and the RAW's EXIF
+    orientation (embedded images are stored unrotated, like the sensor data);
+    None when there is none."""
     with path.open("rb") as handle:
         if path.stat().st_size == 0:
             return None
@@ -105,20 +180,28 @@ def embedded_jpeg(path: Path) -> tuple[bytes, int | None] | None:
                     width, height, scan = header
                     frames.append((width * height, hit, scan))
                 hit = buf.find(_SOI, hit + 3)
-            for _area, start, scan in sorted(frames, reverse=True):
+            jpeg = None
+            for area, start, scan in sorted(frames, reverse=True):
                 end = _frame_end(buf, scan)
                 if end:
-                    return bytes(buf[start:end]), _orientation(bytes(buf[:_HEAD_BYTES]))
+                    jpeg = (area, start, end)
+                    break
+            rgb = max(_tiff_rgb_previews(buf), key=lambda r: r[3], default=None)
+            orientation = _orientation(bytes(buf[:_HEAD_BYTES]))
+            if rgb and (jpeg is None or rgb[3] > jpeg[0]):
+                return _rgb_as_tiff(buf, rgb, buf[:2] == b"II"), orientation
+            if jpeg:
+                return bytes(buf[jpeg[1] : jpeg[2]]), orientation
     return None
 
 
 def render_raw_preview(source: Path, target: Path, size: int) -> None:
-    """A preview of a RAW from its embedded JPEG: long edge at most `size`,
+    """A preview of a RAW from its embedded image: long edge at most `size`,
     the RAW's orientation as the EXIF tag, like every other preview."""
     from .preview_service import render_pillow_preview
 
-    found = embedded_jpeg(source)
+    found = embedded_preview(source)
     if found is None:
-        raise ValueError(f"no embedded JPEG preview in {source.name}")
+        raise ValueError(f"no embedded preview in {source.name}")
     data, orientation = found
     render_pillow_preview(BytesIO(data), target, size, orientation=orientation)
