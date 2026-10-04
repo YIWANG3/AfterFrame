@@ -201,7 +201,7 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(candidate.camera_model, "Canon EOS R6m2")
             self.assertEqual(candidate.lens_model, "RF24-70mm F2.8 L IS USM")
             self.assertEqual(candidate.software, "Adobe Photoshop Lightroom")
-            self.assertEqual(candidate.capture_time, "2026-03-20T10:15:30+00:00")
+            self.assertEqual(candidate.capture_time, "2026-03-20T10:15:30")
             self.assertEqual(candidate.iso, 100)
             self.assertEqual(candidate.aperture, 2.8)
             self.assertEqual(candidate.shutter_speed, 1 / 250)
@@ -260,7 +260,7 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(metadata.camera_make, "Canon")
             self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
             self.assertEqual(metadata.software, "Adobe Photoshop Lightroom")
-            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
+            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52")
             self.assertIsNone(metadata.rating)
             self.assertEqual(metadata.iso, 100)
             self.assertEqual(metadata.aperture, 2.8)
@@ -309,7 +309,7 @@ class MetadataExtractionTest(unittest.TestCase):
             metadata = extract_raw_metadata(path, metadata_profile="matcher")
 
             self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
-            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
+            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52")
             self.assertIsNone(metadata.camera_make)
             self.assertIsNone(metadata.lens_model)
             self.assertIsNone(metadata.lens_make)
@@ -337,14 +337,14 @@ class ExifToolMappingTest(unittest.TestCase):
         def captured(tags):
             return _from_exiftool(tags)["capture_time"]
 
-        self.assertEqual(captured({"ExifIFD:DateTimeOriginal": "2024:07:13 09:12:53"}), "2024-07-13T09:12:53+00:00")
-        self.assertEqual(captured({"ExifIFD:DateTimeOriginal": "2019-10-18T16:25:03"}), "2019-10-18T16:25:03+00:00")  # Hasselblad
-        self.assertEqual(captured({"IFD0:DateTimeOriginal": "2023:05:01 08:00:00"}), "2023-05-01T08:00:00+00:00")  # Nikon
+        self.assertEqual(captured({"ExifIFD:DateTimeOriginal": "2024:07:13 09:12:53"}), "2024-07-13T09:12:53")
+        self.assertEqual(captured({"ExifIFD:DateTimeOriginal": "2019-10-18T16:25:03"}), "2019-10-18T16:25:03")  # Hasselblad
+        self.assertEqual(captured({"IFD0:DateTimeOriginal": "2023:05:01 08:00:00"}), "2023-05-01T08:00:00")  # Nikon
         # An export whose EXIF was stripped keeps XMP; the wall clock, not the instant.
-        self.assertEqual(captured({"XMP-photoshop:DateCreated": "2025:10:04 17:34:08.120-08:00"}), "2025-10-04T17:34:08+00:00")
+        self.assertEqual(captured({"XMP-photoshop:DateCreated": "2025:10:04 17:34:08.120-08:00"}), "2025-10-04T17:34:08")
         # An unset camera clock is no date.
         unset = {"ExifIFD:DateTimeOriginal": "0000:00:00 00:00:00", "IFD0:ModifyDate": "2024:01:01 10:00:00"}
-        self.assertEqual(captured(unset), "2024-01-01T10:00:00+00:00")
+        self.assertEqual(captured(unset), "2024-01-01T10:00:00")
         self.assertIsNone(captured({"XMP-photoshop:DateCreated": "2024:07:13"}))
 
     def test_lens_names(self) -> None:
@@ -390,11 +390,11 @@ class ExifToolTest(unittest.TestCase):
     def test_a_camera_dng_and_an_iphone_style_heic(self) -> None:
         raw = extract_raw_metadata(FIXTURES / "raw" / "luna-morning.dng")
         self.assertEqual((raw.camera_make, raw.camera_model, raw.iso), ("Insta360", "Luna Ultra", 275))
-        self.assertEqual(raw.capture_time, "2026-08-18T09:19:43+00:00")
+        self.assertEqual(raw.capture_time, "2026-08-18T09:19:43")
         self.assertEqual((raw.width, raw.height), (1024, 576))
         heic = extract_image_candidate(FIXTURES / "heic" / "iphone-style.heic")
         self.assertEqual((heic.camera_model, heic.lens_model, heic.rating), ("Canon EOS R6m2", "EF70-200mm f/2.8L IS II USM", 5))
-        self.assertEqual((heic.capture_time, heic.width, heic.height), ("2025-10-04T17:34:08+00:00", 800, 533))
+        self.assertEqual((heic.capture_time, heic.width, heic.height), ("2025-10-04T17:34:08", 800, 533))
 
     def test_an_ifd0_far_into_the_file(self) -> None:
         # Capture One writes IFD0 and the EXIF IFD at the end of its DNGs, tens
@@ -420,7 +420,7 @@ class ExifToolTest(unittest.TestCase):
         path.write_bytes(b"II*\x00" + struct.pack("<I", ifd0_at) + b"\x00" * gap + body)
         metadata = extract_raw_metadata(path)
         self.assertEqual((metadata.camera_make, metadata.camera_model, metadata.iso), ("SONY", "ILCE-7M4", 100))
-        self.assertEqual(metadata.capture_time, "2022-07-31T15:32:58+00:00")
+        self.assertEqual(metadata.capture_time, "2022-07-31T15:32:58")
 
     def test_a_name_in_any_script(self) -> None:
         path = self.root / "飞飞花鸟岛 沙滩 #2.heic"
@@ -535,7 +535,7 @@ class ExifToolTest(unittest.TestCase):
         with patch.object(exiftool, "read", return_value=None):
             heic = extract_image_candidate(FIXTURES / "heic" / "iphone-style.heic")
             raw = extract_raw_metadata(FIXTURES / "raw" / "luna-morning.dng")
-        self.assertEqual((heic.camera_model, heic.iso, heic.capture_time), ("Canon EOS R6m2", 100, "2025-10-04T17:34:08+00:00"))
+        self.assertEqual((heic.camera_model, heic.iso, heic.capture_time), ("Canon EOS R6m2", 100, "2025-10-04T17:34:08"))
         self.assertEqual((heic.aperture, heic.shutter_speed, heic.focal_length), (4.5, 0.0025, 70.0))
         self.assertEqual((heic.width, heic.height), (800, 533))
         # A RAW: only what LibRaw reads.

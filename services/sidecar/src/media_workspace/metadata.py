@@ -176,9 +176,14 @@ _NOT_A_LENS = re.compile(r"^(-+|\d+|n/a|none|unknown\b.*|.*\bno lens\b.*)$", re.
 
 
 def _normalize_capture_time(value: object) -> str | None:
-    """The camera's wall clock in the catalog's form, from EXIF's
+    """The camera's wall clock as ISO 8601 without a time zone, from EXIF's
     "2024:07:13 09:12:53", Hasselblad's "2024-07-13T09:12:53" or XMP's
-    (sub-seconds and an offset are dropped)."""
+    (sub-seconds and an offset are dropped). It was stored as UTC, which it
+    isn't, so every viewer moved it by their own offset (shot at 18:05 in
+    China, shown at 02:05 the next day) and an edit wrote that back into the
+    file. Without an offset, the renderer reads it as local and shows the
+    camera's clock, as photo apps do. Video creation dates are real instants
+    and keep theirs."""
     if not isinstance(value, str):
         return None
     match = re.match(r"\s*(\d{4})[:-](\d{2})[:-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})", value)
@@ -186,7 +191,7 @@ def _normalize_capture_time(value: object) -> str | None:
         return None
     try:
         year, month, day, hour, minute, second = (int(part) for part in match.groups())
-        return datetime(year, month, day, hour, minute, second, tzinfo=UTC).isoformat()
+        return datetime(year, month, day, hour, minute, second).isoformat()
     except ValueError:  # 0000:00:00 00:00:00, an unset clock
         return None
 

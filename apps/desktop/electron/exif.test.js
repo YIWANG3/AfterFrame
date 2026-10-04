@@ -19,6 +19,22 @@ test("toExifGpsCoordinate yields degrees/minutes/seconds with a rational seconds
   assert.equal(toExifGpsCoordinate(null), null);
 });
 
+test("a capture time is written back as the camera's clock showed it, wherever the viewer is", () => {
+  // Capture times are stored without an offset (the camera's clock). Read as
+  // local, they come back with the same digits in any time zone; the old
+  // +00:00 label moved them by the viewer's offset, here 8 hours.
+  const zone = process.env.TZ;
+  try {
+    process.env.TZ = "Asia/Shanghai";
+    assert.equal(formatExifDateTime("2024-07-13T18:05:00"), "2024:07:13 18:05:00");
+    process.env.TZ = "America/Los_Angeles";
+    assert.equal(formatExifDateTime("2024-07-13T18:05:00"), "2024:07:13 18:05:00");
+  } finally {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  }
+});
+
 test("formatExifDateTime uses the EXIF colon-date form and rejects junk", () => {
   assert.match(formatExifDateTime("2026-09-16T10:20:30"), /^2026:09:16 \d\d:20:30$/);
   assert.equal(formatExifDateTime("yesterday"), null);
