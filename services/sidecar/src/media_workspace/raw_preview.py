@@ -25,6 +25,7 @@ says 1 while the RAW's says 8.
 from __future__ import annotations
 
 import mmap
+from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
 from typing import NamedTuple
@@ -140,15 +141,16 @@ def _rgb_directory(buf, tags: dict) -> _RgbImage | None:
     return _RgbImage(width, height, depth, offsets, counts, _valid_orientation(tags.get(_ORIENTATION_TAG)))
 
 
-def _tiff_rgb_previews(buf) -> list[_RgbImage]:
-    """Every uncompressed RGB image in the file's TIFF directories."""
+def tiff_directories(buf, limit: int = 32) -> Iterator[dict]:
+    """The tags of each directory in a TIFF-based RAW, the IFD chain and the
+    SubIFDs under it; at most `limit`, since a corrupt file can point in
+    circles. Nothing for a file that isn't a TIFF."""
     if buf[:4] not in _TIFF_MAGIC:
-        return []
+        return
     little = buf[:2] == b"II"
-    found: list[_RgbImage] = []
     seen: set[int] = set()
     queue = [_read_u32(buf, 4, little)]
-    while queue and len(seen) < 32:
+    while queue and len(seen) < limit:
         offset = queue.pop(0)
         if not isinstance(offset, int) or offset <= 0 or offset in seen or offset + 2 > len(buf):
             continue
@@ -158,10 +160,12 @@ def _tiff_rgb_previews(buf) -> list[_RgbImage]:
         if end + 4 <= len(buf):
             queue.append(_read_u32(buf, end, little))
         queue += [v for v in _as_list(tags.get(_SUBIFDS_TAG)) if isinstance(v, int)]
-        rgb = _rgb_directory(buf, tags)
-        if rgb:
-            found.append(rgb)
-    return found
+        yield tags
+
+
+def _tiff_rgb_previews(buf) -> list[_RgbImage]:
+    """Every uncompressed RGB image in the file's TIFF directories."""
+    return [rgb for tags in tiff_directories(buf) if (rgb := _rgb_directory(buf, tags))]
 
 
 def _rgb_as_tiff(buf, rgb: _RgbImage, little: bool) -> bytes:

@@ -37,6 +37,7 @@ from .metadata import (
     stem_key as compute_stem_key,
 )
 from .models import ImageCandidate, MatchDecision
+from .raw_dimensions import raw_dimensions
 from .source_readiness import SourceNotReadyError, validate_source_ready
 from .video import VIDEO_EXTENSIONS, is_video
 from .video import probe as probe_video
@@ -486,7 +487,9 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
     # EXIF dims can be the embedded preview's size, not the sensor's — override
     # with the true decoded dimensions so the gallery shows real resolution.
-    native = _native_raw_dimensions(resolved)
+    # Without sips (Windows), or where it can't read the file, the RAW's own
+    # structure says where the real size is.
+    native = _native_raw_dimensions(resolved) or raw_dimensions(resolved)
     if native:
         metadata.width, metadata.height = native
     upsert_raw_asset(connection, metadata, commit=False)

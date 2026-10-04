@@ -49,6 +49,7 @@ RATIONAL_TYPE = 5
 UNDEFINED_TYPE = 7
 SIGNED_LONG_TYPE = 9
 SIGNED_RATIONAL_TYPE = 10
+IFD_TYPE = 13  # an offset to a sub-IFD; Capture One writes SubIFDs this way
 TIFF_TYPE_SIZES = {
     ASCII_TYPE: 1,
     SHORT_TYPE: 2,
@@ -57,6 +58,7 @@ TIFF_TYPE_SIZES = {
     UNDEFINED_TYPE: 1,
     SIGNED_LONG_TYPE: 4,
     SIGNED_RATIONAL_TYPE: 8,
+    IFD_TYPE: 4,
 }
 
 
@@ -262,7 +264,7 @@ def _parse_tiff_value(
             for index in range(0, len(raw), 2)
         ]
         return values[0] if count == 1 and values else values
-    if field_type == LONG_TYPE:
+    if field_type in (LONG_TYPE, IFD_TYPE):
         values = [
             struct.unpack("<I" if little_endian else ">I", raw[index : index + 4])[0]
             for index in range(0, len(raw), 4)
