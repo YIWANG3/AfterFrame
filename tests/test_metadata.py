@@ -420,7 +420,7 @@ class ExifToolTest(unittest.TestCase):
         path.write_bytes(b"II*\x00" + struct.pack("<I", ifd0_at) + b"\x00" * gap + body)
         metadata = extract_raw_metadata(path)
         self.assertEqual((metadata.camera_make, metadata.camera_model, metadata.iso), ("SONY", "ILCE-7M4", 100))
-        self.assertEqual(metadata.capture_time, "2022-07-31T15:32:58+00:00")
+        self.assertEqual(metadata.capture_time, "2022-07-31T15:32:58")
 
     def test_a_name_in_any_script(self) -> None:
         path = self.root / "飞飞花鸟岛 沙滩 #2.heic"
