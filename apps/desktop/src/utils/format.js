@@ -190,9 +190,16 @@ export function progressNote(task) {
   return `${currentPhase.label}: starting...`;
 }
 
+// How many photos All Assets shows: exports, and the RAW files and videos
+// imported as photos. `image_assets` counts exports only (what RAW matching
+// needs); an older sidecar has only that.
+export function browseCount(summary) {
+  return Number(summary?.browse_assets ?? summary?.image_assets ?? 0);
+}
+
 export function navItems(summary) {
   const items = [
-    { key: "all", label: "All Assets", count: summary?.image_assets ?? 0, icon: "Archive" },
+    { key: "all", label: "All Assets", count: browseCount(summary), icon: "Archive" },
     { key: "recent", label: "Recently Added", count: summary?.recently_added_count ?? 0, icon: "Clock" },
   ];
   if (Number(summary?.rated_count ?? 0) > 0) {

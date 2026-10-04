@@ -2,7 +2,7 @@ import api from "../api";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid, ArrowUpDown, Search } from "lucide-react";
-import { fileName, localFileUrl } from "../utils/format";
+import { browseCount, fileName, localFileUrl } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
 import CollagePanel from "./collage/CollagePanel";
 import BatchPanel from "./collage/BatchPanel";
@@ -83,7 +83,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
 
   const sourceTotal = useMemo(() => {
     const totalSummary = summary || {};
-    if (source === "all") return Number(totalSummary.image_assets || 0);
+    if (source === "all") return browseCount(totalSummary);
     if (source === "matched") return Number(totalSummary.confirmed_matches || 0);
     if (source === "rated") return Number(totalSummary.rated_count || 0);
     const col = manualCollections.find((c) => c.collection_id === source);

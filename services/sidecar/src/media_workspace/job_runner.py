@@ -556,6 +556,9 @@ def run_import_job(
     thresholds = Thresholds()
     phase_results: list[dict[str, Any]] = []
     changed_paths: list[Path] = []
+    batched_thumbnails = False
+    # What the import's batches made, for the thumbnail phase's totals.
+    batch_preview_results: list[dict[str, Any]] = []
     phases = _build_import_phases(mode, bool(raw_dirs), bool(image_dirs), generate_hd)
     if not phases:
         result: dict[str, Any] = {"phase_results": [], "current_phase": None}
@@ -681,6 +684,21 @@ def run_import_job(
                     commit=True,
                 )
 
+            # Each batch shows up whole: indexed, then its thumbnails (and
+            # colours), before the next is indexed. The gallery refreshes
+            # while an import runs, so a drive fills in batch by batch rather
+            # than staying empty until every file is indexed (#130).
+            batch_previews = None
+            if any(phase["key"] == "generate_previews" for phase in phases):
+                batch_service = PreviewService(ensure_catalog(catalog_path))
+
+                def batch_previews(paths: list[Path], changed: list[Path]) -> None:
+                    batch_preview_results.append(batch_service.generate_batch(
+                        connection, kind="preview", paths=paths, force_paths=changed,
+                        analyze_colors=analyze_colors,
+                        progress_callback=lambda _update: _check_cancel(connection, job_id),
+                    ))
+
             resolve_result = resolve_image_batch(
                 connection,
                 image_dirs,
@@ -688,7 +706,9 @@ def run_import_job(
                 refresh=True,
                 progress_callback=resolve_progress,
                 respect_tombstones=respect_tombstones,
+                batch_callback=batch_previews,
             )
+            batched_thumbnails = batch_previews is not None
             changed_paths = [Path(path) for path in resolve_result.get("changed_paths", [])]
             # Create resource sets for any exports that don't have one yet
             for row in list_image_assets_missing_resource_set(connection):
@@ -736,17 +756,20 @@ def run_import_job(
                 )
 
             preview_service = PreviewService(ensure_catalog(catalog_path))
+            # Batches already made (and re-made, when changed) their thumbnails:
+            # this pass only picks up what they missed, so it skips what's ready.
+            thumbnail_force_paths = [] if batched_thumbnails else changed_paths
             batch_results = [
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="image",
                     progress_callback=preview_progress, paths=image_dirs,
-                    force_paths=changed_paths, analyze_colors=analyze_colors,
+                    force_paths=thumbnail_force_paths, analyze_colors=analyze_colors,
                 ),
                 # Video poster frames share the standard preview tier (no HD).
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="video",
                     progress_callback=preview_progress, paths=image_dirs,
-                    force_paths=changed_paths,
+                    force_paths=thumbnail_force_paths,
                 ),
                 # RAW: the 512 thumbnail only. Its HD tier is made when something
                 # needs it (the lightbox, editor or collage asks for it), not for
@@ -754,7 +777,7 @@ def run_import_job(
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="raw",
                     progress_callback=preview_progress, paths=image_dirs,
-                    force_paths=changed_paths,
+                    force_paths=thumbnail_force_paths,
                 ),
             ]
             # An asset that already has an HD preview must not keep a stale one
@@ -790,6 +813,12 @@ def run_import_job(
                 key: sum(int((r or {}).get(key, 0)) for r in batch_results)
                 for key in ("generated", "skipped", "failed", "deferred", "total")
             }
+            # The batches' thumbnails were made during indexing; this pass
+            # skipped them as ready. Count them as made by this import. A
+            # batch's failures were retried here, so failures are this pass's.
+            made_in_batches = sum(int((r or {}).get("generated", 0)) for r in batch_preview_results)
+            preview_result["generated"] += made_in_batches
+            preview_result["skipped"] = max(0, preview_result["skipped"] - made_in_batches)
             phase_results.append(_phase_result(preview_phase, preview_result))
             phase_cursor += 1
 
