@@ -836,6 +836,7 @@ export const browserBridge = {
   getSummary: async () => {
     return {
       image_assets: assets.length,
+      browse_assets: assets.length,
       raw_assets: 0,
       rated_count: assets.filter((a) => a.app_rating > 0).length,
       confirmed_matches: 0,

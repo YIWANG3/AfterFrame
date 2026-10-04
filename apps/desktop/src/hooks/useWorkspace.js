@@ -234,7 +234,7 @@ export default function useWorkspace({ pushToast } = {}) {
   useEffect(() => {
     if (!browserReady) return;
     loadFacetValues();
-  }, [browserReady, summary?.image_assets, scopeKey, loadFacetValues]);
+  }, [browserReady, summary?.browse_assets, summary?.image_assets, scopeKey, loadFacetValues]);
 
   // Queued-changes note for the import card in the unified JobDock.
   const queuedImportNote = useMemo(() => {
