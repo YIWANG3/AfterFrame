@@ -1,13 +1,65 @@
 import { useState, useRef, useEffect, Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
+import { FOLDER_SORTS, canReorderFolders, visibleFolders } from "./folderList";
 
 const FOLDER_VIEW_KEY = "sidebar.folderView"; // "list" | "covers"
+const FOLDER_SORT_KEY = "sidebar.folderSort"; // one of FOLDER_SORTS
+
+function FolderSortMenu({ sort, onChange }) {
+  const { t } = useTranslation("nav");
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handleKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", handleDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("pointerdown", handleDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+  return (
+    <span ref={ref} className="relative flex">
+      <button
+        type="button"
+        className={`rounded-md p-0.5 transition-colors hover:bg-hover hover:text-text ${sort === "custom" ? "text-muted2" : "text-accent"}`}
+        title={t("sidebar.sortFolders")}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ArrowUpDown className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div data-testid="folder-sort-menu" className="absolute right-0 top-full z-[101] mt-1.5 min-w-[140px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
+          {FOLDER_SORTS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={[
+                "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] normal-case tracking-normal transition-colors hover:bg-hover",
+                sort === value ? "text-text" : "text-muted",
+              ].join(" ")}
+              onClick={() => { onChange(value); setOpen(false); }}
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center">
+                {sort === value && <Check className="h-3 w-3 text-accent" />}
+              </span>
+              {t(`sidebar.folderSort.${value}`)}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
 
 const ICON_MAP = { Archive: Images, Clock, Star, Link };
 
@@ -38,7 +90,7 @@ export default function Sidebar({
   peopleMode = false,
   discoverMode = false,
 }) {
-  const { t } = useTranslation("nav");
+  const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
   const browse = navItems(summary);
   const rootSummary = [];
@@ -62,6 +114,28 @@ export default function Sidebar({
   // a folder that gains/loses photos refreshes its cover.
   const [covers, setCovers] = useState({});
   const manualCollections = (collections || []).filter((c) => c.kind === "manual");
+  const [folderSort, setFolderSort] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FOLDER_SORT_KEY);
+      return FOLDER_SORTS.includes(saved) ? saved : "custom";
+    } catch { return "custom"; }
+  });
+  const changeFolderSort = (next) => {
+    setFolderSort(next);
+    try { localStorage.setItem(FOLDER_SORT_KEY, next); } catch { /* private mode */ }
+  };
+  const [searchingFolders, setSearchingFolders] = useState(false);
+  const [folderQuery, setFolderQuery] = useState("");
+  const closeFolderSearch = () => { setSearchingFolders(false); setFolderQuery(""); };
+  const shownFolders = visibleFolders(collections, { sort: folderSort, query: folderQuery, locale: i18n.language });
+  // Dragging sets the custom order, so it needs that order on screen, whole.
+  const reorderable = canReorderFolders({ sort: folderSort, query: folderQuery }) && !reorderingCollections;
+  const reorderTitle = folderSort !== "custom"
+    ? t("sidebar.reorderNeedsCustom")
+    : folderQuery.trim() ? t("sidebar.reorderNeedsNoSearch") : t("sidebar.reorderHint");
+  // A new folder goes on top of the custom order; under another sort it lands
+  // wherever that puts it, so scroll it into view once the list has it.
+  const [revealFolderId, setRevealFolderId] = useState(null);
   const coverKey = manualCollections.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
   useEffect(() => {
     if (folderView !== "covers") return undefined;
@@ -93,6 +167,14 @@ export default function Sidebar({
   const folderScrollRef = useRef(null);
   const folderScrollSpeed = useRef(0);
   useEffect(() => {
+    if (!revealFolderId) return;
+    const row = [...(folderScrollRef.current?.querySelectorAll("[data-collection-id]") || [])]
+      .find((el) => el.dataset.collectionId === revealFolderId);
+    if (!row) return;
+    row.scrollIntoView?.({ block: "nearest" });
+    setRevealFolderId(null);
+  }, [revealFolderId, collections]);
+  useEffect(() => {
     if (!draggingFolderId) return undefined;
     let frame;
     const scroll = () => {
@@ -115,7 +197,7 @@ export default function Sidebar({
   }
 
   function moveFolder(sourceId, targetId, after) {
-    if (sourceId === targetId || reorderingCollections) return;
+    if (sourceId === targetId || !reorderable) return;
     const original = manualCollections.map((c) => c.collection_id);
     if (!original.includes(sourceId) || !original.includes(targetId)) return;
     const ordered = original.filter((id) => id !== sourceId);
@@ -265,6 +347,16 @@ export default function Sidebar({
             <span className="flex items-center gap-0.5">
               <button
                 type="button"
+                className={`rounded-md p-0.5 transition-colors hover:bg-hover hover:text-text ${searchingFolders ? "text-text" : "text-muted2"}`}
+                title={t("sidebar.searchFolders")}
+                aria-pressed={searchingFolders}
+                onClick={() => (searchingFolders ? closeFolderSearch() : setSearchingFolders(true))}
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+              <FolderSortMenu sort={folderSort} onChange={changeFolderSort} />
+              <button
+                type="button"
                 className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 title={folderView === "covers" ? t("sidebar.viewList") : t("sidebar.viewCovers")}
                 onClick={toggleFolderView}
@@ -275,12 +367,43 @@ export default function Sidebar({
                 type="button"
                 className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 title={t("sidebar.newFolder")}
-                onClick={() => setCreatingFolder(true)}
+                onClick={() => {
+                  // The field opens on top of the list: show it, and let no
+                  // search hide the folder it makes.
+                  closeFolderSearch();
+                  setCreatingFolder(true);
+                  if (folderScrollRef.current) folderScrollRef.current.scrollTop = 0;
+                }}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
               </button>
             </span>
           </div>
+
+          {searchingFolders && (
+            <div className="relative mx-2.5 mb-1.5 shrink-0">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted2" />
+              <input
+                autoFocus
+                value={folderQuery}
+                onChange={(e) => setFolderQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") closeFolderSearch(); }}
+                placeholder={t("sidebar.searchFolders")}
+                aria-label={t("sidebar.searchFolders")}
+                className="h-7 w-full rounded-md border border-border/70 bg-app pl-6 pr-6 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+              />
+              {folderQuery && (
+                <button
+                  type="button"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted2 hover:text-text"
+                  title={t("sidebar.clearFolderSearch")}
+                  onClick={() => setFolderQuery("")}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
 
           <div
             ref={folderScrollRef}
@@ -304,15 +427,16 @@ export default function Sidebar({
                 <InlineEdit
                   initial=""
                   onConfirm={async (name) => {
-                    await onCreateCollection?.(name);
+                    const created = await onCreateCollection?.(name);
                     setCreatingFolder(false);
+                    if (created?.collection_id) setRevealFolderId(created.collection_id);
                   }}
                   onCancel={() => setCreatingFolder(false)}
                 />
               </div>
             )}
 
-            {manualCollections.map((col) => {
+            {shownFolders.map((col) => {
               const active = activeCollectionId === col.collection_id;
               if (editingId === col.collection_id) {
                 const editor = (
@@ -359,10 +483,10 @@ export default function Sidebar({
                   tabIndex={0}
                   data-collection-id={col.collection_id}
                   data-folder-insertion={folderInsertion?.id === col.collection_id ? (folderInsertion.after ? "after" : "before") : undefined}
-                  draggable={!reorderingCollections}
-                  title={t("sidebar.reorderHint")}
+                  draggable={reorderable}
+                  title={reorderTitle}
                   onDragStart={(event) => {
-                    if (event.target.closest("button, input") || reorderingCollections) {
+                    if (event.target.closest("button, input") || !reorderable) {
                       event.preventDefault();
                       return;
                     }
@@ -376,7 +500,7 @@ export default function Sidebar({
                   onKeyDown={(event) => {
                     if (event.target !== event.currentTarget) return;
                     if (event.key === "Enter") onSelectCollection?.(col.collection_id);
-                    if (event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+                    if (reorderable && event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
                       event.preventDefault();
                       const index = manualCollections.findIndex((c) => c.collection_id === col.collection_id);
                       const after = event.key === "ArrowDown";
@@ -500,8 +624,11 @@ export default function Sidebar({
               );
             })}
 
-            {!(collections || []).some((c) => c.kind === "manual") && !creatingFolder && (
+            {!manualCollections.length && !creatingFolder && (
               <div className="px-2.5 py-2 text-[11px] text-muted2">{t("sidebar.noFolders")}</div>
+            )}
+            {manualCollections.length > 0 && !shownFolders.length && folderQuery.trim() && (
+              <div className="px-2.5 py-2 text-[11px] text-muted2">{t("sidebar.noFolderMatches", { query: folderQuery.trim() })}</div>
             )}
           </div>
         </div>

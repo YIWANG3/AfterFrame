@@ -67,6 +67,18 @@
   },
   "sidebar": {
     "reorderHint": "拖拽排序 · Option/Alt + ↑/↓",
+    "reorderNeedsCustom": "选择“自定义顺序”后可拖拽排序",
+    "reorderNeedsNoSearch": "清空搜索后可拖拽排序",
+    "searchFolders": "搜索文件夹",
+    "clearFolderSearch": "清空搜索",
+    "noFolderMatches": "没有匹配“{{query}}”的文件夹",
+    "sortFolders": "文件夹排序",
+    "folderSort": {
+      "custom": "自定义顺序",
+      "name": "名称",
+      "newest": "最近创建",
+      "largest": "照片最多"
+    },
     "discover": "发现",
     "people": "人物",
     "stickers": "贴纸",

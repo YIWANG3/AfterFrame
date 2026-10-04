@@ -64,4 +64,42 @@ async function exerciseFolderOrder(page, { reload = false } = {}) {
   await expect.poll(order).toEqual(final);
   await expect(scroll.locator('[data-folder-insertion]')).toHaveCount(0);
 }
-module.exports = { exerciseFolderOrder };
+
+// New folders go on top; the list sorts by name and searches by name, and
+// only the custom order can be dragged. Runs after exerciseFolderOrder.
+async function exerciseFolderSearchAndSort(page) {
+  const scroll = page.getByTestId('sidebar-folder-scroll');
+  const row = (name) => scroll.locator('[data-collection-id]').filter({ hasText: name });
+  const names = () => scroll.locator('[data-collection-id]').evaluateAll((rows) => rows
+    .map((r) => r.querySelector('span.truncate')?.textContent || '')
+    .filter((name) => name.startsWith('Sort ')));
+  for (const name of ['Sort alpha 10', 'Sort Bravo', 'Sort alpha 2']) {
+    await page.getByTitle('New folder', { exact: true }).click();
+    await scroll.locator('input').fill(name);
+    await scroll.locator('input').press('Enter');
+    await expect.poll(async () => (await names())[0], { timeout: 15_000 }).toBe(name);
+  }
+  await expect.poll(names).toEqual(['Sort alpha 2', 'Sort Bravo', 'Sort alpha 10']);
+
+  const sortBy = async (label) => {
+    await page.getByTitle('Sort folders', { exact: true }).click();
+    await page.getByTestId('folder-sort-menu').getByRole('button', { name: label, exact: true }).click();
+  };
+  await sortBy('Name');
+  await expect.poll(names).toEqual(['Sort alpha 2', 'Sort alpha 10', 'Sort Bravo']);
+  await expect(row('Sort Bravo')).toHaveAttribute('draggable', 'false');
+
+  await page.getByTitle('Search folders', { exact: true }).click();
+  const search = page.getByPlaceholder('Search folders');
+  await search.fill('ALPHA');
+  await expect.poll(names).toEqual(['Sort alpha 2', 'Sort alpha 10']);
+  await search.fill('zzz');
+  await expect(scroll).toContainText('No folders match “zzz”');
+  await search.press('Escape');
+  await expect(search).toHaveCount(0);
+
+  await sortBy('Custom order');
+  await expect.poll(names).toEqual(['Sort alpha 2', 'Sort Bravo', 'Sort alpha 10']);
+  await expect(row('Sort Bravo')).toHaveAttribute('draggable', 'true');
+}
+module.exports = { exerciseFolderOrder, exerciseFolderSearchAndSort };

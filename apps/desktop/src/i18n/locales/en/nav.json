@@ -67,6 +67,18 @@
   },
   "sidebar": {
     "reorderHint": "Drag to reorder · Option/Alt + ↑/↓",
+    "reorderNeedsCustom": "Choose Custom order to drag folders",
+    "reorderNeedsNoSearch": "Clear the search to drag folders",
+    "searchFolders": "Search folders",
+    "clearFolderSearch": "Clear search",
+    "noFolderMatches": "No folders match “{{query}}”",
+    "sortFolders": "Sort folders",
+    "folderSort": {
+      "custom": "Custom order",
+      "name": "Name",
+      "newest": "Newest first",
+      "largest": "Most photos"
+    },
     "discover": "Discover",
     "people": "People",
     "stickers": "Stickers",
