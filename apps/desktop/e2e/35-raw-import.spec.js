@@ -220,3 +220,47 @@ test("a RAW's HD preview is made when the lightbox opens it, not at import", asy
   expect((await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path).toMatch(/previews-hd/);
   await ctx.window.keyboard.press("Escape");
 });
+
+test("byte-identical RAW copies are two photos, and their cards hold still", async () => {
+  test.setTimeout(150_000);
+  // A re-downloaded "B0000333 (1).3FR": the same bytes, its own mtime. Keyed
+  // by content, both were one asset whose mtime matched only one file; the
+  // other card read as changed on disk, and the gallery repaired and
+  // re-rendered both every couple of seconds.
+  const dupDir = path.join(work.root, "copies");
+  fs.mkdirSync(dupDir);
+  // Trailing bytes keep them apart from the RAW sources' fingerprints.
+  const bytes = Buffer.concat([fs.readFileSync(path.join(RAW_FIXTURES, "luna-morning.dng")), Buffer.alloc(128)]);
+  const names = ["B0000333.dng", "B0000333 (1).dng"];
+  names.forEach((name, n) => {
+    const file = path.join(dupDir, name);
+    fs.writeFileSync(file, bytes);
+    const mtime = new Date(1_700_000_000_000 + n * 4000);
+    fs.utimesSync(file, mtime, mtime);
+  });
+  await importAndWait({ image_dirs: [dupDir] });
+
+  const all = await ctx.window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 200 }));
+  const cards = names.map((name) => all.filter((row) => path.basename(row.image_path) === name));
+  expect(cards.map((rows) => rows.length)).toEqual([1, 1]);
+  const [original, copy] = cards.map(([row]) => row);
+  expect(original.asset_id).not.toBe(copy.asset_id);
+  expect([original.source_changed, copy.source_changed]).toEqual([false, false]);
+
+  // Their previews load once and stay put: no repair re-renders them. Cards
+  // are found by file, since a shared asset id is the bug.
+  await tool("show_in_app", { asset_ids: [original.asset_id] });
+  const paths = [original.image_path, copy.image_path];
+  const loadedSources = () => ctx.window.evaluate((wanted) => wanted.map((imagePath) => {
+    const card = [...document.querySelectorAll("[data-image-path]")].find((el) => el.dataset.imagePath === imagePath);
+    const img = card?.querySelector("img");
+    return img?.classList.contains("opacity-100") ? img.getAttribute("src") : null;
+  }), paths);
+  await expect.poll(async () => (await loadedSources()).every(Boolean), { timeout: 15_000 }).toBe(true);
+  const seen = paths.map(() => new Set());
+  for (let tick = 0; tick < 40; tick += 1) {
+    (await loadedSources()).forEach((src, n) => seen[n].add(src ?? "(blank)"));
+    await sleep(100);
+  }
+  expect(seen.map((set) => set.size), JSON.stringify(seen.map((set) => [...set]))).toEqual([1, 1]);
+});

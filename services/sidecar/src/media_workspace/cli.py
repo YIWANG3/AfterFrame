@@ -30,6 +30,7 @@ from .db import (
     connect,
     create_collection,
     create_job,
+    dedupe_preview_entries,
     delete_app_setting,
     delete_collection,
     delete_image_asset_from_catalog,
@@ -965,7 +966,10 @@ def _cmd_repair_resource_sets(args, connection, catalog, parser):
 def _cmd_split_shared_assets(args, connection, catalog, parser):
     count = split_shared_asset_ids(connection)
     raw_removed = remove_raw_from_resource_sets(connection)
-    print(json.dumps({"ok": True, "split_count": count, "raw_removed": raw_removed}, indent=2))
+    previews_deduped = dedupe_preview_entries(connection)
+    print(json.dumps({
+        "ok": True, "split_count": count, "raw_removed": raw_removed, "previews_deduped": previews_deduped,
+    }, indent=2))
     return 0
 
 

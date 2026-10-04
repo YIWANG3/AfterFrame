@@ -16,6 +16,7 @@ function formatDuration(seconds) {
 import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
+import { staleSourceRepairs } from "./galleryRepair";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
 
 const GAP = 12;
@@ -634,18 +635,11 @@ export default function Gallery({
   // signal. Repair either case as soon as the card enters the loaded page.
   useEffect(() => {
     const st = previewRegenRef.current;
-    for (const item of items) {
-      const metadata = item?.image_metadata || {};
-      const missingImageMetadata = item?.asset_type === "image" && (
-        Number(metadata.width || 0) <= 0
-        || Number(metadata.height || 0) <= 0
-        || Number(metadata.file_size || metadata.size_bytes || 0) <= 0
-      );
-      if (item?.source_changed || missingImageMetadata) queueAssetRepair(item, "stale-source");
-      // Healthy again: return the budget, or a second bout of staleness later
-      // in the session (an external edit, a partial re-export) is refused.
-      else if (item?.asset_id) st.attempts.delete(`stale-source:${item.asset_id}`);
-    }
+    const { stale, healthyIds } = staleSourceRepairs(items);
+    for (const item of stale) queueAssetRepair(item, "stale-source");
+    // Healthy again: return the budget, or a second bout of staleness later
+    // in the session (an external edit, a partial re-export) is refused.
+    for (const id of healthyIds) st.attempts.delete(`stale-source:${id}`);
   }, [items, queueAssetRepair]);
 
   const refreshFromDisk = useCallback(async (assetIds) => {

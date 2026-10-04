@@ -195,3 +195,9 @@ def _json(value: object) -> str:
 def _file_id(asset_id: str, path: str) -> str:
     digest = sha1(path.encode("utf-8")).hexdigest()[:16]
     return f"file_{asset_id}_{digest}"
+
+
+def _preview_cache_key(asset_id: str, kind: str) -> str:
+    # One row per (asset, kind): the browse query joins preview_entries once
+    # per kind, so a second row shows the photo twice (four times, both kinds).
+    return f"preview_{sha1(f'{asset_id}:{kind}'.encode()).hexdigest()[:20]}"

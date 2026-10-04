@@ -5,6 +5,7 @@ from ..schema import SCHEMA_VERSION
 from .assets import (
     confirm_match,
     count_assets_for_annotation,
+    dedupe_preview_entries,
     get_duplicate_assets,
     get_registry,
     list_assets_for_annotation,
