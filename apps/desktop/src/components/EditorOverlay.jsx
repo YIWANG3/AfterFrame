@@ -45,6 +45,7 @@ import { useTextTool } from "./editor/state/useTextTool";
 import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
+import { useAddToFolder } from "../hooks/useAddToFolder";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
@@ -274,8 +275,15 @@ function photoLightness(source, geom, spot) {
 const isLogoFileDrag = (event) => [...(event.dataTransfer?.items || [])]
   .some((entry) => entry.kind === "file" && (entry.type === "image/svg+xml" || entry.type === "image/png"));
 
-export default function EditorOverlay({ open, item, catalogKey = null, onClose, onSaveComplete, pushToast }) {
+export default function EditorOverlay({
+  open, item, catalogKey = null, collections, sourceCollectionId, onAddToCollection, onClose, onSaveComplete, pushToast,
+}) {
   const { t } = useTranslation("editor");
+  // Opened from a folder, what the editor makes (a saved copy, split panels,
+  // a repaint) can join it. Saves and split panels are web downloads, not
+  // catalog assets, so on the web only the repaint box shows.
+  const folderJoin = useAddToFolder({ open, collections, sourceCollectionId, onAddToCollection });
+  const fileSaveFolder = api.can("fileSystem") ? folderJoin.folder : null;
   const imageCanvasRef = useRef(null);
   const depthOverlayCanvasRef = useRef(null);
   const nativeSaveSourcePathRef = useRef(null);
@@ -772,6 +780,7 @@ export default function EditorOverlay({ open, item, catalogKey = null, onClose, 
     pushToast,
     t,
     onSaveStart: () => setMessage(""),
+    joinFolder: folderJoin.joinFolder,
   });
 
   const splitExport = useSplitExport({
@@ -780,6 +789,7 @@ export default function EditorOverlay({ open, item, catalogKey = null, onClose, 
     pushToast, t,
     // No path: App refreshes the gallery; the split hook raises its own toast.
     onSaveComplete: () => onSaveComplete?.(),
+    joinFolder: folderJoin.joinFolder,
   });
   const splitExportRef = useRef(null);
   splitExportRef.current = (outputDir = splitOutputDir, subfolder = splitSubfolder) => splitExport.exportSplit({ outputDir, subfolder });
@@ -1376,6 +1386,9 @@ export default function EditorOverlay({ open, item, catalogKey = null, onClose, 
         saving={saving}
         exportDisabled={saving || loadState !== "ready"}
         onExport={handleExport}
+        folder={fileSaveFolder}
+        addToFolder={folderJoin.addToFolder}
+        onAddToFolderChange={folderJoin.setAddToFolder}
         onClose={onClose}
         t={t}
       />
@@ -1660,6 +1673,9 @@ export default function EditorOverlay({ open, item, catalogKey = null, onClose, 
                 subfolder={splitSubfolder}
                 onSubfolderChange={setSplitSubfolder}
                 onChooseFolder={chooseSplitFolder}
+                folder={fileSaveFolder}
+                addToFolder={folderJoin.addToFolder}
+                onAddToFolderChange={folderJoin.setAddToFolder}
                 blockedReason={splitBlockedReason}
                 exporting={splitExport.exporting}
                 progress={splitExport.progress}
@@ -1682,7 +1698,17 @@ export default function EditorOverlay({ open, item, catalogKey = null, onClose, 
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}
             <div className={tool === "ai" ? "flex max-h-[calc(100vh-10rem)] flex-col" : "hidden"}>
-              <AiRepaintPanel sourcePath={sourcePath} outputBasePath={saveBasePath} onCompareChange={setCompareState} compareState={compareState} onRepaintComplete={onSaveComplete} />
+              <AiRepaintPanel
+                sourcePath={sourcePath}
+                outputBasePath={saveBasePath}
+                onCompareChange={setCompareState}
+                compareState={compareState}
+                onRepaintComplete={onSaveComplete}
+                folder={folderJoin.folder}
+                addToFolder={folderJoin.addToFolder}
+                onAddToFolderChange={folderJoin.setAddToFolder}
+                targetCollectionId={folderJoin.targetCollectionId}
+              />
             </div>
           </PanelChrome>
 

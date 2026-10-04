@@ -7,6 +7,7 @@
     "save": "保存图像",
     "saveButton": "保存",
     "saving": "保存中…",
+    "addToFolder": "保存后加入「{{name}}」",
     "saveFailed": "保存失败",
     "saveFailedMsg": "图像保存失败",
     "edited": "已编辑",
@@ -52,6 +53,7 @@
     "customWidth": "自定义比例宽",
     "customHeight": "自定义比例高",
     "subfolder": "创建子目录",
+    "addToFolder": "导出后加入「{{name}}」",
     "webDownloads": "{{count}} 张会逐张下载到浏览器。"
   },
   "text": {
@@ -223,6 +225,7 @@
     "compareTopBottom": "上下对比",
     "generate": "生成",
     "generating": "正在生成…",
+    "addToFolder": "生成后加入「{{name}}」",
     "cancel": "取消"
   },
   "compare": {

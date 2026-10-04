@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  browseCount,
   collapseRootPaths,
   determineImportMode,
   escapePathLabel,
   fileName,
   formatBytes,
   mergeRoots,
+  navItems,
 } from "./format";
 
 describe("path helpers", () => {
@@ -61,5 +63,16 @@ describe("formatBytes", () => {
     expect(formatBytes(1024 ** 2)).toBe("1.0 MB");
     expect(formatBytes(0)).toBeNull();
     expect(formatBytes(-1)).toBeNull();
+  });
+});
+
+describe("All Assets count", () => {
+  it("counts the RAW files and videos imported as photos, not only exports", () => {
+    const summary = { image_assets: 39, raw_assets: 2604, browse_assets: 2669 };
+    expect(browseCount(summary)).toBe(2669);
+    expect(navItems(summary).find((item) => item.key === "all").count).toBe(2669);
+    // An older sidecar reports exports only.
+    expect(browseCount({ image_assets: 39 })).toBe(39);
+    expect(browseCount(null)).toBe(0);
   });
 });

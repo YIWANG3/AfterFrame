@@ -24,13 +24,26 @@ function bgFillStyle(ctx, bg, W, H) {
   return bg?.color || "#ffffff";
 }
 
+// Catalog registration is a nice-to-have — if it fails (no catalog loaded,
+// sidecar down) we still consider the save successful.
+async function registerSaved(savePath, sourcePath) {
+  try {
+    const registered = await api.quickRegister(savePath, sourcePath);
+    return registered?.asset_id || null;
+  } catch (e) {
+    console.warn("[saveImage] quickRegister skipped:", e?.message || e);
+    return null;
+  }
+}
+
 /**
  * Save the current editor composition to `savePath`. Tries native sharp first
  * (no overlay layers), falls back to canvas-based composition when text/sticker
  * layers exist.
  *
  * @param {object} ctx - all the editor state needed to render
- * @returns {Promise<void>} resolves on success; throws on failure
+ * @returns {Promise<{assetId: string|null}>} the catalog asset the file was
+ *   registered as (null when registration was skipped); throws on failure
  */
 export async function saveEditedImage(ctx) {
   const {
@@ -71,11 +84,7 @@ export async function saveEditedImage(ctx) {
         crop: normalizedCrop,
         quality: 92,
       });
-      // Catalog registration is a nice-to-have — if it fails (no catalog
-      // loaded, sidecar down) we still consider the save successful.
-      try { await api.quickRegister(savePath, sourcePath); }
-      catch (e) { console.warn("[saveImage] quickRegister skipped:", e?.message || e); }
-      return;
+      return { assetId: await registerSaved(savePath, sourcePath) };
     } catch (nativeError) {
       console.error("[saveImage] Native sharp save failed, falling back to canvas:", nativeError);
     }
@@ -254,6 +263,5 @@ export async function saveEditedImage(ctx) {
   releaseCanvasImage(transformedFull);
   releaseCanvasImage(outputCanvas);
 
-  try { await api.quickRegister(savePath, sourcePath); }
-  catch (e) { console.warn("[saveImage] quickRegister skipped:", e?.message || e); }
+  return { assetId: await registerSaved(savePath, sourcePath) };
 }

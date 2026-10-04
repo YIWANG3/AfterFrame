@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image
 
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import (
@@ -19,8 +22,9 @@ from media_workspace.db import (
     request_job_resume,
     set_catalog_path,
 )
+from media_workspace.db.collections import create_collection, delete_collection
 from media_workspace.db.jobs import STALL_MINUTES_BY_JOB_TYPE, STALL_MINUTES_DEFAULT
-from media_workspace.job_runner import run_enrichment_job, run_import_job
+from media_workspace.job_runner import run_ai_repaint_job, run_enrichment_job, run_import_job
 from media_workspace.scanner import scan_raw_directory
 
 
@@ -154,6 +158,63 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(len(recorded["result"]["phase_results"]), 4)
             connection.close()
 
+    def test_an_import_makes_each_batchs_thumbnails_before_indexing_the_next(self) -> None:
+        # A drive import used to index every file first: hours of an empty
+        # gallery (#130). Each batch is now indexed, then previewed.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            photos = root / "trip"
+            photos.mkdir()
+            for index in range(5):
+                Image.new("RGB", (64, 48), (index * 40, 90, 160)).save(photos / f"IMG_{index:04d}.jpg", "JPEG")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            job = create_job(connection, "import", payload={})
+            seen = []
+
+            def record(service, conn, kind, asset_type=None, paths=None, **kwargs):
+                indexed = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+                seen.append((kind, asset_type, sorted(p.name for p in (paths or [])), indexed))
+                return {"generated": 0, "skipped": 0, "failed": 0, "deferred": 0, "total": 0}
+
+            with patch("media_workspace.reverse_lookup.IMPORT_BATCH_SIZE", 2), \
+                    patch("media_workspace.job_runner.PreviewService.generate_batch", autospec=True, side_effect=record):
+                run_import_job(connection, catalog.root, job["job_id"], [], [photos], mode="processed_only", generate_hd=False)
+            connection.close()
+
+        batches = [entry for entry in seen if entry[2] and entry[2][0].startswith("IMG_")]
+        self.assertEqual([names for _kind, _type, names, _count in batches],
+                         [["IMG_0000.jpg", "IMG_0001.jpg"], ["IMG_0002.jpg", "IMG_0003.jpg"], ["IMG_0004.jpg"]])
+        # Each batch's previews ran when only that much had been indexed.
+        self.assertEqual([count for *_rest, count in batches], [2, 4, 5])
+        self.assertTrue(all(kind == "preview" and asset_type is None for kind, asset_type, *_ in batches))
+
+
+    def test_the_thumbnail_phase_counts_what_the_batches_made(self) -> None:
+        # The batches make the thumbnails as they index; the import's result
+        # still says it made them, rather than "skipped, already there".
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            photos = root / "trip"
+            photos.mkdir()
+            for index in range(3):
+                Image.new("RGB", (64, 48), (index * 60, 90, 160)).save(photos / f"IMG_{index:04d}.jpg", "JPEG")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            job = create_job(connection, "import", payload={})
+            run_import_job(connection, catalog.root, job["job_id"], [], [photos], mode="processed_only", generate_hd=False)
+            result = get_job(connection, job["job_id"])["result"]
+            connection.close()
+        phases = {phase["key"]: phase["result"] for phase in result["phase_results"]}
+        self.assertEqual(
+            {key: phases["generate_previews"][key] for key in ("generated", "skipped", "failed")},
+            {"generated": 3, "skipped": 0, "failed": 0},
+        )
+
     def _import_trip_both_ways(self, folder_first: bool):
         # A trip folder imported as photos and added as a RAW source, in
         # either order: each RAW is one asset, still a matching candidate.
@@ -249,3 +310,54 @@ class JobsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AiRepaintFolderTest(unittest.TestCase):
+    """A repaint started from a folder, its "add to folder" box ticked, joins
+    that folder. The job does it, not the editor: the editor may be closed by
+    the time the provider answers."""
+
+    def test_repaint_joins_the_folder_it_was_started_from(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            source = root / "shot.jpg"
+            Image.new("RGB", (64, 48), (120, 90, 200)).save(source, quality=90)
+            folder = create_collection(connection, "Trip")
+            gone = create_collection(connection, "Gone")
+            delete_collection(connection, gone["collection_id"])
+            smart = create_collection(connection, "Five stars", "smart", json.dumps({"version": 1, "filters": {"rating_min": 5}}))
+
+            def repaint(name: str, collection_id: str | None) -> dict:
+                job = create_job(connection, "ai_repaint")
+                return run_ai_repaint_job(
+                    connection,
+                    catalog.root,
+                    job["job_id"],
+                    provider="mock",
+                    input_path=source,
+                    output_path=root / name,
+                    prompt="p",
+                    origin_path=source,
+                    collection_id=collection_id,
+                )
+
+            def members() -> list[tuple[str, str]]:
+                return [tuple(row) for row in connection.execute("SELECT collection_id, asset_id FROM collection_items")]
+
+            joined = repaint("joined.jpg", folder["collection_id"])
+            self.assertEqual(joined["collection_id"], folder["collection_id"])
+            self.assertEqual(members(), [(folder["collection_id"], joined["asset_id"])])
+
+            # No folder asked for, one deleted meanwhile, or a smart collection
+            # (which fills itself): saved and registered, in no folder.
+            for name, collection_id in (("loose.jpg", None), ("gone.jpg", gone["collection_id"]), ("smart.jpg", smart["collection_id"])):
+                result = repaint(name, collection_id)
+                self.assertTrue(result["asset_id"], name)
+                self.assertIsNone(result["collection_id"], name)
+                self.assertEqual(get_job(connection, get_latest_job(connection, "ai_repaint")["job_id"])["status"], "succeeded")
+            self.assertEqual(members(), [(folder["collection_id"], joined["asset_id"])])
+            connection.close()
