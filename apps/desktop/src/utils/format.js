@@ -40,9 +40,11 @@ export function stickerLabel(sticker) {
   return sticker.name || sticker.sourceLabel || sticker.filename || "";
 }
 
+// The last path segment, for "/" and "\\" paths alike (Windows paths reach
+// the UI as-is); a trailing separator (a folder) is ignored.
 export function fileName(value) {
   if (!value) return "";
-  const normalized = String(value).replaceAll("\\", "/");
+  const normalized = String(value).replaceAll("\\", "/").replace(/\/+$/, "");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || normalized;
 }
@@ -73,9 +75,12 @@ export function mergeRoots(existing, added) {
 
 export function escapePathLabel(value) {
   if (!value) return "Not linked";
-  const segments = String(value).split("/");
+  const text = String(value);
+  // Keep the path's own separator: C:\\Users\\… shortens to ...\\a\\b\\c.jpg
+  const separator = text.includes("\\") && !text.includes("/") ? "\\" : "/";
+  const segments = text.split(/[\\/]/);
   if (segments.length <= 4) return value;
-  return `.../${segments.slice(-3).join("/")}`;
+  return `...${separator}${segments.slice(-3).join(separator)}`;
 }
 
 export function formatBytes(value) {

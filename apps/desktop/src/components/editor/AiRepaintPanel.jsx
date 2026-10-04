@@ -17,6 +17,7 @@ import {
 
 import { getProviderType, ProviderModal } from "../ai/providers";
 import { SliderRow } from "../../ui";
+import { fileName } from "../../utils/format";
 
 /* ── Provider type templates (not instances) ── */
 
@@ -883,7 +884,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
           <CollapsibleSection label={t("repaint.results")} border="border-t" collapsed={collapsedSections.has("results")} onToggle={() => toggleSection("results")}>
             <div className="space-y-1">
               {results.map((r) => {
-                const name = r.path.split("/").pop();
+                const name = fileName(r.path);
                 const isComparing = compareState?.afterPath === r.path;
                 return (
                   <div
@@ -943,7 +944,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
           <CollapsibleSection label={t("repaint.versions")} border="border-t" collapsed={collapsedSections.has("versions")} onToggle={() => toggleSection("versions")}>
             <div className="space-y-0.5">
               {repaintHistory.map((h) => {
-                const name = h.output_path.split("/").pop();
+                const name = fileName(h.output_path);
                 const isComparing = compareState?.afterPath === h.output_path;
                 const isExpanded = expandedHistoryId === h.asset_id;
                 return (

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .db import load_raw_cache_index, load_raw_enrichment_candidates, upsert_catalog_root, upsert_raw_asset
-from .file_types import is_source_file
+from .file_types import in_system_folder, is_source_file
 from .metadata import extract_raw_metadata, iso_mtime
 
 DEFAULT_SCAN_WORKERS = min(8, max(4, os.cpu_count() or 8))
@@ -338,7 +338,8 @@ def iter_candidate_paths(raw_dir: Path):
         yield raw_dir
         return
     for current_root, dir_names, file_names in os.walk(raw_dir):
-        dir_names.sort()
+        # Don't descend into a volume's Recycle Bin / .Trashes at all.
+        dir_names[:] = sorted(name for name in dir_names if not in_system_folder(Path(name)))
         file_names.sort()
         current_dir = Path(current_root)
         for name in file_names:
