@@ -219,6 +219,12 @@ def _read_u32(data: bytes, offset: int, little_endian: bool) -> int:
 
 
 def _normalize_capture_time(value: str | None) -> str | None:
+    """EXIF's capture time as ISO 8601, as the camera's clock showed it: no
+    time zone. It was stored as UTC, which it isn't, so every viewer moved
+    it by their own offset (shot at 18:05 in China, shown at 02:05 the next
+    day) and an edit wrote that back into the file. Without an offset, the
+    renderer reads it as local and shows the camera's clock, as photo apps
+    do. Video creation dates are real instants and keep theirs."""
     if not value:
         return None
     cleaned = value.strip().replace("\x00", "")
@@ -226,7 +232,7 @@ def _normalize_capture_time(value: str | None) -> str | None:
         return None
     for fmt in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.strptime(cleaned, fmt).replace(tzinfo=UTC).isoformat()
+            return datetime.strptime(cleaned, fmt).isoformat()
         except ValueError:
             continue
     return None

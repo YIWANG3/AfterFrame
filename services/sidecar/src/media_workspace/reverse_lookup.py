@@ -67,10 +67,13 @@ def _content_changed(previous: tuple[str, int, str] | None, fingerprint: str, fi
 
 
 def _parse_time(value: str | None) -> datetime | None:
+    """A capture time as the camera's clock showed it. Catalogs from before
+    capture times dropped their (wrong) +00:00 hold both forms until
+    migrated; comparing the two would raise, so the offset is dropped."""
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        return datetime.fromisoformat(value).replace(tzinfo=None)
     except ValueError:
         return None
 

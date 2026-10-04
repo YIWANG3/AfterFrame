@@ -171,7 +171,7 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(candidate.camera_model, "Canon EOS R6m2")
             self.assertEqual(candidate.lens_model, "RF24-70mm F2.8 L IS USM")
             self.assertEqual(candidate.software, "Adobe Photoshop Lightroom")
-            self.assertEqual(candidate.capture_time, "2026-03-20T10:15:30+00:00")
+            self.assertEqual(candidate.capture_time, "2026-03-20T10:15:30")
             self.assertEqual(candidate.iso, 100)
             self.assertEqual(candidate.aperture, 2.8)
             self.assertEqual(candidate.shutter_speed, 1 / 250)
@@ -230,7 +230,7 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(metadata.camera_make, "Canon")
             self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
             self.assertEqual(metadata.software, "Adobe Photoshop Lightroom")
-            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
+            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52")
             self.assertIsNone(metadata.rating)
             self.assertEqual(metadata.iso, 100)
             self.assertEqual(metadata.aperture, 2.8)
@@ -253,7 +253,7 @@ class MetadataExtractionTest(unittest.TestCase):
             metadata = extract_raw_metadata(path)
 
             self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
-            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
+            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52")
 
     def test_lens_make_is_read_when_written_and_empty_when_blank(self) -> None:
         # A third-party lens: LensMake names it (Tamron on Fujifilm), or the
@@ -295,7 +295,7 @@ class MetadataExtractionTest(unittest.TestCase):
             metadata = extract_raw_metadata(path, metadata_profile="matcher")
 
             self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
-            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52+00:00")
+            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52")
             self.assertIsNone(metadata.camera_make)
             self.assertIsNone(metadata.lens_model)
             self.assertIsNone(metadata.lens_make)

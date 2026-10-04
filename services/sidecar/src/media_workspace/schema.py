@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 SCHEMA_STATEMENTS = [

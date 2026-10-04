@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -212,8 +213,42 @@ class ColorsMigrationTest(unittest.TestCase):
 
         init_db(connection)
 
-        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], 10)
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], SCHEMA_VERSION)
         self.assertEqual(connection.execute("SELECT COUNT(*) FROM asset_colors").fetchone()[0], 0)
+
+
+class CaptureTimeMigrationTest(unittest.TestCase):
+    def test_photo_capture_times_lose_their_false_utc_label(self) -> None:
+        # EXIF's clock time was stored as +00:00 and shown shifted by the
+        # viewer's offset. Photos and RAWs drop the label; a video's creation
+        # date is a real instant and keeps it.
+        connection = sqlite3.connect(":memory:")
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+        init_db(connection)
+        rows = [("img_1", "image", "2024-07-13T18:05:00+00:00"), ("raw_1", "raw", "2024-07-13T18:06:00+00:00"),
+                ("vid_1", "video", "2024-07-13T10:07:00+00:00"), ("img_2", "image", "2024-07-13T18:08:00")]
+        for asset_id, asset_type, captured in rows:
+            connection.execute(
+                "INSERT INTO assets (asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,"
+                " fingerprint, file_size, modified_time, metadata_json) VALUES (?, ?, ?, ?, ?, ?, '.jpg', 'f', 1, 'm', ?)",
+                (asset_id, asset_type, f"/p/{asset_id}", asset_id, asset_id, asset_id, json.dumps({"capture_time": captured})),
+            )
+        connection.execute(
+            "INSERT INTO raw_metadata_cache (raw_asset_id, path, stem, normalized_stem, stem_key, capture_time, file_size,"
+            " modified_time, fingerprint) VALUES ('raw_1', '/p/raw_1', 'r', 'r', 'r', '2024-07-13T18:06:00+00:00', 1, 'm', 'f')"
+        )
+        connection.execute("UPDATE catalog_info SET schema_version = 10")
+        connection.commit()
+
+        init_db(connection)
+
+        captured = dict(connection.execute("SELECT asset_id, meta_capture_time FROM assets").fetchall())
+        self.assertEqual(captured, {
+            "img_1": "2024-07-13T18:05:00", "raw_1": "2024-07-13T18:06:00",
+            "vid_1": "2024-07-13T10:07:00+00:00", "img_2": "2024-07-13T18:08:00",
+        })
+        self.assertEqual(connection.execute("SELECT capture_time FROM raw_metadata_cache").fetchone()[0], "2024-07-13T18:06:00")
 
 
 class SchemaMigrationTest(unittest.TestCase):

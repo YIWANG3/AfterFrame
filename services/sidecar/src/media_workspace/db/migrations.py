@@ -383,6 +383,33 @@ def _migrate_to_10(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_to_11(connection: sqlite3.Connection) -> None:
+    """Photo and RAW capture times were EXIF's clock time labelled UTC
+    (+00:00), and viewers shifted them by their own offset. Drop the label:
+    they are the camera's clock time. Videos' creation dates are real
+    instants and stay as they are."""
+    connection.execute(
+        """
+        UPDATE assets
+        SET metadata_json = json_set(
+                metadata_json, '$.capture_time',
+                substr(json_extract(metadata_json, '$.capture_time'), 1,
+                       length(json_extract(metadata_json, '$.capture_time')) - 6))
+        WHERE asset_type != 'video'
+          AND json_valid(metadata_json)
+          AND json_extract(metadata_json, '$.capture_time') LIKE '%+00:00'
+        """
+    )
+    # meta_capture_time is generated from metadata_json and follows it.
+    if _table_exists(connection, "raw_metadata_cache"):
+        connection.execute(
+            """
+            UPDATE raw_metadata_cache SET capture_time = substr(capture_time, 1, length(capture_time) - 6)
+            WHERE capture_time LIKE '%+00:00'
+            """
+        )
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
@@ -392,6 +419,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     8: _migrate_to_8,
     9: _migrate_to_9,
     10: _migrate_to_10,
+    11: _migrate_to_11,
 }
 
 
