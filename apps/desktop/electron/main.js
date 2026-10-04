@@ -50,6 +50,7 @@ const { createMediaAllowlist } = require("./media/allowlist");
 const { registerMediaProtocol } = require("./media/protocol");
 const { createMediaHttpServer } = require("./media/httpServer");
 const { createAppShell } = require("./appShell");
+const { desktopCapabilities } = require("./capabilities");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
 
@@ -607,6 +608,11 @@ require("./devStaleness").register({
   app,
   enabled: !isPackaged && !process.env.AFTERFRAME_USER_DATA,
   roots: [__dirname, path.join(__dirname, "..", "shared"), sidecarSrc],
+});
+
+// What this platform can do (api.can in the renderer); read once by preload.
+ipcMain.on("app:capabilities", (event) => {
+  event.returnValue = desktopCapabilities(process.platform);
 });
 
 ipcMain.handle("app:copy-text", (_event, text) => {

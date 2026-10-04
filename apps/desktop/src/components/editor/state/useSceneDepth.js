@@ -45,7 +45,7 @@ export function useSceneDepth({ sourcePath } = {}) {
       setError("No source image.");
       return;
     }
-    if (!api.has("computeDepth")) {
+    if (!api.has("computeDepth") || !api.can("depth")) {
       setError("Depth API unavailable.");
       return;
     }

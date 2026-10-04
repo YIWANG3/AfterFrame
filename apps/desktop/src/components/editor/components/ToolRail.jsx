@@ -5,6 +5,7 @@
 
 import { Crop, Type, Cannabis, Sparkles, Columns3, createLucideIcon } from "lucide-react";
 import api from "../../../api";
+import { LOCKED_HINT_KEY } from "../../DesktopOnly";
 
 // The Frame tool: a photo in a frame with an info bar below it. (Lucide's
 // Frame is a hash mark that reads as Crop next to it.)
@@ -49,7 +50,7 @@ export default function ToolRail({ tool, onSelect, t }) {
         <button
           type="button"
           className="flex h-8 w-8 cursor-default items-center justify-center rounded-md text-muted2/50"
-          title={`${t("overlay.tools.sticker")} · ${t("desktop.hint", { ns: "common" })}`}
+          title={`${t("overlay.tools.sticker")} · ${t(LOCKED_HINT_KEY, { ns: "common" })}`}
         >
           <Cannabis className="h-4 w-4" />
         </button>
@@ -60,7 +61,7 @@ export default function ToolRail({ tool, onSelect, t }) {
         <button
           type="button"
           className="flex h-8 w-8 cursor-default items-center justify-center rounded-md text-muted2/50"
-          title={`${t("overlay.tools.repaint")} · ${t("desktop.hint", { ns: "common" })}`}
+          title={`${t("overlay.tools.repaint")} · ${t(LOCKED_HINT_KEY, { ns: "common" })}`}
         >
           <Sparkles className="h-4 w-4" />
         </button>

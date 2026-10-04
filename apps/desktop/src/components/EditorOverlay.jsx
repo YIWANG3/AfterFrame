@@ -575,7 +575,7 @@ export default function EditorOverlay({ open, item, onClose, onSaveComplete, pus
 
     // Auto-load cached depth if it exists for this source image. Same image
     // (path + size + mtime) hits the cache; no ML inference.
-    if (api.has("computeDepth")) {
+    if (api.has("computeDepth") && api.can("depth")) {
       api.computeDepth({ sourcePath, checkOnly: true })
         .then((cached) => {
           if (active && cached?.outputPath) {
