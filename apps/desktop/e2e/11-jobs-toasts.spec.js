@@ -17,6 +17,9 @@ const TINY_JPEG = Buffer.from(
   "base64",
 );
 
+// Files per import: the job has to outlast the dock's first poll (see below).
+const IMPORT_SIZE = 3000;
+
 function makeImportDir(prefix, count) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${prefix}-`));
   for (let i = 0; i < count; i += 1) {
@@ -60,9 +63,11 @@ test.afterAll(async () => {
 test("agent-started import shows a JobDock card and self-dismisses", async () => {
   test.setTimeout(120_000);
   // Big enough that the job is still running when the dock's first poll
-  // lands — tiny files import fast; 300 is the empirically reliable size
-  // (the cancel test below shows the card at 300 consistently).
-  const dir = makeImportDir("dock", 300);
+  // lands (about 2 s in). Previews no longer spawn a process per file, so
+  // tiny files import at about 1.6 ms each locally and about 5 ms on CI: 300,
+  // the size this once used, finished 0.6 s after the card showed locally
+  // and before it on CI. 3000 run about 6.5 s locally and 15 s on CI.
+  const dir = makeImportDir("dock", IMPORT_SIZE);
   try {
     // Fire and don't await — import_directory blocks until the job ends
     const importPromise = callTool("import_directory", { image_dirs: [dir] });
@@ -78,13 +83,25 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
       return { background: css.backgroundColor, radius: css.borderRadius, shadow: css.boxShadow };
     });
 
-    const result = await importPromise;
+    // import_directory returns after 25 s even if the job is still running
+    // (the CI VM can take that long); then follow the job to its end.
+    let result = await importPromise;
+    if (result.status === "running") {
+      await expect(async () => {
+        result = await callTool("get_job_status", { job_id: result.job_id });
+        expect(result.status).not.toBe("running");
+      }).toPass({ timeout: 60_000 });
+    }
     expect(result.status).toBe("succeeded");
 
     // Dock self-dismisses once nothing is running
     await expect(ctx.window.getByText(/^Import( ·|$)/)).toHaveCount(0, { timeout: 15_000 });
     // Real agent notification uses exactly the same surface as progress.
-    const assetId = await ctx.window.locator("[data-gallery-item='true']").first().getAttribute("data-asset-id");
+    // Read the id once the gallery shows the import (newest first): an older
+    // first card ends up thousands of photos down, past what a reveal scans.
+    const firstCard = ctx.window.locator("[data-gallery-item='true']").first();
+    await expect(firstCard).toHaveAttribute("data-image-path", /dock_\d+\.jpg$/, { timeout: 15_000 });
+    const assetId = await firstCard.getAttribute("data-asset-id");
     await callTool("show_in_app", { asset_ids: [assetId] });
     const toast = ctx.window.getByTestId("toast-card").filter({ hasText: "Selected 1 photo" }).first();
     await expect(toast).toBeVisible();
@@ -104,7 +121,7 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
 
 test("JobDock Cancel cooperatively cancels an agent-started import", async () => {
   test.setTimeout(120_000);
-  const dir = makeImportDir("cancel", 300);
+  const dir = makeImportDir("cancel", IMPORT_SIZE);
   try {
     const importPromise = callTool("import_directory", { image_dirs: [dir] }).catch(() => null);
 
