@@ -10,6 +10,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { spawnSafely } = require("../spawnSafely");
 const jobArgv = require("../sidecar/jobArgv");
 const {
   BUNDLED_ARCFACE_R100,
@@ -78,7 +79,7 @@ function resolveModelInBundle(bundlePath, manifest) {
 
 function workerSelfTest(workerPath, modelPath) {
   return new Promise((resolve, reject) => {
-    const child = spawn(workerPath, ["--model", modelPath, "--self-test"]);
+    const child = spawnSafely(spawn, workerPath, ["--model", modelPath, "--self-test"]);
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {

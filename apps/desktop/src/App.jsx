@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { filterTitle, fileName } from "./utils/format";
+import { importTargets } from "./utils/importTargets";
 
 // Web save targets are blob URLs — show the human filename (carried in the
 // URL fragment) instead of the raw URL in toasts.
@@ -667,7 +668,7 @@ export default function App() {
         message: t("watchedCatchUpMsg"),
         ttl: 5000,
       });
-      workspace.addImagesFromPaths(newFiles, { auto: true });
+      workspace.addImagesFromPaths(importTargets(newFiles), { auto: true });
     })();
   });
   const catalogPath = workspace.info?.catalogPath;

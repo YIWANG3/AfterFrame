@@ -16,7 +16,30 @@ from .locations import upsert_asset_location_from_metadata
 from .resource_sets import get_resource_set_for_asset, link_assets
 
 
-def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, commit: bool = True) -> None:
+def upsert_raw_asset(
+    connection: sqlite3.Connection, metadata: RawMetadata, commit: bool = True, register_source: bool = True,
+) -> None:
+    """Index a RAW file. A path keeps its asset: when the file already is a
+    RAW asset (imported as a photo, or added as a source), that asset is
+    updated rather than a second one made, whatever the fingerprint says. The
+    two entry points fingerprint differently (head-only vs head-tail), and
+    Lightroom writing XMP into a DNG changes its bytes; a second asset for
+    the same file broke the import that met it (UNIQUE raw_metadata_cache.path)
+    and orphaned the first one's ratings. metadata.asset_id is updated.
+
+    `register_source`: only Add RAW Sources makes a RAW a matching candidate
+    for exports (raw_metadata_cache); importing a folder indexes its RAWs as
+    photos and leaves that registration alone, either way."""
+    existing = connection.execute(
+        """
+        SELECT asset_files.asset_id FROM asset_files
+        JOIN assets ON assets.asset_id = asset_files.asset_id
+        WHERE asset_files.path = ? AND assets.asset_type = 'raw'
+        """,
+        (str(metadata.path),),
+    ).fetchone()
+    if existing is not None:
+        metadata.asset_id = existing[0]
     asset_metadata = {
         "capture_time": metadata.capture_time,
         "rating": metadata.rating,
@@ -90,6 +113,16 @@ def upsert_raw_asset(connection: sqlite3.Connection, metadata: RawMetadata, comm
         (_file_id(metadata.asset_id, str(metadata.path)), metadata.asset_id, str(metadata.path)),
     )
     upsert_asset_location_from_metadata(connection, metadata.asset_id, asset_metadata)
+    if not register_source:
+        if commit:
+            connection.commit()
+        return
+    # A catalog from before assets kept their path may hold this path under
+    # another id; the path is unique, so that row goes.
+    connection.execute(
+        "DELETE FROM raw_metadata_cache WHERE path = ? AND raw_asset_id != ?",
+        (str(metadata.path), metadata.asset_id),
+    )
     connection.execute(
         """
         INSERT INTO raw_metadata_cache (

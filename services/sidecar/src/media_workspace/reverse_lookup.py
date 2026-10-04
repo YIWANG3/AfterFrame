@@ -466,12 +466,11 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     info = raw_info(resolved)
     if info:
         metadata.width, metadata.height = info.width, info.height
-    upsert_raw_asset(connection, metadata, commit=False)
     # Imported RAW is a browseable photo in its own right, NOT a reverse-lookup
-    # source. Keep it out of the candidate pool so a sibling JPG imported the
-    # same way won't bind it as its "raw source" — only the dedicated
-    # "Add RAW source" flow registers RAW as a matchable source.
-    connection.execute("DELETE FROM raw_metadata_cache WHERE raw_asset_id = ?", (metadata.asset_id,))
+    # source: a sibling JPG imported the same way won't bind it as its "raw
+    # source". Only the dedicated "Add RAW source" flow registers RAW as a
+    # matchable source, and importing the folder again leaves that alone.
+    upsert_raw_asset(connection, metadata, commit=False, register_source=False)
     decision = MatchDecision(
         image_asset_id=metadata.asset_id,
         image_path=resolved,

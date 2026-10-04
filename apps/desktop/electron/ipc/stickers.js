@@ -8,6 +8,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
+const { spawnSafely } = require("../spawnSafely");
 const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
@@ -143,7 +144,7 @@ function register({ app, ipcMain, isPackaged, addAllowedMediaDir }) {
     }
 
     await new Promise((resolve, reject) => {
-      const child = spawn(stickerToolPath, [inputForTool, scratchDir]);
+      const child = spawnSafely(spawn, stickerToolPath, [inputForTool, scratchDir]);
       let stderr = "";
       child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
       child.on("error", reject);
