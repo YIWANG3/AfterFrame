@@ -159,6 +159,7 @@
     "active": "Active",
     "ready": "Ready",
     "noModel": "This build doesn't include the face model. Choose a compatible model below.",
+    "builtInNeedsMacOS": "The built-in face model needs macOS {{version}} or later. You can still choose a compatible Core ML model below.",
     "activeModelHint": "Active local model · {{size}}",
     "builtInModelHint": "Built into AfterFrame · {{size}} · nothing to download",
     "builtIn": "Built in",

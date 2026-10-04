@@ -159,6 +159,7 @@
     "active": "当前使用",
     "ready": "已就绪",
     "noModel": "当前构建没有内置人脸模型，可以在下方选择兼容的模型。",
+    "builtInNeedsMacOS": "内置人脸模型需要 macOS {{version}} 或更高版本。仍可以在下方选择兼容的 Core ML 模型。",
     "activeModelHint": "当前本地模型 · {{size}}",
     "builtInModelHint": "AfterFrame 内置 · {{size}} · 无需下载",
     "builtIn": "内置",

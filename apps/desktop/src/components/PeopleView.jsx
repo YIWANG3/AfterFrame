@@ -78,7 +78,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   const { t } = useTranslation("nav");
   const {
     groups, loading, failed, load, selectedId, select, rename, merge, deleteGroups, scan,
-    requestScan, modelMissing,
+    requestScan, modelMissing, modelNeedsMacOS,
   } = people;
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -125,6 +125,12 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
   // Settings, and the empty state says so.
   const scanLabel = scanning ? t("people.scanningShort") : t("people.scan");
   const scanDisabled = scanning || modelMissing;
+  const modelMissingTitle = modelNeedsMacOS
+    ? t("people.modelNeedsMacOSTitle", { version: modelNeedsMacOS })
+    : t("people.modelMissingTitle");
+  const modelMissingHint = modelNeedsMacOS
+    ? t("people.modelNeedsMacOSHint", { version: modelNeedsMacOS })
+    : t("people.modelMissingHint");
 
   useEffect(() => {
     const available = new Set(groups.map((group) => group.group_id));
@@ -269,7 +275,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
                 type="button"
                 onClick={() => void requestScan()}
                 disabled={scanDisabled}
-                title={modelMissing ? t("people.modelMissingTitle") : t("people.scanHint")}
+                title={modelMissing ? modelMissingTitle : t("people.scanHint")}
                 className="flex h-8 items-center gap-1.5 rounded-md border border-border/60 px-2.5 text-[11px] text-muted transition hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-50"
               >
                 <ScanFace className="h-3.5 w-3.5" />
@@ -343,7 +349,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
                 : scanning
                   ? t("people.scanningEmptyTitle")
                   : modelMissing
-                    ? t("people.modelMissingTitle")
+                    ? modelMissingTitle
                     : t("people.emptyTitle")}
             </h2>
             <p className="mt-2 max-w-sm text-[12px] leading-5 text-muted2">
@@ -352,7 +358,7 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
                 : scanning
                   ? t("people.scanningEmptyHint")
                   : modelMissing
-                    ? t("people.modelMissingHint")
+                    ? modelMissingHint
                     : t("people.emptyHint")}
             </p>
             {!failed && (

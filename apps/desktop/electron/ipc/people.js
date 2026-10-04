@@ -12,9 +12,11 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const jobArgv = require("../sidecar/jobArgv");
 const {
+  BUNDLED_ARCFACE_R100,
   BUNDLED_MODEL_KEY,
   bundledModelPath,
   bundledRecord,
+  canLoadBundledModel,
   isBundledModel,
   modelKey,
   pathDigest,
@@ -123,20 +125,25 @@ function register({
   latestJobStatus,
   formatJobStatus,
   commands,
+  platform = process.platform,
+  osRelease,
 }) {
   const workerPath = isPackaged
     ? path.join(resourcesPath, "native", "bin", "people-worker")
     : path.join(__dirname, "..", "..", "native", "bin", "people-worker");
   const modelStore = path.join(app.getPath("userData"), "people-models");
   const bundledPath = bundledModelPath({ isPackaged, resourcesPath, desktopDir: path.join(__dirname, "..", "..") });
+  const bundledLoadable = canLoadBundledModel({ platform, ...(osRelease ? { osRelease } : {}) });
 
   function getSettings() {
     const source = readAppSettings()?.peopleRecognition;
     return source && typeof source === "object" ? source : {};
   }
 
+  // On macOS 12–13 the bundled model is shipped but can't load, so it is
+  // treated as absent and state() says which macOS it needs.
   function hasBundledModel() {
-    return fs.existsSync(bundledPath);
+    return bundledLoadable && fs.existsSync(bundledPath);
   }
 
   // The bundled model is listed first and never persisted; chosen models come
@@ -185,6 +192,9 @@ function register({
       activeModel: key ? models.find((model) => model.key === key) : null,
       models,
       autoIndexOnImport: !!getSettings().autoIndexOnImport,
+      builtInNeedsMacOS: !bundledLoadable && platform === "darwin" && fs.existsSync(bundledPath)
+        ? BUNDLED_ARCFACE_R100.min_macos
+        : null,
     };
   }
 

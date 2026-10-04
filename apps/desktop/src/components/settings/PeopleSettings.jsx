@@ -133,7 +133,11 @@ export default function PeopleSettings() {
             <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">{t("people.ready")}</span>
           </div>
         ) : (
-          <div className="px-1 py-5 text-center text-[11px] text-muted2">{t("people.noModel")}</div>
+          <div className="px-1 py-5 text-center text-[11px] text-muted2">
+            {settings.builtInNeedsMacOS
+              ? t("people.builtInNeedsMacOS", { version: settings.builtInNeedsMacOS })
+              : t("people.noModel")}
+          </div>
         )}
         <FieldRow label={t("people.installModel")} hint={t("people.installModelHint")}>
           <SecondaryButton disabled={!!busy} onClick={() => perform("install", () => api.pickPeopleModel())}>
