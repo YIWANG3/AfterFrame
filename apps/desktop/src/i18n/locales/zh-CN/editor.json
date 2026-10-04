@@ -2,6 +2,7 @@
   "overlay": {
     "loading": "正在加载编辑器…",
     "decodeError": "无法解码源图像。",
+    "noSource": "没有可用于编辑的预览。",
     "close": "关闭编辑器 (Esc)",
     "save": "保存图像",
     "saveButton": "保存",

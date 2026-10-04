@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import time
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
@@ -38,6 +37,7 @@ from .metadata import (
     stem_key as compute_stem_key,
 )
 from .models import ImageCandidate, MatchDecision
+from .raw_decode import raw_info
 from .source_readiness import SourceNotReadyError, validate_source_ready
 from .video import VIDEO_EXTENSIONS, is_video
 from .video import probe as probe_video
@@ -475,30 +475,6 @@ def is_raw(path: Path) -> bool:
     return path.suffix.lower() in DEFAULT_RAW_EXTENSIONS
 
 
-def _native_raw_dimensions(path: Path) -> tuple[int, int] | None:
-    """True sensor dimensions via Image I/O (sips). RAW EXIF often reports the
-    embedded *preview* size — e.g. Hasselblad .3FR yields 3888×2918 instead of
-    the real ~11664×8750 — so read the decoded dimensions for display."""
-    try:
-        result = subprocess.run(
-            ["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(path)],
-            check=True, capture_output=True, text=True,
-        )
-    except Exception:
-        return None
-    width = height = None
-    for line in result.stdout.splitlines():
-        stripped = line.strip()
-        value = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
-        # sips emits "pixelWidth: <nil>" for formats it can't decode dimensions
-        # for; skip non-numeric values and fall back to the EXIF dims (None).
-        if stripped.startswith("pixelWidth:") and value.isdigit():
-            width = int(value)
-        elif stripped.startswith("pixelHeight:") and value.isdigit():
-            height = int(value)
-    return (width, height) if width and height else None
-
-
 def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision:
     """Index a RAW as a browseable asset_type='raw' entry — EXIF + dims, no RAW
     matching. The original RAW can't be displayed by the renderer, so its preview
@@ -511,11 +487,12 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     ).fetchone()
     preexisting = existing is not None
     metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
-    # EXIF dims can be the embedded preview's size, not the sensor's — override
-    # with the true decoded dimensions so the gallery shows real resolution.
-    native = _native_raw_dimensions(resolved)
-    if native:
-        metadata.width, metadata.height = native
+    # EXIF dims can be the embedded preview's size, not the sensor's (a DJI
+    # DNG's IFD0 says 160x120): LibRaw reads the real, cropped size from the
+    # file's structure, as sips did on macOS, and on Windows too.
+    info = raw_info(resolved)
+    if info:
+        metadata.width, metadata.height = info.width, info.height
     # Imported RAW is a browseable photo in its own right, NOT a reverse-lookup
     # source: a sibling JPG imported the same way won't bind it as its "raw
     # source". Only the dedicated "Add RAW source" flow registers RAW as a

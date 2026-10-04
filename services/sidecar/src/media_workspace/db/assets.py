@@ -561,6 +561,7 @@ def list_assets_for_preview(
             assets.extension,
             json_extract(assets.metadata_json, '$.width') AS width,
             json_extract(assets.metadata_json, '$.height') AS height,
+            assets.metadata_json AS metadata_json,
             preview_entries.relative_path AS existing_relative_path,
             preview_entries.status AS existing_status,
             EXISTS (SELECT 1 FROM asset_colors c WHERE c.asset_id = assets.asset_id) AS has_colors

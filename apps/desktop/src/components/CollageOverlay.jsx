@@ -9,6 +9,8 @@ import BatchPanel from "./collage/BatchPanel";
 import { TemplateGrid } from "./collage/PanelControls";
 import { getTemplatesForCount } from "./collage/collageTemplates";
 import { computeGroups, orderImages, MAX_TEMPLATE_COUNT } from "./collage/collageBatch";
+import { ensureHdInChunks, needsCollageHd } from "./collage/collageHd";
+import { hdPreviews } from "../hooks/useOnDemandHdPreviews";
 import { topLayerOpen } from "../utils/topLayer";
 import { useAddToFolder } from "../hooks/useAddToFolder";
 import { Checkbox } from "../ui";
@@ -489,7 +491,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
   );
 }
 
-export default function CollageOverlay({ open, items, collections, summary, sourceCollectionId, onAddToCollection, onClose, onExportComplete }) {
+export default function CollageOverlay({ open, items, catalogKey = null, collections, summary, sourceCollectionId, onAddToCollection, onClose, onExportComplete }) {
   const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
   const [images, setImages] = useState([]);
@@ -529,17 +531,31 @@ export default function CollageOverlay({ open, items, collections, summary, sour
   // Pan/zoom per image, shared by every batch page canvas (keyed by asset).
   const batchCellStates = useRef(new Map());
 
-  // Assets whose HD preview we already asked for in THIS collage session.
-  // Reset on every open: the overlay stays mounted across sessions and the
-  // incoming items come from the gallery cache (no HD path even when the file
-  // exists), so a stale "attempted" set would leave those cells on the 512px
-  // thumbnail forever — the exported collage then has some cells blurry.
-  const hdAttemptedRef = useRef(new Set());
+  // HD previews for the cells are made per collage session. The overlay stays
+  // mounted, so every open starts a new session (hdSessionRef, mirrored in
+  // state so the HD effect can tell the new session's images from the last
+  // one's); work still running for an old session stops and is dropped.
+  // hdRequestedRef: assets asked for (or made) THIS session. Reset on every
+  // open: the incoming items come from the gallery cache (no HD path even when
+  // the file exists), so a stale set would leave those cells on the 512px
+  // thumbnail forever. One that fails is taken out again, so it is retried.
+  const hdRequestedRef = useRef(new Set());
+  const hdSessionRef = useRef(0);
+  const [hdSession, setHdSession] = useState(0);
+  const hdAbortRef = useRef(null);
+  // Chunk loops still running; an export waits for them.
+  const hdWorkRef = useRef(new Set());
+  // Resolvers for HD patches waiting on the commit that applies them.
+  const hdPatchWaitersRef = useRef([]);
 
   // Initialize from items prop
   useEffect(() => {
-    if (!open || !items?.length) return;
-    hdAttemptedRef.current = new Set();
+    if (!open || !items?.length) return undefined;
+    hdRequestedRef.current = new Set();
+    hdSessionRef.current += 1;
+    setHdSession(hdSessionRef.current);
+    const hdAbort = new AbortController();
+    hdAbortRef.current = hdAbort;
     setImages(items);
     const templates = getTemplatesForCount(items.length);
     setTemplate(templates[0] || null);
@@ -548,6 +564,12 @@ export default function CollageOverlay({ open, items, collections, summary, sour
     setMode(items.length > MAX_TEMPLATE_COUNT ? "batch" : "single");
     setPageOverrides({});
     setLayoutPopoverPage(-1);
+    return () => {
+      // Closed, or reopened on other photos: HD chunks still queued for this
+      // session are never sent, and results still to come are dropped.
+      hdAbort.abort();
+      hdSessionRef.current += 1;
+    };
   }, [open, items]);
 
   // ── Batch derivations ──
@@ -598,42 +620,53 @@ export default function CollageOverlay({ open, items, collections, summary, sour
     return pool.find((tp) => tp.id === batchTemplateId) || pool[0] || null;
   }
 
-  // Lazily generate 2000px HD previews for cells that lack one, so the canvas
-  // and export render from HD rather than the 512px thumbnail. HD generation is
-  // off by default catalog-wide; here we generate just for the cells in use and
-  // patch the HD path back in once ready. Tracked per asset (hdAttemptedRef)
-  // so it runs once per session.
+  // Lazily generate HD previews for cells that lack one, so the canvas and
+  // export render from HD rather than the 512px thumbnail (a RAW's isn't made
+  // at import). They go through the app's one HD queue (hdPreviews), a chunk
+  // at a time, and each chunk is patched in as it lands.
   useEffect(() => {
-    if (!open || !images.length) return undefined;
-    const targets = images.filter(
-      (img) => img?.asset_id && img?.image_path
-        && !img.image_preview_hd_path && !img.preview_hd_path
-        && !hdAttemptedRef.current.has(img.asset_id),
-    );
-    if (!targets.length) return undefined;
-    let cancelled = false;
-    (async () => {
-      for (const img of targets) hdAttemptedRef.current.add(img.asset_id);
-      try {
-        await api.ensureHdPreviews(targets.map((t) => t.image_path));
-        const details = await Promise.all(
-          targets.map((t) => Promise.resolve(api.getAssetDetailById(t.asset_id)).catch(() => null)),
-        );
-        if (cancelled) return;
-        const hdById = new Map();
-        for (const d of details) {
-          if (d?.asset_id && d.image_preview_hd_path) hdById.set(d.asset_id, d.image_preview_hd_path);
-        }
-        if (!hdById.size) return;
-        setImages((prev) => prev.map((img) =>
-          hdById.has(img.asset_id) ? { ...img, image_preview_hd_path: hdById.get(img.asset_id) } : img,
-        ));
-      } catch (err) {
-        console.warn("[Collage] HD preview generation failed:", err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [open, images]);
+    if (!open || !images.length || hdSession !== hdSessionRef.current) return;
+    hdPreviews.setCatalog(catalogKey);
+    const requested = hdRequestedRef.current;
+    const targets = images.filter((img) => needsCollageHd(img) && !requested.has(img.asset_id));
+    if (!targets.length) return;
+    for (const img of targets) requested.add(img.asset_id);
+    const signal = hdAbortRef.current?.signal;
+    const work = ensureHdInChunks(targets, {
+      ensureBatch: (chunk) => hdPreviews.ensureBatch(chunk, { catalogKey, signal }),
+      isCancelled: () => hdSession !== hdSessionRef.current,
+      onChunk: (made, missed) => {
+        // Failed, timed out, or failed moments ago: forget it was asked for,
+        // so a later pass (or the next open) tries again.
+        for (const img of missed) requested.delete(img.asset_id);
+        if (!made.size) return undefined;
+        // Resolves once the commit that applies the patch has run: the
+        // canvases (children, whose effects run first) have started loading
+        // the HD images by then, so an export that waited draws from them.
+        return new Promise((resolve) => {
+          hdPatchWaitersRef.current.push(resolve);
+          setImages((prev) => prev.map((img) => (made.has(img.asset_id)
+            ? { ...img, image_preview_hd_path: made.get(img.asset_id) }
+            : img)));
+        });
+      },
+    });
+    const done = () => hdWorkRef.current.delete(work);
+    hdWorkRef.current.add(work);
+    work.then(done, done);
+  }, [open, images, hdSession, catalogKey]);
+
+  useEffect(() => {
+    const waiters = hdPatchWaitersRef.current.splice(0);
+    for (const resolve of waiters) resolve();
+  }, [images]);
+
+  // An export draws whatever each cell has loaded at that moment, so wait for
+  // the HD previews still being made rather than export those cells from
+  // their thumbnails.
+  async function waitForHdPreviews() {
+    while (hdWorkRef.current.size) await Promise.all([...hdWorkRef.current]);
+  }
 
   // Auto-select template when the image COUNT changes; a template the user
   // picks is left alone, so the current template is read, not depended on.
@@ -672,7 +705,8 @@ export default function CollageOverlay({ open, items, collections, summary, sour
     if (!canvasRef.current) return;
     setExporting(true);
     try {
-      const blob = await canvasRef.current.exportToBlob(exportWidth);
+      await waitForHdPreviews();
+      const blob = await canvasRef.current?.exportToBlob(exportWidth);
       if (!blob) return;
 
       // Derive filename from source images
@@ -799,6 +833,7 @@ export default function CollageOverlay({ open, items, collections, summary, sour
     let failed = 0;
     const exportedIds = [];
     try {
+      await waitForHdPreviews();
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
         try {

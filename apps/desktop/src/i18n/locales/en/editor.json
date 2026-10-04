@@ -2,6 +2,7 @@
   "overlay": {
     "loading": "Loading editor…",
     "decodeError": "The source image cannot be decoded.",
+    "noSource": "No preview is available to edit.",
     "close": "Close editor (Esc)",
     "save": "Save image",
     "saveButton": "Save",

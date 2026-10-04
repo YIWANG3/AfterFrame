@@ -2,6 +2,7 @@ import api from "../api";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName } from "../utils/format";
+import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import { MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
@@ -275,7 +276,7 @@ const isLogoFileDrag = (event) => [...(event.dataTransfer?.items || [])]
   .some((entry) => entry.kind === "file" && (entry.type === "image/svg+xml" || entry.type === "image/png"));
 
 export default function EditorOverlay({
-  open, item, collections, sourceCollectionId, onAddToCollection, onClose, onSaveComplete, pushToast,
+  open, item, catalogKey = null, collections, sourceCollectionId, onAddToCollection, onClose, onSaveComplete, pushToast,
 }) {
   const { t } = useTranslation("editor");
   // Opened from a folder, what the editor makes (a saved copy, split panels,
@@ -322,12 +323,18 @@ export default function EditorOverlay({
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
   // RAW originals (.cr3/.3fr/…) can't be decoded by the renderer or sharp, so
-  // edit from the full-res HD preview generated on import. The save target still
-  // derives from the original path (saveBasePath) → edits land next to the
-  // source file as <stem>_edited.jpg, not in the catalog previews dir.
+  // edit from the HD preview: the camera's embedded JPEG at full size, made
+  // when first needed (one the lightbox already made is reused). Wait for it
+  // rather than start on the thumbnail, so edits aren't laid out on a 512px
+  // image; fall back to the thumbnail if it fails.
+  // The save target still derives from the original path (saveBasePath) →
+  // edits land next to the source file as <stem>_edited.jpg, not in the
+  // catalog previews dir.
   const isRaw = item?.asset_type === "raw";
-  const sourcePath = (isRaw
-    ? (item?.preview_hd_path || item?.image_preview_hd_path || item?.image_preview_path || item?.preview_path)
+  const onDemandHd = useOnDemandHdPreview({ current: item, enabled: open, catalogKey });
+  const awaitingHd = open && needsOnDemandHd(item) && onDemandHd === undefined;
+  const sourcePath = awaitingHd ? null : (isRaw
+    ? (item?.preview_hd_path || item?.image_preview_hd_path || onDemandHd || item?.image_preview_path || item?.preview_path)
     : item?.image_path) || item?.image_preview_path || item?.raw_preview_path || null;
   const saveBasePath = item?.image_path || sourcePath;
   // Image load lives in its own hook. `setSourceImage`/`setPreviewSource` + the
@@ -335,7 +342,13 @@ export default function EditorOverlay({
   const {
     sourceImage, previewSource, loadState, loadError, sourceImageRef,
     setSourceImage, setPreviewSource,
-  } = useEditorImage({ open, sourcePath, decodeErrorLabel: t("overlay.decodeError") });
+  } = useEditorImage({
+    open,
+    sourcePath,
+    waiting: awaitingHd,
+    decodeErrorLabel: t("overlay.decodeError"),
+    missingSourceLabel: t("overlay.noSource"),
+  });
   const depth = useSceneDepth({ sourcePath });
   const {
     generating: depthGenerating,

@@ -1,0 +1,25 @@
+RAW decoding — third-party licenses
+===================================
+
+The sidecar reads RAW files (embedded previews, size and orientation, and
+decodes) with LibRaw, through rawpy. Both ship as separate libraries inside
+the sidecar (Resources/sidecar/media-workspace): LibRaw as its own shared
+library (libraw_r), which can be replaced with a compatible build.
+
+LibRaw 0.22
+  Copyright (C) 2008-2025 LibRaw LLC
+  License: GNU Lesser General Public License 2.1 (LibRaw is dual-licensed
+  LGPL-2.1 / CDDL-1.0; AfterFrame uses it under the LGPL-2.1)
+  Source: https://github.com/LibRaw/LibRaw
+  Full text: sidecar/media-workspace/_internal/rawpy-0.27.1.dist-info/licenses/LICENSE.LibRaw
+
+rawpy 0.27
+  Copyright (c) 2014 Maik Riechert
+  License: MIT
+  Source: https://github.com/letmaik/rawpy
+  Full text: sidecar/media-workspace/_internal/rawpy-0.27.1.dist-info/licenses/LICENSE
+
+Libraries LibRaw links (bundled with rawpy):
+  Little CMS 2 — MIT — https://github.com/mm2/Little-CMS
+  libjpeg-turbo — IJG / BSD 3-Clause / zlib — https://github.com/libjpeg-turbo/libjpeg-turbo
+  JasPer — JasPer License 2.0 (MIT-style) — https://github.com/jasper-software/jasper
