@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -723,7 +724,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _utf8_stdio() -> None:
+    """Make the process's pipes UTF-8 whatever the system code page.
+
+    Windows pipes default to the ANSI code page (cp1252, GBK), so a Chinese
+    path in a request garbles and a Chinese place name in a response raises
+    UnicodeEncodeError, which kills the resident serve loop. Electron also
+    sets PYTHONUTF8, but a frozen build may not honour it. Only at process
+    entry: nothing has been read yet, and serve's per-request main() calls
+    run with stdout redirected to a buffer.
+    """
+    for stream, errors in ((sys.stdin, None), (sys.stdout, None), (sys.stderr, "backslashreplace")):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", **({"errors": errors} if errors else {}))
+
+
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        _utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
 

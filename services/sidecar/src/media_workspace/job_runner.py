@@ -278,6 +278,7 @@ def run_people_index_job(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             bufsize=1,
         )
         assert worker.stdin is not None

@@ -4,7 +4,7 @@ const test = require("node:test");
 const { PassThrough } = require("node:stream");
 const { spawn } = require("node:child_process");
 const { once } = require("node:events");
-const { createSidecarTransport } = require("./transport");
+const { createSidecarTransport, devPython } = require("./transport");
 
 function harness() {
   const children = [];
@@ -110,4 +110,66 @@ test("reset waits for detached jobs, suppresses their failure callbacks, and lea
     await transport.withCatalogPaused("/sample.afcatalog", () => {});
     await transport.withCatalogPaused("/other.afcatalog", () => {});
   }
+});
+
+function recordingTransport(options = {}) {
+  const calls = [];
+  const transport = createSidecarTransport({
+    rootDir: "/tmp", sidecarSrc: "/tmp/src", isPackaged: false, resourcesPath: "/res",
+    getCatalogPath: () => "/sample.afcatalog",
+    spawnProcess: (cmd, args, opts) => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => {};
+      child.unref = () => {};
+      calls.push({ cmd, args, opts, child });
+      return child;
+    },
+    ...options,
+  });
+  return { transport, calls };
+}
+
+test("every sidecar process gets UTF-8 pipes and no console window", async () => {
+  const { transport, calls } = recordingTransport({ platform: "win32" });
+  const pending = transport.callAsync(["summary"]);       // the resident serve process
+  calls[0].child.emit("exit", 1);                          // ...dies, so the call falls back
+  calls[0].child.emit("close", 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  transport.launchJob(["run-import-job", "--job-id", "j1"]); // a detached runner
+  assert.equal(calls.length, 3, "resident, one-shot fallback, detached job");
+  for (const { opts } of calls) {
+    assert.equal(opts.windowsHide, true);
+    assert.equal(opts.env.PYTHONUTF8, "1");
+    assert.equal(opts.env.PYTHONIOENCODING, "utf-8");
+  }
+  assert.equal(calls[2].opts.detached, true);
+  calls[1].child.stdout.end(JSON.stringify({ ok: 1 }));
+  calls[1].child.emit("close", 0);
+  await pending;
+  transport.stopResident();
+});
+
+test("the dev sidecar runs python on Windows, python3 elsewhere, AFTERFRAME_PYTHON over both", () => {
+  assert.equal(devPython("win32", {}), "python", "python3 on Windows is the Microsoft Store stub");
+  assert.equal(devPython("darwin", {}), "python3");
+  assert.equal(devPython("linux", {}), "python3");
+  assert.equal(devPython("win32", { AFTERFRAME_PYTHON: "C:\\venv\\Scripts\\python.exe" }), "C:\\venv\\Scripts\\python.exe");
+
+  const { transport, calls } = recordingTransport({ platform: "win32" });
+  transport.launchJob(["run-import-job", "--job-id", "j1"]);
+  assert.equal(calls[0].cmd, devPython("win32", process.env));
+  assert.deepEqual(calls[0].args.slice(0, 2), ["-m", "media_workspace"]);
+});
+
+test("the packaged sidecar is media-workspace.exe on Windows", () => {
+  const packaged = (platform) => {
+    const { transport, calls } = recordingTransport({ platform, isPackaged: true });
+    transport.launchJob(["run-import-job", "--job-id", "j1"]);
+    return calls[0].cmd;
+  };
+  assert.match(packaged("win32"), /media-workspace[\\/]media-workspace\.exe$/);
+  assert.match(packaged("darwin"), /media-workspace[\\/]media-workspace$/);
 });
