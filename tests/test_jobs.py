@@ -188,6 +188,30 @@ class JobsTest(unittest.TestCase):
         self.assertEqual([count for *_rest, count in batches], [2, 4, 5])
         self.assertTrue(all(kind == "preview" and asset_type is None for kind, asset_type, *_ in batches))
 
+
+    def test_the_thumbnail_phase_counts_what_the_batches_made(self) -> None:
+        # The batches make the thumbnails as they index; the import's result
+        # still says it made them, rather than "skipped, already there".
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            photos = root / "trip"
+            photos.mkdir()
+            for index in range(3):
+                Image.new("RGB", (64, 48), (index * 60, 90, 160)).save(photos / f"IMG_{index:04d}.jpg", "JPEG")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            job = create_job(connection, "import", payload={})
+            run_import_job(connection, catalog.root, job["job_id"], [], [photos], mode="processed_only", generate_hd=False)
+            result = get_job(connection, job["job_id"])["result"]
+            connection.close()
+        phases = {phase["key"]: phase["result"] for phase in result["phase_results"]}
+        self.assertEqual(
+            {key: phases["generate_previews"][key] for key in ("generated", "skipped", "failed")},
+            {"generated": 3, "skipped": 0, "failed": 0},
+        )
+
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

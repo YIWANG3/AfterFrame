@@ -557,6 +557,8 @@ def run_import_job(
     phase_results: list[dict[str, Any]] = []
     changed_paths: list[Path] = []
     batched_thumbnails = False
+    # What the import's batches made, for the thumbnail phase's totals.
+    batch_preview_results: list[dict[str, Any]] = []
     phases = _build_import_phases(mode, bool(raw_dirs), bool(image_dirs), generate_hd)
     if not phases:
         result: dict[str, Any] = {"phase_results": [], "current_phase": None}
@@ -691,11 +693,11 @@ def run_import_job(
                 batch_service = PreviewService(ensure_catalog(catalog_path))
 
                 def batch_previews(paths: list[Path], changed: list[Path]) -> None:
-                    batch_service.generate_batch(
+                    batch_preview_results.append(batch_service.generate_batch(
                         connection, kind="preview", paths=paths, force_paths=changed,
                         analyze_colors=analyze_colors,
                         progress_callback=lambda _update: _check_cancel(connection, job_id),
-                    )
+                    ))
 
             resolve_result = resolve_image_batch(
                 connection,
@@ -815,6 +817,12 @@ def run_import_job(
                 key: sum(int((r or {}).get(key, 0)) for r in batch_results)
                 for key in ("generated", "skipped", "failed", "deferred", "total")
             }
+            # The batches' thumbnails were made during indexing; this pass
+            # skipped them as ready. Count them as made by this import. A
+            # batch's failures were retried here, so failures are this pass's.
+            made_in_batches = sum(int((r or {}).get("generated", 0)) for r in batch_preview_results)
+            preview_result["generated"] += made_in_batches
+            preview_result["skipped"] = max(0, preview_result["skipped"] - made_in_batches)
             phase_results.append(_phase_result(preview_phase, preview_result))
             phase_cursor += 1
 
