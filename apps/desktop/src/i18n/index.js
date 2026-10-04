@@ -26,6 +26,7 @@ import zhCollage from "./locales/zh-CN/collage.json";
 import zhStickerView from "./locales/zh-CN/stickerView.json";
 import zhApp from "./locales/zh-CN/app.json";
 import api from "../api";
+import { withPlatformCopy } from "./platformCopy";
 
 export const SUPPORTED_LOCALES = ["en", "zh-CN"];
 
@@ -43,7 +44,8 @@ function initialLocale() {
 }
 
 i18n.use(initReactI18next).init({
-  resources,
+  // Windows: "Reveal in Finder" → "Show in File Explorer", "this Mac", ⌘.
+  resources: withPlatformCopy(resources, api.platform),
   lng: initialLocale(),
   fallbackLng: "en",
   defaultNS: "common",

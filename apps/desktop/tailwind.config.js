@@ -4,7 +4,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
+        // Chinese: PingFang SC on macOS (what the system picked anyway), Microsoft
+        // YaHei on Windows, where Han text in an lang="en" page otherwise falls
+        // back to a Japanese face.
+        sans: ['"Plus Jakarta Sans"', '"PingFang SC"', '"Microsoft YaHei UI"', '"Microsoft YaHei"', "system-ui", "sans-serif"],
       },
       colors: {
         app: "rgb(var(--app-bg) / <alpha-value>)",
