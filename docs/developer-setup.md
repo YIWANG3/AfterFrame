@@ -114,8 +114,10 @@ python3 -m media_workspace generate-previews --catalog data/default.afcatalog --
 ### Building for distribution
 
 ```bash
-# 1. Build sidecar binary
+# 1. Build the sidecar binary (the spec and entry.py are in the repo; build on
+#    the platform you ship, PyInstaller doesn't cross-compile)
 cd services/sidecar
+pip install -e ".[jimeng]" pyinstaller
 pyinstaller media-workspace.spec --distpath dist --noconfirm
 
 # 2. Package desktop app
@@ -123,7 +125,9 @@ cd apps/desktop
 npm run dist:mac
 ```
 
-Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`
+Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`. `npm run dist:mac` runs step 1
+itself (`build:sidecar`) once the dependencies are installed; `scripts/release.sh` wraps
+the signed, notarized build and the GitHub release.
 
 ## Key subsystems
 
