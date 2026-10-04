@@ -6,6 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
+const { spawnSafely } = require("../spawnSafely");
 const { createCompiledModelCache } = require("./compiledModelCache");
 
 function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateAppSettings }) {
@@ -83,7 +84,7 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
     }
 
     return await new Promise((resolve, reject) => {
-      const child = spawn(depthToolPath, args);
+      const child = spawnSafely(spawn, depthToolPath, args);
       let stdout = "";
       let stderr = "";
       child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
