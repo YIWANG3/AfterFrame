@@ -59,8 +59,6 @@
         "from": "native",
         "to": "native",
         "filter": [
-          "bin/**/*",
-          "*.mlpackage/**/*",
           "exiftool/**/*"
         ]
       },
@@ -102,6 +100,16 @@
           "target": "dmg",
           "arch": [
             "arm64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "native",
+          "to": "native",
+          "filter": [
+            "bin/**/*",
+            "*.mlpackage/**/*"
           ]
         }
       ],
