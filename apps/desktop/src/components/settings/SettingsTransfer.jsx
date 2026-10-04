@@ -248,7 +248,8 @@ function ImportDialog({ inspected, onClose }) {
           <div>{t("transfer.imported")}</div>
           {includeKeys && <div className="text-muted">{t("transfer.importedKeys", { count: result.tokenCount })}</div>}
           {result.warnings?.map((w) => <div key={w} className="text-warn">{t(`transfer.errors.${w}`)}</div>)}
-          <div className="text-[11px] text-muted2">{t("transfer.faceModelNote")}</div>
+          {/* Where People isn't available (Windows) there's nothing to reinstall. */}
+          {api.can("people") && <div className="text-[11px] text-muted2">{t("transfer.faceModelNote")}</div>}
         </div>
       </DialogShell>
     );
