@@ -118,6 +118,7 @@ class PeoplePersistenceTest(unittest.TestCase):
             )
             self.assertEqual(updated["input_hash"], "people-input-b")
             self.assertEqual(updated["face_count"], 0)
+            connection.close()
 
 
 class CandidateClusteringTest(unittest.TestCase):

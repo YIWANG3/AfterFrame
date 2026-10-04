@@ -40,6 +40,7 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(get_job(connection, created["job_id"])["job_id"], created["job_id"])
             self.assertEqual(get_latest_job(connection, "import")["job_id"], created["job_id"])
             self.assertEqual(len(list_jobs(connection, job_type="import", limit=5)), 1)
+            connection.close()
 
     def test_priority_pause_and_resume_are_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -61,6 +62,7 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(resumed["status"], "queued")
             self.assertFalse(resumed["pause_requested"])
             self.assertEqual(resumed["resume_cursor"], {"offset": 12})
+            connection.close()
 
     def test_stall_reaper_uses_a_per_type_window(self) -> None:
         """A job that reports progress per batch is dead after 10 silent minutes;
@@ -101,6 +103,7 @@ class JobsTest(unittest.TestCase):
             reaped = get_job(connection, generation["job_id"])
             self.assertEqual(reaped["status"], "failed")
             self.assertIn("no heartbeat", reaped["error"])
+            connection.close()
 
     def test_stall_reaper_leaves_fresh_jobs_alone(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -118,6 +121,7 @@ class JobsTest(unittest.TestCase):
             self.assertIn(running["job_id"], active)
             self.assertEqual(get_job(connection, queued["job_id"])["status"], "queued")
             self.assertEqual(get_job(connection, running["job_id"])["status"], "running")
+            connection.close()
 
     def test_run_import_job_persists_phase_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -147,6 +151,7 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(recorded["status"], "succeeded")
             self.assertEqual(recorded["progress"], 1.0)
             self.assertEqual(len(recorded["result"]["phase_results"]), 4)
+            connection.close()
 
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -169,6 +174,7 @@ class JobsTest(unittest.TestCase):
             recorded = get_job(connection, job["job_id"])
             self.assertEqual(recorded["status"], "succeeded")
             self.assertEqual(recorded["result"]["enriched"], 1)
+            connection.close()
 
 
 if __name__ == "__main__":

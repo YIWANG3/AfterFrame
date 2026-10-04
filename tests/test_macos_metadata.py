@@ -37,3 +37,4 @@ class MacMetadataTests(unittest.TestCase):
             init_db(connection)
             result = scan_raw_directory(connection, raw, workers=1)
             self.assertEqual(result['indexed'], 1)
+            connection.close()

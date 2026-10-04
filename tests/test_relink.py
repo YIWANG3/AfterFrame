@@ -54,6 +54,7 @@ class RelinkAssetTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual(canonical["canonical_path"], str(moved.resolve()))
             self.assertEqual(canonical["exists_on_disk"], 1)
+            connection.close()
 
     def test_relink_onto_a_path_another_asset_owns_is_refused_not_a_traceback(self) -> None:
         # A background refresh can register a file anew after its asset was
@@ -79,6 +80,7 @@ class RelinkAssetTests(unittest.TestCase):
             # Untouched: both assets still point where they did.
             self.assertEqual(_asset_id_for(connection, first), first_id)
             self.assertEqual(_asset_id_for(connection, second), second_id)
+            connection.close()
 
 
 if __name__ == "__main__":

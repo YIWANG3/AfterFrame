@@ -12,7 +12,7 @@ test("normalizeCatalogPath: extension rules and relative resolution", () => {
   assert.equal(normalizeCatalogPath(ROOT, "/x/lib.afcatalog"), "/x/lib.afcatalog");
   assert.equal(normalizeCatalogPath(ROOT, "/x/old.mwcatalog"), "/x/old.afcatalog");
   assert.equal(normalizeCatalogPath(ROOT, "/x/typed"), "/x/typed.afcatalog");
-  assert.equal(normalizeCatalogPath(ROOT, "data/scratch"), path.join(ROOT, "data", "scratch.afcatalog"));
+  assert.equal(normalizeCatalogPath(ROOT, "data/scratch"), path.resolve(ROOT, "data", "scratch.afcatalog"));
   assert.equal(normalizeCatalogPath(ROOT, ""), null);
   assert.equal(normalizeCatalogPath(ROOT, null), null);
 });
@@ -25,7 +25,7 @@ test("resolveInitialCatalogPath: precedence is no-default > env override > last-
   const base = { env: {}, configuredCatalogPath: null, rootDir: ROOT, readAppSettings: () => ({ lastCatalogPath: last }), scratchCatalogPath: "/scratch" };
 
   assert.equal(resolveInitialCatalogPath({ ...base, env: { AFTERFRAME_NO_DEFAULT_CATALOG: "1" } }), null, "welcome-screen override wins over everything");
-  assert.equal(resolveInitialCatalogPath({ ...base, configuredCatalogPath: "data/x" }), path.join(ROOT, "data", "x"), "env catalog beats last-opened");
+  assert.equal(resolveInitialCatalogPath({ ...base, configuredCatalogPath: "data/x" }), path.resolve(ROOT, "data", "x"), "env catalog beats last-opened");
   assert.equal(resolveInitialCatalogPath(base), last, "last-opened catalog is restored when it still exists");
   assert.equal(
     resolveInitialCatalogPath({ ...base, readAppSettings: () => ({ lastCatalogPath: path.join(dir, "gone.afcatalog") }) }),

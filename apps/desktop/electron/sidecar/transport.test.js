@@ -99,7 +99,10 @@ test("reset waits for detached jobs, suppresses their failure callbacks, and lea
     await once(children[1].stdout, "data");
     catalogPath = "/sample.afcatalog";
     await transport.withCatalogPaused(catalogPath, () => {
-      assert.equal(children[0].exitCode, 9, "wait for the job's actual exit before deletion");
+      // Exited before the action runs: on POSIX through the job's SIGTERM
+      // handler (9); Windows has no signals, so kill() ends it outright.
+      if (process.platform === "win32") assert.equal(children[0].signalCode, "SIGTERM", "wait for the job's actual exit before deletion");
+      else assert.equal(children[0].exitCode, 9, "wait for the job's actual exit before deletion");
       assert.equal(children[1].exitCode, null, "unrelated catalog job is untouched");
     });
     assert.equal(children.length, 2, "the killed job must not send fail-job into the rebuilt DB");

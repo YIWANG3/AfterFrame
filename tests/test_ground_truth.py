@@ -53,6 +53,7 @@ class GroundTruthExportTest(unittest.TestCase):
             self.assertTrue(rows[0]["raw_path"])
             self.assertEqual(rows[1]["raw_path"], "")
             self.assertEqual(rows[1]["notes"], "reviewed-unmatched-v0;score=0.00")
+            connection.close()
 
 
 if __name__ == "__main__":

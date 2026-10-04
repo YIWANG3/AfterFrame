@@ -105,6 +105,7 @@ class RegisterAndCropTest(unittest.TestCase):
                     (derived["asset_id"],),
                 ).fetchone()
                 self.assertIsNotNone(preview)
+            connection.close()
 
     def test_register_with_version_kind_override(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -129,6 +130,7 @@ class RegisterAndCropTest(unittest.TestCase):
             ).fetchone()
             self.assertEqual(row["version_kind"], "ai_repaint")
             self.assertEqual(base["asset_id"], base["asset_id"])
+            connection.close()
 
 
 class ExportAssetsTest(unittest.TestCase):
@@ -158,6 +160,7 @@ class ExportAssetsTest(unittest.TestCase):
             # Unknown asset id reports a per-item error instead of raising
             bad = export_assets_to_dir(connection, ["nope"], dest)
             self.assertIn("error", bad[0])
+            connection.close()
 
 
 if __name__ == "__main__":
