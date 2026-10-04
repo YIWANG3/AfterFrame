@@ -8,6 +8,7 @@
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const BUNDLED_ARCFACE_R100 = Object.freeze({
@@ -29,7 +30,13 @@ const BUNDLED_ARCFACE_R100 = Object.freeze({
   embedding_dimensions: 512,
   input_name: "faceImage",
   output_name: "embedding",
+  // An ML Program with Core ML specification version 8 (Core ML 7). Older
+  // macOS can't load it, though people-worker itself runs from macOS 12.
+  min_macos: 14,
 });
+
+// os.release() is the Darwin version: 23 = macOS 14, 24 = macOS 15, 25 = macOS 26.
+const MIN_DARWIN_MAJOR = 23;
 
 const BUNDLED_MODEL_KEY = modelKey(
   BUNDLED_ARCFACE_R100.id,
@@ -47,6 +54,10 @@ function bundledModelPath({ isPackaged, resourcesPath, desktopDir, env = process
   if (env.AFTERFRAME_BUNDLED_PEOPLE_MODEL) return path.resolve(env.AFTERFRAME_BUNDLED_PEOPLE_MODEL);
   const nativeDir = isPackaged ? path.join(resourcesPath, "native") : path.join(desktopDir, "native");
   return path.join(nativeDir, BUNDLED_ARCFACE_R100.model_path);
+}
+
+function canLoadBundledModel({ platform = process.platform, osRelease = os.release() } = {}) {
+  return platform === "darwin" && Number.parseInt(osRelease, 10) >= MIN_DARWIN_MAJOR;
 }
 
 // Same shape as the records installModel persists for a chosen model.
@@ -112,6 +123,7 @@ module.exports = {
   modelKey,
   bundledModelPath,
   bundledRecord,
+  canLoadBundledModel,
   isBundledModel,
   pathDigest,
 };

@@ -190,5 +190,7 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     startScan,
     requestScan,
     modelMissing: !!modelState && !modelState.activeModelKey,
+    // The macOS the built-in model needs, when this Mac is older; else null.
+    modelNeedsMacOS: modelState?.builtInNeedsMacOS || null,
   };
 }

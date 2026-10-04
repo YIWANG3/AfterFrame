@@ -7,6 +7,7 @@ const path = require("node:path");
 const {
   BUNDLED_MODEL_KEY,
   bundledModelPath,
+  canLoadBundledModel,
   isBundledModel,
   modelKey,
   pathDigest,
@@ -26,7 +27,7 @@ function fakeModel(dir) {
 }
 
 // register() with in-memory settings and a fake ipcMain, as main.js wires it.
-function registerPeople(t, { settings = {}, prepare, bundled = true, jobs = {} } = {}) {
+function registerPeople(t, { settings = {}, prepare, bundled = true, jobs = {}, osRelease = "24.6.0" } = {}) {
   const root = tempDir(t);
   const userData = path.join(root, "userData");
   fs.mkdirSync(userData);
@@ -60,6 +61,8 @@ function registerPeople(t, { settings = {}, prepare, bundled = true, jobs = {} }
       getJob: async (id) => jobs[id] || null,
       resumeJob: async (id) => ({ ...jobs[id], status: "queued" }),
     },
+    platform: "darwin",
+    osRelease,
   });
   return {
     api,
@@ -126,6 +129,8 @@ test("pathDigest covers names and contents, and refuses symlinks", async (t) => 
   assert.equal((await pathDigest(model)).sha256, first.sha256);
   fs.writeFileSync(path.join(model, "Manifest.json"), "[]");
   assert.notEqual((await pathDigest(model)).sha256, first.sha256);
+  // Windows needs Developer Mode or admin rights to create a symlink.
+  if (process.platform === "win32") return;
   fs.symlinkSync(path.join(model, "Manifest.json"), path.join(model, "link"));
   await assert.rejects(pathDigest(model), /symbolic links/);
 });
@@ -219,4 +224,20 @@ test("the built-in model can't be removed", async (t) => {
     settings: { peopleRecognition: { activeModelKey: "custom@1@abc", models: { "custom@1@abc": { modelPath: custom } } } },
   });
   await assert.rejects(people.invoke("workspace:remove-people-model", BUNDLED_MODEL_KEY), /built-in model/);
+});
+
+test("the bundled model needs macOS 14", () => {
+  assert.equal(canLoadBundledModel({ platform: "darwin", osRelease: "22.6.0" }), false); // macOS 13
+  assert.equal(canLoadBundledModel({ platform: "darwin", osRelease: "23.6.0" }), true); // macOS 14
+  assert.equal(canLoadBundledModel({ platform: "darwin", osRelease: "25.6.0" }), true); // macOS 26
+  assert.equal(canLoadBundledModel({ platform: "win32", osRelease: "10.0.26100" }), false);
+});
+
+test("on macOS 13 the bundled model isn't offered, and state says which macOS it needs", (t) => {
+  const people = registerPeople(t, { osRelease: "22.6.0" });
+  const state = people.state();
+  assert.equal(state.activeModelKey, null);
+  assert.deepEqual(state.models, []);
+  assert.equal(state.builtInNeedsMacOS, 14);
+  assert.equal(registerPeople(t).state().builtInNeedsMacOS, null);
 });
