@@ -25,7 +25,7 @@ import struct
 from pathlib import Path
 
 from .metadata import _parse_tiff_ifd, _read_u32
-from .raw_preview import tiff_directories
+from .raw_preview import _TIFF_LIKE, tiff_directories
 
 _NEW_SUBFILE_TYPE = 0x00FE
 _PHOTOMETRIC = 0x0106
@@ -91,6 +91,10 @@ def buffer_dimensions(buf) -> tuple[int, int] | None:
         return None
     if buf[:16] == _RAF_MAGIC:
         return _raf_dimensions(buf)
+    if buf[:4] not in _TIFF_LIKE:
+        # CR3 and other non-TIFF RAWs: nothing to walk, and reading IFD0
+        # offsets out of a file that has none costs disk seeks for nothing.
+        return None
     return _tiff_dimensions(buf)
 
 

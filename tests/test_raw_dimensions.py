@@ -136,6 +136,23 @@ class RawDimensionsTest(unittest.TestCase):
         self.assertIsNone(raw_dimensions(self._write("cut.RAF", _raf([(0x0111, (4512, 6768))])[:120])))
         self.assertIsNone(raw_dimensions(self._write("empty.ARW", b"")))
 
+    def test_an_import_doesnt_run_sips_for_a_cr3(self) -> None:
+        # Its EXIF size is the full image's; a sips process per RAW was about
+        # a third of a drive import's indexing time.
+        root = Path(self.temp_dir.name)
+        cr3 = root / "0Y1A0001.CR3"
+        cr3.write_bytes(b"\x00\x00\x00\x18ftypcrx " + bytes(64))
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        with patch("media_workspace.reverse_lookup.subprocess.run") as run:
+            resolve_image_batch(connection, [cr3], refresh=True)
+        indexed = connection.execute("SELECT count(*) FROM assets WHERE asset_type = 'raw'").fetchone()[0]
+        connection.close()
+        self.assertEqual(indexed, 1)
+        self.assertFalse(any("sips" in str(call) for call in run.call_args_list))
+
     def test_a_real_dng(self) -> None:
         # Its IFD0 says 256×144; sips says 1024×576.
         self.assertEqual(raw_dimensions(DNG_FIXTURE), (1024, 576))

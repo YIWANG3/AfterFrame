@@ -445,6 +445,10 @@ def resolve_image_batch(
     }
 
 
+# RAW formats whose EXIF size is the image's, not an embedded preview's.
+_EXIF_SIZE_IS_FULL = {".cr3"}
+
+
 def is_raw(path: Path) -> bool:
     return path.suffix.lower() in DEFAULT_RAW_EXTENSIONS
 
@@ -491,7 +495,11 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     # answer as sips on every format checked); sips only where it doesn't,
     # since a sips process per RAW nearly doubled a drive import's indexing
     # time (~240 ms each).
-    native = raw_dimensions(resolved) or _native_raw_dimensions(resolved)
+    # CR3's EXIF size is already the full image's (checked against sips on
+    # every CR3 sampled), so it needs neither.
+    native = raw_dimensions(resolved)
+    if native is None and resolved.suffix.lower() not in _EXIF_SIZE_IS_FULL:
+        native = _native_raw_dimensions(resolved)
     if native:
         metadata.width, metadata.height = native
     upsert_raw_asset(connection, metadata, commit=False)
