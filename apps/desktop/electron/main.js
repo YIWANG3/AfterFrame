@@ -750,7 +750,11 @@ app.whenReady().then(async () => {
   if (!isPackaged) addBaselineMediaDir(rootDir); // dev fixtures / demo assets
 
   // media:// (images; HEIC transcoded on the fly) — see ./media/protocol.js.
-  registerMediaProtocol({ protocol, net, allowlist: media, heicCacheDir });
+  registerMediaProtocol({
+    protocol, net, allowlist: media, heicCacheDir,
+    // No sips off macOS: the sidecar converts with Pillow + pillow-heif.
+    convertHeic: process.platform === "darwin" ? undefined : (src, out) => sidecarCommands.transcodeImage(src, out),
+  });
 
   const catalogPreparation = prepareCatalogPath().finally(() => {
     // A paused task remains paused; only queued durable people tasks are

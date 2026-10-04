@@ -721,6 +721,12 @@ def build_parser() -> argparse.ArgumentParser:
     read_meta_p = subparsers.add_parser("read-image-metadata", parents=[common])
     read_meta_p.add_argument("--path", type=Path, required=True)
 
+    # A full-size JPEG of an original the renderer can't decode (HEIC where
+    # there is no sips): Electron's media:// serves it in the original's place.
+    transcode_p = subparsers.add_parser("transcode-image", parents=[common])
+    transcode_p.add_argument("--source", type=Path, required=True)
+    transcode_p.add_argument("--output", type=Path, required=True)
+
     return parser
 
 
@@ -802,6 +808,12 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"ok": True, "models": models}, ensure_ascii=False))
         except Exception as e:  # noqa: BLE001
             print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
+        return 0
+
+    if args.command == "transcode-image":
+        from .preview_service import transcode_to_jpeg
+        transcode_to_jpeg(args.source, args.output)
+        print(json.dumps({"output": str(args.output)}))
         return 0
 
     if args.command == "read-image-metadata":
