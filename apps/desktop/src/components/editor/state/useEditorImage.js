@@ -17,8 +17,16 @@ import { buildPreviewSource, releaseCanvasImage } from "../render/canvasHelpers"
 export const PREVIEW_MAX_EDGE = 2200;
 
 // `waiting`: the source is still being made (a RAW's HD preview); show loading
-// rather than whatever was open before.
-export function useEditorImage({ open, sourcePath, waiting = false, decodeErrorLabel = "Failed to load image" }) {
+// rather than whatever was open before. No source and nothing being made (a
+// RAW whose HD failed and that has no thumbnail either) is an error, not a
+// load that never ends.
+export function useEditorImage({
+  open,
+  sourcePath,
+  waiting = false,
+  decodeErrorLabel = "Failed to load image",
+  missingSourceLabel = "No preview is available to edit.",
+}) {
   const sourceImageRef = useRef(null);
   const [sourceImage, setSourceImage] = useState(null);
   const [previewSource, setPreviewSource] = useState(null);
@@ -28,12 +36,10 @@ export function useEditorImage({ open, sourcePath, waiting = false, decodeErrorL
   useEffect(() => {
     if (!open) return undefined;
     if (!sourcePath) {
-      if (waiting) {
-        setLoadState("loading");
-        setLoadError(null);
-        setSourceImage(null);
-        setPreviewSource(null);
-      }
+      setLoadState(waiting ? "loading" : "error");
+      setLoadError(waiting ? null : missingSourceLabel);
+      setSourceImage(null);
+      setPreviewSource(null);
       return undefined;
     }
     let active = true;

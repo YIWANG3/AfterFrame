@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import api from "../api";
+import { createHdPreviewStore, hdPreviewIn } from "./hdPreviewStore";
 
 // A RAW's HD preview (the JPEG its camera embedded, at full size) isn't made at
 // import, where a drive holds tens of thousands of RAWs; it is made the first
@@ -12,37 +13,49 @@ export function needsOnDemandHd(item) {
     && !item.image_preview_hd_path;
 }
 
-// asset_id → the HD preview made for it, or null once making one failed. An
-// item the map doesn't have yet is still being made (or needn't be).
-export function useOnDemandHdPreviews(items, enabled = true) {
-  const [hdById, setHdById] = useState({});
-  const requestedRef = useRef(new Set());
-  const wanted = enabled ? (items || []).filter(needsOnDemandHd) : [];
-  const wantedKey = wanted.map((item) => item.asset_id).join("|");
+// The one store the lightbox, editor and collage share (see hdPreviewStore.js).
+export const hdPreviews = createHdPreviewStore({
+  ensure: (paths) => api.ensureHdPreviews(paths),
+  readDetail: (assetId) => api.getAssetDetailById(assetId),
+});
+
+// The HD preview made on demand for `current`: its path, null once making one
+// failed, undefined while it is being made (or needn't be). `prefetch`: photos
+// to make ahead once the view has held still on `current` (the lightbox's
+// neighbours). `catalogKey` is the open catalog's path; results belong to it.
+export function useOnDemandHdPreview({
+  current,
+  prefetch = [],
+  enabled = true,
+  catalogKey = null,
+  store = hdPreviews,
+}) {
+  // This view's identity in the store; what it wants replaces what it wanted.
+  const [consumer] = useState(() => ({}));
+  const key = enabled ? current?.asset_id || null : null;
+  const wantedCurrent = enabled && needsOnDemandHd(current) ? current : null;
+  const wantedPrefetch = enabled ? (prefetch || []).filter(needsOnDemandHd) : [];
+  const currentId = wantedCurrent?.asset_id || "";
+  const prefetchKey = wantedPrefetch.map((item) => item.asset_id).join("|");
+  const catalog = catalogKey || null;
+
+  // Only this photo's value is read, so a view re-renders when its own HD
+  // changes, not on every request the store sends or answers. Until the store
+  // has caught up with a catalog switch, what it holds is the previous one's.
+  const hd = useSyncExternalStore(store.subscribe, () => {
+    const snapshot = store.getSnapshot();
+    if (!currentId || snapshot.catalog !== catalog) return undefined;
+    return hdPreviewIn(snapshot, currentId);
+  });
 
   useEffect(() => {
-    const fresh = wanted.filter((item) => !requestedRef.current.has(item.asset_id));
-    if (!fresh.length) return;
-    for (const item of fresh) requestedRef.current.add(item.asset_id);
-    (async () => {
-      const found = Object.fromEntries(fresh.map((item) => [item.asset_id, null]));
-      try {
-        await api.ensureHdPreviews(fresh.map((item) => item.image_path));
-        const details = await Promise.all(
-          fresh.map((item) => Promise.resolve(api.getAssetDetailById(item.asset_id)).catch(() => null)),
-        );
-        for (const detail of details) {
-          const hd = detail?.image_preview_hd_path || detail?.preview_hd_path;
-          if (detail?.asset_id && hd) found[detail.asset_id] = hd;
-        }
-      } catch (err) {
-        console.warn("[hd] on-demand HD preview failed:", err);
-      }
-      setHdById((prev) => ({ ...prev, ...found }));
-    })();
-    // `wanted` is derived from items each render; its ids are the dependency.
+    store.setCatalog(catalog);
+    store.want(consumer, { key, current: wantedCurrent, prefetch: wantedPrefetch });
+    // The items are rebuilt every render; their ids are the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantedKey]);
+  }, [store, consumer, catalog, key, currentId, prefetchKey]);
 
-  return hdById;
+  useEffect(() => () => store.release(consumer), [store, consumer]);
+
+  return hd;
 }

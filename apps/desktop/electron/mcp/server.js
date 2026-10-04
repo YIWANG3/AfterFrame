@@ -40,6 +40,9 @@ const VIEW_EDGE_PX = 384;
 const IMPORT_WAIT_MS = 25000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // JSON-RPC requests are tiny; cap abuse
 const VIEW_TIME_BUDGET_MS = 20000;
+// RAW HD previews made per sidecar call when a tool needs them. Each call has
+// the resident's 30 s timeout; a few at a time finish inside it.
+const HD_ENSURE_CHUNK = 8;
 
 // asset_id -> { preview, previewHd } absolute paths, filled by search results
 // so /assets/{id} usually serves without spawning the sidecar again.
@@ -233,6 +236,30 @@ function createMcpServer(deps) {
     await commands.ensureHdPreviews([detail.image_path]).catch(() => null);
     previewPathCache.delete(assetId);
     return resolvePreviewPaths(assetId);
+  }
+
+  // Tools that draw from the preview (render_collage) need a RAW's HD one, or
+  // its cells are upscaled from the 512px thumbnail; it isn't made at import.
+  // Makes the missing ones, then reads those assets again. `details[i]` is
+  // ids[i]'s; the result keeps that order.
+  async function withRawHdPreviews(ids, details) {
+    const missing = [];
+    details.forEach((detail, i) => {
+      if (detail?.asset_type === "raw" && detail.image_path && !detail.image_preview_hd_path) missing.push(i);
+    });
+    if (!missing.length) return details;
+    for (let start = 0; start < missing.length; start += HD_ENSURE_CHUNK) {
+      const paths = missing.slice(start, start + HD_ENSURE_CHUNK).map((i) => details[i].image_path);
+      // A failure leaves those cells on the thumbnail rather than failing the render.
+      await commands.ensureHdPreviews(paths).catch(() => null);
+    }
+    const next = [...details];
+    for (const i of missing) {
+      previewPathCache.delete(ids[i]);
+      const fresh = await commands.assetDetail({ assetId: ids[i] }).catch(() => null);
+      if (fresh?.image_path) next[i] = fresh;
+    }
+    return next;
   }
 
   async function getJob(jobId) {
@@ -1413,16 +1440,19 @@ function createMcpServer(deps) {
         if (ids.length < 2) throw new Error("render_collage needs at least 2 asset_ids.");
         const perPage = args.per_page ? Math.max(1, Math.min(12, Math.round(args.per_page))) : ids.length;
         if (!args.per_page && ids.length > 12) throw new Error("A single page holds at most 12 photos — pass per_page for batch mode.");
-        const files = [];
+        let details = [];
         for (const id of ids) {
           const detail = await commands.assetDetail({ assetId: id });
           if (!detail?.image_path) throw new Error(`No file path for asset ${id}.`);
-          files.push({
-            assetId: id,
-            imagePath: detail.image_path,
-            previewPath: detail.image_preview_hd_path || detail.image_preview_path || null,
-          });
+          details.push(detail);
         }
+        // The renderer can't decode a RAW, so a RAW cell is drawn from its preview.
+        details = await withRawHdPreviews(ids, details);
+        const files = details.map((detail, i) => ({
+          assetId: ids[i],
+          imagePath: detail.image_path,
+          previewPath: detail.image_preview_hd_path || detail.image_preview_path || null,
+        }));
         const derivedDir = path.join(catalogPath, "derived");
         fs.mkdirSync(derivedDir, { recursive: true });
         const stamp = Date.now();

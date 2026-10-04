@@ -3,7 +3,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
-import { useOnDemandHdPreviews } from "../hooks/useOnDemandHdPreviews";
+import { useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import VideoPlayer from "./VideoPlayer";
 import api from "../api";
 
@@ -114,6 +114,7 @@ export default function Lightbox({
   open,
   items,
   currentIndex,
+  catalogKey = null,
   proofMode,
   onToggleProof,
   onEdit,
@@ -139,6 +140,8 @@ export default function Lightbox({
   const activeAssetIdRef = useRef(null);
   const detailUrlRef = useRef(null);
   const isZoomedRef = useRef(false);
+  // The asset whose every base source failed to load (loadState "error").
+  const failedItemRef = useRef(null);
   const [naturalSize, setNaturalSize] = useState(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -151,13 +154,15 @@ export default function Lightbox({
 
   const clampedIndex = Math.max(0, Math.min(currentIndex, Math.max((items?.length || 1) - 1, 0)));
   const currentItem = items?.[clampedIndex] || null;
-  // RAW HD previews are made on demand: for this photo and its neighbours, so
-  // stepping through stays sharp.
-  const hdById = useOnDemandHdPreviews(
-    [currentItem, items?.[clampedIndex + 1], items?.[clampedIndex - 1]],
-    open,
-  );
-  const onDemandHd = currentItem ? hdById[currentItem.asset_id] || null : null;
+  // RAW HD previews are made on demand: this photo's at once, its neighbours'
+  // once the index has held still, so stepping back and forth stays sharp
+  // without queueing one for every photo passed on the way.
+  const onDemandHd = useOnDemandHdPreview({
+    current: currentItem,
+    prefetch: [items?.[clampedIndex + 1], items?.[clampedIndex - 1]],
+    enabled: open,
+    catalogKey,
+  }) || null;
   const { baseSources: sources, detailPath } = useMemo(
     () => buildLightboxSources(currentItem, { onDemandHd }),
     [currentItem, onDemandHd],
@@ -337,6 +342,7 @@ export default function Lightbox({
     }
     logicalSizeRef.current = null;
     isZoomedRef.current = false;
+    failedItemRef.current = null;
     setIsZoomed(false);
     setLoadState("loading");
     setShowLoadingText(false);
@@ -368,6 +374,18 @@ export default function Lightbox({
     }
     resetImageState();
   }, [open, currentItem?.asset_id, currentItem?.image_path, currentItem?.image_preview_path, currentItem?.raw_preview_path]);
+
+  // A RAW whose thumbnail is missing or corrupt shows the error until its
+  // on-demand HD lands. There is no base view for the HD to join as the detail
+  // layer, so it becomes the base instead.
+  useEffect(() => {
+    if (!onDemandHd || loadState !== "error") return;
+    if (failedItemRef.current !== currentItem?.asset_id) return;
+    const next = sources.indexOf(onDemandHd);
+    if (next <= sourceIndex) return;
+    setSourceIndex(next);
+    setLoadState("loading");
+  }, [onDemandHd, loadState, sources, sourceIndex, currentItem?.asset_id]);
 
   useEffect(() => () => {
     if (paintFrameRef.current) cancelAnimationFrame(paintFrameRef.current);
@@ -484,6 +502,7 @@ export default function Lightbox({
       setSourceIndex((current) => current + 1);
       return;
     }
+    failedItemRef.current = currentItem.asset_id || null;
     setLoadState("error");
   }
 
