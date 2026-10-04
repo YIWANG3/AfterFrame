@@ -166,7 +166,7 @@ test("delete_assets drops catalog records and previews but leaves the files on d
   try {
     // The gallery windows its cards, so count through the sidebar badge —
     // which also proves the renderer refreshed after the agent's import.
-    const countBefore = (await callTool("get_catalog_info")).summary.image_assets;
+    const countBefore = (await callTool("get_catalog_info")).summary.browse_assets;
     const imported = await callTool("import_directory", { image_dirs: [dir] });
     expect(imported.status).toBe("succeeded");
     await expect(ctx.window.getByRole("button", { name: `All Assets ${countBefore + 2}` })).toBeVisible({ timeout: 15_000 });
