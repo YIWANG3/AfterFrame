@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { getProviderType, ProviderModal } from "../ai/providers";
-import { SliderRow } from "../../ui";
+import { Checkbox, SliderRow } from "../../ui";
 import { fileName } from "../../utils/format";
 
 /* ── Provider type templates (not instances) ── */
@@ -256,7 +256,13 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
 
 /* ── Provider instance modal: create new / edit existing ── */
 
-export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareChange, compareState, onRepaintComplete }) {
+// `targetCollectionId` is the folder the result should join (the editor was
+// opened from it and its box is ticked). The job adds it there, not the panel:
+// a repaint can finish after the editor is closed.
+export default function AiRepaintPanel({
+  sourcePath, outputBasePath, onCompareChange, compareState, onRepaintComplete,
+  folder, addToFolder, onAddToFolderChange, targetCollectionId,
+}) {
   const { t } = useTranslation("editor");
   const repaintPollRef = useRef(null);
   const prefsRef = useRef({});
@@ -632,6 +638,7 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
         resolution,
         temperature,
         model: selectedModel[activeProviderId] || null,
+        collectionId: targetCollectionId || null,
       });
       setGenerateStatus({
         running: Boolean(task?.running),
@@ -1023,7 +1030,15 @@ export default function AiRepaintPanel({ sourcePath, outputBasePath, onCompareCh
 
       <div className="shrink-0 border-t border-border/60 px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="flex-1" />
+          {folder ? (
+            <Checkbox
+              className="flex-1"
+              label={t("repaint.addToFolder", { name: folder.name })}
+              checked={addToFolder}
+              onChange={onAddToFolderChange}
+              testId="repaint-add-to-folder"
+            />
+          ) : <div className="flex-1" />}
           <button
             type="button"
             className={cx(

@@ -12,6 +12,8 @@ import { computeGroups, orderImages, MAX_TEMPLATE_COUNT } from "./collage/collag
 import { ensureHdInChunks, needsCollageHd } from "./collage/collageHd";
 import { hdPreviews } from "../hooks/useOnDemandHdPreviews";
 import { topLayerOpen } from "../utils/topLayer";
+import { useAddToFolder } from "../hooks/useAddToFolder";
+import { Checkbox } from "../ui";
 
 const PANEL_WIDTH = 300;
 const PAGE_SIZE = 48;
@@ -489,11 +491,6 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
   );
 }
 
-// Opened from inside a folder, the exported collage can join that folder.
-// The choice is remembered across sessions; it starts on, since the folder is
-// what the user was working in.
-const ADD_TO_FOLDER_KEY = "afterframe-collage-add-to-folder";
-
 export default function CollageOverlay({ open, items, catalogKey = null, collections, summary, sourceCollectionId, onAddToCollection, onClose, onExportComplete }) {
   const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
@@ -506,26 +503,12 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const [bgColor, setBgColor] = useState("#000000");
   const [exportWidth, setExportWidth] = useState(3000);
   const [exporting, setExporting] = useState(false);
-  const [addToFolder, setAddToFolder] = useState(true);
-  // The folder the collage was opened from, if it still exists.
-  const sourceFolder = sourceCollectionId
-    ? (collections || []).find((c) => c.collection_id === sourceCollectionId) || null
-    : null;
-  function toggleAddToFolder(checked) {
-    setAddToFolder(checked);
-    localStorage.setItem(ADD_TO_FOLDER_KEY, checked ? "1" : "0");
-  }
-  // Registered exports join the source folder when the box is ticked. A
-  // failure here is not an export failure: the file is saved and registered.
-  async function joinSourceFolder(assetIds) {
-    const ids = assetIds.filter(Boolean);
-    if (!addToFolder || !sourceFolder || !ids.length) return;
-    try {
-      await onAddToCollection?.(sourceFolder.collection_id, ids);
-    } catch (err) {
-      console.error("[Collage] adding the export to the folder failed:", err);
-    }
-  }
+  // Opened from a folder, the exports can join it. On the web, an export is a
+  // download, not a catalog asset, so there is nothing to add.
+  const { folder: sourceFolder, addToFolder, setAddToFolder, joinFolder: joinSourceFolder } = useAddToFolder({
+    open, collections, sourceCollectionId, onAddToCollection,
+  });
+  const canAddToFolder = !!sourceFolder && api.can("fileSystem");
   const [showPicker, setShowPicker] = useState(false);
   const [replaceIndex, setReplaceIndex] = useState(-1);
   const [selectedCellIdx, setSelectedCellIdx] = useState(-1);
@@ -573,7 +556,6 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
     setHdSession(hdSessionRef.current);
     const hdAbort = new AbortController();
     hdAbortRef.current = hdAbort;
-    setAddToFolder(localStorage.getItem(ADD_TO_FOLDER_KEY) !== "0");
     setImages(items);
     const templates = getTemplatesForCount(items.length);
     setTemplate(templates[0] || null);
@@ -917,20 +899,14 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
           )}
         </div>
         <div className="flex items-center gap-2">
-          {sourceFolder && (
-            <label
-              className="flex max-w-[260px] cursor-pointer items-center gap-1.5 text-[11px] text-muted transition-colors hover:text-text"
-              title={t("addToFolder", { name: sourceFolder.name })}
-            >
-              <input
-                type="checkbox"
-                data-testid="collage-add-to-folder"
-                className="h-3.5 w-3.5 accent-[rgb(var(--accent-color))]"
-                checked={addToFolder}
-                onChange={(e) => toggleAddToFolder(e.target.checked)}
-              />
-              <span className="truncate">{t("addToFolder", { name: sourceFolder.name })}</span>
-            </label>
+          {canAddToFolder && (
+            <Checkbox
+              className="max-w-[260px]"
+              label={t("addToFolder", { name: sourceFolder.name })}
+              checked={addToFolder}
+              onChange={setAddToFolder}
+              testId="collage-add-to-folder"
+            />
           )}
           <button
             type="button"
