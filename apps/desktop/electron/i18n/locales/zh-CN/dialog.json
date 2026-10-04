@@ -1,4 +1,10 @@
 {
   "relinkTitle": "重新连接文件",
-  "relinkMessage": "选择被移动或重命名的原始文件"
+  "relinkMessage": "选择被移动或重命名的原始文件",
+  "importTitle": "导入文件或文件夹",
+  "importFilesTitle": "导入文件",
+  "importFoldersTitle": "导入文件夹",
+  "addRawTitle": "添加 RAW 源文件或文件夹",
+  "addRawFilesTitle": "添加 RAW 源文件",
+  "addRawFoldersTitle": "添加 RAW 源文件夹"
 }

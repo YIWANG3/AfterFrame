@@ -36,6 +36,8 @@
       "tasks": "Tasks",
       "ai": "AI Annotation",
       "import": "Import",
+      "importFiles": "Import Files…",
+      "importFolder": "Import Folder…",
       "addRawSources": "Add Raw Sources",
       "runImport": "Run Import Pipeline",
       "runEnrichment": "Run Enrichment",

@@ -908,9 +908,11 @@ export default function useWorkspace({ pushToast } = {}) {
     return false;
   }
 
-  async function addImages() {
+  // pick: "files" | "folders" from Import Files… / Import Folder… (Windows and
+  // Linux, whose dialogs can't take both); macOS passes none and gets both.
+  async function addImages(pick) {
     if (!requireCatalog()) return;
-    const selected = await api.pickDirectories("image");
+    const selected = await api.pickDirectories("image", pick);
     await addImagesFromPaths(selected);
   }
 
@@ -1071,6 +1073,10 @@ export default function useWorkspace({ pushToast } = {}) {
         await switchCatalog(null);
       } else if (action === "import:pick-export") {
         await addImages();
+      } else if (action === "import:pick-export-files") {
+        await addImages("files");
+      } else if (action === "import:pick-export-folders") {
+        await addImages("folders");
       } else if (action === "import:pick-source") {
         await addSources();
       } else if (action === "import:start") {
