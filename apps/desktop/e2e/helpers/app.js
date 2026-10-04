@@ -67,7 +67,7 @@ async function collectCoverage(app) {
   }
 }
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false, peopleModel = "none" } = {}) {
   // Fresh userData so each run starts from a clean slate
   if (reuseUserDataDir && (!path.basename(reuseUserDataDir).startsWith("afterframe-e2e-")
     || fs.realpathSync(path.dirname(reuseUserDataDir)) !== fs.realpathSync(os.tmpdir()))) {
@@ -94,6 +94,18 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
   // Simulate packaged first-run (no default catalog) — exercises the
   // no-catalog welcome state, which dev's scratch catalog would otherwise hide.
   if (noCatalog) env.AFTERFRAME_NO_DEFAULT_CATALOG = "1";
+
+  // The bundled face model, independent of whether this checkout fetched it:
+  // "none" (default) = a build without it, "stub" = an empty package that
+  // satisfies the UI but can't run a scan, "real" = native/ as fetched.
+  if (peopleModel !== "real") {
+    const modelPath = path.join(userDataDir, "bundled-people-model", "FaceEmbedding.mlpackage");
+    if (peopleModel === "stub") {
+      fs.mkdirSync(modelPath, { recursive: true });
+      fs.writeFileSync(path.join(modelPath, "Manifest.json"), "{}");
+    }
+    env.AFTERFRAME_BUNDLED_PEOPLE_MODEL = modelPath;
+  }
 
   // Copy the seeded catalog into a tmp dir so save/import tests can't
   // contaminate the version-controlled fixture between runs.

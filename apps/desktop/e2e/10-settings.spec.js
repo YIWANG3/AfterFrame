@@ -51,7 +51,7 @@ test("AI Repaint tab renders the provider list", async () => {
   await ctx.window.getByRole("button", { name: "Cancel" }).click();
 });
 
-test("People tab renders local-model onboarding", async () => {
+test("People tab without the bundled model offers choosing one", async () => {
   // This test also runs independently via --grep, where the earlier test that
   // opens the shared Settings overlay is intentionally skipped.
   if (!await ctx.window.getByRole("button", { name: "General" }).isVisible()) {
@@ -60,8 +60,10 @@ test("People tab renders local-model onboarding", async () => {
   // Scope to the settings tab list — the app sidebar also has a "People" button.
   await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People" }).click();
   await expect(ctx.window.getByText("Face model", { exact: true })).toBeVisible();
-  await expect(ctx.window.getByText("No compatible face model is installed yet.")).toBeVisible();
-  await expect(ctx.window.getByRole("button", { name: /Download ArcFace R100/ })).toBeVisible();
+  // The default E2E launch is a build without the bundled model: there is
+  // nothing to download, only a model to choose.
+  await expect(ctx.window.getByText("This build doesn't include the face model. Choose a compatible model below.")).toBeVisible();
+  await expect(ctx.window.getByRole("button", { name: /Download/ })).toHaveCount(0);
   await expect(ctx.window.getByRole("button", { name: "Choose model…" })).toBeVisible();
   await expect(ctx.window.getByText("Index your library")).toBeVisible();
   // Auto-analyze on import is opt-in, and cannot be switched on without a model.

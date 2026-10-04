@@ -15,9 +15,8 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
   const [selectedId, setSelectedId] = useState(null);
   const [scan, setScan] = useState({ active: false, progress: 0, result: null });
   const scanWasActive = useRef(false);
-  // Face-model install state (app-level, not per-catalog). null = unknown.
+  // Face-model state (app-level, not per-catalog). null = unknown.
   const [modelState, setModelState] = useState(null);
-  const [modelDownloading, setModelDownloading] = useState(false);
 
   // People are per-catalog state. Switching catalogs must drop everything —
   // group ids, names and cover paths from the old library are meaningless
@@ -162,38 +161,16 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     if (enabled) void refreshModelState();
   }, [enabled, refreshModelState]);
 
-  // No model installed → the scan entry points become "download & scan":
-  // fetch the official model once, then start the scan the user asked for.
-  const downloadModelAndScan = useCallback(async () => {
-    if (modelDownloading) return;
-    setModelDownloading(true);
-    try {
-      const next = await api.downloadOfficialPeopleModel();
-      setModelState(next || null);
-      pushToast?.({ title: t("people.modelReady"), ttl: 3500 });
-    } catch (error) {
-      pushToast?.({
-        title: t("people.modelDownloadFailed"),
-        message: error?.message || String(error),
-        ttl: 8000,
-        tone: "error",
-      });
-      return;
-    } finally {
-      setModelDownloading(false);
-    }
-    await startScan().catch(() => {});
-  }, [modelDownloading, pushToast, startScan, t]);
-
-  // Single scan entry: re-checks the live model state (it may have been
-  // installed via Settings since we last looked) and routes to download+scan
-  // or plain scan. Falls through to startScan when the state can't be read —
-  // its own error toast explains the failure.
+  // Single scan entry: re-checks the live model state (a model may have been
+  // chosen in Settings since we last looked). The scan buttons are disabled
+  // while no model is available, so this only guards a stale click. Falls
+  // through to startScan when the state can't be read — its own error toast
+  // explains the failure.
   const requestScan = useCallback(async () => {
     const state = await refreshModelState();
-    if (state && !state.activeModelKey) return downloadModelAndScan();
-    return startScan().catch(() => {});
-  }, [refreshModelState, downloadModelAndScan, startScan]);
+    if (state && !state.activeModelKey) return;
+    await startScan().catch(() => {});
+  }, [refreshModelState, startScan]);
 
   const selectedGroup = groups.find((group) => group.group_id === selectedId) || null;
 
@@ -213,7 +190,5 @@ export default function usePeopleGroups({ pushToast, enabled, catalogKey }) {
     startScan,
     requestScan,
     modelMissing: !!modelState && !modelState.activeModelKey,
-    modelDownloading,
-    modelDownloadSizeBytes: modelState?.download?.sizeBytes || 0,
   };
 }
