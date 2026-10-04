@@ -43,7 +43,9 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬盘上，其余一切都被索引、保持快速。
 
 - 基于 Catalog 的工作流 — 每个项目一个 `.afcatalog`
-- 导入流水线：自动提取元数据与生成预览
+- 导入流水线：自动提取元数据与生成预览；大批量导入时照片按批出现，缩略图一起出来
+- 元数据由 [ExifTool](https://exiftool.org/) 读取：相机、镜头、曝光、拍摄时间、GPS 和色彩空间，覆盖 JPEG、HEIF 和 RAW，CR3 和 IIQ 也能读
+- RAW 由 [LibRaw](https://www.libraw.org/) 读取，支持 1200 多款相机：相机内嵌预览够大就直接用，不够大就完整解码；RAW 的高清预览在打开照片时才生成，不在导入时做
 - 两档预览：始终生成快速的 512px 缩略图，另有可选的 2000px 高清预览（设置 → 图库 开关，默认关闭以节省磁盘）
 - 可选的 RAW 源文件索引与按文件名匹配
 - HEIC / HEIF 支持 — 原图按需转码为 JPEG，iPhone 照片在 Lightbox、编辑器、拼图中以全分辨率正常显示
@@ -192,7 +194,7 @@ npm run dist:mac          # 重打 sidecar，再打包 + 签名（Developer ID�
 npm run dist:mac:release  # 额外公证 —— 需设置 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
 ```
 
-`.dmg` 输出在 `apps/desktop/release/`。sidecar 步骤需要 `pyinstaller`（`pip3 install pyinstaller`）。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
+`.dmg` 输出在 `apps/desktop/release/`。sidecar 步骤需要先装好 sidecar 和 `pyinstaller`（`pip3 install -e "services/sidecar[jimeng]" pyinstaller`），没有 rawpy（LibRaw）会直接停下。ExifTool 由构建脚本下载到 `native/exiftool`。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
 
 ## 项目结构
 

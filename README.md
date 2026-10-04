@@ -43,7 +43,9 @@ Download the latest `.dmg` from [Releases](../../releases).
 The core of AfterFrame — a catalog-based workflow that keeps your originals on disk and everything else indexed and fast.
 
 - Catalog-based workflow — one `.afcatalog` per project
-- Import pipeline with automatic metadata extraction and preview generation
+- Import pipeline with automatic metadata extraction and preview generation; on a large import, photos show up a batch at a time, thumbnails included
+- Metadata read with [ExifTool](https://exiftool.org/): camera, lens, exposure, capture time, GPS and colour space from JPEG, HEIF and RAW files, CR3 and IIQ included
+- RAW files from 1,200+ cameras read with [LibRaw](https://www.libraw.org/): the camera's embedded preview when it's big enough, a full decode when it isn't; RAW HD previews are made when you open the photo, not at import
 - Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
 - Optional RAW source indexing and matching by filename
 - HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
@@ -198,7 +200,7 @@ npm run dist:mac          # rebuild sidecar, then package + sign (Developer ID)
 npm run dist:mac:release  # also notarize — set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
 ```
 
-The `.dmg` will be in `apps/desktop/release/`. Requires `pyinstaller` (`pip3 install pyinstaller`) for the sidecar step. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
+The `.dmg` will be in `apps/desktop/release/`. The sidecar step needs the sidecar and `pyinstaller` installed (`pip3 install -e "services/sidecar[jimeng]" pyinstaller`); it stops if rawpy (LibRaw) is missing. ExifTool is fetched into `native/exiftool` by the build. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
 
 `npm run build` updates the workspace renderer only; it does not update an
 installed `/Applications/AfterFrame.app`. To verify the actual packaged app
