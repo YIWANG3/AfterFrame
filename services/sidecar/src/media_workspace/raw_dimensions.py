@@ -85,6 +85,15 @@ def _raf_dimensions(buf) -> tuple[int, int] | None:
     return None
 
 
+def buffer_dimensions(buf) -> tuple[int, int] | None:
+    """raw_dimensions for a RAW already open (bytes or an mmap)."""
+    if len(buf) < 8:
+        return None
+    if buf[:16] == _RAF_MAGIC:
+        return _raf_dimensions(buf)
+    return _tiff_dimensions(buf)
+
+
 def raw_dimensions(path: Path) -> tuple[int, int] | None:
     """(width, height) of the RAW's image as stored; None when the file
     doesn't say (see the module docstring for where it looks)."""
@@ -92,6 +101,4 @@ def raw_dimensions(path: Path) -> tuple[int, int] | None:
         if path.stat().st_size < 8:
             return None
         with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as buf:
-            if buf[:16] == _RAF_MAGIC:
-                return _raf_dimensions(buf)
-            return _tiff_dimensions(buf)
+            return buffer_dimensions(buf)

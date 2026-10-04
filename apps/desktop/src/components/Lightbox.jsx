@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
+import { useOnDemandHdPreviews } from "../hooks/useOnDemandHdPreviews";
 import VideoPlayer from "./VideoPlayer";
 import api from "../api";
 
@@ -150,9 +151,16 @@ export default function Lightbox({
 
   const clampedIndex = Math.max(0, Math.min(currentIndex, Math.max((items?.length || 1) - 1, 0)));
   const currentItem = items?.[clampedIndex] || null;
+  // RAW HD previews are made on demand: for this photo and its neighbours, so
+  // stepping through stays sharp.
+  const hdById = useOnDemandHdPreviews(
+    [currentItem, items?.[clampedIndex + 1], items?.[clampedIndex - 1]],
+    open,
+  );
+  const onDemandHd = currentItem ? hdById[currentItem.asset_id] || null : null;
   const { baseSources: sources, detailPath } = useMemo(
-    () => buildLightboxSources(currentItem),
-    [currentItem],
+    () => buildLightboxSources(currentItem, { onDemandHd }),
+    [currentItem, onDemandHd],
   );
   const imagePath = sources[sourceIndex] || null;
   const imageRevision = currentItem?.modified_time || currentItem?.image_metadata?.modified_time;
@@ -600,7 +608,7 @@ export default function Lightbox({
               shortcut="E"
               onClick={(event) => {
                 event.stopPropagation();
-                onEdit(currentItem);
+                onEdit(onDemandHd ? { ...currentItem, preview_hd_path: onDemandHd } : currentItem);
               }}
             />
           )}

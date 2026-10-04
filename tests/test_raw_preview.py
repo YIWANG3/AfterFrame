@@ -9,9 +9,10 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from media_workspace import raw_preview
 from media_workspace.catalog import ensure_catalog
 from media_workspace.preview_service import PreviewService
-from media_workspace.raw_preview import embedded_preview, render_raw_preview
+from media_workspace.raw_preview import EmbeddedPreviewTooSmall, embedded_preview, render_raw_preview
 
 DNG_FIXTURE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
 
@@ -87,6 +88,34 @@ def _tiff_ifds_at_end(images: list[tuple[int, int, bytes, int]], pad: int = 0) -
     return bytes(out)
 
 
+def _tiff_pointing_to(thumb: bytes, strip: bytes, decoy: bytes = b"", exif_size: tuple[int, int] | None = None) -> bytes:
+    """A little-endian TIFF shaped like a CR2: IFD0 points to a JPEG thumbnail
+    (JPEGInterchangeFormat) and a JPEG-compressed strip. `decoy` is a JPEG
+    nothing points to, after them; `exif_size` is the photo's size in EXIF."""
+    def entry(tag: int, kind: int, value: int) -> bytes:
+        return struct.pack("<HHII", tag, kind, 1, value)
+
+    count = 8 if exif_size else 7
+    exif_at = 8 + 2 + count * 12 + 4
+    thumb_at = exif_at + ((2 + 2 * 12 + 4) if exif_size else 0)
+    strip_at = thumb_at + len(thumb)
+    entries = [
+        entry(0x0100, 4, 640), entry(0x0101, 4, 480), entry(0x0103, 3, 6),
+        entry(0x0111, 4, strip_at), entry(0x0117, 4, len(strip)),
+        entry(0x0201, 4, thumb_at), entry(0x0202, 4, len(thumb)),
+    ] + ([entry(0x8769, 4, exif_at)] if exif_size else [])
+    out = b"II*\x00" + struct.pack("<IH", 8, count) + b"".join(entries) + struct.pack("<I", 0)
+    if exif_size:
+        out += struct.pack("<H", 2) + entry(0xA002, 4, exif_size[0]) + entry(0xA003, 4, exif_size[1]) + struct.pack("<I", 0)
+    return out + thumb + strip + bytes(64) + decoy
+
+
+def _raf_pointing_to(jpeg: bytes, decoy: bytes = b"") -> bytes:
+    """A Fujifilm RAF whose header points to `jpeg`; `decoy` follows unpointed."""
+    head = b"FUJIFILMCCD-RAW 0201FF383501".ljust(84, b"\x00")
+    return (head + struct.pack(">6I", 200, len(jpeg), 0, 0, 0, 0)).ljust(200, b"\x00") + jpeg + bytes(64) + decoy
+
+
 def _halves(width: int, height: int, top: tuple[int, int, int], bottom: tuple[int, int, int], bits: int = 8) -> bytes:
     rows = []
     for y in range(height):
@@ -115,7 +144,7 @@ class EmbeddedJpegTest(unittest.TestCase):
                 _lossless_jpeg(6000, 4000),
                 large,
             )
-            data, orientation = embedded_preview(raw)
+            data, orientation, *_ = embedded_preview(raw)
         self.assertEqual(data, large)
         self.assertEqual(orientation, 6)
 
@@ -123,7 +152,7 @@ class EmbeddedJpegTest(unittest.TestCase):
         small = _jpeg((160, 120), (40, 40, 200))
         with tempfile.TemporaryDirectory() as temp_dir:
             raw = _fake_raw(Path(temp_dir) / "cut.NEF", small, _jpeg((640, 480), (200, 40, 40))[:-500])
-            data, orientation = embedded_preview(raw)
+            data, orientation, *_ = embedded_preview(raw)
         self.assertEqual(data, small)
         self.assertIsNone(orientation)
 
@@ -138,7 +167,7 @@ class EmbeddedJpegTest(unittest.TestCase):
                 render_raw_preview(raw, Path(temp_dir) / "out.jpg", 512)
 
     def test_a_real_dng_yields_its_preview(self) -> None:
-        data, orientation = embedded_preview(DNG_FIXTURE)
+        data, orientation, *_ = embedded_preview(DNG_FIXTURE)
         with Image.open(BytesIO(data)) as preview:
             self.assertEqual(preview.format, "JPEG")
             self.assertEqual(preview.size, (256, 144))
@@ -152,7 +181,7 @@ class UncompressedPreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             raw = Path(temp_dir) / "B0000239.3FR"
             raw.write_bytes(_tiff_with_rgb_preview(320, 240, 8, _halves(320, 240, (200, 30, 30), (30, 30, 200)), orientation=6))
-            data, orientation = embedded_preview(raw)
+            data, orientation, *_ = embedded_preview(raw)
         with Image.open(BytesIO(data)) as preview:
             self.assertEqual(preview.size, (320, 240))
             self.assertEqual(preview.convert("RGB").getpixel((10, 10)), (200, 30, 30))
@@ -163,7 +192,7 @@ class UncompressedPreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             raw = Path(temp_dir) / "scan.fff"
             raw.write_bytes(_tiff_with_rgb_preview(64, 48, 16, _halves(64, 48, (128, 64, 32), (10, 250, 90), bits=16)))
-            data, _orientation = embedded_preview(raw)
+            data, _orientation, *_ = embedded_preview(raw)
         with Image.open(BytesIO(data)) as preview:
             self.assertEqual(preview.convert("RGB").getpixel((5, 5)), (128, 64, 32))
             self.assertEqual(preview.convert("RGB").getpixel((5, 40)), (10, 250, 90))
@@ -173,7 +202,7 @@ class UncompressedPreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             raw = Path(temp_dir) / "B_00206.fff"
             raw.write_bytes(_tiff_ifds_at_end([(64, 48, _halves(64, 48, (9, 9, 9), (99, 99, 99)), 8)], pad=600_000))
-            _data, orientation = embedded_preview(raw)
+            _data, orientation, *_ = embedded_preview(raw)
         self.assertEqual(orientation, 8)
 
     def test_an_already_rotated_copy_keeps_its_own_orientation(self) -> None:
@@ -184,7 +213,7 @@ class UncompressedPreviewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             raw = Path(temp_dir) / "Swiss.fff"
             raw.write_bytes(_tiff_ifds_at_end([landscape, portrait]))
-            data, orientation = embedded_preview(raw)
+            data, orientation, *_ = embedded_preview(raw)
         with Image.open(BytesIO(data)) as preview:
             self.assertEqual(preview.size, (60, 80))
         self.assertEqual(orientation, 1)
@@ -201,6 +230,60 @@ class UncompressedPreviewTest(unittest.TestCase):
             self.assertEqual(embedded_preview(jpeg_wins)[0], big_jpeg)
             with Image.open(BytesIO(embedded_preview(rgb_wins)[0])) as preview:
                 self.assertEqual((preview.format, preview.size), ("TIFF", (640, 480)))
+
+
+class LocatingPreviewsTest(unittest.TestCase):
+    """The file's structure says where its previews are, so a thumbnail never
+    reads the whole RAW, and never decodes a bigger JPEG than it needs."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.thumb = _jpeg((160, 120), (10, 10, 10))
+        self.strip = _jpeg((800, 600), (20, 20, 20))
+        self.decoy = _jpeg((1600, 1200), (30, 30, 30))
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def _write(self, name: str, data: bytes) -> Path:
+        path = Path(self.temp_dir.name) / name
+        path.write_bytes(data)
+        return path
+
+    def test_a_thumbnail_takes_the_smallest_pointed_preview_big_enough(self) -> None:
+        raw = self._write("IMG_0001.CR2", _tiff_pointing_to(self.thumb, self.strip, self.decoy))
+        found = embedded_preview(raw, min_edge=512)
+        self.assertEqual((found.data, found.width, found.height), (self.strip, 800, 600))
+        self.assertEqual(embedded_preview(raw, min_edge=100).data, self.thumb)
+
+    def test_a_full_size_preview_means_no_scan_for_a_bigger_one(self) -> None:
+        # EXIF says the photo is 800×600: the strip is its full-size rendering,
+        # so the unpointed decoy further on is never looked for.
+        raw = self._write("IMG_0002.CR2", _tiff_pointing_to(self.thumb, self.strip, self.decoy, exif_size=(800, 600)))
+        self.assertEqual(embedded_preview(raw).data, self.strip)
+
+    def test_otherwise_the_largest_is_scanned_for(self) -> None:
+        raw = self._write("IMG_0003.CR2", _tiff_pointing_to(self.thumb, self.strip, self.decoy))
+        self.assertEqual(embedded_preview(raw).data, self.decoy)
+
+    def test_a_raf_header_points_to_its_jpeg(self) -> None:
+        raw = self._write("_DSF0001.RAF", _raf_pointing_to(self.strip, self.decoy))
+        self.assertEqual(embedded_preview(raw, min_edge=512).data, self.strip)
+
+    def test_a_scan_stops_at_the_first_preview_big_enough(self) -> None:
+        # CR3 points to nothing a TIFF walk finds: scan, but not past the
+        # first JPEG that will do.
+        cr3 = _fake_raw(Path(self.temp_dir.name) / "0Y1A0001.CR3", b"\x00\x00\x00\x18ftypcrx ", self.thumb, self.strip, self.decoy)
+        with patch.object(raw_preview, "_frame_end", wraps=raw_preview._frame_end) as frame_end:
+            found = embedded_preview(cr3, min_edge=512)
+        self.assertEqual(found.data, self.strip)
+        self.assertEqual(frame_end.call_count, 2)
+
+    def test_a_caller_can_require_a_bigger_preview(self) -> None:
+        raw = self._write("IMG_0004.CR2", _tiff_pointing_to(self.thumb, self.strip, exif_size=(800, 600)))
+        with self.assertRaises(EmbeddedPreviewTooSmall):
+            render_raw_preview(raw, Path(self.temp_dir.name) / "out.jpg", 65535, require=2000)
+        render_raw_preview(raw, Path(self.temp_dir.name) / "out.jpg", 512, require=512)
 
 
 class RawPreviewRenderTest(unittest.TestCase):
@@ -228,6 +311,46 @@ class RawPreviewRenderTest(unittest.TestCase):
                 self.assertEqual(max(preview.size), 512)
             with Image.open(catalog.root / full.relative_path) as preview:
                 self.assertEqual(preview.size, (3000, 2000))
+
+
+class ImageIoFallbackTest(unittest.TestCase):
+    """With Image I/O (macOS) the embedded preview still comes first; the RAW
+    is only demosaiced when what the camera embedded is too small."""
+
+    def _render(self, embedded_size: tuple[int, int]):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        catalog = ensure_catalog(Path(temp_dir.name) / "demo.afcatalog")
+        raw = _fake_raw(Path(temp_dir.name) / "DSC0002.ARW", _tiff_header(1), _jpeg(embedded_size, (90, 160, 90)))
+        service = PreviewService(catalog)
+        row = {"asset_id": "raw_2", "canonical_path": str(raw), "width": 6000, "height": 4000}
+
+        def decoded(source, output, *args, **kwargs):
+            output.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (64, 48)).save(output, "JPEG")
+            return output
+
+        with patch("media_workspace.preview_service.shutil.which", return_value="/usr/bin/sips"), \
+                patch.object(service, "_render_with_quicklook", side_effect=decoded) as quicklook, \
+                patch.object(service, "_render_raw_fullres", side_effect=decoded) as fullres:
+            thumb = service.generate_for_row(row, "preview", force=True)
+            full = service.generate_for_row(row, "preview-hd", force=True)
+        sizes = []
+        for result in (thumb, full):
+            with Image.open(catalog.root / result.relative_path) as image:
+                sizes.append(image.size)
+        return sizes, quicklook.call_count, fullres.call_count
+
+    def test_a_big_enough_embedded_preview_is_used_for_both_tiers(self) -> None:
+        sizes, quicklook, fullres = self._render((3000, 2000))
+        self.assertEqual(sizes, [(512, 341), (3000, 2000)])
+        self.assertEqual((quicklook, fullres), (0, 0))
+
+    def test_a_small_one_falls_back_to_image_io(self) -> None:
+        # 960 px (a DJI DNG): enough for the thumbnail, not for HD.
+        sizes, quicklook, fullres = self._render((960, 640))
+        self.assertEqual(sizes[0], (512, 341))
+        self.assertEqual((quicklook, fullres), (0, 1))
 
 
 if __name__ == "__main__":

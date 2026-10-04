@@ -223,6 +223,18 @@ function createMcpServer(deps) {
     return previewPathCache.get(assetId) || { preview: null, previewHd: null };
   }
 
+  // A RAW's HD preview is made on demand (not at import), so asking for HD
+  // makes it first rather than answering with the 512px thumbnail.
+  async function resolveHdPreviewPaths(assetId) {
+    const paths = await resolvePreviewPaths(assetId);
+    if (paths.previewHd) return paths;
+    const detail = await commands.assetDetail({ assetId }).catch(() => null);
+    if (detail?.asset_type !== "raw" || !detail.image_path) return paths;
+    await commands.ensureHdPreviews([detail.image_path]).catch(() => null);
+    previewPathCache.delete(assetId);
+    return resolvePreviewPaths(assetId);
+  }
+
   async function getJob(jobId) {
     return await commands.getJob(jobId);
   }
@@ -1633,8 +1645,10 @@ function createMcpServer(deps) {
     }
     try {
       requireCatalog();
-      const { preview, previewHd } = await resolvePreviewPaths(assetId);
       const wantHd = url.searchParams.get("kind") === "hd";
+      const { preview, previewHd } = wantHd
+        ? await resolveHdPreviewPaths(assetId)
+        : await resolvePreviewPaths(assetId);
       const filePath = (wantHd ? previewHd || preview : preview || previewHd);
       if (!filePath || !fs.existsSync(filePath)) {
         res.writeHead(404).end("no preview for asset");

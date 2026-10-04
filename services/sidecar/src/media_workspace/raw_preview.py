@@ -1,20 +1,26 @@
 """RAW previews without a RAW decoder: the image the camera embedded in the file.
 
-macOS renders RAW through Image I/O (QuickLook and sips). Windows has
-neither, and Pillow can't demosaic. Nearly every RAW format carries the
-camera's own rendering as a JPEG, though: full size in CR2/CR3, NEF, RAF and
-PEF, smaller in older ARW and ORF, and DNG's preview. Where there is no
-Image I/O, the preview is that JPEG, scaled like any other.
+Pillow can't demosaic, and demosaicing is the slow part anyway: seconds per
+file through Image I/O, against a few hundred milliseconds to scale the JPEG
+the camera already rendered. Nearly every RAW carries one: full size in
+CR2/CR3, NEF, ARW, RAF and PEF, smaller in older ARW and ORF, and DNG's
+preview. That JPEG is the RAW's preview on every platform; macOS falls back to
+Image I/O only when it is too small (see preview_service).
 
-The file is scanned for JPEG start markers rather than parsed per format.
-Each hit is walked marker by marker. Only 8-bit Huffman frames that Pillow
-decodes are kept (baseline, extended, progressive), which skips the lossless
-JPEG that CR2 and many DNGs use for the raw data itself.
+Finding it must not read the whole RAW: a drive import touches tens of
+thousands of them, often on a spinning disk. The file's own structure says
+where its previews are: in a TIFF-based RAW (CR2, NEF, ARW, DNG, 3FR, FFF) the
+directories (the IFD chain and SubIFDs) point to JPEG thumbnails and
+JPEG-compressed strips, and a RAF's header to its JPEG. Only those bytes are
+read. A thumbnail takes the smallest preview that is big enough. Formats
+without such pointers (CR3), or where none is big enough, are scanned for JPEG
+start markers, stopping at the first big enough. Each hit is walked marker by
+marker, and only 8-bit Huffman frames that Pillow decodes are kept (baseline,
+extended, progressive), which skips the lossless JPEG that CR2 and many DNGs
+use for the raw data itself.
 
 Hasselblad 3FR and FFF (and older TIFF-based RAWs) can carry the preview
-uncompressed instead: an RGB image in one of the file's TIFF directories. Those
-are found by walking the directories (the IFD chain and SubIFDs) for
-uncompressed 8- or 16-bit RGB. The largest preview of either kind wins.
+uncompressed instead: an 8- or 16-bit RGB image in one of the directories.
 
 Embedded images are stored unrotated, like the sensor data, so the preview
 carries the RAW's orientation. The exception is an RGB directory with an
@@ -25,7 +31,9 @@ says 1 while the RAW's says 8.
 from __future__ import annotations
 
 import mmap
-from collections.abc import Iterator
+import struct
+from collections.abc import Callable, Iterator
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 from typing import NamedTuple
@@ -44,6 +52,36 @@ _SUBIFDS_TAG = 0x014A
 # orientation near the start; TIFF-based RAWs keep it in IFD0, which FFF
 # writes at the end of the file.
 _HEAD_BYTES = 512 * 1024
+_RAF_MAGIC = b"FUJIFILMCCD-RAW "
+# A preview at least this share of the RAW's size is its full-size rendering:
+# nothing bigger is worth scanning the file for.
+_FULL_SIZE = 0.9
+
+
+class EmbeddedPreview(NamedTuple):
+    data: bytes  # a JPEG, or an RGB preview wrapped as TIFF; Pillow opens both
+    orientation: int | None  # to show it with
+    width: int
+    height: int
+
+
+class EmbeddedPreviewTooSmall(ValueError):
+    """The RAW's embedded preview is smaller than the caller requires."""
+
+
+class _Candidate(NamedTuple):
+    width: int
+    height: int
+    load: Callable[[], bytes]
+    orientation: int | None  # the directory's own, for an already rotated copy
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
+    @property
+    def long_edge(self) -> int:
+        return max(self.width, self.height)
 
 
 class _RgbImage(NamedTuple):
@@ -163,9 +201,76 @@ def tiff_directories(buf, limit: int = 32) -> Iterator[dict]:
         yield tags
 
 
-def _tiff_rgb_previews(buf) -> list[_RgbImage]:
-    """Every uncompressed RGB image in the file's TIFF directories."""
-    return [rgb for tags in tiff_directories(buf) if (rgb := _rgb_directory(buf, tags))]
+def _read(buf, start: int, end: int) -> bytes:
+    return bytes(buf[start:end])
+
+
+def _jpeg_at(buf, start, length) -> _Candidate | None:
+    """The JPEG a directory or header points to, if Pillow decodes it. Only
+    its header is read here; its bytes when it is chosen."""
+    if not (isinstance(start, int) and isinstance(length, int)) or start <= 0 or length <= 0:
+        return None
+    if buf[start : start + 3] != _SOI or (header := _frame_header(buf, start)) is None:
+        return None
+    return _Candidate(header[0], header[1], partial(_read, buf, start, min(start + length, len(buf))), None)
+
+
+def _pointed_previews(buf) -> list[_Candidate]:
+    """The previews the file's structure points to: a TIFF directory's RGB
+    image, JPEG thumbnail (JPEGInterchangeFormat) or single JPEG-compressed
+    strip (CR2's full-size preview, DNG's and 3FR's), or a RAF header's JPEG."""
+    found: list[_Candidate] = []
+    if buf[:16] == _RAF_MAGIC and len(buf) >= 92:
+        start, length = struct.unpack_from(">II", buf, 84)
+        if jpeg := _jpeg_at(buf, start, length):
+            found.append(jpeg)
+        return found
+    little = buf[:2] == b"II"
+    for tags in tiff_directories(buf):
+        if rgb := _rgb_directory(buf, tags):
+            found.append(_Candidate(rgb.width, rgb.height, partial(_rgb_as_tiff, buf, rgb, little), rgb.orientation))
+        if jpeg := _jpeg_at(buf, tags.get(0x0201), tags.get(0x0202)):
+            found.append(jpeg)
+        offsets, counts = _as_list(tags.get(0x0111)), _as_list(tags.get(0x0117))
+        if tags.get(0x0103) in (6, 7) and len(offsets) == 1 and len(counts) == 1:
+            if jpeg := _jpeg_at(buf, offsets[0], counts[0]):
+                found.append(jpeg)
+    return found
+
+
+def _scanned_previews(buf, min_edge: int | None) -> list[_Candidate]:
+    """JPEGs found by scanning for start markers: every one Pillow decodes,
+    or up to the first at least `min_edge` on its long edge."""
+    found: list[_Candidate] = []
+    hit = buf.find(_SOI)
+    while hit >= 0:
+        header = _frame_header(buf, hit)
+        if header:
+            width, height, scan = header
+            end = _frame_end(buf, scan)
+            if end:
+                found.append(_Candidate(width, height, partial(_read, buf, hit, end), None))
+                if min_edge and max(width, height) >= min_edge:
+                    break
+        hit = buf.find(_SOI, hit + 3)
+    return found
+
+
+def _is_full_size(buf, candidate: _Candidate) -> bool:
+    from .raw_dimensions import buffer_dimensions
+
+    size = buffer_dimensions(buf)
+    return size is not None and candidate.long_edge >= _FULL_SIZE * max(size)
+
+
+def _choose(candidates: list[_Candidate], min_edge: int | None) -> _Candidate | None:
+    """The smallest candidate at least `min_edge` on its long edge, else the
+    largest. Ties go to the first found."""
+    if min_edge:
+        enough = [c for c in candidates if c.long_edge >= min_edge]
+        if enough:
+            return min(enough, key=lambda c: c.area)
+    return max(candidates, key=lambda c: c.area, default=None)
 
 
 def _rgb_as_tiff(buf, rgb: _RgbImage, little: bool) -> bytes:
@@ -201,44 +306,38 @@ def _orientation(buf) -> int | None:
     return None
 
 
-def embedded_preview(path: Path) -> tuple[bytes, int | None] | None:
-    """The largest preview embedded in `path`, as image bytes Pillow opens (a
-    JPEG, or an uncompressed RGB image wrapped as TIFF), and the orientation
-    to show it with; None when there is none."""
+def embedded_preview(path: Path, min_edge: int | None = None) -> EmbeddedPreview | None:
+    """The preview embedded in `path`: with `min_edge`, the smallest one at
+    least that long on its long edge (a thumbnail needn't decode a 24 MP
+    JPEG); without, or when none is, the largest. None when there is none."""
     with path.open("rb") as handle:
         if path.stat().st_size == 0:
             return None
         with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as buf:
-            frames = []
-            hit = buf.find(_SOI)
-            while hit >= 0:
-                header = _frame_header(buf, hit)
-                if header:
-                    width, height, scan = header
-                    frames.append((width * height, hit, scan))
-                hit = buf.find(_SOI, hit + 3)
-            jpeg = None
-            for area, start, scan in sorted(frames, reverse=True):
-                end = _frame_end(buf, scan)
-                if end:
-                    jpeg = (area, start, end)
-                    break
-            rgb = max(_tiff_rgb_previews(buf), key=lambda r: r.area, default=None)
-            orientation = _orientation(buf)
-            if rgb and (jpeg is None or rgb.area > jpeg[0]):
-                return _rgb_as_tiff(buf, rgb, buf[:2] == b"II"), rgb.orientation or orientation
-            if jpeg:
-                return bytes(buf[jpeg[1] : jpeg[2]]), orientation
-    return None
+            candidates = _pointed_previews(buf)
+            best = _choose(candidates, min_edge)
+            enough = best is not None and bool(min_edge) and best.long_edge >= (min_edge or 0)
+            if not enough and not (best and _is_full_size(buf, best)):
+                candidates += _scanned_previews(buf, min_edge)
+                best = _choose(candidates, min_edge)
+            if best is None:
+                return None
+            return EmbeddedPreview(best.load(), best.orientation or _orientation(buf), best.width, best.height)
 
 
-def render_raw_preview(source: Path, target: Path, size: int) -> None:
+def render_raw_preview(source: Path, target: Path, size: int, require: int = 0) -> None:
     """A preview of a RAW from its embedded image: long edge at most `size`,
-    the RAW's orientation as the EXIF tag, like every other preview."""
+    the RAW's orientation as the EXIF tag, like every other preview. The
+    smallest embedded image at least `size` is used, else the largest; one
+    shorter than `require` raises EmbeddedPreviewTooSmall, for a caller that
+    has a RAW decoder to fall back to."""
     from .preview_service import render_pillow_preview
 
-    found = embedded_preview(source)
+    found = embedded_preview(source, min_edge=size)
     if found is None:
         raise ValueError(f"no embedded preview in {source.name}")
-    data, orientation = found
-    render_pillow_preview(BytesIO(data), target, size, orientation=orientation)
+    if max(found.width, found.height) < require:
+        raise EmbeddedPreviewTooSmall(
+            f"{source.name}: the embedded preview is {found.width}×{found.height}, under {require} px"
+        )
+    render_pillow_preview(BytesIO(found.data), target, size, orientation=found.orientation)

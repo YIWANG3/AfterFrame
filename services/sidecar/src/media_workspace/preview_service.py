@@ -17,7 +17,7 @@ from .catalog import CatalogPaths
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
 from .db.colors import analyze_asset_colors
-from .raw_preview import render_raw_preview
+from .raw_preview import EmbeddedPreviewTooSmall, render_raw_preview
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -26,6 +26,12 @@ KIND_SIZES = {
     "preview": 512,
     "preview-hd": 2000,
 }
+
+# The camera's embedded JPEG is a RAW's preview when it is at least this long
+# on its long edge; below that, macOS renders the RAW through Image I/O
+# instead (a DJI DNG embeds 960 px, a Capture One DNG 160). Windows has only
+# the embedded image, whatever its size.
+_RAW_EMBEDDED_MIN_EDGE = {"preview": 512, "preview-hd": 2000}
 
 _PREVIEW_JPEG_QUALITY = 90  # sips-sized files (~46 KB vs 49 KB for a 512px preview)
 _ORIENTATION_TAG = 0x0112
@@ -229,21 +235,7 @@ class PreviewService:
                     source_path, output_path, KIND_SIZES[kind], validate=validate
                 )
         elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
-            # RAW has no displayable original (the renderer can't decode .cr3/.arw),
-            # so its preview IS the ceiling. The HD tier is rendered at full native
-            # resolution via sips (Image I/O demosaic) so the lightbox can show real
-            # detail / focus; the thumbnail tier stays a small QuickLook render.
-            # Without Image I/O (Windows) both come from the JPEG the camera
-            # embedded, the HD tier at that JPEG's full size.
-            if shutil.which("sips") is None:
-                size = KIND_SIZES[kind] if kind != "preview-hd" else _JPEG_MAX_EDGE
-                rendered = self._atomic(output_path, lambda tmp: render_raw_preview(source_path, tmp, size), validate=validate)
-            elif kind == "preview-hd":
-                rendered = self._render_raw_fullres(source_path, output_path, validate=validate)
-            else:
-                rendered = self._render_with_quicklook(
-                    source_path, output_path, KIND_SIZES[kind], validate=validate
-                )
+            rendered = self._render_raw(source_path, output_path, kind, validate=validate)
         else:
             rendered = self._render_image(
                 source_path, output_path, KIND_SIZES[kind], validate=validate
@@ -411,6 +403,35 @@ class PreviewService:
                 capture_output=True,
                 text=True,
             ), validate=validate)
+
+    def _render_raw(self, source_path: Path, output_path: Path, kind: str, validate=None) -> Path:
+        """RAW has no displayable original (the renderer can't decode .cr3/.arw),
+        so its preview IS the ceiling. Both tiers come from the JPEG the camera
+        embedded (raw_preview): the thumbnail from the smallest one that is big
+        enough, the HD tier at the largest one's full size, which for most
+        cameras is the sensor's, so the lightbox still zooms to real detail.
+        No demosaic: a few hundred ms per RAW instead of seconds, and no 5-17 MB
+        full-resolution render per file. Where the embedded image is too small
+        for the tier, macOS renders the RAW through Image I/O as before."""
+        has_image_io = shutil.which("sips") is not None
+        size = KIND_SIZES[kind] if kind != "preview-hd" else _JPEG_MAX_EDGE
+        require = _RAW_EMBEDDED_MIN_EDGE[kind] if has_image_io else 0
+        try:
+            return self._atomic(
+                output_path, lambda tmp: render_raw_preview(source_path, tmp, size, require=require), validate=validate
+            )
+        except SourceNotReadyError:
+            raise
+        except EmbeddedPreviewTooSmall:
+            pass
+        except Exception:
+            # No embedded preview, or one Pillow can't read: Image I/O, where
+            # there is one, still renders the RAW.
+            if not has_image_io:
+                raise
+        if kind == "preview-hd":
+            return self._render_raw_fullres(source_path, output_path, validate=validate)
+        return self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind], validate=validate)
 
     def _render_raw_fullres(self, source_path: Path, output_path: Path, validate=None) -> Path:
         # Full native-resolution JPEG straight from the RAW (Image I/O decodes
