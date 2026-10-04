@@ -87,6 +87,7 @@ sidecar job runner 是人物任务的唯一状态来源：它创建 `people_inde
 - **位置：** `Contents/Resources/native/FaceEmbedding.mlpackage`，和深度模型放在一起。来源、版本、SHA-256 和许可证都写在 `apps/desktop/electron/peopleModel.js` 里。
 - **构建：** `npm run fetch:people-model`（`apps/desktop/scripts/fetch-people-model.mjs`）下载锁定版本的压缩包，校验压缩包的 SHA-256 和解包后的目录哈希，再用 People Worker 自检一次，然后放到 `native/`，由 electron-builder 打进 App。`dist`、`dist:mac`、`pack` 都会先运行这一步，`npm run dev` 运行时失败也不会中断。`scripts/release.sh` 会检查打包后的 App 里确实有这个模型。
 - **运行：** 用户没有选择其他模型时，内置模型就是当前模型；它不能被移除，也不写进设置。
+- **系统要求：** 模型是 Core ML 规范版本 8 的 ML Program，需要 macOS 14 或更高版本。People Worker 从 macOS 12 起就能运行，但在 macOS 12–13 上加载不了这个模型，所以那里不提供内置模型，人物页和设置会说明需要 macOS 14；用户仍可以选择兼容的旧格式模型。
 - **兼容 0.5.5 的下载：** 内置模型和 0.5.5 下载的是同一个文件，key 相同（`arcface-r100-coreml@b51b655@743cae41246e637e`），所以已经建好的人物索引继续有效。0.5.5 下载到 `people-models/` 的那份副本在启动时删除，释放约 125 MB 空间。暂停中的人物任务恢复时，会改用内置模型的当前路径。
 - **更新：** 模型跟着 App 版本走，换模型就是发新版本。原先设计的“自动下载已批准的模型更新”（原 4.2）不再需要，已删除。
 

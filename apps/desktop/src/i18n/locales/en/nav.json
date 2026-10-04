@@ -139,6 +139,8 @@
     "emptyHint": "Click \"Scan faces\" to analyze the library. Recognition runs in the background and people appear here as they are found.",
     "modelMissingTitle": "No face model in this build",
     "modelMissingHint": "Face analysis runs fully offline on this Mac. This build of AfterFrame doesn't include the face model; choose a compatible Core ML model in Settings.",
+    "modelNeedsMacOSTitle": "People recognition needs macOS {{version}}",
+    "modelNeedsMacOSHint": "The built-in face model runs on macOS {{version}} or later. On this Mac you can choose a compatible Core ML model in Settings.",
     "failedTitle": "Couldn’t load people",
     "failedHint": "Try refreshing. Your indexed faces remain safely stored in this catalog.",
     "scan": "Scan faces",

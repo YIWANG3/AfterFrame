@@ -130,6 +130,8 @@
     "emptyHint": "点击「扫描人脸」分析图库。识别在后台运行，人物会逐步出现在这里。",
     "modelMissingTitle": "当前版本未包含人脸模型",
     "modelMissingHint": "人脸分析完全在本机离线运行。当前构建的 AfterFrame 没有内置人脸模型，可以在设置中选择兼容的 Core ML 模型。",
+    "modelNeedsMacOSTitle": "人物识别需要 macOS {{version}}",
+    "modelNeedsMacOSHint": "内置人脸模型需要 macOS {{version}} 或更高版本。在这台 Mac 上，可以在设置中选择兼容的 Core ML 模型。",
     "failedTitle": "无法读取人物",
     "failedHint": "请尝试刷新。已索引的人脸数据仍安全保存在当前图库文件夹中。",
     "scan": "扫描人脸",
