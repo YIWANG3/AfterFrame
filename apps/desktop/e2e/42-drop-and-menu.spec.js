@@ -120,7 +120,7 @@ test("files handed over by macOS open-file are batched and imported", async () =
   const files = ["dock_a.jpg", "dock_b.jpg"].map((name) => path.join(dir, name));
   for (const file of files) fs.writeFileSync(file, TINY_JPEG);
   try {
-    const before = (await bridge(() => window.mediaWorkspace.getSummary())).image_assets;
+    const before = (await bridge(() => window.mediaWorkspace.getSummary())).browse_assets;
     // Two open-file events inside the 50 ms batching window → one import.
     await ctx.app.evaluate(({ app }, paths) => {
       for (const p of paths) app.emit("open-file", { preventDefault() {} }, p);
@@ -149,7 +149,7 @@ test("files handed over before the window exists are imported once it has loaded
   const file = path.join(dir, "launch_file.jpg");
   fs.writeFileSync(file, TINY_JPEG);
   try {
-    const before = (await bridge(() => window.mediaWorkspace.getSummary())).image_assets;
+    const before = (await bridge(() => window.mediaWorkspace.getSummary())).browse_assets;
     const reopened = ctx.app.waitForEvent("window");
     await ctx.app.evaluate(({ app, BrowserWindow }, p) => {
       BrowserWindow.getAllWindows()[0].destroy();

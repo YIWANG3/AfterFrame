@@ -22,10 +22,9 @@ class BrowseCountTest(unittest.TestCase):
             trip.mkdir()
             Image.new("RGB", (64, 48), (90, 120, 160)).save(trip / "IMG_0001.jpg", "JPEG")
             shutil.copyfile(FIXTURES / "raw" / "luna-morning.dng", trip / "luna-morning.dng")
-            shutil.copyfile(FIXTURES / "test-videos" / "Z-sample-video.mp4", trip / "clip.mp4")
+            shutil.copyfile(FIXTURES / "test-videos" / "z-sample-video.mp4", trip / "clip.mp4")
             catalog = ensure_catalog(root / "demo.afcatalog")
             connection = connect(catalog.db_path)
-            self.addCleanup(connection.close)
             init_db(connection)
             set_catalog_path(connection, catalog.root)
             resolve_image_batch(connection, [trip])
@@ -38,6 +37,7 @@ class BrowseCountTest(unittest.TestCase):
             (trip / "clip.mp4").unlink()
             connection.execute("UPDATE assets SET exists_on_disk = 0 WHERE asset_type = 'video'")
             self.assertEqual(summary(connection)["browse_assets"], 3)
+            connection.close()  # before the folder goes: Windows can't delete an open file
 
 
 if __name__ == "__main__":
