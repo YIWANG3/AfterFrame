@@ -10,10 +10,12 @@ const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
+const { spawnSafely } = require("../spawnSafely");
 
 function register({ ipcMain, app, allowlist, videoToolPath }) {
   const runTool = (args) => new Promise((resolve) => {
-    const child = spawn(videoToolPath, args);
+    let child;
+    try { child = spawnSafely(spawn, videoToolPath, args); } catch { resolve(false); return; }
     child.on("error", () => resolve(false));
     child.on("close", (code) => resolve(code === 0));
   });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -156,6 +157,132 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(recorded["progress"], 1.0)
             self.assertEqual(len(recorded["result"]["phase_results"]), 4)
             connection.close()
+
+    def test_an_import_makes_each_batchs_thumbnails_before_indexing_the_next(self) -> None:
+        # A drive import used to index every file first: hours of an empty
+        # gallery (#130). Each batch is now indexed, then previewed.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            photos = root / "trip"
+            photos.mkdir()
+            for index in range(5):
+                Image.new("RGB", (64, 48), (index * 40, 90, 160)).save(photos / f"IMG_{index:04d}.jpg", "JPEG")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            job = create_job(connection, "import", payload={})
+            seen = []
+
+            def record(service, conn, kind, asset_type=None, paths=None, **kwargs):
+                indexed = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+                seen.append((kind, asset_type, sorted(p.name for p in (paths or [])), indexed))
+                return {"generated": 0, "skipped": 0, "failed": 0, "deferred": 0, "total": 0}
+
+            with patch("media_workspace.reverse_lookup.IMPORT_BATCH_SIZE", 2), \
+                    patch("media_workspace.job_runner.PreviewService.generate_batch", autospec=True, side_effect=record):
+                run_import_job(connection, catalog.root, job["job_id"], [], [photos], mode="processed_only", generate_hd=False)
+            connection.close()
+
+        batches = [entry for entry in seen if entry[2] and entry[2][0].startswith("IMG_")]
+        self.assertEqual([names for _kind, _type, names, _count in batches],
+                         [["IMG_0000.jpg", "IMG_0001.jpg"], ["IMG_0002.jpg", "IMG_0003.jpg"], ["IMG_0004.jpg"]])
+        # Each batch's previews ran when only that much had been indexed.
+        self.assertEqual([count for *_rest, count in batches], [2, 4, 5])
+        self.assertTrue(all(kind == "preview" and asset_type is None for kind, asset_type, *_ in batches))
+
+
+    def test_the_thumbnail_phase_counts_what_the_batches_made(self) -> None:
+        # The batches make the thumbnails as they index; the import's result
+        # still says it made them, rather than "skipped, already there".
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            photos = root / "trip"
+            photos.mkdir()
+            for index in range(3):
+                Image.new("RGB", (64, 48), (index * 60, 90, 160)).save(photos / f"IMG_{index:04d}.jpg", "JPEG")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            job = create_job(connection, "import", payload={})
+            run_import_job(connection, catalog.root, job["job_id"], [], [photos], mode="processed_only", generate_hd=False)
+            result = get_job(connection, job["job_id"])["result"]
+            connection.close()
+        phases = {phase["key"]: phase["result"] for phase in result["phase_results"]}
+        self.assertEqual(
+            {key: phases["generate_previews"][key] for key in ("generated", "skipped", "failed")},
+            {"generated": 3, "skipped": 0, "failed": 0},
+        )
+
+    def _import_trip_both_ways(self, folder_first: bool):
+        # A trip folder imported as photos and added as a RAW source, in
+        # either order: each RAW is one asset, still a matching candidate.
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        root = Path(temp_dir.name)
+        trip = root / "Trip"
+        trip.mkdir()
+        fixture = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
+        shutil.copyfile(fixture, trip / "luna-morning.dng")
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        self.addCleanup(connection.close)
+        runs = [([], [trip], "processed_only"), ([trip], [trip], "combined")]
+        statuses = []
+        with patch("media_workspace.job_runner.PreviewService.generate_batch", return_value={"generated": 0, "skipped": 0, "failed": 0}):
+            for raw_dirs, image_dirs, mode in (runs if folder_first else runs[::-1]):
+                job = create_job(connection, "import", payload={})
+                run_import_job(connection, catalog.root, job["job_id"], raw_dirs, image_dirs, mode=mode, generate_hd=False)
+                statuses.append(get_job(connection, job["job_id"])["status"])
+        raws = connection.execute("SELECT asset_id FROM assets WHERE asset_type = 'raw'").fetchall()
+        sources = connection.execute("SELECT raw_asset_id FROM raw_metadata_cache").fetchall()
+        return statuses, [r[0] for r in raws], [r[0] for r in sources]
+
+    def test_adding_a_raw_source_after_importing_the_folder(self) -> None:
+        # Used to fail the whole import: UNIQUE constraint failed: raw_metadata_cache.path.
+        statuses, raws, sources = self._import_trip_both_ways(folder_first=True)
+        self.assertEqual(statuses, ["succeeded", "succeeded"])
+        self.assertEqual(len(raws), 1)
+        self.assertEqual(sources, raws)
+
+    def test_importing_the_folder_after_adding_it_as_a_raw_source(self) -> None:
+        # A later folder import must not quietly unregister the source.
+        statuses, raws, sources = self._import_trip_both_ways(folder_first=False)
+        self.assertEqual(statuses, ["succeeded", "succeeded"])
+        self.assertEqual(len(raws), 1)
+        self.assertEqual(sources, raws)
+
+    def test_rescanning_a_raw_source_after_the_file_changed(self) -> None:
+        # Lightroom writing XMP into a DNG changes its bytes, so its
+        # fingerprint: the rescan keeps the same asset rather than adding a
+        # second one for the path (which failed the import).
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        root = Path(temp_dir.name)
+        trip = root / "Trip"
+        trip.mkdir()
+        fixture = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
+        raw = trip / "luna-morning.dng"
+        shutil.copyfile(fixture, raw)
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        self.addCleanup(connection.close)
+        statuses = []
+        with patch("media_workspace.job_runner.PreviewService.generate_batch", return_value={"generated": 0, "skipped": 0, "failed": 0}):
+            for _ in range(2):
+                job = create_job(connection, "import", payload={})
+                run_import_job(connection, catalog.root, job["job_id"], [trip], [trip], mode="combined", generate_hd=False)
+                statuses.append(get_job(connection, job["job_id"])["status"])
+                with raw.open("r+b") as handle:  # rewrite the head in place, as an XMP update does
+                    handle.seek(64)
+                    handle.write(b"edited")
+        self.assertEqual(statuses, ["succeeded", "succeeded"])
+        self.assertEqual(connection.execute("SELECT count(*) FROM assets WHERE asset_type = 'raw'").fetchone()[0], 1)
 
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
