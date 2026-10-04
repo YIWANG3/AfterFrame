@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -12,12 +13,12 @@ from typing import BinaryIO
 
 from PIL import Image, ImageCms
 
-from . import video
+from . import raw_decode, video
 from .catalog import CatalogPaths
+from .color_profiles import adobe_rgb_icc
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
 from .db.colors import analyze_asset_colors
-from .raw_preview import render_raw_preview
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -26,6 +27,17 @@ KIND_SIZES = {
     "preview": 512,
     "preview-hd": 2000,
 }
+
+# Image I/O can hang on files it can't read (QuickLook on Phase One IIQ).
+_IMAGE_IO_TIMEOUT_SECONDS = 90
+# A RAW decoded for the HD tier: full size up to 8000 px long, half size
+# beyond (raw_decode), so the editor still works at the photo's resolution.
+_RAW_DECODE_HD_EDGE = 8000
+
+# The camera's embedded JPEG is a RAW's preview when it is at least this long
+# on its long edge; below that (a DJI DNG embeds 960 px, a Capture One DNG
+# 160), the RAW is decoded.
+_RAW_EMBEDDED_MIN_EDGE = {"preview": 512, "preview-hd": 2000}
 
 _PREVIEW_JPEG_QUALITY = 90  # sips-sized files (~46 KB vs 49 KB for a 512px preview)
 _ORIENTATION_TAG = 0x0112
@@ -73,7 +85,14 @@ def _cmyk_to_srgb(image: Image.Image, icc_profile: bytes) -> Image.Image:
     return image.convert("RGB")
 
 
-def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orientation: int | None = None) -> None:
+def render_pillow_preview(
+    source: Path | BinaryIO,
+    target: Path,
+    size: int,
+    orientation: int | None = None,
+    icc_profile: bytes | None = None,
+    exif: bytes | None = None,
+) -> None:
     """A JPEG with the long edge at most `size`, matching what sips -Z gave:
 
     - pixels stay as stored and the EXIF orientation tag is carried over
@@ -86,12 +105,14 @@ def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orie
     Unlike sips it never enlarges a small image. JPEG sources decode at a
     reduced scale (draft), which is where most of the time goes.
     `orientation` overrides the source's own tag: a RAW's embedded JPEG
-    carries the RAW's (raw_preview.py).
+    carries the RAW's (raw_decode.py). `icc_profile` is the source's colour
+    space when the source doesn't say (a RAW's Adobe RGB JPEG), and `exif`
+    replaces the orientation-only EXIF (it must carry the orientation).
     """
     _register_heif()
     with Image.open(source) as image:
         orientation = orientation or image.getexif().get(_ORIENTATION_TAG)
-        icc_profile = image.info.get("icc_profile")
+        icc_profile = image.info.get("icc_profile") or icc_profile
         image.draft("RGB", (size, size))
         if image.mode == "CMYK" and icc_profile:
             frame = _cmyk_to_srgb(image, icc_profile)
@@ -108,11 +129,96 @@ def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orie
     options: dict = {"quality": _PREVIEW_JPEG_QUALITY}
     if icc_profile and _profile_space(icc_profile) == "RGB ":
         options["icc_profile"] = icc_profile
-    if orientation and orientation != 1:
-        exif = Image.Exif()
-        exif[_ORIENTATION_TAG] = orientation
-        options["exif"] = exif.tobytes()
+    if exif:
+        options["exif"] = exif
+    elif orientation and orientation != 1:
+        tag = Image.Exif()
+        tag[_ORIENTATION_TAG] = orientation
+        options["exif"] = tag.tobytes()
     frame.save(target, "JPEG", **options)
+
+
+def _row_metadata(row) -> dict:
+    """The asset's catalog metadata, from a preview row that carries it."""
+    keys = row.keys() if hasattr(row, "keys") else ()
+    raw = row["metadata_json"] if "metadata_json" in keys else None
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+
+
+def _is_adobe_rgb(metadata: dict) -> bool:
+    """EXIF ColorSpace "uncalibrated" (0xFFFF): cameras offer only sRGB and
+    Adobe RGB, and render their embedded JPEG, untagged, in the one set."""
+    return str(metadata.get("color_space")) in ("65535", "Uncalibrated")
+
+
+def _exif_rational(value) -> float | None:
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _exif_from_metadata(metadata: dict, orientation: int | None) -> bytes:
+    """EXIF for a RAW's HD preview from the catalog's metadata (camera, lens,
+    exposure, capture time, GPS), so an edit saved from it keeps them."""
+    exif = Image.Exif()
+    for tag, key in ((0x010F, "camera_make"), (0x0110, "camera_model"), (0x0131, "software")):
+        if metadata.get(key):
+            exif[tag] = str(metadata[key])
+    if orientation and orientation != 1:
+        exif[_ORIENTATION_TAG] = orientation
+    details = exif.get_ifd(0x8769)
+    captured = metadata.get("capture_time")
+    if isinstance(captured, str) and len(captured) >= 19:
+        details[0x9003] = captured[:19].replace("-", ":", 2).replace("T", " ")
+    for tag, key in ((0xA434, "lens_model"), (0xA433, "lens_make")):
+        if metadata.get(key):
+            details[tag] = str(metadata[key])
+    for tag, key in ((0x829A, "shutter_speed"), (0x829D, "aperture"), (0x920A, "focal_length")):
+        value = _exif_rational(metadata.get(key))
+        if value:
+            details[tag] = value
+    if isinstance(metadata.get("iso"), (int, float)):
+        details[0x8827] = int(metadata["iso"])
+    if _is_adobe_rgb(metadata):
+        details[0xA001] = 0xFFFF
+    latitude, longitude = _exif_rational(metadata.get("gps_latitude")), _exif_rational(metadata.get("gps_longitude"))
+    if latitude is not None and longitude is not None:
+        gps = exif.get_ifd(0x8825)
+
+        def dms(value: float) -> tuple[float, float, float]:
+            value = abs(value)
+            degrees = int(value)
+            minutes = int((value - degrees) * 60)
+            return (float(degrees), float(minutes), round((value - degrees - minutes / 60) * 3600, 4))
+
+        gps[1], gps[2] = ("N" if latitude >= 0 else "S"), dms(latitude)
+        gps[3], gps[4] = ("E" if longitude >= 0 else "W"), dms(longitude)
+    try:
+        return exif.tobytes()
+    except Exception:
+        fallback = Image.Exif()
+        if orientation and orientation != 1:
+            fallback[_ORIENTATION_TAG] = orientation
+        return fallback.tobytes()
+
+
+class BlackRenderError(ValueError):
+    pass
+
+
+def _reject_black(path: Path) -> None:
+    """sips returns success and an all-black image for some RAWs it can't
+    really decode (Lightroom's Enhanced-NR DNGs): treat that as failure."""
+    with Image.open(path) as image:
+        image.draft("L", (64, 64))
+        if not any(image.convert("L").resize((32, 32)).histogram()[8:]):
+            raise BlackRenderError(f"{path.name}: Image I/O rendered it black")
 
 
 # JPEG's own limit: a "preview" this large is the image at full size.
@@ -229,21 +335,7 @@ class PreviewService:
                     source_path, output_path, KIND_SIZES[kind], validate=validate
                 )
         elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
-            # RAW has no displayable original (the renderer can't decode .cr3/.arw),
-            # so its preview IS the ceiling. The HD tier is rendered at full native
-            # resolution via sips (Image I/O demosaic) so the lightbox can show real
-            # detail / focus; the thumbnail tier stays a small QuickLook render.
-            # Without Image I/O (Windows) both come from the JPEG the camera
-            # embedded, the HD tier at that JPEG's full size.
-            if shutil.which("sips") is None:
-                size = KIND_SIZES[kind] if kind != "preview-hd" else _JPEG_MAX_EDGE
-                rendered = self._atomic(output_path, lambda tmp: render_raw_preview(source_path, tmp, size), validate=validate)
-            elif kind == "preview-hd":
-                rendered = self._render_raw_fullres(source_path, output_path, validate=validate)
-            else:
-                rendered = self._render_with_quicklook(
-                    source_path, output_path, KIND_SIZES[kind], validate=validate
-                )
+            rendered = self._render_raw(source_path, output_path, kind, _row_metadata(row), validate=validate)
         else:
             rendered = self._render_image(
                 source_path, output_path, KIND_SIZES[kind], validate=validate
@@ -392,19 +484,23 @@ class PreviewService:
             check=True,
             capture_output=True,
             text=True,
+            timeout=_IMAGE_IO_TIMEOUT_SECONDS,
         ), validate=validate)
 
     def _render_with_quicklook(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         with tempfile.TemporaryDirectory(prefix="media-workspace-ql-") as temp_dir:
+            # QuickLook can hang on files it can't read (Phase One IIQ).
             subprocess.run(
                 ["qlmanage", "-t", "-s", str(size), "-o", temp_dir, str(source_path)],
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=_IMAGE_IO_TIMEOUT_SECONDS,
             )
             generated = Path(temp_dir) / f"{source_path.name}.png"
             if not generated.exists():
                 raise FileNotFoundError(f"Quick Look did not render {source_path}")
+            _reject_black(generated)
             return self._atomic(output_path, lambda tmp: subprocess.run(
                 ["sips", "-s", "format", "jpeg", "--out", str(tmp), str(generated)],
                 check=True,
@@ -412,16 +508,74 @@ class PreviewService:
                 text=True,
             ), validate=validate)
 
+    def _render_raw(self, source_path: Path, output_path: Path, kind: str, metadata: dict, validate=None) -> Path:
+        """RAW has no displayable original (the renderer can't decode .cr3/.arw),
+        so its preview IS the ceiling. In order:
+
+        1. the JPEG the camera embedded, through LibRaw, when it is big enough
+           for the tier: most cameras embed it at full size, so the lightbox
+           still zooms to real detail, at a few hundred ms and no demosaic;
+        2. on macOS, Image I/O: Quick Look for the thumbnail, sips at full
+           size for HD (Quick Look when sips comes out black), with timeouts;
+        3. a LibRaw decode in a child process (the only decoder on Windows,
+           and the one for files Image I/O can't open, such as IIQ);
+        4. whatever the camera embedded, whatever its size.
+
+        The camera's colour space (Adobe RGB) and, for the HD tier, its EXIF
+        come from the metadata already in the catalog."""
+        hd = kind == "preview-hd"
+        size = _JPEG_MAX_EDGE if hd else KIND_SIZES[kind]
+        icc = adobe_rgb_icc() if _is_adobe_rgb(metadata) else None
+        embedded = raw_decode.embedded_preview(source_path)
+
+        def from_embedded(tmp: Path) -> None:
+            assert embedded is not None
+            exif = _exif_from_metadata(metadata, embedded.orientation) if hd else None
+            render_pillow_preview(BytesIO(embedded.data), tmp, size, orientation=embedded.orientation, icc_profile=icc, exif=exif)
+
+        if embedded and max(embedded.width, embedded.height) >= _RAW_EMBEDDED_MIN_EDGE[kind]:
+            return self._atomic(output_path, from_embedded, validate=validate)
+        if shutil.which("sips") is not None:
+            try:
+                if not hd:
+                    return self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind], validate=validate)
+                try:
+                    return self._render_raw_fullres(source_path, output_path, validate=validate)
+                except BlackRenderError:
+                    # Quick Look renders what sips turns black; only then, as
+                    # it hangs on what sips can't open at all (IIQ).
+                    return self._render_with_quicklook(source_path, output_path, _RAW_DECODE_HD_EDGE, validate=validate)
+            except SourceNotReadyError:
+                raise
+            except Exception:
+                pass  # failed, hung or came out black: LibRaw next
+        if raw_decode.available():
+            try:
+                decode_edge = _RAW_DECODE_HD_EDGE if hd else KIND_SIZES[kind]
+                return self._atomic(output_path, lambda tmp: raw_decode.decode_in_child(source_path, tmp, decode_edge), validate=validate)
+            except SourceNotReadyError:
+                raise
+            except Exception:
+                pass
+        if embedded:
+            return self._atomic(output_path, from_embedded, validate=validate)
+        raise ValueError(f"no preview for {source_path.name}: nothing embedded and no decoder could read it")
+
     def _render_raw_fullres(self, source_path: Path, output_path: Path, validate=None) -> Path:
         # Full native-resolution JPEG straight from the RAW (Image I/O decodes
         # CR2/CR3/ARW/NEF/DNG). No --resampleHeightWidthMax, so the long edge is
         # the sensor's native size — the displayable stand-in for the RAW.
-        return self._atomic(output_path, lambda tmp: subprocess.run(
-            ["sips", "-s", "format", "jpeg", "--out", str(tmp), str(source_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        ), validate=validate)
+        def render(tmp: Path) -> None:
+            subprocess.run(
+                ["sips", "-s", "format", "jpeg", "--out", str(tmp), str(source_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+            )
+            _reject_black(tmp)
+
+        return self._atomic(output_path, render, validate=validate)
 
 
 def report_progress(progress_callback, **payload) -> None:

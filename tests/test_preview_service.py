@@ -43,10 +43,10 @@ class PreviewServiceTest(unittest.TestCase):
             source.write_bytes(b"raw")
             output = service.output_path("raw_abcdef123456", "preview")
 
-            def side_effect(cmd, check, capture_output, text):
+            def side_effect(cmd, check, capture_output, text, timeout=None):
                 if cmd[0] == "qlmanage":
                     temp_dir_arg = Path(cmd[5])
-                    (temp_dir_arg / f"{source.name}.png").write_bytes(b"png")
+                    Image.new("RGB", (64, 48), (120, 90, 60)).save(temp_dir_arg / f"{source.name}.png")
                 elif cmd[0] == "sips":
                     Path(cmd[-2]).write_bytes(b"jpg")
                 return None
@@ -69,7 +69,7 @@ class PreviewServiceTest(unittest.TestCase):
             output = service.output_path("img_abcdef123456", "preview")
             seen = {}
 
-            def side_effect(cmd, check, capture_output, text):
+            def side_effect(cmd, check, capture_output, text, timeout=None):
                 out = Path(cmd[cmd.index("--out") + 1])
                 seen["out"] = out
                 out.write_bytes(b"jpgdata")
@@ -303,7 +303,7 @@ class PillowPreviewTest(unittest.TestCase):
             source.write_bytes(b"not something Pillow can open")
             output = service.output_path("img_0123456789ab", "preview")
 
-            def sips(cmd, check, capture_output, text):
+            def sips(cmd, check, capture_output, text, timeout=None):
                 Path(cmd[cmd.index("--out") + 1]).write_bytes(b"jpg-from-sips")
 
             run_mock.side_effect = sips

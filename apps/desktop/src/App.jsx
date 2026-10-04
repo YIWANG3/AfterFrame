@@ -879,8 +879,10 @@ export default function App() {
         // The gallery context menu passes image_path; the lightbox passes an
         // asset_id. itemById is keyed by asset_id, so fall back to a path match.
         ? itemById.get(target) || [...itemById.values()].find((it) => it.image_path === target)
+        // Merged over the catalog's copy, not replaced by it: the lightbox
+        // passes the RAW HD preview it made on demand (preview_hd_path).
         : target?.asset_id
-          ? itemById.get(target.asset_id) || target
+          ? { ...itemById.get(target.asset_id), ...target }
           : itemById.get(workspace.selectedAssetId);
     if (!nextItem) return;
     // The image editor (crop/text/stickers/repaint) doesn't apply to video.
@@ -1454,6 +1456,7 @@ export default function App() {
         open={lightboxOpen}
         items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
         currentIndex={viewMode === "stickers" ? stickerLightboxIndex : Math.max(selectedIndex, 0)}
+        catalogKey={activeCatalogPath}
         proofMode={viewMode === "stickers" ? false : proofMode}
         onToggleProof={viewMode === "stickers" ? undefined : (() => setProofMode((current) => !current))}
         onEdit={viewMode === "stickers" ? undefined : openEditor}
@@ -1483,6 +1486,7 @@ export default function App() {
       <EditorOverlay
         open={!!editorItem}
         item={editorItem}
+        catalogKey={activeCatalogPath}
         onClose={() => setEditorItem(null)}
         pushToast={pushToast}
         onSaveComplete={async (savePath) => {
@@ -1515,6 +1519,7 @@ export default function App() {
       <CollageOverlay
         open={!!collageItems}
         items={collageItems}
+        catalogKey={activeCatalogPath}
         collections={workspace.collections}
         summary={workspace.summary}
         sourceCollectionId={collageSourceId}

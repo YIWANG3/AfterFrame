@@ -16,7 +16,7 @@
 import os
 import sys
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 # pathex below only reaches Analysis. The collect_* calls run first, and unless
 # media_workspace is pip-installed they can't import it and collect nothing,
@@ -29,6 +29,16 @@ hiddenimports = collect_submodules("media_workspace")
 datas = collect_data_files("media_workspace")
 if not datas:
     raise SystemExit("media-workspace.spec: no media_workspace/data files found")
+
+# LibRaw, through rawpy, reads every RAW (raw_decode.py). It's imported where
+# it's used, so a build without it would only fail on the first RAW. Its
+# dist-info carries the LibRaw (LGPL-2.1) and rawpy (MIT) licence texts.
+try:
+    import rawpy  # noqa: F401
+except ImportError:
+    raise SystemExit("media-workspace.spec: rawpy is not installed (pip install -e .)") from None
+hiddenimports.append("rawpy")
+datas += copy_metadata("rawpy")
 
 a = Analysis(
     ["entry.py"],

@@ -54,6 +54,22 @@ describe("lightbox source selection", () => {
       detailPath: null,
     });
   });
+
+  it("layers a RAW's on-demand HD preview over its thumbnail, like an original", () => {
+    const raw = {
+      asset_type: "raw",
+      image_path: "/photos/source.cr3",
+      preview_path: "/catalog/source-small.jpg",
+    };
+    expect(buildLightboxSources(raw)).toEqual({
+      baseSources: ["/catalog/source-small.jpg"],
+      detailPath: null,
+    });
+    expect(buildLightboxSources(raw, { onDemandHd: "/catalog/hd/source.jpg" })).toEqual({
+      baseSources: ["/catalog/source-small.jpg", "/catalog/hd/source.jpg"],
+      detailPath: "/catalog/hd/source.jpg",
+    });
+  });
 });
 
 describe("lightbox logical image size", () => {

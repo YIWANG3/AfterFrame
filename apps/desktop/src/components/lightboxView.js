@@ -1,8 +1,13 @@
-export function buildLightboxSources(item) {
+// `onDemandHd`: a RAW's HD preview made while it was open (useOnDemandHdPreviews).
+// It arrives after the thumbnail is up, so it joins as the detail layer, the way
+// an image's original does, rather than replacing the view under the user.
+export function buildLightboxSources(item, { onDemandHd = null } = {}) {
   if (!item) return { baseSources: [], detailPath: null };
 
   const isRaw = item.asset_type === "raw";
-  const original = item.exists_on_disk === false || isRaw ? null : item.image_path || null;
+  const original = item.exists_on_disk === false
+    ? null
+    : (isRaw ? onDemandHd : item.image_path) || null;
   const smallPreviews = [
     item.image_preview_path,
     item.preview_path,

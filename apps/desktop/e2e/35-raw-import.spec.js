@@ -205,3 +205,18 @@ test("a RAW imported as a photo is browseable with a rendered preview and native
   await tool("show_in_app", { asset_ids: [raw.asset_id] });
   await expect(ctx.window.locator(`[data-asset-id="${raw.asset_id}"]`)).toBeVisible({ timeout: 5_000 });
 });
+
+test("a RAW's HD preview is made when the lightbox opens it, not at import", async () => {
+  test.setTimeout(90_000);
+  const raw = (await browseByName()).get("luna-browse.dng");
+  expect((await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path).toBeFalsy();
+
+  await tool("show_in_app", { asset_ids: [raw.asset_id] });
+  await ctx.window.locator(`[data-asset-id="${raw.asset_id}"]`).dblclick();
+  const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
+  await expect(viewport.locator("[data-lightbox-layer='preview']")).toHaveAttribute("src", /\/previews\//, { timeout: 10_000 });
+  // It arrives after the thumbnail, as the detail layer an image's original would be.
+  await expect(viewport.locator("[data-lightbox-layer='detail']")).toHaveAttribute("src", /\/previews-hd\//, { timeout: 60_000 });
+  expect((await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path).toMatch(/previews-hd/);
+  await ctx.window.keyboard.press("Escape");
+});
