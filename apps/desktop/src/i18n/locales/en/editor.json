@@ -7,6 +7,7 @@
     "save": "Save image",
     "saveButton": "Save",
     "saving": "Saving…",
+    "addToFolder": "Add to \u201c{{name}}\u201d",
     "saveFailed": "Save failed",
     "saveFailedMsg": "Failed to save image",
     "edited": "Edited",
@@ -52,6 +53,7 @@
     "customWidth": "Custom ratio width",
     "customHeight": "Custom ratio height",
     "subfolder": "Create a subfolder for the panels",
+    "addToFolder": "Add to \u201c{{name}}\u201d",
     "webDownloads": "The {{count}} panels download one by one."
   },
   "text": {
@@ -223,6 +225,7 @@
     "compareTopBottom": "Compare top/bottom",
     "generate": "Generate",
     "generating": "Generating…",
+    "addToFolder": "Add to \u201c{{name}}\u201d",
     "cancel": "Cancel"
   },
   "compare": {

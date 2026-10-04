@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import api from "../api";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
-import { baseName, formatTimestamp, navItems, localFileUrl } from "../utils/format";
+import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
 
@@ -42,7 +42,7 @@ export default function Sidebar({
   const { t: tc } = useTranslation("common");
   const browse = navItems(summary);
   const rootSummary = [];
-  if (Number(summary?.image_assets ?? 0)) rootSummary.push(t("sidebar.assetsCount", { count: summary.image_assets }));
+  if (browseCount(summary)) rootSummary.push(t("sidebar.assetsCount", { count: browseCount(summary) }));
   if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at) }));
 
   const [creatingFolder, setCreatingFolder] = useState(false);

@@ -11,6 +11,7 @@ import { isEmptyValue,
 } from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
+const LIVE_IMPORT_REFRESH_MS = 4000;
 const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
@@ -234,7 +235,7 @@ export default function useWorkspace({ pushToast } = {}) {
   useEffect(() => {
     if (!browserReady) return;
     loadFacetValues();
-  }, [browserReady, summary?.image_assets, scopeKey, loadFacetValues]);
+  }, [browserReady, summary?.browse_assets, summary?.image_assets, scopeKey, loadFacetValues]);
 
   // Queued-changes note for the import card in the unified JobDock.
   const queuedImportNote = useMemo(() => {
@@ -1027,6 +1028,31 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     void loadDetail(selectedAssetId);
   }, [selectedAssetId]);
+
+  // Show what an import has added while it runs. The importer commits each
+  // photo as it indexes it, but the grid used to reload only when the whole
+  // job ended: on a drive, hours of an empty library while the dock counted
+  // thousands of indexed files (#130). A light refresh every few seconds,
+  // keeping the scroll position; skipped while the window is hidden or the
+  // previous one is still loading.
+  const liveImportRefreshRef = useRef(false);
+  const refreshDuringImport = useEffectEvent(async () => {
+    if (liveImportRefreshRef.current || document.hidden) return;
+    liveImportRefreshRef.current = true;
+    try {
+      await Promise.all([
+        loadBrowser({ scope: scopeRef.current, preserveView: true }),
+        api.getSummary().then(setSummary).catch(() => {}),
+      ]);
+    } finally {
+      liveImportRefreshRef.current = false;
+    }
+  });
+  useEffect(() => {
+    if (!importTask?.running) return undefined;
+    const timer = setInterval(() => void refreshDuringImport(), LIVE_IMPORT_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [importTask?.running, importTask?.jobId]);
 
   // Re-import reminder: when an import finishes, tell the user how many of the
   // selected files were already in the catalog (re-importing the same folder).

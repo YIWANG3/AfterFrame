@@ -48,7 +48,7 @@ export function splitPanelPaths(saveBasePath, outputDir, subfolder, count) {
 
 export function useSplitExport({
   saveBasePath, sourcePath, sourceImageRef, nativeSaveSourcePathRef, editorStateRef,
-  getCount, pushToast, t, onSaveComplete,
+  getCount, pushToast, t, onSaveComplete, joinFolder,
 }) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -116,10 +116,12 @@ export function useSplitExport({
         results = await exportCanvasPanels({ region, count, savePaths });
       }
       // Catalog registration is best-effort, like the single-image save.
+      const assetIds = [];
       for (const panel of results) {
-        try { await api.quickRegister(panel.path, sourcePath); }
+        try { assetIds.push((await api.quickRegister(panel.path, sourcePath))?.asset_id); }
         catch (e) { console.warn("[split] quickRegister skipped:", e?.message || e); }
       }
+      await joinFolder?.(assetIds);
       const dir = savePaths[0].slice(0, Math.max(savePaths[0].lastIndexOf("/"), savePaths[0].lastIndexOf("\\")));
       pushToast?.({
         title: t("split.done", { count: results.length }),

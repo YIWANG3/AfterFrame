@@ -6,4 +6,4 @@ export { default as Button, BUTTON_VARIANTS } from "./Button";
 export { default as Modal } from "./Modal";
 export { default as Spinner } from "./Spinner";
 export { SliderRow, NumberDragInput } from "./Slider";
-export { Toggle, TextInput, NumberInput, Select, Chip } from "./fields";
+export { Toggle, Checkbox, TextInput, NumberInput, Select, Chip } from "./fields";

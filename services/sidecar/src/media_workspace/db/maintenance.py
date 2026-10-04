@@ -9,6 +9,7 @@ import sqlite3
 from pathlib import Path
 
 from .assets import upsert_preview_entry
+from .browse import count_image_assets
 from .locations import delete_asset_location
 from .resource_sets import _link_id, get_resource_set_for_asset
 
@@ -435,6 +436,9 @@ def summary(connection: sqlite3.Connection) -> dict[str, int]:
             WHERE assets.asset_type = 'image' AND assets.exists_on_disk = 1
             """
         ).fetchone()[0],
+        # What All Assets shows: exports and the RAW files and videos
+        # imported as photos, missing ones included.
+        "browse_assets": count_image_assets(connection, "all"),
         "roots": connection.execute("SELECT COUNT(*) FROM catalog_roots WHERE is_active = 1").fetchone()[0],
         "preview_ready": connection.execute(
             "SELECT COUNT(*) FROM preview_entries WHERE kind = 'preview' AND status = 'ready'"

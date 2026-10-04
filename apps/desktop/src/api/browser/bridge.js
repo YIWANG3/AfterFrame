@@ -836,6 +836,7 @@ export const browserBridge = {
   getSummary: async () => {
     return {
       image_assets: assets.length,
+      browse_assets: assets.length,
       raw_assets: 0,
       rated_count: assets.filter((a) => a.app_rating > 0).length,
       confirmed_matches: 0,
@@ -1277,6 +1278,9 @@ export const browserBridge = {
     void (async () => {
       try {
         const { outputAsset, row } = await runRepaint(opts);
+        // Opened from a folder with its box ticked, the editor asks for the
+        // result there, as the desktop job does.
+        if (opts.collectionId) await browserBridge.collectionAddItems(opts.collectionId, [outputAsset.asset_id]);
         repaintJob = {
           running: false, active: false, status: "succeeded", kind: "ai_repaint",
           finishedAt: Date.now(), error: null,

@@ -55,7 +55,7 @@ function previewJob({ jobId, kind = "preview", assetType = "image", analyzeColor
 
 function aiRepaintJob({
   jobId, provider, inputPath, outputPath, originPath, prompt,
-  aspectRatio, imageSize, temperature, model, baseUrl, apiKey,
+  aspectRatio, imageSize, temperature, model, baseUrl, apiKey, collectionId,
 }) {
   const argv = [
     "run-ai-repaint-job",
@@ -72,6 +72,7 @@ function aiRepaintJob({
   pushIf(argv, "--model", model);
   pushIf(argv, "--base-url", baseUrl);
   pushIf(argv, "--api-key", apiKey);
+  pushIf(argv, "--collection-id", collectionId);
   return argv;
 }
 
