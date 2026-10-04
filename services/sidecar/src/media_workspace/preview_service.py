@@ -6,9 +6,10 @@ import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageCms
 
 from . import video
 from .catalog import CatalogPaths
@@ -49,12 +50,35 @@ def _register_heif() -> None:
     _heif_registered = True
 
 
+def _profile_space(icc_profile: bytes) -> str | None:
+    """The colour space an ICC profile describes ('RGB ', 'CMYK', 'GRAY'…)."""
+    try:
+        return ImageCms.ImageCmsProfile(BytesIO(icc_profile)).profile.xcolor_space
+    except (ImageCms.PyCMSError, OSError, ValueError):
+        return None
+
+
+def _cmyk_to_srgb(image: Image.Image, icc_profile: bytes) -> Image.Image:
+    """CMYK through its own profile into sRGB, as Image I/O does. A plain
+    convert("RGB") ignores the profile and oversaturates (print exports)."""
+    try:
+        source = ImageCms.ImageCmsProfile(BytesIO(icc_profile))
+        converted = ImageCms.profileToProfile(image, source, ImageCms.createProfile("sRGB"), outputMode="RGB")
+        if converted is not None:
+            return converted
+    except (ImageCms.PyCMSError, OSError, ValueError):
+        pass
+    return image.convert("RGB")
+
+
 def render_pillow_preview(source: Path, target: Path, size: int) -> None:
     """A JPEG with the long edge at most `size`, matching what sips -Z gave:
 
     - pixels stay as stored and the EXIF orientation tag is carried over
       (viewers rotate, exactly as with the sips previews);
-    - the ICC profile is kept, so Display P3 photos keep their colour;
+    - an RGB ICC profile is kept, so Display P3 photos keep their colour;
+      CMYK is converted to sRGB through its profile, and a profile that
+      can't describe the RGB preview (CMYK, grey) is dropped;
     - transparency is flattened onto white.
 
     Unlike sips it never enlarges a small image. JPEG sources decode at a
@@ -65,7 +89,10 @@ def render_pillow_preview(source: Path, target: Path, size: int) -> None:
         orientation = image.getexif().get(_ORIENTATION_TAG)
         icc_profile = image.info.get("icc_profile")
         image.draft("RGB", (size, size))
-        if image.mode in ("I;16", "I;16B", "I;16L", "I"):
+        if image.mode == "CMYK" and icc_profile:
+            frame = _cmyk_to_srgb(image, icc_profile)
+            icc_profile = None  # the pixels are sRGB now
+        elif image.mode in ("I;16", "I;16B", "I;16L", "I"):
             frame = image.convert("I").point(lambda value: value * (1 / 257)).convert("L").convert("RGB")
         elif image.has_transparency_data:
             rgba = image.convert("RGBA")
@@ -75,7 +102,7 @@ def render_pillow_preview(source: Path, target: Path, size: int) -> None:
             frame = image.convert("RGB")
     frame.thumbnail((size, size), Image.Resampling.LANCZOS)
     options: dict = {"quality": _PREVIEW_JPEG_QUALITY}
-    if icc_profile:
+    if icc_profile and _profile_space(icc_profile) == "RGB ":
         options["icc_profile"] = icc_profile
     if orientation and orientation != 1:
         exif = Image.Exif()

@@ -11,6 +11,7 @@ from PIL import Image, ImageCms
 from media_workspace.catalog import ensure_catalog
 from media_workspace.preview_service import PreviewService, SourceNotReadyError, render_pillow_preview
 
+GENERIC_CMYK = Path("/System/Library/ColorSync/Profiles/Generic CMYK Profile.icc")
 HEIC_FIXTURE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "heic" / "iphone-style.heic"
 
 
@@ -178,6 +179,27 @@ class PillowPreviewTest(unittest.TestCase):
             self.assertEqual(preview.size, (512, 341), "pixels stay as stored; viewers rotate")
             self.assertEqual(preview.getexif().get(0x0112), 6)
             self.assertEqual(preview.info.get("icc_profile"), icc)
+
+    def test_cmyk_never_keeps_a_cmyk_profile_on_an_rgb_preview(self) -> None:
+        """A print export: the preview is RGB, so a CMYK profile can't ride along."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "print.jpg"
+            Image.new("CMYK", (400, 300), (0, 255, 255, 0)).save(source, icc_profile=b"not a usable profile")
+            preview = self.render(source)
+            self.assertEqual(preview.mode, "RGB")
+            self.assertIsNone(preview.info.get("icc_profile"))
+
+    @unittest.skipUnless(GENERIC_CMYK.exists(), "needs macOS's Generic CMYK profile")
+    def test_cmyk_is_colour_managed_like_colorsync(self) -> None:
+        """C0 M100 Y100 K0 under Generic CMYK is (216, 35, 42) in sRGB through
+        ColorSync (what sips and Preview show); a plain convert gives 254, 0, 0."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "print.jpg"
+            Image.new("CMYK", (400, 300), (0, 255, 255, 0)).save(source, icc_profile=GENERIC_CMYK.read_bytes())
+            preview = self.render(source)
+            self.assertIsNone(preview.info.get("icc_profile"))
+            for got, want in zip(preview.getpixel((200, 150)), (216, 35, 42), strict=True):
+                self.assertAlmostEqual(got, want, delta=6)
 
     def test_transparency_flattens_onto_white_and_small_images_are_not_enlarged(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
