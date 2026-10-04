@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import (
     connect,
@@ -152,6 +154,39 @@ class JobsTest(unittest.TestCase):
             self.assertEqual(recorded["progress"], 1.0)
             self.assertEqual(len(recorded["result"]["phase_results"]), 4)
             connection.close()
+
+    def test_an_import_makes_each_batchs_thumbnails_before_indexing_the_next(self) -> None:
+        # A drive import used to index every file first: hours of an empty
+        # gallery (#130). Each batch is now indexed, then previewed.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            photos = root / "trip"
+            photos.mkdir()
+            for index in range(5):
+                Image.new("RGB", (64, 48), (index * 40, 90, 160)).save(photos / f"IMG_{index:04d}.jpg", "JPEG")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            job = create_job(connection, "import", payload={})
+            seen = []
+
+            def record(service, conn, kind, asset_type=None, paths=None, **kwargs):
+                indexed = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+                seen.append((kind, asset_type, sorted(p.name for p in (paths or [])), indexed))
+                return {"generated": 0, "skipped": 0, "failed": 0, "deferred": 0, "total": 0}
+
+            with patch("media_workspace.reverse_lookup.IMPORT_BATCH_SIZE", 2), \
+                    patch("media_workspace.job_runner.PreviewService.generate_batch", autospec=True, side_effect=record):
+                run_import_job(connection, catalog.root, job["job_id"], [], [photos], mode="processed_only", generate_hd=False)
+            connection.close()
+
+        batches = [entry for entry in seen if entry[2] and entry[2][0].startswith("IMG_")]
+        self.assertEqual([names for _kind, _type, names, _count in batches],
+                         [["IMG_0000.jpg", "IMG_0001.jpg"], ["IMG_0002.jpg", "IMG_0003.jpg"], ["IMG_0004.jpg"]])
+        # Each batch's previews ran when only that much had been indexed.
+        self.assertEqual([count for *_rest, count in batches], [2, 4, 5])
+        self.assertTrue(all(kind == "preview" and asset_type is None for kind, asset_type, *_ in batches))
 
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -42,6 +43,10 @@ from .video import VIDEO_EXTENSIONS, is_video
 from .video import probe as probe_video
 
 RESOLVE_BATCH_COMMIT_SIZE = 200
+# An import hands its photos on in batches this size, or whatever it has
+# after this long (a slow disk still shows progress).
+IMPORT_BATCH_SIZE = 100
+IMPORT_BATCH_SECONDS = 8.0
 RECALL_LIMIT = 200
 IMAGE_EXTENSIONS = {".avif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 
@@ -362,7 +367,12 @@ def resolve_image_batch(
     respect_tombstones: bool = False,
     validate_sources: bool = False,
     persist_roots: bool = True,
+    batch_callback=None,
 ) -> dict[str, Any]:
+    """Index every media file under `image_dirs`. With `batch_callback`, the
+    files are committed and handed on in batches as they are indexed
+    (`batch_callback(paths, changed_paths)`), so an import can finish each
+    batch (its previews) and show it before indexing the next."""
     thresholds = thresholds or Thresholds()
     counts: dict[str, int] = {
         "auto_bound": 0,
@@ -379,6 +389,19 @@ def resolve_image_batch(
     # is an explicit "bring this back" — clear any tombstone for the files it
     # touches so a later delete behaves predictably.
     tombstones = _load_tombstones(connection)
+    batch: list[Path] = []
+    batch_changed: list[Path] = []
+    last_flush = time.monotonic()
+
+    def flush() -> None:
+        nonlocal last_flush
+        connection.commit()
+        if batch_callback and batch:
+            batch_callback(list(batch), list(batch_changed))
+        batch.clear()
+        batch_changed.clear()
+        last_flush = time.monotonic()
+
     total = sum(count_image_files(image_dir.resolve()) for image_dir in image_dirs)
     report_progress(progress_callback, phase="resolve_images", processed=0, total=total, status_counts=counts)
 
@@ -425,12 +448,16 @@ def resolve_image_batch(
                 already_in_catalog += 1
             if decision.content_changed:
                 changed_paths.append(str(path.resolve()))
+                batch_changed.append(path.resolve())
+            batch.append(path.resolve())
             processed += 1
-            if processed % RESOLVE_BATCH_COMMIT_SIZE == 0:
+            if batch_callback and (len(batch) >= IMPORT_BATCH_SIZE or time.monotonic() - last_flush >= IMPORT_BATCH_SECONDS):
+                flush()
+            elif processed % RESOLVE_BATCH_COMMIT_SIZE == 0:
                 connection.commit()
             report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
 
-    connection.commit()
+    flush()
 
     return {
         "processed": processed,
