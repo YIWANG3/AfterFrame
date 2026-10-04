@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from .models import ImageCandidate, RawMetadata
 
@@ -40,6 +40,9 @@ EMBEDDED_METADATA_SAMPLE_STEPS: Sequence[int] = (
     2 * 1024 * 1024,
     EXIF_SAMPLE_BYTES,
 )
+# What's read at an IFD that lies past the largest sample: the directory and
+# the values written after it.
+TIFF_IFD_WINDOW_BYTES = 64 * 1024
 FINGERPRINT_MODES = {"head-tail", "head-only"}
 RAW_METADATA_PROFILES = {"full", "matcher"}
 ASCII_TYPE = 2
@@ -49,6 +52,7 @@ RATIONAL_TYPE = 5
 UNDEFINED_TYPE = 7
 SIGNED_LONG_TYPE = 9
 SIGNED_RATIONAL_TYPE = 10
+IFD_TYPE = 13  # an offset to a sub-IFD; Capture One writes SubIFDs this way
 TIFF_TYPE_SIZES = {
     ASCII_TYPE: 1,
     SHORT_TYPE: 2,
@@ -57,6 +61,7 @@ TIFF_TYPE_SIZES = {
     UNDEFINED_TYPE: 1,
     SIGNED_LONG_TYPE: 4,
     SIGNED_RATIONAL_TYPE: 8,
+    IFD_TYPE: 4,
 }
 
 
@@ -210,11 +215,53 @@ def _ensure_sample(handle, sample: bytearray, limit: int) -> bytes:
     return bytes(sample[:limit])
 
 
-def _read_u16(data: bytes, offset: int, little_endian: bool) -> int:
+def _read_at(handle, offset: int, size: int) -> bytes:
+    """`size` bytes from `offset`, leaving the handle where it was: the sample
+    goes on growing from there."""
+    position = handle.tell()
+    try:
+        handle.seek(offset)
+        return handle.read(size)
+    finally:
+        handle.seek(position)
+
+
+class _TiffBytes(Protocol):
+    """What the TIFF parsing reads: bytes, an mmap, or `_SampleAndWindow`."""
+
+    def __len__(self) -> int: ...
+
+    def __getitem__(self, key: slice, /) -> bytes: ...
+
+
+class _SampleAndWindow:
+    """The sample and a window read at an IFD past it, addressed by file
+    offset. The IFD's values can be in either: Capture One writes them after
+    the IFD, while a tool that rewrites IFD0 at the end of a NEF or a DJI DNG
+    leaves Make, Model and DateTime where the camera wrote them, near the
+    start. Bytes in neither read as empty."""
+
+    def __init__(self, sample: bytes, window_at: int, window: bytes) -> None:
+        self.sample = sample
+        self.window_at = window_at
+        self.window = window
+
+    def __len__(self) -> int:
+        return self.window_at + len(self.window)
+
+    def __getitem__(self, key: slice) -> bytes:
+        if key.stop <= len(self.sample):
+            return self.sample[key]
+        if key.start >= self.window_at:
+            return self.window[key.start - self.window_at : key.stop - self.window_at]
+        return b""
+
+
+def _read_u16(data: _TiffBytes, offset: int, little_endian: bool) -> int:
     return struct.unpack("<H" if little_endian else ">H", data[offset : offset + 2])[0]
 
 
-def _read_u32(data: bytes, offset: int, little_endian: bool) -> int:
+def _read_u32(data: _TiffBytes, offset: int, little_endian: bool) -> int:
     return struct.unpack("<I" if little_endian else ">I", data[offset : offset + 4])[0]
 
 
@@ -233,7 +280,7 @@ def _normalize_capture_time(value: str | None) -> str | None:
 
 
 def _parse_tiff_value(
-    data: bytes,
+    data: _TiffBytes,
     tiff_base: int,
     entry_offset: int,
     field_type: int,
@@ -253,6 +300,8 @@ def _parse_tiff_value(
         if start < 0 or end > len(data):
             return None
         raw = data[start:end]
+        if len(raw) < total_size:  # between the sample and a window read past it
+            return None
 
     if field_type == ASCII_TYPE:
         return raw.rstrip(b"\x00").decode("utf-8", "ignore").strip() or None
@@ -262,7 +311,7 @@ def _parse_tiff_value(
             for index in range(0, len(raw), 2)
         ]
         return values[0] if count == 1 and values else values
-    if field_type == LONG_TYPE:
+    if field_type in (LONG_TYPE, IFD_TYPE):
         values = [
             struct.unpack("<I" if little_endian else ">I", raw[index : index + 4])[0]
             for index in range(0, len(raw), 4)
@@ -372,7 +421,7 @@ def _extract_xmp_rating(data: bytes) -> int | None:
     return None
 
 
-def _parse_tiff_ifd(data: bytes, tiff_base: int, ifd_offset: int, little_endian: bool) -> dict[int, object]:
+def _parse_tiff_ifd(data: _TiffBytes, tiff_base: int, ifd_offset: int, little_endian: bool) -> dict[int, object]:
     if ifd_offset <= 0:
         return {}
     start = tiff_base + ifd_offset
@@ -397,7 +446,11 @@ def _extract_tiff_metadata(
     data: bytes,
     tiff_base: int,
     profile: str = "full",
+    handle=None,
 ) -> dict[str, Any]:
+    """`handle` is the file, when the TIFF is the file itself (`tiff_base`
+    0): an IFD past the largest sample is then read from the file. Capture One
+    writes IFD0 and the EXIF IFD at the end of its DNGs."""
     if profile not in RAW_METADATA_PROFILES:
         raise ValueError(f"unsupported metadata profile: {profile}")
     if tiff_base + 8 > len(data):
@@ -407,12 +460,19 @@ def _extract_tiff_metadata(
         return {}
 
     little_endian = header[:2] == b"II"
+    read_from_file: dict[int, bytes] = {}
+
+    def parse_ifd(ifd_offset: object) -> dict[int, object]:
+        if not isinstance(ifd_offset, int):
+            return {}
+        if handle is None or ifd_offset + 2 <= EXIF_SAMPLE_BYTES:
+            return _parse_tiff_ifd(data, tiff_base, ifd_offset, little_endian)
+        window = read_from_file[ifd_offset] = _read_at(handle, ifd_offset, TIFF_IFD_WINDOW_BYTES)
+        return _parse_tiff_ifd(_SampleAndWindow(data, ifd_offset, window), 0, ifd_offset, little_endian)
+
     first_ifd = _read_u32(data, tiff_base + 4, little_endian)
-    ifd0 = _parse_tiff_ifd(data, tiff_base, first_ifd, little_endian)
-    exif_pointer = ifd0.get(0x8769)
-    exif_ifd = _parse_tiff_ifd(data, tiff_base, exif_pointer, little_endian) if isinstance(exif_pointer, int) else {}
-    gps_pointer = ifd0.get(0x8825)
-    gps_ifd = _parse_tiff_ifd(data, tiff_base, gps_pointer, little_endian) if isinstance(gps_pointer, int) else {}
+    ifd0 = parse_ifd(first_ifd)
+    exif_ifd = parse_ifd(ifd0.get(0x8769))
 
     date_time_original = exif_ifd.get(0x9003)
     date_time = ifd0.get(0x0132)
@@ -445,6 +505,10 @@ def _extract_tiff_metadata(
             "height": None,
         }
 
+    gps_ifd = parse_ifd(ifd0.get(0x8825))
+    # The caller finds XMP in the sample; an IFD0 read from the file can carry
+    # its packet (tag 700) in its window.
+    rating = _extract_xmp_rating(read_from_file[first_ifd]) if first_ifd in read_from_file else None
     width = ifd0.get(0x0100)
     if not isinstance(width, int):
         width = exif_ifd.get(0xA002) if isinstance(exif_ifd.get(0xA002), int) else None
@@ -467,7 +531,7 @@ def _extract_tiff_metadata(
 
     return {
         "capture_time": capture_time,
-        "rating": None,
+        "rating": rating,
         "camera_make": camera_make,
         "camera_model": camera_model,
         "lens_model": lens_model,
@@ -567,7 +631,7 @@ def _extract_embedded_metadata_with_sample(
                 candidates.append(_extract_tiff_metadata(data, exif_offset, profile=profile))
         else:
             for offset in _iter_embedded_tiff_offsets(data)[:8]:
-                metadata = _extract_tiff_metadata(data, offset, profile=profile)
+                metadata = _extract_tiff_metadata(data, offset, profile=profile, handle=handle if offset == 0 else None)
                 if any(metadata.values()):
                     candidates.append(metadata)
                     if profile == "matcher" and metadata.get("camera_model") and metadata.get("capture_time"):
