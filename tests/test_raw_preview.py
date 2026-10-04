@@ -64,6 +64,29 @@ def _tiff_with_rgb_preview(width: int, height: int, bits: int, pixels: bytes, or
     return head + first + second + struct.pack("<HHH", bits, bits, bits) + pixels + bytes(1000)
 
 
+def _tiff_ifds_at_end(images: list[tuple[int, int, bytes, int]], pad: int = 0) -> bytes:
+    """A little-endian TIFF laid out like FFF: `pad` bytes, the pixel data,
+    then the IFD chain at the end of the file. One directory per (width,
+    height, 8-bit RGB pixels, orientation)."""
+    out = bytearray(b"II*\x00" + bytes(4) + bytes(pad))
+    placed = []
+    for width, height, pixels, orientation in images:
+        bits_at = len(out)
+        out += struct.pack("<HHH", 8, 8, 8)
+        placed.append((width, height, len(out), len(pixels), orientation, bits_at))
+        out += pixels
+    struct.pack_into("<I", out, 4, len(out))
+    for index, (width, height, pixels_at, size, orientation, bits_at) in enumerate(placed):
+        entries = [
+            (0x00FE, 4, 1, 1), (0x0100, 4, 1, width), (0x0101, 4, 1, height), (0x0102, 3, 3, bits_at),
+            (0x0103, 3, 1, 1), (0x0106, 3, 1, 2), (0x0111, 4, 1, pixels_at), (0x0112, 3, 1, orientation),
+            (0x0115, 3, 1, 3), (0x0117, 4, 1, size),
+        ]
+        out += struct.pack("<H", len(entries)) + b"".join(struct.pack("<HHII", *e) for e in entries)
+        out += struct.pack("<I", len(out) + 4 if index + 1 < len(placed) else 0)
+    return bytes(out)
+
+
 def _halves(width: int, height: int, top: tuple[int, int, int], bottom: tuple[int, int, int], bits: int = 8) -> bytes:
     rows = []
     for y in range(height):
@@ -144,6 +167,27 @@ class UncompressedPreviewTest(unittest.TestCase):
         with Image.open(BytesIO(data)) as preview:
             self.assertEqual(preview.convert("RGB").getpixel((5, 5)), (128, 64, 32))
             self.assertEqual(preview.convert("RGB").getpixel((5, 40)), (10, 250, 90))
+
+    def test_the_orientation_is_read_from_an_ifd0_at_the_end_of_the_file(self) -> None:
+        # FFF writes IFD0 after the raw data, megabytes in.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw = Path(temp_dir) / "B_00206.fff"
+            raw.write_bytes(_tiff_ifds_at_end([(64, 48, _halves(64, 48, (9, 9, 9), (99, 99, 99)), 8)], pad=600_000))
+            _data, orientation = embedded_preview(raw)
+        self.assertEqual(orientation, 8)
+
+    def test_an_already_rotated_copy_keeps_its_own_orientation(self) -> None:
+        # IFD0 is stored landscape with the RAW's orientation 8; the larger
+        # copy is already portrait and says 1. Rotating it again would be wrong.
+        landscape = (64, 48, _halves(64, 48, (9, 9, 9), (99, 99, 99)), 8)
+        portrait = (60, 80, _halves(60, 80, (9, 9, 9), (99, 99, 99)), 1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw = Path(temp_dir) / "Swiss.fff"
+            raw.write_bytes(_tiff_ifds_at_end([landscape, portrait]))
+            data, orientation = embedded_preview(raw)
+        with Image.open(BytesIO(data)) as preview:
+            self.assertEqual(preview.size, (60, 80))
+        self.assertEqual(orientation, 1)
 
     def test_the_larger_of_a_jpeg_and_an_rgb_preview_wins(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -15,6 +15,11 @@ Hasselblad 3FR and FFF (and older TIFF-based RAWs) can carry the preview
 uncompressed instead: an RGB image in one of the file's TIFF directories. Those
 are found by walking the directories (the IFD chain and SubIFDs) for
 uncompressed 8- or 16-bit RGB. The largest preview of either kind wins.
+
+Embedded images are stored unrotated, like the sensor data, so the preview
+carries the RAW's orientation. The exception is an RGB directory with an
+Orientation tag of its own: FFF keeps a second, already rotated copy whose tag
+says 1 while the RAW's says 8.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from __future__ import annotations
 import mmap
 from io import BytesIO
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from PIL import Image
@@ -33,8 +39,25 @@ _DECODABLE_SOF = {0xC0, 0xC1, 0xC2}
 _ORIENTATION_TAG = 0x0112
 _TIFF_MAGIC = (b"II*\x00", b"MM\x00*")
 _SUBIFDS_TAG = 0x014A
-# The RAW's own TIFF IFD0 (orientation) sits near the start in every format.
+# Formats that aren't TIFF (CR3, RAF) carry a TIFF block with the
+# orientation near the start; TIFF-based RAWs keep it in IFD0, which FFF
+# writes at the end of the file.
 _HEAD_BYTES = 512 * 1024
+
+
+class _RgbImage(NamedTuple):
+    """An uncompressed RGB image in one of the RAW's TIFF directories."""
+
+    width: int
+    height: int
+    depth: int  # bytes per sample
+    offsets: list
+    counts: list
+    orientation: int | None  # the directory's own Orientation tag
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
 
 
 def _frame_header(buf, start: int) -> tuple[int, int, int] | None:
@@ -92,11 +115,14 @@ def _as_list(value) -> list:
     return value if isinstance(value, list) else [value]
 
 
-def _rgb_directory(buf, tags: dict) -> tuple[int, int, int, int, list, list] | None:
-    """(width, height, bytes per sample, area, strip offsets, strip byte
-    counts) of a TIFF directory holding an uncompressed 8- or 16-bit RGB
-    image, the form Hasselblad's previews take; None for anything else (the
-    raw CFA data, a JPEG-compressed or planar image)."""
+def _valid_orientation(value) -> int | None:
+    return value if isinstance(value, int) and 1 <= value <= 8 else None
+
+
+def _rgb_directory(buf, tags: dict) -> _RgbImage | None:
+    """The uncompressed 8- or 16-bit RGB image a TIFF directory holds, the
+    form Hasselblad's previews take; None for anything else (the raw CFA data,
+    a JPEG-compressed or planar image)."""
     width, height = tags.get(0x0100), tags.get(0x0101)
     bits = _as_list(tags.get(0x0102))
     offsets, counts = _as_list(tags.get(0x0111)), _as_list(tags.get(0x0117))
@@ -111,15 +137,15 @@ def _rgb_directory(buf, tags: dict) -> tuple[int, int, int, int, list, list] | N
     depth = bits[0] // 8
     if sum(counts) < width * height * 3 * depth or any(o + c > len(buf) for o, c in zip(offsets, counts, strict=True)):
         return None
-    return width, height, depth, width * height, offsets, counts
+    return _RgbImage(width, height, depth, offsets, counts, _valid_orientation(tags.get(_ORIENTATION_TAG)))
 
 
-def _tiff_rgb_previews(buf) -> list[tuple[int, int, int, int, list, list]]:
+def _tiff_rgb_previews(buf) -> list[_RgbImage]:
     """Every uncompressed RGB image in the file's TIFF directories."""
     if buf[:4] not in _TIFF_MAGIC:
         return []
     little = buf[:2] == b"II"
-    found: list[tuple[int, int, int, int, list, list]] = []
+    found: list[_RgbImage] = []
     seen: set[int] = set()
     queue = [_read_u32(buf, 4, little)]
     while queue and len(seen) < 32:
@@ -138,10 +164,10 @@ def _tiff_rgb_previews(buf) -> list[tuple[int, int, int, int, list, list]]:
     return found
 
 
-def _rgb_as_tiff(buf, rgb: tuple[int, int, int, int, list, list], little: bool) -> bytes:
+def _rgb_as_tiff(buf, rgb: _RgbImage, little: bool) -> bytes:
     """The RGB image as an in-memory TIFF Pillow opens (16-bit scaled to 8)."""
-    width, height, depth, _area, offsets, counts = rgb
-    data = b"".join(buf[o : o + c] for o, c in zip(offsets, counts, strict=True))[: width * height * 3 * depth]
+    width, height, depth = rgb.width, rgb.height, rgb.depth
+    data = b"".join(buf[o : o + c] for o, c in zip(rgb.offsets, rgb.counts, strict=True))[: width * height * 3 * depth]
     if depth == 1:
         image = Image.frombytes("RGB", (width, height), data)
     else:
@@ -152,22 +178,29 @@ def _rgb_as_tiff(buf, rgb: tuple[int, int, int, int, list, list], little: bool) 
     return out.getvalue()
 
 
-def _orientation(head: bytes) -> int | None:
+def _orientation(buf) -> int | None:
+    """The RAW's EXIF orientation: IFD0's when the file is a TIFF, wherever
+    IFD0 is, else the first TIFF block near the start that has one."""
+    if buf[:4] in _TIFF_MAGIC:
+        little = buf[:2] == b"II"
+        found = _valid_orientation(_parse_tiff_ifd(buf, 0, _read_u32(buf, 4, little), little).get(_ORIENTATION_TAG))
+        if found:
+            return found
+    head = bytes(buf[:_HEAD_BYTES])
     for base in _iter_embedded_tiff_offsets(head)[:8]:
         if base + 8 > len(head):
             continue
         little = head[base : base + 2] == b"II"
-        value = _parse_tiff_ifd(head, base, _read_u32(head, base + 4, little), little).get(_ORIENTATION_TAG)
-        if isinstance(value, int) and 1 <= value <= 8:
-            return value
+        found = _valid_orientation(_parse_tiff_ifd(head, base, _read_u32(head, base + 4, little), little).get(_ORIENTATION_TAG))
+        if found:
+            return found
     return None
 
 
 def embedded_preview(path: Path) -> tuple[bytes, int | None] | None:
     """The largest preview embedded in `path`, as image bytes Pillow opens (a
-    JPEG, or an uncompressed RGB image wrapped as TIFF), and the RAW's EXIF
-    orientation (embedded images are stored unrotated, like the sensor data);
-    None when there is none."""
+    JPEG, or an uncompressed RGB image wrapped as TIFF), and the orientation
+    to show it with; None when there is none."""
     with path.open("rb") as handle:
         if path.stat().st_size == 0:
             return None
@@ -186,10 +219,10 @@ def embedded_preview(path: Path) -> tuple[bytes, int | None] | None:
                 if end:
                     jpeg = (area, start, end)
                     break
-            rgb = max(_tiff_rgb_previews(buf), key=lambda r: r[3], default=None)
-            orientation = _orientation(bytes(buf[:_HEAD_BYTES]))
-            if rgb and (jpeg is None or rgb[3] > jpeg[0]):
-                return _rgb_as_tiff(buf, rgb, buf[:2] == b"II"), orientation
+            rgb = max(_tiff_rgb_previews(buf), key=lambda r: r.area, default=None)
+            orientation = _orientation(buf)
+            if rgb and (jpeg is None or rgb.area > jpeg[0]):
+                return _rgb_as_tiff(buf, rgb, buf[:2] == b"II"), rgb.orientation or orientation
             if jpeg:
                 return bytes(buf[jpeg[1] : jpeg[2]]), orientation
     return None
