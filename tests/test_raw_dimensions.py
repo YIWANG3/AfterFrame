@@ -15,15 +15,15 @@ from media_workspace.reverse_lookup import resolve_image_batch
 
 DNG_FIXTURE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
 
-SHORT, LONG, RATIONAL = 3, 4, 5
+SHORT, LONG, RATIONAL, IFD = 3, 4, 5, 13
 
 
-def _tiff(ifd0: dict, subifds: tuple[dict, ...] = (), exif: dict | None = None) -> bytes:
+def _tiff(ifd0: dict, subifds: tuple[dict, ...] = (), exif: dict | None = None, subifd_type: int = LONG) -> bytes:
     """A little-endian TIFF: IFD0, the SubIFDs and EXIF IFD it points to.
     Tags map to (type, values); a RATIONAL value is (numerator, denominator)."""
     dirs = [dict(ifd0), *(dict(d) for d in subifds), *([dict(exif)] if exif else [])]
     if subifds:
-        dirs[0][0x014A] = (LONG, [0] * len(subifds))
+        dirs[0][0x014A] = (subifd_type, [0] * len(subifds))
     if exif:
         dirs[0][0x8769] = (LONG, [0])
     sizes = [2 + 12 * len(d) + 4 for d in dirs]
@@ -31,7 +31,7 @@ def _tiff(ifd0: dict, subifds: tuple[dict, ...] = (), exif: dict | None = None) 
     for size in sizes[:-1]:
         offsets.append(offsets[-1] + size)
     if subifds:
-        dirs[0][0x014A] = (LONG, offsets[1 : 1 + len(subifds)])
+        dirs[0][0x014A] = (subifd_type, offsets[1 : 1 + len(subifds)])
     if exif:
         dirs[0][0x8769] = (LONG, [offsets[-1]])
     data_at = offsets[-1] + sizes[-1]
@@ -43,7 +43,7 @@ def _tiff(ifd0: dict, subifds: tuple[dict, ...] = (), exif: dict | None = None) 
             if kind == RATIONAL:
                 payload = b"".join(struct.pack("<II", *v) for v in values)
             else:
-                payload = struct.pack("<" + {SHORT: "H", LONG: "I"}[kind] * len(values), *values)
+                payload = struct.pack("<" + {SHORT: "H", LONG: "I", IFD: "I"}[kind] * len(values), *values)
             if len(payload) <= 4:
                 field = payload.ljust(4, b"\x00")
             else:
@@ -95,6 +95,11 @@ class RawDimensionsTest(unittest.TestCase):
         mono = self._write("L1010305.DNG", _tiff(_thumbnail(), subifds=(_raw_directory(8424, 5632, crop=(8368, 5584), photometric=34892),)))
         self.assertEqual(raw_dimensions(dng), (4000, 3000))
         self.assertEqual(raw_dimensions(mono), (8368, 5584))
+
+    def test_subifds_written_as_the_ifd_type(self) -> None:
+        # Capture One's DNGs point to their SubIFDs with TIFF type 13 (IFD), not LONG.
+        dng = _tiff(_thumbnail(160, 107), subifds=(_raw_directory(7040, 4688, crop=(7008, 4672)),), subifd_type=IFD)
+        self.assertEqual(raw_dimensions(self._write("DSC07744.dng", dng)), (7008, 4672))
 
     def test_the_crop_size_wins_over_the_exif_size(self) -> None:
         # Leica's EXIF size includes the margins DefaultCropSize cuts.
