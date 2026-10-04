@@ -41,9 +41,14 @@ export default function PreviewImage({
     return () => observer.disconnect();
   }, [src, container, scrollRootRef]);
 
+  // Pulse only while a load is pending. An infinite animation left under a
+  // loaded (or failed) image makes Chromium composite every frame forever:
+  // ~35% CPU in the GPU process with the gallery just sitting there.
+  const loading = Boolean(src) && !loaded && !errored;
+
   return (
     <div ref={setContainer} className="relative h-full w-full overflow-hidden">
-      <div className="absolute inset-0 animate-pulse bg-[rgba(255,255,255,0.04)] dark:bg-[rgba(255,255,255,0.03)]" />
+      <div className={`absolute inset-0 bg-[rgba(255,255,255,0.04)] dark:bg-[rgba(255,255,255,0.03)] ${loading ? "animate-pulse" : ""}`} />
       {!src ? (
         <div className="absolute inset-0 flex items-center justify-center text-[11px] text-muted">{placeholderLabel}</div>
       ) : null}

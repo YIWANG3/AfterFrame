@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 from sqlite3 import Row
 from typing import Any
 
+from . import exiftool
 from .config import DEFAULT_RAW_EXTENSIONS, Thresholds
 from .db import (
     get_registry,
@@ -388,7 +388,9 @@ def resolve_image_batch(
     for image_dir in image_dirs:
         if persist_roots:
             upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
-        for path in iter_image_files([image_dir.resolve()]):
+        # Metadata is read one file at a time below; ExifTool reads the next
+        # few meanwhile.
+        for path in exiftool.read_ahead(iter_image_files([image_dir.resolve()]), wanted=lambda path: not is_video(path)):
             if respect_tombstones or validate_sources:
                 if _is_tombstoned(connection, tombstones, path):
                     processed += 1
@@ -451,30 +453,6 @@ def is_raw(path: Path) -> bool:
     return path.suffix.lower() in DEFAULT_RAW_EXTENSIONS
 
 
-def _native_raw_dimensions(path: Path) -> tuple[int, int] | None:
-    """True sensor dimensions via Image I/O (sips). RAW EXIF often reports the
-    embedded *preview* size — e.g. Hasselblad .3FR yields 3888×2918 instead of
-    the real ~11664×8750 — so read the decoded dimensions for display."""
-    try:
-        result = subprocess.run(
-            ["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(path)],
-            check=True, capture_output=True, text=True,
-        )
-    except Exception:
-        return None
-    width = height = None
-    for line in result.stdout.splitlines():
-        stripped = line.strip()
-        value = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
-        # sips emits "pixelWidth: <nil>" for formats it can't decode dimensions
-        # for; skip non-numeric values and fall back to the EXIF dims (None).
-        if stripped.startswith("pixelWidth:") and value.isdigit():
-            width = int(value)
-        elif stripped.startswith("pixelHeight:") and value.isdigit():
-            height = int(value)
-    return (width, height) if width and height else None
-
-
 def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision:
     """Index a RAW as a browseable asset_type='raw' entry — EXIF + dims, no RAW
     matching. The original RAW can't be displayed by the renderer, so its preview
@@ -486,18 +464,13 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
         "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
     ).fetchone()
     preexisting = existing is not None
+    # Its size is LibRaw's, cropped to the image the camera delivers.
     metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
-    # EXIF dims can be the embedded preview's size, not the sensor's — override
-    # with the true decoded dimensions so the gallery shows real resolution.
-    native = _native_raw_dimensions(resolved)
-    if native:
-        metadata.width, metadata.height = native
-    upsert_raw_asset(connection, metadata, commit=False)
     # Imported RAW is a browseable photo in its own right, NOT a reverse-lookup
-    # source. Keep it out of the candidate pool so a sibling JPG imported the
-    # same way won't bind it as its "raw source" — only the dedicated
-    # "Add RAW source" flow registers RAW as a matchable source.
-    connection.execute("DELETE FROM raw_metadata_cache WHERE raw_asset_id = ?", (metadata.asset_id,))
+    # source: a sibling JPG imported the same way won't bind it as its "raw
+    # source". Only the dedicated "Add RAW source" flow registers RAW as a
+    # matchable source, and importing the folder again leaves that alone.
+    upsert_raw_asset(connection, metadata, commit=False, register_source=False)
     decision = MatchDecision(
         image_asset_id=metadata.asset_id,
         image_path=resolved,

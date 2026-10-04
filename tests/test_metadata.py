@@ -1,11 +1,41 @@
 from __future__ import annotations
 
+import os
+import shutil
 import struct
+import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from media_workspace.metadata import camera_stem_token, extract_image_candidate, extract_raw_metadata, quick_fingerprint, stem_key
+from media_workspace import exiftool
+from media_workspace.metadata import (
+    _from_exiftool,
+    camera_stem_token,
+    extract_image_candidate,
+    extract_raw_metadata,
+    quick_fingerprint,
+    stem_key,
+)
+
+FIXTURES = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures"
+
+
+def _alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        found = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+        return str(pid) in found
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A zombie still answers kill(0) on macOS until its parent reaps it.
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(state) and not state.startswith("Z")
 
 
 def _build_tiff(
@@ -222,8 +252,8 @@ class MetadataExtractionTest(unittest.TestCase):
                     (0x920A, 5, (70, 1)),
                 ],
             )
-            path = Path(temp_dir) / "0Y1A6380.CR3"
-            path.write_bytes(b"\x00" * 344 + tiff + b"\x00" * 256)
+            path = Path(temp_dir) / "0Y1A6380.CR2"
+            path.write_bytes(tiff)
 
             metadata = extract_raw_metadata(path)
 
@@ -238,22 +268,6 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertEqual(metadata.focal_length, 70.0)
             self.assertEqual(metadata.width, 6000)
             self.assertEqual(metadata.height, 4000)
-
-    def test_extract_raw_metadata_falls_back_to_larger_sample(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tiff = _build_tiff(
-                ifd0=[
-                    (0x0110, 2, "Canon EOS R6m2"),
-                    (0x0132, 2, "2026:01:11 15:03:52"),
-                ]
-            )
-            path = Path(temp_dir) / "0Y1A7000.CR3"
-            path.write_bytes(b"\x00" * (700 * 1024) + tiff + b"\x00" * 256)
-
-            metadata = extract_raw_metadata(path)
-
-            self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
-            self.assertEqual(metadata.capture_time, "2026-01-11T15:03:52")
 
     def test_lens_make_is_read_when_written_and_empty_when_blank(self) -> None:
         # A third-party lens: LensMake names it (Tamron on Fujifilm), or the
@@ -275,7 +289,7 @@ class MetadataExtractionTest(unittest.TestCase):
                 exif=[(0xA434, 2, "LAOWA FFII 12mm F2.8 C&D Dreamer"), (0xA433, 2, "LAOWA")],
             )
             path = Path(temp_dir) / "DSC_0001.NEF"
-            path.write_bytes(b"\x00" * 344 + tiff + b"\x00" * 256)
+            path.write_bytes(tiff)
             self.assertEqual(extract_raw_metadata(path).lens_make, "LAOWA")
 
     def test_extract_raw_metadata_matcher_profile_skips_nonessential_fields(self) -> None:
@@ -289,8 +303,8 @@ class MetadataExtractionTest(unittest.TestCase):
                 ],
                 exif=[(0xA434, 2, "RF24-70mm F2.8 L IS USM"), (0xA433, 2, "Canon")],
             )
-            path = Path(temp_dir) / "0Y1A7001.CR3"
-            path.write_bytes(b"\x00" * 1024 + tiff)
+            path = Path(temp_dir) / "0Y1A7001.CR2"
+            path.write_bytes(tiff)
 
             metadata = extract_raw_metadata(path, metadata_profile="matcher")
 
@@ -302,6 +316,204 @@ class MetadataExtractionTest(unittest.TestCase):
             self.assertIsNone(metadata.iso)
             self.assertIsNone(metadata.width)
             self.assertIsNone(metadata.height)
+
+
+class ExifToolMappingTest(unittest.TestCase):
+    """How ExifTool's tags become the catalog's fields."""
+
+    def test_adobe_rgb_from_exif_maker_notes_or_the_interop_index(self) -> None:
+        def color_space(**tags):
+            return _from_exiftool({key.replace("__", ":"): value for key, value in tags.items()})["color_space"]
+
+        self.assertEqual(color_space(ExifIFD__ColorSpace=65535), 65535)
+        self.assertEqual(color_space(ExifIFD__ColorSpace=1), 1)
+        self.assertEqual(color_space(Nikon__ColorSpace=2), 65535)  # a NEF has no EXIF ColorSpace
+        self.assertEqual(color_space(Nikon__ColorSpace=1), 1)
+        self.assertEqual(color_space(ExifIFD__ColorSpace=1, Canon__ColorSpace=2), 65535)
+        self.assertEqual(color_space(ExifIFD__ColorSpace=65535, InteropIFD__InteropIndex="R03 - DCF option file (Adobe RGB)"), 65535)
+        self.assertIsNone(color_space())
+
+    def test_the_capture_time_from_wherever_it_was_written(self) -> None:
+        def captured(tags):
+            return _from_exiftool(tags)["capture_time"]
+
+        self.assertEqual(captured({"ExifIFD:DateTimeOriginal": "2024:07:13 09:12:53"}), "2024-07-13T09:12:53")
+        self.assertEqual(captured({"ExifIFD:DateTimeOriginal": "2019-10-18T16:25:03"}), "2019-10-18T16:25:03")  # Hasselblad
+        self.assertEqual(captured({"IFD0:DateTimeOriginal": "2023:05:01 08:00:00"}), "2023-05-01T08:00:00")  # Nikon
+        # An export whose EXIF was stripped keeps XMP; the wall clock, not the instant.
+        self.assertEqual(captured({"XMP-photoshop:DateCreated": "2025:10:04 17:34:08.120-08:00"}), "2025-10-04T17:34:08")
+        # An unset camera clock is no date.
+        unset = {"ExifIFD:DateTimeOriginal": "0000:00:00 00:00:00", "IFD0:ModifyDate": "2024:01:01 10:00:00"}
+        self.assertEqual(captured(unset), "2024-01-01T10:00:00")
+        self.assertIsNone(captured({"XMP-photoshop:DateCreated": "2024:07:13"}))
+
+    def test_lens_names(self) -> None:
+        def lens(tags):
+            return _from_exiftool(tags)["lens_model"]
+
+        named = {"ExifIFD:LensModel": "RF24-70mm F2.8 L IS USM", "Composite:LensID": "Canon RF 24-70mm F2.8L IS USM"}
+        self.assertEqual(lens(named), "RF24-70mm F2.8 L IS USM")
+        self.assertEqual(lens({"Composite:LensID": "AF-S Nikkor 24-70mm f/2.8G ED"}), "AF-S Nikkor 24-70mm f/2.8G ED")
+        self.assertEqual(lens({"Composite:LensID": "Unknown (00 0 0)", "PhaseOne:LensModel": "Schneider 80mm LS"}), "Schneider 80mm LS")
+        self.assertIsNone(lens({"Composite:LensID": "65535", "ExifIFD:LensModel": "   "}))
+        self.assertIsNone(lens({"ExifIFD:LensModel": "----", "Composite:LensID": "E-Mount, T-Mount, Other Lens or no lens"}))
+        self.assertEqual(lens({"ExifIFD:LensModel": "28 - 70mm F2.8 DG DN | Contemporary 021"}), "28 - 70mm F2.8 DG DN | Contemporary 021")
+
+    def test_numbers(self) -> None:
+        found = _from_exiftool({
+            "ExifIFD:ISO": "100 0",
+            "ExifIFD:LensInfo": "70 200 0 0",
+            "Composite:ImageSize": "6000x4000",
+            "Composite:GPSLatitude": -33.8568,
+            "Composite:GPSLongitude": "151.2153",
+            "XMP-xmp:Rating": 0,
+        })
+        self.assertEqual((found["iso"], found["lens_specification"]), (100, [70.0, 200.0]))
+        self.assertEqual((found["width"], found["height"]), (6000, 4000))
+        self.assertEqual((found["gps_latitude"], found["gps_longitude"]), (-33.8568, 151.2153))
+        self.assertEqual(found["rating"], 0)
+        # A manual lens on a Sony: no aperture or focal length, written as 0.
+        manual = _from_exiftool({"ExifIFD:FNumber": 0, "ExifIFD:FocalLength": 0, "Sony:FocalLength": 0, "ExifIFD:ISO": 0})
+        self.assertEqual((manual["aperture"], manual["focal_length"], manual["iso"]), (None, None, None))
+        heif = _from_exiftool({"Composite:ImageSize": "800 534", "QuickTime:CleanAperture": "800 533 0 -0.5"})
+        self.assertEqual((heif["width"], heif["height"]), (800, 533))
+
+
+class ExifToolTest(unittest.TestCase):
+    def setUp(self) -> None:
+        if exiftool.find_command() is None:
+            self.fail("ExifTool is missing: run `npm --prefix apps/desktop run fetch:exiftool`")
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.root = Path(temp_dir.name)
+
+    def test_a_camera_dng_and_an_iphone_style_heic(self) -> None:
+        raw = extract_raw_metadata(FIXTURES / "raw" / "luna-morning.dng")
+        self.assertEqual((raw.camera_make, raw.camera_model, raw.iso), ("Insta360", "Luna Ultra", 275))
+        self.assertEqual(raw.capture_time, "2026-08-18T09:19:43")
+        self.assertEqual((raw.width, raw.height), (1024, 576))
+        heic = extract_image_candidate(FIXTURES / "heic" / "iphone-style.heic")
+        self.assertEqual((heic.camera_model, heic.lens_model, heic.rating), ("Canon EOS R6m2", "EF70-200mm f/2.8L IS II USM", 5))
+        self.assertEqual((heic.capture_time, heic.width, heic.height), ("2025-10-04T17:34:08", 800, 533))
+
+    def test_a_name_in_any_script(self) -> None:
+        path = self.root / "飞飞花鸟岛 沙滩 #2.heic"
+        shutil.copyfile(FIXTURES / "heic" / "iphone-style.heic", path)
+        self.assertEqual(extract_image_candidate(path).camera_model, "Canon EOS R6m2")
+
+    def test_a_file_it_cant_read_has_no_metadata(self) -> None:
+        path = self.root / "IMG_0001.CR3"
+        path.write_bytes(b"not a photo")
+        metadata = extract_raw_metadata(path)
+        self.assertIsNone(metadata.camera_model)
+        self.assertIsNone(metadata.capture_time)
+
+    def test_threads_share_the_processes(self) -> None:
+        heic = FIXTURES / "heic" / "iphone-style.heic"
+        results: list[str | None] = []
+        threads = [threading.Thread(target=lambda: results.append(extract_image_candidate(heic).camera_model)) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(results, ["Canon EOS R6m2"] * 8)
+
+    def test_a_hung_or_dead_process_is_replaced(self) -> None:
+        command = exiftool.find_command()
+        assert command is not None
+        pool = exiftool.ExifTool(command, size=1)
+        self.addCleanup(pool.close)
+        heic = FIXTURES / "heic" / "iphone-style.heic"
+        with self.assertRaises(exiftool.ExifToolError):
+            pool.read(heic, timeout=0)
+        self.assertEqual(pool.read(heic)["IFD0:Model"], "Canon EOS R6m2")
+        # A process that isn't ExifTool at all: it exits at once, or can't start.
+        for command in ([sys.executable, "-c", "pass"], [str(self.root / "no-such-perl")]):
+            with self.assertRaises(exiftool.ExifToolError):
+                exiftool.ExifTool(command, size=1).read(heic)
+        # A name with a line break can't be passed to it (one argument per line).
+        self.assertEqual(pool.read(self.root / "two\nlines.jpg"), {})
+
+    def test_a_killed_sidecar_leaves_no_exiftool_behind(self) -> None:
+        # At the end of its input a -stay_open ExifTool polls for good; it
+        # watches for its parent instead.
+        script = (
+            "import sys, time\n"
+            "from pathlib import Path\n"
+            "from media_workspace import exiftool\n"
+            "exiftool.read(Path(sys.argv[1]))\n"
+            "print(exiftool.shared()._idle.queue[-1]._process.pid, flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        sidecar = subprocess.Popen(
+            [sys.executable, "-c", script, str(FIXTURES / "heic" / "iphone-style.heic")],
+            stdout=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+        )
+        child = int(sidecar.stdout.readline())
+        sidecar.kill()
+        sidecar.wait()
+        sidecar.stdout.close()
+        deadline = time.monotonic() + 10
+        while _alive(child) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        self.assertFalse(_alive(child), "ExifTool outlived the sidecar")
+
+    def test_a_process_is_renewed_after_a_few_hundred_files(self) -> None:
+        command = exiftool.find_command()
+        assert command is not None
+        started = []
+        real = exiftool._Process
+
+        def counting(*args):
+            started.append(1)
+            return real(*args)
+
+        pool = exiftool.ExifTool(command, size=1)
+        self.addCleanup(pool.close)
+        with patch.object(exiftool, "_Process", counting), patch.object(exiftool, "_FILES_PER_PROCESS", 2):
+            for _ in range(5):
+                pool.read(FIXTURES / "heic" / "iphone-style.heic")
+        self.assertEqual(len(started), 3)
+
+    def test_an_import_reads_the_next_files_ahead(self) -> None:
+        paths = []
+        for index in range(10):
+            path = self.root / f"IMG_{index:04d}.heic"
+            shutil.copyfile(FIXTURES / "heic" / "iphone-style.heic", path)
+            paths.append(path)
+        pool = exiftool.shared()
+        assert pool is not None
+        threads: list[str] = []
+        real = pool.read
+
+        def recording(path, *args, **kwargs):
+            threads.append(threading.current_thread().name)
+            return real(path, *args, **kwargs)
+
+        with patch.object(pool, "read", recording):
+            seen = []
+            for path in exiftool.read_ahead(iter(paths), depth=3, wanted=lambda path: path.name != "IMG_0005.heic"):
+                seen.append(path)
+                if path.name not in ("IMG_0005.heic", "IMG_0007.heic"):  # skipped, like a deleted file
+                    self.assertEqual(extract_image_candidate(path).camera_model, "Canon EOS R6m2")
+            self.assertEqual(seen, paths)
+            self.assertIn(len(threads), (8, 9))  # each wanted file read once (a skipped one maybe not)
+            self.assertTrue(all(name.startswith("exiftool-ahead") for name in threads))
+            self.assertEqual(exiftool._ahead, {})
+            # A loop that stops early leaves nothing behind either.
+            for _ in exiftool.read_ahead(iter(paths), depth=3):
+                break
+            self.assertEqual(exiftool._ahead, {})
+
+    def test_without_exiftool_an_image_still_has_its_exif(self) -> None:
+        with patch.object(exiftool, "read", return_value=None):
+            heic = extract_image_candidate(FIXTURES / "heic" / "iphone-style.heic")
+            raw = extract_raw_metadata(FIXTURES / "raw" / "luna-morning.dng")
+        self.assertEqual((heic.camera_model, heic.iso, heic.capture_time), ("Canon EOS R6m2", 100, "2025-10-04T17:34:08"))
+        self.assertEqual((heic.aperture, heic.shutter_speed, heic.focal_length), (4.5, 0.0025, 70.0))
+        self.assertEqual((heic.width, heic.height), (800, 533))
+        # A RAW: only what LibRaw reads.
+        self.assertEqual((raw.camera_model, raw.width, raw.height), (None, 1024, 576))
 
 
 if __name__ == "__main__":

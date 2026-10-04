@@ -748,30 +748,26 @@ def run_import_job(
                     progress_callback=preview_progress, paths=image_dirs,
                     force_paths=changed_paths,
                 ),
-                # RAW: 512 thumbnail + a full-resolution HD preview. RAW has no
-                # displayable original, so the HD (full-res) tier is generated
-                # unconditionally — unlike the opt-in HD for regular images.
+                # RAW: the 512 thumbnail only. Its HD tier is made when something
+                # needs it (the lightbox, editor or collage asks for it), not for
+                # every RAW on a drive.
                 preview_service.generate_batch(
                     connection, kind="preview", asset_type="raw",
                     progress_callback=preview_progress, paths=image_dirs,
                     force_paths=changed_paths,
                 ),
-                preview_service.generate_batch(
-                    connection, kind="preview-hd", asset_type="raw",
-                    progress_callback=preview_progress, paths=image_dirs,
-                    force_paths=changed_paths,
-                ),
             ]
-            # HD generation is an opt-in setting, but an asset that already has
-            # an HD preview must not keep the old Lightroom export forever. Only
-            # refresh existing HD entries here; do not create new ones when the
-            # setting is disabled.
-            if changed_paths and not generate_hd:
+            # An asset that already has an HD preview must not keep a stale one
+            # (an old Lightroom export, a RAW rewritten in place). Only refresh
+            # existing HD entries here; images get new ones in their own phase
+            # when the HD setting is on, RAW on demand.
+            hd_refresh_types = ["raw"] if generate_hd else ["image", "raw"]
+            for hd_type in hd_refresh_types if changed_paths else []:
                 existing_hd_paths = [
                     Path(row["canonical_path"])
                     for row in list_assets_for_preview(
                         connection,
-                        asset_type="image",
+                        asset_type=hd_type,
                         kind="preview-hd",
                         paths=changed_paths,
                     )
@@ -782,14 +778,14 @@ def run_import_job(
                         preview_service.generate_batch(
                             connection,
                             kind="preview-hd",
-                            asset_type="image",
+                            asset_type=hd_type,
                             progress_callback=preview_progress,
                             paths=existing_hd_paths,
                             force_paths=existing_hd_paths,
                         )
                     )
-            # Merge all batches (image + video + raw ×2) so the phase result
-            # reflects everything generated, not just the image tier.
+            # Merge all batches so the phase result reflects everything
+            # generated, not just the image tier.
             preview_result = {
                 key: sum(int((r or {}).get(key, 0)) for r in batch_results)
                 for key in ("generated", "skipped", "failed", "deferred", "total")

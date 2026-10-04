@@ -281,6 +281,13 @@ def build_parser() -> argparse.ArgumentParser:
     previews.add_argument("--path", action="append", dest="paths",
                           help="Limit to specific source file(s)/dir(s); repeatable. Used for on-demand HD generation.")
 
+    decode_raw = subparsers.add_parser(
+        "decode-raw", help="Decode a RAW to a JPEG with LibRaw (run as a child process by the preview service)."
+    )
+    decode_raw.add_argument("--source", type=Path, required=True)
+    decode_raw.add_argument("--target", type=Path, required=True)
+    decode_raw.add_argument("--size", type=int, required=True)
+
     refresh_assets = subparsers.add_parser("refresh-assets", parents=[common])
     refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
 
@@ -787,6 +794,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # Catalog-free commands (no DB connection required) — must run before
     # ensure_catalog() so users can configure providers without a catalog open.
+    if args.command == "decode-raw":
+        from .raw_decode import decode
+        decode(args.source, args.target, args.size)
+        return 0
+
     if args.command == "annotation-test-connection":
         from . import annotation as _annotation
         result = _annotation.test_connection(

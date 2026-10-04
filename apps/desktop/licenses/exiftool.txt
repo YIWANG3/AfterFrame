@@ -1,0 +1,23 @@
+ExifTool — third-party license
+==============================
+
+The sidecar reads photo metadata (camera, lens, exposure, capture time, GPS,
+rating) with ExifTool, run as a separate program
+(Resources/native/exiftool).
+
+ExifTool 13.59
+  Copyright 2003-2026, Phil Harvey
+  License: the same terms as Perl itself, the Artistic License or the GNU
+  General Public License (version 1 or later), at your choice
+  Source and the standard version: https://exiftool.org/
+  AfterFrame ships its program unmodified. The macOS copy is the script and
+  its modules (exiftool, lib/, README) without the .pod manuals; the HTML
+  documentation, the test suite and the build files are left out. It runs
+  with the system's /usr/bin/perl.
+
+Windows: ExifTool for Windows, packaged by Oliver Betz
+  https://oliverbetz.de/pages/Artikel/ExifTool-for-Windows
+  It brings Strawberry Perl 5.32 (Artistic / GPL) and the MinGW runtime
+  (libgcc_s, libstdc++: GPL-3.0 with the GCC Runtime Library Exception;
+  libwinpthread; liblzma). Its license texts ship beside it, in
+  native/exiftool/exiftool_files (LICENSE, Licenses_Strawberry_Perl.zip).

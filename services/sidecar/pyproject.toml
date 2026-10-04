@@ -14,6 +14,10 @@ dependencies = [
     "pillow-heif>=0.16",
     # Batched cosine clustering for local face embeddings.
     "numpy>=1.26,<3",
+    # RAW files through LibRaw: embedded previews, size and orientation, and
+    # decodes (raw_decode.py). Pinned to a minor release: LibRaw's camera list
+    # and colour handling change between them.
+    "rawpy>=0.27.1,<0.28",
 ]
 
 [project.optional-dependencies]
