@@ -8,6 +8,9 @@ import "./fonts";
 // Tahoe 皮肤:桌面版去掉了系统标题栏(hiddenInset),侧栏让位与拖拽区只在 Electron 里生效
 if (/Electron/i.test(navigator.userAgent)) {
   document.documentElement.classList.add("electron");
+  // html.platform-win32 swaps the macOS shell (traffic-light gutters, the
+  // self-drawn rounded corner) for the Windows one: see index.css.
+  if (api.platform) document.documentElement.classList.add(`platform-${api.platform}`);
   // Fullscreen: the window fills the screen, so the self-drawn 26px corner and
   // the traffic-light gutters go away (html.fs).
   api.onFullscreen((flag) => document.documentElement.classList.toggle("fs", flag));

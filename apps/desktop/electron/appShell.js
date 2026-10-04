@@ -7,9 +7,29 @@
 //   getLocale             current locale (main owns it; see main.js applyLocale)
 //   devServerUrl          VITE_DEV_SERVER_URL in dev, undefined when packaged
 //   preloadPath / indexHtml   what the window loads
+//   screen, nativeTheme   electron (the window fits the work area; Windows
+//                         paints its first frame in the theme's colour)
+//   platform              process.platform (a parameter so tests can pick)
 
+const { windowChromeOptions, WIN_SYMBOL_COLOR } = require("./windowChrome");
 
-function createAppShell({ BrowserWindow, Menu, makeT, getLocale, devServerUrl, preloadPath, indexHtml }) {
+// Menu roles that only mean something on macOS; elsewhere they are omitted.
+const MAC_ONLY_ROLES = new Set(["services", "hide", "hideOthers", "unhide", "zoom", "front"]);
+
+function withoutMacOnlyItems(template) {
+  return template.map((menu) => {
+    const items = (menu.submenu || []).filter((item) => !MAC_ONLY_ROLES.has(item.role));
+    // Drop the separators the removed items leave stacked or trailing.
+    const tidy = items.filter((item, i) => item.type !== "separator"
+      || (i > 0 && i < items.length - 1 && items[i - 1].type !== "separator"));
+    return { ...menu, submenu: tidy };
+  });
+}
+
+function createAppShell({
+  BrowserWindow, Menu, makeT, getLocale, devServerUrl, preloadPath, indexHtml,
+  screen, nativeTheme, platform = process.platform,
+}) {
   const anyWindow = () => BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
 
   // ── external "Open With…" / dock-icon drop import ──
@@ -38,21 +58,12 @@ function createAppShell({ BrowserWindow, Menu, makeT, getLocale, devServerUrl, p
   }
 
   function createWindow() {
+    // Tahoe 皮肤(macOS):去掉系统标题栏,红绿灯落进侧栏面板;Windows:原生窗口按钮盖在自绘标题条上。见 windowChrome.js
     const window = new BrowserWindow({
-      width: 1440,
-      height: 920,
-      minWidth: 1080,
-      minHeight: 720,
-      // Tahoe 皮肤:去掉系统标题栏,红绿灯落进侧栏面板(P3 第一步;渲染层让位 + 拖拽区在皮肤里)
-      titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 18, y: 16 },
-      // Tahoe gives a titlebar-only window the small (~16pt) corner; the large
-      // 26pt corner is reserved for windows with an NSToolbar, which Electron
-      // cannot create. So the window is transparent and the renderer clips
-      // itself to a 26px rounded rect (index.css, html.electron #root); macOS
-      // derives the shadow from the alpha shape.
-      transparent: true,
-      backgroundColor: "#00000000",
+      ...windowChromeOptions(platform, {
+        workArea: screen?.getPrimaryDisplay?.().workAreaSize,
+        theme: nativeTheme?.shouldUseDarkColors === false ? "light" : "dark",
+      }),
       show: true,
       webPreferences: {
         preload: preloadPath,
@@ -113,10 +124,10 @@ function createAppShell({ BrowserWindow, Menu, makeT, getLocale, devServerUrl, p
     // Native macOS fullscreen immediately bounces a transparent BrowserWindow
     // back to windowed mode. Simple fullscreen is the supported equivalent for
     // our transparent Tahoe shell; other platforms keep the native behavior.
-    const next = process.platform === "darwin"
+    const next = platform === "darwin"
       ? !window.isSimpleFullScreen()
       : !window.isFullScreen();
-    if (process.platform === "darwin") window.setSimpleFullScreen(next);
+    if (platform === "darwin") window.setSimpleFullScreen(next);
     else window.setFullScreen(next);
     window.webContents.send("window:fullscreen", next);
   }
@@ -198,7 +209,7 @@ function createAppShell({ BrowserWindow, Menu, makeT, getLocale, devServerUrl, p
           {
             id: "toggle-fullscreen",
             label: t("menu.toggleFullscreen"),
-            accelerator: process.platform === "darwin" ? "Ctrl+Command+F" : "F11",
+            accelerator: platform === "darwin" ? "Ctrl+Command+F" : "F11",
             click: (_item, browserWindow) => toggleAppFullscreen(browserWindow),
           },
         ],
@@ -213,12 +224,33 @@ function createAppShell({ BrowserWindow, Menu, makeT, getLocale, devServerUrl, p
         ],
       },
     ];
-    return Menu.buildFromTemplate(template);
+    return Menu.buildFromTemplate(platform === "darwin" ? template : withoutMacOnlyItems(template));
   }
 
   const installMenu = () => Menu.setApplicationMenu(buildAppMenu());
 
-  return { createWindow, buildAppMenu, installMenu, sendMenuAction, toggleAppFullscreen, queueExternalImport, flushExternalImports };
+  // Windows: the title strip's menu button (WindowTitleBar.jsx). The window
+  // has no menu bar of its own (titleBarStyle "hidden"), so the application
+  // menu opens as a popup under the button; its accelerators stay registered.
+  function popupAppMenu(window, x, y) {
+    const menu = Menu.getApplicationMenu();
+    if (!menu || !window || window.isDestroyed()) return false;
+    menu.popup({ window, x: Math.round(Number(x) || 0), y: Math.round(Number(y) || 0) });
+    return true;
+  }
+
+  // Windows: the caption buttons' glyph colour follows the app theme (the
+  // renderer reports it; the overlay background stays transparent).
+  function setTitleBarTheme(window, theme) {
+    if (platform !== "win32" || !window || window.isDestroyed() || typeof window.setTitleBarOverlay !== "function") return false;
+    window.setTitleBarOverlay({ color: "#00000000", symbolColor: WIN_SYMBOL_COLOR[theme === "light" ? "light" : "dark"] });
+    return true;
+  }
+
+  return {
+    createWindow, buildAppMenu, installMenu, sendMenuAction, toggleAppFullscreen, queueExternalImport, flushExternalImports,
+    popupAppMenu, setTitleBarTheme,
+  };
 }
 
 module.exports = { createAppShell };

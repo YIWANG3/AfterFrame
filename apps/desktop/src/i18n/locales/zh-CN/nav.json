@@ -1,4 +1,7 @@
 {
+  "window": {
+    "menu": "菜单"
+  },
   "browse": {
     "all": "全部素材",
     "recent": "最近添加",

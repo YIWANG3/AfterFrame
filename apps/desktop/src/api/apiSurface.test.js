@@ -18,8 +18,8 @@ const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)),
 
 // Values (read by the facade's getters) and facade-only conveniences — not
 // callable bridge methods, so they sit outside the parity comparison.
-const PRELOAD_META = new Set(["isPackaged"]);
-const FACADE_META = new Set(["isPackaged", "has", "capabilities", "can"]);
+const PRELOAD_META = new Set(["isPackaged", "platform"]);
+const FACADE_META = new Set(["isPackaged", "platform", "has", "capabilities", "can"]);
 const BRIDGE_META = new Set(["isPackaged", "capabilities"]);
 
 function keysOfObjectLiteral(source, openMarker) {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage, nativeTheme } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage, nativeTheme, screen } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { sampleOriginalNames, copySampleOriginals, repairLegacySamplePreviews } = require("./sampleCatalog");
@@ -349,7 +349,15 @@ const appShell = createAppShell({
   devServerUrl,
   preloadPath: path.join(__dirname, "preload.js"),
   indexHtml: path.join(__dirname, "..", "dist", "index.html"),
+  screen, nativeTheme,
 });
+
+// Windows title strip (WindowTitleBar.jsx): its menu button, and the caption
+// buttons' colour following the app theme. No-ops on macOS.
+ipcMain.handle("window:popup-app-menu", (event, x, y) =>
+  appShell.popupAppMenu(BrowserWindow.fromWebContents(event.sender), x, y));
+ipcMain.handle("window:set-titlebar-theme", (event, theme) =>
+  appShell.setTitleBarTheme(BrowserWindow.fromWebContents(event.sender), theme));
 
 ipcMain.handle("workspace:summary", async () => {
   console.log("[ipc:summary] catalogPath:", catalog.path(), "hasDb:", catalog.hasDb());
