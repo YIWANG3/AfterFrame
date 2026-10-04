@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -211,6 +212,75 @@ class JobsTest(unittest.TestCase):
             {key: phases["generate_previews"][key] for key in ("generated", "skipped", "failed")},
             {"generated": 3, "skipped": 0, "failed": 0},
         )
+
+    def _import_trip_both_ways(self, folder_first: bool):
+        # A trip folder imported as photos and added as a RAW source, in
+        # either order: each RAW is one asset, still a matching candidate.
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        root = Path(temp_dir.name)
+        trip = root / "Trip"
+        trip.mkdir()
+        fixture = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
+        shutil.copyfile(fixture, trip / "luna-morning.dng")
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        self.addCleanup(connection.close)
+        runs = [([], [trip], "processed_only"), ([trip], [trip], "combined")]
+        statuses = []
+        with patch("media_workspace.job_runner.PreviewService.generate_batch", return_value={"generated": 0, "skipped": 0, "failed": 0}):
+            for raw_dirs, image_dirs, mode in (runs if folder_first else runs[::-1]):
+                job = create_job(connection, "import", payload={})
+                run_import_job(connection, catalog.root, job["job_id"], raw_dirs, image_dirs, mode=mode, generate_hd=False)
+                statuses.append(get_job(connection, job["job_id"])["status"])
+        raws = connection.execute("SELECT asset_id FROM assets WHERE asset_type = 'raw'").fetchall()
+        sources = connection.execute("SELECT raw_asset_id FROM raw_metadata_cache").fetchall()
+        return statuses, [r[0] for r in raws], [r[0] for r in sources]
+
+    def test_adding_a_raw_source_after_importing_the_folder(self) -> None:
+        # Used to fail the whole import: UNIQUE constraint failed: raw_metadata_cache.path.
+        statuses, raws, sources = self._import_trip_both_ways(folder_first=True)
+        self.assertEqual(statuses, ["succeeded", "succeeded"])
+        self.assertEqual(len(raws), 1)
+        self.assertEqual(sources, raws)
+
+    def test_importing_the_folder_after_adding_it_as_a_raw_source(self) -> None:
+        # A later folder import must not quietly unregister the source.
+        statuses, raws, sources = self._import_trip_both_ways(folder_first=False)
+        self.assertEqual(statuses, ["succeeded", "succeeded"])
+        self.assertEqual(len(raws), 1)
+        self.assertEqual(sources, raws)
+
+    def test_rescanning_a_raw_source_after_the_file_changed(self) -> None:
+        # Lightroom writing XMP into a DNG changes its bytes, so its
+        # fingerprint: the rescan keeps the same asset rather than adding a
+        # second one for the path (which failed the import).
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        root = Path(temp_dir.name)
+        trip = root / "Trip"
+        trip.mkdir()
+        fixture = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
+        raw = trip / "luna-morning.dng"
+        shutil.copyfile(fixture, raw)
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        self.addCleanup(connection.close)
+        statuses = []
+        with patch("media_workspace.job_runner.PreviewService.generate_batch", return_value={"generated": 0, "skipped": 0, "failed": 0}):
+            for _ in range(2):
+                job = create_job(connection, "import", payload={})
+                run_import_job(connection, catalog.root, job["job_id"], [trip], [trip], mode="combined", generate_hd=False)
+                statuses.append(get_job(connection, job["job_id"])["status"])
+                with raw.open("r+b") as handle:  # rewrite the head in place, as an XMP update does
+                    handle.seek(64)
+                    handle.write(b"edited")
+        self.assertEqual(statuses, ["succeeded", "succeeded"])
+        self.assertEqual(connection.execute("SELECT count(*) FROM assets WHERE asset_type = 'raw'").fetchone()[0], 1)
 
     def test_run_enrichment_job_marks_job_succeeded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

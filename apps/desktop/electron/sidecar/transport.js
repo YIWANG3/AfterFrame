@@ -7,6 +7,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
+const { spawnSafely } = require("../spawnSafely");
 
 // Every sidecar process: UTF-8 on its pipes whatever the system code page
 // (Windows pipes default to the ANSI one, cp1252 or GBK, and Chinese text
@@ -28,6 +29,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   const pausedCatalogs = new Set();
   const catalogGenerations = new Map();
   const generationOf = (catalogPath) => catalogGenerations.get(catalogPath) || 0;
+  const startProcess = (cmd, args, options) => spawnSafely(spawnProcess, cmd, args, options);
 
   function trackProcess(child, catalogPath, detached = false) {
     const state = { child, catalogPath, detached };
@@ -117,7 +119,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     let spawned;
     try {
       const { cmd, args, env } = sidecarCommand(["serve"]);
-      spawned = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env, ...HIDDEN }), getCatalogPath());
+      spawned = trackProcess(startProcess(cmd, args, { cwd: rootDir, env, ...HIDDEN }), getCatalogPath());
     } catch (err) {
       console.warn("[sidecar:resident] failed to start:", err.message);
       return null;
@@ -249,7 +251,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       const { cmd, args, env } = sidecarCommand(sanitized);
       console.log("[sidecar:async]", cmd, args.join(" "));
       const t0 = Date.now();
-      const child = trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, ...HIDDEN }), getCatalogPath());
+      const child = trackProcess(startProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, ...HIDDEN }), getCatalogPath());
 
       const timer = setTimeout(() => {
         console.error("[sidecar:async] TIMEOUT after", timeoutMs, "ms — killing child");
@@ -337,7 +339,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   function spawnDetachedSidecar(command) {
     const { sanitized, secretEnv } = extractSecretEnv(command);
     const { cmd, args, env } = sidecarCommand(sanitized);
-    return trackProcess(spawnProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore", ...HIDDEN }), getCatalogPath(), true);
+    return trackProcess(startProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore", ...HIDDEN }), getCatalogPath(), true);
   }
 
   // `command` is always the product of sidecar/jobArgv.js (the one module
