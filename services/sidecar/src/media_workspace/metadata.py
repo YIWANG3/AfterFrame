@@ -413,7 +413,13 @@ def _extract_tiff_metadata(
     exif_ifd = _parse_tiff_ifd(data, tiff_base, exif_pointer, little_endian) if isinstance(exif_pointer, int) else {}
     gps_pointer = ifd0.get(0x8825)
     gps_ifd = _parse_tiff_ifd(data, tiff_base, gps_pointer, little_endian) if isinstance(gps_pointer, int) else {}
+    return _metadata_from_ifds(ifd0, exif_ifd, gps_ifd, profile)
 
+
+def _metadata_from_ifds(
+    ifd0: dict[int, object], exif_ifd: dict[int, object], gps_ifd: dict[int, object], profile: str = "full",
+) -> dict[str, Any]:
+    """The catalog's metadata fields from a photo's IFD0, EXIF and GPS tags."""
     date_time_original = exif_ifd.get(0x9003)
     date_time = ifd0.get(0x0132)
     capture_time = (
@@ -510,6 +516,29 @@ def _iter_embedded_tiff_offsets(data: bytes) -> list[int]:
     return offsets
 
 
+# CR3 is an ISO media file, not a TIFF: its EXIF comes as separate TIFF
+# blocks in boxes near the start, CMT1 holding IFD0, CMT2 the EXIF IFD (lens,
+# exposure, capture time), CMT3 Canon's maker note and CMT4 the GPS IFD.
+# IFD0 has no pointers to the others, so reading only the first TIFF block
+# found camera and date but lost lens, exposure and location.
+_CR3_BOXES = (b"CMT1", b"CMT2", b"CMT4")
+
+
+def _cr3_metadata(data: bytes, profile: str) -> dict[str, Any] | None:
+    """Metadata of a CR3 from its CMT boxes; None when there are none. Only
+    TIFF blocks right after a CMT box header count: the bytes II*\0 also turn
+    up inside other boxes, and parse to garbage."""
+    found: dict[bytes, dict[int, object]] = {}
+    for offset in _iter_embedded_tiff_offsets(data)[:16]:
+        box = bytes(data[offset - 4 : offset]) if offset >= 4 else b""
+        if box in _CR3_BOXES and box not in found:
+            little = data[offset : offset + 2] == b"II"
+            found[box] = _parse_tiff_ifd(data, offset, _read_u32(data, offset + 4, little), little)
+    if not found:
+        return None
+    return _metadata_from_ifds(found.get(b"CMT1", {}), found.get(b"CMT2", {}), found.get(b"CMT4", {}), profile)
+
+
 def _merge_metadata(candidates: list[dict[str, Any]]) -> dict[str, Any]:
     merged: dict[str, Any] = {
         "capture_time": None,
@@ -566,6 +595,8 @@ def _extract_embedded_metadata_with_sample(
             if exif_offset is not None:
                 candidates.append(_extract_tiff_metadata(data, exif_offset, profile=profile))
         else:
+            if suffix == ".cr3" and (cr3 := _cr3_metadata(data, profile)):
+                candidates.append(cr3)
             for offset in _iter_embedded_tiff_offsets(data)[:8]:
                 metadata = _extract_tiff_metadata(data, offset, profile=profile)
                 if any(metadata.values()):

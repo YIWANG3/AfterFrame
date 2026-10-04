@@ -111,7 +111,42 @@ def _build_jpeg(app_segments: bytes, width: int, height: int) -> bytes:
     return b"\xff\xd8" + app_segments + sof0 + b"\xff\xd9"
 
 
+def _box(kind: bytes, body: bytes) -> bytes:
+    return struct.pack(">I", 8 + len(body)) + kind + body
+
+
+def _build_cr3() -> bytes:
+    """The start of a CR3: an ISO media file whose EXIF is split into TIFF
+    blocks in CMT1 (IFD0), CMT2 (EXIF) and CMT4 (GPS) boxes, with a decoy
+    II*\0 inside another box that parses to garbage."""
+    cmt1 = _build_tiff([(0x010F, 2, "Canon"), (0x0110, 2, "Canon EOS R6m2"), (0x0132, 2, "2024:07:13 09:12:53")])
+    cmt2 = _build_tiff([
+        (0x829A, 5, [(1, 500)]), (0x829D, 5, [(56, 10)]), (0x8827, 3, 100), (0x9003, 2, "2024:07:13 09:12:53"),
+        (0x920A, 5, [(62, 1)]), (0xA434, 2, "RF24-70mm F2.8 L IS USM"),
+    ])
+    cmt4 = _build_tiff([
+        (0x0001, 2, "N"), (0x0002, 5, [(37, 1), (44, 1), (2400, 100)]),
+        (0x0003, 2, "W"), (0x0004, 5, [(119, 1), (35, 1), (0, 1)]),
+    ])
+    decoy = _build_tiff([(0x829D, 5, [(41486, 1)]), (0x8827, 3, 9999)])
+    moov = _box(b"uuid", bytes(16) + _box(b"CMT1", cmt1) + _box(b"free", bytes(8) + decoy) + _box(b"CMT2", cmt2) + _box(b"CMT4", cmt4))
+    return _box(b"ftyp", b"crx " + bytes(12)) + _box(b"moov", moov) + bytes(4096)
+
+
 class MetadataExtractionTest(unittest.TestCase):
+    def test_cr3_reads_exif_and_gps_from_its_cmt_boxes(self) -> None:
+        # IFD0 (CMT1) points to neither; reading it alone lost lens, exposure
+        # and location for every Canon mirrorless RAW.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw = Path(temp_dir) / "0Y1A6655.CR3"
+            raw.write_bytes(_build_cr3())
+            metadata = extract_raw_metadata(raw)
+        self.assertEqual(metadata.camera_model, "Canon EOS R6m2")
+        self.assertEqual(metadata.lens_model, "RF24-70mm F2.8 L IS USM")
+        self.assertEqual((metadata.iso, metadata.aperture, metadata.shutter_speed, metadata.focal_length), (100, 5.6, 0.002, 62.0))
+        self.assertAlmostEqual(metadata.gps_latitude, 37.74, places=4)
+        self.assertAlmostEqual(metadata.gps_longitude, -119.5833, places=4)
+
     def test_quick_fingerprint_supports_head_only_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "demo.CR3"
