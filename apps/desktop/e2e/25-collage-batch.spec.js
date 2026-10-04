@@ -19,6 +19,19 @@ function stripHdPreviews(catalogDir) {
   fs.rmSync(path.join(catalogDir, "previews-hd"), { recursive: true, force: true });
 }
 
+// A page canvas repaints a frame after whatever changed it (a layout pick, a
+// regroup, a swap, a preview finishing its decode), so a read taken right
+// after the action can still see the old picture. Take a value once three
+// reads in a row agree.
+async function settled(read) {
+  const reads = [];
+  await expect.poll(async () => {
+    reads.push(await read());
+    return reads.length >= 3 && reads.slice(-3).every((v) => v === reads.at(-1));
+  }, { timeout: 15_000, intervals: [300] }).toBe(true);
+  return reads.at(-1);
+}
+
 // Every test past the second continues the batch session the one before it
 // set up (grouping, per-page layout, swapped cells). Serial: one failure ends
 // the chain instead of restarting the app and failing the rest for a state
@@ -161,19 +174,10 @@ test.describe("Batch collage", () => {
       return h;
     }, idx);
     // The pages may still be drawing after the regroup above (on a slow CI VM
-    // page 1 was read half drawn): take a page's pixels once three reads in a
-    // row agree.
-    const settled = async (idx) => {
-      const reads = [];
-      await expect.poll(async () => {
-        reads.push(await pixelsOf(idx));
-        return reads.length >= 3 && reads.slice(-3).every((h) => h === reads.at(-1));
-      }, { timeout: 15_000, intervals: [300] }).toBe(true);
-      return reads.at(-1);
-    };
+    // page 1 was read half drawn).
     const cards = window.locator("[data-testid='batch-page-card']");
-    const p1a = await settled(0);
-    const p2a = await settled(1);
+    const p1a = await settled(() => pixelsOf(0));
+    const p2a = await settled(() => pixelsOf(1));
 
     // Card button (hover-revealed) → popover scoped to that page
     await cards.nth(1).hover();
@@ -203,21 +207,33 @@ test.describe("Batch collage", () => {
 
   test("dragging a cell onto another page swaps the two images", async () => {
     const cards = window.locator("[data-testid='batch-page-card']");
-    // Read back which image sits in a cell by sampling its centre colour.
+    // Read back which image sits in a cell: the mean colour of the middle of
+    // the cell (half its width and height), in backing-store pixels so the
+    // DPR doesn't matter. A mean, not one pixel: inside a photo a single
+    // pixel moves a lot with any change in how it is resampled (thumbnail →
+    // HD, another crop); the mean of a patch barely does.
     const cellColor = (page, cell) => window.evaluate(([p, ci]) => {
       const c = document.querySelectorAll("[data-testid='batch-page-card'] canvas")[p];
-      const ctx = c.getContext("2d");
-      const dpr = window.devicePixelRatio || 1;
-      // 7-image default template "3 top + 4 bottom": cell 0 is top-left third
-      const x = cell => (cell < 3 ? (cell + 0.5) * (c.width / 3) : ((cell - 3) + 0.5) * (c.width / 4));
-      const y = cell => (cell < 3 ? c.height * 0.25 : c.height * 0.75);
-      const d = ctx.getImageData(Math.floor(x(ci)), Math.floor(y(ci)), 1, 1).data;
-      return [d[0], d[1], d[2]].join(",");
+      // 7-image default template "3 top + 4 bottom": cells 0–2 are the top
+      // thirds, 3–6 the bottom quarters.
+      const w = c.width / (ci < 3 ? 3 : 4), h = c.height / 2;
+      const x0 = ((ci < 3 ? ci : ci - 3) + 0.25) * w, y0 = (ci < 3 ? 0.25 : 1.25) * h;
+      const { data } = c.getContext("2d").getImageData(Math.floor(x0), Math.floor(y0), Math.floor(w / 2), Math.floor(h / 2));
+      const sum = [0, 0, 0];
+      for (let i = 0; i < data.length; i += 4) for (let k = 0; k < 3; k++) sum[k] += data[i + k];
+      return sum.map((v) => Math.round(v / (data.length / 4))).join(",");
     }, [page, cell]);
+    const near = (a, b) => a.split(",").every((v, i) => Math.abs(Number(v) - Number(b.split(",")[i])) <= 24);
+    // The panel lists the pool in page order: page 1 is rows 0–6, page 2 rows 7–13.
+    const listNames = () => window.locator("[data-testid='batch-panel'] [data-testid='collage-image-list'] span").allTextContents();
 
-    const before1 = await cellColor(0, 0);
-    const before2 = await cellColor(1, 0);
-    expect(before1).not.toBe(before2);
+    // The test above ends by picking the default layout again, and the pages
+    // repaint a frame after that. Read straight away, page 1 / cell 0 was
+    // still the other layout's crop of its photo — never what the swap
+    // brings back (every local run; on CI whenever the read beat the frame).
+    const [before1, before2] = (await settled(async () => `${await cellColor(0, 0)}/${await cellColor(1, 0)}`)).split("/");
+    expect(near(before1, before2)).toBe(false); // the two cells can be told apart
+    const namesBefore = await listNames();
 
     // Drag page 1 / cell 0 → page 2 / cell 0
     const src = await cards.nth(0).locator("canvas").boundingBox();
@@ -232,11 +248,12 @@ test.describe("Batch collage", () => {
     await expect(window.locator("img.object-cover.h-full.w-full").last()).toBeVisible();
     await window.mouse.up();
 
-    // Within a tolerance: the sampled pixel moves a little when the lazily
-    // generated HD preview replaces the thumbnail between the two samples
-    // (the CI VM is slow enough for that to land mid-test). Two different
-    // photos differ by far more than this.
-    const near = (a, b) => a.split(",").every((v, i) => Math.abs(Number(v) - Number(b.split(",")[i])) <= 24);
+    // The two images traded places in the pool…
+    const swapped = [...namesBefore];
+    [swapped[0], swapped[7]] = [swapped[7], swapped[0]];
+    await expect.poll(listNames, { timeout: 3000 }).toEqual(swapped);
+    // …and both pages redrew with them. Within a tolerance: a page that just
+    // received a photo draws its thumbnail until the HD preview decodes.
     await expect.poll(() => cellColor(0, 0).then((c) => near(c, before2)), { timeout: 3000 }).toBe(true);
     await expect.poll(() => cellColor(1, 0).then((c) => near(c, before1)), { timeout: 3000 }).toBe(true);
     // Page structure unchanged
