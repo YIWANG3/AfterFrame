@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlite3 import Row
 from typing import Any
 
+from . import exiftool
 from .config import DEFAULT_RAW_EXTENSIONS, Thresholds
 from .db import (
     get_registry,
@@ -37,7 +38,6 @@ from .metadata import (
     stem_key as compute_stem_key,
 )
 from .models import ImageCandidate, MatchDecision
-from .raw_decode import raw_info
 from .source_readiness import SourceNotReadyError, validate_source_ready
 from .video import VIDEO_EXTENSIONS, is_video
 from .video import probe as probe_video
@@ -408,7 +408,9 @@ def resolve_image_batch(
     for image_dir in image_dirs:
         if persist_roots:
             upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
-        for path in iter_image_files([image_dir.resolve()]):
+        # Metadata is read one file at a time below; ExifTool reads the next
+        # few meanwhile.
+        for path in exiftool.read_ahead(iter_image_files([image_dir.resolve()]), wanted=lambda path: not is_video(path)):
             if respect_tombstones or validate_sources:
                 if _is_tombstoned(connection, tombstones, path):
                     processed += 1
@@ -486,13 +488,8 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
         "SELECT asset_id FROM asset_files WHERE path = ?", (str(resolved),)
     ).fetchone()
     preexisting = existing is not None
+    # Its size is LibRaw's, cropped to the image the camera delivers.
     metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
-    # EXIF dims can be the embedded preview's size, not the sensor's (a DJI
-    # DNG's IFD0 says 160x120): LibRaw reads the real, cropped size from the
-    # file's structure, as sips did on macOS, and on Windows too.
-    info = raw_info(resolved)
-    if info:
-        metadata.width, metadata.height = info.width, info.height
     # Imported RAW is a browseable photo in its own right, NOT a reverse-lookup
     # source: a sibling JPG imported the same way won't bind it as its "raw
     # source". Only the dedicated "Add RAW source" flow registers RAW as a

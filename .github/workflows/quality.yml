@@ -25,6 +25,16 @@ jobs:
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Install Python sidecar
         run: python -m pip install -e "services/sidecar[dev]"
+      # Photo metadata is read with ExifTool (scripts/fetch-exiftool.mjs).
+      - name: Cache ExifTool
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/desktop/native/.cache/Image-ExifTool-13.59.tar.gz
+            apps/desktop/native/.cache/exiftool-13.59_64.zip
+          key: exiftool-13.59-${{ runner.os }}
+      - name: Fetch ExifTool
+        run: node apps/desktop/scripts/fetch-exiftool.mjs
       - name: Install desktop dependencies
         run: npm ci --prefix apps/desktop
       - name: Run repository checks
@@ -50,6 +60,16 @@ jobs:
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Install Python sidecar
         run: python -m pip install -e "services/sidecar[dev]"
+      # Photo metadata is read with ExifTool (scripts/fetch-exiftool.mjs).
+      - name: Cache ExifTool
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/desktop/native/.cache/Image-ExifTool-13.59.tar.gz
+            apps/desktop/native/.cache/exiftool-13.59_64.zip
+          key: exiftool-13.59-${{ runner.os }}
+      - name: Fetch ExifTool
+        run: node apps/desktop/scripts/fetch-exiftool.mjs
       - name: Install desktop dependencies
         run: npm ci --prefix apps/desktop
       - name: Build native tools
@@ -174,6 +194,16 @@ jobs:
           cache-dependency-path: apps/desktop/package-lock.json
       - name: Install Python sidecar
         run: python -m pip install -e "services/sidecar[dev]"
+      # Photo metadata is read with ExifTool (scripts/fetch-exiftool.mjs).
+      - name: Cache ExifTool
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/desktop/native/.cache/Image-ExifTool-13.59.tar.gz
+            apps/desktop/native/.cache/exiftool-13.59_64.zip
+          key: exiftool-13.59-${{ runner.os }}
+      - name: Fetch ExifTool
+        run: node apps/desktop/scripts/fetch-exiftool.mjs
       # The unit suites run on Node and jsdom, not Electron.
       - name: Install desktop dependencies
         run: npm ci --prefix apps/desktop

@@ -301,6 +301,11 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   const peopleWorkerPath = isPackaged
     ? path.join(resourcesPath, "native", "bin", "people-worker")
     : path.join(rootDir, "apps", "desktop", "native", "bin", "people-worker");
+  // ExifTool, which reads photo metadata (scripts/fetch-exiftool.mjs).
+  const exifToolPath = isPackaged
+    ? path.join(resourcesPath, "native", "exiftool")
+    : path.join(rootDir, "apps", "desktop", "native", "exiftool");
+  const toolEnv = { VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath, EXIFTOOL_PATH: exifToolPath };
 
   function sidecarCommand(command) {
     if (pausedCatalogs.has(getCatalogPath())) throw new Error("catalog reset in progress");
@@ -313,7 +318,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       return {
         cmd: sidecarBin,
         args: ["--catalog", getCatalogPath(), ...command],
-        env: { ...process.env, ...UTF8_ENV, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
+        env: { ...process.env, ...UTF8_ENV, ...toolEnv },
       };
     }
     // Coverage runs (npm run e2e:coverage) wrap the dev sidecar in
@@ -332,7 +337,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     return {
       cmd: devPython(platform),
       args: [...coverageArgs, "-m", "media_workspace", "--catalog", getCatalogPath(), ...command],
-      env: { ...process.env, ...UTF8_ENV, PYTHONPATH: pythonPath, VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath },
+      env: { ...process.env, ...UTF8_ENV, PYTHONPATH: pythonPath, ...toolEnv },
     };
   }
 
