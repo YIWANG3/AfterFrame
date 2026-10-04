@@ -9,6 +9,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
 const { spawnSafely } = require("../spawnSafely");
+const { writeJsonAtomic } = require("../settingsStore");
 const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
@@ -54,9 +55,11 @@ function register({ app, ipcMain, isPackaged, addAllowedMediaDir }) {
   }
   // Serialize manifest writes so concurrent saves can't trash the JSON.
   let writeQueue = Promise.resolve();
+  // Atomic (temp file + rename): sticker-list reads outside the queue, and a
+  // read that landed mid-write got a truncated file, which readLibrary turns
+  // into an empty library.
   async function writeLibrary(data) {
-    await fs.promises.mkdir(stickerLibraryDir, { recursive: true });
-    await fs.promises.writeFile(manifestPath(), `${JSON.stringify(data, null, 2)}\n`, "utf-8");
+    await writeJsonAtomic(manifestPath(), data);
   }
   function updateLibrary(mutate) {
     writeQueue = writeQueue.then(async () => {
