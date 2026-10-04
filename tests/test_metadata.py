@@ -396,6 +396,32 @@ class ExifToolTest(unittest.TestCase):
         self.assertEqual((heic.camera_model, heic.lens_model, heic.rating), ("Canon EOS R6m2", "EF70-200mm f/2.8L IS II USM", 5))
         self.assertEqual((heic.capture_time, heic.width, heic.height), ("2025-10-04T17:34:08+00:00", 800, 533))
 
+    def test_an_ifd0_far_into_the_file(self) -> None:
+        # Capture One writes IFD0 and the EXIF IFD at the end of its DNGs, tens
+        # of MB in (#141): here, past 5 MB of zeros.
+        gap = 5 * 1024 * 1024
+        ifd0_at = 8 + gap
+        make, model, when = b"SONY\x00", b"ILCE-7M4\x00", b"2022:07:31 15:32:58\x00"
+        values_at = ifd0_at + 2 + 3 * 12 + 4
+        make_at, model_at = values_at, values_at + len(make)
+        exif_at = model_at + len(model) + (model_at + len(model)) % 2
+        when_at = exif_at + 2 + 2 * 12 + 4
+        ifd0 = struct.pack("<H", 3) + b"".join([
+            struct.pack("<HHII", 0x010F, 2, len(make), make_at),
+            struct.pack("<HHII", 0x0110, 2, len(model), model_at),
+            struct.pack("<HHII", 0x8769, 4, 1, exif_at),
+        ]) + struct.pack("<I", 0)
+        exif = struct.pack("<H", 2) + b"".join([
+            struct.pack("<HHIHH", 0x8827, 3, 1, 100, 0),
+            struct.pack("<HHII", 0x9003, 2, len(when), when_at),
+        ]) + struct.pack("<I", 0)
+        body = ifd0 + make + model + b"\x00" * ((model_at + len(model)) % 2) + exif + when
+        path = self.root / "DSC07281.dng"
+        path.write_bytes(b"II*\x00" + struct.pack("<I", ifd0_at) + b"\x00" * gap + body)
+        metadata = extract_raw_metadata(path)
+        self.assertEqual((metadata.camera_make, metadata.camera_model, metadata.iso), ("SONY", "ILCE-7M4", 100))
+        self.assertEqual(metadata.capture_time, "2022-07-31T15:32:58+00:00")
+
     def test_a_name_in_any_script(self) -> None:
         path = self.root / "飞飞花鸟岛 沙滩 #2.heic"
         shutil.copyfile(FIXTURES / "heic" / "iphone-style.heic", path)
