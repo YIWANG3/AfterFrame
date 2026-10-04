@@ -612,6 +612,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_ai_repaint_job_parser.add_argument("--image-size", choices=["1K", "2K", "4K"])
     run_ai_repaint_job_parser.add_argument("--temperature", type=float)
     run_ai_repaint_job_parser.add_argument("--api-key")
+    run_ai_repaint_job_parser.add_argument("--collection-id")
 
     run_text_image_job_parser = subparsers.add_parser("run-text-image-job", parents=[common])
     run_text_image_job_parser.add_argument("--job-id", required=True)
@@ -1001,6 +1002,7 @@ def _cmd_run_ai_repaint_job(args, connection, catalog, parser):
         temperature=args.temperature,
         model=getattr(args, "model", None),
         base_url=getattr(args, "base_url", None),
+        collection_id=args.collection_id,
     )
     print(json.dumps(payload, indent=2))
     return 0

@@ -8,7 +8,8 @@
 // read through a ref so `executeSave`/`executeSaveRef` always run against the
 // latest state (the E2E backdoor calls executeSaveRef after transforms). The
 // path refs are owned by EditorOverlay (reset + Apply also touch them) and
-// passed in.
+// passed in. `joinFolder` puts the saved asset in the folder the editor was
+// opened from, when that box is ticked.
 
 import api from "../../../api";
 import { useRef, useState } from "react";
@@ -23,12 +24,13 @@ const SAVE_FILTERS = [
 
 export function useEditorSave({
   saveBasePath, buildSaveArgs, canSave, quickSavePathRef,
-  onSaveComplete, pushToast, t, onSaveStart,
+  onSaveComplete, pushToast, t, onSaveStart, joinFolder,
 }) {
   const [saving, setSaving] = useState(false);
   // Latest-value refs so the async callbacks don't capture stale closures.
   const buildArgsRef = useRef(buildSaveArgs); buildArgsRef.current = buildSaveArgs;
   const canSaveRef = useRef(canSave); canSaveRef.current = canSave;
+  const joinFolderRef = useRef(joinFolder); joinFolderRef.current = joinFolder;
   const savingRef = useRef(false); savingRef.current = saving;
   const executeSaveRef = useRef(null);
 
@@ -36,7 +38,8 @@ export function useEditorSave({
     setSaving(true);
     onSaveStart?.();
     try {
-      await saveEditedImage(buildArgsRef.current(savePath));
+      const saved = await saveEditedImage(buildArgsRef.current(savePath));
+      await joinFolderRef.current?.([saved?.assetId]);
       onSaveComplete?.(savePath);
     } catch (error) {
       pushToast?.({

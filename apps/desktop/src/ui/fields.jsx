@@ -27,6 +27,29 @@ export function Toggle({ on, onChange, disabled }) {
   );
 }
 
+// A small labelled checkbox for tool chrome (header bars, panel footers): the
+// label truncates to one line and the full text is the tooltip.
+export function Checkbox({ label, checked, onChange, testId, className = "" }) {
+  return (
+    <label
+      className={[
+        "flex min-w-0 cursor-pointer items-center gap-1.5 text-[11px] text-muted transition-colors hover:text-text",
+        className,
+      ].join(" ")}
+      title={label}
+    >
+      <input
+        type="checkbox"
+        data-testid={testId}
+        className="h-3.5 w-3.5 shrink-0 accent-[rgb(var(--accent-color))]"
+        checked={!!checked}
+        onChange={(e) => onChange?.(e.target.checked)}
+      />
+      <span className="truncate">{label}</span>
+    </label>
+  );
+}
+
 export function TextInput({ value, onChange, type = "text", placeholder, monospace, className = "", ...rest }) {
   return (
     <input

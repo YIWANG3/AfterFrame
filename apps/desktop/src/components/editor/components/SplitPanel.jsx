@@ -12,6 +12,7 @@ import {
 } from "../splitMath";
 import { AspectButton } from "./CropPanel";
 import api from "../../../api";
+import { Checkbox } from "../../../ui";
 
 // Long paths keep their head and tail (the folder name is what matters).
 function middleEllipsis(text, max = 40) {
@@ -131,6 +132,7 @@ export default function SplitPanel({
   rect, previewSource, sourceDims,
   onResetRegion,
   outputDir, subfolder, onSubfolderChange, onChooseFolder,
+  folder, addToFolder, onAddToFolderChange,
   blockedReason,
   exporting, progress, onExport,
   onUndo, canUndo, onRedo, canRedo,
@@ -253,16 +255,22 @@ export default function SplitPanel({
                   <FolderOpen className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-muted">
-                <input
-                  type="checkbox"
-                  checked={subfolder}
-                  onChange={(e) => onSubfolderChange(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-[rgb(var(--accent-color))]"
-                  data-testid="split-subfolder"
+              <Checkbox
+                className="mt-2"
+                label={t("split.subfolder")}
+                checked={subfolder}
+                onChange={onSubfolderChange}
+                testId="split-subfolder"
+              />
+              {folder ? (
+                <Checkbox
+                  className="mt-2"
+                  label={t("split.addToFolder", { name: folder.name })}
+                  checked={addToFolder}
+                  onChange={onAddToFolderChange}
+                  testId="split-add-to-folder"
                 />
-                {t("split.subfolder")}
-              </label>
+              ) : null}
             </>
           ) : (
             <div className="mt-2 rounded-md bg-app px-2.5 py-2 text-[11px] leading-snug text-muted" data-testid="split-web-hint">

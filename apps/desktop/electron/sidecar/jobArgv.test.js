@@ -66,6 +66,7 @@ const CASES = [
     full: {
       jobId: "j1", provider: "mock", inputPath: "/in.jpg", outputPath: "/out.png", originPath: "/orig.cr3", prompt: "p",
       aspectRatio: "1:1", imageSize: "2K", temperature: 0.5, model: "m", baseUrl: "https://x", apiKey: "k",
+      collectionId: "c",
     },
   },
   {

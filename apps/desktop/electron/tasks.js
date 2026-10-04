@@ -227,6 +227,9 @@ function createTaskStarters({
       image_size: options?.resolution ? String(options.resolution).toUpperCase() : null,
       temperature: typeof options?.temperature === "number" ? options.temperature : null,
       model,
+      // The folder the editor was opened from, when its box is ticked: the
+      // job puts the result there (it may finish after the editor closes).
+      collection_id: options?.collectionId ? String(options.collectionId) : null,
     };
     const job = await createJob("ai_repaint", payload);
     launchSidecarJob(jobArgv.aiRepaintJob({
@@ -242,6 +245,7 @@ function createTaskStarters({
       model,
       baseUrl,
       apiKey,
+      collectionId: payload.collection_id,
     }));
     return formatJobStatus(job);
   }

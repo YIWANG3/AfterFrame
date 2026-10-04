@@ -1278,6 +1278,9 @@ export const browserBridge = {
     void (async () => {
       try {
         const { outputAsset, row } = await runRepaint(opts);
+        // Opened from a folder with its box ticked, the editor asks for the
+        // result there, as the desktop job does.
+        if (opts.collectionId) await browserBridge.collectionAddItems(opts.collectionId, [outputAsset.asset_id]);
         repaintJob = {
           running: false, active: false, status: "succeeded", kind: "ai_repaint",
           finishedAt: Date.now(), error: null,
