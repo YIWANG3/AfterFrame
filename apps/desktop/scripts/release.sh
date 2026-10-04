@@ -82,6 +82,9 @@ if [[ -n "$APP" ]]; then
   # People recognition has no download fallback since the model was bundled.
   [[ -f "$APP/Contents/Resources/native/FaceEmbedding.mlpackage/Manifest.json" ]] \
     || { echo "✗ The face model is missing from the app (npm run fetch:people-model)." >&2; exit 1; }
+  # Photo metadata is read with ExifTool, run by the system's Perl.
+  /usr/bin/perl "$APP/Contents/Resources/native/exiftool/exiftool" -ver >/dev/null \
+    || { echo "✗ ExifTool is missing from the app (npm run fetch:exiftool)." >&2; exit 1; }
 fi
 
 SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"

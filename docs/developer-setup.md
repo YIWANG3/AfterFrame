@@ -85,6 +85,14 @@ the sidecar (`npm run lint:python`). The Python tools come from the sidecar's
 python3 -m pip install -e "services/sidecar[dev]"
 ```
 
+The sidecar reads photo metadata with ExifTool, which isn't committed:
+`npm run dev` fetches it into `apps/desktop/native/exiftool`, and the Python
+tests need it there too:
+
+```bash
+npm --prefix apps/desktop run fetch:exiftool
+```
+
 mypy runs with a per-module debt list in `services/sidecar/pyproject.toml`
 (`[[tool.mypy.overrides]] … ignore_errors = true`). Modules on that list are
 excluded until someone cleans them; everything else is checked, and the list

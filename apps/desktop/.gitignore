@@ -3,4 +3,5 @@ native/bin/
 .coverage/
 .coverage-tools/
 native/FaceEmbedding.mlpackage/
+native/exiftool/
 native/.cache/
