@@ -10,7 +10,8 @@ system's /usr/bin/perl. Electron passes that folder as EXIFTOOL_PATH.
 Each process is started once and kept (`-stay_open`): a read is then 10-60 ms
 instead of 100-200 ms of Perl start-up. A small pool serves threads; a read
 that hangs or fails restarts its process, and a process is renewed after a
-few hundred files (one IIQ leaves it at 600 MB).
+few hundred files (one IIQ leaves it at 600 MB). A process exits by itself
+when the sidecar is gone, killed or crashed (see _end_with_this_process).
 """
 
 from __future__ import annotations
@@ -110,20 +111,82 @@ class ExifToolError(RuntimeError):
     pass
 
 
+# At the end of its input a -stay_open ExifTool keeps polling for more, so one
+# whose sidecar was killed or crashed would run for good. On macOS and Linux
+# a config watches for the sidecar (Perl's alarm doesn't fire there on
+# Windows); on Windows the process is put in a job that ends with the sidecar.
+_WATCHDOG = Path(__file__).with_name("data") / "exiftool_watchdog.config"
+_job = None
+
+
+def _end_with_this_process(process: subprocess.Popen) -> None:
+    """Windows: put `process` in a job that the system closes, killing what is
+    in it, when this process ends, however it ends. ExifTool for Windows runs
+    Perl inside its own process, so there is no child to miss."""
+    global _job
+    if sys.platform != "win32":
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    class _Basic(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class _Extended(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", _Basic),
+            ("IoInfo", ctypes.c_uint64 * 6),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    if _job is None:
+        job = kernel32.CreateJobObjectW(None, None)
+        limits = _Extended()
+        limits.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not job or not kernel32.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+            return  # JobObjectExtendedLimitInformation; without it, no watchdog
+        _job = job
+    kernel32.AssignProcessToJobObject(_job, int(process._handle))  # type: ignore[attr-defined,unused-ignore]
+
+
 class _Process:
     def __init__(self, command: list[str]) -> None:
+        # -config has to come first.
+        watchdog = ["-config", str(_WATCHDOG)] if sys.platform != "win32" else []
         try:
             self._process = subprocess.Popen(
-                [*command, "-stay_open", "True", "-@", "-", "-common_args", *_COMMON_ARGS],
+                [*command, *watchdog, "-stay_open", "True", "-@", "-", "-common_args", *_COMMON_ARGS],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                # CR3 and QuickTime dates are UTC that ExifTool shows in local
-                # time; the same answer on every machine.
-                env={**os.environ, "TZ": "UTC"},
+                env={
+                    **os.environ,
+                    # CR3 and QuickTime dates are UTC that ExifTool shows in
+                    # local time; the same answer on every machine.
+                    "TZ": "UTC",
+                    "AFTERFRAME_EXIFTOOL_PARENT": str(os.getpid()),
+                },
             )
         except OSError as error:
             raise ExifToolError(f"ExifTool can't start: {error}") from error
+        _end_with_this_process(self._process)
         self._lines: queue.Queue[bytes | None] = queue.Queue()
         self._sequence = 0
         self.files = 0

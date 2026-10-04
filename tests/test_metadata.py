@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -20,6 +23,19 @@ from media_workspace.metadata import (
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures"
+
+
+def _alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        found = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+        return str(pid) in found
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A zombie still answers kill(0) on macOS until its parent reaps it.
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(state) and not state.startswith("Z")
 
 
 def _build_tiff(
@@ -417,6 +433,30 @@ class ExifToolTest(unittest.TestCase):
                 exiftool.ExifTool(command, size=1).read(heic)
         # A name with a line break can't be passed to it (one argument per line).
         self.assertEqual(pool.read(self.root / "two\nlines.jpg"), {})
+
+    def test_a_killed_sidecar_leaves_no_exiftool_behind(self) -> None:
+        # At the end of its input a -stay_open ExifTool polls for good; it
+        # watches for its parent instead.
+        script = (
+            "import sys, time\n"
+            "from pathlib import Path\n"
+            "from media_workspace import exiftool\n"
+            "exiftool.read(Path(sys.argv[1]))\n"
+            "print(exiftool.shared()._idle.queue[-1]._process.pid, flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        sidecar = subprocess.Popen(
+            [sys.executable, "-c", script, str(FIXTURES / "heic" / "iphone-style.heic")],
+            stdout=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+        )
+        child = int(sidecar.stdout.readline())
+        sidecar.kill()
+        sidecar.wait()
+        sidecar.stdout.close()
+        deadline = time.monotonic() + 10
+        while _alive(child) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        self.assertFalse(_alive(child), "ExifTool outlived the sidecar")
 
     def test_a_process_is_renewed_after_a_few_hundred_files(self) -> None:
         command = exiftool.find_command()
