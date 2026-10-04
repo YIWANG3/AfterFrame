@@ -241,11 +241,14 @@ def _parse_tiff_value(
     field_type: int,
     count: int,
     little_endian: bool,
+    max_value_bytes: int | None = None,
 ) -> object | None:
     unit_size = TIFF_TYPE_SIZES.get(field_type)
     if unit_size is None:
         return None
     total_size = unit_size * count
+    if max_value_bytes is not None and total_size > max_value_bytes:
+        return None
     if total_size <= 4:
         raw = data[entry_offset + 8 : entry_offset + 12][:total_size]
     else:
@@ -374,7 +377,12 @@ def _extract_xmp_rating(data: bytes) -> int | None:
     return None
 
 
-def _parse_tiff_ifd(data: bytes, tiff_base: int, ifd_offset: int, little_endian: bool) -> dict[int, object]:
+def _parse_tiff_ifd(
+    data: bytes, tiff_base: int, ifd_offset: int, little_endian: bool, max_value_bytes: int | None = None
+) -> dict[int, object]:
+    """The tags of the IFD at `ifd_offset`. With `max_value_bytes`, larger
+    values are skipped rather than copied (a DNG's OriginalRawFileData, a
+    maker note: megabytes nobody asked for)."""
     if ifd_offset <= 0:
         return {}
     start = tiff_base + ifd_offset
@@ -389,7 +397,7 @@ def _parse_tiff_ifd(data: bytes, tiff_base: int, ifd_offset: int, little_endian:
         tag = _read_u16(data, entry_offset, little_endian)
         field_type = _read_u16(data, entry_offset + 2, little_endian)
         count = _read_u32(data, entry_offset + 4, little_endian)
-        value = _parse_tiff_value(data, tiff_base, entry_offset, field_type, count, little_endian)
+        value = _parse_tiff_value(data, tiff_base, entry_offset, field_type, count, little_endian, max_value_bytes)
         if value is not None:
             tags[tag] = value
     return tags

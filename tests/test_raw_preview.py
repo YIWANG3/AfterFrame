@@ -11,8 +11,9 @@ from PIL import Image
 
 from media_workspace import raw_preview
 from media_workspace.catalog import ensure_catalog
+from media_workspace.color_profiles import adobe_rgb_icc
 from media_workspace.preview_service import PreviewService
-from media_workspace.raw_preview import EmbeddedPreviewTooSmall, embedded_preview, render_raw_preview
+from media_workspace.raw_preview import EmbeddedPreviewUnusable, embedded_preview, render_raw_preview
 
 DNG_FIXTURE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
 
@@ -88,25 +89,34 @@ def _tiff_ifds_at_end(images: list[tuple[int, int, bytes, int]], pad: int = 0) -
     return bytes(out)
 
 
-def _tiff_pointing_to(thumb: bytes, strip: bytes, decoy: bytes = b"", exif_size: tuple[int, int] | None = None) -> bytes:
+def _tiff_pointing_to(
+    thumb: bytes, strip: bytes, decoy: bytes = b"", exif_size: tuple[int, int] | None = None,
+    orientation: int | None = 1, magic: bytes = b"II*\x00", color_space: int | None = None,
+) -> bytes:
     """A little-endian TIFF shaped like a CR2: IFD0 points to a JPEG thumbnail
     (JPEGInterchangeFormat) and a JPEG-compressed strip. `decoy` is a JPEG
     nothing points to, after them; `exif_size` is the photo's size in EXIF."""
     def entry(tag: int, kind: int, value: int) -> bytes:
         return struct.pack("<HHII", tag, kind, 1, value)
 
-    count = 8 if exif_size else 7
+    exif_entries = ([(0xA002, 4, exif_size[0]), (0xA003, 4, exif_size[1])] if exif_size else []) + (
+        [(0xA001, 3, color_space)] if color_space is not None else []
+    )
+    count = 7 + bool(exif_entries) + bool(orientation)
     exif_at = 8 + 2 + count * 12 + 4
-    thumb_at = exif_at + ((2 + 2 * 12 + 4) if exif_size else 0)
+    thumb_at = exif_at + ((2 + len(exif_entries) * 12 + 4) if exif_entries else 0)
     strip_at = thumb_at + len(thumb)
     entries = [
         entry(0x0100, 4, 640), entry(0x0101, 4, 480), entry(0x0103, 3, 6),
-        entry(0x0111, 4, strip_at), entry(0x0117, 4, len(strip)),
+        entry(0x0111, 4, strip_at), entry(0x0112, 3, orientation or 1), entry(0x0117, 4, len(strip)),
         entry(0x0201, 4, thumb_at), entry(0x0202, 4, len(thumb)),
-    ] + ([entry(0x8769, 4, exif_at)] if exif_size else [])
-    out = b"II*\x00" + struct.pack("<IH", 8, count) + b"".join(entries) + struct.pack("<I", 0)
-    if exif_size:
-        out += struct.pack("<H", 2) + entry(0xA002, 4, exif_size[0]) + entry(0xA003, 4, exif_size[1]) + struct.pack("<I", 0)
+    ]
+    if not orientation:
+        entries = [e for e in entries if struct.unpack_from("<H", e)[0] != 0x0112]
+    entries += [entry(0x8769, 4, exif_at)] if exif_entries else []
+    out = magic + struct.pack("<IH", 8, count) + b"".join(entries) + struct.pack("<I", 0)
+    if exif_entries:
+        out += struct.pack("<H", len(exif_entries)) + b"".join(entry(*e) for e in sorted(exif_entries)) + struct.pack("<I", 0)
     return out + thumb + strip + bytes(64) + decoy
 
 
@@ -279,11 +289,72 @@ class LocatingPreviewsTest(unittest.TestCase):
         self.assertEqual(found.data, self.strip)
         self.assertEqual(frame_end.call_count, 2)
 
+    def test_an_orf_or_rw2_header_is_read_like_a_tiff(self) -> None:
+        # Olympus (IIRO) and Panasonic (IIU\0) use their own magic for the
+        # same IFD0, orientation included.
+        for name, magic in (("P1010001.ORF", b"IIRO"), ("P1010002.RW2", b"IIU\x00")):
+            raw = self._write(name, _tiff_pointing_to(self.thumb, self.strip, orientation=6, magic=magic))
+            self.assertEqual(embedded_preview(raw, min_edge=512).orientation, 6, name)
+
+    def test_without_an_orientation_a_caller_with_a_decoder_is_told(self) -> None:
+        # A portrait CRW would come out sideways; Image I/O knows better.
+        raw = self._write("CRW_0001.CRW", _tiff_pointing_to(self.thumb, self.strip, orientation=None))
+        with self.assertRaises(EmbeddedPreviewUnusable):
+            render_raw_preview(raw, Path(self.temp_dir.name) / "out.jpg", 512, require=512)
+        render_raw_preview(raw, Path(self.temp_dir.name) / "out.jpg", 512)  # no decoder: best effort
+
+    def test_the_hd_tier_stops_scanning_at_a_preview_big_enough(self) -> None:
+        # CR3: thumbnail, preview, then the full-size JPEG near the start;
+        # the rest of the file (the raw data) is never read.
+        big = _jpeg((2400, 1600), (40, 40, 40))
+        cr3 = _fake_raw(Path(self.temp_dir.name) / "0Y1A0002.CR3", b"\x00\x00\x00\x18ftypcrx ", self.thumb, big, self.decoy)
+        with patch.object(raw_preview, "_frame_end", wraps=raw_preview._frame_end) as frame_end:
+            render_raw_preview(cr3, Path(self.temp_dir.name) / "hd.jpg", 65535)
+        self.assertEqual(frame_end.call_count, 2)
+
+    def test_a_raf_is_never_scanned(self) -> None:
+        # Its header's JPEG is the only one; a big JPEG elsewhere is noise.
+        raw = self._write("_DSF0002.RAF", _raf_pointing_to(self.strip, self.decoy))
+        self.assertEqual(embedded_preview(raw).data, self.strip)
+
     def test_a_caller_can_require_a_bigger_preview(self) -> None:
         raw = self._write("IMG_0004.CR2", _tiff_pointing_to(self.thumb, self.strip, exif_size=(800, 600)))
-        with self.assertRaises(EmbeddedPreviewTooSmall):
+        with self.assertRaises(EmbeddedPreviewUnusable):
             render_raw_preview(raw, Path(self.temp_dir.name) / "out.jpg", 65535, require=2000)
         render_raw_preview(raw, Path(self.temp_dir.name) / "out.jpg", 512, require=512)
+
+
+class CameraMetadataTest(unittest.TestCase):
+    """The preview keeps what the camera recorded: its colour space, and in
+    the HD tier its EXIF, which an edit saved from that preview keeps."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.out = Path(self.temp_dir.name) / "out.jpg"
+
+    def _rendered_icc(self, color_space: int) -> bytes | None:
+        raw = Path(self.temp_dir.name) / f"IMG_{color_space}.CR2"
+        raw.write_bytes(_tiff_pointing_to(_jpeg((160, 120), (1, 1, 1)), _jpeg((800, 600), (200, 30, 30)), color_space=color_space))
+        render_raw_preview(raw, self.out, 512)
+        with Image.open(self.out) as preview:
+            return preview.info.get("icc_profile")
+
+    def test_an_adobe_rgb_camera_gets_an_adobe_rgb_preview(self) -> None:
+        self.assertEqual(self._rendered_icc(0xFFFF), adobe_rgb_icc())
+        self.assertIsNone(self._rendered_icc(1))  # sRGB: untagged, like every other preview
+
+    def test_the_hd_tier_keeps_the_raws_exif(self) -> None:
+        render_raw_preview(DNG_FIXTURE, self.out, 65535)
+        with Image.open(self.out) as preview:
+            exif = preview.getexif()
+            details = exif.get_ifd(0x8769)
+        self.assertEqual((exif.get(0x010F), exif.get(0x0110)), ("Insta360", "Luna Ultra"))
+        self.assertEqual(details.get(0x9003), "2026:08:18 09:19:43")  # DateTimeOriginal
+        self.assertEqual((float(details.get(0x829D)), details.get(0x8827)), (2.0, 275))  # f/2, ISO 275
+        render_raw_preview(DNG_FIXTURE, self.out, 512)
+        with Image.open(self.out) as thumbnail:
+            self.assertIsNone(thumbnail.getexif().get(0x010F))  # thumbnails stay small
 
 
 class RawPreviewRenderTest(unittest.TestCase):

@@ -486,10 +486,12 @@ def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision
     preexisting = existing is not None
     metadata = extract_raw_metadata(resolved, fingerprint_mode="head-tail", metadata_profile="full")
     # EXIF dims can be the embedded preview's size, not the sensor's — override
-    # with the true decoded dimensions so the gallery shows real resolution.
-    # Without sips (Windows), or where it can't read the file, the RAW's own
-    # structure says where the real size is.
-    native = _native_raw_dimensions(resolved) or raw_dimensions(resolved)
+    # with the true dimensions so the gallery shows real resolution. The RAW's
+    # own structure says where they are (raw_dimensions, ~8 ms and the same
+    # answer as sips on every format checked); sips only where it doesn't,
+    # since a sips process per RAW nearly doubled a drive import's indexing
+    # time (~240 ms each).
+    native = raw_dimensions(resolved) or _native_raw_dimensions(resolved)
     if native:
         metadata.width, metadata.height = native
     upsert_raw_asset(connection, metadata, commit=False)

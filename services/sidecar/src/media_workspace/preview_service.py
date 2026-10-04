@@ -17,7 +17,7 @@ from .catalog import CatalogPaths
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
 from .db.colors import analyze_asset_colors
-from .raw_preview import EmbeddedPreviewTooSmall, render_raw_preview
+from .raw_preview import EmbeddedPreviewUnusable, render_raw_preview
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -79,7 +79,14 @@ def _cmyk_to_srgb(image: Image.Image, icc_profile: bytes) -> Image.Image:
     return image.convert("RGB")
 
 
-def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orientation: int | None = None) -> None:
+def render_pillow_preview(
+    source: Path | BinaryIO,
+    target: Path,
+    size: int,
+    orientation: int | None = None,
+    icc_profile: bytes | None = None,
+    exif: bytes | None = None,
+) -> None:
     """A JPEG with the long edge at most `size`, matching what sips -Z gave:
 
     - pixels stay as stored and the EXIF orientation tag is carried over
@@ -92,12 +99,14 @@ def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orie
     Unlike sips it never enlarges a small image. JPEG sources decode at a
     reduced scale (draft), which is where most of the time goes.
     `orientation` overrides the source's own tag: a RAW's embedded JPEG
-    carries the RAW's (raw_preview.py).
+    carries the RAW's (raw_preview.py). `icc_profile` is the source's colour
+    space when the source doesn't say (a RAW's Adobe RGB JPEG), and `exif`
+    replaces the orientation-only EXIF (it must carry the orientation).
     """
     _register_heif()
     with Image.open(source) as image:
         orientation = orientation or image.getexif().get(_ORIENTATION_TAG)
-        icc_profile = image.info.get("icc_profile")
+        icc_profile = image.info.get("icc_profile") or icc_profile
         image.draft("RGB", (size, size))
         if image.mode == "CMYK" and icc_profile:
             frame = _cmyk_to_srgb(image, icc_profile)
@@ -114,10 +123,12 @@ def render_pillow_preview(source: Path | BinaryIO, target: Path, size: int, orie
     options: dict = {"quality": _PREVIEW_JPEG_QUALITY}
     if icc_profile and _profile_space(icc_profile) == "RGB ":
         options["icc_profile"] = icc_profile
-    if orientation and orientation != 1:
-        exif = Image.Exif()
-        exif[_ORIENTATION_TAG] = orientation
-        options["exif"] = exif.tobytes()
+    if exif:
+        options["exif"] = exif
+    elif orientation and orientation != 1:
+        tag = Image.Exif()
+        tag[_ORIENTATION_TAG] = orientation
+        options["exif"] = tag.tobytes()
     frame.save(target, "JPEG", **options)
 
 
@@ -422,7 +433,7 @@ class PreviewService:
             )
         except SourceNotReadyError:
             raise
-        except EmbeddedPreviewTooSmall:
+        except EmbeddedPreviewUnusable:
             pass
         except Exception:
             # No embedded preview, or one Pillow can't read: Image I/O, where
