@@ -95,6 +95,9 @@ export default function App() {
   const [thumbSize, setThumbSize] = useState(180);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editorItem, setEditorItem] = useState(null);
+  // The folder the editor was opened from (null in any other view): what it
+  // saves can join that folder, so it is taken at open time, like the collage's.
+  const [editorSourceId, setEditorSourceId] = useState(null);
   const [externalEditors, setExternalEditors] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sampleBusy, setSampleBusy] = useState(false);
@@ -317,6 +320,7 @@ export default function App() {
         const item = typeof pathOrItem === "string"
           ? { image_path: pathOrItem, stem: fileName(pathOrItem) }
           : pathOrItem;
+        setEditorSourceId(workspaceRef.current.activeCollectionId || null);
         setEditorItem(item);
       },
       closeEditor() { setEditorItem(null); },
@@ -896,6 +900,7 @@ export default function App() {
       });
       return;
     }
+    setEditorSourceId(workspace.activeCollectionId || null);
     setEditorItem(nextItem);
   }
 
@@ -1483,6 +1488,9 @@ export default function App() {
       <EditorOverlay
         open={!!editorItem}
         item={editorItem}
+        collections={workspace.collections}
+        sourceCollectionId={editorSourceId}
+        onAddToCollection={workspace.addToCollection}
         onClose={() => setEditorItem(null)}
         pushToast={pushToast}
         onSaveComplete={async (savePath) => {

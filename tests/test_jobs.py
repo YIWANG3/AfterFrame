@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image
 
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import (
@@ -18,8 +21,9 @@ from media_workspace.db import (
     request_job_resume,
     set_catalog_path,
 )
+from media_workspace.db.collections import create_collection, delete_collection
 from media_workspace.db.jobs import STALL_MINUTES_BY_JOB_TYPE, STALL_MINUTES_DEFAULT
-from media_workspace.job_runner import run_enrichment_job, run_import_job
+from media_workspace.job_runner import run_ai_repaint_job, run_enrichment_job, run_import_job
 from media_workspace.scanner import scan_raw_directory
 
 
@@ -179,3 +183,54 @@ class JobsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AiRepaintFolderTest(unittest.TestCase):
+    """A repaint started from a folder, its "add to folder" box ticked, joins
+    that folder. The job does it, not the editor: the editor may be closed by
+    the time the provider answers."""
+
+    def test_repaint_joins_the_folder_it_was_started_from(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            source = root / "shot.jpg"
+            Image.new("RGB", (64, 48), (120, 90, 200)).save(source, quality=90)
+            folder = create_collection(connection, "Trip")
+            gone = create_collection(connection, "Gone")
+            delete_collection(connection, gone["collection_id"])
+            smart = create_collection(connection, "Five stars", "smart", json.dumps({"version": 1, "filters": {"rating_min": 5}}))
+
+            def repaint(name: str, collection_id: str | None) -> dict:
+                job = create_job(connection, "ai_repaint")
+                return run_ai_repaint_job(
+                    connection,
+                    catalog.root,
+                    job["job_id"],
+                    provider="mock",
+                    input_path=source,
+                    output_path=root / name,
+                    prompt="p",
+                    origin_path=source,
+                    collection_id=collection_id,
+                )
+
+            def members() -> list[tuple[str, str]]:
+                return [tuple(row) for row in connection.execute("SELECT collection_id, asset_id FROM collection_items")]
+
+            joined = repaint("joined.jpg", folder["collection_id"])
+            self.assertEqual(joined["collection_id"], folder["collection_id"])
+            self.assertEqual(members(), [(folder["collection_id"], joined["asset_id"])])
+
+            # No folder asked for, one deleted meanwhile, or a smart collection
+            # (which fills itself): saved and registered, in no folder.
+            for name, collection_id in (("loose.jpg", None), ("gone.jpg", gone["collection_id"]), ("smart.jpg", smart["collection_id"])):
+                result = repaint(name, collection_id)
+                self.assertTrue(result["asset_id"], name)
+                self.assertIsNone(result["collection_id"], name)
+                self.assertEqual(get_job(connection, get_latest_job(connection, "ai_repaint")["job_id"])["status"], "succeeded")
+            self.assertEqual(members(), [(folder["collection_id"], joined["asset_id"])])
+            connection.close()

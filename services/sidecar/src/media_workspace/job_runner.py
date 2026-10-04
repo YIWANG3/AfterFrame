@@ -31,6 +31,7 @@ from .ai_repaint import (
 from .catalog import ensure_catalog
 from .config import Thresholds
 from .db import (
+    add_collection_items,
     attach_asset_to_resource_set,
     get_app_setting,
     get_job,
@@ -1151,6 +1152,25 @@ def run_annotation_job(
         raise
 
 
+def _join_folder(connection, collection_id: str | None, asset_id: str) -> str | None:
+    """Put a repaint in the folder the editor was opened from.
+
+    The job does it rather than the editor: a repaint can finish after the
+    editor is closed. A folder deleted meanwhile (or a smart collection, which
+    fills itself) is skipped; the repaint is saved and registered either way.
+    """
+    if not collection_id:
+        return None
+    row = connection.execute(
+        "SELECT 1 FROM collections WHERE collection_id = ? AND kind = 'manual'",
+        (collection_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    add_collection_items(connection, collection_id, [asset_id])
+    return collection_id
+
+
 def run_ai_repaint_job(
     connection,
     catalog_path: Path,
@@ -1167,6 +1187,7 @@ def run_ai_repaint_job(
     temperature: float | None = None,
     model: str | None = None,
     base_url: str | None = None,
+    collection_id: str | None = None,
 ) -> dict[str, Any]:
     payload = {
         "provider": provider,
@@ -1277,6 +1298,7 @@ def run_ai_repaint_job(
         asset_id = register_payload["asset_id"]
         match_status = register_payload["match_status"]
         match_score = register_payload["score"]
+        joined_collection_id = _join_folder(connection, collection_id, asset_id)
 
         final_result = {
             "provider": result.provider,
@@ -1288,6 +1310,7 @@ def run_ai_repaint_job(
             "asset_id": asset_id,
             "match_status": match_status,
             "score": match_score,
+            "collection_id": joined_collection_id,
             "current_phase": None,
         }
         update_job(
