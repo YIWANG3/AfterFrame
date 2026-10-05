@@ -38,12 +38,16 @@ function setPhoto(img, previewPath) {
   }
 }
 
+// previews: null leaves the photos as they are (a cluster whose covers are
+// still being looked up keeps showing the ones it has).
 export function updateMarkerElement(element, { count, previews, label }) {
   element.__markerData = element.__markerData || {};
-  const photos = element.querySelectorAll(".photo-map-marker__photo");
-  setPhoto(photos[2], previews[0]);
-  setPhoto(photos[1], previews[1]);
-  setPhoto(photos[0], previews[2]);
+  if (previews) {
+    const photos = element.querySelectorAll(".photo-map-marker__photo");
+    setPhoto(photos[2], previews[0]);
+    setPhoto(photos[1], previews[1]);
+    setPhoto(photos[0], previews[2]);
+  }
   const countEl = element.querySelector(".photo-map-marker__count");
   const compact = count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
   if (countEl.textContent !== compact) countEl.textContent = compact;
