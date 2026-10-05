@@ -87,8 +87,10 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
     // (the CI VM can take that long); then follow the job to its end.
     let result = await importPromise;
     if (result.status === "running") {
+      // get_job_status answers with jobId, not job_id: keep the id from here.
+      const jobId = result.job_id;
       await expect(async () => {
-        result = await callTool("get_job_status", { job_id: result.job_id });
+        result = await callTool("get_job_status", { job_id: jobId });
         expect(result.status).not.toBe("running");
       }).toPass({ timeout: 60_000 });
     }
