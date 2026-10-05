@@ -179,6 +179,7 @@ def palette_from_pixels(pixels: list[tuple[int, int, int]], weights: list[int]) 
 def extract_palette(path: Path) -> list[dict]:
     """→ [{hex, share, l, a, b}] for an image file, most prominent first.
     Empty when the file cannot be read."""
+    import numpy as np
     from PIL import Image
 
     try:
@@ -186,10 +187,12 @@ def extract_palette(path: Path) -> list[dict]:
             image.draft("RGB", (_SAMPLE_EDGE * 2, _SAMPLE_EDGE * 2))
             rgb = image.convert("RGB")
             rgb.thumbnail((_SAMPLE_EDGE, _SAMPLE_EDGE))
-            pixels = list(rgb.getdata())
+            # As an array, not getdata()'s list of tuples: no Python object per
+            # pixel, and getdata goes away in Pillow 14.
+            pixels = np.asarray(rgb).reshape(-1, 3)
     except Exception:
         return []
-    if not pixels:
+    if not len(pixels):
         return []
     return rank_palette(_cluster(pixels))
 
