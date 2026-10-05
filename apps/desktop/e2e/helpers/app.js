@@ -156,15 +156,24 @@ function relocateFixturePaths(catalogDir) {
   const db = path.join(catalogDir, "catalog.sqlite3");
   if (!fs.existsSync(db)) return;
   const seededRoot = execFileSync("sqlite3", [db, "SELECT path FROM catalog_roots ORDER BY path LIMIT 1"]).toString().trim();
-  const marker = `${path.sep}e2e${path.sep}fixtures${path.sep}`;
+  // The fixtures were seeded on macOS, so their paths use "/" on every
+  // platform; one re-seeded on Windows would use "\".
+  const seededSep = seededRoot.includes(`${path.posix.sep}e2e${path.posix.sep}fixtures${path.posix.sep}`) ? path.posix.sep : path.win32.sep;
+  const marker = `${seededSep}e2e${seededSep}fixtures${seededSep}`;
   const at = seededRoot.indexOf(marker);
   if (at < 0) return;
   const oldPrefix = seededRoot.slice(0, at + marker.length);
   const newPrefix = path.resolve(__dirname, "..", "fixtures") + path.sep;
   const quote = (value) => `'${value.replace(/'/g, "''")}'`;
+  // The rest of each path takes this platform's separator too, or the app
+  // can't find the file (every asset reads "Missing" on Windows).
+  const rest = (column) => {
+    const tail = `substr(${column}, ${oldPrefix.length + 1})`;
+    return seededSep === path.sep ? tail : `replace(${tail}, ${quote(seededSep)}, ${quote(path.sep)})`;
+  };
   if (oldPrefix !== newPrefix) {
     const sql = PATH_COLUMNS.map(([table, column]) =>
-      `UPDATE ${table} SET ${column} = ${quote(newPrefix)} || substr(${column}, ${oldPrefix.length + 1}) WHERE ${column} LIKE ${quote(`${oldPrefix}%`)};`,
+      `UPDATE ${table} SET ${column} = ${quote(newPrefix)} || ${rest(column)} WHERE ${column} LIKE ${quote(`${oldPrefix}%`)};`,
     ).join(" ");
     execFileSync("sqlite3", [db, sql]);
   }
@@ -179,7 +188,7 @@ function relocateFixturePaths(catalogDir) {
 // utimes and the sidecar's iso_mtime exactly.
 function restoreSeededMtimes(db) {
   const rows = execFileSync("sqlite3", ["-separator", "\t", db, "SELECT canonical_path, modified_time FROM assets"]).toString();
-  for (const line of rows.split("\n")) {
+  for (const line of rows.split(/\r?\n/)) {
     const [file, iso] = line.split("\t");
     if (!file || !iso || !fs.existsSync(file)) continue;
     const whole = Math.floor(Date.parse(iso) / 1000);
