@@ -5,6 +5,7 @@
 
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
 const { spawnSafely } = require("../spawnSafely");
@@ -24,7 +25,7 @@ function devPython(platform, env = process.env) {
   return env.AFTERFRAME_PYTHON || (platform === "win32" ? "python" : "python3");
 }
 
-function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath, getCatalogPath, spawnProcess = spawn, platform = process.platform }) {
+function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath, getCatalogPath, spawnProcess = spawn, platform = process.platform, setPriority = os.setPriority }) {
   const processes = new Set();
   const pausedCatalogs = new Set();
   const catalogGenerations = new Map();
@@ -351,7 +352,15 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   function spawnDetachedSidecar(command) {
     const { sanitized, secretEnv } = extractSecretEnv(command);
     const { cmd, args, env } = sidecarCommand(sanitized);
-    return trackProcess(startProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore", ...HIDDEN }), getCatalogPath(), true);
+    const child = trackProcess(startProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, detached: true, stdio: "ignore", ...HIDDEN }), getCatalogPath(), true);
+    // A job is background work. Below normal priority (nice 10 off Windows),
+    // the window and the resident sidecar, which the user is waiting on, get
+    // the CPU first while it runs; on an idle machine it runs as fast as
+    // before. The ExifTool it starts inherits the priority.
+    if (child.pid) {
+      try { setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* it has already exited */ }
+    }
+    return child;
   }
 
   // `command` is always the product of sidecar/jobArgv.js (the one module

@@ -4,6 +4,7 @@ const test = require("node:test");
 const { PassThrough } = require("node:stream");
 const { spawn } = require("node:child_process");
 const { once } = require("node:events");
+const os = require("node:os");
 const { createSidecarTransport, devPython } = require("./transport");
 
 function harness() {
@@ -124,6 +125,7 @@ function recordingTransport(options = {}) {
       child.stdin = new PassThrough();
       child.kill = () => {};
       child.unref = () => {};
+      child.pid = 4000 + calls.length;
       calls.push({ cmd, args, opts, child });
       return child;
     },
@@ -131,6 +133,28 @@ function recordingTransport(options = {}) {
   });
   return { transport, calls };
 }
+
+test("a job runs below normal priority; the resident sidecar and one-shots keep the app's", async () => {
+  const lowered = [];
+  const { transport, calls } = recordingTransport({ setPriority: (pid, priority) => lowered.push([pid, priority]) });
+  const pending = transport.callAsync(["summary"]); // the resident serve process
+  calls[0].child.emit("exit", 1);                   // ...dies, so the call falls back to a one-shot
+  calls[0].child.emit("close", 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  calls[1].child.stdout.end(JSON.stringify({ ok: 1 }));
+  calls[1].child.emit("close", 0);
+  await pending;
+  transport.launchJob(["run-import-job", "--job-id", "j1"]);
+  assert.deepEqual(lowered, [[calls[2].child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL]]);
+  assert.deepEqual(calls[2].args.slice(-3), ["run-import-job", "--job-id", "j1"]);
+  transport.stopResident();
+});
+
+test("a job that is gone before its priority is set still runs its course", () => {
+  const { transport, calls } = recordingTransport({ setPriority: () => { throw Object.assign(new Error("no such process"), { code: "ESRCH" }); } });
+  assert.doesNotThrow(() => transport.launchJob(["run-import-job", "--job-id", "j1"]));
+  assert.equal(calls.length, 1);
+});
 
 test("every sidecar process gets UTF-8 pipes and no console window", async () => {
   const { transport, calls } = recordingTransport({ platform: "win32" });
