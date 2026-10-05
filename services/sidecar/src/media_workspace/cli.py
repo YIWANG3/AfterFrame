@@ -767,10 +767,24 @@ def _utf8_stdio() -> None:
             reconfigure(encoding="utf-8", **({"errors": errors} if errors else {}))
 
 
+_parser: argparse.ArgumentParser | None = None
+
+
+def _get_parser() -> argparse.ArgumentParser:
+    """Built once per process. The resident sidecar runs main() for every
+    request, and building this parser was most of a small request's cost
+    (~5 ms of ~5.4 on an M-series Mac, ~20× that on a slow PC, with the
+    activity centre asking every 1.2 s). parse_args leaves it untouched."""
+    global _parser
+    if _parser is None:
+        _parser = build_parser()
+    return _parser
+
+
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         _utf8_stdio()
-    parser = build_parser()
+    parser = _get_parser()
     args = parser.parse_args(argv)
 
     # Secrets come via env, not argv (argv is visible to every local process
