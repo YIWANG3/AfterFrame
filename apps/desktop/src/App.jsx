@@ -24,7 +24,7 @@ import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
 import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
-import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
+import GalleryCompare from "./components/GalleryCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import DiscoverView, { prefetchDiscover } from "./components/DiscoverView";
 import FilterBar from "./components/FilterBar";
@@ -926,7 +926,7 @@ export default function App() {
     const a = itemById.get(assetIds[0]);
     const b = itemById.get(assetIds[1]);
     if (!a?.image_path || !b?.image_path) return;
-    setCompareState({ beforePath: a.image_path, afterPath: b.image_path, layout: "side" });
+    setCompareState({ items: [a, b], layout: "side" });
   }
 
   // An active filter must be on screen: a hidden bar that is still filtering is
@@ -1532,9 +1532,9 @@ export default function App() {
         }}
       />
       {compareState && (
-        <BeforeAfterCompare
-          beforePath={compareState.beforePath}
-          afterPath={compareState.afterPath}
+        <GalleryCompare
+          items={compareState.items}
+          catalogKey={activeCatalogPath}
           layout={compareState.layout || "side"}
           onClose={() => setCompareState(null)}
           onLayoutChange={(layout) => setCompareState((s) => s ? { ...s, layout } : s)}

@@ -30,6 +30,22 @@ export function buildLightboxSources(item, { onDemandHd = null } = {}) {
   };
 }
 
+// What Compare shows for one photo. An <img> can't decode a RAW (or a TIFF,
+// or a video), and media:// serves those bytes as they are — so the gallery's
+// Compare showed two broken images for RAWs. A RAW shows the HD preview made
+// on demand once it arrives, a better preview until then; a photo whose
+// original is missing shows its preview.
+const BROWSER_IMAGE = /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i;
+export function compareSource(item, { onDemandHd = null } = {}) {
+  if (!item) return null;
+  const onDisk = item.exists_on_disk !== false;
+  if (onDisk && item.asset_type !== "raw" && item.asset_type !== "video" && BROWSER_IMAGE.test(item.image_path || "")) {
+    return item.image_path;
+  }
+  if (onDisk && item.asset_type === "raw" && onDemandHd) return onDemandHd;
+  return item.preview_hd_path || item.image_preview_hd_path || item.image_preview_path || item.preview_path || item.raw_preview_path || null;
+}
+
 export function resolveLightboxLogicalSize(naturalWidth, naturalHeight, metaWidth, metaHeight) {
   const width = Number(naturalWidth) || 0;
   const height = Number(naturalHeight) || 0;

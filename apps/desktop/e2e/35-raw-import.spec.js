@@ -264,3 +264,59 @@ test("byte-identical RAW copies are two photos, and their cards hold still", asy
   }
   expect(seen.map((set) => set.size), JSON.stringify(seen.map((set) => [...set]))).toEqual([1, 1]);
 });
+
+// The 0.5.8 report: two ARWs compared from the context menu showed two broken
+// images. Compare handed the RAW file itself to an <img>.
+test("Compare shows RAWs decoded — two RAWs, and a RAW beside a JPEG — and zooms both sides together", async () => {
+  test.setTimeout(120_000);
+  const rows = await browseByName();
+  const card = (row) => ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${row.asset_id}"]`);
+  const images = () => ctx.window.getByTestId("compare-image");
+  const decoded = () => images().evaluateAll((els) => els.map((img) => ({
+    src: decodeURIComponent(img.getAttribute("src") || ""), ok: img.complete && img.naturalWidth > 0,
+  })));
+  async function compare(a, b) {
+    await tool("show_in_app", { asset_ids: [a.asset_id] });
+    await card(a).click();
+    await card(b).click({ modifiers: ["Meta"] });
+    await expect(ctx.window.locator("[data-gallery-item='true'][data-selected='true']")).toHaveCount(2);
+    await card(b).click({ button: "right" });
+    await ctx.window.getByText("Compare", { exact: true }).click();
+    await expect(ctx.window.getByTestId("compare-header")).toBeVisible();
+    await expect(images()).toHaveCount(2);
+  }
+
+  const [rawA, rawB] = ["B0000333.dng", "B0000333 (1).dng"].map((name) => rows.get(name));
+  await compare(rawA, rawB);
+  // Both sides decode, and neither is the RAW file.
+  await expect.poll(async () => (await decoded()).every((side) => side.ok && !/\.dng$/i.test(side.src)), { timeout: 15_000 }).toBe(true);
+  // The HD previews are made on demand and take over, as in the lightbox.
+  await expect.poll(async () => (await decoded()).every((side) => side.ok && side.src.includes("/previews-hd/")), { timeout: 60_000 }).toBe(true);
+  // Each side is named by its file, not "Before" / "After".
+  await expect(images().nth(0)).toHaveAttribute("alt", "B0000333.dng");
+  await expect(images().nth(1)).toHaveAttribute("alt", "B0000333 (1).dng");
+
+  // One wheel turn zooms both, around the same point; switching layout keeps them decoded.
+  await images().first().hover();
+  await ctx.window.mouse.wheel(0, -120);
+  const transforms = () => images().evaluateAll((els) => els.map((img) => img.style.transform));
+  await expect.poll(async () => (await transforms())[0]).toMatch(/scale\(1\.0[0-9]+\)/);
+  const [first, second] = await transforms();
+  expect(second).toBe(first);
+  await ctx.window.getByTestId("compare-layout-controls").getByRole("button").nth(1).click();
+  await expect.poll(async () => (await decoded()).every((side) => side.ok)).toBe(true);
+  await ctx.window.getByTestId("compare-close").click();
+  await expect(ctx.window.getByTestId("compare-header")).toHaveCount(0);
+
+  // A RAW beside a JPEG: the JPEG side is its original, the RAW side a preview.
+  const raw = rows.get("luna-browse.dng");
+  const jpeg = rows.get("luna-morning.jpg");
+  await compare(raw, jpeg);
+  await expect.poll(async () => {
+    const sides = await decoded();
+    return sides.every((side) => side.ok)
+      && sides.some((side) => side.src.endsWith("/luna-morning.jpg"))
+      && !sides.some((side) => /\.dng$/i.test(side.src));
+  }, { timeout: 30_000 }).toBe(true);
+  await ctx.window.getByTestId("compare-close").click();
+});
