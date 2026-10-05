@@ -51,32 +51,52 @@ def _inside(edges: Edges, x: float, y: float) -> bool:
     return inside
 
 
+class _Polygon:
+    """One polygon of a country. Its edges are bucketed the first time a
+    point falls inside its bounds: most borders are never asked about, and
+    bucketing all of them was most of the cost of loading."""
+
+    __slots__ = ("iso", "bounds", "_rings", "_edges")
+
+    def __init__(self, iso: str, rings: list[Ring]):
+        outer = rings[0]
+        lons, lats = outer[0::2], outer[1::2]
+        self.iso = iso
+        self.bounds: Bounds = (min(lons), min(lats), max(lons), max(lats))
+        self._rings = rings
+        self._edges: tuple[Edges, list[Edges]] | None = None
+
+    def contains(self, lon: float, lat: float) -> bool:
+        if self._edges is None:
+            self._edges = (_bucket(self._rings[0]), [_bucket(hole) for hole in self._rings[1:]])
+        outer, holes = self._edges
+        return _inside(outer, lon, lat) and not any(_inside(hole, lon, lat) for hole in holes)
+
+
 class CountryShapes:
     def __init__(self, payload: dict):
         self.names: dict[str, dict[str, str | None]] = {}
-        # (iso, bounds, outer ring, holes) per polygon; bounds keep the
-        # ray casting to the few polygons a point can possibly be in.
-        self.polygons: list[tuple[str, Bounds, Edges, list[Edges]]] = []
+        # Bounds keep the ray casting to the few polygons a point can
+        # possibly be in.
+        self.polygons: list[_Polygon] = []
         for country in payload.get("countries", []):
             self.names[country["iso"]] = {"en": country.get("en"), "zh": country.get("zh")}
             for rings in country.get("polygons", []):
                 if not rings or len(rings[0]) < 6:
                     continue
-                outer = rings[0]
-                lons, lats = outer[0::2], outer[1::2]
-                bounds = (min(lons), min(lats), max(lons), max(lats))
-                self.polygons.append((country["iso"], bounds, _bucket(outer), [_bucket(hole) for hole in rings[1:]]))
+                self.polygons.append(_Polygon(country["iso"], rings))
 
     def country_at(self, lat: float, lon: float) -> str | None:
         """ISO 3166-1 alpha-2 of the country containing the point, or None
         at sea. The first polygon that contains the point wins; enclaves
         (Lesotho, San Marino) are holes in their neighbour, so the order
         does not matter."""
-        for iso, bounds, outer, holes in self.polygons:
+        for polygon in self.polygons:
+            bounds = polygon.bounds
             if not (bounds[0] <= lon <= bounds[2] and bounds[1] <= lat <= bounds[3]):
                 continue
-            if _inside(outer, lon, lat) and not any(_inside(hole, lon, lat) for hole in holes):
-                return iso
+            if polygon.contains(lon, lat):
+                return polygon.iso
         return None
 
 

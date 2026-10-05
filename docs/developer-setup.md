@@ -204,7 +204,10 @@ Place data (`media_workspace/data/`): `gazetteer.json.gz` (Wikidata, built by
 Earth 50m borders, `research/gazetteer-lab/build_countries.py`). Country and
 city on every location are derived from them; bump
 `db/locations.py::PLACE_DATA_VERSION` after rebuilding either, and catalogs
-redo those fields on their next open.
+redo those fields on their next open. `places.idx` is the gazetteer's
+localities cut into tiles, so placing a photo reads only the places near it:
+rebuild it with `python -m media_workspace.place_index` whenever the gazetteer
+changes (`test_place_index.py` fails until you do).
 
 ## Notes
 

@@ -23,12 +23,14 @@ Francisco. So within LOCALITY_SEARCH_KM the winner is scored by importance
 the neighbourhood you are standing in, but a real neighbouring town
 (Sausalito, 10 km from San Francisco with a fraction of the links) keeps its
 own name. Fallbacks: nearest locality inside NEAREST_LOCALITY_KM, nearest
-admin1 inside NEAREST_ADMIN1_KM, nearest country centroid. The index is built
-once per process; the sidecar is resident so the cost is paid once.
+admin1 inside NEAREST_ADMIN1_KM, nearest country centroid. Localities come
+from data/places.idx a tile at a time (place_index.py), so a process loads
+only the places near the photos it is asked about.
 """
 from __future__ import annotations
 
 import math
+import threading
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime
@@ -36,6 +38,7 @@ from typing import Any
 
 from .country_shapes import load_country_shapes
 from .geo_resolver import load_gazetteer
+from .place_index import CELL_DEG, PlaceIndex, cell_of, load_place_index, tile_of
 
 MEMORY_GAP_DAYS = 3
 MEMORY_MIN_PHOTOS = 3
@@ -43,7 +46,7 @@ LOCALITY_SEARCH_KM = 25.0
 LOCALITY_KM_PENALTY = 0.25  # score = ln(2 + sitelinks) − penalty × km
 NEAREST_LOCALITY_KM = 40.0
 NEAREST_ADMIN1_KM = 400.0
-_CELL_DEG = 0.5
+_CELL_DEG = CELL_DEG
 _EARTH_KM = 6371.0
 
 
@@ -56,10 +59,17 @@ def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 class _GridIndex:
-    """Bucket points by 0.5° cell; a query scans the 3×3 (or wider) block."""
+    """Bucket points by 0.5° cell; a query scans the 3×3 (or wider) block.
+    With `tiles`, the cells fill from the place index as queries reach them."""
 
-    def __init__(self, items: Iterable[dict]):
+    def __init__(self, items: Iterable[dict] = (), tiles: PlaceIndex | None = None):
         self.cells: dict[tuple[int, int], list[dict]] = defaultdict(list)
+        self._tiles = tiles
+        self._loaded: set[tuple[int, int]] = set()
+        self._loading = threading.Lock()
+        self._add(items)
+
+    def _add(self, items: Iterable[dict]) -> None:
         for item in items:
             try:
                 lat, lon = float(item["lat"]), float(item["lon"])
@@ -69,7 +79,19 @@ class _GridIndex:
 
     @staticmethod
     def _cell(lat: float, lon: float) -> tuple[int, int]:
-        return (math.floor(lat / _CELL_DEG), math.floor(lon / _CELL_DEG))
+        return cell_of(lat, lon)
+
+    def _at(self, cell: tuple[int, int]) -> list[dict]:
+        if self._tiles is not None:
+            tile = tile_of(cell)
+            if tile not in self._loaded:
+                # Marked only once filled: a lookup on another thread never
+                # scans a tile that is half in.
+                with self._loading:
+                    if tile not in self._loaded:
+                        self._add(self._tiles.localities(tile))
+                        self._loaded.add(tile)
+        return self.cells.get(cell, [])
 
     def within(self, lat: float, lon: float, max_km: float) -> list[tuple[dict, float]]:
         rings = max(1, math.ceil(max_km / (_CELL_DEG * 111.0)))
@@ -77,7 +99,7 @@ class _GridIndex:
         hits: list[tuple[dict, float]] = []
         for dy in range(-rings, rings + 1):
             for dx in range(-rings, rings + 1):
-                for item in self.cells.get((cy + dy, cx + dx), ()):
+                for item in self._at((cy + dy, cx + dx)):
                     km = _distance_km(lat, lon, float(item["lat"]), float(item["lon"]))
                     if km <= max_km:
                         hits.append((item, km))
@@ -95,7 +117,7 @@ class _GridIndex:
                 for dx in range(-ring, ring + 1):
                     if max(abs(dy), abs(dx)) != ring:
                         continue
-                    for item in self.cells.get((cy + dy, cx + dx), ()):
+                    for item in self._at((cy + dy, cx + dx)):
                         km = _distance_km(lat, lon, float(item["lat"]), float(item["lon"]))
                         if km < best_km:
                             best, best_km = item, km
@@ -109,8 +131,8 @@ class _GridIndex:
 
 
 class ReverseGeocoder:
-    def __init__(self, payload: dict[str, Any]):
-        self.localities = _GridIndex(payload.get("localities", []))
+    def __init__(self, payload: dict[str, Any], *, tiles: PlaceIndex | None = None):
+        self.localities = _GridIndex(payload.get("localities", []), tiles=tiles)
         self.admin1 = _GridIndex(payload.get("admin1", []))
         self.countries = _GridIndex(payload.get("countries", []))
         self.country_by_qid = {c["q"]: c for c in payload.get("countries", []) if c.get("q")}
@@ -123,6 +145,10 @@ class ReverseGeocoder:
                 self.qids_by_iso[country["iso"]].add(country["q"])
                 if country.get("parent"):
                     self.qids_by_iso[country["iso"]].add(country["parent"])
+
+    @classmethod
+    def from_index(cls, index: PlaceIndex) -> ReverseGeocoder:
+        return cls({"countries": index.countries, "admin1": index.admin1}, tiles=index)
 
     def lookup(self, lat: float, lon: float) -> dict | None:
         """→ {key, tier, en, zh, country_en, country_zh, country_iso} or None when
@@ -190,6 +216,11 @@ def load_reverse_geocoder() -> ReverseGeocoder | None:
     global _geocoder
     if _geocoder is not None:
         return _geocoder
+    index = load_place_index()
+    if index is not None:
+        _geocoder = ReverseGeocoder.from_index(index)
+        return _geocoder
+    # No index (a checkout without the file): the whole gazetteer, as before.
     gazetteer = load_gazetteer()
     if gazetteer is None:
         return None
