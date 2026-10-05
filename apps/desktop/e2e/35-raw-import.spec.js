@@ -24,6 +24,7 @@ const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, mcpCall, waitForEditor } = require("./helpers/app");
+const { writeSyntheticDng } = require("./helpers/images");
 
 const RAW_FIXTURES = path.resolve(__dirname, "fixtures", "raw");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -359,4 +360,43 @@ test("an export saved from the editor on a RAW names that RAW as its source and 
   await ctx.window.getByTestId("inspector-show-raw").click();
   await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse.dng", { timeout: 10_000 });
   await expect(ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"][data-selected='true']`)).toBeVisible();
+});
+
+// The 0.5.8 report: an untouched save of an 11648×8735 RAF came out at
+// 4000×3000, the size of the JPEG the camera embedded, which is what the HD
+// preview is when it is 2000 px or more. A synthetic DNG has the same shape at
+// a test's size: 2048×1152 of raw data, a 2000×1125 preview inside.
+test("editing a RAW whose embedded preview is smaller than the RAW saves the RAW's full size", async () => {
+  test.setTimeout(150_000);
+  const dir = path.join(work.root, "embedded-smaller");
+  fs.mkdirSync(dir);
+  await writeSyntheticDng(path.join(dir, "gfx-like.dng"));
+  await importAndWait({ image_dirs: [dir] });
+  const raw = (await browseByName()).get("gfx-like.dng");
+  expect(raw.image_metadata).toMatchObject({ width: 2048, height: 1152 });
+
+  await tool("show_in_app", { asset_ids: [raw.asset_id] });
+  await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"]`).click();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("gfx-like.dng");
+  await ctx.window.keyboard.press("e");
+  await expect(ctx.window.getByRole("button", { name: /^Save$/ })).toBeVisible({ timeout: 30_000 });
+  await waitForEditor(ctx.window, { preview: true, previewTimeout: 90_000 });
+  // The HD preview is the embedded 2000 px JPEG; the editor did not stop there.
+  const hd = (await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path;
+  expect(await sharp(hd).metadata()).toMatchObject({ width: 2000, height: 1125 });
+
+  const out = path.join(fs.realpathSync(work.root), "gfx-like_edited.jpg");
+  await ctx.app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+  }, out);
+  await ctx.window.getByRole("button", { name: /^Save$/ }).click();
+  await expect.poll(() => fs.existsSync(out), { timeout: 30_000 }).toBe(true);
+  await expect.poll(async () => (await ctx.window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), out))?.raw_path, { timeout: 15_000 })
+    .toBe(raw.image_path);
+  expect(await sharp(out).metadata()).toMatchObject({ width: 2048, height: 1152 });
+  // Rendered once into the userData cache, not into the catalog.
+  const cache = path.join(ctx.userDataDir, "raw-edit-cache");
+  expect(fs.readdirSync(cache).filter((name) => name.endsWith(".jpg"))).toHaveLength(1);
+  await ctx.window.keyboard.press("Escape");
+  await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
 });

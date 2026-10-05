@@ -350,3 +350,52 @@ class BlackRenderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FullSizeRenderTest(unittest.TestCase):
+    """The editor's full-size picture of a RAW whose embedded preview is
+    smaller than the sensor (electron/rawEditSource.js)."""
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.root = Path(temp_dir.name)
+        self.dng = self.root / "IMG_0001.dng"
+        self.dng.write_bytes(build_dng())
+
+    def test_a_full_decode_is_never_half_size(self) -> None:
+        # Shrink the half-size threshold so a 64 px DNG crosses it.
+        with patch.object(raw_decode, "_HALF_SIZE_FROM", 32):
+            raw_decode.decode(self.dng, self.root / "half.jpg", 65535)
+            raw_decode.decode(self.dng, self.root / "full.jpg", 65535, full=True)
+        with Image.open(self.root / "half.jpg") as half, Image.open(self.root / "full.jpg") as full:
+            self.assertEqual(half.size, (32, 24))
+            self.assertEqual(full.size, (64, 48))
+
+    def test_without_image_io_libraw_renders_the_full_size(self) -> None:
+        from media_workspace.preview_service import render_raw_full
+
+        target = self.root / "cache" / "full.jpg"
+        with patch("media_workspace.preview_service.shutil.which", return_value=None):
+            self.assertEqual(render_raw_full(self.dng, target), "libraw")
+        with Image.open(target) as image:
+            self.assertEqual(image.size, (64, 48))
+        self.assertEqual(sorted(p.name for p in target.parent.iterdir()), ["full.jpg"])  # no partial left behind
+
+    def test_a_black_image_io_render_falls_back_to_libraw(self) -> None:
+        from media_workspace.preview_service import render_raw_full
+
+        def black_sips(argv, **_kwargs):
+            Image.new("RGB", (64, 48)).save(argv[argv.index("--out") + 1], "JPEG")
+            return subprocess.CompletedProcess(argv, 0)
+
+        target = self.root / "full.jpg"
+        with (
+            patch("media_workspace.preview_service.shutil.which", return_value="/usr/bin/sips"),
+            patch("media_workspace.preview_service.subprocess.run", side_effect=black_sips),
+            patch.object(raw_decode, "decode_in_child", side_effect=lambda source, out, edge, full=False: raw_decode.decode(source, out, edge, full=full)),
+        ):
+            self.assertEqual(render_raw_full(self.dng, target), "libraw")
+        with Image.open(target) as image:
+            self.assertEqual(image.size, (64, 48))
+            self.assertGreater(max(image.convert("L").getextrema()), 8)

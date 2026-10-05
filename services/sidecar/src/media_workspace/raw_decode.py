@@ -106,16 +106,18 @@ def embedded_preview(path: Path) -> EmbeddedPreview | None:
     return EmbeddedPreview(data, width, height, info.orientation)
 
 
-def decode(path: Path, target: Path, long_edge: int) -> None:
+def decode(path: Path, target: Path, long_edge: int, full: bool = False) -> None:
     """Decode the RAW to an sRGB JPEG at most `long_edge` px, cropped to the
     camera's image, unrotated with the orientation as the EXIF tag like every
-    other preview. In-process: call it through decode_in_child."""
+    other preview. `full`: never at half size, whatever the cost — the
+    editor's full-size picture of the RAW, not a preview. In-process: call it
+    through decode_in_child."""
     import rawpy
 
     with rawpy.imread(str(path)) as raw:
         sizes = raw.sizes
         info = _info(sizes)
-        half = max(info.width, info.height) >= min(_HALF_SIZE_FROM, 2 * long_edge)
+        half = not full and max(info.width, info.height) >= min(_HALF_SIZE_FROM, 2 * long_edge)
         rgb = raw.postprocess(
             half_size=half,
             use_camera_wb=True,  # rawpy defaults to daylight
@@ -134,7 +136,7 @@ def decode(path: Path, target: Path, long_edge: int) -> None:
     exif = Image.Exif()
     if info.orientation != 1:
         exif[0x0112] = info.orientation
-    image.save(target, "JPEG", quality=90, exif=exif.tobytes())
+    image.save(target, "JPEG", quality=95 if full else 90, exif=exif.tobytes())
 
 
 def _sidecar_command() -> list[str]:
@@ -142,11 +144,12 @@ def _sidecar_command() -> list[str]:
     return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "media_workspace"]
 
 
-def decode_in_child(path: Path, target: Path, long_edge: int, timeout: float = DECODE_TIMEOUT_SECONDS) -> None:
+def decode_in_child(path: Path, target: Path, long_edge: int, timeout: float = DECODE_TIMEOUT_SECONDS, full: bool = False) -> None:
     """decode() in a child process: a crash or a hang in LibRaw fails this
     one preview (CalledProcessError / TimeoutExpired) instead of the sidecar."""
     subprocess.run(
-        [*_sidecar_command(), "decode-raw", "--source", str(path), "--target", str(target), "--size", str(long_edge)],
+        [*_sidecar_command(), "decode-raw", "--source", str(path), "--target", str(target), "--size", str(long_edge),
+         *(["--full"] if full else [])],
         check=True,
         capture_output=True,
         timeout=timeout,

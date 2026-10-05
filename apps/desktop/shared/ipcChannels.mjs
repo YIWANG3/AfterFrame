@@ -42,6 +42,7 @@ export const IPC_METHODS = [
   ["getAssetDetail", "workspace:detail", 1],
   ["getAssetDetailById", "workspace:detail-by-id", 1],
   ["ensureHdPreviews", "workspace:ensure-hd-previews", 1],
+  ["rawEditSource", "workspace:raw-edit-source", 1],
   ["regeneratePreviews", "workspace:regenerate-previews", 1],
   ["refreshAssets", "workspace:refresh-assets", 1],
   ["detectEditors", "app:detect-editors", 0],

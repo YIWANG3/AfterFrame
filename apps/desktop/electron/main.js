@@ -288,7 +288,7 @@ const stopResidentSidecar = sidecarTransport.stopResident;
 
 // Domain-verb command layer — the only place argv is assembled. IPC handlers
 // and MCP tools both receive this instead of building commands by hand.
-const sidecarCommands = createSidecarCommands(callSidecarJsonAsync);
+const sidecarCommands = createSidecarCommands(callSidecarJsonAsync, sidecarTransport.callJsonOneShot);
 
 // Image write-back with the original's EXIF/XMP, and the background-task
 // starters — both lived here until review 2026-09-16 §2. See ./imageMetadata.js
@@ -553,6 +553,7 @@ assetsIpc.register({
   ipcMain, shell, dialog, BrowserWindow,
   commands: sidecarCommands, addAllowedMediaDir,
   getCatalogState: catalog.state,
+  getUserDataPath: () => app.getPath("userData"),
   t: () => makeT(currentLocale),
 });
 

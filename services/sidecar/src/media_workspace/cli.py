@@ -293,6 +293,13 @@ def build_parser() -> argparse.ArgumentParser:
     decode_raw.add_argument("--source", type=Path, required=True)
     decode_raw.add_argument("--target", type=Path, required=True)
     decode_raw.add_argument("--size", type=int, required=True)
+    decode_raw.add_argument("--full", action="store_true", help="Never at half size (the editor's full-size picture).")
+
+    render_raw_full_parser = subparsers.add_parser(
+        "render-raw-full", help="Render a RAW at its full size for the editor (no catalog access)."
+    )
+    render_raw_full_parser.add_argument("--source", type=Path, required=True)
+    render_raw_full_parser.add_argument("--target", type=Path, required=True)
 
     refresh_assets = subparsers.add_parser("refresh-assets", parents=[common])
     refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
@@ -803,7 +810,17 @@ def main(argv: list[str] | None = None) -> int:
     # ensure_catalog() so users can configure providers without a catalog open.
     if args.command == "decode-raw":
         from .raw_decode import decode
-        decode(args.source, args.target, args.size)
+        decode(args.source, args.target, args.size, full=args.full)
+        return 0
+
+    if args.command == "render-raw-full":
+        from PIL import Image
+
+        from .preview_service import render_raw_full
+        renderer = render_raw_full(args.source, args.target)
+        with Image.open(args.target) as image:
+            width, height = image.size
+        print(json.dumps({"path": str(args.target), "width": width, "height": height, "renderer": renderer}))
         return 0
 
     if args.command == "annotation-test-connection":

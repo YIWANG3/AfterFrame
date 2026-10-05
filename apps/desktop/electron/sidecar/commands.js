@@ -18,7 +18,9 @@ function facetViewArgv({ collectionId, status, search, filters, base } = {}) {
   return argv;
 }
 
-function createSidecarCommands(callJson) {
+// callJsonOneShot: a separate process per call, for slow work that must not
+// hold up the serial resident sidecar (defaults to callJson where unwired).
+function createSidecarCommands(callJson, callJsonOneShot = callJson) {
   return {
     // ── Browse / read ────────────────────────────────────────────────────
     // `base`: the rules of the smart collection being viewed — the set that
@@ -243,6 +245,12 @@ function createSidecarCommands(callJson) {
       const argv = ["generate-previews", "--kind", "preview-hd"];
       for (const p of paths) argv.push("--path", String(p));
       return callJson(argv);
+    },
+
+    // The RAW at its full size for the editor, written to `target` (main owns
+    // the cache). Seconds for a 100 MP file, so its own process.
+    renderRawFull(source, target) {
+      return callJsonOneShot(["render-raw-full", "--source", String(source), "--target", String(target)], 180_000);
     },
 
     // Force-regenerate 512px thumbnails for specific source files. --force so a

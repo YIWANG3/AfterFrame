@@ -225,6 +225,42 @@ def _reject_black(path: Path) -> None:
 _JPEG_MAX_EDGE = 65535
 
 
+def render_raw_full(source: Path, target: Path) -> str:
+    """The RAW at its full size, as the JPEG the editor draws and saves from.
+    Its HD preview is the camera's embedded JPEG whenever that is 2000 px or
+    more, which on some cameras is a fraction of the sensor (a Fuji GFX embeds
+    4000×3000 of 11648×8735), so an untouched save came out at a tenth of the
+    pixels. This is made only when the editor opens such a RAW; the camera's
+    own look is not kept. On macOS, Image I/O (the Photos rendering, with the
+    RAW's EXIF and orientation tag); otherwise, or when it fails or comes out
+    black, a full LibRaw decode in a child process. Written beside the target,
+    then renamed in. Returns which renderer made it."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(f".{target.stem}.{os.getpid()}.partial.jpg")
+    try:
+        if shutil.which("sips") is not None:
+            try:
+                subprocess.run(
+                    ["sips", "-s", "format", "jpeg", "-s", "formatOptions", "95", "--out", str(partial), str(source)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+                )
+                _reject_black(partial)
+                os.replace(partial, target)
+                return "image-io"
+            except Exception:
+                partial.unlink(missing_ok=True)
+        if not raw_decode.available():
+            raise ValueError(f"no decoder can render {source.name} at full size")
+        raw_decode.decode_in_child(source, partial, _JPEG_MAX_EDGE, full=True)
+        os.replace(partial, target)
+        return "libraw"
+    finally:
+        partial.unlink(missing_ok=True)
+
+
 def transcode_to_jpeg(source: Path, target: Path) -> None:
     """The full-size JPEG Electron shows in place of an original the renderer
     can't decode: HEIC/HEIF where there is no sips (Windows). Same handling as
