@@ -41,9 +41,12 @@ _GEO_PRECISION_RANK = {"exact": 3, "locality": 2, "admin1": 1, "country": 0}
 def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
     """WHERE fragment for filters.geo.
 
-    bounds mode filters by the map viewport via the R*Tree; when the viewport
-    crosses the antimeridian (west > east) the longitude test is split into two
-    ranges on the base table instead. place mode (Phase 2 UI) matches place_id.
+    bounds mode keeps the photos whose map marker is inside the viewport: the
+    location's point, not its box. A city-level AI guess is drawn at the city
+    centre while its box spans ±0.15°, so matching the box listed photos for
+    a viewport over the next town that showed no marker for them. When the
+    viewport crosses the antimeridian (west > east) the longitude test is
+    split into two ranges. place mode (Phase 2 UI) matches place_id.
 
     Matches against the asset's EFFECTIVE location: the paired RAW's
     (registry.raw_asset_id) first, or — only when no paired RAW has one — the
@@ -75,7 +78,6 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
         place_id = geo.get("place_id")
         if not place_id:
             return None
-        location_join = ""
         location_conditions = "loc.place_id = ?" + extra_conditions
         location_params: list[object] = [place_id, *extra_params]
     elif geo.get("mode") == "bounds":
@@ -87,22 +89,12 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
         except (KeyError, TypeError, ValueError):
             return None
         if west <= east:
-            location_join = (
-                "JOIN asset_location_rtree geo_idx ON geo_idx.location_id = loc.location_id"
-            )
-            location_conditions = (
-                "geo_idx.max_longitude >= ? AND geo_idx.min_longitude <= ? "
-                "AND geo_idx.max_latitude >= ? AND geo_idx.min_latitude <= ?"
-            ) + extra_conditions
-            location_params = [west, east, south, north, *extra_params]
+            longitude_test = "loc.longitude BETWEEN ? AND ?"
         else:
             # Viewport crosses the antimeridian: split the longitude test in two.
-            location_join = ""
-            location_conditions = (
-                "loc.max_latitude >= ? AND loc.min_latitude <= ? "
-                "AND (loc.max_longitude >= ? OR loc.min_longitude <= ?)"
-            ) + extra_conditions
-            location_params = [south, north, west, east, *extra_params]
+            longitude_test = "(loc.longitude >= ? OR loc.longitude <= ?)"
+        location_conditions = f"loc.latitude BETWEEN ? AND ? AND {longitude_test}" + extra_conditions
+        location_params = [south, north, west, east, *extra_params]
     else:
         return None
 
@@ -110,7 +102,6 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
         EXISTS (
             SELECT 1 FROM image_lookup_registry reg
             JOIN asset_locations loc ON loc.asset_id = reg.raw_asset_id
-            {location_join}
             WHERE reg.image_asset_id = assets.asset_id AND {location_conditions}
         )
         OR (
@@ -121,7 +112,6 @@ def _geo_filter_clause(geo: object) -> tuple[str, list[object]] | None:
             )
             AND EXISTS (
                 SELECT 1 FROM asset_locations loc
-                {location_join}
                 WHERE loc.asset_id = assets.asset_id AND {location_conditions}
             )
         )

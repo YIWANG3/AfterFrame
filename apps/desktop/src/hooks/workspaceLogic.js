@@ -190,6 +190,23 @@ export function filterItemsByQuery(items, query) {
   return items.filter((item) => itemMatchesQuery(item, normalizedQuery));
 }
 
+// Pages are fetched by offset, so a view that gains photos between two pages
+// (an import landing, an annotation adding matches) hands back rows that are
+// already on screen. The grid keys cards by asset_id: a repeated id makes
+// React remount one copy on every scroll, and its thumbnail blinks as it
+// reloads. Keep the copy already shown; the server offset still advances by
+// the full page.
+export function appendPage(items, page) {
+  const seen = new Set(items.map((item) => item.asset_id));
+  const added = [];
+  for (const item of page) {
+    if (seen.has(item.asset_id)) continue;
+    seen.add(item.asset_id);
+    added.push(item);
+  }
+  return added.length ? [...items, ...added] : items;
+}
+
 // After a fresh (non-append) browse page lands, which asset should be selected?
 //   relatedPinned  — a version picked from the inspector stays selected even
 //                    when it's outside this filtered page; the next ordinary

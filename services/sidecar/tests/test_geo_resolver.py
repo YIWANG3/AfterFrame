@@ -372,20 +372,29 @@ class AiLocationWriteTestCase(unittest.TestCase):
         self.assertEqual(row["source"], "exif")
         self.assertAlmostEqual(row["latitude"], 48.8566)
 
-    def test_ai_bbox_feeds_rtree_intersection(self):
+    def test_ai_location_matches_viewport_by_its_point(self):
         asset_id = self._import_image()
         self._write_ai(asset_id, country="United States", region="California", confidence=90)
-        # admin1 bbox is ±1.5° around the centroid — a viewport overlapping the
-        # box edge (not the centroid) must still match.
+        # The viewport filter keeps photos whose marker is in view. The admin1
+        # box reaches ±1.5° past the centroid, but a viewport that only
+        # overlaps the box shows no marker for the photo, so it doesn't match.
         from media_workspace.db.browse import _facet_clauses
 
-        clause, params = _facet_clauses({"geo": {
-            "mode": "bounds", "west": -119.0, "south": 35.0, "east": -118.0, "north": 36.0,
-        }})
-        rows = self.connection.execute(
-            f"SELECT assets.asset_id FROM assets WHERE 1=1 {clause}", params
-        ).fetchall()
-        self.assertIn(asset_id, {row["asset_id"] for row in rows})
+        lat, lon = self.connection.execute(
+            "SELECT latitude, longitude FROM asset_locations WHERE asset_id = ?", (asset_id,)
+        ).fetchone()
+
+        def matches(west, south, east, north):
+            clause, params = _facet_clauses({"geo": {
+                "mode": "bounds", "west": west, "south": south, "east": east, "north": north,
+            }})
+            rows = self.connection.execute(
+                f"SELECT assets.asset_id FROM assets WHERE 1=1 {clause}", params
+            ).fetchall()
+            return asset_id in {row["asset_id"] for row in rows}
+
+        self.assertTrue(matches(lon - 0.5, lat - 0.5, lon + 0.5, lat + 0.5))
+        self.assertFalse(matches(lon + 1.0, lat + 1.0, lon + 1.4, lat + 1.4))
 
     def test_map_points_hide_sub_locality_precision_by_default(self):
         # An admin1-level guess drawn as a marker at the state centroid reads

@@ -409,20 +409,29 @@ export default function PhotoMap({
         const element = marker.getElement();
         if (props.cluster) {
           element.__markerData = { type: "cluster", clusterId: props.cluster_id, coordinates };
+          // The same id in the same point generation is the same cluster, so
+          // covers it already shows are right: leave them. Blanking and
+          // re-fetching them on every refresh (each moveend, each tile a drag
+          // loads) made every cluster blink while the map moved. A new marker
+          // starts blank; one whose id names a cluster of a new point set
+          // keeps its old covers until the new ones arrive.
+          const generation = state.pointsGeneration || 0;
+          const coverKey = `${generation}:${props.cluster_id}`;
           updateMarkerElement(element, {
             count: props.point_count,
-            previews: ["", "", ""],
+            previews: element.__coverKey === undefined ? ["", "", ""] : null,
             label: `${props.point_count} photos`,
           });
+          if (element.__coverKey === coverKey) continue;
           // Representative covers load async; input features are pre-sorted so
           // the first three leaves are the stable representatives. cluster_ids
           // are reused across setData() generations, so a stale resolve could
           // otherwise paint the previous dataset's covers onto a new cluster.
-          const generation = state.pointsGeneration || 0;
           source.getClusterLeaves(props.cluster_id, 3, 0)
             .then((leaves) => {
               if (state.destroyed || !markers.has(key)) return;
               if ((state.pointsGeneration || 0) !== generation) return;
+              element.__coverKey = coverKey;
               updateMarkerElement(element, {
                 count: props.point_count,
                 previews: [
