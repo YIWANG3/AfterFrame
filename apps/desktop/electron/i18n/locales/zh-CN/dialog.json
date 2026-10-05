@@ -6,5 +6,8 @@
   "importFoldersTitle": "导入文件夹",
   "addRawTitle": "添加 RAW 源文件或文件夹",
   "addRawFilesTitle": "添加 RAW 源文件",
-  "addRawFoldersTitle": "添加 RAW 源文件夹"
+  "addRawFoldersTitle": "添加 RAW 源文件夹",
+  "openCatalogTitle": "打开图库",
+  "newCatalogTitle": "新建图库",
+  "newCatalogButton": "创建图库"
 }
