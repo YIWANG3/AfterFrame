@@ -6,12 +6,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import zlib
 from hashlib import sha1
 from pathlib import Path
 
 from ..schema import SCHEMA_STATEMENTS, SCHEMA_VERSION
 from .colors import mark_colors_current
-from .locations import refresh_place_fields
+from .locations import PLACE_DATA_VERSION, refresh_place_fields
 from .migrations import SchemaMigrationError, ensure_column, migrate
 
 RESOLVER_VERSION = "reverse_lookup_v3_embedded_metadata"
@@ -50,6 +51,55 @@ _FACET_INDEXES = [
 ]
 
 
+# Columns added to a table after its CREATE: catalogs from before them get
+# them when opened.
+_LATEST_COLUMNS = [
+    ("catalog_info", "place_data_version", "TEXT"),
+    ("catalog_info", "colors_version", "TEXT"),
+    ("assets", "app_rating", "INTEGER"),
+    ("raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'"),
+    ("raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'"),
+    ("raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'"),
+    ("jobs", "result_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("jobs", "cancel_requested", "INTEGER NOT NULL DEFAULT 0"),
+    ("jobs", "priority", "INTEGER NOT NULL DEFAULT 50"),
+    ("jobs", "pause_requested", "INTEGER NOT NULL DEFAULT 0"),
+    ("jobs", "resume_cursor_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("jobs", "attempt_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("people_asset_index", "file_size", "INTEGER"),
+    ("people_asset_index", "file_mtime", "REAL"),
+]
+
+# Everything init_db brings a catalog up to, as one number: the schema version
+# and what _apply_latest_schema runs. A full init stores it in the database
+# header (PRAGMA user_version); a catalog carrying it needs no init again.
+INIT_STAMP = zlib.crc32(
+    repr((SCHEMA_VERSION, SCHEMA_STATEMENTS, _LATEST_COLUMNS, _FACET_COLUMNS, _FACET_INDEXES)).encode()
+) & 0x7FFFFFFF
+
+
+def _is_current(connection: sqlite3.Connection) -> bool:
+    """Whether init_db has nothing to do, found with plain reads. Every
+    sidecar command runs init_db, and a full init takes the write lock: while
+    an import held it for a preview batch, every other command (the sidebar's
+    summary, browse, job polls) waited 5 s and failed "database is locked"."""
+    if connection.execute("PRAGMA user_version").fetchone()[0] != INIT_STAMP:
+        return False
+    try:
+        row = connection.execute(
+            "SELECT schema_version, place_data_version, colors_version FROM catalog_info WHERE catalog_id = 1"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    if row is None or row[0] != SCHEMA_VERSION or row[1] != PLACE_DATA_VERSION:
+        return False
+    if connection.execute("SELECT 1 FROM asset_colors LIMIT 1").fetchone() is None:
+        from ..colors import COLORS_VERSION
+
+        return row[2] == COLORS_VERSION  # otherwise init marks the colours current
+    return True
+
+
 def _backup_before_migration(connection: sqlite3.Connection) -> Path | None:
     """Copy the catalog database next to itself before a schema upgrade.
 
@@ -85,6 +135,8 @@ def _backup_before_migration(connection: sqlite3.Connection) -> Path | None:
 def init_db(connection: sqlite3.Connection) -> None:
     if connection.in_transaction:
         raise SchemaMigrationError("init_db requires a connection with no active transaction")
+    if _is_current(connection):
+        return
 
     _backup_before_migration(connection)
     connection.execute("BEGIN IMMEDIATE")
@@ -119,6 +171,7 @@ def init_db(connection: sqlite3.Connection) -> None:
         # and the catch-up job would redo them all.
         if is_new or connection.execute("SELECT 1 FROM asset_colors LIMIT 1").fetchone() is None:
             mark_colors_current(connection)
+        connection.execute(f"PRAGMA user_version = {INIT_STAMP}")
 
         connection.commit()
     except Exception:
@@ -129,21 +182,9 @@ def init_db(connection: sqlite3.Connection) -> None:
 def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         connection.execute(statement)
-    _ensure_column(connection, "catalog_info", "place_data_version", "TEXT")
-    _ensure_column(connection, "catalog_info", "colors_version", "TEXT")
-    _ensure_column(connection, "assets", "app_rating", "INTEGER")
-    _ensure_column(connection, "raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'")
-    _ensure_column(connection, "raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'")
-    _ensure_column(connection, "raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'")
-    _ensure_column(connection, "jobs", "result_json", "TEXT NOT NULL DEFAULT '{}'")
-    _ensure_column(connection, "jobs", "cancel_requested", "INTEGER NOT NULL DEFAULT 0")
-    _ensure_column(connection, "jobs", "priority", "INTEGER NOT NULL DEFAULT 50")
-    _ensure_column(connection, "jobs", "pause_requested", "INTEGER NOT NULL DEFAULT 0")
-    _ensure_column(connection, "jobs", "resume_cursor_json", "TEXT NOT NULL DEFAULT '{}'")
-    _ensure_column(connection, "jobs", "attempt_count", "INTEGER NOT NULL DEFAULT 0")
+    for table_name, column_name, column_spec in _LATEST_COLUMNS:
+        _ensure_column(connection, table_name, column_name, column_spec)
     _backfill_asset_files(connection)
-    _ensure_column(connection, "people_asset_index", "file_size", "INTEGER")
-    _ensure_column(connection, "people_asset_index", "file_mtime", "REAL")
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(
             connection,
