@@ -58,10 +58,17 @@ def create_collection(
     if kind == "smart":
         rules_json = _checked_rules_json(rules_json)
     collection_id = _collection_id()
+    # A new folder goes on top of the folders' custom order, where the sidebar
+    # opens its name field; smart collections keep going to the end of theirs.
+    position = (
+        "SELECT COALESCE(MIN(sort_order), 1) - 1 FROM collections WHERE kind = 'manual'"
+        if kind == "manual"
+        else "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collections"
+    )
     connection.execute(
-        """
+        f"""
         INSERT INTO collections (collection_id, name, kind, rules_json, sort_order)
-        VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collections))
+        VALUES (?, ?, ?, ?, ({position}))
         """,
         (collection_id, name, kind, rules_json),
     )

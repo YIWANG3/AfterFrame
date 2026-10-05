@@ -7,17 +7,31 @@ from media_workspace.db.collections import create_collection, list_collections, 
 
 
 class CollectionOrderTests(unittest.TestCase):
-    def test_order_persists_and_new_folders_append(self):
+    def test_order_persists_and_new_folders_go_on_top(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'catalog.sqlite'
             connection = connect(path)
             init_db(connection)
             ids = [create_collection(connection, name)['collection_id'] for name in ['Zulu', 'Alpha', 'Middle']]
+            self.assertEqual([row['collection_id'] for row in list_collections(connection)], ids[::-1])
             reorder_collections(connection, [ids[2], ids[0], ids[1]])
             connection.close()
             connection = connect(path)
             new_id = create_collection(connection, 'A new folder')['collection_id']
-            self.assertEqual([row['collection_id'] for row in list_collections(connection)], [ids[2], ids[0], ids[1], new_id])
+            self.assertEqual([row['collection_id'] for row in list_collections(connection)], [new_id, ids[2], ids[0], ids[1]])
+            connection.close()
+
+    def test_smart_collections_still_append(self):
+        with tempfile.TemporaryDirectory() as directory:
+            connection = connect(Path(directory) / 'catalog.sqlite')
+            init_db(connection)
+            rules = '{"filters": {"rating_min": 5}}'
+            first = create_collection(connection, 'Five stars', 'smart', rules)['collection_id']
+            folder = create_collection(connection, 'Folder')['collection_id']
+            second = create_collection(connection, 'Also five', 'smart', rules)['collection_id']
+            smart = [row['collection_id'] for row in list_collections(connection) if row['kind'] == 'smart']
+            self.assertEqual(smart, [first, second])
+            self.assertIn(folder, [row['collection_id'] for row in list_collections(connection)])
             connection.close()
 
     def test_stale_or_duplicate_order_leaves_existing_order_intact(self):

@@ -1016,7 +1016,10 @@ export const browserBridge = {
       parent_collection_id: null,
       rules_json: null,
       rules: kind === "smart" && rules ? { version: 1, status: "all", search: "", filters: {}, ...rules } : null,
-      sort_order: Math.max(-1, ...collections.map((c) => c.sort_order || 0)) + 1,
+      // New folders go on top of the custom order, like the sidecar's.
+      sort_order: (kind || "manual") === "manual"
+        ? Math.min(1, ...collections.filter((c) => c.kind === "manual").map((c) => c.sort_order || 0)) - 1
+        : Math.max(-1, ...collections.map((c) => c.sort_order || 0)) + 1,
       created_at: now,
       updated_at: now,
       asset_ids: [],
