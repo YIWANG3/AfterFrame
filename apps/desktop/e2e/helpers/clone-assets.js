@@ -9,7 +9,9 @@ const SOURCE_STEM = "001-red";
 // specs use it to build a catalog several pages of 180 long.
 function cloneAssets(catalogDir, stems) {
   const db = path.join(catalogDir, "catalog.sqlite3");
-  const sqlite = (sql) => execFileSync("sqlite3", ["-cmd", ".timeout 10000", "-separator", "\t", db, sql]).toString().trim();
+  // The SQL goes in on stdin: hundreds of clones make a statement longer than a
+  // Windows command line may be (32K).
+  const sqlite = (sql) => execFileSync("sqlite3", ["-cmd", ".timeout 10000", "-separator", "\t", db], { input: sql }).toString().trim();
   const [srcId, srcPath, mtimeIso] = sqlite(
     `SELECT asset_id, canonical_path, modified_time FROM assets WHERE stem = '${SOURCE_STEM}'`,
   ).split("\t");

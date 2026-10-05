@@ -12,8 +12,8 @@ const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launchApp, closeApp } = require("./helpers/app");
-const { tagPhoto, writeUniqueJpeg } = require("./helpers/images");
+const { launchApp, closeApp, byImagePath, importThroughToolbar } = require("./helpers/app");
+const { tagPhotos, writeUniqueJpeg } = require("./helpers/images");
 
 const ZONE = "America/Los_Angeles";
 const HONOLULU = [21.3069, -157.8583];
@@ -28,11 +28,12 @@ const shown = (epochMs) => ctx.window.evaluate((ms) => new Date(ms).toLocaleStri
 
 test.beforeAll(async () => {
   dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-dates-")));
-  files = [];
+  const photos = [];
   for (const day of ["02", "04", "06"]) {
     const file = await writeUniqueJpeg(path.join(dir, `honolulu-${day}.jpg`), { width: 320, height: 240 });
-    files.push(tagPhoto(file, { taken: `2024:01:${day} 18:05:00`, gps: HONOLULU }));
+    photos.push({ file, taken: `2024:01:${day} 18:05:00`, gps: HONOLULU });
   }
+  files = tagPhotos(photos);
   ctx = await launchApp({ testName: "dates-and-places", env: { TZ: ZONE } });
   await expect(cards().first()).toBeVisible({ timeout: 15_000 });
 });
@@ -49,13 +50,9 @@ test("the app runs in the zone under test", async () => {
 });
 
 test("Imported and Modified are shown in the viewer's zone, Captured as the camera wrote it", async () => {
-  await ctx.app.evaluate(({ dialog }, picked) => {
-    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
-  }, files);
-  await ctx.window.locator(".app-toolbar button").first().click();
-  await ctx.window.getByRole("button", { name: "Import", exact: true }).click();
+  await importThroughToolbar(ctx.app, ctx.window, files);
   const importedAround = Date.now();
-  const card = ctx.window.locator(`[data-gallery-item='true'][data-image-path='${files[0]}']`);
+  const card = ctx.window.locator(`[data-gallery-item='true']${byImagePath(files[0])}`);
   await expect(card).toBeVisible({ timeout: 30_000 });
   await card.click();
   await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("honolulu-02.jpg");
@@ -93,5 +90,5 @@ test("a Discover memory names its days naturally in Chinese and English, and ope
   await memory().click();
   await expect(cards()).toHaveCount(3, { timeout: 10_000 });
   await expect(ctx.window.locator("[data-testid='geo-filter-chip']")).toHaveText("Honolulu");
-  for (const file of files) await expect(ctx.window.locator(`[data-gallery-item='true'][data-image-path='${file}']`)).toBeVisible();
+  for (const file of files) await expect(ctx.window.locator(`[data-gallery-item='true']${byImagePath(file)}`)).toBeVisible();
 });

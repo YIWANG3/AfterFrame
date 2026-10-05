@@ -7,7 +7,13 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 
-const EXIFTOOL = path.resolve(__dirname, "..", "..", "native", "exiftool", "exiftool");
+// The bundled ExifTool, run as the app runs it (media_workspace/exiftool.py):
+// the Perl script with the system's perl on macOS, the packaged exiftool.exe on
+// Windows, which has no perl.
+const EXIFTOOL_DIR = path.resolve(__dirname, "..", "..", "native", "exiftool");
+const EXIFTOOL = process.platform === "win32"
+  ? [path.join(EXIFTOOL_DIR, "exiftool.exe")]
+  : ["perl", path.join(EXIFTOOL_DIR, "exiftool")];
 
 // A JPEG no other photo shares: random pixels, so neither the content hash nor
 // the duplicate check ties it to anything already in the catalog.
@@ -18,19 +24,25 @@ async function writeUniqueJpeg(file, { width = 480, height = 320 } = {}) {
   return file;
 }
 
-// Writes EXIF the way a camera would, with the bundled ExifTool (perl, as the
-// app runs it on macOS). taken: "2024:01:02 18:05:00" (the camera's clock, no
-// zone); gps: [latitude, longitude].
-function tagPhoto(file, { taken, gps } = {}) {
-  const args = ["-q", "-overwrite_original"];
-  if (taken) args.push(`-DateTimeOriginal=${taken}`);
-  if (gps) {
-    const [lat, lon] = gps;
-    args.push(`-GPSLatitude=${Math.abs(lat)}`, `-GPSLatitudeRef=${lat >= 0 ? "N" : "S"}`,
-      `-GPSLongitude=${Math.abs(lon)}`, `-GPSLongitudeRef=${lon >= 0 ? "E" : "W"}`);
-  }
-  execFileSync("perl", [EXIFTOOL, ...args, file]);
-  return file;
+// Writes EXIF the way a camera would, with the bundled ExifTool, in one run
+// for all the photos: starting ExifTool is most of the cost (seconds for
+// exiftool.exe on Windows). Each photo: { file, taken: "2024:01:02 18:05:00"
+// (the camera's clock, no zone), gps: [latitude, longitude] }. Returns the files.
+function tagPhotos(photos) {
+  const args = [];
+  photos.forEach(({ file, taken, gps }, index) => {
+    if (index) args.push("-execute");
+    if (taken) args.push(`-DateTimeOriginal=${taken}`);
+    if (gps) {
+      const [lat, lon] = gps;
+      args.push(`-GPSLatitude=${Math.abs(lat)}`, `-GPSLatitudeRef=${lat >= 0 ? "N" : "S"}`,
+        `-GPSLongitude=${Math.abs(lon)}`, `-GPSLongitudeRef=${lon >= 0 ? "E" : "W"}`);
+    }
+    args.push(file);
+  });
+  const [command, ...script] = EXIFTOOL;
+  execFileSync(command, [...script, ...args, "-common_args", "-q", "-overwrite_original"]);
+  return photos.map(({ file }) => file);
 }
 
 // A minimal DNG whose embedded preview is smaller than its raw image: the
@@ -124,4 +136,4 @@ async function writeSyntheticDng(file, { width = 2048, height = 1152, previewWid
   return file;
 }
 
-module.exports = { writeUniqueJpeg, tagPhoto, writeSyntheticDng };
+module.exports = { writeUniqueJpeg, tagPhotos, writeSyntheticDng };

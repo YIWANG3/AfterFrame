@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const sharp = require("sharp");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, importThroughToolbar } = require("./helpers/app");
 
 let ctx;
 
@@ -191,10 +191,10 @@ test("an import cancelled part-way keeps what it indexed, and importing the fold
   ]));
   await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 30, g: 140, b: 90 } } }).tiff().toFile(path.join(dir, "retry_scan.tif"));
   const expected = fs.readdirSync(dir).map((name) => path.join(dir, name)).sort();
-  const inCatalog = () => ctx.window.evaluate(async (folder) => {
+  const inCatalog = () => ctx.window.evaluate(async (prefix) => {
     const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 10_000 });
-    return rows.filter((row) => row.image_path.startsWith(`${folder}/`)).map((row) => ({ path: row.image_path, preview: row.preview_path }));
-  }, dir);
+    return rows.filter((row) => row.image_path.startsWith(prefix)).map((row) => ({ path: row.image_path, preview: row.preview_path }));
+  }, dir + path.sep);
   try {
     const first = callTool("import_directory", { image_dirs: [dir] }).catch(() => null);
     const card = ctx.window.getByTestId("job-dock-card").first();
@@ -206,11 +206,7 @@ test("an import cancelled part-way keeps what it indexed, and importing the fold
     expect(partial.length).toBeLessThan(expected.length);
 
     // Again, the way a user does it: toolbar + › Import, the folder picked.
-    await ctx.app.evaluate(({ dialog }, picked) => {
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
-    }, [dir]);
-    await ctx.window.locator(".app-toolbar button").first().click();
-    await ctx.window.getByRole("button", { name: "Import", exact: true }).click();
+    await importThroughToolbar(ctx.app, ctx.window, [dir]);
     await expect.poll(async () => (await inCatalog()).length, { timeout: 180_000, intervals: [1_000] }).toBe(expected.length);
     await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => s.status)), { timeout: 120_000 })
       .toBe("succeeded");

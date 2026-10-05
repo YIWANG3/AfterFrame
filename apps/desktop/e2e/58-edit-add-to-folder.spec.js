@@ -27,7 +27,7 @@ const editorBox = () => ctx.window.getByTestId("editor-add-to-folder");
 // By file name: the sidecar stores the resolved path (/private/var/… for a
 // macOS temp dir), which is not the string the test handed out.
 const folderFiles = () => ctx.window.evaluate((id) => window.mediaWorkspace.browseCollection(id, { limit: 50 })
-  .then((rows) => rows.map((r) => r.image_path.split("/").pop())), folderId);
+  .then((rows) => rows.map((r) => r.image_path.split(/[\\/]/).pop())), folderId);
 
 async function openEditorFromFolder() {
   await ctx.window.locator(`[data-asset-id="${photoId}"]`).click();

@@ -18,6 +18,9 @@ const path = require("node:path");
 const sharp = require("sharp");
 const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
 
+// libvips keeps the files it read open; Windows can't delete an open file.
+sharp.cache(false);
+
 let ctx, outDir, source;
 const asked = [];
 
@@ -43,11 +46,19 @@ async function saveThroughPanel(answer) {
   return { toasts, before };
 }
 
+// A save is done when its file is in the catalog. Counting "Saved" toasts
+// raced on a slow PC: the earlier ones expire while this one is written.
+async function expectRegistered(file) {
+  await expect.poll(() => ctx.window.evaluate(
+    (p) => window.mediaWorkspace.getAssetDetail(p).then((d) => d?.image_path ?? null, () => null), file,
+  ), { timeout: 30_000 }).toBe(file);
+}
+
 test.beforeAll(async () => {
   outDir = path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-panel-"))), "G-DRIVE PRO", "外接盘 测试");
   fs.mkdirSync(outDir, { recursive: true });
   ctx = await launchApp({ testName: "save-panel" });
-  const card = ctx.window.locator("[data-gallery-item='true'][data-image-path$='/0Y1A6707-9.jpg']");
+  const card = ctx.window.locator("[data-gallery-item='true'][data-image-path$='0Y1A6707-9.jpg']");
   await expect(card).toBeVisible({ timeout: 15_000 });
   source = await card.getAttribute("data-image-path");
   await card.click();
@@ -83,15 +94,13 @@ test("Cancel in the panel writes nothing and registers nothing", async () => {
 for (const [name, format] of [["CUA 导出.png", "png"], ["CUA 导出.webp", "webp"], ["CUA 导出.jpg", "jpeg"]]) {
   test(`picking ${format.toUpperCase()} in the panel writes ${format.toUpperCase()} at full size, and it is registered`, async () => {
     const out = path.join(outDir, name);
-    const { toasts, before } = await saveThroughPanel({ canceled: false, filePath: out });
-    await expect(toasts).toHaveCount(before + 1, { timeout: 30_000 });
+    await saveThroughPanel({ canceled: false, filePath: out });
+    await expectRegistered(out);
     const meta = await sharp(out).metadata();
     expect(meta.format).toBe(format);
     // Untouched: the original's own size (the native pipeline).
     const original = await sharp(source).metadata();
     expect([meta.width, meta.height]).toEqual([original.width, original.height]);
-    const detail = await ctx.window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), out);
-    expect(detail?.image_path).toBe(out);
   });
 }
 
@@ -99,7 +108,7 @@ test("with a text layer (the canvas pipeline) the picked format is still the one
   await ctx.window.evaluate(() => window.__afterframeTest.setTool("text"));
   await ctx.window.evaluate(() => window.__afterframeTest.addTextLayer("外接盘"));
   const out = path.join(outDir, "CUA 文字.png");
-  const { toasts, before } = await saveThroughPanel({ canceled: false, filePath: out });
-  await expect(toasts).toHaveCount(before + 1, { timeout: 30_000 });
+  await saveThroughPanel({ canceled: false, filePath: out });
+  await expectRegistered(out);
   expect((await sharp(out).metadata()).format).toBe("png");
 });
