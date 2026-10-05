@@ -9,6 +9,7 @@ const { execFileSync } = require("node:child_process");
 const { _electron: electron } = require("@playwright/test");
 const { devPython } = require("../../electron/sidecar/transport");
 const { desktopCapabilities } = require("../../electron/capabilities");
+const { splitsImport } = require("../../electron/importDialog");
 
 // On Windows %TEMP% can be an 8.3 short path (C:\Users\ADMINI~1\…, as on
 // GitHub's runners). The sidecar stores paths in their long form, so a path a
@@ -21,6 +22,23 @@ if (process.platform === "win32") {
 // A feature this platform's build locks ("macOS for now", electron/capabilities.js):
 // its specs skip there instead of failing on a control that is meant to be off.
 const lacks = (feature) => desktopCapabilities(process.platform)[feature] === false;
+
+// Selects the cards (and anything else) carrying this file's path. In a CSS
+// string a backslash starts an escape, so Windows paths need theirs doubled.
+const byImagePath = (file) => `[data-image-path='${file.replace(/[\\']/g, "\\$&")}']`;
+
+// Toolbar + › Import, the native picker answering with `paths`: an import the
+// way a user starts one. Windows and Linux split the entry into Import Files…
+// and Import Folder…, since their pickers can't take both (#123).
+async function importThroughToolbar(app, window, paths) {
+  await app.evaluate(({ dialog }, picked) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
+  }, paths);
+  const folders = paths.every((p) => fs.statSync(p).isDirectory());
+  const entry = !splitsImport(process.platform) ? "Import" : folders ? "Import Folder…" : "Import Files…";
+  await window.locator(".app-toolbar button").first().click();
+  await window.getByRole("button", { name: entry, exact: true }).click();
+}
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
 const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.afcatalog");
@@ -297,4 +315,7 @@ async function waitForEditor(window, { preview = false, timeout = 15_000, previe
   );
 }
 
-module.exports = { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, lacks, REPO_DESKTOP_DIR };
+module.exports = {
+  launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, lacks, byImagePath, importThroughToolbar,
+  REPO_DESKTOP_DIR,
+};

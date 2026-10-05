@@ -250,7 +250,7 @@ test("the sidebar's covers switch gives smart collections a cover too", async ()
   // The cover is the first photo the collection currently shows.
   const first = await window.evaluate((base) => window.mediaWorkspace.browseImages({ status: "all", base, limit: 1 })
     .then((rows) => rows[0].preview_path || rows[0].image_path), (await collectionNamed("Five stars")).rules);
-  expect(decodeURIComponent(await cover.getAttribute("src"))).toContain(first.split("/").pop());
+  expect(decodeURIComponent(await cover.getAttribute("src"))).toContain(first.split(/[\\/]/).pop());
   // Covers mode shows the count as "N items" under the name, like a folder.
   await expect(row).toContainText(`${await holds("Five stars")} items`);
   // A collection with nothing in it keeps the placeholder tile.
@@ -305,7 +305,7 @@ test("an agent can create, browse and re-condition a smart collection over MCP",
 test("demoting a photo below a view's rating condition takes it out of the grid at once", async () => {
   const inspectorTitle = () => window.getByTestId("inspector-asset-title");
   const titleOf = (id) => window.evaluate((assetId) => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 })
-    .then((rows) => rows.find((row) => row.asset_id === assetId)?.image_path.split("/").pop()), id);
+    .then((rows) => rows.find((row) => row.asset_id === assetId)?.image_path.split(/[\\/]/).pop()), id);
   // Select a photo the way a user does, and rate it from the keyboard.
   const rate = async (id, key) => {
     await window.locator(`[data-gallery-item='true'][data-asset-id='${id}']`).click();

@@ -295,7 +295,7 @@ test("Compare shows RAWs decoded — two RAWs, and a RAW beside a JPEG — and z
   // Both sides decode, and neither is the RAW file.
   await expect.poll(async () => (await decoded()).every((side) => side.ok && !/\.dng$/i.test(side.src)), { timeout: 15_000 }).toBe(true);
   // The HD previews are made on demand and take over, as in the lightbox.
-  await expect.poll(async () => (await decoded()).every((side) => side.ok && side.src.includes("/previews-hd/")), { timeout: 60_000 }).toBe(true);
+  await expect.poll(async () => (await decoded()).every((side) => side.ok && /[\\/]previews-hd[\\/]/.test(side.src)), { timeout: 60_000 }).toBe(true);
   // Each side is named by its file, not "Before" / "After".
   await expect(images().nth(0)).toHaveAttribute("alt", "B0000333.dng");
   await expect(images().nth(1)).toHaveAttribute("alt", "B0000333 (1).dng");
@@ -319,7 +319,7 @@ test("Compare shows RAWs decoded — two RAWs, and a RAW beside a JPEG — and z
   await expect.poll(async () => {
     const sides = await decoded();
     return sides.every((side) => side.ok)
-      && sides.some((side) => side.src.endsWith("/luna-morning.jpg"))
+      && sides.some((side) => /[\\/]luna-morning\.jpg$/.test(side.src))
       && !sides.some((side) => /\.dng$/i.test(side.src));
   }, { timeout: 30_000 }).toBe(true);
   await ctx.window.getByTestId("compare-close").click();

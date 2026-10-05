@@ -20,7 +20,7 @@ const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, byImagePath, importThroughToolbar } = require("./helpers/app");
 const { writeUniqueJpeg } = require("./helpers/images");
 
 function makeDirs(prefix, ...names) {
@@ -33,7 +33,7 @@ function makeDirs(prefix, ...names) {
 function harness(ctx) {
   const w = () => ctx.window;
   const h = {
-    card: (filePath) => w().locator(`[data-gallery-item='true'][data-image-path='${filePath}']`),
+    card: (filePath) => w().locator(`[data-gallery-item='true']${byImagePath(filePath)}`),
     cardById: (assetId) => w().locator(`[data-gallery-item='true'][data-asset-id='${assetId}']`),
     missingBadge: (card) => card.locator("[title='Original file moved or deleted']"),
     inspectorTitle: () => w().getByTestId("inspector-asset-title"),
@@ -44,12 +44,7 @@ function harness(ctx) {
     stubOpenDialog: (paths) => ctx.app.evaluate(({ dialog }, picked) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
     }, paths),
-    // Toolbar + › Import, with the native picker answering `paths`.
-    async importThroughPicker(paths) {
-      await h.stubOpenDialog(paths);
-      await w().locator(".app-toolbar button").first().click();
-      await w().getByRole("button", { name: "Import", exact: true }).click();
-    },
+    importThroughPicker: (paths) => importThroughToolbar(ctx.app, w(), paths),
     rows: () => w().evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 })),
     async rowAt(filePath) {
       return (await h.rows()).find((row) => row.image_path === filePath) || null;

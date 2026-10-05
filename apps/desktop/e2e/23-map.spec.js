@@ -10,8 +10,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
-const { tagPhoto, writeUniqueJpeg } = require("./helpers/images");
+const { launchApp, closeApp, byImagePath, importThroughToolbar } = require("./helpers/app");
+const { tagPhotos, writeUniqueJpeg } = require("./helpers/images");
 const { captureElement } = require("./helpers/screenshot");
 
 test.describe("Map drawer", () => {
@@ -184,21 +184,19 @@ test.describe("A Discover place on the map", () => {
   const settle = () => window.waitForTimeout(1_500);
 
   test.beforeAll(async () => {
+    test.setTimeout(120_000); // tagging, launch and an import, as below
     // Three days in Honolulu: a memory needs three photos of one visit.
     dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-honolulu-")));
-    const files = [];
+    const photos = [];
     for (const day of ["02", "04", "06"]) {
       const file = await writeUniqueJpeg(path.join(dir, `honolulu-${day}.jpg`), { width: 320, height: 240 });
-      files.push(tagPhoto(file, { taken: `2024:01:${day} 12:00:00`, gps: [HONOLULU[1], HONOLULU[0]] }));
+      photos.push({ file, taken: `2024:01:${day} 12:00:00`, gps: [HONOLULU[1], HONOLULU[0]] });
     }
+    const files = tagPhotos(photos);
     ({ app, window, userDataDir } = await launchApp({ testName: "map-discover-place" }));
     await expect(cards().first()).toBeVisible({ timeout: 15_000 });
-    await app.evaluate(({ dialog }, picked) => {
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
-    }, files);
-    await window.locator(".app-toolbar button").first().click();
-    await window.getByRole("button", { name: "Import", exact: true }).click();
-    for (const file of files) await expect(window.locator(`[data-image-path='${file}']`)).toBeVisible({ timeout: 30_000 });
+    await importThroughToolbar(app, window, files);
+    for (const file of files) await expect(window.locator(byImagePath(file))).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => !!s?.running)), { timeout: 30_000 }).toBe(false);
 
     // The map has been used before: its camera has been moved by the user,
@@ -268,19 +266,16 @@ test.describe("The map's first open, on a Discover place", () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
     dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-first-map-")));
-    const files = [];
+    const photos = [];
     for (const day of ["02", "03", "04"]) {
       const file = await writeUniqueJpeg(path.join(dir, `waikiki-${day}.jpg`), { width: 320, height: 240 });
-      files.push(tagPhoto(file, { taken: `2024:01:${day} 09:00:00`, gps: [21.2766, -157.8271] }));
+      photos.push({ file, taken: `2024:01:${day} 09:00:00`, gps: [21.2766, -157.8271] });
     }
+    const files = tagPhotos(photos);
     ({ app, window, userDataDir } = await launchApp({ testName: "map-first-open" }));
     await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
-    await app.evaluate(({ dialog }, picked) => {
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
-    }, files);
-    await window.locator(".app-toolbar button").first().click();
-    await window.getByRole("button", { name: "Import", exact: true }).click();
-    for (const file of files) await expect(window.locator(`[data-image-path='${file}']`)).toBeVisible({ timeout: 30_000 });
+    await importThroughToolbar(app, window, files);
+    for (const file of files) await expect(window.locator(byImagePath(file))).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => !!s?.running)), { timeout: 30_000 }).toBe(false);
   });
 
