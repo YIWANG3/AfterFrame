@@ -16,6 +16,7 @@ import {
   inferMimeType, releaseCanvasImage,
 } from "../render/canvasHelpers";
 import { panelBoundaries, regionToPixels } from "../splitMath";
+import { pathSeparator } from "../../../utils/format";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -37,13 +38,14 @@ export function resolveSplitOutputDir(saveBasePath, outputDir, subfolder = true)
   if (!saveBasePath) return null;
   const { dir, stem } = splitPath(saveBasePath);
   const base = outputDir || dir;
-  return subfolder ? `${base}/${stem}_split` : base;
+  // A Windows folder takes "\\" (C:\\Photos\\pano_split), not a mixed path.
+  return subfolder ? `${base}${pathSeparator(base)}${stem}_split` : base;
 }
 
 export function splitPanelPaths(saveBasePath, outputDir, subfolder, count) {
   const { stem, ext } = splitPath(saveBasePath);
   const dir = resolveSplitOutputDir(saveBasePath, outputDir, subfolder);
-  return Array.from({ length: count }, (_, i) => `${dir}/${stem}_split_${pad2(i + 1)}.${ext}`);
+  return Array.from({ length: count }, (_, i) => `${dir}${pathSeparator(dir)}${stem}_split_${pad2(i + 1)}.${ext}`);
 }
 
 export function useSplitExport({
