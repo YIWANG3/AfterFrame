@@ -6,6 +6,11 @@
 // full gallery, and collapsing the map keeps the filter.
 
 const { test, expect } = require("@playwright/test");
+const { execFileSync } = require("node:child_process");
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const sharp = require("sharp");
 const { launchApp, closeApp } = require("./helpers/app");
 const { captureElement } = require("./helpers/screenshot");
@@ -155,5 +160,103 @@ test.describe("Map drawer", () => {
     await window.locator("[data-testid='display-mode-trigger']").click();
     await window.locator("[data-testid='display-mode-tiles']").click();
     await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible();
+  });
+});
+
+// A Discover memory is a date range AND a place. Opening the map on it used to
+// replace the place with whatever the camera showed first (the world), which
+// emptied the gallery; closing the map then dropped the place for good.
+test.describe("A Discover place on the map", () => {
+  test.skip(!!process.env.CI, "no GPU/WebGL on the GitHub macOS runner: MapLibre never renders");
+  test.describe.configure({ mode: "serial" });
+
+  const HONOLULU = [-157.8583, 21.3069];
+  const EXIFTOOL = path.resolve(__dirname, "..", "native", "exiftool", "exiftool");
+  let app, window, userDataDir, dir;
+  const cards = () => window.locator("[data-gallery-item='true']");
+  const chip = () => window.locator("[data-testid='geo-filter-chip']");
+  const drawer = () => window.locator("[data-testid='map-drawer']");
+  const mapState = () => window.evaluate(() => window.__afterframeMapTest.getState());
+  const toggleMap = async (open) => {
+    await window.locator("[data-testid='map-toggle']").click();
+    await expect.poll(() => drawer().evaluate((el) => el.getBoundingClientRect().height), { timeout: 10_000 })[open ? "toBeGreaterThan" : "toBe"](open ? 200 : 0);
+  };
+  // Long enough for the drawer animation, the framing and the 250 ms debounce
+  // that would have replaced the filter.
+  const settle = () => window.waitForTimeout(1_500);
+
+  test.beforeAll(async () => {
+    // Three days in Honolulu: a memory needs three photos of one visit.
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-honolulu-")));
+    const files = [];
+    for (const day of ["02", "04", "06"]) {
+      const file = path.join(dir, `honolulu-${day}.jpg`);
+      await sharp(crypto.randomBytes(320 * 240 * 3), { raw: { width: 320, height: 240, channels: 3 } }).jpeg().toFile(file);
+      execFileSync("perl", [EXIFTOOL, "-q", "-overwrite_original", `-DateTimeOriginal=2024:01:${day} 12:00:00`,
+        "-GPSLatitude=21.3069", "-GPSLatitudeRef=N", "-GPSLongitude=157.8583", "-GPSLongitudeRef=W", file]);
+      files.push(file);
+    }
+    ({ app, window, userDataDir } = await launchApp({ testName: "map-discover-place" }));
+    await expect(cards().first()).toBeVisible({ timeout: 15_000 });
+    await app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
+    }, files);
+    await window.locator(".app-toolbar button").first().click();
+    await window.getByRole("button", { name: "Import", exact: true }).click();
+    for (const file of files) await expect(window.locator(`[data-image-path='${file}']`)).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => !!s?.running)), { timeout: 30_000 }).toBe(false);
+
+    // The map has been used before: its camera has been moved by the user,
+    // which once made every later viewport count as deliberate.
+    await toggleMap(true);
+    await expect(window.locator(".photo-map-stage[data-map-ready='true']")).toBeVisible({ timeout: 30_000 });
+    await window.evaluate(() => window.__afterframeMapTest.jumpTo([2.35, 48.85], 5));
+    await expect(chip()).toBeVisible({ timeout: 10_000 });
+    await toggleMap(false);
+    await expect(chip()).toHaveCount(0);
+  });
+
+  test.afterAll(async () => {
+    await closeApp(app, userDataDir);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("opening the map keeps the memory's place and frames it", async () => {
+    await window.getByRole("navigation").first().getByRole("button", { name: "Discover" }).click();
+    await window.getByRole("button", { name: /^Honolulu/ }).click();
+    await expect(cards()).toHaveCount(3, { timeout: 10_000 });
+    await expect(chip()).toHaveText("Honolulu");
+
+    await toggleMap(true);
+    await settle();
+    await expect(chip()).toHaveText("Honolulu");
+    await expect(cards()).toHaveCount(3);
+    const { center, zoom, bounds } = await mapState();
+    expect(Math.abs(center[0] - HONOLULU[0])).toBeLessThan(1);
+    expect(Math.abs(center[1] - HONOLULU[1])).toBeLessThan(1);
+    expect(zoom).toBeGreaterThan(6);
+    // The photos are on screen, not just near the centre.
+    expect(bounds[0][0]).toBeLessThan(HONOLULU[0]);
+    expect(bounds[1][0]).toBeGreaterThan(HONOLULU[0]);
+    await expect(window.locator(".photo-map-marker").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("moving the map looks around; closing it brings the place back", async () => {
+    await window.evaluate(() => window.__afterframeMapTest.jumpTo([2.35, 48.85], 5));
+    await expect(chip()).toHaveText("Visible map area", { timeout: 10_000 });
+    // Still inside the memory's dates: nothing from Honolulu, nothing undated.
+    await expect(cards()).toHaveCount(0, { timeout: 10_000 });
+
+    await toggleMap(false);
+    await expect(chip()).toHaveText("Honolulu", { timeout: 10_000 });
+    await expect(cards()).toHaveCount(3, { timeout: 10_000 });
+
+    // Opening it again frames the place again and keeps it.
+    await toggleMap(true);
+    await settle();
+    await expect(chip()).toHaveText("Honolulu");
+    await expect(cards()).toHaveCount(3);
+    const { center } = await mapState();
+    expect(Math.abs(center[0] - HONOLULU[0])).toBeLessThan(1);
   });
 });
