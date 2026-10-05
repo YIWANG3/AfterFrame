@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SCOPE,
   activeFilterCount,
+  appendPage,
   browseScopeKey,
   chooseSelectionAfterReload,
   editScopeFromRules,
@@ -52,6 +53,27 @@ describe("filterItemsByQuery", () => {
   it("is case-insensitive on filename/path and tolerates missing fields", () => {
     expect(filterItemsByQuery(items, "img_0001").map((i) => i.asset_id)).toEqual(["a"]);
     expect(filterItemsByQuery([item("z")], "anything")).toEqual([]);
+  });
+});
+
+describe("appendPage", () => {
+  const ids = (list) => list.map((entry) => entry.asset_id);
+
+  it("drops rows already shown when the view grew between two pages", () => {
+    // Page 1 ended at c; two photos landed before it, so page 2 starts at b.
+    const shown = [item("a"), item("b"), item("c")];
+    const next = appendPage(shown, [item("b"), item("c"), item("d"), item("e")]);
+    expect(ids(next)).toEqual(["a", "b", "c", "d", "e"]);
+    expect(next[1]).toBe(shown[1]); // the card on screen keeps its object
+  });
+
+  it("returns the same array when the page adds nothing new", () => {
+    const shown = [item("a"), item("b")];
+    expect(appendPage(shown, [item("a"), item("b")])).toBe(shown);
+  });
+
+  it("drops a repeat inside one page", () => {
+    expect(ids(appendPage([], [item("a"), item("b"), item("a")]))).toEqual(["a", "b"]);
   });
 });
 

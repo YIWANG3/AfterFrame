@@ -5,7 +5,7 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
+  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
@@ -328,9 +328,9 @@ export default function useWorkspace({ pushToast } = {}) {
       setBrowserOffset(nextOffset + payload.length);
       setBrowserHasMore(payload.length === (append ? PAGE_SIZE : pageLimit));
       if (append) {
-        setItems((current) => [...current, ...payload]);
+        setItems((current) => appendPage(current, payload));
       } else {
-        setItems(payload);
+        setItems(appendPage([], payload));
         const activeSelectedId = selectedAssetIdRef.current;
         // The pin (relatedSelectionRef) is cleared by the next ordinary gallery
         // selection through setSelectedAssetId above.
@@ -463,7 +463,7 @@ export default function useWorkspace({ pushToast } = {}) {
         : await api.browseImages({ ...asQuery(target), limit: count, offset });
       log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
       if (!isCurrent()) { log("superseded after page"); return; }
-      const nextItems = offset === 0 ? payload : [...items, ...payload];
+      const nextItems = appendPage(offset === 0 ? [] : items, payload);
       if (!nextItems.some((item) => item.asset_id === assetId)) throw new Error(t("relatedAsset.missing"));
       // Either way the scope the grid now shows becomes THE scope — including
       // the absorbed search text, so the box and the grid agree.
@@ -472,7 +472,7 @@ export default function useWorkspace({ pushToast } = {}) {
       seedAnnotations(payload);
       setItems(nextItems);
       setRevealAssetRequest({ assetId, navigationId });
-      setBrowserOffset(nextItems.length);
+      setBrowserOffset(offset + payload.length);
       if (count > 0) setBrowserHasMore(payload.length === count);
       setBrowserReady(true);
       log("done", `items=${nextItems.length}`);
@@ -525,7 +525,7 @@ export default function useWorkspace({ pushToast } = {}) {
         return { found, missing: [...wanted] };
       }
       seedAnnotations(collected);
-      setItems(collected);
+      setItems(appendPage([], collected));
       setBrowserOffset(offset);
       setBrowserHasMore(lastPageFull);
       setBrowserReady(true);
