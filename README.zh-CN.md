@@ -60,6 +60,7 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 网格、瓦片、对齐、瀑布流四种布局模式
 - 按导入时间、拍摄时间、评分或文件名排序
 - 智能集合（保存的筛选条件，数量实时更新；可排除任意条件、按低于某星级或未评分筛选、条件分组取「或」）和手动文件夹
+- 文件夹列表可排序（自定义顺序、名称、最新、照片最多）和按名称搜索；新建的文件夹排在最上面
 - 完整元数据检查器：EXIF、相机、镜头、曝光、日期
 - 星级评分（自动导入 Lightroom XMP 评分）
 - 虚拟滚动画廊，流畅处理 10,000+ 张图片
@@ -194,7 +195,7 @@ npm run dist:mac          # 重打 sidecar，再打包 + 签名（Developer ID�
 npm run dist:mac:release  # 额外公证 —— 需设置 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
 ```
 
-`.dmg` 输出在 `apps/desktop/release/`。sidecar 步骤需要先装好 sidecar 和 `pyinstaller`（`pip3 install -e "services/sidecar[jimeng]" pyinstaller`），没有 rawpy（LibRaw）会直接停下。ExifTool 由构建脚本下载到 `native/exiftool`。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
+`.dmg` 输出在 `apps/desktop/release/`。macOS 上 sidecar 步骤需要 [uv](https://docs.astral.sh/uv/)：它用 uv 的 CPython 3.12 和面向 macOS 14 的 wheel 构建 sidecar，打进去的二进制只要有一个需要更新的 macOS 就直接失败（见 `docs/developer-setup.md`）。ExifTool 由构建脚本下载到 `native/exiftool`。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
 
 ## 项目结构
 

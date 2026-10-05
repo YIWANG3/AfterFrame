@@ -60,6 +60,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Grid, tiles, justified, and waterfall layout modes
 - Sort by imported time, captured time, rating, or name
 - Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
+- Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
 - Star rating system (imports Lightroom XMP ratings)
 - Virtual-scroll gallery that handles 10,000+ images smoothly
@@ -200,7 +201,7 @@ npm run dist:mac          # rebuild sidecar, then package + sign (Developer ID)
 npm run dist:mac:release  # also notarize — set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
 ```
 
-The `.dmg` will be in `apps/desktop/release/`. The sidecar step needs the sidecar and `pyinstaller` installed (`pip3 install -e "services/sidecar[jimeng]" pyinstaller`); it stops if rawpy (LibRaw) is missing. ExifTool is fetched into `native/exiftool` by the build. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
+The `.dmg` will be in `apps/desktop/release/`. On macOS the sidecar step needs [uv](https://docs.astral.sh/uv/): it builds the sidecar from uv's CPython 3.12 with wheels for macOS 14, and fails if any bundled binary needs a newer macOS (see `docs/developer-setup.md`). ExifTool is fetched into `native/exiftool` by the build. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
 
 `npm run build` updates the workspace renderer only; it does not update an
 installed `/Applications/AfterFrame.app`. To verify the actual packaged app
