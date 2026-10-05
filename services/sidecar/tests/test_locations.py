@@ -27,6 +27,8 @@ from media_workspace.db import (  # noqa: E402
     upsert_registry,
 )
 from media_workspace.db.browse import _facet_clauses  # noqa: E402
+from media_workspace.db.locations import upsert_ai_asset_location  # noqa: E402
+from media_workspace.geo_resolver import ResolvedLocation  # noqa: E402
 from media_workspace.db.migrations import migrate  # noqa: E402
 from media_workspace.models import ImageCandidate, MatchDecision, RawMetadata  # noqa: E402
 from media_workspace.schema import SCHEMA_VERSION  # noqa: E402
@@ -264,6 +266,22 @@ class LocationTestCase(unittest.TestCase):
         self.assertIn(fiji, ids)
         self.assertIn(samoa, ids)
         self.assertNotIn(paris, ids)
+
+    def test_bounds_filter_matches_the_point_the_map_draws(self):
+        # A city-level AI guess is drawn at the city centre, but its box
+        # (±0.15°) reaches the next town over. A viewport there shows no
+        # marker for it, so the filtered gallery must not list it either.
+        sf = self._import_image(None, None)
+        upsert_ai_asset_location(self.connection, sf, ResolvedLocation(
+            latitude=37.775, longitude=-122.4194,
+            min_latitude=37.625, max_latitude=37.925, min_longitude=-122.569, max_longitude=-122.269,
+            precision_level="locality", place_id="wd:Q62", matched_label="San Francisco",
+            country_code="US", confidence=0.9,
+        ), resolver_version="test", commit=True)
+        mill_valley = {"mode": "bounds", "west": -122.65, "south": 37.88, "east": -122.50, "north": 37.98}
+        downtown = {"mode": "bounds", "west": -122.45, "south": 37.76, "east": -122.39, "north": 37.80}
+        self.assertEqual(self._browse_geo_ids(mill_valley), set())
+        self.assertEqual(self._browse_geo_ids(downtown), {sf})
 
     def test_source_and_precision_filters(self):
         paris = self._import_image(48.8566, 2.3522)

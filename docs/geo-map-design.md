@@ -178,7 +178,7 @@ CREATE VIRTUAL TABLE asset_location_rtree USING rtree(
 );
 ```
 
-精确 GPS 点的 min/max 经纬度相同。AI 城市或行政区位置保存用于相交查询的包围盒；`latitude/longitude` 是 Marker 中心点。
+精确 GPS 点的 min/max 经纬度相同。AI 城市或行政区位置另存包围盒；`latitude/longitude` 是 Marker 中心点。视窗筛选按中心点判断（见 5.1），不按包围盒相交：城市级位置画在市中心，包围盒约 ±0.15°，按相交会让邻镇的视窗列出地图上看不到标记的照片。
 
 通过应用层统一维护 `asset_locations` 和 R*Tree，避免复杂触发器。所有 Upsert/Delete 必须在同一事务中完成。
 
@@ -244,12 +244,9 @@ MVP 可以先支持当前内置城市/行政区数据；更完整的城市覆盖
 EXISTS (
   SELECT 1
   FROM asset_locations loc
-  JOIN asset_location_rtree geo ON geo.location_id = loc.location_id
   WHERE loc.asset_id = assets.asset_id
-    AND geo.max_longitude >= :west
-    AND geo.min_longitude <= :east
-    AND geo.max_latitude >= :south
-    AND geo.min_latitude <= :north
+    AND loc.latitude BETWEEN :south AND :north
+    AND loc.longitude BETWEEN :west AND :east
 )
 ```
 
