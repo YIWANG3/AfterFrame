@@ -11,7 +11,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { localFileUrl } from "../utils/format";
+import { formatDayRange, localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 
 // Fallback when the catalog has no located photos at all (no GPS, no AI
@@ -231,13 +231,7 @@ export default function DiscoverView({
   }, [coverKey]);
 
   const thumb = (item) => (item ? localFileUrl(item.preview_path || item.image_path) : null);
-  const fmt = (iso, opts) => new Date(`${iso}T12:00:00`).toLocaleDateString(locale, opts);
-  const rangeLabel = (from, to) => {
-    const year = from.slice(0, 4) === String(new Date().getFullYear()) ? {} : { year: "numeric" };
-    if (from === to) return fmt(from, { month: "short", day: "numeric", ...year });
-    if (from.slice(0, 7) === to.slice(0, 7)) return `${fmt(from, { month: "short", day: "numeric" })} – ${fmt(to, { day: "numeric", ...year })}`;
-    return `${fmt(from, { month: "short", day: "numeric", ...year })} – ${fmt(to, { month: "short", day: "numeric", ...year })}`;
-  };
+  const rangeLabel = (from, to) => formatDayRange(from, to, locale);
   const monthLabel = (g) => new Date(g.year, g.month - 1, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
   const countLabel = (count) => t("discover.folderMeta", { count });
 

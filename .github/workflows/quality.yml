@@ -157,6 +157,7 @@ jobs:
           e2e/55-personal-logos.spec.js
           e2e/56-brand-logos.spec.js
           e2e/60-file-lifecycle.spec.js
+          e2e/61-dates-and-places.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

@@ -432,9 +432,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           ) : null}
 
           <Section title={t("sections.dates")}>
-            <DetailRow label={t("rows.imported")}>{formatTimestamp(detail.imported_at || imageMeta.imported_at)}</DetailRow>
-            <DetailRow label={t("rows.captured")}>{formatTimestamp(rawMeta.capture_time || imageMeta.capture_time)}</DetailRow>
-            <DetailRow label={t("rows.modified")}>{formatTimestamp(imageMeta.modified_time || detail.updated_at)}</DetailRow>
+            <DetailRow label={t("rows.imported")}><span data-testid="inspector-imported">{formatTimestamp(detail.imported_at || imageMeta.imported_at, { zoneless: "utc" })}</span></DetailRow>
+            <DetailRow label={t("rows.captured")}><span data-testid="inspector-captured">{formatTimestamp(rawMeta.capture_time || imageMeta.capture_time)}</span></DetailRow>
+            <DetailRow label={t("rows.modified")}><span data-testid="inspector-modified">{formatTimestamp(imageMeta.modified_time || detail.updated_at, { zoneless: "utc" })}</span></DetailRow>
           </Section>
 
           {gps ? (

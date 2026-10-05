@@ -29,6 +29,7 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
  *   is exercised).
  * @param {string} [opts.reuseUserDataDir] - reuse an isolated E2E directory to
  *   exercise app restart and saved-catalog migrations; use withCatalog: false.
+ * @param {object} [opts.env] - extra environment for the app, e.g. { TZ }.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
 // Each launch gets its own MCP port: the dev app holds the default 41706, and
@@ -67,7 +68,7 @@ async function collectCoverage(app) {
   }
 }
 
-async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false, peopleModel = "none" } = {}) {
+async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = false, catalogFixture = "default", prepareCatalog, reuseUserDataDir, keepCatalog = false, peopleModel = "none", env: extraEnv = {} } = {}) {
   // Fresh userData so each run starts from a clean slate
   if (reuseUserDataDir && (!path.basename(reuseUserDataDir).startsWith("afterframe-e2e-")
     || fs.realpathSync(path.dirname(reuseUserDataDir)) !== fs.realpathSync(os.tmpdir()))) {
@@ -83,6 +84,7 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
     AFTERFRAME_SIDECAR_TRACE: "1",
     NODE_ENV: "test",
     ...coverageEnv(),
+    ...extraEnv,
   };
   // Production tests must not accidentally attach to an inherited Vite URL.
   delete env.VITE_DEV_SERVER_URL;

@@ -17,22 +17,11 @@
 // the CI VM cannot run): the watched-folder catch-up is the startup scan.
 
 const { test, expect } = require("@playwright/test");
-const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const sharp = require("sharp");
 const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
-
-// A JPEG no other photo shares: random pixels, so neither the content hash nor
-// the duplicate check ties it to anything already in the catalog.
-async function writeUniqueJpeg(file) {
-  const width = 480;
-  const height = 320;
-  await sharp(crypto.randomBytes(width * height * 3), { raw: { width, height, channels: 3 } })
-    .jpeg({ quality: 90 })
-    .toFile(file);
-}
+const { writeUniqueJpeg } = require("./helpers/images");
 
 function makeDirs(prefix, ...names) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));

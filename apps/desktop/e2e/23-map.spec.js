@@ -6,13 +6,12 @@
 // full gallery, and collapsing the map keeps the filter.
 
 const { test, expect } = require("@playwright/test");
-const { execFileSync } = require("node:child_process");
-const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { launchApp, closeApp } = require("./helpers/app");
+const { tagPhoto, writeUniqueJpeg } = require("./helpers/images");
 const { captureElement } = require("./helpers/screenshot");
 
 test.describe("Map drawer", () => {
@@ -171,7 +170,6 @@ test.describe("A Discover place on the map", () => {
   test.describe.configure({ mode: "serial" });
 
   const HONOLULU = [-157.8583, 21.3069];
-  const EXIFTOOL = path.resolve(__dirname, "..", "native", "exiftool", "exiftool");
   let app, window, userDataDir, dir;
   const cards = () => window.locator("[data-gallery-item='true']");
   const chip = () => window.locator("[data-testid='geo-filter-chip']");
@@ -190,11 +188,8 @@ test.describe("A Discover place on the map", () => {
     dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-honolulu-")));
     const files = [];
     for (const day of ["02", "04", "06"]) {
-      const file = path.join(dir, `honolulu-${day}.jpg`);
-      await sharp(crypto.randomBytes(320 * 240 * 3), { raw: { width: 320, height: 240, channels: 3 } }).jpeg().toFile(file);
-      execFileSync("perl", [EXIFTOOL, "-q", "-overwrite_original", `-DateTimeOriginal=2024:01:${day} 12:00:00`,
-        "-GPSLatitude=21.3069", "-GPSLatitudeRef=N", "-GPSLongitude=157.8583", "-GPSLongitudeRef=W", file]);
-      files.push(file);
+      const file = await writeUniqueJpeg(path.join(dir, `honolulu-${day}.jpg`), { width: 320, height: 240 });
+      files.push(tagPhoto(file, { taken: `2024:01:${day} 12:00:00`, gps: [HONOLULU[1], HONOLULU[0]] }));
     }
     ({ app, window, userDataDir } = await launchApp({ testName: "map-discover-place" }));
     await expect(cards().first()).toBeVisible({ timeout: 15_000 });

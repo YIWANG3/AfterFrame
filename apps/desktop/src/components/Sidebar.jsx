@@ -95,7 +95,7 @@ export default function Sidebar({
   const browse = navItems(summary);
   const rootSummary = [];
   if (browseCount(summary)) rootSummary.push(t("sidebar.assetsCount", { count: browseCount(summary) }));
-  if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at) }));
+  if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at, { zoneless: "utc" }) }));
 
   const [creatingFolder, setCreatingFolder] = useState(false);
   // Folder list view: plain rows, or rows with a cover thumbnail (demo C's library list).
