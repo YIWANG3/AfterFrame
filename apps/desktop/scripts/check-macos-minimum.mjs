@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 // Fail when anything built for the app needs a newer macOS than the app itself.
 //
-// 0.5.8 shipped a sidecar built with Homebrew's Python 3.14: its Python
-// framework, standard-library modules and numpy all said macOS 15. On macOS
-// 12–14 the window opened, but the sidecar couldn't load, so nothing could be
-// imported or browsed — and nothing in the build noticed.
+// 0.5.8 declared macOS 12 (Electron's minimum) but shipped a sidecar built
+// with Homebrew's Python 3.14, whose framework, standard-library modules and
+// numpy all said macOS 15. On macOS 12–14 the window opened, but the sidecar
+// couldn't load, so nothing could be imported or browsed — and nothing in the
+// build noticed.
 //
 //   node scripts/check-macos-minimum.mjs [dir ...]   # default: the built sidecar
 //
-// The app's minimum is Electron's (LSMinimumSystemVersion in its Info.plist),
-// or package.json build.mac.minimumSystemVersion when that is set. Every
-// Mach-O file under the given folders must need no newer macOS than that.
+// The app's minimum is package.json build.mac.minimumSystemVersion, or
+// Electron's own (LSMinimumSystemVersion in its Info.plist) when that isn't
+// set. Every Mach-O file under the given folders must need no newer macOS.
 
 import fs from "node:fs";
 import path from "node:path";

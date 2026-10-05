@@ -16,7 +16,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 从 [Releases](../../releases) 下载最新 `.dmg`。
 
-> 仅支持 macOS（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
+> 需要 macOS 14 或更新版本（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
 
 ![AfterFrame — 浏览与检查](docs/assets/cn/library.webp)
 
@@ -171,7 +171,7 @@ codex mcp add afterframe --url http://127.0.0.1:41706/mcp
 ## 快速开始
 
 ### 环境要求
-- macOS（Apple Silicon）
+- macOS 14 或更新版本（Apple Silicon）
 - Python 3.10+（sidecar 服务，仅开发需要）
 - Node.js 18+（仅开发需要）
 

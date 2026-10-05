@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 #
-# Build the macOS sidecar (PyInstaller) so it runs on every macOS the app
-# does: 12 and later, as Electron's Info.plist says.
+# Build the macOS sidecar (PyInstaller) for the macOS the app supports:
+# build.mac.minimumSystemVersion in package.json (14.0: every Apple Silicon Mac
+# can update to it, and numpy's fast Accelerate build needs it).
 #
 # Whatever Python is on PATH won't do. Homebrew's is built for the Mac it was
-# installed on, and so is anything pip compiles against it: 0.5.8 shipped a
-# sidecar that needed macOS 15, and on macOS 12–14 nothing could be imported.
-# So the build uses
-#   - uv's standalone CPython 3.12, which runs on macOS 11 and later;
-#   - wheels picked for macOS 12 (numpy's Accelerate build needs 14, its
-#     OpenBLAS build doesn't), anything compiled targeting 12 too;
+# installed on, and so is anything pip compiles against it: once that Mac is
+# on a newer macOS, so is the sidecar, and on anything older nothing can be
+# imported. So the build uses
+#   - uv's standalone CPython 3.12 (runs on macOS 11+), the Python CI tests;
+#   - wheels picked for the app's minimum, so numpy is its Accelerate build
+#     (macOS 14+, about twice as fast as its OpenBLAS one here);
 #   - scripts/check-macos-minimum.mjs, which fails the build on anything newer.
 #
 # Needs uv: curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -21,7 +22,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # → apps/desktop
 SIDECAR="$(cd ../../services/sidecar && pwd)"
 VENV="$SIDECAR/build/macos-venv"
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-$(node -p "require('./package.json').build.mac.minimumSystemVersion")}"
 
 UV="$(command -v uv || true)"
 [[ -n "$UV" ]] || UV="$HOME/.local/bin/uv"

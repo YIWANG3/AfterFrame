@@ -96,6 +96,7 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.photography",
+      "minimumSystemVersion": "14.0",
       "target": [
         {
           "target": "dmg",
