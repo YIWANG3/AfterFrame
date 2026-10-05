@@ -2,6 +2,7 @@
 // Doesn't depend on having a catalog loaded; just verifies the nav buttons
 // react and the right pane swaps content.
 
+const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, lacks } = require("./helpers/app");
 
@@ -63,6 +64,68 @@ test.describe("Sidebar navigation", () => {
 
     // restore
     await window.getByRole("button", { name: /All Assets/i }).first().click();
+  });
+
+  // Changing place and straight back. With the answer for the place left
+  // still out, the way back skipped its browse ("already showing this" was
+  // still true from before), so that answer landed last and won: CI showed
+  // All Assets' 14 photos under a smart collection's title (e2e/46). Here the
+  // answers are held back behind read-only scans of a big folder (the
+  // watched-folder catch-up check, which lists new files and imports nothing)
+  // on the resident sidecar, which answers in order, so they are still out
+  // when the second click comes, however fast the machine.
+  test.describe("changing place and straight back", () => {
+    const cards = () => window.locator("[data-gallery-item='true']");
+    const title = () => window.getByTestId("gallery-title");
+    const holdSidecar = () => window.evaluate((dir) => {
+      for (let i = 0; i < 3; i += 1) void window.mediaWorkspace.scanNewMedia([dir]);
+    }, path.resolve(__dirname, "..", "node_modules"));
+    // Everything asked before this has been answered, and painted.
+    const settle = async () => {
+      await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1 }));
+      await window.waitForTimeout(500);
+    };
+
+    test.beforeEach(async () => {
+      await window.getByRole("button", { name: /^All Assets/ }).first().click();
+      await expect(cards()).toHaveCount(14, { timeout: 10_000 });
+    });
+
+    test("away and back shows where you came back to", async () => {
+      await holdSidecar();
+      await window.getByRole("button", { name: /^Rated/ }).first().click();
+      await expect(title()).toHaveText("Rated");
+      await window.getByRole("button", { name: /^All Assets/ }).first().click();
+      await expect(title()).toHaveText("All Assets");
+      await settle();
+      await expect(cards()).toHaveCount(14);
+    });
+
+    // A filter changes the view without clearing the grid; the filtered
+    // answer used to stay the same way.
+    test("a filter put on and straight off again shows the view without it", async () => {
+      if (!await window.locator("[data-filter-bar]").isVisible()) await window.getByRole("button", { name: "Filters" }).click();
+      await holdSidecar();
+      const fourStars = window.getByTitle("Rating ≥ 4");
+      await fourStars.click();
+      await fourStars.click();
+      await settle();
+      await expect(cards()).toHaveCount(14);
+    });
+
+    // Both clicks in one task are one batch of updates: the render ends where
+    // it started, so the browse effect saw no change of place, but the first
+    // click had cleared the grid. It stayed empty.
+    test("away and back in one batch of updates shows where you came back to", async () => {
+      await window.evaluate(() => {
+        const buttons = [...document.querySelectorAll("button")];
+        buttons.find((button) => /^Rated/.test(button.textContent.trim())).click();
+        buttons.find((button) => /^All Assets/.test(button.textContent.trim())).click();
+      });
+      await expect(title()).toHaveText("All Assets");
+      await settle();
+      await expect(cards()).toHaveCount(14);
+    });
   });
 
   // Leaving a folder. The status entries used to mark the library as "already

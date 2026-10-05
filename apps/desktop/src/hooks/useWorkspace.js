@@ -215,7 +215,11 @@ export default function useWorkspace({ pushToast } = {}) {
     if (scopeKey === loadedScopeRef.current) return;
     void loadBrowser({ scope: scopeRef.current });
   });
-  useEffect(() => { browseCurrentScope(); }, [scopeKey]);
+  // `navigation` counts the times goTo cleared the grid: a cleared grid is
+  // always browsed again, even when the scope it ends on is the one it started
+  // from (away and back within one batch of updates).
+  const [navigation, setNavigation] = useState(0);
+  useEffect(() => { browseCurrentScope(); }, [scopeKey, navigation]);
 
   // Refresh facet options when the catalog/library changes, and whenever the
   // view does: every count is "how many photos picking this would show" given
@@ -291,6 +295,12 @@ export default function useWorkspace({ pushToast } = {}) {
     } else {
       setBrowserLoading(true);
       setBrowserLoadingMore(false);
+      // Going somewhere else: until this answer lands, the place shown before
+      // is no longer surely loaded. Otherwise, going straight back to it while
+      // this is out skips the browse ("already showing this"), and this
+      // answer, for the place left, lands last and wins. A refresh of the
+      // same place keeps the mark, which reveals rely on.
+      if (scopeKeyOf(target) !== loadedScopeRef.current) loadedScopeRef.current = null;
     }
     try {
       const nextOffset = append ? browserOffset : 0;
@@ -795,6 +805,10 @@ export default function useWorkspace({ pushToast } = {}) {
       setBrowserOffset(0);
       setBrowserHasMore(true);
       setSelectedAssetId(null);
+      // The grid no longer shows what was loaded: whatever place this ends on,
+      // including the one just left, has to be browsed.
+      loadedScopeRef.current = null;
+      setNavigation((count) => count + 1);
     }
     setTypedQuery(full.query);
     setScopeState(full);
