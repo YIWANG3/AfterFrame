@@ -5,7 +5,7 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
+  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
@@ -28,6 +28,9 @@ export default function useWorkspace({ pushToast } = {}) {
   const [roots, setRoots] = useState([]);
   const [items, setItems] = useState([]);
   const [detail, setDetail] = useState(null);
+  // What the Inspector shows right now, for code that runs after an await.
+  const detailRef = useRef(null);
+  detailRef.current = detail;
   // The browse destination is ONE value. Every way of changing what the grid
   // shows (sidebar status, a collection, typed search, facet chips, sort, the
   // Discover tiles, a person, an agent reveal) writes this object; one effect
@@ -251,7 +254,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // photo is still the one shown, and a loadDetail issued meanwhile is not
   // outranked, since this never bumps the request counter.
   function refreshShownDetail() {
-    const assetId = detail?.asset_id;
+    const assetId = detailRef.current?.asset_id;
     if (!assetId) return;
     void api.getAssetDetailById(assetId)
       .then((payload) => {
@@ -340,6 +343,11 @@ export default function useWorkspace({ pushToast } = {}) {
         if (nextSelectedId !== activeSelectedId) {
           setSelectedAssetId(nextSelectedId);
           await loadDetail(nextSelectedId || null);
+        } else if (!preserveView || detailIsStale(detailRef.current, payload)) {
+          // Same photo still selected, so nothing above reloads its detail:
+          // after Refresh, a relink or a file coming back, the card changed
+          // and the Inspector kept the old path and missing state.
+          refreshShownDetail();
         }
       }
       setBrowserReady(true);

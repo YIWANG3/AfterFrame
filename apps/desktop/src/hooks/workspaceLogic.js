@@ -224,6 +224,22 @@ export function chooseSelectionAfterReload({ payload, activeSelectedId, relatedP
   return payload[0]?.asset_id || null;
 }
 
+// After a reload that kept the selection: is the Inspector's copy of the
+// photo out of date? The browse row is read fresh each time, and its file
+// state is a live stat, so a photo moved away, put back or relinked shows up
+// there first — with the same asset id, which is all the selection compares.
+// A photo the Inspector shows from outside the grid (a version sibling) has
+// no row to compare against.
+export function detailIsStale(detail, payload) {
+  if (!detail?.asset_id) return false;
+  const row = payload.find((item) => item.asset_id === detail.asset_id);
+  if (!row) return false;
+  return row.image_path !== detail.image_path
+    || row.exists_on_disk !== detail.exists_on_disk
+    || (row.app_rating ?? null) !== (detail.app_rating ?? null)
+    || JSON.stringify(row.image_metadata ?? {}) !== JSON.stringify(detail.image_metadata ?? {});
+}
+
 // A related-version reveal must fall back to the unfiltered library when the
 // target isn't in the current scope at all — or when it IS on the server's
 // page but the local text projection would hide it (an annotation-only match

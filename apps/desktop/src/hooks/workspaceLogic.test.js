@@ -5,6 +5,7 @@ import {
   appendPage,
   browseScopeKey,
   chooseSelectionAfterReload,
+  detailIsStale,
   editScopeFromRules,
   facetScopeOf,
   filterItemsByQuery,
@@ -95,6 +96,29 @@ describe("chooseSelectionAfterReload", () => {
 
   it("yields null for an empty page and ignores a stale pin with no selection", () => {
     expect(chooseSelectionAfterReload({ payload: [], activeSelectedId: null, relatedPinned: true, preserveView: false })).toBe(null);
+  });
+});
+
+describe("detailIsStale", () => {
+  const detail = { asset_id: "p1", image_path: "/A/p1.jpg", exists_on_disk: true, app_rating: 4, image_metadata: { width: 10 } };
+  const row = (extra = {}) => item("p1", { image_path: "/A/p1.jpg", exists_on_disk: true, app_rating: 4, image_metadata: { width: 10 }, ...extra });
+
+  it("is fresh while the row says what the Inspector says", () => {
+    expect(detailIsStale(detail, [row()])).toBe(false);
+    expect(detailIsStale({ ...detail, app_rating: null }, [row({ app_rating: undefined })])).toBe(false);
+  });
+
+  it("is stale once the file went missing, came back, moved or changed", () => {
+    expect(detailIsStale(detail, [row({ exists_on_disk: false })])).toBe(true);
+    expect(detailIsStale({ ...detail, exists_on_disk: false }, [row()])).toBe(true);
+    expect(detailIsStale(detail, [row({ image_path: "/B/p1.jpg" })])).toBe(true);
+    expect(detailIsStale(detail, [row({ app_rating: 2 })])).toBe(true);
+    expect(detailIsStale(detail, [row({ image_metadata: { width: 20 } })])).toBe(true);
+  });
+
+  it("has nothing to compare for a photo shown from outside the grid, or none", () => {
+    expect(detailIsStale(detail, [item("p2")])).toBe(false);
+    expect(detailIsStale(null, [row()])).toBe(false);
   });
 });
 

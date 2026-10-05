@@ -13,7 +13,7 @@ function StarRating({ value = 0, onChange }) {
   const [hover, setHover] = useState(0);
   const display = hover || value;
   return (
-    <div className="flex gap-0.5" onMouseLeave={() => setHover(0)}>
+    <div className="flex gap-0.5" data-testid="inspector-rating" data-value={value} onMouseLeave={() => setHover(0)}>
       {[1, 2, 3, 4, 5].map((i) => (
         <button
           key={i}
@@ -270,7 +270,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
           <h2 className="text-[13px] font-medium leading-tight text-text" data-testid="inspector-asset-title">{imageName || detail.stem}</h2>
 
           {missing ? (
-            <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[rgba(239,159,39,0.42)] bg-[rgba(120,70,8,0.18)] px-2.5 py-2">
+            <div data-testid="inspector-missing" className="mt-2.5 flex items-start gap-2 rounded-lg border border-[rgba(239,159,39,0.42)] bg-[rgba(120,70,8,0.18)] px-2.5 py-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#EF9F27]" />
               <div className="min-w-0">
                 <div className="text-[12px] leading-tight text-[#FAC775]">{t("missing.banner")}</div>
@@ -384,7 +384,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
               {missing ? (
                 <span className="flex min-w-0 items-center justify-end gap-1.5">
                   <span className="shrink-0 rounded border border-[rgba(239,159,39,0.42)] px-1 text-[10px] text-[#EF9F27]">{t("missing.badge")}</span>
-                  <span className="truncate text-muted2 line-through">{escapePathLabel(detail.image_path)}</span>
+                  <span className="truncate text-muted2 line-through" data-testid="inspector-source-path" data-path={detail.image_path} data-missing="true">{escapePathLabel(detail.image_path)}</span>
                 </span>
               ) : (
                 <button
@@ -392,6 +392,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                   className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
                   onClick={() => void api.revealPath(detail.image_path)}
                   title={t("reveal")}
+                  data-testid="inspector-source-path"
+                  data-path={detail.image_path}
+                  data-missing="false"
                 >
                   {escapePathLabel(detail.image_path)}
                 </button>
