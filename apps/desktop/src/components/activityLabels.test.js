@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
 import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
 import enNav from "../i18n/locales/en/nav.json";
@@ -40,7 +39,7 @@ describe("background activity in Chinese", () => {
   });
 
   it("has a name in both languages for every phase the job runner reports", () => {
-    const runner = fs.readFileSync(path.resolve(__dirname, "../../../../services/sidecar/src/media_workspace/job_runner.py"), "utf8");
+    const runner = fs.readFileSync(new URL("../../../../services/sidecar/src/media_workspace/job_runner.py", import.meta.url), "utf8");
     const keys = new Set([...runner.matchAll(/"(?:key|phase)": "([a-z_]+)"/g)].map((match) => match[1]));
     expect(keys.size).toBeGreaterThan(8);
     for (const key of keys) {
