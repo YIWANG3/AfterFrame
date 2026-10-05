@@ -84,6 +84,7 @@ test.describe("a selected photo whose original moves, is trashed and comes back"
   let dirs, original, assetId, folderId, baseline;
 
   test.beforeAll(async () => {
+    test.setTimeout(120_000); // launch + an import, slower on CI
     dirs = makeDirs("afterframe-e2e-lifecycle-", "A", "B", "Trash");
     original = path.join(dirs.A, "Lifecycle_external.jpg");
     await writeUniqueJpeg(original);
@@ -233,6 +234,7 @@ test.describe("removed from the library, deleted from disk, changed while the ap
   const ids = {};
 
   test.beforeAll(async () => {
+    test.setTimeout(120_000); // launch + an import, slower on CI
     dirs = makeDirs("afterframe-e2e-lifecycle-watch-", "W/A", "W/B", "Trash");
     files = {
       catalog: path.join(dirs["W/A"], "Lifecycle_catalog.jpg"),
@@ -302,6 +304,9 @@ test.describe("removed from the library, deleted from disk, changed while the ap
   });
 
   test("after a restart the scan imports what is new or put back, and keeps a removed file out", async () => {
+    // A relaunch, the startup scan and an import: well over the default 60 s
+    // on a busy machine.
+    test.setTimeout(180_000);
     // While the app is closed, the 1-star photo is renamed into the other folder.
     await collectCoverage(ctx.app);
     await ctx.app.close();
@@ -344,6 +349,7 @@ test.describe("removed from the library, deleted from disk, changed while the ap
   });
 
   test("importing the removed file on purpose brings it back, without its old rating or folder", async () => {
+    test.setTimeout(120_000);
     await h.importThroughPicker([files.catalog]);
     await expect(h.card(files.catalog)).toBeVisible({ timeout: 30_000 });
     await h.waitForImportIdle();
@@ -369,6 +375,7 @@ test.describe("a watched folder while the app runs", () => {
   let dirs, first, assetId, folderId;
 
   test.beforeAll(async () => {
+    test.setTimeout(120_000); // launch + an import, slower on CI
     dirs = makeDirs("afterframe-e2e-lifecycle-live-", "W/A", "W/B", "Trash");
     first = path.join(dirs["W/A"], "Lifecycle_live.jpg");
     await writeUniqueJpeg(first);
@@ -392,6 +399,7 @@ test.describe("a watched folder while the app runs", () => {
   });
 
   test("a rename and a move across folders import new records; the old one keeps its rating, missing", async () => {
+    test.setTimeout(150_000);
     const renamed = path.join(dirs["W/A"], "Lifecycle_live_renamed.jpg");
     fs.renameSync(first, renamed);
     await expect(h.card(renamed)).toBeVisible({ timeout: 30_000 });
@@ -416,6 +424,7 @@ test.describe("a watched folder while the app runs", () => {
   });
 
   test("deleted and put back while selected: the watcher brings the same record back and the Inspector follows", async () => {
+    test.setTimeout(120_000);
     const moved = path.join(dirs["W/B"], "Lifecycle_live_renamed.jpg");
     const record = (await h.rowAt(moved)).asset_id;
     await h.cardById(record).click();
