@@ -28,8 +28,8 @@ from media_workspace.db import (  # noqa: E402
 )
 from media_workspace.db.browse import _facet_clauses  # noqa: E402
 from media_workspace.db.locations import upsert_ai_asset_location  # noqa: E402
-from media_workspace.geo_resolver import ResolvedLocation  # noqa: E402
 from media_workspace.db.migrations import migrate  # noqa: E402
+from media_workspace.geo_resolver import ResolvedLocation  # noqa: E402
 from media_workspace.models import ImageCandidate, MatchDecision, RawMetadata  # noqa: E402
 from media_workspace.schema import SCHEMA_VERSION  # noqa: E402
 
