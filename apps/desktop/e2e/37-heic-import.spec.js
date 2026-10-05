@@ -62,7 +62,8 @@ test("the lightbox shows the original through the HEIC → JPEG transcode", asyn
   const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
   const preview = viewport.locator("[data-lightbox-layer='preview']");
   await expect(preview).toBeVisible({ timeout: 5_000 });
-  await expect(preview).toHaveAttribute("src", /\/previews\//);
+  // A media:// URL into previews/ (on Windows its backslashes arrive as %5C).
+  await expect(preview).toHaveAttribute("src", /(\/|%5C)previews(\/|%5C)/i);
 
   // The detail layer requests the .HEIC itself; main.js answers with the
   // transcoded JPEG, which is the only way Chromium can decode it.

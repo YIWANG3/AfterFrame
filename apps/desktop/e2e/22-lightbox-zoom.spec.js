@@ -20,7 +20,8 @@ test.describe("Lightbox progressive zoom", () => {
     const viewport = window.locator("[data-lightbox-viewport='true']");
     const preview = viewport.locator("[data-lightbox-layer='preview']");
     await expect(preview).toBeVisible({ timeout: 5_000 });
-    await expect(preview).toHaveAttribute("src", /\/previews\//);
+    // A media:// URL into previews/ (on Windows its backslashes arrive as %5C).
+    await expect(preview).toHaveAttribute("src", /(\/|%5C)previews(\/|%5C)/i);
 
     const detail = viewport.locator("[data-lightbox-layer='detail']");
     await expect(detail).toHaveCount(1);

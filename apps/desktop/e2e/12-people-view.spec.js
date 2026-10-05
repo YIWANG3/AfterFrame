@@ -4,7 +4,9 @@
 // they depend on a real Core ML model and face embeddings.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, lacks } = require("./helpers/app");
+
+test.skip(lacks("people"), "people recognition is macOS-only for now (electron/capabilities.js)");
 
 test.describe("without a face model", () => {
   let ctx;

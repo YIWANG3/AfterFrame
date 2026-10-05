@@ -2,6 +2,7 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { launchApp, closeApp } = require("./helpers/app");
+const { devPython } = require("../electron/sidecar/transport");
 
 test.describe("Related version gallery navigation", () => {
   let app, window, userDataDir;
@@ -9,7 +10,7 @@ test.describe("Related version gallery navigation", () => {
     ({ app, window, userDataDir } = await launchApp({
       testName: "version-navigation",
       prepareCatalog(catalogDir) {
-        execFileSync("python3", [path.join(__dirname, "fixtures/seed-version-navigation.py"), catalogDir]);
+        execFileSync(devPython(process.platform), [path.join(__dirname, "fixtures/seed-version-navigation.py"), catalogDir]);
       },
     }));
   });

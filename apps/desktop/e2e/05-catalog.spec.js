@@ -82,12 +82,12 @@ test.describe("Catalog browse", () => {
     await window.getByText("Copy File Path", { exact: true }).click();
     const fullPath = await app.evaluate(({ clipboard }) => clipboard.readText());
     expect(fullPath).toMatch(/\.[a-z0-9]+$/i);
-    expect(fullPath).toContain("/");
+    expect(fullPath).toContain(path.sep);
 
     await firstCard.click({ button: "right" });
     await window.getByText("Copy Name", { exact: true }).click();
     const name = await app.evaluate(({ clipboard }) => clipboard.readText());
-    expect(name).not.toContain("/");
+    expect(name).not.toContain(path.sep);
     expect(fullPath).toContain(name);
   });
 
@@ -122,7 +122,7 @@ test.describe("Catalog browse", () => {
   });
 
   test("a missing or corrupt thumbnail regenerates on image load error", async () => {
-    const card = window.locator("[data-gallery-item='true'][data-image-path$='/003-yellow.jpg']");
+    const card = window.locator("[data-gallery-item='true'][data-image-path$='003-yellow.jpg']");
     const imagePath = await card.getAttribute("data-image-path");
     const detail = await window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), imagePath);
     const previewFile = detail?.preview_path || detail?.image_preview_path;

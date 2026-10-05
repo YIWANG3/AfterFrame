@@ -63,7 +63,7 @@ test("Edit › Select All, Copy Name, Copy File Path, Delete act on the gallery 
   await clickMenu("Edit", "Copy Name");
   await expect.poll(() => ctx.app.evaluate(({ clipboard }) => clipboard.readText())).toBe(firstName);
   await clickMenu("Edit", "Copy File Path");
-  await expect.poll(() => ctx.app.evaluate(({ clipboard }) => clipboard.readText())).toMatch(new RegExp(`/${firstName.replace(".", "\\.")}$`));
+  await expect.poll(() => ctx.app.evaluate(({ clipboard }) => clipboard.readText())).toMatch(new RegExp(`[\\\\/]${firstName.replace(".", "\\.")}$`));
 
   await clickMenu("Edit", "Delete");
   await expect(ctx.window.getByText("Remove from catalog")).toBeVisible({ timeout: 5_000 });
@@ -128,9 +128,9 @@ test("files handed over by macOS open-file are batched and imported", async () =
     // The gallery windows its cards (a small CI viewport renders fewer than
     // the catalog holds), so verify through the catalog and the sidebar badge.
     await expect(ctx.window.getByRole("button", { name: `All Assets ${before + 2}` })).toBeVisible({ timeout: 30_000 });
-    const names = await bridge(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 100 })).map((r) => r.image_path.split("/").pop()));
+    const names = await bridge(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 100 })).map((r) => r.image_path.split(/[\\/]/).pop()));
     expect(names).toEqual(expect.arrayContaining(["dock_a.jpg", "dock_b.jpg"]));
-    await expect(ctx.window.locator(`[data-gallery-item='true'][data-image-path$="/dock_a.jpg"]`)).toBeVisible({ timeout: 10_000 });
+    await expect(ctx.window.locator(`[data-gallery-item='true'][data-image-path$="dock_a.jpg"]`)).toBeVisible({ timeout: 10_000 });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -159,7 +159,7 @@ test("files handed over before the window exists are imported once it has loaded
     }, file);
     ctx.window = await reopened;
     await expect(ctx.window.getByRole("button", { name: `All Assets ${before + 1}` })).toBeVisible({ timeout: 30_000 });
-    const names = await bridge(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 100 })).map((r) => r.image_path.split("/").pop()));
+    const names = await bridge(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 100 })).map((r) => r.image_path.split(/[\\/]/).pop()));
     expect(names).toContain("launch_file.jpg");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

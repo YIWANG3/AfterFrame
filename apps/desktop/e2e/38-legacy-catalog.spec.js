@@ -11,6 +11,7 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { devPython } = require("../electron/sidecar/transport");
 
 let ctx;
 
@@ -19,7 +20,7 @@ test.beforeAll(async () => {
     testName: "legacy-catalog",
     prepareCatalog(catalogDir) {
       // Keep the folder (previews dirs, settings.json); swap in the v5 database.
-      execFileSync("python3", [path.resolve(__dirname, "fixtures", "make-legacy-catalog.py"), path.join(catalogDir, "catalog.sqlite3")]);
+      execFileSync(devPython(process.platform), [path.resolve(__dirname, "fixtures", "make-legacy-catalog.py"), path.join(catalogDir, "catalog.sqlite3")]);
       for (const suffix of ["-wal", "-shm"]) fs.rmSync(path.join(catalogDir, `catalog.sqlite3${suffix}`), { force: true });
     },
   });

@@ -20,12 +20,15 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, mcpCall } = require("./helpers/app");
 
 const RAW_FIXTURES = path.resolve(__dirname, "fixtures", "raw");
+// A media:// URL into the catalog's previews / previews-hd folder; on Windows
+// the separators arrive encoded as %5C.
+const PREVIEW_SRC = /(\/|%5C)previews(\/|%5C)/i;
+const PREVIEW_HD_SRC = /(\/|%5C)previews-hd(\/|%5C)/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let ctx;
@@ -66,13 +69,13 @@ test.beforeAll(async () => {
   for (const name of ["luna-morning.dng", "luna-evening.dng"]) {
     fs.copyFileSync(path.join(RAW_FIXTURES, name), path.join(rawDir, name));
   }
-  // sips keeps the camera EXIF (make/model/capture time) — the export a real
-  // RAW converter would produce.
-  execFileSync("sips", ["-s", "format", "jpeg", "-Z", "1024", "--out", path.join(jpgDir, "luna-morning.jpg"), path.join(rawDir, "luna-morning.dng")], { stdio: "ignore" });
-  const eveningTmp = path.join(root, "evening-tmp.jpg");
-  execFileSync("sips", ["-s", "format", "jpeg", "-Z", "1024", "--out", eveningTmp, path.join(rawDir, "luna-evening.dng")], { stdio: "ignore" });
+  // The exports a real RAW converter would produce: the DNGs as JPEGs that
+  // keep the camera EXIF (make/model/capture time). Made once on macOS with
+  // `sips -s format jpeg -Z 1024 --out luna-<name>.jpg luna-<name>.dng`, so
+  // platforms without sips get the same files.
+  fs.copyFileSync(path.join(RAW_FIXTURES, "luna-morning.jpg"), path.join(jpgDir, "luna-morning.jpg"));
   // sharp drops EXIF unless asked to keep it; the square crop breaks the aspect feature.
-  await sharp(eveningTmp).extract({ left: 224, top: 0, width: 576, height: 576 }).jpeg().toFile(path.join(jpgDir, "luna-evening-2.jpg"));
+  await sharp(path.join(RAW_FIXTURES, "luna-evening.jpg")).extract({ left: 224, top: 0, width: 576, height: 576 }).jpeg().toFile(path.join(jpgDir, "luna-evening-2.jpg"));
   await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 230, g: 120, b: 40 } } }).jpeg().toFile(path.join(jpgDir, "sunset-edit.jpg"));
   // A RAW imported as a PHOTO (image_dirs) must not share bytes with a RAW
   // registered as a SOURCE (raw_dirs): asset ids are content fingerprints and
@@ -214,9 +217,9 @@ test("a RAW's HD preview is made when the lightbox opens it, not at import", asy
   await tool("show_in_app", { asset_ids: [raw.asset_id] });
   await ctx.window.locator(`[data-asset-id="${raw.asset_id}"]`).dblclick();
   const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
-  await expect(viewport.locator("[data-lightbox-layer='preview']")).toHaveAttribute("src", /\/previews\//, { timeout: 10_000 });
+  await expect(viewport.locator("[data-lightbox-layer='preview']")).toHaveAttribute("src", PREVIEW_SRC, { timeout: 10_000 });
   // It arrives after the thumbnail, as the detail layer an image's original would be.
-  await expect(viewport.locator("[data-lightbox-layer='detail']")).toHaveAttribute("src", /\/previews-hd\//, { timeout: 60_000 });
+  await expect(viewport.locator("[data-lightbox-layer='detail']")).toHaveAttribute("src", PREVIEW_HD_SRC, { timeout: 60_000 });
   expect((await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path).toMatch(/previews-hd/);
   await ctx.window.keyboard.press("Escape");
 });

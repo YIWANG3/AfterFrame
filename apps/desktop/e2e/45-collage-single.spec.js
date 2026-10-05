@@ -188,7 +188,7 @@ test("a collage made inside a folder joins that folder while the box is ticked",
   // By file name: the sidecar stores the resolved path (/private/var/… for a
   // macOS temp dir), which is not the string the dialog stub handed out.
   const folderFiles = () => ctx.window.evaluate((id) => window.mediaWorkspace.browseCollection(id, { limit: 50 })
-    .then((rows) => rows.map((r) => r.image_path.split("/").pop())), folderId);
+    .then((rows) => rows.map((r) => r.image_path.split(/[\\/]/).pop())), folderId);
   await ctx.window.getByRole("button", { name: /^Collage home/ }).click();
   await expect(cards()).toHaveCount(2);
 

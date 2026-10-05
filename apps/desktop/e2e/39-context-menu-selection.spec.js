@@ -47,7 +47,9 @@ test.afterAll(async () => {
 
 test("right-click lists the single-asset actions; a pair adds Compare and Collage", async () => {
   await cards().nth(0).click({ button: "right" });
-  for (const label of ["Edit…", "Reveal in Finder", "Refresh from Disk", "Copy File Path", "Copy Name", "Delete from Catalog", "Delete from Disk…"]) {
+  // Windows says File Explorer for Finder (src/i18n/platformCopy.js).
+  const reveal = process.platform === "win32" ? "Show in File Explorer" : "Reveal in Finder";
+  for (const label of ["Edit…", reveal, "Refresh from Disk", "Copy File Path", "Copy Name", "Delete from Catalog", "Delete from Disk…"]) {
     await expect(ctx.window.getByText(label, { exact: true })).toBeVisible();
   }
   // The Inspector carries the same "Annotate with AI" label; the menu adds a second.
@@ -169,7 +171,7 @@ test("Delete from Disk… moves the file to the Trash after the in-app confirm",
   try {
     const imported = await callTool("import_directory", { image_dirs: [dir] });
     expect(imported.status).toBe("succeeded");
-    const card = ctx.window.locator("[data-gallery-item='true'][data-image-path$='/trash_me.jpg']");
+    const card = ctx.window.locator("[data-gallery-item='true'][data-image-path$='trash_me.jpg']");
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.click();
     await card.click({ button: "right" });

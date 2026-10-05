@@ -115,7 +115,8 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
     await expect(toast).toHaveCSS("border-top-width", "0px");
     await ctx.window.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // Windows can't delete a file the app is still reading: retry a few times.
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -145,6 +146,7 @@ test("JobDock Cancel cooperatively cancels an agent-started import", async () =>
     await expect(ctx.window.getByText(/^Import( ·|$)/)).toHaveCount(0, { timeout: 15_000 });
     await importPromise;
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // Windows can't delete a file the app is still reading: retry a few times.
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });

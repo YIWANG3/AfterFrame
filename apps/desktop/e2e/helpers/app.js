@@ -7,6 +7,20 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 const { _electron: electron } = require("@playwright/test");
+const { devPython } = require("../../electron/sidecar/transport");
+const { desktopCapabilities } = require("../../electron/capabilities");
+
+// On Windows %TEMP% can be an 8.3 short path (C:\Users\ADMINI~1\…, as on
+// GitHub's runners). The sidecar stores paths in their long form, so a path a
+// spec builds from os.tmpdir() wouldn't equal the one the app reports. Use the
+// long form here and in the app this launches.
+if (process.platform === "win32") {
+  try { process.env.TEMP = process.env.TMP = fs.realpathSync.native(os.tmpdir()); } catch { /* keep it */ }
+}
+
+// A feature this platform's build locks ("macOS for now", electron/capabilities.js):
+// its specs skip there instead of failing on a control that is meant to be off.
+const lacks = (feature) => desktopCapabilities(process.platform)[feature] === false;
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
 const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.afcatalog");
@@ -156,15 +170,24 @@ function relocateFixturePaths(catalogDir) {
   const db = path.join(catalogDir, "catalog.sqlite3");
   if (!fs.existsSync(db)) return;
   const seededRoot = execFileSync("sqlite3", [db, "SELECT path FROM catalog_roots ORDER BY path LIMIT 1"]).toString().trim();
-  const marker = `${path.sep}e2e${path.sep}fixtures${path.sep}`;
+  // The fixtures were seeded on macOS, so their paths use "/" on every
+  // platform; one re-seeded on Windows would use "\".
+  const seededSep = seededRoot.includes(`${path.posix.sep}e2e${path.posix.sep}fixtures${path.posix.sep}`) ? path.posix.sep : path.win32.sep;
+  const marker = `${seededSep}e2e${seededSep}fixtures${seededSep}`;
   const at = seededRoot.indexOf(marker);
   if (at < 0) return;
   const oldPrefix = seededRoot.slice(0, at + marker.length);
   const newPrefix = path.resolve(__dirname, "..", "fixtures") + path.sep;
   const quote = (value) => `'${value.replace(/'/g, "''")}'`;
+  // The rest of each path takes this platform's separator too, or the app
+  // can't find the file (every asset reads "Missing" on Windows).
+  const rest = (column) => {
+    const tail = `substr(${column}, ${oldPrefix.length + 1})`;
+    return seededSep === path.sep ? tail : `replace(${tail}, ${quote(seededSep)}, ${quote(path.sep)})`;
+  };
   if (oldPrefix !== newPrefix) {
     const sql = PATH_COLUMNS.map(([table, column]) =>
-      `UPDATE ${table} SET ${column} = ${quote(newPrefix)} || substr(${column}, ${oldPrefix.length + 1}) WHERE ${column} LIKE ${quote(`${oldPrefix}%`)};`,
+      `UPDATE ${table} SET ${column} = ${quote(newPrefix)} || ${rest(column)} WHERE ${column} LIKE ${quote(`${oldPrefix}%`)};`,
     ).join(" ");
     execFileSync("sqlite3", [db, sql]);
   }
@@ -175,18 +198,27 @@ function relocateFixturePaths(catalogDir) {
 // size + mtime against the catalog row and reports the source as changed,
 // which the app answers by re-reading metadata from disk — wiping whatever a
 // spec seeded into the row (32-gps-location-menu's GPS, on CI). Put the
-// mtimes back to what the catalog recorded; microseconds round-trip through
-// utimes and the sidecar's iso_mtime exactly.
+// mtimes back to what the catalog recorded, to the microsecond. Node's utimes
+// takes float seconds, too coarse at today's epoch for Windows' 100 ns file
+// times: a third of the fixtures came back 1 µs off there and read as
+// changed. Python sets them in nanoseconds.
+const SET_MTIMES_PY = [
+  "import os, sys",
+  "from datetime import datetime",
+  "for line in sys.stdin.buffer.read().decode('utf-8').splitlines():",
+  "    path, _, iso = line.partition('\\t')",
+  "    if not iso or not os.path.exists(path):",
+  "        continue",
+  "    stamp = datetime.fromisoformat(iso)",
+  "    ns = (int(stamp.replace(microsecond=0).timestamp()) * 1_000_000 + stamp.microsecond) * 1000",
+  "    try:",
+  "        os.utime(path, ns=(ns, ns))",
+  "    except OSError:",
+  "        pass  # read-only checkout: browse will just flag it",
+].join("\n");
 function restoreSeededMtimes(db) {
-  const rows = execFileSync("sqlite3", ["-separator", "\t", db, "SELECT canonical_path, modified_time FROM assets"]).toString();
-  for (const line of rows.split("\n")) {
-    const [file, iso] = line.split("\t");
-    if (!file || !iso || !fs.existsSync(file)) continue;
-    const whole = Math.floor(Date.parse(iso) / 1000);
-    const micros = Number((/\.(\d{1,6})/.exec(iso)?.[1] || "0").padEnd(6, "0"));
-    const seconds = whole + micros / 1e6;
-    try { fs.utimesSync(file, seconds, seconds); } catch (_) { /* read-only checkout: browse will just flag it */ }
-  }
+  const rows = execFileSync("sqlite3", ["-separator", "\t", db, "SELECT canonical_path, modified_time FROM assets"]);
+  execFileSync(devPython(process.platform), ["-c", SET_MTIMES_PY], { input: rows });
 }
 
 // Main-process stdout/stderr and renderer console lines go to
@@ -263,4 +295,4 @@ async function waitForEditor(window, { preview = false, timeout = 15_000, previe
   );
 }
 
-module.exports = { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, REPO_DESKTOP_DIR };
+module.exports = { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, lacks, REPO_DESKTOP_DIR };
