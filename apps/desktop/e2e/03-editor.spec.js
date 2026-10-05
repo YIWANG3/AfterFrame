@@ -8,7 +8,7 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, lacks } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 test.describe("Editor functional", () => {
@@ -44,6 +44,7 @@ test.describe("Editor functional", () => {
   });
 
   test("can switch to Sticker tool — detection and library render together", async () => {
+    test.skip(lacks("stickerExtract"), "the sticker browser and tool are macOS-only for now (electron/capabilities.js)");
     await window.getByRole("button", { name: /^Sticker$/i }).first().click();
     await expect(window.getByRole("button", { name: /Detect subjects/i })).toBeVisible();
     await expect(window.getByRole("heading", { name: /^Library$/i })).toBeVisible();

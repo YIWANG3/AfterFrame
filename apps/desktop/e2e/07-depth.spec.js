@@ -5,7 +5,7 @@
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
-const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor, lacks } = require("./helpers/app");
 const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
 
 // SF skyline at dusk — a real photo with a genuine foreground→background depth
@@ -36,6 +36,7 @@ test.describe("Scene depth", () => {
   });
 
   test("Generate scene depth button is reachable", async () => {
+    test.skip(lacks("depth"), "scene depth is macOS-only for now (electron/capabilities.js)");
     await expect(window.getByRole("button", { name: /Generate scene depth/i })).toBeVisible();
   });
 

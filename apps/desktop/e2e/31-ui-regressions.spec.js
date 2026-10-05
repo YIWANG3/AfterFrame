@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, lacks } = require("./helpers/app");
 
 test.describe("UI regression guards", () => {
   let ctx;
@@ -14,6 +14,7 @@ test.describe("UI regression guards", () => {
   });
 
   test("People and Stickers use the same workspace header geometry as All Assets", async () => {
+    test.skip(lacks("people") || lacks("stickerExtract"), "People and Stickers are macOS-only for now (electron/capabilities.js)");
     const page = ctx.window;
     const geometry = (locator) => locator.evaluate((element) => {
       const rect = element.getBoundingClientRect();

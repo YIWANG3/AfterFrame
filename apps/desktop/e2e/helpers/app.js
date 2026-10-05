@@ -8,6 +8,19 @@ const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 const { _electron: electron } = require("@playwright/test");
 const { devPython } = require("../../electron/sidecar/transport");
+const { desktopCapabilities } = require("../../electron/capabilities");
+
+// On Windows %TEMP% can be an 8.3 short path (C:\Users\ADMINI~1\…, as on
+// GitHub's runners). The sidecar stores paths in their long form, so a path a
+// spec builds from os.tmpdir() wouldn't equal the one the app reports. Use the
+// long form here and in the app this launches.
+if (process.platform === "win32") {
+  try { process.env.TEMP = process.env.TMP = fs.realpathSync.native(os.tmpdir()); } catch { /* keep it */ }
+}
+
+// A feature this platform's build locks ("macOS for now", electron/capabilities.js):
+// its specs skip there instead of failing on a control that is meant to be off.
+const lacks = (feature) => desktopCapabilities(process.platform)[feature] === false;
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
 const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.afcatalog");
@@ -282,4 +295,4 @@ async function waitForEditor(window, { preview = false, timeout = 15_000, previe
   );
 }
 
-module.exports = { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, REPO_DESKTOP_DIR };
+module.exports = { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, lacks, REPO_DESKTOP_DIR };
