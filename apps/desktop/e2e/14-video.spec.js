@@ -59,6 +59,62 @@ test.describe("Video assets", () => {
     await expect(window.locator("video")).toHaveCount(0);
   });
 
+  // The 0.5.8 report's gap: the test above passes for a <video> that is
+  // mounted but never decodes a frame. The sample is 4K HEVC, like the
+  // phone and camera clips the report played.
+  test("the clip really plays: frames decode, time runs, seeking and pausing take effect", async () => {
+    const card = window.locator("[data-gallery-item='true'][data-asset-type='video']").first();
+    await card.dblclick();
+    const video = window.locator("video");
+    await expect(video).toBeVisible({ timeout: 15_000 });
+    const state = () => video.evaluate((v) => ({
+      readyState: v.readyState,
+      width: v.videoWidth,
+      height: v.videoHeight,
+      duration: v.duration,
+      time: v.currentTime,
+      paused: v.paused,
+      ended: v.ended,
+      seeking: v.seeking,
+      frames: v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0,
+      error: v.error?.code ?? null,
+    }));
+
+    // Decoded, at its real size, and playing on its own (autoplay).
+    await expect.poll(async () => (await state()).readyState, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+    const first = await state();
+    expect(first).toMatchObject({ width: 3840, height: 2160, error: null });
+    expect(first.duration).toBeGreaterThan(2);
+    expect(first.duration).toBeLessThan(2.2);
+    await expect.poll(async () => (await state()).time, { timeout: 10_000 }).toBeGreaterThan(0.3);
+    expect((await state()).frames).toBeGreaterThan(0);
+
+    // Pause with the player's own button: time holds still.
+    const playPause = window.locator("video").locator("xpath=ancestor::div[contains(@class,'flex-col')][1]").getByRole("button").first();
+    await playPause.click();
+    await expect.poll(async () => (await state()).paused).toBe(true);
+    const held = (await state()).time;
+    await window.waitForTimeout(500);
+    expect((await state()).time).toBeCloseTo(held, 2);
+
+    // Seek with the scrubber: the frame there is decoded, and the readout follows.
+    await window.getByLabel("Seek").fill("1");
+    await expect.poll(async () => {
+      const now = await state();
+      return !now.seeking && now.readyState >= 2 && Math.abs(now.time - 1) < 0.1;
+    }, { timeout: 10_000 }).toBe(true);
+    await expect(window.getByText("0:01", { exact: true })).toBeVisible();
+
+    // Play again from there, to the end.
+    await playPause.click();
+    await expect.poll(async () => (await state()).time, { timeout: 10_000 }).toBeGreaterThan(1.2);
+    await expect.poll(async () => (await state()).ended, { timeout: 10_000 }).toBe(true);
+    expect((await state()).frames).toBeGreaterThan(first.frames);
+
+    await window.keyboard.press("Escape");
+    await expect(window.locator("video")).toHaveCount(0);
+  });
+
   test("the video is visible on the MCP agent surface with a poster", async () => {
     const result = await mcpCall(mcpPort, "tools/call", {
       name: "search_assets",
