@@ -1031,8 +1031,11 @@ export default function useWorkspace({ pushToast } = {}) {
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "preview", kind } : undefined);
   }
 
-  async function switchCatalog(nextCatalogPath) {
-    await api.switchCatalog(nextCatalogPath ?? null);
+  // `switched`: main already made it the current catalog (the sample library
+  // does, to import into it). Switching main again would restart the
+  // resident sidecar it has just started: seconds on a slow PC.
+  async function switchCatalog(nextCatalogPath, { switched = false } = {}) {
+    if (!switched) await api.switchCatalog(nextCatalogPath ?? null);
     // Facet filters reference catalog-local entities (person groups, tags) —
     // carrying them across catalogs yields empty or nonsense views. The sort
     // resets too (app default).

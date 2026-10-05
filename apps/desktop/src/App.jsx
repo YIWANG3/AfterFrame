@@ -716,16 +716,17 @@ export default function App() {
     if (selected) await workspace.switchCatalog(selected);
   }
 
-  // Sample catalog: main creates/populates it on first use (openSampleCatalog),
-  // then the normal switchCatalog path resets renderer state and picks up the
-  // running import job. Reset deletes and rebuilds the same catalog.
+  // Sample catalog: main creates/populates it on first use (openSampleCatalog)
+  // and makes it the current catalog; switchCatalog then resets renderer state
+  // and picks up the running import job. Reset deletes and rebuilds the same
+  // catalog.
   const isSampleCatalog = !!workspace.info?.isSampleCatalog;
   async function runSampleCatalogAction(action) {
     if (sampleBusy) return;
     setSampleBusy(true);
     try {
       const res = await action();
-      if (res?.path) await workspace.switchCatalog(res.path);
+      if (res?.path) await workspace.switchCatalog(res.path, { switched: true });
     } catch (err) {
       pushToast({ title: t("sample.failed"), message: String(err?.message || err), tone: "error", ttl: 6000 });
     } finally {
