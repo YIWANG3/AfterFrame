@@ -19,8 +19,13 @@ test.describe("Idle app", () => {
   test("a loaded gallery runs no endless animations on screen", async () => {
     const cards = window.locator("[data-gallery-item='true']");
     await expect(cards.first()).toBeVisible({ timeout: 10_000 });
+    // Only the thumbnails in view. Cards up to 600 px below the fold already
+    // have their <img>, but it is loading="lazy" and won't load until scrolled
+    // to: in the CI VM's 1024×681 window most of the 14 never do.
     await expect.poll(() => window.evaluate(() => {
-      const imgs = [...document.querySelectorAll("[data-gallery-item='true'] img")];
+      const bottom = document.querySelector('[data-testid="gallery-scroll"]').getBoundingClientRect().bottom;
+      const imgs = [...document.querySelectorAll("[data-gallery-item='true'] img")]
+        .filter((img) => img.getBoundingClientRect().top < bottom);
       return imgs.length > 0 && imgs.every((img) => img.complete);
     }), { timeout: 10_000 }).toBe(true);
 
