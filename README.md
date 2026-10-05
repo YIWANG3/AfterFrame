@@ -16,7 +16,7 @@ AfterFrame is built for photographers who work with thousands of exported images
 
 Download the latest `.dmg` from [Releases](../../releases).
 
-> macOS only (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
+> macOS 14 or later (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
 
@@ -177,7 +177,7 @@ The full interface in 简体中文 (switch live in Settings → General):
 ## Getting Started
 
 ### Requirements
-- macOS (Apple Silicon)
+- macOS 14 or later (Apple Silicon)
 - Python 3.10+ (for the sidecar service, development only)
 - Node.js 20.19+ or 22.13+ (development only)
 

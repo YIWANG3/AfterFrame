@@ -122,20 +122,35 @@ python3 -m media_workspace generate-previews --catalog data/default.afcatalog --
 ### Building for distribution
 
 ```bash
-# 1. Build the sidecar binary (the spec and entry.py are in the repo; build on
-#    the platform you ship, PyInstaller doesn't cross-compile)
-cd services/sidecar
-pip install -e ".[jimeng]" pyinstaller
-pyinstaller media-workspace.spec --distpath dist --noconfirm
-
-# 2. Package desktop app
 cd apps/desktop
 npm run dist:mac
 ```
 
-Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`. `npm run dist:mac` runs step 1
-itself (`build:sidecar`) once the dependencies are installed; `scripts/release.sh` wraps
+Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`. `scripts/release.sh` wraps
 the signed, notarized build and the GitHub release.
+
+**The app needs macOS 14 or later** (`build.mac.minimumSystemVersion`). Every Apple Silicon Mac can
+update to it, numpy's fast Accelerate build needs it, and so do People, sticker cut-outs and the
+depth model. Older systems refuse to launch the app with the system's own message.
+
+**The macOS sidecar needs [uv](https://docs.astral.sh/uv/).** `dist:mac` builds the sidecar with
+`scripts/build-sidecar-mac.sh`, which doesn't use the Python on your PATH:
+- it makes its own environment from uv's CPython 3.12 (the version CI tests);
+- it picks wheels for the app's minimum macOS, which keeps numpy's Accelerate build;
+- it runs `scripts/check-macos-minimum.mjs`, which fails the build if any bundled binary needs a
+  newer macOS than that minimum.
+
+Homebrew's Python won't do: it is built for the Mac it was installed on. 0.5.8 declared macOS 12
+but shipped a sidecar that needed macOS 15, so on macOS 12–14 nothing could be imported.
+
+On Windows and Linux, `dist:win` / `dist:linux` run `build:sidecar`, which uses the Python on your
+PATH (the spec and `entry.py` are in the repo; PyInstaller doesn't cross-compile):
+
+```bash
+cd services/sidecar
+pip install -e ".[jimeng]" pyinstaller
+pyinstaller media-workspace.spec --distpath dist --noconfirm
+```
 
 ## Key subsystems
 

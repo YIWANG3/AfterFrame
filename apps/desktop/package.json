@@ -23,9 +23,9 @@
     "fetch:people-model": "node scripts/fetch-people-model.mjs",
     "fetch:exiftool": "node scripts/fetch-exiftool.mjs",
     "pack": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build && electron-builder --dir",
-    "dist": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar && npm run build && electron-builder",
-    "dist:mac": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar && npm run build && electron-builder --mac",
-    "dist:mac:release": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar && npm run build && electron-builder --mac -c.mac.notarize=true",
+    "dist": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder",
+    "dist:mac": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder --mac",
+    "dist:mac:release": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder --mac -c.mac.notarize=true",
     "dist:win": "npm run fetch:exiftool && npm run build:sidecar && npm run build && electron-builder --win",
     "dist:linux": "npm run fetch:exiftool && npm run build:sidecar && npm run build && electron-builder --linux",
     "e2e": "npm run build && playwright test",
@@ -35,7 +35,8 @@
     "e2e:coverage:report": "node scripts/e2e-coverage.mjs --report-only",
     "e2e:web": "playwright test --config playwright.web.config.js",
     "e2e:agent": "npm run build && cross-env AGENT_E2E=1 playwright test e2e/27-agent-mcp.spec.js --workers=1",
-    "build:sidecar": "cd ../../services/sidecar && pyinstaller media-workspace.spec --distpath dist --noconfirm"
+    "build:sidecar": "cd ../../services/sidecar && pyinstaller media-workspace.spec --distpath dist --noconfirm",
+    "build:sidecar:mac": "bash scripts/build-sidecar-mac.sh"
   },
   "build": {
     "appId": "com.afterframe.app",
@@ -95,6 +96,7 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.photography",
+      "minimumSystemVersion": "14.0",
       "target": [
         {
           "target": "dmg",
