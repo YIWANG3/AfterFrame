@@ -285,6 +285,13 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     return payload ? JSON.parse(payload) : null;
   }
 
+  // Its own short-lived process, for work measured in seconds (a full-size RAW
+  // render): the resident sidecar is serial, and everything else would queue.
+  async function callSidecarJsonOneShot(command, timeoutMs) {
+    const payload = await callSidecarOneShot(command, timeoutMs);
+    return payload ? JSON.parse(payload) : null;
+  }
+
   // Sidecar: packaged = standalone binary, dev = python -m media_workspace
   const sidecarBin = isPackaged
     ? path.join(resourcesPath, "sidecar", "media-workspace", platform === "win32" ? "media-workspace.exe" : "media-workspace")
@@ -387,6 +394,7 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   return {
     callAsync: callSidecarAsync,
     callJsonAsync: callSidecarJsonAsync,
+    callJsonOneShot: callSidecarJsonOneShot,
     launchJob: launchSidecarJob,
     stopResident: stopResidentSidecar,
     withCatalogPaused,

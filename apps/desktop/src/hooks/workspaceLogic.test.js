@@ -5,6 +5,7 @@ import {
   appendPage,
   browseScopeKey,
   chooseSelectionAfterReload,
+  detailIsStale,
   editScopeFromRules,
   facetScopeOf,
   filterItemsByQuery,
@@ -13,6 +14,7 @@ import {
   rulesFromScope,
   scopeFromRules,
   scopeKeyOf,
+  scopeSelectsByRating,
   shouldResetScopeForReveal,
   sortOutsideFolder,
 } from "./workspaceLogic";
@@ -95,6 +97,50 @@ describe("chooseSelectionAfterReload", () => {
 
   it("yields null for an empty page and ignores a stale pin with no selection", () => {
     expect(chooseSelectionAfterReload({ payload: [], activeSelectedId: null, relatedPinned: true, preserveView: false })).toBe(null);
+  });
+});
+
+describe("detailIsStale", () => {
+  const detail = { asset_id: "p1", image_path: "/A/p1.jpg", exists_on_disk: true, app_rating: 4, image_metadata: { width: 10 } };
+  const row = (extra = {}) => item("p1", { image_path: "/A/p1.jpg", exists_on_disk: true, app_rating: 4, image_metadata: { width: 10 }, ...extra });
+
+  it("is fresh while the row says what the Inspector says", () => {
+    expect(detailIsStale(detail, [row()])).toBe(false);
+    expect(detailIsStale({ ...detail, app_rating: null }, [row({ app_rating: undefined })])).toBe(false);
+  });
+
+  it("is stale once the file went missing, came back, moved or changed", () => {
+    expect(detailIsStale(detail, [row({ exists_on_disk: false })])).toBe(true);
+    expect(detailIsStale({ ...detail, exists_on_disk: false }, [row()])).toBe(true);
+    expect(detailIsStale(detail, [row({ image_path: "/B/p1.jpg" })])).toBe(true);
+    expect(detailIsStale(detail, [row({ app_rating: 2 })])).toBe(true);
+    expect(detailIsStale(detail, [row({ image_metadata: { width: 20 } })])).toBe(true);
+  });
+
+  it("has nothing to compare for a photo shown from outside the grid, or none", () => {
+    expect(detailIsStale(detail, [item("p2")])).toBe(false);
+    expect(detailIsStale(null, [row()])).toBe(false);
+  });
+});
+
+describe("scopeSelectsByRating", () => {
+  const scope = (extra) => ({ ...DEFAULT_SCOPE, ...extra });
+
+  it("finds a rating condition wherever the view keeps it", () => {
+    expect(scopeSelectsByRating(scope({ status: "rated" }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ filters: { rating_min: 4 } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ filters: { rating_max: 0 } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ filters: { any_of: [{ camera: "X" }, { rating_min: 5 }] } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ base: { status: "all", filters: { rating_min: 4 } } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ base: { status: "all", filters: { camera: "X" }, base: { status: "rated", filters: {} } } }))).toBe(true);
+  });
+
+  it("ignores views that do not pick by rating", () => {
+    expect(scopeSelectsByRating(DEFAULT_SCOPE)).toBe(false);
+    expect(scopeSelectsByRating(scope({ sort: "rating-desc", filters: { camera: "X", rating_min: null } }))).toBe(false);
+    expect(scopeSelectsByRating(scope({ base: { status: "all", filters: { date_within_days: 30 } } }))).toBe(false);
+    // A folder has no status of its own; a leftover "rated" is not a condition there.
+    expect(scopeSelectsByRating(scope({ collectionId: "c1", status: "rated" }))).toBe(false);
   });
 });
 

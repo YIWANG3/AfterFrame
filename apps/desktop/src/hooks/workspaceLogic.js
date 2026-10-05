@@ -109,6 +109,21 @@ export function rulesFromScope(scope) {
   return rules;
 }
 
+// Does this view pick its photos by rating? Then a rating change can move a
+// photo out of it (or into it), and the grid has to be asked again. The
+// condition can sit in the status (Rated), the filter bar, an "any of" group,
+// or a smart collection's rules and the rules nested under them.
+const filtersUseRating = (filters) => !!filters && (
+  ["rating_min", "rating_max"].some((key) => !isEmptyValue(filters[key]))
+  || listOf(filters.any_of).some(filtersUseRating)
+);
+const rulesUseRating = (rules) => !!rules && (
+  rules.status === "rated" || filtersUseRating(rules.filters) || rulesUseRating(rules.base)
+);
+export const scopeSelectsByRating = (scope) => !!scope && (
+  (!scope.collectionId && scope.status === "rated") || filtersUseRating(scope.filters) || rulesUseRating(scope.base)
+);
+
 // Opening a smart collection: its rules become the base set, and the filter
 // bar starts EMPTY — picking a format in there narrows the collection, it does
 // not rewrite it. The sort is the user's, not the collection's.
@@ -222,6 +237,22 @@ export function chooseSelectionAfterReload({ payload, activeSelectedId, relatedP
   if (stillValid) return activeSelectedId;
   if (preserveView) return null;
   return payload[0]?.asset_id || null;
+}
+
+// After a reload that kept the selection: is the Inspector's copy of the
+// photo out of date? The browse row is read fresh each time, and its file
+// state is a live stat, so a photo moved away, put back or relinked shows up
+// there first — with the same asset id, which is all the selection compares.
+// A photo the Inspector shows from outside the grid (a version sibling) has
+// no row to compare against.
+export function detailIsStale(detail, payload) {
+  if (!detail?.asset_id) return false;
+  const row = payload.find((item) => item.asset_id === detail.asset_id);
+  if (!row) return false;
+  return row.image_path !== detail.image_path
+    || row.exists_on_disk !== detail.exists_on_disk
+    || (row.app_rating ?? null) !== (detail.app_rating ?? null)
+    || JSON.stringify(row.image_metadata ?? {}) !== JSON.stringify(detail.image_metadata ?? {});
 }
 
 // A related-version reveal must fall back to the unfiltered library when the

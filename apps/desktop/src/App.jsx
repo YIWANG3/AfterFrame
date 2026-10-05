@@ -24,7 +24,7 @@ import EditorOverlay from "./components/EditorOverlay";
 import SettingsOverlay from "./components/SettingsOverlay";
 import WelcomeOverlay from "./components/WelcomeOverlay";
 import SampleCatalogBanner from "./components/SampleCatalogBanner";
-import BeforeAfterCompare from "./components/editor/BeforeAfterCompare";
+import GalleryCompare from "./components/GalleryCompare";
 import CollageOverlay from "./components/CollageOverlay";
 import DiscoverView, { prefetchDiscover } from "./components/DiscoverView";
 import FilterBar from "./components/FilterBar";
@@ -156,7 +156,7 @@ export default function App() {
     return Math.min(max, Math.max(MAP_MIN_HEIGHT, Math.round(height)));
   };
 
-  const { handleViewportChange } = useMapViewportFilter({
+  const { handleViewportChange, geoOnClose } = useMapViewportFilter({
     enabled: mapExpanded,
     filters: workspace.filters,
     applyFilters: workspace.applyFilters,
@@ -185,16 +185,30 @@ export default function App() {
 
   // Collapsing the map also drops the viewport filter: with the map hidden the
   // chip is the only trace of it, and a gallery silently pinned to an invisible
-  // viewport reads as "my photos disappeared".
+  // viewport reads as "my photos disappeared". A labelled geo filter (a
+  // Discover place/memory) has its own chip and stays put; one the user moved
+  // the map away from comes back (useMapViewportFilter.geoAfterClose).
   useEffect(() => {
     if (mapExpanded) return;
     const current = workspaceRef.current.filters;
-    // A labelled geo filter (a Discover place/memory) has its own chip and
-    // never came from the viewport — it stays put with the map closed.
-    if (!current?.geo || current.geo.label) return;
+    const next = geoOnClose(current?.geo);
+    if (next === current?.geo) return;
     const { geo: _geo, ...rest } = current;
-    workspaceRef.current.applyFilters(rest);
+    workspaceRef.current.applyFilters(next ? { ...rest, geo: next } : rest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapExpanded]);
+
+  // Opening the map on a gallery filtered to a place (a Discover place or
+  // memory) frames that place instead of the world view. The map's own move:
+  // the place filter stays until the user moves the map.
+  const placeGeo = workspace.filters?.geo?.label ? workspace.filters.geo : null;
+  const placeKey = placeGeo ? [placeGeo.west, placeGeo.south, placeGeo.east, placeGeo.north].join(",") : "";
+  const [mapFitBounds, setMapFitBounds] = useState(null);
+  useEffect(() => {
+    if (!mapExpanded || !placeKey) return;
+    const [west, south, east, north] = placeKey.split(",").map(Number);
+    setMapFitBounds({ west, south, east, north });
+  }, [mapExpanded, placeKey]);
 
   // Entering a collection drops it too: the viewport belongs to wherever the
   // user was looking before, and a folder opened through it would look empty
@@ -912,7 +926,7 @@ export default function App() {
     const a = itemById.get(assetIds[0]);
     const b = itemById.get(assetIds[1]);
     if (!a?.image_path || !b?.image_path) return;
-    setCompareState({ beforePath: a.image_path, afterPath: b.image_path, layout: "side" });
+    setCompareState({ items: [a, b], layout: "side" });
   }
 
   // An active filter must be on screen: a hidden bar that is still filtering is
@@ -1330,6 +1344,7 @@ export default function App() {
                   onViewportChange={handleViewportChange}
                   onSelectAsset={selectSingle}
                   flyTo={mapFlyTo}
+                  fitBounds={mapFitBounds}
                 />
                 {mapExpanded ? (
                   <MapResizeHandle
@@ -1517,9 +1532,9 @@ export default function App() {
         }}
       />
       {compareState && (
-        <BeforeAfterCompare
-          beforePath={compareState.beforePath}
-          afterPath={compareState.afterPath}
+        <GalleryCompare
+          items={compareState.items}
+          catalogKey={activeCatalogPath}
           layout={compareState.layout || "side"}
           onClose={() => setCompareState(null)}
           onLayoutChange={(layout) => setCompareState((s) => s ? { ...s, layout } : s)}

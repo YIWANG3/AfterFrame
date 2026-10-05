@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName } from "../utils/format";
 import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
+import useRawEditSource from "../hooks/useRawEditSource";
 import { MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
@@ -323,18 +324,25 @@ export default function EditorOverlay({
   // Scene-level depth: one Depth Anything V2 inference per source image,
   // cached as both an Image (for visualization) and a Canvas (for pixel reads).
   // RAW originals (.cr3/.3fr/…) can't be decoded by the renderer or sharp, so
-  // edit from the HD preview: the camera's embedded JPEG at full size, made
-  // when first needed (one the lightbox already made is reused). Wait for it
-  // rather than start on the thumbnail, so edits aren't laid out on a 512px
-  // image; fall back to the thumbnail if it fails.
+  // edit from the HD preview: the camera's embedded JPEG, made when first
+  // needed (one the lightbox already made is reused). Where that JPEG is
+  // smaller than the RAW (a Fuji GFX embeds 4000×3000 of 11648×8735), a
+  // full-size render replaces it, so a save keeps the RAW's pixels
+  // (useRawEditSource). Wait for both rather than start on the thumbnail, so
+  // edits aren't laid out on a 512px image; fall back to the HD, then the
+  // thumbnail, if they fail.
   // The save target still derives from the original path (saveBasePath) →
   // edits land next to the source file as <stem>_edited.jpg, not in the
   // catalog previews dir.
   const isRaw = item?.asset_type === "raw";
   const onDemandHd = useOnDemandHdPreview({ current: item, enabled: open, catalogKey });
   const awaitingHd = open && needsOnDemandHd(item) && onDemandHd === undefined;
-  const sourcePath = awaitingHd ? null : (isRaw
-    ? (item?.preview_hd_path || item?.image_preview_hd_path || onDemandHd || item?.image_preview_path || item?.preview_path)
+  const rawHdPath = isRaw ? (item?.preview_hd_path || item?.image_preview_hd_path || onDemandHd || null) : null;
+  const rawEditSource = useRawEditSource({ item, hdPath: rawHdPath, enabled: open && !awaitingHd });
+  const awaitingRawSource = open && isRaw && rawEditSource === undefined;
+  const awaitingSource = awaitingHd || awaitingRawSource;
+  const sourcePath = awaitingSource ? null : (isRaw
+    ? (rawEditSource || rawHdPath || item?.image_preview_path || item?.preview_path)
     : item?.image_path) || item?.image_preview_path || item?.raw_preview_path || null;
   const saveBasePath = item?.image_path || sourcePath;
   // Image load lives in its own hook. `setSourceImage`/`setPreviewSource` + the
@@ -345,7 +353,7 @@ export default function EditorOverlay({
   } = useEditorImage({
     open,
     sourcePath,
-    waiting: awaitingHd,
+    waiting: awaitingSource,
     decodeErrorLabel: t("overlay.decodeError"),
     missingSourceLabel: t("overlay.noSource"),
   });
@@ -753,6 +761,9 @@ export default function EditorOverlay({
   const buildSaveArgs = (savePath) => ({
     savePath,
     sourcePath,
+    // What the result is a version of. For a RAW that is the RAW, not the
+    // preview the pixels came from — or the export comes out unlinked.
+    originPath: saveBasePath,
     sourceImage,
     transformedPreview,
     rotationDeg,

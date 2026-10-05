@@ -1,9 +1,10 @@
 // Asset-level IPC: quick-register (after a save), collage-sources lookup,
 // delete-image-assets, and the cross-platform "reveal in Finder/Explorer".
 
-function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedMediaDir, getCatalogState, t }) {
+function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedMediaDir, getCatalogState, getUserDataPath, t }) {
   const fs = require("node:fs");
   const path = require("node:path");
+  const { cacheName, fullRenderNeeded, pruneCache } = require("../rawEditSource");
   // t() returns a translator bound to the current locale; fall back to identity
   // (English literals) if i18n wasn't wired (e.g. older callers/tests).
   const tr = () => (typeof t === "function" ? t() : (key) => key);
@@ -48,6 +49,39 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
       addAllowedMediaDir?.(path.dirname(outcome.new_path));
     }
     return outcome;
+  });
+
+  // The picture the editor edits a RAW from (../rawEditSource.js): its HD
+  // preview when that is the RAW's full size, else a full-size render.
+  // { path, full } or null when there is no RAW to read.
+  ipcMain.handle("workspace:raw-edit-source", async (_event, options) => {
+    const rawPath = options?.path ? String(options.path) : "";
+    if (!rawPath || !fs.existsSync(rawPath)) return null;
+    const hdPath = options?.hdPath ? String(options.hdPath) : "";
+    if (hdPath && fs.existsSync(hdPath)) {
+      const sharp = require("sharp");
+      const hdSize = await sharp(hdPath).metadata().catch(() => null);
+      if (!fullRenderNeeded(hdSize, { width: options.width, height: options.height })) return { path: hdPath, full: false };
+    }
+    if (!getUserDataPath) return hdPath ? { path: hdPath, full: false } : null;
+    const dir = path.join(getUserDataPath(), "raw-edit-cache");
+    const target = path.join(dir, cacheName(rawPath, fs.statSync(rawPath)));
+    if (fs.existsSync(target)) {
+      const now = new Date();
+      fs.utimesSync(target, now, now); // most recently used
+    } else {
+      try {
+        await commands.renderRawFull(rawPath, target);
+      } catch (err) {
+        // The HD is still something to edit; a render that failed is no reason
+        // to keep the editor from opening.
+        console.warn("[workspace:raw-edit-source] full render failed:", err?.message || err);
+        return hdPath ? { path: hdPath, full: false, error: String(err?.message || err) } : null;
+      }
+      pruneCache(dir);
+    }
+    addAllowedMediaDir?.(dir);
+    return { path: target, full: true };
   });
 
   ipcMain.handle("workspace:open-external", (_event, url) => {

@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
+const sharp = require("sharp");
 const { launchApp, closeApp, mcpCall } = require("./helpers/app");
 
 let ctx;
@@ -122,6 +123,30 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
   }
 });
 
+// The 0.5.8 report: in Chinese the dock read "Index Images" / "Match with RAW"
+// and the Activity Center "导入cancelled" — the sidecar's own words.
+test("in Chinese the dock names the import's phase and the Activity Center says it was cancelled", async () => {
+  test.setTimeout(120_000);
+  const dir = makeImportDir("zh", IMPORT_SIZE);
+  await ctx.window.evaluate(() => window.__afterframeTest.setLocale("zh-CN"));
+  try {
+    const importPromise = callTool("import_directory", { image_dirs: [dir] }).catch(() => null);
+    const card = ctx.window.getByTestId("job-dock-card").first();
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toContainText(/索引图片|生成预览/, { timeout: 15_000 });
+    await expect(card).not.toContainText(/Index Images|Generate Previews|Match with RAW/);
+    await card.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(ctx.window.getByTestId("job-dock-card")).toHaveCount(0, { timeout: 30_000 });
+    await ctx.window.getByTitle("后台活动", { exact: true }).click();
+    await expect(ctx.window.getByTestId("activity-finished")).toHaveText("导入已取消");
+    await ctx.window.keyboard.press("Escape");
+    await importPromise;
+  } finally {
+    await ctx.window.evaluate(() => window.__afterframeTest.setLocale("en"));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("JobDock Cancel cooperatively cancels an agent-started import", async () => {
   test.setTimeout(120_000);
   const dir = makeImportDir("cancel", IMPORT_SIZE);
@@ -150,5 +175,53 @@ test("JobDock Cancel cooperatively cancels an agent-started import", async () =>
   } finally {
     // Windows can't delete a file the app is still reading: retry a few times.
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});
+
+// The 0.5.8 report's sequence: an import cancelled part-way, then the folder
+// imported again (there, a mixed folder of RAW, TIFF and JPEG that first
+// failed with "database is locked" and was retried). What the first run
+// committed stays, the second fills in the rest, and no file ends up in the
+// catalog twice or without a thumbnail.
+test("an import cancelled part-way keeps what it indexed, and importing the folder again fills in the rest exactly once", async () => {
+  test.setTimeout(240_000);
+  const dir = fs.realpathSync(makeImportDir("retry", IMPORT_SIZE));
+  fs.writeFileSync(path.join(dir, "retry_raw.dng"), Buffer.concat([
+    fs.readFileSync(path.resolve(__dirname, "fixtures", "raw", "luna-morning.dng")), Buffer.alloc(96),
+  ]));
+  await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 30, g: 140, b: 90 } } }).tiff().toFile(path.join(dir, "retry_scan.tif"));
+  const expected = fs.readdirSync(dir).map((name) => path.join(dir, name)).sort();
+  const inCatalog = () => ctx.window.evaluate(async (folder) => {
+    const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 10_000 });
+    return rows.filter((row) => row.image_path.startsWith(`${folder}/`)).map((row) => ({ path: row.image_path, preview: row.preview_path }));
+  }, dir);
+  try {
+    const first = callTool("import_directory", { image_dirs: [dir] }).catch(() => null);
+    const card = ctx.window.getByTestId("job-dock-card").first();
+    await expect(card).toContainText(/\d+\/\d+/, { timeout: 15_000 });
+    await card.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(ctx.window.getByTestId("job-dock-card")).toHaveCount(0, { timeout: 60_000 });
+    await first;
+    const partial = await inCatalog();
+    expect(partial.length).toBeLessThan(expected.length);
+
+    // Again, the way a user does it: toolbar + › Import, the folder picked.
+    await ctx.app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
+    }, [dir]);
+    await ctx.window.locator(".app-toolbar button").first().click();
+    await ctx.window.getByRole("button", { name: "Import", exact: true }).click();
+    await expect.poll(async () => (await inCatalog()).length, { timeout: 180_000, intervals: [1_000] }).toBe(expected.length);
+    await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => s.status)), { timeout: 120_000 })
+      .toBe("succeeded");
+    const status = await ctx.window.evaluate(() => window.mediaWorkspace.getImportStatus());
+    const indexed = (status.phaseResults || []).find((phase) => phase.key === "index_processed_media")?.result || {};
+    expect(indexed.already_in_catalog).toBe(partial.length);
+
+    const final = await inCatalog();
+    expect(final.map((row) => row.path).sort()).toEqual(expected);
+    expect(final.filter((row) => !row.preview || !fs.existsSync(row.preview)).map((row) => row.path)).toEqual([]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

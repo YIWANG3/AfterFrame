@@ -272,6 +272,24 @@
     "workingProgress": "{{label}} · {{processed}}/{{total}}",
     "finished": "{{label}}已完成",
     "ended": "{{label}}{{status}}",
+    "status": {
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "phases": {
+      "scan_sources": "索引 RAW 源",
+      "index_processed_media": "索引图片",
+      "match_processed_media": "匹配 RAW",
+      "generate_previews": "生成预览",
+      "generate_previews_hd": "生成高清预览",
+      "enrich_raw": "补全 RAW 元数据",
+      "analyze_colors": "分析色彩",
+      "annotate": "AI 标注",
+      "people_index": "分析人物",
+      "people_cluster": "整理人物分组",
+      "generate_ai_repaint": "生成 AI 重绘",
+      "generate_text_image": "生成文字图片"
+    },
     "jobs": {
       "import": "导入",
       "preview": "预览",

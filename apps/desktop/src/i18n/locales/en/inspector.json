@@ -28,6 +28,7 @@
     "type": "Type",
     "asset": "Asset",
     "rawSource": "RAW Source",
+    "showRaw": "Show the RAW in the library",
     "lastEditedBy": "Last edited by",
     "camera": "Camera",
     "lens": "Lens",

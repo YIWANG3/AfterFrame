@@ -19,6 +19,7 @@ export default function MapDrawer({
   onViewportChange,
   onSelectAsset,
   flyTo,
+  fitBounds,
 }) {
   const { t } = useTranslation("nav");
   // Once opened, stay mounted: tearing down on collapse would re-parse the
@@ -61,6 +62,7 @@ export default function MapDrawer({
           onViewportChange={onViewportChange}
           onSelectAsset={onSelectAsset}
           flyTo={flyTo}
+          fitBounds={fitBounds}
           levelLabels={{
             world: t("map.level.world"),
             region: t("map.level.region"),

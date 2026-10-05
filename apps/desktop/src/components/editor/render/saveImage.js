@@ -26,9 +26,9 @@ function bgFillStyle(ctx, bg, W, H) {
 
 // Catalog registration is a nice-to-have — if it fails (no catalog loaded,
 // sidecar down) we still consider the save successful.
-async function registerSaved(savePath, sourcePath) {
+async function registerSaved(savePath, originPath) {
   try {
-    const registered = await api.quickRegister(savePath, sourcePath);
+    const registered = await api.quickRegister(savePath, originPath);
     return registered?.asset_id || null;
   } catch (e) {
     console.warn("[saveImage] quickRegister skipped:", e?.message || e);
@@ -49,6 +49,7 @@ export async function saveEditedImage(ctx) {
   const {
     savePath,
     sourcePath,
+    originPath = sourcePath,
     sourceImage,
     transformedPreview,
     quarterTurns,
@@ -84,7 +85,7 @@ export async function saveEditedImage(ctx) {
         crop: normalizedCrop,
         quality: 92,
       });
-      return { assetId: await registerSaved(savePath, sourcePath) };
+      return { assetId: await registerSaved(savePath, originPath) };
     } catch (nativeError) {
       console.error("[saveImage] Native sharp save failed, falling back to canvas:", nativeError);
     }
@@ -263,5 +264,5 @@ export async function saveEditedImage(ctx) {
   releaseCanvasImage(transformedFull);
   releaseCanvasImage(outputCanvas);
 
-  return { assetId: await registerSaved(savePath, sourcePath) };
+  return { assetId: await registerSaved(savePath, originPath) };
 }

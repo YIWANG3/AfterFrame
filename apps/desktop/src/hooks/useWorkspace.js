@@ -5,8 +5,8 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
-  rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
+  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
+  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
@@ -30,6 +30,9 @@ export default function useWorkspace({ pushToast } = {}) {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const [detail, setDetail] = useState(null);
+  // What the Inspector shows right now, for code that runs after an await.
+  const detailRef = useRef(null);
+  detailRef.current = detail;
   // The browse destination is ONE value. Every way of changing what the grid
   // shows (sidebar status, a collection, typed search, facet chips, sort, the
   // Discover tiles, a person, an agent reveal) writes this object; one effect
@@ -212,7 +215,11 @@ export default function useWorkspace({ pushToast } = {}) {
     if (scopeKey === loadedScopeRef.current) return;
     void loadBrowser({ scope: scopeRef.current });
   });
-  useEffect(() => { browseCurrentScope(); }, [scopeKey]);
+  // `navigation` counts the times goTo cleared the grid: a cleared grid is
+  // always browsed again, even when the scope it ends on is the one it started
+  // from (away and back within one batch of updates).
+  const [navigation, setNavigation] = useState(0);
+  useEffect(() => { browseCurrentScope(); }, [scopeKey, navigation]);
 
   // Refresh facet options when the catalog/library changes, and whenever the
   // view does: every count is "how many photos picking this would show" given
@@ -253,7 +260,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // photo is still the one shown, and a loadDetail issued meanwhile is not
   // outranked, since this never bumps the request counter.
   function refreshShownDetail() {
-    const assetId = detail?.asset_id;
+    const assetId = detailRef.current?.asset_id;
     if (!assetId) return;
     void api.getAssetDetailById(assetId)
       .then((payload) => {
@@ -288,6 +295,12 @@ export default function useWorkspace({ pushToast } = {}) {
     } else {
       setBrowserLoading(true);
       setBrowserLoadingMore(false);
+      // Going somewhere else: until this answer lands, the place shown before
+      // is no longer surely loaded. Otherwise, going straight back to it while
+      // this is out skips the browse ("already showing this"), and this
+      // answer, for the place left, lands last and wins. A refresh of the
+      // same place keeps the mark, which reveals rely on.
+      if (scopeKeyOf(target) !== loadedScopeRef.current) loadedScopeRef.current = null;
     }
     try {
       const nextOffset = append ? browserOffset : 0;
@@ -342,6 +355,11 @@ export default function useWorkspace({ pushToast } = {}) {
         if (nextSelectedId !== activeSelectedId) {
           setSelectedAssetId(nextSelectedId);
           await loadDetail(nextSelectedId || null);
+        } else if (!preserveView || detailIsStale(detailRef.current, payload)) {
+          // Same photo still selected, so nothing above reloads its detail:
+          // after Refresh, a relink or a file coming back, the card changed
+          // and the Inspector kept the old path and missing state.
+          refreshShownDetail();
         }
       }
       setBrowserReady(true);
@@ -745,6 +763,11 @@ export default function useWorkspace({ pushToast } = {}) {
       await api.setAssetRating(targetIds, normalized);
       // A rating is the most common smart-collection condition.
       if (collections.some((c) => c.kind === "smart")) void loadCollections();
+      // In a view that selects by rating, a photo that no longer qualifies
+      // leaves the grid now, as it already left the sidebar count — and the
+      // selection with it, like a delete, so nothing else gets rated by
+      // the next key press.
+      if (scopeSelectsByRating(scopeRef.current) && !revealRef.current) void refreshBrowse();
     } catch (error) {
       applyRating((assetId, current) => (previousRatings.has(assetId) ? previousRatings.get(assetId) : current));
       pushToast?.({
@@ -782,6 +805,10 @@ export default function useWorkspace({ pushToast } = {}) {
       setBrowserOffset(0);
       setBrowserHasMore(true);
       setSelectedAssetId(null);
+      // The grid no longer shows what was loaded: whatever place this ends on,
+      // including the one just left, has to be browsed.
+      loadedScopeRef.current = null;
+      setNavigation((count) => count + 1);
     }
     setTypedQuery(full.query);
     setScopeState(full);

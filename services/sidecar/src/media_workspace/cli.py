@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -94,6 +95,10 @@ from .preview_service import PreviewService
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 from .watcher import ImageWatcher
+
+# run-import-job, run-preview-job, … : the detached background job runners.
+JOB_RUNNER_COMMAND = re.compile(r"^run-[a-z-]+-job$")
+JOB_BUSY_TIMEOUT_MS = 60_000
 
 
 def _provider_token_key(provider: str) -> str:
@@ -288,6 +293,13 @@ def build_parser() -> argparse.ArgumentParser:
     decode_raw.add_argument("--source", type=Path, required=True)
     decode_raw.add_argument("--target", type=Path, required=True)
     decode_raw.add_argument("--size", type=int, required=True)
+    decode_raw.add_argument("--full", action="store_true", help="Never at half size (the editor's full-size picture).")
+
+    render_raw_full_parser = subparsers.add_parser(
+        "render-raw-full", help="Render a RAW at its full size for the editor (no catalog access)."
+    )
+    render_raw_full_parser.add_argument("--source", type=Path, required=True)
+    render_raw_full_parser.add_argument("--target", type=Path, required=True)
 
     refresh_assets = subparsers.add_parser("refresh-assets", parents=[common])
     refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
@@ -798,7 +810,17 @@ def main(argv: list[str] | None = None) -> int:
     # ensure_catalog() so users can configure providers without a catalog open.
     if args.command == "decode-raw":
         from .raw_decode import decode
-        decode(args.source, args.target, args.size)
+        decode(args.source, args.target, args.size, full=args.full)
+        return 0
+
+    if args.command == "render-raw-full":
+        from PIL import Image
+
+        from .preview_service import render_raw_full
+        renderer = render_raw_full(args.source, args.target)
+        with Image.open(args.target) as image:
+            width, height = image.size
+        print(json.dumps({"path": str(args.target), "width": width, "height": height, "renderer": renderer}))
         return 0
 
     if args.command == "annotation-test-connection":
@@ -854,6 +876,12 @@ def main(argv: list[str] | None = None) -> int:
     catalog = ensure_catalog(args.catalog)
     fresh_db = not catalog.db_path.exists()
     connection = connect(catalog.db_path)
+    if JOB_RUNNER_COMMAND.match(args.command or ""):
+        # A background job waits its turn for the catalog instead of failing
+        # the whole import after 5 s, as the app's own quick commands do so
+        # the UI never hangs on one. "Locked" comes before anything is
+        # written, so waiting is safe.
+        connection.execute(f"PRAGMA busy_timeout={JOB_BUSY_TIMEOUT_MS}")
     init_db(connection)
     if fresh_db:
         set_catalog_path(connection, catalog.root)
@@ -1862,6 +1890,12 @@ def _cmd_asset_detail(args, connection, catalog, parser):
     }
     from .db import get_asset_people
     payload["people"] = get_asset_people(connection, asset_id=row["asset_id"])
+    # A RAW imported as a photo is in the gallery; a RAW source folder's RAWs
+    # are not. Only the first can be opened from its export's Inspector.
+    payload["raw_in_library"] = bool(row["raw_asset_id"]) and connection.execute(
+        "SELECT 1 FROM image_lookup_registry WHERE image_asset_id = ? LIMIT 1",
+        (row["raw_asset_id"],),
+    ).fetchone() is not None
 
     # Add version siblings from resource set
     asset_id = row["asset_id"]

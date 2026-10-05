@@ -22,7 +22,8 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, waitForEditor } = require("./helpers/app");
+const { writeSyntheticDng } = require("./helpers/images");
 
 const RAW_FIXTURES = path.resolve(__dirname, "fixtures", "raw");
 // A media:// URL into the catalog's previews / previews-hd folder; on Windows
@@ -266,4 +267,139 @@ test("byte-identical RAW copies are two photos, and their cards hold still", asy
     await sleep(100);
   }
   expect(seen.map((set) => set.size), JSON.stringify(seen.map((set) => [...set]))).toEqual([1, 1]);
+});
+
+// The 0.5.8 report: two ARWs compared from the context menu showed two broken
+// images. Compare handed the RAW file itself to an <img>.
+test("Compare shows RAWs decoded — two RAWs, and a RAW beside a JPEG — and zooms both sides together", async () => {
+  test.setTimeout(120_000);
+  const rows = await browseByName();
+  const card = (row) => ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${row.asset_id}"]`);
+  const images = () => ctx.window.getByTestId("compare-image");
+  const decoded = () => images().evaluateAll((els) => els.map((img) => ({
+    src: decodeURIComponent(img.getAttribute("src") || ""), ok: img.complete && img.naturalWidth > 0,
+  })));
+  async function compare(a, b) {
+    await tool("show_in_app", { asset_ids: [a.asset_id] });
+    await card(a).click();
+    await card(b).click({ modifiers: ["Meta"] });
+    await expect(ctx.window.locator("[data-gallery-item='true'][data-selected='true']")).toHaveCount(2);
+    await card(b).click({ button: "right" });
+    await ctx.window.getByText("Compare", { exact: true }).click();
+    await expect(ctx.window.getByTestId("compare-header")).toBeVisible();
+    await expect(images()).toHaveCount(2);
+  }
+
+  const [rawA, rawB] = ["B0000333.dng", "B0000333 (1).dng"].map((name) => rows.get(name));
+  await compare(rawA, rawB);
+  // Both sides decode, and neither is the RAW file.
+  await expect.poll(async () => (await decoded()).every((side) => side.ok && !/\.dng$/i.test(side.src)), { timeout: 15_000 }).toBe(true);
+  // The HD previews are made on demand and take over, as in the lightbox.
+  await expect.poll(async () => (await decoded()).every((side) => side.ok && side.src.includes("/previews-hd/")), { timeout: 60_000 }).toBe(true);
+  // Each side is named by its file, not "Before" / "After".
+  await expect(images().nth(0)).toHaveAttribute("alt", "B0000333.dng");
+  await expect(images().nth(1)).toHaveAttribute("alt", "B0000333 (1).dng");
+
+  // One wheel turn zooms both, around the same point; switching layout keeps them decoded.
+  await images().first().hover();
+  await ctx.window.mouse.wheel(0, -120);
+  const transforms = () => images().evaluateAll((els) => els.map((img) => img.style.transform));
+  await expect.poll(async () => (await transforms())[0]).toMatch(/scale\(1\.0[0-9]+\)/);
+  const [first, second] = await transforms();
+  expect(second).toBe(first);
+  await ctx.window.getByTestId("compare-layout-controls").getByRole("button").nth(1).click();
+  await expect.poll(async () => (await decoded()).every((side) => side.ok)).toBe(true);
+  await ctx.window.getByTestId("compare-close").click();
+  await expect(ctx.window.getByTestId("compare-header")).toHaveCount(0);
+
+  // A RAW beside a JPEG: the JPEG side is its original, the RAW side a preview.
+  const raw = rows.get("luna-browse.dng");
+  const jpeg = rows.get("luna-morning.jpg");
+  await compare(raw, jpeg);
+  await expect.poll(async () => {
+    const sides = await decoded();
+    return sides.every((side) => side.ok)
+      && sides.some((side) => side.src.endsWith("/luna-morning.jpg"))
+      && !sides.some((side) => /\.dng$/i.test(side.src));
+  }, { timeout: 30_000 }).toBe(true);
+  await ctx.window.getByTestId("compare-close").click();
+});
+
+// The 0.5.8 report: JPEGs exported from a CR2 and a RAF in the editor showed
+// "RAW source: not linked" — registered against the preview they were drawn
+// from, not the RAW.
+test("an export saved from the editor on a RAW names that RAW as its source and leads back to it", async () => {
+  test.setTimeout(120_000);
+  const raw = (await browseByName()).get("luna-browse.dng");
+  const out = path.join(fs.realpathSync(work.root), "luna-browse_edited.jpg");
+  await tool("show_in_app", { asset_ids: [raw.asset_id] });
+  await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"]`).click();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse.dng");
+  await ctx.window.keyboard.press("e");
+  await expect(ctx.window.getByRole("button", { name: /^Save$/ })).toBeVisible({ timeout: 30_000 });
+  await waitForEditor(ctx.window, { preview: true, previewTimeout: 60_000 });
+
+  await ctx.app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+  }, out);
+  await ctx.window.getByRole("button", { name: /^Save$/ }).click();
+  await expect(ctx.window.getByText("Saved", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  expect(fs.existsSync(out)).toBe(true);
+  // Untouched, so the RAW's own size: this RAW's HD preview is a full-size render.
+  expect(await sharp(out).metadata()).toMatchObject({ width: 1024, height: 576 });
+
+  const detail = await ctx.window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), out);
+  expect(detail.raw_path).toBe(raw.image_path);
+  expect(detail.raw_asset_id).toBe(raw.asset_id);
+  expect(detail.match_status).toBe("manual_confirmed");
+  expect(detail.raw_in_library).toBe(true);
+  await ctx.window.keyboard.press("Escape");
+  await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+
+  // The export's Inspector names the RAW, and one click opens it in the gallery.
+  await tool("show_in_app", { asset_ids: [detail.asset_id] });
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse_edited.jpg", { timeout: 10_000 });
+  await expect(ctx.window.getByTestId("inspector-raw-source")).toContainText("luna-browse.dng");
+  await ctx.window.getByTestId("inspector-show-raw").click();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse.dng", { timeout: 10_000 });
+  await expect(ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"][data-selected='true']`)).toBeVisible();
+});
+
+// The 0.5.8 report: an untouched save of an 11648×8735 RAF came out at
+// 4000×3000, the size of the JPEG the camera embedded, which is what the HD
+// preview is when it is 2000 px or more. A synthetic DNG has the same shape at
+// a test's size: 2048×1152 of raw data, a 2000×1125 preview inside.
+test("editing a RAW whose embedded preview is smaller than the RAW saves the RAW's full size", async () => {
+  test.setTimeout(150_000);
+  const dir = path.join(work.root, "embedded-smaller");
+  fs.mkdirSync(dir);
+  await writeSyntheticDng(path.join(dir, "gfx-like.dng"));
+  await importAndWait({ image_dirs: [dir] });
+  const raw = (await browseByName()).get("gfx-like.dng");
+  expect(raw.image_metadata).toMatchObject({ width: 2048, height: 1152 });
+
+  await tool("show_in_app", { asset_ids: [raw.asset_id] });
+  await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"]`).click();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("gfx-like.dng");
+  await ctx.window.keyboard.press("e");
+  await expect(ctx.window.getByRole("button", { name: /^Save$/ })).toBeVisible({ timeout: 30_000 });
+  await waitForEditor(ctx.window, { preview: true, previewTimeout: 90_000 });
+  // The HD preview is the embedded 2000 px JPEG; the editor did not stop there.
+  const hd = (await tool("get_asset", { asset_id: raw.asset_id })).image_preview_hd_path;
+  expect(await sharp(hd).metadata()).toMatchObject({ width: 2000, height: 1125 });
+
+  const out = path.join(fs.realpathSync(work.root), "gfx-like_edited.jpg");
+  await ctx.app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+  }, out);
+  await ctx.window.getByRole("button", { name: /^Save$/ }).click();
+  await expect.poll(() => fs.existsSync(out), { timeout: 30_000 }).toBe(true);
+  await expect.poll(async () => (await ctx.window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), out))?.raw_path, { timeout: 15_000 })
+    .toBe(raw.image_path);
+  expect(await sharp(out).metadata()).toMatchObject({ width: 2048, height: 1152 });
+  // Rendered once into the userData cache, not into the catalog.
+  const cache = path.join(ctx.userDataDir, "raw-edit-cache");
+  expect(fs.readdirSync(cache).filter((name) => name.endsWith(".jpg"))).toHaveLength(1);
+  await ctx.window.keyboard.press("Escape");
+  await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
 });

@@ -48,8 +48,18 @@ function pointsToGeoJSON(points) {
   };
 }
 
+// How long a framing request keeps re-framing as the drawer grows, from the
+// first time it could be applied: the open animation is 400 ms.
+const FIT_SETTLE_MS = 2500;
+
 function markerMode(zoom) {
   return zoom < 2.45 ? "compact" : zoom < 5.6 ? "stack" : "detail";
+}
+
+// The marker size and the lit level (World / Region / City) follow the zoom.
+function syncMarkerMode(stage, map) {
+  const mode = markerMode(map.getZoom());
+  if (stage && stage.dataset.markerMode !== mode) stage.dataset.markerMode = mode;
 }
 
 // Representative zoom for each detail level (matching the markerMode bands).
@@ -120,6 +130,7 @@ export default function PhotoMap({
   levelLabels,
   statusLabels,
   flyTo,
+  fitBounds,
   scrollZoom = true,
 }) {
   const stageRef = useRef(null);
@@ -128,6 +139,10 @@ export default function PhotoMap({
   // Latest external fly-to request; parked here when the map instance is
   // still constructing (first open triggered by an Inspector location click).
   const pendingFlyToRef = useRef(null);
+  // A request to frame an area (a Discover place the gallery is filtered to).
+  // The drawer grows from zero height as it opens, so the area is framed
+  // again on each resize for a moment, until the drawer has its size.
+  const fitRef = useRef(null);
   const markersRef = useRef(new Map());
   const stateRef = useRef({ points: [], destroyed: false, maplibre: null });
   const callbacksRef = useRef({});
@@ -192,6 +207,7 @@ export default function PhotoMap({
           resizeObserver = new ResizeObserver(() => {
             if (!state.destroyed && containerRef.current?.clientWidth && containerRef.current?.clientHeight) {
               map.resize();
+              applyFit();
             }
           });
           resizeObserver.observe(containerRef.current);
@@ -207,6 +223,8 @@ export default function PhotoMap({
         const request = pendingFlyToRef.current;
         pendingFlyToRef.current = null;
         map.flyTo({ center: [request.lon, request.lat], zoom: request.zoom ?? 12, duration: 900 });
+      } else {
+        applyFit();
       }
       map.addControl(
         new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
@@ -304,11 +322,7 @@ export default function PhotoMap({
         });
       };
 
-      map.on("zoom", () => {
-        const stage = stageRef.current;
-        const mode = markerMode(map.getZoom());
-        if (stage && stage.dataset.markerMode !== mode) stage.dataset.markerMode = mode;
-      });
+      map.on("zoom", () => syncMarkerMode(stageRef.current, map));
       map.on("move", scheduleLabels);
       map.on("resize", scheduleLabels);
       // moveend can arrive while the style is still loading tiles for the new
@@ -317,8 +331,14 @@ export default function PhotoMap({
       map.on("idle", scheduleLabels);
       // Viewport filtering engages only after a deliberate user move — opening
       // the drawer must never filter the gallery by the whole-world viewport.
+      // userMove marks the move in progress as the user's own, as opposed to
+      // the camera settling as the drawer opens or resizes, or a fly-to.
       map.on("movestart", (event) => {
-        if (event.originalEvent) state.interacted = true;
+        if (event.originalEvent) {
+          state.interacted = true;
+          state.userMove = true;
+          fitRef.current = null; // the user has taken the camera
+        }
       });
       // Marker add/remove and gallery-filter updates wait for moveend — during
       // the move MapLibre keeps existing marker transforms correct on its own.
@@ -337,6 +357,8 @@ export default function PhotoMap({
         window.__afterframeMapTest = {
         jumpTo(center, zoom) {
           state.interacted = true;
+          state.userMove = true;
+          fitRef.current = null;
           map.jumpTo({ center, zoom });
         },
         getState() {
@@ -344,6 +366,7 @@ export default function PhotoMap({
             interacted: !!state.interacted,
             zoom: map.getZoom(),
             center: map.getCenter().toArray(),
+            bounds: map.getBounds().toArray(),
             markerCount: markersRef.current.size,
           };
         },
@@ -364,7 +387,9 @@ export default function PhotoMap({
         north: bounds.getNorth(),
         zoom: map.getZoom(),
         interacted: !!state.interacted,
+        userMove: !!state.userMove,
       });
+      state.userMove = false;
     }
 
     function updateMarkers() {
@@ -459,6 +484,8 @@ export default function PhotoMap({
       if (!map || !data) return;
       state.interacted = true;
       if (data.type === "cluster") {
+        state.userMove = true;
+        fitRef.current = null;
         const source = map.getSource("photo-locations");
         source.getClusterExpansionZoom(data.clusterId)
           .then((zoom) => {
@@ -556,6 +583,32 @@ export default function PhotoMap({
     map.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: flyTo.zoom ?? 12, duration: 900 });
   }, [flyTo]);
 
+  // Frame an area (App: the Discover place the gallery is filtered to, when
+  // the map opens on it). A camera move of the map's own, so it never counts
+  // as the user moving the map. Waits for the map and for a usable size.
+  function applyFit() {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    const request = fitRef.current;
+    if (!map || !container || !request) return;
+    if (request.until && Date.now() > request.until) {
+      fitRef.current = null;
+      return;
+    }
+    if (container.clientWidth < 160 || container.clientHeight < 160) return;
+    request.until ??= Date.now() + FIT_SETTLE_MS;
+    const { west, south, east, north } = request.bounds;
+    map.fitBounds([[west, south], [east, north]], { padding: 48, maxZoom: 11, duration: 0 });
+    // The first fit can land before the map's zoom listener exists.
+    syncMarkerMode(stageRef.current, map);
+  }
+  useEffect(() => {
+    const bounds = fitBounds;
+    if (!bounds || ![bounds.west, bounds.south, bounds.east, bounds.north].every(Number.isFinite)) return;
+    fitRef.current = { bounds, until: null };
+    applyFit();
+  }, [fitBounds]);
+
   // Point data changes → swap the GeoJSON source, keep the camera. The
   // generation bump invalidates in-flight getClusterLeaves resolutions.
   useEffect(() => {
@@ -618,6 +671,8 @@ export default function PhotoMap({
                 const map = mapRef.current;
                 if (!map) return;
                 stateRef.current.interacted = true;
+                stateRef.current.userMove = true;
+                fitRef.current = null;
                 map.easeTo({ zoom: LEVEL_ZOOMS[level], duration: 600 });
               }}
             >

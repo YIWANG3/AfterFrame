@@ -237,7 +237,8 @@ function createTaskStarters({
       provider: providerType,
       inputPath: sourcePath,
       outputPath,
-      originPath: sourcePath,
+      // The version is of the original: for a RAW, the RAW, not its preview.
+      originPath: options?.outputBasePath || sourcePath,
       prompt,
       aspectRatio: payload.aspect_ratio,
       imageSize: payload.image_size,

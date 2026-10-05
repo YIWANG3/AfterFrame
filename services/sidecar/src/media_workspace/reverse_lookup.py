@@ -42,7 +42,11 @@ from .source_readiness import SourceNotReadyError, validate_source_ready
 from .video import VIDEO_EXTENSIONS, is_video
 from .video import probe as probe_video
 
-RESOLVE_BATCH_COMMIT_SIZE = 200
+# Files indexed per commit. One: the next file's metadata read (ExifTool,
+# LibRaw — seconds for a 200 MB RAW on a drive) must not run inside an open
+# write transaction, or every other process waiting on the catalog gives up
+# after its busy timeout ("database is locked", 0.5.8 report).
+RESOLVE_BATCH_COMMIT_SIZE = 1
 # An import hands its photos on in batches this size, or whatever it has
 # after this long (a slow disk still shows progress).
 IMPORT_BATCH_SIZE = 100

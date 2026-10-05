@@ -37,6 +37,7 @@ function CompareCell({ src, label, zoom, pan, originPct, onWheel, onPointerDown,
       <img
         src={src}
         alt={label}
+        data-testid="compare-image"
         draggable={false}
         className="absolute inset-0 h-full w-full object-contain"
         style={{
@@ -52,7 +53,11 @@ function CompareCell({ src, label, zoom, pan, originPct, onWheel, onPointerDown,
   );
 }
 
-export default function BeforeAfterCompare({ beforePath, afterPath, layout, onClose, onLayoutChange }) {
+// `labels`: what each side is called (the editor's Before/After by default).
+// `resetKey`: what counts as "other photos" for the zoom and pan; by default
+// the two paths, but the gallery passes asset ids, because a RAW's path
+// changes once its HD preview arrives and that must not reset the view.
+export default function BeforeAfterCompare({ beforePath, afterPath, layout, labels, resetKey, onClose, onLayoutChange }) {
   const { t } = useTranslation("editor");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -63,12 +68,13 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout, onCl
   const beforeSrc = localFileUrl(beforePath);
   const afterSrc = localFileUrl(afterPath);
 
-  // Reset on path/layout change
+  // Reset on other photos / layout change
+  const viewKey = resetKey ?? `${beforePath}|${afterPath}`;
   useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setOriginPct({ x: 50, y: 50 });
-  }, [beforePath, afterPath, layout]);
+  }, [viewKey, layout]);
 
   // Keyboard
   useEffect(() => {
@@ -144,9 +150,9 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout, onCl
 
       {/* Compare area */}
       <div className={`min-h-0 flex-1 flex ${horizontal ? "flex-row" : "flex-col"}`}>
-        <CompareCell src={beforeSrc} label={t("compare.before")} {...cellProps} />
+        <CompareCell src={beforeSrc} label={labels?.[0] || t("compare.before")} {...cellProps} />
         <div className={`${horizontal ? "w-[2px]" : "h-[2px]"} shrink-0 bg-white/8`} />
-        <CompareCell src={afterSrc} label={t("compare.after")} {...cellProps} />
+        <CompareCell src={afterSrc} label={labels?.[1] || t("compare.after")} {...cellProps} />
       </div>
 
       {/* Footer */}

@@ -99,9 +99,18 @@ export function formatBytes(value) {
   return `${bytes} B`;
 }
 
-export function formatTimestamp(value) {
+// A date and time with no zone written on it ("2026-10-05 03:37:05").
+const ZONELESS_TIME = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+// `zoneless` says what a time without a zone means. Capture times are the
+// camera's own clock (#147): shown as written, in any zone ("local"). Times the
+// catalog stamps itself — an import, a record's update — come from SQLite's
+// CURRENT_TIMESTAMP, which is UTC without saying so ("utc"); read as local
+// they were off by the viewer's offset, 7 hours in California.
+export function formatTimestamp(value, { zoneless = "local" } = {}) {
   if (!value) return "Unknown";
-  const date = new Date(value);
+  const text = String(value);
+  const date = new Date(zoneless === "utc" && ZONELESS_TIME.test(text) ? `${text.replace(" ", "T")}Z` : text);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString([], {
     year: "numeric",
@@ -110,6 +119,30 @@ export function formatTimestamp(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+// A run of capture days ("2024-01-02" … "2024-01-06") as one label: the year
+// only when it isn't this year, and what both ends share said once —
+// "Jan 2 – 6, 2024", "2024年1月2日–6日". Chromium's formatRange falls back to
+// "2024/1/2 – 2024/1/6" for Chinese, so CJK dates (largest unit first) are
+// joined here: the end drops the year and month it shares with the start.
+export function formatDayRange(from, to, locale, currentYear = new Date().getFullYear()) {
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+  const withYear = start.getFullYear() !== currentYear || end.getFullYear() !== currentYear;
+  const format = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}) });
+  if (from === to) return format.format(start);
+  if (!/^(zh|ja|ko)\b/i.test(format.resolvedOptions().locale)) return format.formatRange(start, end);
+  const shared = new Set();
+  if (start.getFullYear() === end.getFullYear()) {
+    shared.add("year");
+    if (start.getMonth() === end.getMonth()) shared.add("month");
+  }
+  // Drop each shared unit together with the literal after it ("2024" + "年").
+  const parts = format.formatToParts(end);
+  const kept = parts.filter((part, index) => !shared.has(part.type)
+    && !(part.type === "literal" && shared.has(parts[index - 1]?.type)));
+  return `${format.format(start)}–${kept.map((part) => part.value).join("")}`;
 }
 
 export function formatPercent(value) {

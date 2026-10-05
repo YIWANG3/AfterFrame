@@ -161,7 +161,10 @@ jobs:
           e2e/58-edit-add-to-folder.spec.js
           e2e/59-paging-drift.spec.js
           e2e/59-scroll-edge-blur.spec.js
+          e2e/60-file-lifecycle.spec.js
+          e2e/61-dates-and-places.spec.js
           e2e/61-paging-after-delete.spec.js
+          e2e/63-save-dialog.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

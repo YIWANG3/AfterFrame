@@ -21,7 +21,7 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
   const source = group.cover_preview_path || group.cover_image_path;
 
   return (
-    <div className="group/tile relative flex flex-col items-center">
+    <div className="group/tile relative flex flex-col items-center" data-person-group={group.group_id}>
       <button
         type="button"
         onClick={(event) => onSelect(group, event)}

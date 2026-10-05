@@ -299,6 +299,71 @@ test("an agent can create, browse and re-condition a smart collection over MCP",
   await expect(smartRow("Agent picks")).toHaveCount(0);
 });
 
+// A rating change inside a view that selects by rating has to move the photo
+// out of the grid right away — the sidebar count did, the grid kept it until
+// the view was left and opened again.
+test("demoting a photo below a view's rating condition takes it out of the grid at once", async () => {
+  const inspectorTitle = () => window.getByTestId("inspector-asset-title");
+  const titleOf = (id) => window.evaluate((assetId) => window.mediaWorkspace.browseImages({ status: "all", limit: 1000 })
+    .then((rows) => rows.find((row) => row.asset_id === assetId)?.image_path.split("/").pop()), id);
+  // Select a photo the way a user does, and rate it from the keyboard.
+  const rate = async (id, key) => {
+    await window.locator(`[data-gallery-item='true'][data-asset-id='${id}']`).click();
+    await expect(inspectorTitle()).toHaveText(await titleOf(id));
+    await window.keyboard.press(key);
+  };
+  const expectGone = async (id, count) => {
+    await expect(cards()).toHaveCount(count);
+    await expect(window.locator(`[data-gallery-item='true'][data-asset-id='${id}']`)).toHaveCount(0);
+    // Nothing still shows it as selected: neither a card nor the Inspector.
+    await expect(window.locator("[data-gallery-item='true'][data-selected='true']")).toHaveCount(0);
+    await expect(inspectorTitle()).toHaveCount(0);
+  };
+
+  // 1. Inside the smart collection (rating ≥ 4 since it was edited above).
+  await smartRow("Five stars").click();
+  const inCollection = await holds("Five stars");
+  expect(inCollection).toBeGreaterThan(1);
+  await expect(cards()).toHaveCount(inCollection);
+  const demoted = await cards().first().getAttribute("data-asset-id");
+  await rate(demoted, "2");
+  await expect.poll(() => rowCount("Five stars")).toBe(inCollection - 1);
+  await expectGone(demoted, inCollection - 1);
+  // Leaving and coming back shows the same thing.
+  await window.getByRole("button", { name: "All Assets" }).click();
+  await smartRow("Five stars").click();
+  await expect(cards()).toHaveCount(inCollection - 1);
+  await expect(window.locator(`[data-asset-id='${demoted}']`)).toHaveCount(0);
+
+  // 2. A rating filter on the library is the same kind of condition.
+  await window.getByRole("button", { name: "All Assets" }).click();
+  await window.getByTitle("Rating ≥ 4").click();
+  const filtered = await browseCount({ rating_min: 4 });
+  await expect(cards()).toHaveCount(filtered);
+  const second = await cards().first().getAttribute("data-asset-id");
+  await rate(second, "1");
+  await expectGone(second, filtered - 1);
+  await actions().getByRole("button", { name: /^Clear/ }).click();
+
+  // 3. So is the Rated view: clearing a rating leaves it.
+  await window.getByRole("button", { name: /^Rated\b/ }).first().click();
+  const rated = await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "rated", limit: 1000 }).then((rows) => rows.length));
+  await expect(cards()).toHaveCount(rated);
+  const third = await cards().first().getAttribute("data-asset-id");
+  await rate(third, "0");
+  await expectGone(third, rated - 1);
+
+  // A view that does not select by rating keeps the photo where it is.
+  await window.getByRole("button", { name: "All Assets" }).click();
+  const all = await browseCount({});
+  await rate(third, "3");
+  await expect(cards()).toHaveCount(all);
+  await expect(window.locator(`[data-gallery-item='true'][data-asset-id='${third}']`)).toHaveAttribute("data-selected", "true");
+  // Put the ratings back for the tests after this one.
+  await rate(demoted, "5");
+  await rate(second, "5");
+});
+
 test("smart collections survive a restart, and photos cannot be added to one by hand", async () => {
   await collectCoverage(app); // the restart path bypasses closeApp
   await app.close();
