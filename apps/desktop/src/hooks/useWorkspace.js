@@ -6,7 +6,7 @@ import api from "../api";
 import useJobs from "./useJobs";
 import { isEmptyValue,
   DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
-  rulesFromScope, scopeFromRules, scopeKeyOf, sortOutsideFolder,
+  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
@@ -741,6 +741,11 @@ export default function useWorkspace({ pushToast } = {}) {
       await api.setAssetRating(targetIds, normalized);
       // A rating is the most common smart-collection condition.
       if (collections.some((c) => c.kind === "smart")) void loadCollections();
+      // In a view that selects by rating, a photo that no longer qualifies
+      // leaves the grid now, as it already left the sidebar count — and the
+      // selection with it, like a delete, so nothing else gets rated by
+      // the next key press.
+      if (scopeSelectsByRating(scopeRef.current) && !revealRef.current) void refreshBrowse();
     } catch (error) {
       applyRating((assetId, current) => (previousRatings.has(assetId) ? previousRatings.get(assetId) : current));
       pushToast?.({

@@ -109,6 +109,21 @@ export function rulesFromScope(scope) {
   return rules;
 }
 
+// Does this view pick its photos by rating? Then a rating change can move a
+// photo out of it (or into it), and the grid has to be asked again. The
+// condition can sit in the status (Rated), the filter bar, an "any of" group,
+// or a smart collection's rules and the rules nested under them.
+const filtersUseRating = (filters) => !!filters && (
+  ["rating_min", "rating_max"].some((key) => !isEmptyValue(filters[key]))
+  || listOf(filters.any_of).some(filtersUseRating)
+);
+const rulesUseRating = (rules) => !!rules && (
+  rules.status === "rated" || filtersUseRating(rules.filters) || rulesUseRating(rules.base)
+);
+export const scopeSelectsByRating = (scope) => !!scope && (
+  (!scope.collectionId && scope.status === "rated") || filtersUseRating(scope.filters) || rulesUseRating(scope.base)
+);
+
 // Opening a smart collection: its rules become the base set, and the filter
 // bar starts EMPTY — picking a format in there narrows the collection, it does
 // not rewrite it. The sort is the user's, not the collection's.

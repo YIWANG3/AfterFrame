@@ -14,6 +14,7 @@ import {
   rulesFromScope,
   scopeFromRules,
   scopeKeyOf,
+  scopeSelectsByRating,
   shouldResetScopeForReveal,
   sortOutsideFolder,
 } from "./workspaceLogic";
@@ -119,6 +120,27 @@ describe("detailIsStale", () => {
   it("has nothing to compare for a photo shown from outside the grid, or none", () => {
     expect(detailIsStale(detail, [item("p2")])).toBe(false);
     expect(detailIsStale(null, [row()])).toBe(false);
+  });
+});
+
+describe("scopeSelectsByRating", () => {
+  const scope = (extra) => ({ ...DEFAULT_SCOPE, ...extra });
+
+  it("finds a rating condition wherever the view keeps it", () => {
+    expect(scopeSelectsByRating(scope({ status: "rated" }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ filters: { rating_min: 4 } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ filters: { rating_max: 0 } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ filters: { any_of: [{ camera: "X" }, { rating_min: 5 }] } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ base: { status: "all", filters: { rating_min: 4 } } }))).toBe(true);
+    expect(scopeSelectsByRating(scope({ base: { status: "all", filters: { camera: "X" }, base: { status: "rated", filters: {} } } }))).toBe(true);
+  });
+
+  it("ignores views that do not pick by rating", () => {
+    expect(scopeSelectsByRating(DEFAULT_SCOPE)).toBe(false);
+    expect(scopeSelectsByRating(scope({ sort: "rating-desc", filters: { camera: "X", rating_min: null } }))).toBe(false);
+    expect(scopeSelectsByRating(scope({ base: { status: "all", filters: { date_within_days: 30 } } }))).toBe(false);
+    // A folder has no status of its own; a leftover "rated" is not a condition there.
+    expect(scopeSelectsByRating(scope({ collectionId: "c1", status: "rated" }))).toBe(false);
   });
 });
 
