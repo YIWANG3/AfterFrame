@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 const { _electron: electron } = require("@playwright/test");
+const { devPython } = require("../../electron/sidecar/transport");
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
 const SEEDED_CATALOG = path.resolve(__dirname, "..", "fixtures", "test-catalog.afcatalog");
@@ -184,18 +185,27 @@ function relocateFixturePaths(catalogDir) {
 // size + mtime against the catalog row and reports the source as changed,
 // which the app answers by re-reading metadata from disk — wiping whatever a
 // spec seeded into the row (32-gps-location-menu's GPS, on CI). Put the
-// mtimes back to what the catalog recorded; microseconds round-trip through
-// utimes and the sidecar's iso_mtime exactly.
+// mtimes back to what the catalog recorded, to the microsecond. Node's utimes
+// takes float seconds, too coarse at today's epoch for Windows' 100 ns file
+// times: a third of the fixtures came back 1 µs off there and read as
+// changed. Python sets them in nanoseconds.
+const SET_MTIMES_PY = [
+  "import os, sys",
+  "from datetime import datetime",
+  "for line in sys.stdin.buffer.read().decode('utf-8').splitlines():",
+  "    path, _, iso = line.partition('\\t')",
+  "    if not iso or not os.path.exists(path):",
+  "        continue",
+  "    stamp = datetime.fromisoformat(iso)",
+  "    ns = (int(stamp.replace(microsecond=0).timestamp()) * 1_000_000 + stamp.microsecond) * 1000",
+  "    try:",
+  "        os.utime(path, ns=(ns, ns))",
+  "    except OSError:",
+  "        pass  # read-only checkout: browse will just flag it",
+].join("\n");
 function restoreSeededMtimes(db) {
-  const rows = execFileSync("sqlite3", ["-separator", "\t", db, "SELECT canonical_path, modified_time FROM assets"]).toString();
-  for (const line of rows.split(/\r?\n/)) {
-    const [file, iso] = line.split("\t");
-    if (!file || !iso || !fs.existsSync(file)) continue;
-    const whole = Math.floor(Date.parse(iso) / 1000);
-    const micros = Number((/\.(\d{1,6})/.exec(iso)?.[1] || "0").padEnd(6, "0"));
-    const seconds = whole + micros / 1e6;
-    try { fs.utimesSync(file, seconds, seconds); } catch (_) { /* read-only checkout: browse will just flag it */ }
-  }
+  const rows = execFileSync("sqlite3", ["-separator", "\t", db, "SELECT canonical_path, modified_time FROM assets"]);
+  execFileSync(devPython(process.platform), ["-c", SET_MTIMES_PY], { input: rows });
 }
 
 // Main-process stdout/stderr and renderer console lines go to

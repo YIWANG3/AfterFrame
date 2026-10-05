@@ -82,12 +82,12 @@ test.describe("Catalog browse", () => {
     await window.getByText("Copy File Path", { exact: true }).click();
     const fullPath = await app.evaluate(({ clipboard }) => clipboard.readText());
     expect(fullPath).toMatch(/\.[a-z0-9]+$/i);
-    expect(fullPath).toContain("/");
+    expect(fullPath).toContain(path.sep);
 
     await firstCard.click({ button: "right" });
     await window.getByText("Copy Name", { exact: true }).click();
     const name = await app.evaluate(({ clipboard }) => clipboard.readText());
-    expect(name).not.toContain("/");
+    expect(name).not.toContain(path.sep);
     expect(fullPath).toContain(name);
   });
 
