@@ -21,27 +21,40 @@ export const JOB_META = {
   colors: { label: "Colour Analysis", icon: Palette },
 };
 
+// The sidecar names a job's phase in English ("Match with RAW"); its key is
+// what gets translated, with that name as the fallback for a phase this
+// build doesn't know yet.
+export function phaseName(job, t) {
+  if (!job.phaseLabel && !job.phase) return null;
+  return job.phase ? t(`activity.phases.${job.phase}`, { defaultValue: job.phaseLabel || job.phase }) : job.phaseLabel;
+}
+
 export function jobLine(job, t) {
   const phase = job.result?.current_phase?.result || {};
   const processed = Number(phase.processed || 0);
   const total = Number(phase.total || 0);
+  const name = phaseName(job, t);
   if (job.status === "paused") return t("activity.paused");
-  if (total > 0) return t("activity.workingProgress", { label: job.phaseLabel || t("activity.working"), processed, total });
-  return job.phaseLabel || (job.status === "queued" ? t("activity.queued") : t("activity.working"));
+  if (total > 0) return t("activity.workingProgress", { label: name || t("activity.working"), processed, total });
+  return name || (job.status === "queued" ? t("activity.queued") : t("activity.working"));
+}
+
+// "Import failed", "导入已取消": the status word is translated too, never the
+// sidecar's own "failed"/"cancelled".
+export function finishedLine(job, t) {
+  const label = t(`activity.jobs.${job.jobType}`, (JOB_META[job.jobType] || { label: job.jobType }).label);
+  if (job.status === "succeeded") return t("activity.finished", { label });
+  return t("activity.ended", { label, status: t(`activity.status.${job.status}`, { defaultValue: job.status || "" }) });
 }
 
 function FinishedRow({ job }) {
   const { t } = useTranslation("nav");
-  const meta = JOB_META[job.jobType] || { label: job.jobType, icon: Activity };
   const Icon = job.status === "succeeded" ? CheckCircle2 : job.status === "cancelled" ? CircleSlash : XCircle;
   const tone = job.status === "succeeded" ? "text-green-500" : job.status === "cancelled" ? "text-muted2" : "text-red-400";
-  const label = t(`activity.jobs.${job.jobType}`, meta.label);
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-muted2">
+    <div className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-muted2" data-testid="activity-finished">
       <Icon className={`h-3.5 w-3.5 shrink-0 ${tone}`} />
-      <span className="min-w-0 flex-1 truncate">
-        {job.status === "succeeded" ? t("activity.finished", { label }) : t("activity.ended", { label, status: job.status })}
-      </span>
+      <span className="min-w-0 flex-1 truncate">{finishedLine(job, t)}</span>
     </div>
   );
 }

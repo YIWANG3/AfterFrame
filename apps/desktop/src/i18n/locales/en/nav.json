@@ -281,6 +281,24 @@
     "workingProgress": "{{label}} · {{processed}}/{{total}}",
     "finished": "{{label}} finished",
     "ended": "{{label}} {{status}}",
+    "status": {
+      "failed": "failed",
+      "cancelled": "cancelled"
+    },
+    "phases": {
+      "scan_sources": "Index Sources",
+      "index_processed_media": "Index Images",
+      "match_processed_media": "Match with RAW",
+      "generate_previews": "Generate Previews",
+      "generate_previews_hd": "Generate HD Previews",
+      "enrich_raw": "Enrich RAW Metadata",
+      "analyze_colors": "Analyze Colors",
+      "annotate": "Annotate with AI",
+      "people_index": "Analyze People",
+      "people_cluster": "Build People Candidates",
+      "generate_ai_repaint": "Generate AI Repaint",
+      "generate_text_image": "Generate Text Image"
+    },
     "jobs": {
       "import": "Import",
       "preview": "Previews",

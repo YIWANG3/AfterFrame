@@ -119,6 +119,30 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
   }
 });
 
+// The 0.5.8 report: in Chinese the dock read "Index Images" / "Match with RAW"
+// and the Activity Center "导入cancelled" — the sidecar's own words.
+test("in Chinese the dock names the import's phase and the Activity Center says it was cancelled", async () => {
+  test.setTimeout(120_000);
+  const dir = makeImportDir("zh", IMPORT_SIZE);
+  await ctx.window.evaluate(() => window.__afterframeTest.setLocale("zh-CN"));
+  try {
+    const importPromise = callTool("import_directory", { image_dirs: [dir] }).catch(() => null);
+    const card = ctx.window.getByTestId("job-dock-card").first();
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toContainText(/索引图片|生成预览/, { timeout: 15_000 });
+    await expect(card).not.toContainText(/Index Images|Generate Previews|Match with RAW/);
+    await card.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(ctx.window.getByTestId("job-dock-card")).toHaveCount(0, { timeout: 30_000 });
+    await ctx.window.getByTitle("后台活动", { exact: true }).click();
+    await expect(ctx.window.getByTestId("activity-finished")).toHaveText("导入已取消");
+    await ctx.window.keyboard.press("Escape");
+    await importPromise;
+  } finally {
+    await ctx.window.evaluate(() => window.__afterframeTest.setLocale("en"));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("JobDock Cancel cooperatively cancels an agent-started import", async () => {
   test.setTimeout(120_000);
   const dir = makeImportDir("cancel", IMPORT_SIZE);
