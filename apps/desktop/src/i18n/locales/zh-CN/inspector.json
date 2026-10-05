@@ -28,6 +28,7 @@
     "type": "类型",
     "asset": "成品",
     "rawSource": "RAW 源",
+    "showRaw": "在图库中显示这张 RAW",
     "lastEditedBy": "上次编辑",
     "camera": "相机",
     "lens": "镜头",

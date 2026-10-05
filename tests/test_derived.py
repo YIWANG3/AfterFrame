@@ -165,3 +165,67 @@ class ExportAssetsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+RAW_FIXTURE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "e2e" / "fixtures" / "raw" / "luna-morning.dng"
+
+
+class RawOriginTest(unittest.TestCase):
+    """An export made from a RAW in the editor (or a split, or an AI repaint) is
+    registered with the RAW as its origin. It used to come out unlinked: the
+    RAW went into the export's resource set, the launch-time repair took it
+    out again, and the registry never named it."""
+
+    def setUp(self) -> None:
+        from media_workspace.reverse_lookup import index_raw_file
+
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.root = Path(temp_dir.name)
+        self.catalog = ensure_catalog(self.root / "demo.afcatalog")
+        self.connection = connect(self.catalog.db_path)
+        self.addCleanup(self.connection.close)
+        init_db(self.connection)
+        set_catalog_path(self.connection, self.catalog.root)
+        self.raw = self.root / "luna-morning.dng"
+        shutil.copyfile(RAW_FIXTURE, self.raw)
+        # Imported as a photo, the way a folder of RAWs lands in the gallery.
+        self.raw_id = index_raw_file(self.connection, self.raw).image_asset_id
+        self.export = self.root / "luna-morning_edited.jpg"
+        _write_jpeg(self.export, 1024, 576)
+
+    def test_the_raw_is_the_exports_source_and_stays_so(self) -> None:
+        from media_workspace.config import Thresholds
+        from media_workspace.db import get_image_asset_detail, get_resource_set_for_asset, remove_raw_from_resource_sets
+        from media_workspace.reverse_lookup import resolve_image
+
+        registered = register_image_file(self.connection, self.catalog, self.export, origin_path=self.raw)
+        self.assertEqual(registered["raw_asset_id"], self.raw_id)
+        self.assertEqual(registered["match_status"], "manual_confirmed")
+
+        # What every launch runs: RAWs leave resource sets. The export still
+        # heads a set of its own, and the RAW link lives on.
+        remove_raw_from_resource_sets(self.connection)
+        own_set = get_resource_set_for_asset(self.connection, registered["asset_id"])
+        self.assertEqual(own_set["primary_asset_id"], registered["asset_id"])
+
+        # A later import or watch re-resolves every file it sees.
+        decision = resolve_image(self.connection, self.export, thresholds=Thresholds(), refresh=True)
+        self.assertEqual((decision.status, decision.raw_asset_id), ("manual_confirmed", self.raw_id))
+
+        detail = get_image_asset_detail(self.connection, registered["asset_id"])
+        self.assertEqual(detail["raw_path"], str(self.raw.resolve()))
+
+    def test_a_jpeg_origin_still_makes_a_version(self) -> None:
+        from media_workspace.db import get_resource_set_for_asset
+
+        origin = self.root / "shot.jpg"
+        _write_jpeg(origin, 800, 600)
+        first = register_image_file(self.connection, self.catalog, origin)
+        edited = self.root / "shot_edited.jpg"
+        _write_jpeg(edited, 600, 600)
+        second = register_image_file(self.connection, self.catalog, edited, origin_path=origin)
+        self.assertEqual(
+            get_resource_set_for_asset(self.connection, second["asset_id"])["set_id"],
+            get_resource_set_for_asset(self.connection, first["asset_id"])["set_id"],
+        )

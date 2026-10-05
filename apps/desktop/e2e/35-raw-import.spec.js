@@ -23,7 +23,7 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, waitForEditor } = require("./helpers/app");
 
 const RAW_FIXTURES = path.resolve(__dirname, "fixtures", "raw");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -319,4 +319,44 @@ test("Compare shows RAWs decoded — two RAWs, and a RAW beside a JPEG — and z
       && !sides.some((side) => /\.dng$/i.test(side.src));
   }, { timeout: 30_000 }).toBe(true);
   await ctx.window.getByTestId("compare-close").click();
+});
+
+// The 0.5.8 report: JPEGs exported from a CR2 and a RAF in the editor showed
+// "RAW source: not linked" — registered against the preview they were drawn
+// from, not the RAW.
+test("an export saved from the editor on a RAW names that RAW as its source and leads back to it", async () => {
+  test.setTimeout(120_000);
+  const raw = (await browseByName()).get("luna-browse.dng");
+  const out = path.join(fs.realpathSync(work.root), "luna-browse_edited.jpg");
+  await tool("show_in_app", { asset_ids: [raw.asset_id] });
+  await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"]`).click();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse.dng");
+  await ctx.window.keyboard.press("e");
+  await expect(ctx.window.getByRole("button", { name: /^Save$/ })).toBeVisible({ timeout: 30_000 });
+  await waitForEditor(ctx.window, { preview: true, previewTimeout: 60_000 });
+
+  await ctx.app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+  }, out);
+  await ctx.window.getByRole("button", { name: /^Save$/ }).click();
+  await expect(ctx.window.getByText("Saved", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  expect(fs.existsSync(out)).toBe(true);
+  // Untouched, so the RAW's own size: this RAW's HD preview is a full-size render.
+  expect(await sharp(out).metadata()).toMatchObject({ width: 1024, height: 576 });
+
+  const detail = await ctx.window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), out);
+  expect(detail.raw_path).toBe(raw.image_path);
+  expect(detail.raw_asset_id).toBe(raw.asset_id);
+  expect(detail.match_status).toBe("manual_confirmed");
+  expect(detail.raw_in_library).toBe(true);
+  await ctx.window.keyboard.press("Escape");
+  await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+
+  // The export's Inspector names the RAW, and one click opens it in the gallery.
+  await tool("show_in_app", { asset_ids: [detail.asset_id] });
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse_edited.jpg", { timeout: 10_000 });
+  await expect(ctx.window.getByTestId("inspector-raw-source")).toContainText("luna-browse.dng");
+  await ctx.window.getByTestId("inspector-show-raw").click();
+  await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse.dng", { timeout: 10_000 });
+  await expect(ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"][data-selected='true']`)).toBeVisible();
 });

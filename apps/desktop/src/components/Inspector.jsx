@@ -402,14 +402,29 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             </DetailRow>
             <DetailRow label={t("rows.rawSource")}>
               {detail.raw_path ? (
-                <button
-                  type="button"
-                  className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
-                  onClick={() => void api.revealPath(detail.raw_path)}
-                  title={t("reveal")}
-                >
-                  {escapePathLabel(detail.raw_path)}
-                </button>
+                <span className="inline-flex max-w-full items-start justify-end gap-1.5">
+                  <button
+                    type="button"
+                    className="max-w-full cursor-pointer break-all text-right text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+                    onClick={() => void api.revealPath(detail.raw_path)}
+                    title={t("reveal")}
+                    data-testid="inspector-raw-source"
+                  >
+                    {escapePathLabel(detail.raw_path)}
+                  </button>
+                  {detail.raw_in_library && detail.raw_asset_id ? (
+                    <button
+                      type="button"
+                      className="mt-px shrink-0 rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                      onClick={() => onSelectAsset?.(detail.raw_asset_id)}
+                      title={t("rows.showRaw")}
+                      aria-label={t("rows.showRaw")}
+                      data-testid="inspector-show-raw"
+                    >
+                      <Images className="h-3 w-3" />
+                    </button>
+                  ) : null}
+                </span>
               ) : t("notLinked")}
             </DetailRow>
             {imageMeta.software ? <DetailRow label={t("rows.lastEditedBy")}>{imageMeta.software}</DetailRow> : null}

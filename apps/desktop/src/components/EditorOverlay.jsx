@@ -753,6 +753,9 @@ export default function EditorOverlay({
   const buildSaveArgs = (savePath) => ({
     savePath,
     sourcePath,
+    // What the result is a version of. For a RAW that is the RAW, not the
+    // preview the pixels came from — or the export comes out unlinked.
+    originPath: saveBasePath,
     sourceImage,
     transformedPreview,
     rotationDeg,

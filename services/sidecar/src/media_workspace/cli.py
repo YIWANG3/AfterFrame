@@ -1862,6 +1862,12 @@ def _cmd_asset_detail(args, connection, catalog, parser):
     }
     from .db import get_asset_people
     payload["people"] = get_asset_people(connection, asset_id=row["asset_id"])
+    # A RAW imported as a photo is in the gallery; a RAW source folder's RAWs
+    # are not. Only the first can be opened from its export's Inspector.
+    payload["raw_in_library"] = bool(row["raw_asset_id"]) and connection.execute(
+        "SELECT 1 FROM image_lookup_registry WHERE image_asset_id = ? LIMIT 1",
+        (row["raw_asset_id"],),
+    ).fetchone() is not None
 
     # Add version siblings from resource set
     asset_id = row["asset_id"]

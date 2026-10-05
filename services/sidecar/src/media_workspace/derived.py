@@ -123,14 +123,20 @@ def register_image_file(
     match_status = "unmatched"
     match_score = 0.0
     raw_asset_id = None
+    origin_is_raw = False
     if origin_path:
         origin = str(origin_path.resolve())
         origin_asset_row = connection.execute(
-            "SELECT asset_id FROM asset_files WHERE path = ?",
+            """
+            SELECT asset_files.asset_id, assets.asset_type
+            FROM asset_files JOIN assets ON assets.asset_id = asset_files.asset_id
+            WHERE asset_files.path = ?
+            """,
             (origin,),
         ).fetchone()
         origin_asset_id = str(origin_asset_row["asset_id"]) if origin_asset_row else None
-        origin_row = connection.execute(
+        origin_is_raw = bool(origin_asset_row) and origin_asset_row["asset_type"] == "raw"
+        origin_row = None if origin_is_raw else connection.execute(
             """
             SELECT registry.raw_asset_id, registry.score
             FROM asset_files
@@ -140,7 +146,17 @@ def register_image_file(
             """,
             (origin,),
         ).fetchone()
-        if origin_row:
+        if origin_is_raw and not collage_source_ids:
+            # Made from the RAW itself (the editor, a split, an AI repaint):
+            # the RAW is its source, as a RAW is linked to an export —
+            # through the registry, never a resource set (repair-resource-sets
+            # takes RAWs out of sets). Confirmed, because the matcher never
+            # offers a RAW imported as a photo as a candidate, so a later
+            # re-resolve of this file would otherwise unlink it.
+            raw_asset_id = origin_asset_id
+            match_score = 1.0
+            match_status = "manual_confirmed"
+        elif origin_row:
             raw_asset_id = origin_row[0]
             match_score = origin_row[1] or 1.0
             match_status = "auto_bound"
@@ -173,11 +189,13 @@ def register_image_file(
             commit=True,
         )
     else:
+        # A RAW origin is linked above; its export heads a set of its own.
+        set_origin = None if origin_is_raw else origin_asset_id
         attach_asset_to_resource_set(
             connection,
             asset_id,
-            origin_asset_id=origin_asset_id,
-            version_kind=version_kind if origin_asset_id else "import",
+            origin_asset_id=set_origin,
+            version_kind=version_kind if set_origin else "import",
             commit=True,
         )
 

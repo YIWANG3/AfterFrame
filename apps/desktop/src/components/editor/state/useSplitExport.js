@@ -118,7 +118,8 @@ export function useSplitExport({
       // Catalog registration is best-effort, like the single-image save.
       const assetIds = [];
       for (const panel of results) {
-        try { assetIds.push((await api.quickRegister(panel.path, sourcePath))?.asset_id); }
+        // Linked to the original (a RAW, not the preview it was cut from).
+        try { assetIds.push((await api.quickRegister(panel.path, saveBasePath || sourcePath))?.asset_id); }
         catch (e) { console.warn("[split] quickRegister skipped:", e?.message || e); }
       }
       await joinFolder?.(assetIds);
