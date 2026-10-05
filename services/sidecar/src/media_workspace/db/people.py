@@ -14,9 +14,10 @@ from collections.abc import Callable, Iterable
 from typing import Any
 from uuid import uuid4
 
-import numpy as np
-
 from .core import _json
+
+# numpy is imported by the two functions that use it. Every sidecar process
+# imports this module (through db), and numpy was half of its start-up time.
 
 EMBEDDING_DIMENSIONS = 512
 _QUALITY_VALUES = {"standard", "low"}
@@ -316,6 +317,8 @@ def rebuild_candidate_groups(
     so clusters sharing an asset never merge automatically. Named and confirmed
     groups are deliberately left untouched.
     """
+    import numpy as np
+
     if not 0.0 < threshold < 1.0:
         raise ValueError("candidate group threshold must be between 0 and 1")
     if chain_slack < 0:
@@ -649,6 +652,8 @@ def list_similar_person_groups(
     person" targets surface first instead of a face-count phone book. Only
     groups in the same embedding space are comparable (and mergeable).
     """
+    import numpy as np
+
     if limit < 1:
         raise ValueError("limit must be positive")
     source = _person_group_row(connection, group_id)
