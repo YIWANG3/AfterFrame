@@ -120,6 +120,12 @@ def refresh_place_fields(connection: sqlite3.Connection) -> bool:
     row = connection.execute("SELECT place_data_version FROM catalog_info WHERE catalog_id = 1").fetchone()
     if row is not None and row[0] == PLACE_DATA_VERSION:
         return False
+    # No locations to redo, as in every new catalog: mark the data current
+    # without loading it (seconds on a slow PC). Locations added later are
+    # placed with the data of their day as they come in.
+    if connection.execute("SELECT 1 FROM asset_locations LIMIT 1").fetchone() is None:
+        connection.execute("UPDATE catalog_info SET place_data_version = ? WHERE catalog_id = 1", (PLACE_DATA_VERSION,))
+        return False
     if load_reverse_geocoder() is None:
         return False  # keep the old fields; try again when the data is there
     backfill_place_fields(connection)
