@@ -7,13 +7,14 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
-const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor, lacks } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 // macOS 14 (Darwin 23) is where Vision's subject lifting starts.
 const onMacOS14 = () => process.platform === "darwin" && Number(os.release().split(".")[0]) >= 23;
 
 test.describe("Sticker tool", () => {
+  test.skip(lacks("stickerExtract"), "the sticker browser and tool are macOS-only for now (electron/capabilities.js)");
   let app, window, userDataDir, fixturePath;
 
   test.beforeAll(async () => {

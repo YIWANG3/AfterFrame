@@ -27,6 +27,8 @@ export default function useWorkspace({ pushToast } = {}) {
   const [summary, setSummary] = useState(null);
   const [roots, setRoots] = useState([]);
   const [items, setItems] = useState([]);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const [detail, setDetail] = useState(null);
   // What the Inspector shows right now, for code that runs after an await.
   const detailRef = useRef(null);
@@ -664,16 +666,26 @@ export default function useWorkspace({ pushToast } = {}) {
     }
   }
 
+  // The rows just left the list the server pages through (deleted, or taken
+  // out of the folder on screen). Paging is by offset, so the offset falls by
+  // every one of them that was loaded; otherwise the next page starts that
+  // many rows late and skips them. Ids past the loaded range never counted.
+  function dropLoadedItems(assetIds) {
+    const loadedIds = new Set(itemsRef.current.map((item) => item.asset_id));
+    const loaded = assetIds.filter((id) => loadedIds.has(id)).length;
+    const dropped = new Set(assetIds);
+    setItems((current) => current.filter((item) => !dropped.has(item.asset_id)));
+    // Not inside the setItems updater: StrictMode runs updaters twice.
+    if (loaded) setBrowserOffset((offset) => Math.max(0, offset - loaded));
+  }
+
   async function removeFromCollection(collectionId, assetIds) {
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
     await api.collectionRemoveItems(collectionId, targetIds);
     bumpCatalogRevision();
     await loadCollections();
-    if (scopeRef.current.collectionId === collectionId) {
-      const removedSet = new Set(targetIds);
-      setItems((current) => current.filter((item) => !removedSet.has(item.asset_id)));
-    }
+    if (scopeRef.current.collectionId === collectionId) dropLoadedItems(targetIds);
   }
 
   async function deleteImageAssets(assetIds) {
@@ -682,7 +694,7 @@ export default function useWorkspace({ pushToast } = {}) {
     await api.deleteImageAssets(targetIds);
     bumpCatalogRevision();
     const deletedSet = new Set(targetIds);
-    setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
+    dropLoadedItems(targetIds);
     if (selectedAssetId && deletedSet.has(selectedAssetId)) {
       setSelectedAssetId(null);
       setDetail(null);
@@ -698,7 +710,7 @@ export default function useWorkspace({ pushToast } = {}) {
     const result = await api.deleteImageAssetsFromDisk(targetIds, paths || []);
     bumpCatalogRevision();
     const deletedSet = new Set(targetIds);
-    setItems((current) => current.filter((item) => !deletedSet.has(item.asset_id)));
+    dropLoadedItems(targetIds);
     if (selectedAssetId && deletedSet.has(selectedAssetId)) {
       setSelectedAssetId(null);
       setDetail(null);

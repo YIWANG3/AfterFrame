@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import json
+import ntpath
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -271,18 +273,36 @@ def create_derived_crop(connection, catalog: CatalogPaths, asset_id: str, ratio:
     return payload
 
 
-# Default font chain: CJK-capable faces first so Chinese captions just work.
-FONT_CANDIDATES = [
-    "/System/Library/Fonts/PingFang.ttc",
-    "/System/Library/Fonts/Hiragino Sans GB.ttc",
-    "/System/Library/Fonts/STHeiti Medium.ttc",
-    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    "/System/Library/Fonts/Helvetica.ttc",
-]
+# Default font chain per platform: CJK-capable faces first so Chinese captions
+# just work, then a Latin face every install of that system has.
+FONT_CANDIDATES = {
+    "darwin": [
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+    ],
+    # Microsoft YaHei, SimHei, SimSun; under %WINDIR%\Fonts (default_fonts).
+    "win32": ["msyh.ttc", "msyh.ttf", "simhei.ttf", "simsun.ttc", "segoeui.ttf", "arial.ttf"],
+    "linux": [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
+}
+
+
+def default_fonts(platform: str = sys.platform, environ: dict[str, str] | None = None) -> list[str]:
+    """The fonts text overlays try, in order, when the caller names none."""
+    if platform == "win32":
+        fonts_dir = ntpath.join((environ if environ is not None else os.environ).get("WINDIR", "C:\\Windows"), "Fonts")
+        return [ntpath.join(fonts_dir, name) for name in FONT_CANDIDATES["win32"]]
+    return FONT_CANDIDATES.get(platform, FONT_CANDIDATES["linux"])
 
 
 def _resolve_font(font_path: str | None, size: int) -> ImageFont.FreeTypeFont:
-    candidates = [font_path] if font_path else FONT_CANDIDATES
+    candidates = [font_path] if font_path else default_fonts()
     for candidate in candidates:
         if candidate and Path(candidate).exists():
             try:

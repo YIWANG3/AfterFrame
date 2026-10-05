@@ -415,7 +415,8 @@ class PreviewService:
             if row["existing_relative_path"] and row["existing_status"] == "ready" and not row_force and self._preview_on_disk(row["asset_id"], kind):
                 # A preview from before colours existed: read its colours now.
                 if analyze_colors and kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
-                    analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"], commit=True)
+                    analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"])
+                    connection.commit()
                 skipped += 1
                 processed += 1
                 report_progress(
@@ -435,6 +436,9 @@ class PreviewService:
         # progress callback raises (cooperative job cancellation) we cancel the
         # queued futures before unwinding — otherwise the executor's exit
         # handler would block until every queued render finished anyway.
+        # Each result is written and committed before waiting for the next:
+        # an open transaction holds the catalog's write lock, and other
+        # processes (the app's own reads and writes) would wait on renders.
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
             futures = {
                 pool.submit(self.generate_for_row, row, kind=kind, force=row_force): row
@@ -445,6 +449,11 @@ class PreviewService:
                     row = futures[future]
                     try:
                         result = future.result()
+                        # The thumbnail is the colour sample too: same file,
+                        # already decoded once, a few ms more. Read before the
+                        # first write, so the lock isn't held for it.
+                        if analyze_colors and kind == "preview" and row["asset_type"] == "image":
+                            analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
                         upsert_preview_entry(
                             connection,
                             asset_id=result.asset_id,
@@ -455,10 +464,6 @@ class PreviewService:
                             status=result.status,
                             commit=False,
                         )
-                        # The thumbnail is the colour sample too: same file,
-                        # already decoded once, a few ms more.
-                        if analyze_colors and kind == "preview" and row["asset_type"] == "image":
-                            analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
                         generated += 1
                     except SourceNotReadyError:
                         # Keep an existing good preview/DB entry. A later watcher
@@ -477,10 +482,6 @@ class PreviewService:
                         )
                         failed += 1
                     processed += 1
-                    # Each preview is committed as it lands: the next render
-                    # (seconds for a big RAW or TIFF) must not run inside an
-                    # open write transaction, which locked every other
-                    # process out of the catalog for up to 50 renders.
                     connection.commit()
                     report_progress(
                         progress_callback,

@@ -11,6 +11,7 @@ import {
   formatTimestamp,
   mergeRoots,
   navItems,
+  pathSeparator,
 } from "./format";
 
 describe("path helpers", () => {
@@ -43,6 +44,14 @@ describe("path helpers", () => {
     expect(escapePathLabel("C:\\Users\\me\\Pictures\\2026\\a.jpg")).toBe("...\\Pictures\\2026\\a.jpg");
     expect(escapePathLabel("/short/a.jpg")).toBe("/short/a.jpg");
     expect(escapePathLabel("")).toBe("Not linked");
+  });
+
+  it("tells a Windows path's separator from a POSIX one", () => {
+    expect(pathSeparator("C:\\Users\\me\\Pictures")).toBe("\\");
+    expect(pathSeparator("\\\\nas\\photos")).toBe("\\");
+    expect(pathSeparator("/Users/me/Pictures")).toBe("/");
+    expect(pathSeparator("C:/Users/me")).toBe("/");
+    expect(pathSeparator("")).toBe("/");
   });
 });
 

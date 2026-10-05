@@ -12,9 +12,11 @@ from media_workspace.db import connect, init_db, set_catalog_path
 from media_workspace.derived import (
     _crop_box,
     create_derived_crop,
+    default_fonts,
     export_assets_to_dir,
     parse_ratio,
     register_image_file,
+    render_text_overlay,
 )
 
 
@@ -29,6 +31,31 @@ class ParseRatioTest(unittest.TestCase):
         for bad in ("", "4", "4:3:2", "0:3", "-1:1", "a:b"):
             with self.assertRaises(ValueError):
                 parse_ratio(bad)
+
+
+class DefaultFontsTest(unittest.TestCase):
+    """add_text with no --font-path: every platform needs a font it has."""
+
+    def test_windows_looks_in_its_fonts_folder_chinese_first(self) -> None:
+        fonts = default_fonts("win32", {"WINDIR": "D:\\Win"})
+        self.assertEqual(fonts[0], "D:\\Win\\Fonts\\msyh.ttc")
+        self.assertTrue(all(font.startswith("D:\\Win\\Fonts\\") for font in fonts))
+        self.assertTrue(default_fonts("win32", {})[0].startswith("C:\\Windows\\Fonts\\"))
+
+    def test_macos_keeps_its_chain(self) -> None:
+        self.assertEqual(default_fonts("darwin")[0], "/System/Library/Fonts/PingFang.ttc")
+
+    def test_text_renders_with_this_systems_default_font(self) -> None:
+        if not any(Path(font).exists() for font in default_fonts()):
+            self.skipTest("none of this platform's default fonts is installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dest = Path(tmp) / "in.jpg", Path(tmp) / "out.jpg"
+            Image.new("RGB", (400, 300), "gray").save(src)
+            info = render_text_overlay(src, dest, text="AfterFrame 后帧")
+            self.assertTrue(dest.exists())
+            left, top, right, bottom = info["text_box"]
+            self.assertGreater(right - left, 0)
+            self.assertGreater(bottom - top, 0)
 
 
 class CropBoxTest(unittest.TestCase):

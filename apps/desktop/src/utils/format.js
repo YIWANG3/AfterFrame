@@ -73,11 +73,18 @@ export function mergeRoots(existing, added) {
   return collapseRootPaths([...(existing || []), ...(added || [])]);
 }
 
+// The separator a path uses: "\\" for a Windows path, "/" otherwise. Paths
+// built from one should keep it.
+export function pathSeparator(value) {
+  const text = String(value || "");
+  return text.includes("\\") && !text.includes("/") ? "\\" : "/";
+}
+
 export function escapePathLabel(value) {
   if (!value) return "Not linked";
   const text = String(value);
   // Keep the path's own separator: C:\\Users\\… shortens to ...\\a\\b\\c.jpg
-  const separator = text.includes("\\") && !text.includes("/") ? "\\" : "/";
+  const separator = pathSeparator(text);
   const segments = text.split(/[\\/]/);
   if (segments.length <= 4) return value;
   return `...${separator}${segments.slice(-3).join(separator)}`;

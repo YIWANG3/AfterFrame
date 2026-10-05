@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp } = require("./helpers/app");
+const { splitsImport } = require("../electron/importDialog");
 
 test.describe("Tahoe window and toolbar", () => {
   let ctx;
@@ -30,7 +31,8 @@ test.describe("Tahoe window and toolbar", () => {
   test("add menu dismisses on outside click and Escape", async () => {
     const page = ctx.window;
     const trigger = page.locator(".app-toolbar > div").first().getByRole("button").first();
-    const action = page.getByRole("button", { name: "Import", exact: true });
+    // Windows and Linux split Import into Import Files… / Import Folder… (#123).
+    const action = page.getByRole("button", { name: splitsImport(process.platform) ? "Import Files…" : "Import", exact: true });
     await trigger.click();
     await expect(action).toBeVisible();
     await page.getByRole("button", { name: /All Assets/ }).first().click();
@@ -63,6 +65,8 @@ test.describe("Tahoe window and toolbar", () => {
       });
     }
     await expect(page.locator("html")).not.toHaveClass(/\bfs\b/, { timeout: 15000 });
-    await expect(page.locator("#root")).not.toHaveCSS("clip-path", "none");
+    // The rounded clip belongs to the transparent macOS window; Windows draws an
+    // opaque native frame and never clips.
+    if (process.platform === "darwin") await expect(page.locator("#root")).not.toHaveCSS("clip-path", "none");
   });
 });

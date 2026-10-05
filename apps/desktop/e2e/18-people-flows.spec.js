@@ -7,7 +7,9 @@
 // no group.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, lacks } = require("./helpers/app");
+
+test.skip(lacks("people"), "people recognition is macOS-only for now (electron/capabilities.js)");
 
 let ctx;
 
