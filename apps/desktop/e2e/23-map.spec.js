@@ -230,6 +230,8 @@ test.describe("A Discover place on the map", () => {
     expect(Math.abs(center[0] - HONOLULU[0])).toBeLessThan(1);
     expect(Math.abs(center[1] - HONOLULU[1])).toBeLessThan(1);
     expect(zoom).toBeGreaterThan(6);
+    // The level switcher and the marker size follow the framed zoom.
+    await expect(window.locator(".photo-map-stage")).toHaveAttribute("data-marker-mode", "detail");
     // The photos are on screen, not just near the centre.
     expect(bounds[0][0]).toBeLessThan(HONOLULU[0]);
     expect(bounds[1][0]).toBeGreaterThan(HONOLULU[0]);
@@ -253,5 +255,48 @@ test.describe("A Discover place on the map", () => {
     await expect(cards()).toHaveCount(3);
     const { center } = await mapState();
     expect(Math.abs(center[0] - HONOLULU[0])).toBeLessThan(1);
+  });
+});
+
+// The first time the map opens in a session, on a Discover place: the map is
+// built and framed at once, before its zoom listener exists, and the level
+// switcher stayed on World over a city-level view (0.5.8 review, F5).
+test.describe("The map's first open, on a Discover place", () => {
+  test.skip(!!process.env.CI, "no GPU/WebGL on the GitHub macOS runner: MapLibre never renders");
+  let app, window, userDataDir, dir;
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-first-map-")));
+    const files = [];
+    for (const day of ["02", "03", "04"]) {
+      const file = await writeUniqueJpeg(path.join(dir, `waikiki-${day}.jpg`), { width: 320, height: 240 });
+      files.push(tagPhoto(file, { taken: `2024:01:${day} 09:00:00`, gps: [21.2766, -157.8271] }));
+    }
+    ({ app, window, userDataDir } = await launchApp({ testName: "map-first-open" }));
+    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
+    }, files);
+    await window.locator(".app-toolbar button").first().click();
+    await window.getByRole("button", { name: "Import", exact: true }).click();
+    for (const file of files) await expect(window.locator(`[data-image-path='${file}']`)).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => !!s?.running)), { timeout: 30_000 }).toBe(false);
+  });
+
+  test.afterAll(async () => {
+    await closeApp(app, userDataDir);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("it opens framed on the place, with the City level lit", async () => {
+    await window.getByRole("navigation").first().getByRole("button", { name: "Discover" }).click();
+    await window.getByRole("button", { name: /^Honolulu/ }).first().click();
+    await expect(window.locator("[data-testid='geo-filter-chip']")).toHaveText("Honolulu", { timeout: 10_000 });
+    await window.locator("[data-testid='map-toggle']").click();
+    await expect(window.locator(".photo-map-stage[data-map-ready='true']")).toBeVisible({ timeout: 30_000 });
+    await expect.poll(async () => (await window.evaluate(() => window.__afterframeMapTest.getState())).zoom, { timeout: 10_000 }).toBeGreaterThan(6);
+    await expect(window.locator(".photo-map-stage")).toHaveAttribute("data-marker-mode", "detail");
+    await expect(window.locator("[data-testid='geo-filter-chip']")).toHaveText("Honolulu");
   });
 });

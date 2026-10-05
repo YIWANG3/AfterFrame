@@ -56,6 +56,12 @@ function markerMode(zoom) {
   return zoom < 2.45 ? "compact" : zoom < 5.6 ? "stack" : "detail";
 }
 
+// The marker size and the lit level (World / Region / City) follow the zoom.
+function syncMarkerMode(stage, map) {
+  const mode = markerMode(map.getZoom());
+  if (stage && stage.dataset.markerMode !== mode) stage.dataset.markerMode = mode;
+}
+
 // Representative zoom for each detail level (matching the markerMode bands).
 const LEVEL_ZOOMS = { world: 1.35, region: 4, city: 7 };
 
@@ -316,11 +322,7 @@ export default function PhotoMap({
         });
       };
 
-      map.on("zoom", () => {
-        const stage = stageRef.current;
-        const mode = markerMode(map.getZoom());
-        if (stage && stage.dataset.markerMode !== mode) stage.dataset.markerMode = mode;
-      });
+      map.on("zoom", () => syncMarkerMode(stageRef.current, map));
       map.on("move", scheduleLabels);
       map.on("resize", scheduleLabels);
       // moveend can arrive while the style is still loading tiles for the new
@@ -597,6 +599,8 @@ export default function PhotoMap({
     request.until ??= Date.now() + FIT_SETTLE_MS;
     const { west, south, east, north } = request.bounds;
     map.fitBounds([[west, south], [east, north]], { padding: 48, maxZoom: 11, duration: 0 });
+    // The first fit can land before the map's zoom listener exists.
+    syncMarkerMode(stageRef.current, map);
   }
   useEffect(() => {
     const bounds = fitBounds;
