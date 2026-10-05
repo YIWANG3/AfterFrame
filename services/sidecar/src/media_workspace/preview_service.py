@@ -370,7 +370,6 @@ class PreviewService:
         deferred = 0
         processed = 0
         total = len(rows)
-        batch_size = 50
         report_progress(progress_callback, phase="generate_previews", processed=0, total=total, generated=0, skipped=0, failed=0, deferred=0)
 
         # Split rows into skip vs work
@@ -380,7 +379,7 @@ class PreviewService:
             if row["existing_relative_path"] and row["existing_status"] == "ready" and not row_force and self._preview_on_disk(row["asset_id"], kind):
                 # A preview from before colours existed: read its colours now.
                 if analyze_colors and kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
-                    analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"])
+                    analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"], commit=True)
                 skipped += 1
                 processed += 1
                 report_progress(
@@ -442,8 +441,11 @@ class PreviewService:
                         )
                         failed += 1
                     processed += 1
-                    if processed % batch_size == 0:
-                        connection.commit()
+                    # Each preview is committed as it lands: the next render
+                    # (seconds for a big RAW or TIFF) must not run inside an
+                    # open write transaction, which locked every other
+                    # process out of the catalog for up to 50 renders.
+                    connection.commit()
                     report_progress(
                         progress_callback,
                         phase="generate_previews",

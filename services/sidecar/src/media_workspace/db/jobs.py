@@ -225,6 +225,27 @@ def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
     kill). Mark it failed so it doesn't haunt the activity center forever.
     """
     stall_cutoff = _stall_cutoff_sql()
+    # Look before writing: the activity centre polls this every 1.2 s, and an
+    # UPDATE takes the catalog's write lock even when it changes nothing.
+    stale = connection.execute(
+        f"SELECT 1 FROM jobs WHERE status IN ('queued', 'running') AND updated_at < {stall_cutoff} LIMIT 1"
+    ).fetchone()
+    if stale is not None:
+        _reap_stalled_jobs(connection, stall_cutoff)
+    rows = connection.execute(
+        """
+            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
+                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
+            FROM jobs
+        WHERE status IN ('queued', 'running', 'paused')
+        ORDER BY priority DESC, created_at ASC
+        """
+    ).fetchall()
+    decoded = (_decode_job_row(row) for row in rows)
+    return [job for job in decoded if job is not None]
+
+
+def _reap_stalled_jobs(connection: sqlite3.Connection, stall_cutoff: str) -> None:
     # Only people_index jobs have a durable per-asset cursor today. Recover
     # stalled runs with that cursor instead of marking them irretrievably failed;
     # the dispatcher will launch them again when the app reconnects.
@@ -252,17 +273,6 @@ def list_active_jobs(connection: sqlite3.Connection) -> list[dict[str, object]]:
         """
     )
     connection.commit()
-    rows = connection.execute(
-        """
-            SELECT job_id, job_type, status, payload_json, result_json, progress, priority, pause_requested,
-                   resume_cursor_json, attempt_count, error_text, cancel_requested, created_at, updated_at
-            FROM jobs
-        WHERE status IN ('queued', 'running', 'paused')
-        ORDER BY priority DESC, created_at ASC
-        """
-    ).fetchall()
-    decoded = (_decode_job_row(row) for row in rows)
-    return [job for job in decoded if job is not None]
 
 
 def request_job_cancel(connection: sqlite3.Connection, job_id: str, commit: bool = True) -> dict[str, object] | None:

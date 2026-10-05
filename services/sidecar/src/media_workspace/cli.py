@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -94,6 +95,10 @@ from .preview_service import PreviewService
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 from .watcher import ImageWatcher
+
+# run-import-job, run-preview-job, … : the detached background job runners.
+JOB_RUNNER_COMMAND = re.compile(r"^run-[a-z-]+-job$")
+JOB_BUSY_TIMEOUT_MS = 60_000
 
 
 def _provider_token_key(provider: str) -> str:
@@ -854,6 +859,12 @@ def main(argv: list[str] | None = None) -> int:
     catalog = ensure_catalog(args.catalog)
     fresh_db = not catalog.db_path.exists()
     connection = connect(catalog.db_path)
+    if JOB_RUNNER_COMMAND.match(args.command or ""):
+        # A background job waits its turn for the catalog instead of failing
+        # the whole import after 5 s, as the app's own quick commands do so
+        # the UI never hangs on one. "Locked" comes before anything is
+        # written, so waiting is safe.
+        connection.execute(f"PRAGMA busy_timeout={JOB_BUSY_TIMEOUT_MS}")
     init_db(connection)
     if fresh_db:
         set_catalog_path(connection, catalog.root)
