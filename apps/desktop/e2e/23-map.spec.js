@@ -184,6 +184,7 @@ test.describe("A Discover place on the map", () => {
   const settle = () => window.waitForTimeout(1_500);
 
   test.beforeAll(async () => {
+    test.setTimeout(120_000); // tagging, launch and an import, as below
     // Three days in Honolulu: a memory needs three photos of one visit.
     dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-honolulu-")));
     const photos = [];
