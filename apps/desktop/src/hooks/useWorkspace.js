@@ -12,6 +12,7 @@ import { isEmptyValue,
 
 const PAGE_SIZE = 180;
 const LIVE_IMPORT_REFRESH_MS = 4000;
+const NO_QUEUED_IMPORT = { rawDirs: [], imageDirs: [], auto: false };
 const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
@@ -80,7 +81,21 @@ export default function useWorkspace({ pushToast } = {}) {
   const [importTask, setImportTask] = useState(null);
   const [previewTask, setPreviewTask] = useState(null);
   const [enrichmentTask, setEnrichmentTask] = useState(null);
-  const [pendingImport, setPendingImport] = useState({ rawDirs: [], imageDirs: [], auto: false });
+  const [pendingImport, setPendingImport] = useState(NO_QUEUED_IMPORT);
+  // Dirs asked for while an import runs, replayed when it ends. Requests and
+  // the finish handler go through the ref, never a render's copy, so a request
+  // lands either before the handler takes the queue or after it, and then finds
+  // no import running and starts its own. The state only feeds the dock's
+  // "Queued changes" note.
+  const pendingImportRef = useRef(NO_QUEUED_IMPORT);
+  const setImportQueue = (queue) => {
+    pendingImportRef.current = queue;
+    setPendingImport(queue);
+  };
+  const queueImport = ({ rawDirs: raw = [], imageDirs: image = [], auto = false }) => {
+    const queue = pendingImportRef.current;
+    setImportQueue({ rawDirs: mergeRoots(queue.rawDirs, raw), imageDirs: mergeRoots(queue.imageDirs, image), auto: queue.auto || auto });
+  };
   const [collections, setCollections] = useState([]);
   // Monotonic catalog-content revision: bumped on every refreshAll, every
   // catalog-changed event (imports, metadata refresh, agent writes) AND every
@@ -118,8 +133,8 @@ export default function useWorkspace({ pushToast } = {}) {
     refreshAll: (opts) => refreshAll(opts),
     startIncrementalImport: (opts) => startIncrementalImport(opts),
     consumeQueuedImport: () => {
-      const queued = pendingImport;
-      setPendingImport({ rawDirs: [], imageDirs: [], auto: false });
+      const queued = pendingImportRef.current;
+      setImportQueue(NO_QUEUED_IMPORT);
       return queued;
     },
     mirrorTask: (type, task) => {
@@ -140,7 +155,7 @@ export default function useWorkspace({ pushToast } = {}) {
       }
     },
   };
-  const { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
+  const { activeJobs, lastFinishedJob, pokeJobs, importRunning, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
 
   // Settings starts people indexing outside the import/annotation hooks. Wake
   // the shared job poller so the Activity Center and dock appear immediately.
@@ -937,6 +952,10 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     setImportTask(task);
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
+    // An import this window hadn't seen yet was running (an agent's, or one
+    // started a moment ago): main left these dirs out, so they wait behind it
+    // like any request made while an import runs.
+    if (task?.busy) queueImport({ rawDirs: resolvedRawDirs, imageDirs: resolvedImageDirs, auto });
   }
 
   // Importing needs a catalog. In packaged first-run there is none open, so
@@ -988,8 +1007,12 @@ export default function useWorkspace({ pushToast } = {}) {
     await api.registerRoots("image", selected);
     const nextRoots = mergeRoots(imageDirs, selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "image", path }))]);
-    if (importTask?.running) {
-      setPendingImport((current) => ({ ...current, imageDirs: mergeRoots(current.imageDirs, selected), auto: current.auto || auto }));
+    // Asked now, not read from this render's importTask: that is from before
+    // the awaits (a picker can stay open for as long as the user likes), and
+    // queueing behind an import that has ended since would leave these dirs
+    // waiting for nothing.
+    if (importRunning()) {
+      queueImport({ imageDirs: selected, auto });
       return;
     }
     await startIncrementalImport({ imageDirs: nextRoots.length ? selected : [], auto });
@@ -1002,8 +1025,9 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!selected.length) return;
     await api.registerRoots("raw", selected);
     setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "raw", path }))]);
-    if (importTask?.running) {
-      setPendingImport((current) => ({ ...current, rawDirs: mergeRoots(current.rawDirs, selected) }));
+    // As in addImagesFromPaths: decided after the picker and the awaits.
+    if (importRunning()) {
+      queueImport({ rawDirs: selected });
       return;
     }
     await startIncrementalImport({ rawDirs: selected, imageDirs });
@@ -1049,7 +1073,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportTask(null);
     setPreviewTask(null);
     setEnrichmentTask(null);
-    setPendingImport({ rawDirs: [], imageDirs: [], auto: false });
+    setImportQueue(NO_QUEUED_IMPORT);
     setCollections([]);
     resetJobs();
     await refreshAll({ scope: DEFAULT_SCOPE });

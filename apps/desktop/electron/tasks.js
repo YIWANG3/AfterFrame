@@ -113,16 +113,17 @@ function createTaskStarters({
     const current = await latestJobStatus("import");
     if (current.running) {
       // The requested dirs are NOT imported here — the caller gets someone else's
-      // job back. The UI copes by queueing them (useWorkspace `pendingImport`,
-      // replayed from the import-finished handler); callers without a queue must
-      // opt into an error so they don't report a phantom success.
+      // job back, marked `busy`. The UI copes by queueing them (useWorkspace
+      // `pendingImport`, replayed from the import-finished handler); callers
+      // without a queue must opt into an error so they don't report a phantom
+      // success.
       if (options?.rejectIfBusy) {
         throw new Error(
           `An import is already running (job ${current.jobId}); these folders were not imported. `
           + "Wait for it to finish (poll get_job_status) and call import_directory again.",
         );
       }
-      return current;
+      return { ...current, busy: true };
     }
     const job = await createJob("import", { raw_dirs: rawDirs, image_dirs: imageDirs, mode });
     launchSidecarJob(jobArgv.importJob({
