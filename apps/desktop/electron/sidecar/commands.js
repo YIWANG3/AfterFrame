@@ -214,6 +214,13 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv);
     },
 
+    // Of the files a watched folder reported, those an import would change.
+    changedMedia(paths) {
+      const argv = ["changed-media"];
+      for (const file of paths || []) argv.push("--path", String(file));
+      return callJson(argv);
+    },
+
     catalogRoots() {
       return callJson(["catalog-roots"]).then((rows) => rows || []);
     },

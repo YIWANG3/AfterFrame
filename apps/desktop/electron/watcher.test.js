@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -9,7 +10,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const fdDir = process.platform === "darwin" ? "/dev/fd" : process.platform === "linux" ? "/proc/self/fd" : null;
 const openFds = () => fs.readdirSync(fdDir).length;
 
-function setup(t) {
+function setup(t, { changedMedia } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-watch-"));
   const watched = path.join(root, "Trips");
   const catalogPath = path.join(watched, "My.afcatalog");
@@ -23,6 +24,7 @@ function setup(t) {
     getCatalogPath: () => catalogPath,
     readCatalogSettings: () => ({ integrations: { watchedDirs: [watched] } }),
     updateCatalogSettings: async () => {},
+    changedMedia,
     quietPeriodMs: 200,
   });
   t.after(() => {
@@ -56,6 +58,50 @@ test("new media is imported once writes go quiet; hidden, catalog and non-media 
   while (!sent.length && Date.now() < deadline) await sleep(100);
   await sleep(400);
   assert.deepEqual(sent.flat().map((p) => fs.realpathSync(p)), [fs.realpathSync(path.join(watched, "day 1", "DSC_0001.NEF"))]);
+});
+
+async function waitFor(condition, ms = 5000) {
+  const deadline = Date.now() + ms;
+  while (!condition() && Date.now() < deadline) await sleep(100);
+}
+
+test("a photo AirDrop marked as sent isn't imported again", { skip: process.platform !== "darwin" }, async (t) => {
+  const known = new Set();
+  const checked = [];
+  const { api, watched, sent } = setup(t, {
+    changedMedia: async (paths) => {
+      checked.push(...paths);
+      return { changed: paths.filter((p) => !known.has(p)), unchanged: 0 };
+    },
+  });
+  api.start();
+  await sleep(300);
+  const photo = path.join(watched, "day 1", "sent.jpg");
+  fs.writeFileSync(photo, "jpeg");
+  await waitFor(() => sent.length);
+  assert.deepEqual(sent.flat(), [photo]);
+
+  // Imported: the catalog now holds it as it is on disk.
+  known.add(photo);
+  sent.length = 0;
+  checked.length = 0;
+  execFileSync("xattr", ["-w", "com.apple.metadata:kMDItemUserSharedSentTransport", "com.apple.AirDrop", photo]);
+  await waitFor(() => checked.length);
+  await sleep(400);
+  assert.deepEqual(checked, [photo]);
+  assert.deepEqual(sent, []);
+});
+
+test("files are imported when the catalog can't say whether they changed", async (t) => {
+  const { api, watched, sent } = setup(t, {
+    changedMedia: async () => { throw new Error("sidecar busy"); },
+  });
+  api.start();
+  await sleep(300);
+  const photo = path.join(watched, "day 1", "DSC_0004.NEF");
+  fs.writeFileSync(photo, "raw");
+  await waitFor(() => sent.length);
+  assert.deepEqual(sent.flat().map((p) => fs.realpathSync(p)), [fs.realpathSync(photo)]);
 });
 
 test("many files go to the importer as their outermost folders", () => {

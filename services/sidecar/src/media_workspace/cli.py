@@ -653,6 +653,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_new_media_parser = subparsers.add_parser("scan-new-media", parents=[common])
     scan_new_media_parser.add_argument("--image-dir", type=Path, action="append", required=True)
 
+    changed_media_parser = subparsers.add_parser("changed-media", parents=[common])
+    changed_media_parser.add_argument("--path", dest="paths", action="append", required=True)
+
     list_models_parser = subparsers.add_parser("list-ai-models", parents=[common])
     list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark"], default="nanobanana")
     list_models_parser.add_argument("--api-key")
@@ -2167,6 +2170,52 @@ def _cmd_scan_new_media(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_changed_media(args, connection, catalog, parser):
+    # Which of these files, reported by a watched folder, would an import change?
+    # The folder reports more than new and rewritten files: AirDrop, a Finder tag
+    # or opening the photo in another app only writes its extended attributes.
+    # Dropped: a file the catalog holds as it is on disk (present, same size and
+    # mtime: what the importer itself compares), and one the user removed that
+    # hasn't been rewritten since (the auto import skips it the same way). The
+    # rest, unreadable paths included, are the import's to decide.
+    changed: list[str] = []
+    unchanged = 0
+    for given in args.paths:
+        try:
+            path = Path(given).resolve()
+            stat = path.stat()
+        except OSError:
+            changed.append(given)
+            continue
+        known = connection.execute(
+            """
+            SELECT assets.file_size, assets.modified_time, assets.exists_on_disk
+            FROM asset_files
+            JOIN assets ON assets.asset_id = asset_files.asset_id
+            WHERE asset_files.path = ?
+            LIMIT 1
+            """,
+            (str(path),),
+        ).fetchone()
+        removed = connection.execute(
+            "SELECT file_size, mtime FROM deleted_files WHERE path = ?", (str(path),)
+        ).fetchone()
+        if known is not None and (
+            int(known["exists_on_disk"]) == 1
+            and int(stat.st_size) == int(known["file_size"] or 0)
+            and iso_mtime(path, stat) == str(known["modified_time"] or "")
+        ):
+            unchanged += 1
+        elif known is None and removed is not None and (
+            int(stat.st_size) == int(removed["file_size"]) and abs(stat.st_mtime - float(removed["mtime"])) < 2
+        ):
+            unchanged += 1
+        else:
+            changed.append(given)
+    print(json.dumps({"changed": changed, "unchanged": unchanged}))
+    return 0
+
+
 def _cmd_list_collections(args, connection, catalog, parser):
     payload = []
     for row in list_collections(connection):
@@ -2367,6 +2416,7 @@ COMMAND_HANDLERS = {
     "register-roots": _cmd_register_roots,
     "summary": _cmd_summary,
     "scan-new-media": _cmd_scan_new_media,
+    "changed-media": _cmd_changed_media,
     "list-collections": _cmd_list_collections,
     "reorder-collections": _cmd_reorder_collections,
     "create-collection": _cmd_create_collection,

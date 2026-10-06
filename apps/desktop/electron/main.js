@@ -510,6 +510,7 @@ const watcherApi = watcherModule.register({
   getCatalogPath: catalog.path,
   readCatalogSettings,
   updateCatalogSettings,
+  changedMedia: (paths) => sidecarCommands.changedMedia(paths),
 });
 
 let peopleApi = null;
