@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import api from "../api";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -186,7 +186,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
@@ -232,6 +232,9 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
       <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut="E" onClick={() => { onEdit?.(item.image_path); onClose(); }} />
+      {onShowInAllAssets && (
+        <MenuItem icon={LocateFixed} label={t("gallery.menu.showInAllAssets")} onClick={() => { onShowInAllAssets(item.asset_id); onClose(); }} />
+      )}
       {assetIds?.length === 2 && (
         <MenuItem icon={Columns2} label={t("gallery.menu.compare")} onClick={() => { onCompare?.(assetIds); onClose(); }} />
       )}
@@ -559,6 +562,8 @@ export default function Gallery({
   onCompare,
   onCollage,
   onAnnotate,
+  // Only passed when the grid shows less than the whole library.
+  onShowInAllAssets,
 }) {
   const { t } = useTranslation("nav");
   const containerRef = useRef(null);
@@ -842,9 +847,12 @@ export default function Gallery({
     }
     if (!selectedAssetId) { prevSelectedRef.current = null; return; }
     if (!containerRef.current) return;
+    // "Show in All Assets" centres the photo even when it is already in view:
+    // the point is to see what comes before and after it.
+    const center = explicitReveal && !!revealAssetRequest.center;
     const escaped = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(selectedAssetId) : selectedAssetId;
     const element = containerRef.current.querySelector(`[data-asset-id="${escaped}"]`);
-    if (element instanceof HTMLElement) {
+    if (element instanceof HTMLElement && !center) {
       prevSelectedRef.current = selectedAssetId;
       handledRevealRef.current = revealAssetRequest;
       element.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -862,10 +870,12 @@ export default function Gallery({
     const viewportBottom = viewportTop + containerRef.current.clientHeight;
     const targetTop = target.top;
     const targetBottom = target.top + target.height;
-    if (targetTop >= viewportTop && targetBottom <= viewportBottom) return;
+    if (!center && targetTop >= viewportTop && targetBottom <= viewportBottom) return;
 
     const nextScrollTop = Math.max(0, targetTop - Math.max(24, (containerRef.current.clientHeight - target.height) / 2));
-    containerRef.current.scrollTo({ top: nextScrollTop, behavior: "smooth" });
+    // A jump into a different grid has nothing to animate from, and a smooth
+    // scroll across thousands of rows would load every thumbnail on the way.
+    containerRef.current.scrollTo({ top: nextScrollTop, behavior: center ? "auto" : "smooth" });
   }, [selectedAssetId, layoutItems, revealAssetRequest]);
 
   const gridMetrics = useMemo(() => {
@@ -1091,6 +1101,7 @@ export default function Gallery({
           onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onRefreshFromDisk={refreshFromDisk}
           onReveal={(path) => api.revealPath(path)}
+          onShowInAllAssets={onShowInAllAssets}
           editors={editors}
           onOpenWith={(appPath) => onOpenWith?.(contextMenu.assetIds || [contextMenu.item.asset_id], appPath)}
           onEdit={onEdit}

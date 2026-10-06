@@ -5,7 +5,7 @@ import { invalidateAnnotations, seedAnnotations } from "../components/annotation
 import api from "../api";
 import useJobs from "./useJobs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, rulesDirty,
+  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
@@ -447,12 +447,24 @@ export default function useWorkspace({ pushToast } = {}) {
   // Locate using the same scope/order as browse, then fetch only the missing
   // prefix needed by the virtual layout. Do not scan pages or stat the entire
   // library just to discover the target's position.
-  async function revealRelatedAsset(assetId) {
+  function revealRelatedAsset(assetId) {
+    return revealAsset(assetId);
+  }
+
+  // "Show in All Assets": a photo found by a search, a filter, a folder or
+  // another view, shown among its neighbours in the whole library — in the
+  // order the toolbar has now, so sorted by capture time, the photos around it
+  // are the ones taken around it.
+  function revealInAllAssets(assetId) {
+    return revealAsset(assetId, { inAllAssets: true });
+  }
+
+  async function revealAsset(assetId, { inAllAssets = false } = {}) {
     if (!assetId) return;
     const navigationId = ++relatedNavigationRef.current;
     const startedAt = Date.now();
     const log = (step, extra = "") => console.log(`[reveal] #${navigationId} ${step} +${Date.now() - startedAt}ms ${extra}`);
-    log("start", assetId);
+    log("start", `${assetId}${inAllAssets ? " in all" : ""}`);
     setRelatedAssetId(assetId);
     // Whatever is in the search box is part of the scope the user means, even
     // if its debounce has not landed yet — locate inside it, and stop the
@@ -470,21 +482,30 @@ export default function useWorkspace({ pushToast } = {}) {
     setBrowserLoadingMore(false);
     try {
       const asQuery = (s) => ({ status: s.status, collectionId: s.collectionId, search: s.query.trim() || undefined, sort: s.sort, filters: s.filters, base: s.base || undefined });
-      let target = startScope;
-      const sameLoadedScope = loadedScopeRef.current === scopeKeyOf(startScope);
-      if (sameLoadedScope && filteredItems.some((item) => item.asset_id === assetId)) {
+      // The whole library, in the current order ("added to folder" has no
+      // meaning outside a folder).
+      const allAssets = { ...DEFAULT_SCOPE, sort: sortOutsideFolder(startScope.sort) };
+      let target = inAllAssets ? allAssets : startScope;
+      // Centred, so the photos before it are on screen as well as after it.
+      const request = { assetId, navigationId, center: inAllAssets };
+      const sameLoadedScope = loadedScopeRef.current === scopeKeyOf(target);
+      // Going to All Assets, a search still in its debounce only narrows the
+      // loaded page locally: the photo is loaded, and the box must clear.
+      const shown = inAllAssets ? items : filteredItems;
+      if (sameLoadedScope && shown.some((item) => item.asset_id === assetId)) {
         log("already loaded");
-        setRevealAssetRequest({ assetId, navigationId });
+        if (inAllAssets) installLoadedScope(target);
+        setRevealAssetRequest(request);
         return;
       }
       let location = await api.locateImageAsset({ assetId, ...asQuery(target) });
       log("located", JSON.stringify(location));
       if (!isCurrent()) { log("superseded after locate"); return; }
-      const resetScope = shouldResetScopeForReveal({
+      const resetScope = !inAllAssets && shouldResetScopeForReveal({
         locationIndex: location.index, query: typedQuery, items, filteredItems, assetId,
       });
       if (resetScope) {
-        target = { ...DEFAULT_SCOPE, sort: startScope.sort };
+        target = allAssets;
         location = await api.locateImageAsset({ assetId, ...asQuery(target) });
         log("located in all", JSON.stringify(location));
         if (!isCurrent()) { log("superseded after relocate"); return; }
@@ -506,14 +527,15 @@ export default function useWorkspace({ pushToast } = {}) {
       if (resetScope) pushToast?.({ title: t("relatedAsset.showingAll"), ttl: 4000 });
       seedAnnotations(payload);
       setItems(nextItems);
-      setRevealAssetRequest({ assetId, navigationId });
+      setRevealAssetRequest(request);
       setBrowserOffset(offset + payload.length);
       if (count > 0) setBrowserHasMore(payload.length === count);
       setBrowserReady(true);
       log("done", `items=${nextItems.length}`);
     } catch (error) {
       log("failed", error?.message || String(error));
-      if (isCurrent()) pushToast?.({ title: t("relatedAsset.failed"), message: error.message, tone: "error", ttl: 6000 });
+      const title = t(inAllAssets ? "showInAllAssets.failed" : "relatedAsset.failed");
+      if (isCurrent()) pushToast?.({ title, message: error.message, tone: "error", ttl: 6000 });
     } finally {
       if (revealRef.current === navigationId) revealRef.current = null;
       if (requestId === browserRequestIdRef.current) setBrowserLoading(false);
@@ -1233,6 +1255,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setSelectedAssetId,
     setRelatedAssetId,
     revealRelatedAsset,
+    revealInAllAssets,
     revealAssetRequest,
     // The scope, exposed field by field for the toolbar/sidebar/filter bar,
     // with setters that each write one field of it.
@@ -1252,6 +1275,9 @@ export default function useWorkspace({ pushToast } = {}) {
     // "Update" when an open smart collection's conditions were changed.
     // Filter bar: what it offers depends on the layer the user is working in.
     hasRefinement: hasRefinement(scope),
+    // Less than the whole library on screen, counting what is typed in the
+    // search box before its debounce lands.
+    narrowed: isNarrowedScope({ ...scope, query: typedQuery }),
     editingSmartCollection: !!scope.editingRules,
     canSaveSmartCollection: !!rulesFromScope(scope),
     smartCollectionDirty: !!activeSmartCollection && rulesDirty(scope, activeSmartCollection.rules),

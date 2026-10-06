@@ -10,6 +10,7 @@ import {
   facetScopeOf,
   filterItemsByQuery,
   hasRefinement,
+  isNarrowedScope,
   rulesDirty,
   rulesFromScope,
   scopeFromRules,
@@ -159,6 +160,27 @@ describe("shouldResetScopeForReveal", () => {
   it("does not reset when the asset is located and visible", () => {
     expect(shouldResetScopeForReveal({ locationIndex: 3, query: "sea", items, filteredItems: items, assetId: "x" })).toBe(false);
     expect(shouldResetScopeForReveal({ locationIndex: 3, query: "", items, filteredItems: items, assetId: "x" })).toBe(false);
+  });
+});
+
+describe("isNarrowedScope", () => {
+  it("is false only for All Assets with nothing typed or filtered, whatever the sort", () => {
+    expect(isNarrowedScope(DEFAULT_SCOPE)).toBe(false);
+    expect(isNarrowedScope({ ...DEFAULT_SCOPE, sort: "captured-desc" })).toBe(false);
+    expect(isNarrowedScope({ ...DEFAULT_SCOPE, query: "  " })).toBe(false);
+    expect(isNarrowedScope({ ...DEFAULT_SCOPE, filters: { tag_match: "all" } })).toBe(false);
+  });
+  it("is true for another view, a folder, a smart collection, a search or a filter", () => {
+    for (const patch of [
+      { status: "rated" },
+      { collectionId: "c1" },
+      { smartCollectionId: "s1", base: { status: "all", filters: { tag: "x" } } },
+      { smartCollectionId: "s1", editingRules: true, filters: { tag: "x" } },
+      { query: "DSC_0042" },
+      { filters: { person_group: "p1" } },
+    ]) {
+      expect(isNarrowedScope({ ...DEFAULT_SCOPE, ...patch }), JSON.stringify(patch)).toBe(true);
+    }
   });
 });
 

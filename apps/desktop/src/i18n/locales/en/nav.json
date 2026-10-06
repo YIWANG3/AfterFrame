@@ -328,6 +328,7 @@
     "hasPerson": "Contains a detected face",
     "menu": {
       "edit": "Edit…",
+      "showInAllAssets": "Show in All Assets",
       "compare": "Compare",
       "collage": "Collage",
       "addToFolder": "Add to Folder",

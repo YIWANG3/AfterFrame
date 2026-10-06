@@ -319,6 +319,7 @@
     "hasPerson": "包含已检测到的人脸",
     "menu": {
       "edit": "编辑…",
+      "showInAllAssets": "在全部素材中定位",
       "compare": "对比",
       "collage": "拼图",
       "addToFolder": "加入文件夹",
