@@ -1,0 +1,104 @@
+name: Windows installer
+
+# The unsigned NSIS installer for Windows, built as on the Windows dev box:
+# sidecar (PyInstaller) → ExifTool → renderer → electron-builder, then checked
+# for what a broken build lacked before (sharp, the place index, a sidecar
+# and ExifTool that run, an app that starts).
+#
+# Run it by hand (Actions ▸ Windows installer ▸ Run workflow) to get the
+# installer as a build artifact for 14 days. A pull request that changes this
+# file builds and checks it without keeping it. Nothing here publishes a
+# release.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/windows-installer.yml
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      # The runner converts checkouts to CRLF; keep the repository's LF endings.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/sidecar/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install the sidecar and PyInstaller
+        run: python -m pip install -e "services/sidecar[jimeng]" "pyinstaller>=6,<7"
+      - name: Cache ExifTool
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/native/.cache/exiftool-13.59_64.zip
+          key: exiftool-13.59-${{ runner.os }}
+      - name: Fetch ExifTool
+        run: node apps/desktop/scripts/fetch-exiftool.mjs
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop
+      - name: Build the sidecar
+        working-directory: services/sidecar
+        run: pyinstaller media-workspace.spec --distpath dist --noconfirm
+      - name: Build the renderer
+        run: npm run build --prefix apps/desktop
+      - name: Build the installer
+        working-directory: apps/desktop
+        run: npx electron-builder --win --publish never
+      - name: Check what the installer carries
+        shell: pwsh
+        working-directory: apps/desktop/release
+        run: |
+          $ErrorActionPreference = "Stop"
+          $resources = "win-unpacked/resources"
+          # electron-builder only warns when it can't collect a dependency,
+          # and main.js requires sharp first thing: without it the app sits
+          # at launch with no window.
+          if (-not (Test-Path "$resources/app.asar.unpacked/node_modules/sharp/package.json")) { throw "sharp is missing from the app" }
+          $data = "$resources/sidecar/media-workspace/_internal/media_workspace/data"
+          foreach ($file in "places.idx", "gazetteer.json.gz", "countries.json.gz") {
+            if (-not (Test-Path "$data/$file")) { throw "the sidecar lacks data/$file" }
+          }
+          $version = & "$resources/native/exiftool/exiftool.exe" -ver
+          if ($LASTEXITCODE -ne 0) { throw "the bundled ExifTool doesn't run" }
+          "ExifTool $version"
+          $catalog = Join-Path $env:RUNNER_TEMP "smoke.afcatalog"
+          $summary = & "$resources/sidecar/media-workspace/media-workspace.exe" --catalog $catalog summary
+          if ($LASTEXITCODE -ne 0) { throw "the packaged sidecar failed" }
+          "sidecar summary: $(($summary | ConvertFrom-Json | ConvertTo-Json -Compress))"
+          Get-ChildItem *.exe | ForEach-Object { "$($_.Name): $([math]::Round($_.Length / 1MB)) MB" }
+      - name: Check that the packaged app starts
+        shell: pwsh
+        working-directory: apps/desktop/release
+        run: |
+          # Its own profile and no catalog: the welcome screen. A started app
+          # has its GPU and renderer processes; one stuck before its window
+          # has none.
+          $env:AFTERFRAME_USER_DATA = Join-Path $env:RUNNER_TEMP "smoke-profile"
+          $env:AFTERFRAME_NO_DEFAULT_CATALOG = "1"
+          $app = Start-Process -FilePath "win-unpacked/AfterFrame.exe" -PassThru
+          Start-Sleep -Seconds 20
+          $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($app.Id)")
+          "children: $($children.Count) ($(($children | ForEach-Object { $_.Name }) -join ', '))"
+          taskkill /PID $app.Id /T /F | Out-Null
+          if ($children.Count -eq 0) { throw "the packaged app did not get past startup" }
+      - name: Keep the installer
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AfterFrame-windows-${{ github.sha }}
+          path: apps/desktop/release/*.exe
+          retention-days: 14
