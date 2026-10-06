@@ -165,6 +165,7 @@ jobs:
           e2e/61-dates-and-places.spec.js
           e2e/61-paging-after-delete.spec.js
           e2e/63-save-dialog.spec.js
+          e2e/64-import-self-repair.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

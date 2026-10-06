@@ -321,6 +321,7 @@
   "gallery": {
     "loading": "Loading…",
     "noPreview": "No preview",
+    "previewPending": "Preparing preview…",
     "noAssets": "No assets in this view",
     "missing": "Missing",
     "missingTip": "Original file moved or deleted",

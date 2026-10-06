@@ -36,12 +36,14 @@ export function buildLightboxSources(item, { onDemandHd = null } = {}) {
 // on demand once it arrives, a better preview until then; a photo whose
 // original is missing shows its preview.
 const BROWSER_IMAGE = /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i;
+// Whether an <img> can show the photo's original file itself.
+export function showsOriginal(item) {
+  return Boolean(item) && item.asset_type !== "raw" && item.asset_type !== "video" && BROWSER_IMAGE.test(item.image_path || "");
+}
 export function compareSource(item, { onDemandHd = null } = {}) {
   if (!item) return null;
   const onDisk = item.exists_on_disk !== false;
-  if (onDisk && item.asset_type !== "raw" && item.asset_type !== "video" && BROWSER_IMAGE.test(item.image_path || "")) {
-    return item.image_path;
-  }
+  if (onDisk && showsOriginal(item)) return item.image_path;
   if (onDisk && item.asset_type === "raw" && onDemandHd) return onDemandHd;
   return item.preview_hd_path || item.image_preview_hd_path || item.image_preview_path || item.preview_path || item.raw_preview_path || null;
 }

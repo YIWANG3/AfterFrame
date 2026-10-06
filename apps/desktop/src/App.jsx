@@ -50,6 +50,9 @@ const MAP_HEIGHT_KEY = "afterframe-map-height";
 const MAP_MIN_HEIGHT = 220;
 const GALLERY_MIN_HEIGHT = 200;
 const MAP_HANDLE_HEIGHT = 10;
+// Missing thumbnails made in one background pass: a short wait for the first
+// of them to show, and few enough processes for a long list.
+const THUMBNAIL_PASS = 100;
 
 function hasSelfDragMarkers() {
   return window.__mediaWorkspaceDraggingAssetIds != null
@@ -508,6 +511,25 @@ export default function App() {
       title: t(field === "name" ? "copiedName" : "copiedPath", { count: texts.length }),
       ttl: 2000,
     });
+  };
+
+  // Thumbnails the gallery is missing, made in the background where missing,
+  // THUMBNAIL_PASS at a time from the top of the grid down. After each pass
+  // the grid is asked again, so they show as they come. Something skipped as
+  // ready was made since the grid loaded (by an import, say): that too.
+  const ensureThumbnails = async (ids) => {
+    const paths = [...new Set((ids || []).map((id) => itemById.get(id)?.image_path).filter(Boolean))];
+    for (let start = 0; start < paths.length; start += THUMBNAIL_PASS) {
+      let result;
+      try {
+        result = await api.ensurePreviews(paths.slice(start, start + THUMBNAIL_PASS));
+      } catch {
+        return; // the pass failed: the cards go on saying "No preview"
+      }
+      if (Number(result?.generated || 0) + Number(result?.skipped || 0) > 0) {
+        await workspace.refreshAll({ preserveView: true });
+      }
+    }
   };
 
   const refreshAssetsFromDisk = async (ids, { silent = false } = {}) => {
@@ -1389,6 +1411,8 @@ export default function App() {
                   onCopyPath={(ids) => copyAssetField(ids, "path")}
                   onCopyName={(ids) => copyAssetField(ids, "name")}
                   onRefreshFromDisk={refreshAssetsFromDisk}
+                  onEnsureThumbnails={ensureThumbnails}
+                  importRunning={Boolean(workspace.importTask?.running)}
                   onEdit={openEditor}
                   onOpenWith={handleOpenWith}
                   editors={externalEditors}
