@@ -2233,7 +2233,9 @@ def _cmd_collection_remove_items(args, connection, catalog, parser):
 
 
 def _cmd_set_asset_rating(args, connection, catalog, parser):
-    updated = set_asset_rating(connection, args.asset_id, None if args.rating == 0 else args.rating)
+    # A clear is stored as 0, not NULL: NULL means "never rated", which the
+    # next import of the photo fills from the stars its file carries.
+    updated = set_asset_rating(connection, args.asset_id, args.rating)
     print(json.dumps({"ok": True, "asset_ids": args.asset_id, "rating": args.rating, "updated": updated}))
     return 0
 

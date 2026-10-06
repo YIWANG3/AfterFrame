@@ -124,6 +124,29 @@ test("number keys rate the selection and 0 clears it", async () => {
   await expect.poll(() => ratingOf(assetId), { timeout: 5_000 }).toBeFalsy();
 });
 
+test("the Inspector's stars follow the keys, down to 0", async () => {
+  const stars = ctx.window.getByTestId("inspector-rating");
+  // B0016108's XMP carries 5 stars, which import made its rating. Cleared,
+  // the stars must not fall back to the file's.
+  const assetId = "image_1f9dab80c352819829ab31a8";
+  await ctx.window.locator(`[data-gallery-item='true'][data-asset-id='${assetId}']`).click();
+  await expect(stars).toHaveAttribute("data-value", "5");
+  await ctx.window.keyboard.press("0");
+  await expect(stars).toHaveAttribute("data-value", "0");
+  await expect.poll(() => ratingOf(assetId), { timeout: 5_000 }).toBe(0);
+
+  // A star clicked in the Inspector, then a key: the stars show the key's.
+  await stars.locator("button").nth(2).click();
+  await expect(stars).toHaveAttribute("data-value", "3");
+  await expect.poll(() => ratingOf(assetId), { timeout: 5_000 }).toBe(3);
+  await ctx.window.keyboard.press("1");
+  await expect(stars).toHaveAttribute("data-value", "1");
+  await expect.poll(() => ratingOf(assetId), { timeout: 5_000 }).toBe(1);
+  await ctx.window.keyboard.press("0");
+  await expect(stars).toHaveAttribute("data-value", "0");
+  await expect.poll(() => ratingOf(assetId), { timeout: 5_000 }).toBe(0);
+});
+
 test("folders: create, add from the menu, open, remove, rename, delete", async () => {
   await ctx.window.getByTitle("New folder", { exact: true }).click();
   const editor = ctx.window.getByTestId("sidebar-folder-scroll").locator("input");
