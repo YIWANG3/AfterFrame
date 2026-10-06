@@ -312,6 +312,7 @@
   "gallery": {
     "loading": "加载中…",
     "noPreview": "无预览",
+    "previewPending": "正在准备预览…",
     "noAssets": "此视图中没有素材",
     "missing": "缺失",
     "missingTip": "原文件已移动或删除",

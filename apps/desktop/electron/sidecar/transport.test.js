@@ -150,6 +150,17 @@ test("a job runs below normal priority; the resident sidecar and one-shots keep 
   transport.stopResident();
 });
 
+test("a one-shot asked for in the background runs below normal priority, as a job does", async () => {
+  const lowered = [];
+  const { transport, calls } = recordingTransport({ setPriority: (pid, priority) => lowered.push([pid, priority]) });
+  const pending = transport.callJsonOneShot(["generate-previews", "--kind", "preview"], 1000, { background: true });
+  calls[0].child.stdout.end(JSON.stringify({ generated: 1 }));
+  calls[0].child.emit("close", 0);
+  assert.deepEqual(await pending, { generated: 1 });
+  assert.deepEqual(lowered, [[calls[0].child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL]]);
+  assert.deepEqual(calls[0].args.slice(-3), ["generate-previews", "--kind", "preview"]);
+});
+
 test("a job that is gone before its priority is set still runs its course", () => {
   const { transport, calls } = recordingTransport({ setPriority: () => { throw Object.assign(new Error("no such process"), { code: "ESRCH" }); } });
   assert.doesNotThrow(() => transport.launchJob(["run-import-job", "--job-id", "j1"]));

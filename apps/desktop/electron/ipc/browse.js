@@ -1,6 +1,10 @@
 // Read-only catalog queries — gallery browse + asset detail lookups.
 // All wrap the Python sidecar; return empty results when no catalog loaded.
 
+// Files per thumbnail pass: keeps a pass's command line short, and a long
+// queue of missing thumbnails made in steps.
+const ENSURE_CHUNK = 200;
+
 function register({ ipcMain, commands, getCatalogState }) {
   ipcMain.handle("workspace:locate-image-asset", async (_event, options) => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
@@ -206,6 +210,31 @@ function register({ ipcMain, commands, getCatalogState }) {
       console.warn("[workspace:regenerate-previews] sidecar error:", err.message);
       return { error: String(err.message) };
     }
+  });
+
+  // Thumbnails missing from the gallery: an import cancelled before its
+  // thumbnail pass, a file whose thumbnail failed. Made where missing, in a
+  // background process, one pass at a time (two would only read the same disk
+  // against each other) and at most ENSURE_CHUNK files a process.
+  let ensuring = Promise.resolve();
+  ipcMain.handle("workspace:ensure-previews", async (_event, paths) => {
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    const total = { generated: 0, skipped: 0, failed: 0, deferred: 0 };
+    if (!currentCatalogPath || !catalogHasDb()) return total;
+    const list = [...new Set((paths || []).map(String).filter(Boolean))];
+    for (let start = 0; start < list.length; start += ENSURE_CHUNK) {
+      const chunk = list.slice(start, start + ENSURE_CHUNK);
+      const pass = ensuring.then(() => commands.ensurePreviews(chunk));
+      ensuring = pass.catch(() => {});
+      try {
+        const result = await pass;
+        for (const key of Object.keys(total)) total[key] += Number(result?.[key] || 0);
+      } catch (err) {
+        console.warn("[workspace:ensure-previews] sidecar error:", err.message);
+        return { ...total, error: String(err.message) };
+      }
+    }
+    return total;
   });
 
   ipcMain.handle("workspace:refresh-assets", async (_event, paths) => {

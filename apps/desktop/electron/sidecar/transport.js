@@ -244,7 +244,9 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     return result;
   }
 
-  function callSidecarOneShot(command, timeoutMs = 30000) {
+  // `background`: work nobody is waiting on. It runs below normal priority,
+  // as a job does, so the window and the resident sidecar get the CPU first.
+  function callSidecarOneShot(command, timeoutMs = 30000, { background = false } = {}) {
     return new Promise((resolve, reject) => {
       const chunks = [];
       const errChunks = [];
@@ -253,6 +255,9 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       console.log("[sidecar:async]", cmd, args.join(" "));
       const t0 = Date.now();
       const child = trackProcess(startProcess(cmd, args, { cwd: rootDir, env: { ...env, ...secretEnv }, ...HIDDEN }), getCatalogPath());
+      if (background && child.pid) {
+        try { setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* it has already exited */ }
+      }
 
       const timer = setTimeout(() => {
         console.error("[sidecar:async] TIMEOUT after", timeoutMs, "ms — killing child");
@@ -288,8 +293,8 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
 
   // Its own short-lived process, for work measured in seconds (a full-size RAW
   // render): the resident sidecar is serial, and everything else would queue.
-  async function callSidecarJsonOneShot(command, timeoutMs) {
-    const payload = await callSidecarOneShot(command, timeoutMs);
+  async function callSidecarJsonOneShot(command, timeoutMs, options) {
+    const payload = await callSidecarOneShot(command, timeoutMs, options);
     return payload ? JSON.parse(payload) : null;
   }
 

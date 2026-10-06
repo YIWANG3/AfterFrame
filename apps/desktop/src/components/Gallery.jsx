@@ -16,7 +16,7 @@ function formatDuration(seconds) {
 import { useTranslation } from "react-i18next";
 import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
-import { staleSourceRepairs } from "./galleryRepair";
+import { awaitingThumbnail, staleSourceRepairs, thumbnailNeeds } from "./galleryRepair";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
 
 const GAP = 12;
@@ -323,11 +323,15 @@ const CardContent = memo(function CardContent({
   captionHeight = CAPTION_HEIGHT,
   compact = false,
   bustToken,
+  importRunning = false,
   onPreviewError,
   onPreviewLoaded,
 }) {
   const { t } = useTranslation("nav");
   const title = fileName(item.image_path) || item.stem;
+  // Nothing to show until the thumbnail is made. While an import runs, it is
+  // on its way: the import makes thumbnails in batches behind its reading.
+  const awaiting = awaitingThumbnail(item);
   const totalHeight = height + captionHeight;
   const previewSrc = item.preview_path || item.image_path
     ? localFileUrl(item.preview_path || item.image_path) + (bustToken || item.modified_time ? `?r=${encodeURIComponent(bustToken || item.modified_time)}` : "")
@@ -449,7 +453,11 @@ const CardContent = memo(function CardContent({
         onMouseMove={isVideo ? onVideoMove : undefined}
         onMouseLeave={isVideo ? onVideoLeave : undefined}
       >
-        {item.preview_path || item.image_path ? (
+        {awaiting ? (
+          <div className="flex h-full w-full items-center justify-center text-[11px] text-muted" data-preview-pending={importRunning ? "true" : undefined}>
+            {importRunning ? t("gallery.previewPending") : t("gallery.noPreview")}
+          </div>
+        ) : item.preview_path || item.image_path ? (
           <PreviewImage
             src={previewSrc}
             alt={item.stem}
@@ -543,6 +551,8 @@ export default function Gallery({
   onCopyPath,
   onCopyName,
   onRefreshFromDisk,
+  onEnsureThumbnails,
+  importRunning = false,
   onEdit,
   onOpenWith,
   editors,
@@ -641,6 +651,31 @@ export default function Gallery({
     // in the session (an external edit, a partial re-export) is refused.
     for (const id of healthyIds) st.attempts.delete(`stale-source:${id}`);
   }, [items, queueAssetRepair]);
+
+  // Thumbnails that are missing, not broken (an import cancelled before its
+  // thumbnail pass, a thumbnail that failed): made where missing, in the
+  // background. Not while an import runs: its own pass is on the way. This
+  // runs when a browse lands, never when the import ends, so it sees what the
+  // import made. Two passes an asset, as for the repairs above.
+  const thumbnailsRef = useRef({ attempts: new Map(), inFlight: new Set() });
+  const importRunningRef = useRef(importRunning);
+  importRunningRef.current = importRunning;
+  const ensureThumbnailsRef = useRef(onEnsureThumbnails);
+  ensureThumbnailsRef.current = onEnsureThumbnails;
+  useEffect(() => {
+    const { attempts, inFlight } = thumbnailsRef.current;
+    const { awaitingIds, settledIds } = thumbnailNeeds(items);
+    for (const id of settledIds) attempts.delete(id);
+    if (importRunningRef.current) return;
+    const ids = awaitingIds.filter((id) => !inFlight.has(id) && (attempts.get(id) || 0) < 2);
+    if (!ids.length) return;
+    for (const id of ids) {
+      attempts.set(id, (attempts.get(id) || 0) + 1);
+      inFlight.add(id);
+    }
+    void Promise.resolve(ensureThumbnailsRef.current?.(ids))
+      .finally(() => { for (const id of ids) inFlight.delete(id); });
+  }, [items]);
 
   const refreshFromDisk = useCallback(async (assetIds) => {
     const result = await onRefreshFromDisk?.(assetIds);
@@ -1021,6 +1056,7 @@ export default function Gallery({
                 captionHeight={entry.captionHeight ?? CAPTION_HEIGHT}
                 compact={isTileMode}
                 bustToken={previewBust[item.asset_id]}
+                importRunning={importRunning}
                 onPreviewError={stableOnPreviewError}
                 onPreviewLoaded={stableOnPreviewLoaded}
               />

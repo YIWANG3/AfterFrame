@@ -253,6 +253,16 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJsonOneShot(["render-raw-full", "--source", String(source), "--target", String(target)], 180_000);
     },
 
+    // The 512px thumbnails of these files where they are missing (no --force:
+    // a ready one is skipped). For thumbnails the gallery has nothing to show
+    // without, so in a background process of its own: on a hard drive this is
+    // seconds a RAW, and the resident sidecar the window waits on is serial.
+    ensurePreviews(paths) {
+      const argv = ["generate-previews", "--kind", "preview"];
+      for (const p of paths) argv.push("--path", String(p));
+      return callJsonOneShot(argv, 300_000, { background: true });
+    },
+
     // Force-regenerate 512px thumbnails for specific source files. --force so a
     // stale "ready" entry pointing at a missing/corrupt file is re-rendered.
     regeneratePreviews(paths, kind = "preview") {
