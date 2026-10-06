@@ -13,6 +13,11 @@
 // `workspace:watched-import` to the renderer, which runs its normal
 // addImagesFromPaths() flow (registerRoots + import job + dedup + refresh +
 // requireCatalog guard) — mirrors the existing open-file (onExternalImport) bridge.
+//
+// A folder reports more than new and rewritten files. AirDropping a photo, a
+// Finder tag or opening it in another app writes only its extended attributes,
+// and importing for those runs a job with nothing to do. Before sending, the
+// sidecar drops the files the catalog already holds as they are.
 
 const fs = require("fs");
 const path = require("path");
@@ -31,9 +36,11 @@ const QUIET_MS = 3000;
 // a card into a watched folder).
 const MAX_FILES_PER_IMPORT = 500;
 
+const keepAll = async (paths) => ({ changed: paths });
+
 let watchers = [];
 let getWindow = () => null;
-let catalog = { path: () => null, read: () => ({}), update: async () => {} };
+let catalog = { path: () => null, read: () => ({}), update: async () => {}, changed: keepAll };
 const pending = new Set();
 let flushTimer = null;
 let generation = 0;
@@ -69,7 +76,24 @@ function isFile(p) {
   try { return fs.statSync(p).isFile(); } catch { return false; }
 }
 
-function flush(eventGeneration, catalogPath) {
+// The files an import would change. A batch the sidecar can't answer for is
+// kept: the import itself skips what hasn't changed.
+async function changedFiles(files) {
+  const changed = [];
+  for (let start = 0; start < files.length; start += MAX_FILES_PER_IMPORT) {
+    const batch = files.slice(start, start + MAX_FILES_PER_IMPORT);
+    try {
+      const result = await catalog.changed(batch);
+      changed.push(...(Array.isArray(result?.changed) ? result.changed : batch));
+    } catch (err) {
+      console.warn("[watcher] can't check for changes:", err?.message || err);
+      changed.push(...batch);
+    }
+  }
+  return changed;
+}
+
+async function flush(eventGeneration, catalogPath) {
   flushTimer = null;
   if (eventGeneration !== generation || !sameCatalog(catalog.path(), catalogPath)) {
     pending.clear();
@@ -78,7 +102,10 @@ function flush(eventGeneration, catalogPath) {
   // fs.watch reports a deletion like a creation ('rename'): keep what exists.
   const files = [...pending].filter(isFile);
   pending.clear();
-  if (files.length) send(importTargets(files), catalogPath);
+  if (!files.length) return;
+  const changed = await changedFiles(files);
+  if (eventGeneration !== generation) return;
+  if (changed.length) send(importTargets(changed), catalogPath);
 }
 
 // `relative` is the changed path under `root`, as fs.watch reports it.
@@ -135,9 +162,9 @@ function rebuild() {
   }
 }
 
-function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings, updateCatalogSettings, quietPeriodMs = QUIET_MS }) {
+function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings, updateCatalogSettings, changedMedia = keepAll, quietPeriodMs = QUIET_MS }) {
   getWindow = getMainWindow;
-  catalog = { path: getCatalogPath, read: readCatalogSettings, update: updateCatalogSettings };
+  catalog = { path: getCatalogPath, read: readCatalogSettings, update: updateCatalogSettings, changed: changedMedia };
   quietMs = quietPeriodMs;
 
   // Named (not inline in the handlers) so the MCP maintain_library tool can

@@ -3,6 +3,7 @@
 // renderer addImagesFromPaths → import job → gallery.
 
 const { test, expect } = require("@playwright/test");
+const { execFileSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -117,5 +118,35 @@ test.describe("Watched directories", () => {
       return card?.querySelector("img")?.getAttribute("src") || "";
     }, canonicalPath);
     expect(renderedSrc).toContain("?r=");
+  });
+
+  // AirDrop records whom it sent a photo to on the photo itself: an extended
+  // attribute, which the folder reports like any other change.
+  test("a photo sent by AirDrop doesn't start an import; a new one still does", async () => {
+    test.skip(process.platform !== "darwin", "AirDrop's attribute is macOS's");
+    await window.evaluate((d) => window.mediaWorkspace.addWatchedDir(d), watchDir);
+    const sentPhoto = path.join(watchDir, "airdrop-sent.jpg");
+    fs.copyFileSync(SRC_IMAGE, sentPhoto);
+    await expect.poll(() => window.evaluate(async (target) => {
+      const rows = await window.mediaWorkspace.browseImages({ status: "all", limit: 500 });
+      return rows.some((row) => row.image_path === target);
+    }, fs.realpathSync(sentPhoto)), { timeout: 25_000, intervals: [500] }).toBe(true);
+    await window.evaluate(() => {
+      window.__watchedImports = [];
+      window.__stopWatchedProbe = window.mediaWorkspace.onWatchedImport((paths) => {
+        window.__watchedImports.push(...paths);
+      });
+    });
+
+    execFileSync("xattr", ["-w", "com.apple.metadata:kMDItemUserSharedSentTransport", "com.apple.AirDrop", sentPhoto]);
+    await new Promise((resolve) => setTimeout(resolve, 6_000)); // quiet period + the check
+    expect(await window.evaluate(() => window.__watchedImports)).toEqual([]);
+
+    const newPhoto = path.join(watchDir, "after-airdrop.jpg");
+    fs.copyFileSync(SRC_IMAGE, newPhoto);
+    await expect
+      .poll(() => window.evaluate(() => window.__watchedImports), { timeout: 15_000, intervals: [500] })
+      .toEqual([newPhoto]);
+    await window.evaluate(() => window.__stopWatchedProbe?.());
   });
 });
