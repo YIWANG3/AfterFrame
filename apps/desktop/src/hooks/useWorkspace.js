@@ -744,8 +744,8 @@ export default function useWorkspace({ pushToast } = {}) {
   }
 
   async function setAssetRating(assetIds, rating) {
-    const normalized = Number(rating) || 0;
-    const nextRating = normalized > 0 ? normalized : null;
+    // 0 is a rating of its own (cleared), as the catalog stores it.
+    const nextRating = Number(rating) || 0;
     const targetIds = [...new Set((assetIds || []).filter(Boolean))];
     if (!targetIds.length) return;
     const targetSet = new Set(targetIds);
@@ -775,7 +775,7 @@ export default function useWorkspace({ pushToast } = {}) {
     applyRating(() => nextRating);
 
     try {
-      await api.setAssetRating(targetIds, normalized);
+      await api.setAssetRating(targetIds, nextRating);
       // A rating is the most common smart-collection condition.
       if (collections.some((c) => c.kind === "smart")) void loadCollections();
       // In a view that selects by rating, a photo that no longer qualifies

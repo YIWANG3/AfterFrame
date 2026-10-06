@@ -121,7 +121,6 @@ function PaletteStrip({ colors, onPick }) {
 
 export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
-  const [localRating, setLocalRating] = useState(null);
   const [relinking, setRelinking] = useState(false);
   const [hoveredFaceId, setHoveredFaceId] = useState(null);
   const [namingFace, setNamingFace] = useState(null); // { face, anchorRect, namedGroups }
@@ -130,7 +129,6 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const currentAssetId = detail?.asset_id || detail?.image_path || null;
 
   useEffect(() => {
-    setLocalRating(null);
     setHoveredFaceId(null);
     setNamingFace(null);
     setFaceMenu(null);
@@ -204,8 +202,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : t("unknown");
   const fileSize = formatBytes(imageMeta.file_size || imageMeta.size_bytes) || t("unknown");
 
-  const metaRating = Number(detail.app_rating ?? rawMeta.rating ?? imageMeta.rating ?? 0);
-  const rating = localRating ?? metaRating;
+  // The catalog's rating only. Import already seeded it from the stars the
+  // file carries; falling back to those here brought them back on a clear.
+  const rating = Number(detail.app_rating ?? 0);
   const gps = formatGPS(
     rawMeta.gps_latitude ?? imageMeta.gps_latitude,
     rawMeta.gps_longitude ?? imageMeta.gps_longitude,
@@ -355,10 +354,7 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             <DetailRow label={t("rows.rating")}>
               <StarRating
                 value={rating}
-                onChange={(next) => {
-                  setLocalRating(next);
-                  onRatingChange?.(next);
-                }}
+                onChange={(next) => onRatingChange?.(next)}
               />
             </DetailRow>
             <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
