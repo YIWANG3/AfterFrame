@@ -221,3 +221,96 @@ test("an import cancelled part-way keeps what it indexed, and importing the fold
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// What the catalog holds under `dir` (searched by path, so a big catalog
+// doesn't ship every row to the test).
+const pathsUnder = (dir) => ctx.window.evaluate(async (prefix) => {
+  const rows = await window.mediaWorkspace.browseImages({ status: "all", search: prefix, limit: 10_000 });
+  return rows.map((row) => row.image_path).filter((file) => file.startsWith(prefix));
+}, dir + path.sep);
+const importCard = () => ctx.window.getByTestId("job-dock-card").filter({ hasText: /^Import/ });
+
+// Toolbar + › Import while an import runs, the picker left open until that
+// import has ended: the folder chosen is imported. The window decided whether
+// to queue it behind the running import from what it knew when the picker
+// opened, so the folder was queued after that import's end had already
+// replayed the queue, and waited for an import that never came. (e2e/64 hit
+// it on CI without a picker: its next import's click landed as the job poll
+// saw the previous import end.)
+test("a folder picked while an import runs is imported, even when that import ends before the picker closes", async () => {
+  test.setTimeout(240_000);
+  const running = fs.realpathSync(makeImportDir("running", IMPORT_SIZE));
+  const picked = fs.realpathSync(makeImportDir("picked", 5));
+  try {
+    await importThroughToolbar(ctx.app, ctx.window, [running]);
+    await expect(importCard()).toHaveCount(1, { timeout: 15_000 });
+    const answerPicker = await importThroughToolbar(ctx.app, ctx.window, [picked], { hold: true });
+    await expect(importCard()).toHaveCount(0, { timeout: 180_000 });
+    await answerPicker();
+    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 60_000 }).toBe(5);
+    await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
+  } finally {
+    fs.rmSync(running, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    fs.rmSync(picked, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});
+
+// The other way round: the picker opened with nothing running, and closes
+// while an agent's import runs. The folder waits for that import, as the dock
+// says, where it used to go to the importer, which answered with the agent's
+// job and left the folder out.
+test("a folder picked before an agent's import starts waits for it, then is imported", async () => {
+  test.setTimeout(240_000);
+  const agents = fs.realpathSync(makeImportDir("agents", IMPORT_SIZE));
+  const picked = fs.realpathSync(makeImportDir("waiting", 5));
+  try {
+    await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
+    const answerPicker = await importThroughToolbar(ctx.app, ctx.window, [picked], { hold: true });
+    const agentImport = callTool("import_directory", { image_dirs: [agents] }).catch(() => null);
+    await expect(importCard()).toHaveCount(1, { timeout: 15_000 });
+    await answerPicker();
+    await expect(importCard()).toContainText("Queued changes: 1 media · 0 sources", { timeout: 15_000 });
+    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 180_000 }).toBe(5);
+    await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
+    expect((await pathsUnder(agents)).length).toBe(IMPORT_SIZE);
+    await agentImport;
+  } finally {
+    fs.rmSync(agents, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    fs.rmSync(picked, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});
+
+// And when the window hasn't heard of the running import at all (main's
+// notice of the agent's job is held back here): the importer reports itself
+// busy, and the folder waits all the same.
+test("a folder picked while an import runs that the window hasn't seen yet waits for it, then is imported", async () => {
+  test.setTimeout(240_000);
+  const unseen = fs.realpathSync(makeImportDir("unseen", IMPORT_SIZE));
+  const picked = fs.realpathSync(makeImportDir("behind", 5));
+  try {
+    await expect(ctx.window.getByTestId("job-dock-card")).toHaveCount(0, { timeout: 60_000 });
+    await ctx.app.evaluate(({ BrowserWindow }) => {
+      const contents = BrowserWindow.getAllWindows()[0].webContents;
+      const send = contents.send.bind(contents);
+      contents.send = (channel, payload, ...rest) => {
+        if (channel !== "workspace:catalog-changed" || payload?.scope !== "jobs") send(channel, payload, ...rest);
+      };
+      globalThis.__releaseJobNotices = () => { delete contents.send; };
+    });
+    const answerPicker = await importThroughToolbar(ctx.app, ctx.window, [picked], { hold: true });
+    const agentImport = callTool("import_directory", { image_dirs: [unseen] }).catch(() => null);
+    await expect.poll(async () => (await callTool("list_active_jobs")).jobs.some((job) => job.jobType === "import" && job.running), { timeout: 15_000 })
+      .toBe(true);
+    await expect(importCard()).toHaveCount(0);
+    await answerPicker();
+    await expect(importCard()).toContainText("Queued changes: 1 media · 0 sources", { timeout: 15_000 });
+    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 180_000 }).toBe(5);
+    await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
+    expect((await pathsUnder(unseen)).length).toBe(IMPORT_SIZE);
+    await agentImport;
+  } finally {
+    await ctx.app.evaluate(() => globalThis.__releaseJobNotices?.());
+    fs.rmSync(unseen, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    fs.rmSync(picked, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});

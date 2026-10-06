@@ -135,6 +135,18 @@ export default function useJobs(bridgeRef) {
     }
   }
 
+  // Whether an import is running that this poller follows: true until the
+  // poll that sees it end, whose finish handler then replays the imports
+  // queued behind it (consumeQueuedImport). Ask at the moment a request is
+  // decided: the importTask a render holds can predate that poll, and a
+  // request queued after the replay would wait for an import that never comes.
+  function importRunning() {
+    for (const job of knownActiveRef.current.values()) {
+      if (job.jobType === "import") return true;
+    }
+    return false;
+  }
+
   // Kick (or re-kick) the poll loop. `seed` pre-registers a just-started job
   // so even one that finishes before the first poll still gets its finish
   // side effects dispatched.
@@ -186,5 +198,5 @@ export default function useJobs(bridgeRef) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { activeJobs, lastFinishedJob, pokeJobs, cancelJob, pauseJob, resumeJob, resetJobs };
+  return { activeJobs, lastFinishedJob, pokeJobs, importRunning, cancelJob, pauseJob, resumeJob, resetJobs };
 }

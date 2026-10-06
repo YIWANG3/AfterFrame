@@ -30,14 +30,26 @@ const byImagePath = (file) => `[data-image-path='${file.replace(/[\\']/g, "\\$&"
 // Toolbar + › Import, the native picker answering with `paths`: an import the
 // way a user starts one. Windows and Linux split the entry into Import Files…
 // and Import Folder…, since their pickers can't take both (#123).
-async function importThroughToolbar(app, window, paths) {
-  await app.evaluate(({ dialog }, picked) => {
-    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
-  }, paths);
+// `hold`: the picker stays open, as for a user taking their time to choose,
+// until the function this returns (once the picker is open) is called.
+async function importThroughToolbar(app, window, paths, { hold = false } = {}) {
+  await app.evaluate(({ dialog }, { picked, held }) => {
+    globalThis.__answerImportPicker = null;
+    dialog.showOpenDialog = () => new Promise((resolve) => {
+      globalThis.__answerImportPicker = () => resolve({ canceled: false, filePaths: picked });
+      if (!held) globalThis.__answerImportPicker();
+    });
+  }, { picked: paths, held: hold });
   const folders = paths.every((p) => fs.statSync(p).isDirectory());
   const entry = !splitsImport(process.platform) ? "Import" : folders ? "Import Folder…" : "Import Files…";
   await window.locator(".app-toolbar button").first().click();
   await window.getByRole("button", { name: entry, exact: true }).click();
+  if (!hold) return null;
+  for (const deadline = Date.now() + 10_000; !(await app.evaluate(() => Boolean(globalThis.__answerImportPicker)));) {
+    if (Date.now() > deadline) throw new Error("the import picker never opened");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return () => app.evaluate(() => globalThis.__answerImportPicker());
 }
 
 const REPO_DESKTOP_DIR = path.resolve(__dirname, "..", "..");
