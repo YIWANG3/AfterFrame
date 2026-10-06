@@ -400,6 +400,14 @@ export default function App() {
   });
   const selectedAssetIds = selectedIds;
 
+  // Gallery menu "Show in All Assets": just this photo stays selected, so the
+  // next action doesn't pick up the rest of what was selected in the search.
+  function showInAllAssets(assetId) {
+    setSelectedIds([assetId]);
+    setSelectionAnchorId(assetId);
+    void workspace.revealInAllAssets(assetId);
+  }
+
   const [dropActive, setDropActive] = useState(false);
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
 
@@ -1419,6 +1427,7 @@ export default function App() {
                   onCompare={handleCompare}
                   onCollage={handleCollage}
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
+                  onShowInAllAssets={workspace.narrowed ? showInAllAssets : undefined}
                 />
                 </div>
               </div>

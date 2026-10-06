@@ -4,6 +4,9 @@
     "failed": "Could not locate this version",
     "showingAll": "Switched to All Assets to show this version"
   },
+  "showInAllAssets": {
+    "failed": "Could not show this photo in All Assets"
+  },
   "folderOrderFailed": "Could not save folder order",
   "ratingFailed": "Could not save rating",
   "drop": {

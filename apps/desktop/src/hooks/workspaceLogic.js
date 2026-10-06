@@ -52,6 +52,12 @@ export const activeFilterCount = (filters) => Object.entries(filters || {})
 // hidden while it is filtering" and which actions the bar offers.
 export const hasRefinement = (scope) => !!scope.query.trim() || activeFilterCount(scope.filters) > 0;
 
+// Is the grid showing less than the whole library — another view, a folder, a
+// smart collection, a search or a filter? Then a photo found here can be shown
+// among its neighbours in All Assets.
+export const isNarrowedScope = (scope) => scope.status !== DEFAULT_SCOPE.status
+  || !!scope.collectionId || !!scope.smartCollectionId || !!scope.base || hasRefinement(scope);
+
 // The view facet counts are taken inside (db/browse.py _facet_scope): what
 // the grid is showing, minus the sort, which does not change any count.
 export const facetScopeOf = (scope) => ({
