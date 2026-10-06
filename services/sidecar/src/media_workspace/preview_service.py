@@ -19,6 +19,7 @@ from .color_profiles import adobe_rgb_icc
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, upsert_preview_entry
 from .db.colors import analyze_asset_colors
+from .processes import no_window
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -246,6 +247,7 @@ def render_raw_full(source: Path, target: Path) -> str:
                     capture_output=True,
                     text=True,
                     timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+                    **no_window(),
                 )
                 _reject_black(partial)
                 os.replace(partial, target)
@@ -524,6 +526,7 @@ class PreviewService:
             capture_output=True,
             text=True,
             timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+            **no_window(),
         ), validate=validate)
 
     def _render_with_quicklook(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
@@ -535,6 +538,7 @@ class PreviewService:
                 capture_output=True,
                 text=True,
                 timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+                **no_window(),
             )
             generated = Path(temp_dir) / f"{source_path.name}.png"
             if not generated.exists():
@@ -545,6 +549,7 @@ class PreviewService:
                 check=True,
                 capture_output=True,
                 text=True,
+                **no_window(),
             ), validate=validate)
 
     def _render_raw(self, source_path: Path, output_path: Path, kind: str, metadata: dict, validate=None) -> Path:
@@ -611,6 +616,7 @@ class PreviewService:
                 capture_output=True,
                 text=True,
                 timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+                **no_window(),
             )
             _reject_black(tmp)
 

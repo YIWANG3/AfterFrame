@@ -13,6 +13,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from .processes import no_window
+
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
 
 
@@ -35,7 +37,7 @@ def probe(path: Path) -> dict | None:
     try:
         result = subprocess.run(
             [tool, "probe", str(path)],
-            capture_output=True, text=True, encoding="utf-8", timeout=30,
+            capture_output=True, text=True, encoding="utf-8", timeout=30, **no_window(),
         )
         if result.returncode != 0:
             return None
@@ -52,7 +54,7 @@ def poster(path: Path, out_path: Path, max_edge: int = 1024) -> bool:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             [tool, "poster", str(path), str(out_path), "--max-edge", str(max_edge)],
-            capture_output=True, text=True, encoding="utf-8", timeout=60,
+            capture_output=True, text=True, encoding="utf-8", timeout=60, **no_window(),
         )
         return result.returncode == 0 and out_path.exists()
     except (subprocess.SubprocessError, OSError):
@@ -69,7 +71,7 @@ def frames(path: Path, out_dir: Path, *, interval: float | None = None, max_edge
         cmd = [tool, "frames", str(path), str(out_dir), "--max-edge", str(max_edge)]
         if interval and interval > 0:
             cmd += ["--interval", str(interval)]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=120, **no_window())
         if result.returncode != 0:
             return []
         return json.loads(result.stdout).get("frames", [])

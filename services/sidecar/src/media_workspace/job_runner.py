@@ -47,6 +47,7 @@ from .db import (
     upsert_people_asset_index,
 )
 from .preview_service import PreviewService
+from .processes import no_window
 from .reverse_lookup import resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 
@@ -281,6 +282,7 @@ def run_people_index_job(
             text=True,
             encoding="utf-8",
             bufsize=1,
+            **no_window(),
         )
         assert worker.stdin is not None
         assert worker.stdout is not None

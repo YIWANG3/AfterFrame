@@ -32,6 +32,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from .processes import no_window
+
 # The tags metadata.py maps, with `#` for numbers instead of their printed
 # form. Lens names stay printed: an old Nikon lens is only named by
 # Composite:LensID's lookup.
@@ -183,6 +185,7 @@ class _Process:
                     "TZ": "UTC",
                     "AFTERFRAME_EXIFTOOL_PARENT": str(os.getpid()),
                 },
+                **no_window(),
             )
         except OSError as error:
             raise ExifToolError(f"ExifTool can't start: {error}") from error

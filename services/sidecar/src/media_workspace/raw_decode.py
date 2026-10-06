@@ -24,6 +24,8 @@ from typing import Any
 
 from PIL import Image
 
+from .processes import no_window
+
 # LibRaw's `flip` as the EXIF orientation the previews carry.
 _FLIP_TO_ORIENTATION = {0: 1, 3: 3, 5: 8, 6: 6}
 # A half-size decode skips demosaicing and has a quarter of the pixels. It's
@@ -153,4 +155,5 @@ def decode_in_child(path: Path, target: Path, long_edge: int, timeout: float = D
         check=True,
         capture_output=True,
         timeout=timeout,
+        **no_window(),
     )

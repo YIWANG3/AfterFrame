@@ -720,7 +720,8 @@ ipcMain.handle("workspace:list-system-fonts", async () => {
     } else if (process.platform === "win32") {
       const { stdout } = await run(
         'powershell -Command "[System.Reflection.Assembly]::LoadWithPartialName(\'System.Drawing\') | Out-Null; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }"',
-        { maxBuffer: 10 * 1024 * 1024 }
+        // Without it a terminal window flashes up while PowerShell runs.
+        { maxBuffer: 10 * 1024 * 1024, windowsHide: true }
       );
       return stdout.trim().split("\r\n").filter(Boolean);
     }
