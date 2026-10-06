@@ -1,6 +1,6 @@
 # Windows 支持：现状评估与方案
 
-> **状态（2026-10-03）**：阶段 1、2 的大部分已经做成 11 个 PR（#116–#126），都在开发机上验证过，等合并，见第 12 节。还没做的：sidecar 打包（spec 不在仓库里）、安装包和签名、视频，以及阶段 3 的深度、抠图、人物。
+> **状态（2026-10-06）**：阶段 1、2 已经全部合进 main。Windows 版能打出可用的安装包（未签名），核心功能都在开发机上验证过，全量 e2e 312 个通过，见第 12 节。还没做的：发布流程和签名、家用 Win11 真机验收，以及阶段 3 的视频、深度、抠图、人物。
 > 起因（2026-10-02）：社媒上要 Windows 版的反馈很多。
 > 依据：对 `439f397`（0.5.5）做了三路代码审计（Electron 主进程、Python sidecar、前端/打包/CI），关键结论都抽查核实过，性能数据是在本机实测的；第 10 节是在 Windows 真机上跑出来的结果。
 > 文中行号以 `439f397` 为准，0.5.6（#113、#114）改过的文件里行号有偏移。路径如果不以 `services/`、`tests/`、`docs/`、`scripts/` 开头，就是相对 `apps/desktop/` 而言。
@@ -15,23 +15,29 @@
 
 ## 1. 各功能在 Windows 上的现状
 
-| 功能 | 修完阻断项后 | 原因 |
+下表是 2026-10-06 的状态。第 2、3 节是 2026-10-02 审计时的情况。
+
+| 功能 | 现在 | 说明 |
 |---|---|---|
 | 图库、筛选、搜索、智能合集、评分 | ✅ | 纯 JS + SQLite |
-| 编辑：裁剪、文字、相框、拼图、切图、导出 | ✅ | canvas + sharp（sharp 有 Windows 预编译包） |
+| 编辑：裁剪、文字、相框、拼图、切图、导出 | ✅ | canvas + sharp；文字叠加的字体有 Windows 的备选（#162） |
 | AI 重绘、AI 标注、AI 手写字（BYOK） | ✅ | 直接 HTTP 调用 |
 | MCP server | ✅ | 监听 `127.0.0.1` 的 TCP 端口，没有 POSIX 专属代码 |
-| 缩略图、预览、主色 | ❌ 现在完全不可用 | 全部依赖 `sips` / `qlmanage`，见 2.1 |
-| HEIC 显示 | ❌ | 主进程同样用 `sips` 转码（`electron/media/protocol.js:27`） |
-| 深度感知文字 | ❌ | CoreML（`native/compute-depth.swift`，0.5.6 起打包时预编译） |
-| 贴纸主体抠图 | ❌（贴纸库本身能用） | Vision（`native/extract-sticker.swift`） |
-| 人物识别 | ❌ | Vision + CoreML 版 ArcFace（`native/people-worker.swift`） |
-| 视频封面、预览条、HEVC 播放代理 | ❌ | AVFoundation（`native/video-tool.swift`） |
-| 用外部编辑器打开 | ❌ | 只扫描 `/Applications`（`electron/ipc/editors.js:49`） |
+| 缩略图、预览、主色 | ✅ | Pillow（#118） |
+| HEIC | ✅ | pillow-heif（#118、#125） |
+| RAW | ✅，JPEG XL 压缩的 DNG 例外 | LibRaw（#149）：内嵌预览、真实尺寸、按需全尺寸。JPEG XL 的 DNG 见 12.3 |
+| 照片元数据 | ✅ | ExifTool（#150），Windows 上用官方的 `exiftool.exe` |
+| 深度感知文字 | ❌ 置灰，提示"目前仅 macOS 版支持"（#119） | CoreML（`native/compute-depth.swift`） |
+| 贴纸主体抠图 | ❌ 同上（贴纸库本身能用） | Vision（`native/extract-sticker.swift`） |
+| 人物识别 | ❌ 同上 | Vision + CoreML 版 ArcFace（`native/people-worker.swift`） |
+| 视频 | ⚠️ H.264 能播放；没有封面和时长；HEVC 是黑屏 | AVFoundation（`native/video-tool.swift`） |
+| 用外部编辑器打开 | ❌ 右键菜单里不出现 | 只扫描 `/Applications`（`electron/ipc/editors.js:49`） |
 
 浏览器版（官网 `try/web.html`）现在就能在 Windows 上用，相框、拼图、裁剪、AI 都可以。它的能力开关在 `src/api/browser/bridge.js:768-783`。
 
 ## 2. 阻断项：不修就无法使用
+
+> 本节和第 3 节是 2026-10-02 审计时的状态，行号以 `439f397` 为准。这里的问题大多已经修复，见第 12 节。
 
 ### 2.1 预览全靠 macOS 自带的命令行工具
 
@@ -264,24 +270,28 @@ services/sidecar/src/media_workspace/
 
 ### 阶段 1：Mac 也受益的准备工作（约 1.5–2 周，不需要 Windows 机器）
 
+已完成，只差把平台判断收拢到一处（12.3）。
+
 | 项 | 估时 | 对 Mac 的好处 |
 |---|---|---|
 | ~~深度和抠图改为预编译~~ 已随 0.5.6 发布（#114），见第 8 节 | — | 不再依赖 Xcode；深度每张新照片从约 16 秒降到约 0.2 秒 |
-| PyInstaller spec 放进仓库 | 0.5 天 | 发版不再依赖本地文件 |
-| 预览改走 Pillow，Mac 上 RAW 保留 `sips` | 3–4 天 | 不变慢；Linux CI 也能测预览 |
-| sidecar 的 stdio 强制 UTF-8（环境变量 `PYTHONUTF8=1` 加上 `reconfigure`） | 0.5 天 | 消除隐患 |
-| 平台判断收拢到 `electron/platform/` + 能力上报 + 补齐深度/视频的检查 + lint 规则 | 2–3 天 | 结构更清晰 |
+| ✅ PyInstaller spec 放进仓库（#134） | 0.5 天 | 发版不再依赖本地文件 |
+| ✅ 预览改走 Pillow，Mac 上 RAW 保留 `sips`（#118；RAW 后来改用 LibRaw，#149） | 3–4 天 | 不变慢；Linux CI 也能测预览 |
+| ✅ sidecar 的 stdio 强制 UTF-8（环境变量 `PYTHONUTF8=1` 加上 `reconfigure`，#117） | 0.5 天 | 消除隐患 |
+| 部分完成：平台判断收拢到 `electron/platform/` + 能力上报 + 补齐深度/视频的检查 + lint 规则。能力上报已做（#119，`electron/capabilities.js`），收拢和 lint 规则没做 | 2–3 天 | 结构更清晰 |
 
 ### 阶段 2：Windows 核心版公测（约 2–3 周，在第 9 节的 Windows 开发机上做）
 
+开发部分已完成。安装包能打，但还没签名，也还没发布。
+
 | 项 | 估时 |
 |---|---|
-| 窗口外壳：`titleBarOverlay`、不透明窗口（Win11 可以用 `backgroundMaterial: "mica"`）、菜单操作的入口、右上角避让 | 3–4 天 |
-| 打包和进程：Windows 版 sidecar 构建、`extraResources` 按平台过滤、`windowsHide`、单实例锁、文件选择框 | 2–3 天 |
-| 路径和文件系统：3.1、3.2 中对用户影响最大的那些 | 3–4 天 |
-| 中文字体：`Microsoft YaHei` 兜底，Noto Sans SC 改为本地子集 | 0.5–1 天 |
-| Windows CI：e2e 路径重定位改写、去掉对 `sqlite3` 命令行的依赖、单测里的路径 | 2–3 天 |
-| 签名和安装包 | 1–2 天，另加证书申请周期 |
+| ✅ 窗口外壳：`titleBarOverlay`、不透明窗口（Win11 可以用 `backgroundMaterial: "mica"`）、菜单操作的入口、右上角避让（#116；Mica 没做） | 3–4 天 |
+| ✅ 打包和进程：Windows 版 sidecar 构建、`extraResources` 按平台过滤、`windowsHide`、单实例锁、文件选择框（#117、#122、#123、#134、#158） | 2–3 天 |
+| ✅ 路径和文件系统：3.1、3.2 中对用户影响最大的那些（#120、#159、#164） | 3–4 天 |
+| ✅ 中文字体：`Microsoft YaHei` 兜底（#121、#162）；Noto Sans SC 改为本地子集没做 | 0.5–1 天 |
+| ✅ Windows CI：单测全部通过并进了 CI（#124）。e2e 在开发机上能跑（#161、#174），还没进 CI | 2–3 天 |
+| 安装包能构建（#178 在 GitHub Actions 上构建并检查）；签名暂不做（第 7 节第 3 条） | 1–2 天，另加证书申请周期 |
 
 ### 阶段 3：补回苹果专属功能（每个约 1–2 周）
 
@@ -292,10 +302,10 @@ services/sidecar/src/media_workspace/
 ## 7. 待决问题
 
 1. ~~**做不做、什么时候做**~~：已决定做（2026-10-03），开发机见第 9 节。候补名单仍然有用，可以用来排阶段 3 的顺序。
-2. **架构**：只做 x64 吗？（建议先只做 x64。）最低支持哪个 Windows 版本？（建议 Win10 22H2 及以上，Mica 效果只在 Win11 上有。）
-3. **代码签名**：选 OV 证书，还是 Azure Trusted Signing？后者对个人开发者开放的地区有限，需要确认。签名之后 SmartScreen 的信誉也需要时间积累。
+2. **架构**：只做 x64 吗？（建议先只做 x64。目前打出来的就是 x64。）最低支持哪个 Windows 版本？（建议 Win10 22H2 及以上，Mica 效果只在 Win11 上有。）
+3. **代码签名**：选 OV 证书，还是 Azure Trusted Signing？后者对个人开发者开放的地区有限，需要确认。签名之后 SmartScreen 的信誉也需要时间积累。**2026-10-03 决定暂不买证书**：安装包先不签名，下载页要教用户越过 SmartScreen。
 4. **自动更新**：要不要同时给 Mac 加上 `electron-updater`？
-5. **RAW 一致性**：Windows 上的 RAW 预览颜色和 Mac 不同，能不能接受？还是首版只显示内嵌的 JPEG 预览？
+5. ~~**RAW 一致性**~~：已定。预览用相机内嵌的 JPEG（#126），尺寸和全尺寸解码用 LibRaw（#149），两个平台一样。Mac 的全尺寸渲染优先用 Image I/O，所以颜色可能和 Windows 略有差别。
 6. **安装包体积**：ffmpeg 和 ONNX 模型加起来可能让 Windows 安装包比 Mac 大不少，体积上限定多少？
 7. **视觉**：Windows 上保留多少液态玻璃效果？透明窗口在 Windows 上有限制，建议改用不透明窗口加 Mica。
 
@@ -305,7 +315,7 @@ services/sidecar/src/media_workspace/
 - **深度感知文字和贴纸抠图在正式版里依赖 Xcode**：这两个功能以前在运行时用 `swift` 解释 `.swift` 源文件（`ipc/swiftRuntime.js`）。0.5.6（#114）改为打包时预编译，`swiftRuntime.js` 已删除。实测解释执行只比预编译慢约 0.5 秒，所以这一项修的是"没装开发工具就用不了"，速度不是重点。
 - **深度推理每张新照片要约 16 秒**：`compute-depth` 每次运行都把模型编译到新的临时目录，而 Core ML 对 Neural Engine 的编译缓存是按模型位置来的，所以缓存从来用不上。0.5.6 把编译结果固定存到 `userData/depth-models`，之后每张照片约 0.22 秒，输出和之前逐字节相同。`people-worker` 也是每次任务编译一遍模型，但每个任务只编译一次，影响小，尚未处理。
 - **0.5.5 的 `video-tool` 和 `people-worker` 要求 macOS 26**：`swiftc` 没有指定最低版本，默认按构建机的系统版本编译，所以视频和人物识别在 macOS 26 以下大概率启动不了。0.5.6 给每个程序指定了它能支持的最低版本：`video-tool` 13，`people-worker` 12，`compute-depth` 12，`extract-sticker` 14。Windows 版的原生引擎同样要注意这个问题。
-- **PyInstaller spec 不在仓库里**：见 2.4。
+- ~~**PyInstaller spec 不在仓库里**~~：见 2.4。已放回仓库（#134，随 0.5.7 发布）。
 - **现有 e2e 失败**：`25-collage-batch` 里"把格子拖到另一页交换两张图"那条，在 `main` 上也会失败（2026-10-02）。
 
 ## 9. Windows 开发机
@@ -392,48 +402,74 @@ Python 的 34 个：
 - **Windows CI**：先加成"失败不阻塞合并"的提醒；等第 10 节的失败都修完，再改成必须通过，防止日常改动又把 Windows 弄坏。
 - **顺序**：按第 6 节阶段 1、阶段 2 的列表，一项一个 PR。
 
-## 12. 进展（2026-10-03）
+## 12. 进展（2026-10-06）
 
-每项一个 `win/*` 分支，Mac CI 和 e2e 都跑过，也都在开发机上实际验证过。
+阶段 1、2 已经全部合进 main。每项都跑过 Mac 的 CI 和 e2e，也都在开发机上实际验证过。
 
-| PR | 分支 | 内容 | 基于 |
-|---|---|---|---|
-| #116 | `win/window-chrome` | 窗口外壳：系统标题栏按钮、可调大小和贴靠、☰ 菜单、Ctrl+, | main |
-| #117 | `win/sidecar-stdio` | sidecar 全程 UTF-8，开发时用 `python`，子进程不弹控制台 | main |
-| #118 | `win/preview-pillow` | 预览改用 Pillow（含 HEIC），读不了的格式在 Mac 上退回 sips | main |
-| #119 | `win/capabilities` | 深度、抠图、人物在 Windows 上置灰并提示"目前仅 macOS 版支持" | #116 |
-| #120 | `win/paths` | Windows 路径下的文件名和路径缩写；导入整张卡时跳过回收站等系统目录 | main |
-| #121 | `win/copy-and-fonts` | "访达"改成"文件资源管理器"、⌘ 改成 Ctrl+；雅黑字体；`<html lang>` | #116 |
-| #122 | `win/single-instance` | 单实例；拖到 exe 上或用"打开方式"打开的文件会被导入；冷启动时带的文件不再丢（Mac 也有这个问题） | #119 |
-| #123 | `win/file-picker` | 导入拆成"导入文件…"和"导入文件夹…"（Windows 的对话框不能两者兼选） | #122 |
-| #124 | `win/tests-windows` | 单测在 Windows 上全部通过，CI 加 Windows job（失败不阻塞合并） | main |
-| #125 | `win/heic-originals` | HEIC 原图能在大图和编辑器里打开（sidecar 转码代替 sips） | #118 |
-| #126 | `win/raw-previews` | RAW 预览用相机内嵌的 JPEG | #125 |
+### 12.1 已合并
 
-**合并顺序**：#117、#118、#120、#124 互不依赖，先合哪个都行。然后按两条链依次合：
-- #116 → #119、#121 → #122 → #123；
-- #118 → #125 → #126。
+第一批（2026-10-03 合并），每项一个 `win/*` 分支：
 
-11 个分支两两试合并过（55 对），只有一处冲突：#125/#126 和 #116 那条链（#116、#119、#121、#122、#123）都往 `package.json` 的 `test:electron` 这一行加了测试。后合并的那一边要手动保留两边的条目。仓库默认 squash 合并，而且合并后不删分支，所以叠在上面的 PR 不会自动改指向 main，每合一个都需要把下一个 rebase 到 main 上。
-
-**第 10 节基线结论的更正**：
-- allowlist 和 transport 的两个失败也是测试本身的问题，不是产品 bug：
-  - allowlist 的测试用 POSIX 正则模拟 `/tmp → /private/tmp`；
-  - transport 的产品代码早就绕开了进程组，只是断言写死了 POSIX 信号的退出码。
-- 32 个 `WinError 32` 全是测试自己开的 SQLite 连接，产品代码都关了（在开发机上逐个跟踪过连接）。
-- 把这 11 个 PR 全部合在一起后，开发机上仓库根目录的 Python 196/196、sidecar 59/59、Electron 主进程 139/139、前端 235/235 全部通过，ruff 和 mypy 也干净。GitHub 的 `windows-latest` 跑 #124 也是全绿。
-
-**还没做的**：
-
-| 项 | 卡在哪 |
+| PR | 内容 |
 |---|---|
-| sidecar 打包 | `media-workspace.spec` 和 `entry.py` 被 `.gitignore` 忽略，不在仓库里。要先放进仓库（阶段 1 那一项），Windows 版才能构建 |
-| 安装包（`dist:win`）和签名 | 依赖上一项；签名方式见第 7 节第 3 条 |
-| 视频封面和 HEVC 转码 | Swift 写的 `video-tool`；Windows 上要用 ffmpeg 或者在渲染进程里截帧 |
-| RAW 的尺寸 | Windows 上取自 EXIF，有的格式记的是预览图的尺寸（DNG 样例是 256×144，实际是 1024×576）；可以改读全分辨率的 SubIFD |
-| 真实 RAW 文件验证 | 仓库里只有两个小 DNG；CR3/NEF/ARW 还没在 Windows 上试过 |
-| 深度、抠图、人物 | 阶段 3，ONNX Runtime |
-| Windows e2e | e2e 里用到了只有 macOS 才有的辅助程序 |
-| 中文字体本地子集、Mica | 体验优化，不阻塞 |
+| #116 | 窗口外壳：系统标题栏按钮、可调大小和贴靠、☰ 菜单、Ctrl+, |
+| #117 | sidecar 全程 UTF-8，开发时用 `python`，子进程不弹控制台 |
+| #118 | 预览改用 Pillow（含 HEIC），读不了的格式在 Mac 上退回 sips |
+| #119 | 深度、抠图、人物在 Windows 上置灰并提示"目前仅 macOS 版支持" |
+| #120 | Windows 路径下的文件名和路径缩写；导入整张卡时跳过回收站等系统目录 |
+| #121 | "访达"改成"文件资源管理器"、⌘ 改成 Ctrl+；雅黑字体；`<html lang>` |
+| #122 | 单实例；拖到 exe 上或用"打开方式"打开的文件会被导入；冷启动时带的文件不再丢（Mac 也有这个问题） |
+| #123 | 导入拆成"导入文件…"和"导入文件夹…"（Windows 的对话框不能两者兼选） |
+| #124 | 单测在 Windows 上全部通过，CI 加 Windows job（失败不阻塞合并） |
+| #125 | HEIC 原图能在大图和编辑器里打开（sidecar 转码代替 sips） |
+| #126 | RAW 预览用相机内嵌的 JPEG |
 
-第 7 节第 5 条（RAW 一致性）：#126 先采用"首版只显示内嵌的 JPEG 预览"。要和 Mac 一样出图，需要引入 LibRaw（rawpy）。
+之后（2026-10-04 至 10-06）：
+
+| PR | 内容 |
+|---|---|
+| #134 | PyInstaller spec 和 `entry.py` 放回仓库，Windows 版 sidecar 能构建了（随 0.5.7 发布） |
+| #149 | RAW 改由 LibRaw（rawpy）读：内嵌预览、真实尺寸、按需生成 HD。取代了没有合并的 #136、#139 |
+| #150 | 照片元数据改由 ExifTool 读；Windows 上用官方的 `exiftool.exe` |
+| #158 | 安装包只带 ExifTool，不带 macOS 的辅助程序和 Core ML 模型 |
+| #159 | 打开和新建图库的对话框从"文档"开始，并且挂在窗口前面 |
+| #161、#174 | e2e 在 Windows 上能跑：fixture 的路径、`exiftool.exe`、两个导入入口、命令行长度、路径分隔符 |
+| #162 | 文字叠加在 Windows 上能找到字体（雅黑优先） |
+| #164 | 切图导出的路径是正常的 Windows 路径 |
+| #166 | 导入时不再把整个图库锁住（Mac 也受益） |
+| #175 | 慢电脑上响应更快：地名数据按块读取（开发机上首次反查从 5–6 秒降到约 0.3 秒，sidecar 进程从约 290MB 降到约 50MB）、numpy 按需加载、后台任务降低优先级 |
+| #177 | 导入期间还没有缩略图的 RAW、TIFF 卡片不再触发修复；缺的缩略图在后台补 |
+
+### 12.2 验证情况
+
+在开发机上对 main 的 `3272d1a`（2026-10-05）：
+- **单测**：仓库根目录的 Python 251 个、sidecar 65 个、Electron 主进程 171 个、前端 297 个，全部通过。
+- **全量 e2e**：312 个通过，9 个失败，用时 65 分钟。
+  - 只有 1 个是 Windows 上的真问题：JPEG XL 压缩的 DNG，见 12.3。
+  - 其余 8 个是开发机太慢或没有显卡造成的超时，日志里没有报错。比如自定义 logo 那条，失败时的截图里 logo 已经导入并放进了画面，只是比测试等待的 5 秒晚。
+- **真实文件**：HEIC、中文文件名、CR2/CR3/ARW/RAF/DNG/3FR/FFF。安装后的打开、导入、监视文件夹也都试过。
+
+导入速度，用同一批 213 张 JPG（2.5GB），导入整个文件夹：
+
+| | 开发机 | Mac（M 系列） |
+|---|---|---|
+| 启动到图库出现 | 15–26 秒（开发模式，几次实测） | 1.4 秒 |
+| 全部导入完成 | 约 10 分钟；导入任务单独运行约 3 分钟 | 约 9 秒 |
+
+开发机是 4 核的限速云主机，没有显卡，同样的 Python 代码比 Mac 慢约 20 倍。导入时界面要靠 CPU 软件渲染，会占掉一半 CPU。家用电脑上的真实速度要等真机验收（12.3）。
+
+### 12.3 还没做的
+
+| 项 | 现状 |
+|---|---|
+| 发布流程 | 安装包（NSIS，约 175MB，未签名）一直在开发机上手动构建。#178 改为在 GitHub Actions 上构建并做冒烟检查，但不发布到 Release |
+| 签名 | 2026-10-03 决定暂不买证书。SmartScreen 会弹"已保护你的电脑"，下载页要教用户点"更多信息 → 仍要运行" |
+| 家用 Win11 真机验收 | 开发机是 Windows Server 2025 的云主机。SmartScreen、安装体验和真实速度都要在家用电脑上看 |
+| 视频 | H.264 能播放，但新导入的视频没有封面和时长（Swift 写的 `video-tool`）。HEVC 播放是黑屏，Windows 默认没有 HEVC 解码器。要用 ffmpeg 补回来，属于阶段 3 |
+| JPEG XL 压缩的 DNG | rawpy 自带的 LibRaw 0.22.1 没有编进 libjxl。缩略图用内嵌预览，没有问题；但编辑和导出会悄悄退回内嵌预览的尺寸（测试样例只有 256×144）。DNG Converter 的有损压缩、部分 Lightroom 和 iPhone 的 DNG 会用到这种压缩。Mac 上有 Image I/O 兜底 |
+| 用外部编辑器打开 | 只扫描 `/Applications`，Windows 上右键菜单里不出现 |
+| 深度、抠图、人物 | 阶段 3，ONNX Runtime |
+| Windows e2e 进 CI | 只在开发机上跑（约 65 分钟）。CI 的 Windows job 只跑单测 |
+| 平台判断收拢 | 能力上报已做（`electron/capabilities.js`），但 `process.platform` 仍分散在约 9 个文件里，也没有 lint 规则（5.4） |
+| 自动更新 | Mac 和 Windows 都没有 |
+| 中文字体本地子集、Mica | 体验优化，不阻塞 |
