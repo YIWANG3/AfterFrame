@@ -111,11 +111,19 @@ test.describe("Watched directories", () => {
       return rows.filter((row) => row.image_path === target).map((row) => row.asset_id);
     }, canonicalPath);
     expect(matchingAssets).toEqual([beforeAsset.asset_id]);
-    const renderedSrc = await window.evaluate((target) => {
+    // The card shows the new picture: a cache-busted src, loaded at the
+    // replacement's 3:2, not the original fixture's 4:3. Polled, because the
+    // browse above returns just as the gallery reloads, and PreviewImage
+    // unmounts its <img> for a frame each time the src changes.
+    await expect.poll(() => window.evaluate((target) => {
       const card = [...document.querySelectorAll("[data-gallery-item='true']")]
         .find((element) => element.dataset.imagePath === target);
-      return card?.querySelector("img")?.getAttribute("src") || "";
-    }, canonicalPath);
-    expect(renderedSrc).toContain("?r=");
+      const img = card?.querySelector("img");
+      if (!img?.complete || !img.naturalWidth) return null;
+      return {
+        cacheBusted: img.getAttribute("src").includes("?r="),
+        aspect: Math.round((img.naturalWidth / img.naturalHeight) * 100) / 100,
+      };
+    }, canonicalPath), { timeout: 10_000, intervals: [100] }).toEqual({ cacheBusted: true, aspect: 1.5 });
   });
 });
