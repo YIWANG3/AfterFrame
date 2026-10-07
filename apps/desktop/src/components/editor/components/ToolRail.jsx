@@ -3,7 +3,7 @@
 // handler (which also resets the depth-map overlay for non-text tools).
 // Extracted from EditorOverlay (Phase 4).
 
-import { Crop, Type, Cannabis, Sparkles, Columns3, Blend, createLucideIcon } from "lucide-react";
+import { Crop, Type, Cannabis, Sparkles, Columns3, createLucideIcon } from "lucide-react";
 import api from "../../../api";
 import { LOCKED_HINT_KEY } from "../../DesktopOnly";
 
@@ -14,6 +14,12 @@ const PhotoFrame = createLucideIcon("photo-frame", [
   ["rect", { x: "7", y: "7", width: "10", height: "7", rx: "1", key: "photo" }],
   ["path", { d: "M8 17.5h4", key: "bar" }],
 ]);
+
+// The LUT tool: the word itself. Photographers know "LUT"; no pictogram for
+// a colour lookup reads as one (two overlapping circles read as "blend").
+function LutGlyph() {
+  return <span className="text-[10px] font-bold leading-none tracking-[0.04em]">LUT</span>;
+}
 
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
@@ -44,7 +50,7 @@ export default function ToolRail({ tool, onSelect, t }) {
       {/* macOS only for now, and hidden rather than locked elsewhere
           (docs/lut-plan.md): the web build has no LUT library either. */}
       {api.can("lut") && api.has("listLuts") ? (
-        <ToolTab active={tool === "lut"} icon={Blend} label={t("overlay.tools.lut")} onClick={() => onSelect("lut")} />
+        <ToolTab active={tool === "lut"} icon={LutGlyph} label={t("overlay.tools.lut")} onClick={() => onSelect("lut")} />
       ) : null}
       <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />

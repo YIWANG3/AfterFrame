@@ -35,7 +35,6 @@
     "title": "LUT",
     "import": "Import LUTs…",
     "importing": "Importing…",
-    "importingHint": "Importing LUTs… a large pack takes a few seconds",
     "addFolder": "Add a LUT folder (no copy)…",
     "undo": "Undo",
     "redo": "Redo",

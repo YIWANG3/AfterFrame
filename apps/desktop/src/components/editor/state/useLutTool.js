@@ -112,7 +112,12 @@ export function useLutTool({
       .finally(() => { if (!cancelled) setGrading(false); });
     return () => { cancelled = true; };
   }, [gradeKey, previewSource]);
-  const gradedPreview = graded && graded.key === gradeKey && graded.source === previewSource ? graded.canvas : null;
+  // Switching from one LUT to another keeps showing the previous grade until
+  // the new one is ready (~0.1 s), rather than flashing the ungraded photo in
+  // between. Only clearing the LUT, a new picture or a LUT that fails drops it.
+  const current = gradeKey && graded && graded.source === previewSource ? graded : null;
+  const gradedPreview = current?.canvas || null;
+  const gradedId = current?.key || null;
 
   // ── thumbnails ──────────────────────────────────────────────────────────
   // The photo (rotated/flipped, uncropped, ungraded) at THUMB_EDGE; each LUT
@@ -288,7 +293,7 @@ export function useLutTool({
   return {
     library, loading, importing, query, setQuery, groups, errors,
     refresh, select, setStrength, importPaths, addFolder, setLogMark, trash,
-    gradedPreview, grading, comparing, setComparing,
+    gradedPreview, gradedId, grading, comparing, setComparing,
     requestThumb, cancelThumb, thumbFor, thumbVersion, thumbAspect: thumbBase ? thumbBase.width / thumbBase.height : 1,
   };
 }

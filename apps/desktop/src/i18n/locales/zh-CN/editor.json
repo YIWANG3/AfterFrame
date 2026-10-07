@@ -35,7 +35,6 @@
     "title": "LUT",
     "import": "导入 LUT…",
     "importing": "正在导入…",
-    "importingHint": "正在导入 LUT…大的 LUT 包要十几秒",
     "addFolder": "添加 LUT 文件夹（不复制）…",
     "undo": "撤销",
     "redo": "重做",

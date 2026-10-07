@@ -51,6 +51,7 @@ test.describe("LUT tool (macOS)", () => {
     const pack = path.join(work, "Test Pack", "STANDARD");
     fs.mkdirSync(pack, { recursive: true });
     fs.writeFileSync(path.join(pack, "Swap RB.cube"), cubeText(17, (r, g, b) => [b, g, r]));
+    fs.writeFileSync(path.join(pack, "Invert.cube"), cubeText(5, (r, g, b) => [1 - r, 1 - g, 1 - b]));
     const log = path.join(work, "Test Pack", "SLog3");
     fs.mkdirSync(log, { recursive: true });
     fs.writeFileSync(path.join(log, "Phntm_Test_Slog3.cube"), cubeText(9, (r, g, b) => [r, g, b]));
@@ -71,18 +72,18 @@ test.describe("LUT tool (macOS)", () => {
 
   test("importing a folder copies its LUTs into the library, keeps the pack's name, and skips duplicates", async () => {
     const first = await ctx.window.evaluate((p) => window.mediaWorkspace.importLuts([p]), path.join(work, "Test Pack"));
-    expect(first.imported).toHaveLength(2);
+    expect(first.imported).toHaveLength(3);
     expect(first.failed).toEqual([]);
     const again = await ctx.window.evaluate((p) => window.mediaWorkspace.importLuts([p]), path.join(work, "Test Pack"));
     expect(again.imported).toHaveLength(0);
-    expect(again.duplicates).toHaveLength(2);
+    expect(again.duplicates).toHaveLength(3);
     const lib = path.join(ctx.userDataDir, "afterframe", "luts", "Test Pack");
     expect(fs.existsSync(path.join(lib, "STANDARD", "Swap RB.cube"))).toBe(true);
     expect(fs.existsSync(path.join(lib, "SLog3", "Phntm_Test_Slog3.cube"))).toBe(true);
 
     await ctx.window.evaluate(() => window.__afterframeTest.refreshLuts());
-    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(2);
-    await expect(ctx.window.getByTestId("lut-library-footer")).toContainText("2");
+    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(3);
+    await expect(ctx.window.getByTestId("lut-library-footer")).toContainText("3");
   });
 
   test("a LUT named for Log footage carries the Log badge; a Rec709 one doesn't", async () => {
@@ -108,6 +109,41 @@ test.describe("LUT tool (macOS)", () => {
     await expect.poll(async () => near(await displayPixel(...at), before, 1), { timeout: 5_000 }).toBe(true);
     await ctx.window.mouse.up();
     await expect.poll(async () => near(await displayPixel(...at), half, 2), { timeout: 5_000 }).toBe(true);
+  });
+
+  test("switching to another LUT never flashes the ungraded photo in between", async () => {
+    const at = [0.3, 0.4];
+    await ctx.window.getByTestId("lut-strength").fill("100");
+    await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
+    const swapped = await displayPixel(...at);
+    // Sample every frame from the click until the new grade has landed.
+    const samples = await ctx.window.evaluate(async ([x, y]) => {
+      const t = window.__afterframeTest;
+      const seen = [];
+      const done = new Promise((resolve) => {
+        const tick = () => {
+          seen.push(t.sampleDisplayPixel(x, y));
+          const s = t.getLutState();
+          if (s.lut?.name === "Invert" && s.gradedReady) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      document.querySelector("[data-lut-name='Invert']").click();
+      await done;
+      seen.push(t.sampleDisplayPixel(x, y));
+      return seen;
+    }, at);
+    const original = [swapped[2], swapped[1], swapped[0]];
+    const inverted = original.map((v) => 255 - v);
+    expect(samples.length).toBeGreaterThan(1);
+    // Every frame shows either the previous LUT or the new one, never the photo itself.
+    for (const px of samples) expect(near(px, swapped, 2) || near(px, inverted, 2), JSON.stringify(px)).toBe(true);
+    expect(near(samples[samples.length - 1], inverted, 2)).toBe(true);
+    // Back to the half-strength Swap RB the save test expects.
+    await ctx.window.locator("[data-lut-name='Swap RB']").click();
+    await ctx.window.getByTestId("lut-strength").fill("50");
+    await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
   });
 
   test("the save is graded at full size, at the chosen strength", async () => {
@@ -138,8 +174,12 @@ test.describe("LUT tool (macOS)", () => {
     expect(sum / n).toBeLessThan(3);
   });
 
-  test("undo takes the LUT back off", async () => {
+  test("undo steps back through the LUTs chosen, to none", async () => {
+    // Chosen in order: Swap RB, Invert, Swap RB (strength changes are live).
     await ctx.window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe("Invert");
+    await ctx.window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe("Swap RB");
     await ctx.window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(async () => (await lutState()).lut, { timeout: 5_000 }).toBe(null);
     await ctx.window.keyboard.press("Escape");

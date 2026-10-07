@@ -1270,7 +1270,9 @@ export default function EditorOverlay({
     // LUT tool (docs/lut-plan.md).
     getLutState: () => ({
       lut: editorStateRef.current.lut,
-      gradedReady: !!lutGradedTransformed,
+      // Graded with the LUT chosen now (a switch shows the previous one
+      // until the new grade lands).
+      gradedReady: !!lutGradedTransformed && lutTool.gradedId === editorStateRef.current.lut?.id,
       grading: lutTool.grading,
       base: lutBase,
       sourcePath,

@@ -156,10 +156,12 @@ export default function LutPanel({
               className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35"
               onClick={() => importPaths(null)}
               disabled={importing}
-              title={t("lut.import")}
-              aria-label={t("lut.import")}
+              title={importing ? t("lut.importing") : t("lut.import")}
+              aria-label={importing ? t("lut.importing") : t("lut.import")}
             >
-              <FileInput className="h-3.5 w-3.5" />
+              {/* The button itself says it is busy: a line of text below would
+                  change the panel's height under the user's hand. */}
+              {importing ? <Spinner className="h-3.5 w-3.5" /> : <FileInput className="h-3.5 w-3.5" />}
             </button>
             <button
               type="button"
@@ -176,12 +178,6 @@ export default function LutPanel({
         {base ? (
           <div className="mt-1.5 text-[10.5px] leading-snug text-muted2" data-testid="lut-base" data-base={base}>
             {baseLabel(base, t)}
-          </div>
-        ) : null}
-        {importing && total > 0 ? (
-          <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-muted" data-testid="lut-importing">
-            <Spinner className="h-3 w-3" />
-            {t("lut.importingHint")}
           </div>
         ) : null}
 
