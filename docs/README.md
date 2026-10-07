@@ -29,6 +29,7 @@
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
 | [liquid-glass-redesign.md](liquid-glass-redesign.md) | 视觉重构的调研、原型与定调；材质规则是现行约束 |
 | [people-recognition-design.md](people-recognition-design.md) | 本地人物识别设计，已实现（状态行 2026-09-17 回填；`ipc/people.js`、`db/people.py`、`native/people-worker.swift`），状态行待回填 |
+| [lut-plan.md](lut-plan.md) | 计划中（2026-10-06）：套 LUT 的编辑器工具，方案定稿，未开工；P1 只做 Mac |
 | [windows-support-plan.md](windows-support-plan.md) | 进行中（2026-10-03）：Windows 现状审计、共享/分平台架构、路线与估时；开发机已就绪（`scripts/windows/setup-dev.ps1`）；阶段 1、2 的大部分已成 PR #116–#126，等合并（见第 12 节） |
 
 ## 已完成的计划（历史记录；实现以代码为准）
