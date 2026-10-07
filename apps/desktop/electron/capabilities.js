@@ -7,9 +7,11 @@
 // 5.5), so their entry points stay visible but locked with a "macOS for now"
 // hint instead of failing on click. Video is not locked: it imports, and H.264
 // plays in Chromium; only posters and the HEVC proxy need the macOS helper.
+// The LUT tool is macOS-only for now (docs/lut-plan.md): a RAW is graded on
+// Apple's RAW rendering, and Windows has no engine of that quality yet.
 function desktopCapabilities(platform) {
   if (platform === "darwin") return {};
-  return { depth: false, stickerExtract: false, people: false };
+  return { depth: false, stickerExtract: false, people: false, lut: false };
 }
 
 module.exports = { desktopCapabilities };

@@ -4,6 +4,7 @@ import { FolderOpen, FolderInput, FolderPlus, Trash2, Palette } from "lucide-rea
 import api from "../../api";
 import { fileName } from "../../utils/format";
 import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
+import LutLibraryGroup from "./LutLibraryGroup";
 
 // Dominant colours: how many photos have them, and the two ways to run the
 // job by hand — the missing ones (normally done on open), or every photo
@@ -203,6 +204,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
           <ColorAnalysisRow />
         </Group>
       )}
+      {api.can("lut") && api.has("listLuts") ? <LutLibraryGroup /> : null}
       <Group title={t("library.cacheStorage")} subtitle={t("library.cacheSubtitle")}>
         <FieldRow label={t("library.depthMaps")} hint={t("library.depthMapsHint")}>
           <OpenFolderButton kind="depth" label={t("library.openFolder")} />

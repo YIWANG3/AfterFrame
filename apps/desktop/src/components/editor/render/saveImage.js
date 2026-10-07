@@ -66,14 +66,16 @@ export async function saveEditedImage(ctx) {
     drawLayersToCtx,
     nativeSaveSourcePath,
     isLayerRenderable,
+    // The LUT step (docs/lut-plan.md): async (canvas) => graded canvas, or null.
+    gradeContent = null,
   } = ctx;
 
   const padActive = hasPad(canvasPad);
 
   // Native sharp fast-path: full source resolution, no canvas overhead. Only
   // valid when there are zero overlay layers AND no canvas margin/scrim (sharp
-  // can't do the padded-canvas composite).
-  if (api.has("processAndSave") && nativeSaveSourcePath && layers.length === 0 && !padActive && !canvasScrim) {
+  // can't do the padded-canvas composite) AND no LUT (sharp has no 3D LUT).
+  if (api.has("processAndSave") && nativeSaveSourcePath && layers.length === 0 && !padActive && !canvasScrim && !gradeContent) {
     try {
       await api.processAndSave({
         sourcePath: nativeSaveSourcePath,
@@ -120,7 +122,13 @@ export async function saveEditedImage(ctx) {
         height: Math.max(1, Math.round(normalizedCrop.height * fullH)),
       }
     : { x: 0, y: 0, width: fullW, height: fullH };
-  const content = cutRotatedCrop(transformedFull, contentSrc, freeAngle);
+  let content = cutRotatedCrop(transformedFull, contentSrc, freeAngle);
+  // The LUT grades the photo only: margins, washes and layers go on after.
+  if (gradeContent) {
+    const graded = await gradeContent(content);
+    releaseCanvasImage(content);
+    content = graded;
+  }
 
   // Two output shapes:
   //  • pad active → output = cropped photo + margins (bg-filled)
@@ -262,6 +270,7 @@ export async function saveEditedImage(ctx) {
   const blob = await canvasToBlob(outputCanvas, inferMimeType(savePath));
   await api.saveImage(savePath, await blob.arrayBuffer(), sourcePath);
   releaseCanvasImage(transformedFull);
+  releaseCanvasImage(content);
   releaseCanvasImage(outputCanvas);
 
   return { assetId: await registerSaved(savePath, originPath) };

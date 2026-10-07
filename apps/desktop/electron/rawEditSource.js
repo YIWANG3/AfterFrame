@@ -32,6 +32,26 @@ function cacheName(rawPath, stat) {
   return `${key.slice(0, 24)}.jpg`;
 }
 
+// Which renderer made a cached render ("image-io" for Apple's, "libraw"), kept
+// beside it: the LUT tool names the picture it grades (docs/lut-plan.md).
+const rendererNote = (render) => render.replace(/\.jpg$/, ".json");
+
+function readRenderer(render) {
+  try {
+    return JSON.parse(fs.readFileSync(rendererNote(render), "utf8")).renderer || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRenderer(render, renderer) {
+  try {
+    fs.writeFileSync(rendererNote(render), JSON.stringify({ renderer }));
+  } catch {
+    // Only a label is lost.
+  }
+}
+
 // Keeps the most recently used renders and deletes the rest.
 function pruneCache(dir, keep = CACHE_KEEP) {
   let entries;
@@ -43,8 +63,11 @@ function pruneCache(dir, keep = CACHE_KEEP) {
     return [];
   }
   const stale = entries.sort((a, b) => b.mtime - a.mtime).slice(keep);
-  for (const { file } of stale) fs.rmSync(file, { force: true });
+  for (const { file } of stale) {
+    fs.rmSync(file, { force: true });
+    fs.rmSync(rendererNote(file), { force: true });
+  }
   return stale.map(({ file }) => file);
 }
 
-module.exports = { CACHE_KEEP, cacheName, fullRenderNeeded, pruneCache };
+module.exports = { CACHE_KEEP, cacheName, fullRenderNeeded, pruneCache, readRenderer, writeRenderer };

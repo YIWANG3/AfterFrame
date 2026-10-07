@@ -30,3 +30,30 @@ export default function useRawEditSource({ item, hdPath, enabled }) {
   if (!key) return null;
   return answer.key === key ? answer.path : undefined;
 }
+
+// The RAW rendered by Apple's RAW engine at full size, never the camera's
+// embedded JPEG: what the LUT tool grades (docs/lut-plan.md). { path, renderer }
+// once made ("image-io", or "libraw" where Image I/O failed), undefined while
+// rendering, null when there is nothing to ask or the render failed.
+export function useNeutralRawRender({ item, enabled }) {
+  const rawPath = enabled && item?.asset_type === "raw" && item.exists_on_disk !== false ? item.image_path : null;
+  const askable = Boolean(rawPath && api.has?.("rawEditSource"));
+  const key = askable ? rawPath : null;
+  const [answer, setAnswer] = useState({ key: null, value: undefined });
+
+  useEffect(() => {
+    if (!key) return undefined;
+    let cancelled = false;
+    api.rawEditSource({ path: rawPath, neutral: true })
+      .then((result) => {
+        if (cancelled) return;
+        setAnswer({ key, value: result?.full && result.path ? { path: result.path, renderer: result.renderer || null } : null });
+      })
+      .catch(() => { if (!cancelled) setAnswer({ key, value: null }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (!key) return null;
+  return answer.key === key ? answer.value : undefined;
+}

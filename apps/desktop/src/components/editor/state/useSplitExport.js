@@ -5,8 +5,9 @@
 //  • native — the untouched source file is still on disk (no Apply yet): the
 //    main process cuts the region once and slices it (processAndSavePanels),
 //    full source resolution, EXIF carried over.
-//  • canvas — the working source is a baked canvas (after Apply): slice a
-//    transformed full-resolution canvas here and save each panel blob.
+//  • canvas — the working source is a baked canvas (after Apply), or a LUT
+//    is chosen: slice a transformed full-resolution canvas here (graded once
+//    when there is a LUT) and save each panel blob.
 // Text/sticker/border layers are not supported (P1): the caller blocks export.
 
 import { useRef, useState } from "react";
@@ -50,21 +51,27 @@ export function splitPanelPaths(saveBasePath, outputDir, subfolder, count) {
 
 export function useSplitExport({
   saveBasePath, sourcePath, sourceImageRef, nativeSaveSourcePathRef, editorStateRef,
-  getCount, pushToast, t, onSaveComplete, joinFolder,
+  getGrader, getCount, pushToast, t, onSaveComplete, joinFolder,
 }) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(null);
   const exportingRef = useRef(false);
 
-  async function exportCanvasPanels({ region, count, savePaths }) {
+  async function exportCanvasPanels({ region, count, savePaths, grade }) {
     const source = sourceImageRef.current;
     if (!source) throw new Error("Image not loaded");
     const s = editorStateRef.current;
     const { width: sw, height: sh } = getSourceDimensions(source);
     const transformed = buildTransformedCanvas(source, sw, sh, s.quarterTurns * 90, s.flipX, s.flipY);
     const regionPx = regionToPixels(region, transformed.width, transformed.height);
-    const cut = cutRotatedCrop(transformed, regionPx, s.freeAngle || 0);
+    let cut = cutRotatedCrop(transformed, regionPx, s.freeAngle || 0);
     releaseCanvasImage(transformed);
+    // A LUT grades the region once, before it is sliced.
+    if (grade) {
+      const graded = await grade(cut);
+      releaseCanvasImage(cut);
+      cut = graded;
+    }
     const bounds = panelBoundaries(cut.width, count);
     const results = [];
     try {
@@ -102,7 +109,8 @@ export function useSplitExport({
     try {
       let results;
       const nativeSource = nativeSaveSourcePathRef.current;
-      if (nativeSource && api.has("processAndSavePanels")) {
+      const grade = getGrader?.() || null; // sharp has no 3D LUT: canvas path
+      if (nativeSource && !grade && api.has("processAndSavePanels")) {
         results = await api.processAndSavePanels({
           sourcePath: nativeSource,
           savePaths,
@@ -115,7 +123,7 @@ export function useSplitExport({
         });
         setProgress({ done: count, total: count });
       } else {
-        results = await exportCanvasPanels({ region, count, savePaths });
+        results = await exportCanvasPanels({ region, count, savePaths, grade });
       }
       // Catalog registration is best-effort, like the single-image save.
       const assetIds = [];

@@ -3,7 +3,7 @@
 // handler (which also resets the depth-map overlay for non-text tools).
 // Extracted from EditorOverlay (Phase 4).
 
-import { Crop, Type, Cannabis, Sparkles, Columns3, createLucideIcon } from "lucide-react";
+import { Crop, Type, Cannabis, Sparkles, Columns3, Blend, createLucideIcon } from "lucide-react";
 import api from "../../../api";
 import { LOCKED_HINT_KEY } from "../../DesktopOnly";
 
@@ -41,6 +41,11 @@ export default function ToolRail({ tool, onSelect, t }) {
       data-editor-wheel-scope="toolbar"
     >
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
+      {/* macOS only for now, and hidden rather than locked elsewhere
+          (docs/lut-plan.md): the web build has no LUT library either. */}
+      {api.can("lut") && api.has("listLuts") ? (
+        <ToolTab active={tool === "lut"} icon={Blend} label={t("overlay.tools.lut")} onClick={() => onSelect("lut")} />
+      ) : null}
       <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
       <ToolTab active={tool === "frame"} icon={PhotoFrame} label={t("overlay.tools.frame")} onClick={() => onSelect("frame")} />

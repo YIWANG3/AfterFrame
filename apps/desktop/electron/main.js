@@ -33,6 +33,7 @@ const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const frameTemplatesIpc = require("./ipc/frameTemplates");
+const lutsIpc = require("./ipc/luts");
 const editorsIpc = require("./ipc/editors");
 const settingsTransferIpc = require("./ipc/settingsTransfer");
 const { createAgentRenderBridge } = require("./agentRender");
@@ -599,6 +600,7 @@ ipcMain.handle("app:open-cache-dir", (_event, kind) => {
     depth: path.join(app.getPath("userData"), "depth-cache"),
     stickers: path.join(app.getPath("userData"), "stickers"),
     videoProxies: path.join(app.getPath("userData"), "video-proxies"),
+    luts: path.join(app.getPath("userData"), "afterframe", "luts"),
   };
   const dir = dirs[kind];
   if (!dir) return false;
@@ -665,6 +667,10 @@ const saveFileApi = saveFileIpc.register({
 frameLogosIpc.register({ ipcMain });
 frameTemplatesIpc.register({
   app, ipcMain, dialog, sharp, readAppSettings, updateAppSettings,
+  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+});
+lutsIpc.register({
+  app, ipcMain, dialog, shell, readAppSettings, updateAppSettings,
   getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
 });
 

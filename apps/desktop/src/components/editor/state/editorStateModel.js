@@ -26,7 +26,17 @@ export const BASE_STATE = {
   // turn changes it and the tool regenerates the default region.
   // `custom` is the W:H pair used when aspectKey === "custom".
   split: { aspectKey: "3:4", custom: { width: 3, height: 4 }, count: null, rect: null, basis: null },
+  // The LUT graded over the photo (docs/lut-plan.md): { id, name, strength }
+  // with strength 0..1, or null. In the history, so choosing one, clearing it
+  // and each strength change undo like any other edit. Applied last, to the
+  // photo only — after the crop, before margins and layers.
+  lut: null,
 };
+
+export function lutEquals(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  return a.id === b.id && a.strength === b.strength;
+}
 
 export function rectEquals(a, b) {
   if (!a || !b) return a === b;
@@ -115,6 +125,7 @@ export function cloneState(state) {
     cropRect: state.cropRect ? { ...state.cropRect } : null,
     canvas: cloneCanvas(state.canvas),
     split: cloneSplit(state.split),
+    lut: state.lut ? { ...state.lut } : null,
   };
 }
 
@@ -130,6 +141,7 @@ export function stateEquals(a, b) {
     a.imageOffsetY === b.imageOffsetY &&
     rectEquals(a.cropRect, b.cropRect) &&
     canvasEquals(a.canvas, b.canvas) &&
-    splitEquals(a.split, b.split)
+    splitEquals(a.split, b.split) &&
+    lutEquals(a.lut, b.lut)
   );
 }
