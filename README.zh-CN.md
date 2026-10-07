@@ -14,9 +14,10 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 ## 下载
 
-从 [Releases](../../releases) 下载最新 `.dmg`。
+从 [Releases](../../releases) 下载最新版本：
 
-> 需要 macOS 14 或更新版本（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
+- **Mac**：下载 `.dmg`。需要 macOS 14 或更新版本（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
+- **Windows**：下载 `-setup.exe`。需要 Windows 10 或 11（64 位）。安装包暂未签名，Windows 提示「Windows 已保护你的电脑」时，点 **更多信息**，再点 **仍要运行**。贴纸、人物和场景深度目前仅 macOS 版支持。
 
 ![AfterFrame — 浏览与检查](docs/assets/cn/library.webp)
 

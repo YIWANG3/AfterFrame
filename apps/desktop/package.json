@@ -1,6 +1,6 @@
 {
   "name": "afterframe",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "private": true,
   "description": "AfterFrame desktop shell",
   "author": "YI WANG",
@@ -143,7 +143,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-${version}-${arch}-setup.${ext}"
     },
     "linux": {
       "icon": "build/icon.png",

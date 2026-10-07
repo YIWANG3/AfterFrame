@@ -14,9 +14,10 @@ AfterFrame is built for photographers who work with thousands of exported images
 
 ## Download
 
-Download the latest `.dmg` from [Releases](../../releases).
+Download the latest version from [Releases](../../releases):
 
-> macOS 14 or later (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
+- **Mac:** the `.dmg`. macOS 14 or later (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
+- **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People and Scene Depth are in the macOS app only for now.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
 
