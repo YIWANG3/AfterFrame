@@ -139,7 +139,8 @@ test.describe("LUT tool (macOS)", () => {
     expect(samples.length).toBeGreaterThan(1);
     // Every frame shows either the previous LUT or the new one, never the photo itself.
     for (const px of samples) expect(near(px, swapped, 2) || near(px, inverted, 2), JSON.stringify(px)).toBe(true);
-    expect(near(samples[samples.length - 1], inverted, 2)).toBe(true);
+    // The canvas is redrawn in an effect after the grade lands: give it its frame.
+    await expect.poll(async () => near(await displayPixel(...at), inverted, 2), { timeout: 5_000 }).toBe(true);
     // Back to the half-strength Swap RB the save test expects.
     await ctx.window.locator("[data-lut-name='Swap RB']").click();
     await ctx.window.getByTestId("lut-strength").fill("50");
@@ -236,6 +237,58 @@ test.describe("LUT tool (macOS)", () => {
     await expect.poll(() => fs.existsSync(out), { timeout: 30_000 }).toBe(true);
     // The 1:1 crop of the RAW's full 2048×1152.
     expect(await sharp(out).metadata()).toMatchObject({ width: 1152, height: 1152 });
+    await ctx.window.keyboard.press("Escape");
+    await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+  });
+
+  test("Add LUTs says what each way does to the files; the groups expand and collapse together", async () => {
+    await openEditorOnFirstAsset(ctx.window);
+    await ctx.window.getByTestId("tool-lut").click();
+    await ctx.window.getByTestId("lut-add").click();
+    await expect(ctx.window.getByTestId("lut-import")).toContainText("Copied into AfterFrame's LUT library");
+    await expect(ctx.window.getByTestId("lut-add-folder")).toContainText("nothing copied");
+    await ctx.window.keyboard.press("Escape");
+    await expect(ctx.window.getByTestId("lut-add-menu")).toHaveCount(0);
+
+    // Two groups: Test Pack / STANDARD and Test Pack / SLog3.
+    const toggle = ctx.window.getByTestId("lut-toggle-all");
+    await expect(toggle).toHaveText("Collapse all");
+    await toggle.click();
+    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(0);
+    await expect(toggle).toHaveText("Expand all");
+    await toggle.click();
+    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(3);
+  });
+
+  test("a LUT dropped into the library folder in Finder shows up when the window comes back", async () => {
+    const byHand = path.join(ctx.userDataDir, "afterframe", "luts", "By hand");
+    fs.mkdirSync(byHand, { recursive: true });
+    fs.writeFileSync(path.join(byHand, "Warm Hand.cube"), cubeText(5, (r, g, b) => [Math.min(1, r * 1.1), g, b * 0.9]));
+    await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(ctx.window.locator("[data-lut-name='Warm Hand']")).toHaveCount(1, { timeout: 10_000 });
+    fs.rmSync(path.join(byHand, "Warm Hand.cube"));
+    await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(ctx.window.locator("[data-lut-name='Warm Hand']")).toHaveCount(0, { timeout: 10_000 });
+  });
+
+  test("an added folder that moved is called out with Locate and Stop reading; a chosen LUT from it says it's gone", async () => {
+    const drive = path.join(work, "Drive");
+    fs.mkdirSync(path.join(drive, "Kodak"), { recursive: true });
+    fs.writeFileSync(path.join(drive, "Kodak", "Portra.cube"), cubeText(5, (r, g, b) => [r, g * 0.95, b * 0.9]));
+    const added = await ctx.window.evaluate((p) => window.mediaWorkspace.addLutFolder(p), drive);
+    expect(added.ok).toBe(true);
+    await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await ctx.window.locator("[data-lut-name='Portra']").click();
+    await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
+
+    fs.renameSync(drive, path.join(work, "Drive (moved)"));
+    await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(ctx.window.getByTestId("lut-folder-missing")).toContainText("Drive", { timeout: 10_000 });
+    await expect(ctx.window.getByTestId("lut-selected-error")).toContainText("is gone");
+
+    await ctx.window.getByTestId("lut-folder-missing").getByRole("button", { name: "Stop reading it" }).click();
+    await expect(ctx.window.getByTestId("lut-folder-missing")).toHaveCount(0, { timeout: 10_000 });
+    await ctx.window.getByTestId("lut-clear").click();
     await ctx.window.keyboard.press("Escape");
   });
 });

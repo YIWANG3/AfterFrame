@@ -36,25 +36,43 @@ export function useLutTool({
   const [grading, setGrading] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [thumbVersion, setThumbVersion] = useState(0);
+  const thumbsRef = useRef(new Map()); // id → JPEG data URL (null: the LUT is broken), for thumbBase
 
-  const refresh = useCallback(async () => {
-    if (!api.has?.("listLuts")) return null;
+  const refreshingRef = useRef(null);
+  const refresh = useCallback(() => {
+    if (!api.has?.("listLuts")) return Promise.resolve(null);
+    if (refreshingRef.current) return refreshingRef.current; // one scan at a time
     setLoading(true);
-    try {
-      const next = await api.listLuts();
-      cachedLibrary = next;
-      setLibrary(next);
-      return next;
-    } catch (error) {
-      console.warn("[lut] listing failed:", error?.message || error);
-      return null;
-    } finally {
-      setLoading(false);
-    }
+    refreshingRef.current = (async () => {
+      try {
+        const next = await api.listLuts();
+        // A file replaced in place keeps its id: forget what was made from it.
+        const before = new Map((cachedLibrary?.luts || []).map((l) => [l.id, l.bytes]));
+        for (const l of next.luts) {
+          if (before.has(l.id) && before.get(l.id) !== l.bytes) {
+            forgetLut(l.id);
+            thumbsRef.current.delete(l.id);
+          }
+        }
+        cachedLibrary = next;
+        setLibrary(next);
+        return next;
+      } catch (error) {
+        console.warn("[lut] listing failed:", error?.message || error);
+        return null;
+      } finally {
+        setLoading(false);
+        refreshingRef.current = null;
+      }
+    })();
+    return refreshingRef.current;
   }, []);
 
-  // Scan when the tool is first shown in a session; later scans follow
-  // imports, deletions and folder changes.
+  // Scan when the tool is first shown in a session, and again whenever the
+  // window comes back to the front while it's open: LUTs dropped into (or
+  // taken out of) the library folder or an added folder in Finder show up
+  // without a button to press. Imports, deletions and folder changes rescan
+  // on their own.
   const scannedRef = useRef(false);
   useEffect(() => {
     if (!open) {
@@ -67,6 +85,12 @@ export function useLutTool({
       scannedRef.current = true;
       void refresh();
     }
+  }, [open, active, refresh]);
+  useEffect(() => {
+    if (!open || !active) return undefined;
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [open, active, refresh]);
 
   // ── selection ───────────────────────────────────────────────────────────
@@ -137,7 +161,6 @@ export function useLutTool({
     return { width, height, pixels: ctx.getImageData(0, 0, width, height).data };
   }, [open, active, transformedPreview]);
 
-  const thumbsRef = useRef(new Map()); // id → JPEG data URL (null: the LUT is broken), for thumbBase
   const queueRef = useRef([]);
   const inFlightRef = useRef(new Set());
   const retriesRef = useRef(new Map()); // id → transient failures so far
@@ -246,6 +269,24 @@ export function useLutTool({
     if (!res?.canceled) await refresh();
   }, [refresh, pushToast, t]);
 
+  // An added folder that can't be read (moved, renamed, its drive away):
+  // point at where it is now, or stop reading it. Neither touches a file.
+  const relocateFolder = useCallback(async (oldPath) => {
+    const res = await api.addLutFolder(null);
+    if (res?.error) {
+      pushToast?.({ title: t(`lut.errors.${res.error}`, { defaultValue: res.error }), tone: "error", ttl: 6000 });
+      return;
+    }
+    if (res?.canceled) return;
+    if (res?.folder && res.folder !== oldPath) await api.removeLutFolder(oldPath);
+    await refresh();
+  }, [refresh, pushToast, t]);
+
+  const removeFolder = useCallback(async (folderPath) => {
+    await api.removeLutFolder(folderPath);
+    await refresh();
+  }, [refresh]);
+
   const setLogMark = useCallback(async (entry, isLog) => {
     // Back to the guess when the mark would say what the guess says.
     const mark = isLog === !!entry.logGuess ? null : (isLog ? "log" : "normal");
@@ -292,7 +333,7 @@ export function useLutTool({
 
   return {
     library, loading, importing, query, setQuery, groups, errors,
-    refresh, select, setStrength, importPaths, addFolder, setLogMark, trash,
+    refresh, select, setStrength, importPaths, addFolder, relocateFolder, removeFolder, setLogMark, trash,
     gradedPreview, gradedId, grading, comparing, setComparing,
     requestThumb, cancelThumb, thumbFor, thumbVersion, thumbAspect: thumbBase ? thumbBase.width / thumbBase.height : 1,
   };

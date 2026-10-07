@@ -181,6 +181,42 @@ test("a Log mark overrides the guess, survives a rescan, and clears back to the 
   }
 });
 
+test("a Log mark follows the file when it's moved to another folder", async () => {
+  const { dir, library, write, cleanup } = setup();
+  try {
+    const file = write("Drive/Warm/Kodak 2383.cube", cube(2));
+    await library.addFolder(path.join(dir, "Drive"));
+    let [entry] = (await library.list()).luts;
+    await library.setLogMark(entry.id, "log");
+    fs.mkdirSync(path.join(dir, "Drive/Moved"));
+    fs.renameSync(file, path.join(dir, "Drive/Moved/Kodak 2383.cube"));
+    [entry] = (await library.list()).luts;
+    assert.equal(entry.group, "Moved");
+    assert.equal(entry.log, true);
+    assert.equal(entry.logMarked, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test("files dropped into the library folder in Finder are listed on the next scan; removed ones go", async () => {
+  const { library, cleanup } = setup();
+  try {
+    assert.equal((await library.list()).luts.length, 0);
+    fs.mkdirSync(path.join(library.libraryDir, "By hand"), { recursive: true });
+    fs.writeFileSync(path.join(library.libraryDir, "By hand", "Teal.cube"), cube(2));
+    fs.writeFileSync(path.join(library.libraryDir, "notes.txt"), "not a LUT");
+    let listed = await library.list();
+    assert.deepEqual(listed.luts.map((l) => `${l.group} | ${l.name}`), ["By hand | Teal"]);
+    assert.equal(listed.library.count, 1);
+    fs.rmSync(path.join(library.libraryDir, "By hand", "Teal.cube"));
+    listed = await library.list();
+    assert.equal(listed.luts.length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
 test("headers are cached by size and mtime: a rescan reads only what changed", async () => {
   const { dir, library, write, cleanup } = setup();
   try {

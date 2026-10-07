@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Search, FileInput, FolderPlus, FolderOpen, Eye, X, ChevronDown, ChevronRight,
-  Trash2, Tag, Undo2, Redo2, AlertTriangle,
+  Trash2, Tag, Undo2, Redo2, AlertTriangle, Plus, ChevronsDownUp, ChevronsUpDown,
 } from "lucide-react";
 import api from "../../api";
 import { Spinner } from "../../ui";
@@ -82,6 +82,60 @@ function LutCell({ entry, selected, error, thumb, aspect, scrollRoot, onRequest,
   );
 }
 
+// "+ Add LUTs": the two ways in, each saying in one line what it does to the
+// user's files — two bare icons left people guessing which was which.
+function AddLutsMenu({ t, importing, onImport, onAddFolder }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const down = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const key = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [open]);
+  const item = (testId, Icon, title, hint, onClick) => (
+    <button
+      type="button"
+      data-testid={testId}
+      className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-hover"
+      onClick={() => { setOpen(false); onClick(); }}
+    >
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+      <span className="min-w-0">
+        <span className="block text-[12px] text-text">{title}</span>
+        <span className="mt-0.5 block text-[10.5px] leading-snug text-muted2">{hint}</span>
+      </span>
+    </button>
+  );
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        data-testid="lut-add"
+        className="flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] text-text transition-colors hover:bg-hover disabled:opacity-50"
+        onClick={() => setOpen((v) => !v)}
+        disabled={importing}
+        aria-expanded={open}
+      >
+        {/* Busy in place: text below would change the panel's height. */}
+        {importing ? <Spinner className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+        {importing ? t("lut.importing") : t("lut.add")}
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-8 z-30 w-[248px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" data-testid="lut-add-menu">
+          {item("lut-import", FileInput, t("lut.importFiles"), t("lut.importFilesHint"), onImport)}
+          {item("lut-add-folder", FolderPlus, t("lut.addFolderShort"), t("lut.addFolderHint"), onAddFolder)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function baseLabel(base, t) {
   if (!base) return null;
   return t(`lut.base.${base}`);
@@ -96,13 +150,18 @@ export default function LutPanel({
   const [dropActive, setDropActive] = useState(false);
   const {
     library, loading, importing, query, setQuery, groups, errors,
-    select, setStrength, importPaths, addFolder, setLogMark, trash,
+    select, setStrength, importPaths, addFolder, relocateFolder, removeFolder, setLogMark, trash,
     grading, setComparing, requestThumb, cancelThumb, thumbFor, thumbAspect,
   } = tool;
   const selectedEntry = lut ? library?.luts?.find((l) => l.id === lut.id) : null;
-  const selectedError = lut ? errors[lut.id] || selectedEntry?.error : null;
+  // Chosen, then moved or deleted in Finder (the list is rescanned when the
+  // window comes back): say so rather than fail at save.
+  const selectedMissing = !!(lut && library && !loading && !selectedEntry);
+  const selectedError = lut ? errors[lut.id] || selectedEntry?.error || (selectedMissing ? "missing" : null) : null;
   const total = library?.luts?.length || 0;
   const strengthPct = Math.round((lut?.strength ?? 1) * 100);
+  const unavailableFolders = (library?.folders || []).filter((f) => !f.available);
+  const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.key));
 
   const isFileDrag = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
   async function handleDrop(event) {
@@ -150,29 +209,7 @@ export default function LutPanel({
             <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35" onClick={onRedo} disabled={!canRedo} title={t("lut.redo")} aria-label={t("lut.redo")}>
               <Redo2 className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              data-testid="lut-import"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35"
-              onClick={() => importPaths(null)}
-              disabled={importing}
-              title={importing ? t("lut.importing") : t("lut.import")}
-              aria-label={importing ? t("lut.importing") : t("lut.import")}
-            >
-              {/* The button itself says it is busy: a line of text below would
-                  change the panel's height under the user's hand. */}
-              {importing ? <Spinner className="h-3.5 w-3.5" /> : <FileInput className="h-3.5 w-3.5" />}
-            </button>
-            <button
-              type="button"
-              data-testid="lut-add-folder"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text"
-              onClick={addFolder}
-              title={t("lut.addFolder")}
-              aria-label={t("lut.addFolder")}
-            >
-              <FolderPlus className="h-3.5 w-3.5" />
-            </button>
+            <AddLutsMenu t={t} importing={importing} onImport={() => importPaths(null)} onAddFolder={addFolder} />
           </div>
         </div>
         {base ? (
@@ -198,7 +235,9 @@ export default function LutPanel({
               </button>
             </div>
             {selectedError ? (
-              <div className="mt-1.5 text-[11px] text-amber-400">{t(`lut.errors.${selectedError}`, { defaultValue: selectedError })}</div>
+              <div className="mt-1.5 text-[11px] leading-snug text-amber-400" data-testid="lut-selected-error">
+                {selectedMissing ? t("lut.selectedMissing") : t(`lut.errors.${selectedError}`, { defaultValue: selectedError })}
+              </div>
             ) : selectedEntry?.log ? (
               <div className="mt-1.5 text-[10.5px] leading-snug text-amber-300/80">{t("lut.logHint")}</div>
             ) : null}
@@ -248,6 +287,39 @@ export default function LutPanel({
             />
           </div>
         ) : null}
+
+        {/* Added folders that can't be read: moved, renamed, or the drive is
+            away. Nothing to show for them in the list, so say it here. */}
+        {unavailableFolders.map((folder) => (
+          <div key={folder.path} className="mt-2 rounded-md bg-amber-500/10 px-2.5 py-2" data-testid="lut-folder-missing">
+            <div className="text-[10.5px] leading-snug text-amber-300" title={folder.path}>
+              {t("lut.folderMissing", { name: folder.name })}
+            </div>
+            <div className="mt-1.5 flex gap-1.5">
+              <button type="button" className="rounded px-2 py-1 text-[10.5px] text-text hover:bg-hover" onClick={() => relocateFolder(folder.path)}>
+                {t("lut.relocate")}
+              </button>
+              <button type="button" className="rounded px-2 py-1 text-[10.5px] text-muted hover:bg-hover hover:text-text" onClick={() => removeFolder(folder.path)}>
+                {t("lut.removeFolder")}
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {groups.length > 1 ? (
+          <div className="mt-2 flex items-center justify-between text-[10.5px] text-muted2">
+            <span>{t("lut.groupsSummary", { groups: groups.length, count: groups.reduce((n, g) => n + g.luts.length, 0) })}</span>
+            <button
+              type="button"
+              data-testid="lut-toggle-all"
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted transition-colors hover:bg-hover hover:text-text"
+              onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.key)))}
+            >
+              {allCollapsed ? <ChevronsUpDown className="h-3 w-3" /> : <ChevronsDownUp className="h-3 w-3" />}
+              {allCollapsed ? t("lut.expandAll") : t("lut.collapseAll")}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2" data-testid="lut-list">
@@ -256,12 +328,19 @@ export default function LutPanel({
             <div className="text-[12px] text-text">{loading ? t("lut.loading") : t("lut.empty")}</div>
             {!loading ? <div className="text-[11px] leading-relaxed text-muted">{t("lut.emptyHint")}</div> : null}
             {!loading ? (
-              <div className="flex flex-col gap-1.5 self-stretch">
-                <button type="button" className="rounded-md bg-[rgb(var(--accent-color))] py-1.5 text-[11.5px] font-medium text-white disabled:opacity-50" onClick={() => importPaths(null)} disabled={importing}>
-                  {importing ? t("lut.importing") : t("lut.import")}
+              <div className="flex flex-col gap-2 self-stretch text-left">
+                <button
+                  type="button"
+                  className="rounded-md bg-[rgb(var(--accent-color))] px-3 py-2 text-white disabled:opacity-50"
+                  onClick={() => importPaths(null)}
+                  disabled={importing}
+                >
+                  <span className="block text-[11.5px] font-medium">{importing ? t("lut.importing") : t("lut.importFiles")}</span>
+                  <span className="mt-0.5 block text-[10.5px] leading-snug text-white/75">{t("lut.importFilesHint")}</span>
                 </button>
-                <button type="button" className="rounded-md border border-border/60 py-1.5 text-[11.5px] text-muted hover:bg-hover hover:text-text" onClick={addFolder}>
-                  {t("lut.addFolder")}
+                <button type="button" className="rounded-md border border-border/60 px-3 py-2 hover:bg-hover" onClick={addFolder}>
+                  <span className="block text-[11.5px] text-text">{t("lut.addFolderShort")}</span>
+                  <span className="mt-0.5 block text-[10.5px] leading-snug text-muted2">{t("lut.addFolderHint")}</span>
                 </button>
               </div>
             ) : null}
@@ -271,7 +350,6 @@ export default function LutPanel({
         ) : (
           groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
-            const unavailable = group.source === "folder" && library?.folders?.find((f) => f.path === group.root)?.available === false;
             return (
               <div key={group.key} className="mb-2" data-lut-group={group.title || "library"}>
                 <button
@@ -290,7 +368,6 @@ export default function LutPanel({
                   {group.source === "folder" ? <FolderOpen className="h-3 w-3 shrink-0 opacity-60" /> : null}
                   <span className="tabular-nums opacity-70">{group.luts.length}</span>
                 </button>
-                {unavailable ? <div className="px-1 text-[10.5px] text-amber-400/80">{t("lut.folderUnavailable")}</div> : null}
                 {!isCollapsed ? (
                   <div className="mt-1 grid grid-cols-3 gap-x-1.5 gap-y-2">
                     {group.luts.map((entry) => (

@@ -7,8 +7,11 @@
 //    an external drive costs nothing). Unavailable while the drive is away.
 //
 // A LUT's id is a hash of its absolute path: stable while it stays put, and
-// what the editor and the per-LUT "Log" mark refer to. The index file caches
-// each file's header (by size + mtime) so a rescan reads only what changed.
+// what the editor refers to. The user's "Log" mark goes by name and size, so
+// it follows a file moved elsewhere. The index file caches each file's header
+// (by size + mtime) so a rescan reads only what changed — cheap enough to
+// rescan whenever the window comes back to the front, which is how files the
+// user drops into (or takes out of) these folders in Finder show up.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -26,6 +29,10 @@ const FOLDERS_MAX = 20;
 const IO_CONCURRENCY = 16;
 
 const isCube = (name) => /\.cube$/i.test(name) && !name.startsWith(".");
+// What the user's "Log" mark is remembered by: the file's name and size, so
+// it survives the file being moved to another folder (its id, the path,
+// doesn't). Renaming it is a new LUT as far as the mark goes.
+const markKey = (name, size) => `${name.toLowerCase()}|${size}`;
 const lutId = (absPath) => crypto.createHash("sha1").update(path.resolve(absPath)).digest("hex").slice(0, 16);
 const sha1 = (buffer) => crypto.createHash("sha1").update(buffer).digest("hex");
 const naturalCompare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -159,7 +166,7 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
       const dirs = path.dirname(rel) === "." ? [] : path.dirname(rel).split(path.sep);
       const name = path.basename(rel).replace(/\.cube$/i, "");
       const id = lutId(file);
-      const mark = index.logMarks[id];
+      const mark = index.logMarks[markKey(name, stat.size)];
       const guess = guessLogInput({ name, folders: source === "library" ? dirs : [label, ...dirs], title: info.title, comments: info.comments });
       return {
         id,
@@ -196,7 +203,7 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
     const sortEntries = (a, b) => naturalCompare(a.group, b.group) || naturalCompare(a.name, b.name);
     const luts = [...lib.entries.sort(sortEntries)];
     for (const f of extra) luts.push(...f.entries.sort(sortEntries));
-    byId = new Map(luts.map((l) => [l.id, { path: l.path, source: l.source }]));
+    byId = new Map(luts.map((l) => [l.id, { path: l.path, source: l.source, name: l.name, bytes: l.bytes }]));
     return {
       library: { dir: libraryDir, count: lib.entries.length, bytes: lib.bytes },
       folders: extra.map((f) => ({
@@ -355,8 +362,11 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
 
   async function setLogMark(id, mark) {
     loadIndex();
-    if (mark === "log" || mark === "normal") index.logMarks[id] = mark;
-    else delete index.logMarks[id];
+    const where = await locate(id);
+    if (!where) return { error: "missing" };
+    const key = markKey(where.name, where.bytes);
+    if (mark === "log" || mark === "normal") index.logMarks[key] = mark;
+    else delete index.logMarks[key];
     await saveIndex();
     return { ok: true };
   }
