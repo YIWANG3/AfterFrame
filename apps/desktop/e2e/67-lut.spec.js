@@ -65,7 +65,24 @@ test.describe("LUT tool (macOS)", () => {
     await openEditorOnFirstAsset(ctx.window);
     // The untouched save, for the graded one to be checked against.
     await ctx.window.evaluate((p) => window.__afterframeTest.saveAs(p), path.join(work, "plain.jpg"));
-    await ctx.window.getByTestId("tool-lut").click();
+    // Second in the rail, right after Crop; its icon is the word LUT in a
+    // rounded frame (a badge, not a pictogram), and it's named on hover.
+    const tab = ctx.window.getByTestId("tool-lut");
+    await expect(tab).toHaveText("LUT");
+    await expect(tab).toHaveAttribute("title", "LUT");
+    const rail = await ctx.window.locator("[data-editor-wheel-scope='toolbar'] [data-testid^='tool-']").evaluateAll(
+      (els) => els.map((el) => el.dataset.testid),
+    );
+    expect(rail.slice(0, 2)).toEqual(["tool-crop", "tool-lut"]);
+    const badge = await tab.locator("span").first().evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { border: parseFloat(s.borderTopWidth), radius: parseFloat(s.borderTopLeftRadius), height: el.getBoundingClientRect().height };
+    });
+    expect(badge.border).toBeGreaterThan(0);
+    expect(badge.radius).toBeGreaterThan(0);
+    expect(badge.height).toBeGreaterThanOrEqual(12);
+    expect(badge.height).toBeLessThanOrEqual(16);
+    await tab.click();
     await expect(ctx.window.getByTestId("lut-panel")).toBeVisible();
     await expect(ctx.window.getByTestId("lut-list")).toContainText("No LUTs yet", { timeout: 10_000 });
   });
