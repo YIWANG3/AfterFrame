@@ -7,8 +7,13 @@ name: Windows installer
 #
 # Run it by hand (Actions ▸ Windows installer ▸ Run workflow) to get the
 # installer as a build artifact for 14 days. A pull request that changes this
-# file builds and checks it without keeping it. Nothing here publishes a
-# release.
+# file builds and checks it without keeping it.
+#
+# Run on a release tag (Use workflow from ▸ Tags ▸ v0.5.10, or
+# `gh workflow run windows-installer.yml --ref v0.5.10`), it also adds the
+# installer to that tag's GitHub Release. The Mac's release.sh creates the
+# release, with the notes and the DMG, and refuses one that already exists, so
+# this waits for it instead of making it.
 on:
   workflow_dispatch:
   pull_request:
@@ -29,6 +34,12 @@ jobs:
       - name: Keep LF line endings
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
+      - name: Check the tag is the app's version
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} but the app says $version" }
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -102,3 +113,34 @@ jobs:
           name: AfterFrame-windows-${{ github.sha }}
           path: apps/desktop/release/*.exe
           retention-days: 14
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+    needs: installer
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: AfterFrame-windows-${{ github.sha }}
+          path: installer
+      - name: Add the installer to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l installer
+          # The Mac build and notarization can take a while; wait up to 90 min.
+          for attempt in $(seq 1 90); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              gh release upload "$TAG" installer/*.exe --repo "$GITHUB_REPOSITORY" --clobber
+              gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+              exit 0
+            fi
+            echo "No release $TAG yet ($attempt/90), waiting for the Mac side"
+            sleep 60
+          done
+          echo "::error::No GitHub Release $TAG after 90 minutes. Publish it with release.sh on the Mac, then re-run this job."
+          exit 1
