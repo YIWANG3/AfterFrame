@@ -39,6 +39,10 @@ async function openEditorOnFirstAsset(window) {
 const lutState = () => ctx.window.evaluate(() => window.__afterframeTest.getLutState());
 const displayPixel = (fx, fy) => ctx.window.evaluate(([x, y]) => window.__afterframeTest.sampleDisplayPixel(x, y), [fx, fy]);
 const near = (a, b, tolerance) => a.slice(0, 3).every((v, i) => Math.abs(v - b[i]) <= tolerance);
+// A LUT also shows in Favorites and Recently used once it's there; its own
+// pack's or folder's cell is the one whose group key is "source|root|group".
+const PACK_CELL = "[data-lut-cell][data-lut-group-key*='|']";
+const cell = (name) => ctx.window.locator(`${PACK_CELL}[data-lut-name='${name}']`);
 
 test.describe("LUT tool (macOS)", () => {
   test.skip(process.platform !== "darwin", "the LUT tool is macOS-only for now");
@@ -100,18 +104,19 @@ test.describe("LUT tool (macOS)", () => {
 
     await ctx.window.evaluate(() => window.__afterframeTest.refreshLuts());
     await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(3);
+    await expect(ctx.window.locator(PACK_CELL)).toHaveCount(3);
     await expect(ctx.window.getByTestId("lut-library-footer")).toContainText("3");
   });
 
   test("a LUT named for Log footage carries the Log badge; a Rec709 one doesn't", async () => {
-    await expect(ctx.window.locator("[data-lut-name='Phntm_Test_Slog3'] [data-testid='lut-log-badge']")).toBeVisible();
-    await expect(ctx.window.locator("[data-lut-name='Swap RB'] [data-testid='lut-log-badge']")).toHaveCount(0);
+    await expect(cell("Phntm_Test_Slog3").getByTestId("lut-log-badge")).toBeVisible();
+    await expect(cell("Swap RB").getByTestId("lut-log-badge")).toHaveCount(0);
   });
 
   test("choosing a LUT grades the preview; strength mixes it; holding Compare shows the original", async () => {
     const at = [0.3, 0.4];
     const before = await displayPixel(...at);
-    await ctx.window.locator("[data-lut-name='Swap RB']").click();
+    await cell("Swap RB").click();
     await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
     await expect.poll(async () => near(await displayPixel(...at), [before[2], before[1], before[0]], 2), { timeout: 5_000 }).toBe(true);
 
@@ -134,7 +139,7 @@ test.describe("LUT tool (macOS)", () => {
     await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
     const swapped = await displayPixel(...at);
     // Sample every frame from the click until the new grade has landed.
-    const samples = await ctx.window.evaluate(async ([x, y]) => {
+    const samples = await ctx.window.evaluate(async ([x, y, packCell]) => {
       const t = window.__afterframeTest;
       const seen = [];
       const done = new Promise((resolve) => {
@@ -146,11 +151,11 @@ test.describe("LUT tool (macOS)", () => {
         };
         requestAnimationFrame(tick);
       });
-      document.querySelector("[data-lut-name='Invert']").click();
+      document.querySelector(`${packCell}[data-lut-name='Invert']`).click();
       await done;
       seen.push(t.sampleDisplayPixel(x, y));
       return seen;
-    }, at);
+    }, [...at, PACK_CELL]);
     const original = [swapped[2], swapped[1], swapped[0]];
     const inverted = original.map((v) => 255 - v);
     expect(samples.length).toBeGreaterThan(1);
@@ -159,7 +164,7 @@ test.describe("LUT tool (macOS)", () => {
     // The canvas is redrawn in an effect after the grade lands: give it its frame.
     await expect.poll(async () => near(await displayPixel(...at), inverted, 2), { timeout: 5_000 }).toBe(true);
     // Back to the half-strength Swap RB the save test expects.
-    await ctx.window.locator("[data-lut-name='Swap RB']").click();
+    await cell("Swap RB").click();
     await ctx.window.getByTestId("lut-strength").fill("50");
     await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
   });
@@ -247,7 +252,7 @@ test.describe("LUT tool (macOS)", () => {
     expect(state.tool).toBe("lut");
     expect(state.aspectKey).toBe("1:1");
 
-    await ctx.window.locator("[data-lut-name='Swap RB']").click();
+    await cell("Swap RB").click();
     await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
     const out = path.join(work, "raw-graded.jpg");
     await ctx.window.evaluate((p) => window.__afterframeTest.saveAs(p), out);
@@ -267,14 +272,15 @@ test.describe("LUT tool (macOS)", () => {
     await ctx.window.keyboard.press("Escape");
     await expect(ctx.window.getByTestId("lut-add-menu")).toHaveCount(0);
 
-    // Two groups: Test Pack / STANDARD and Test Pack / SLog3.
+    // Recently used, Test Pack / STANDARD and Test Pack / SLog3.
     const toggle = ctx.window.getByTestId("lut-toggle-all");
     await expect(toggle).toHaveText("Collapse all");
     await toggle.click();
     await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(0);
     await expect(toggle).toHaveText("Expand all");
     await toggle.click();
-    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(3);
+    await expect(ctx.window.locator(PACK_CELL)).toHaveCount(3);
+    await expect(ctx.window.locator("[data-lut-group='recent'] [data-lut-cell]")).not.toHaveCount(0);
   });
 
   test("a LUT dropped into the library folder in Finder shows up when the window comes back", async () => {
@@ -282,10 +288,10 @@ test.describe("LUT tool (macOS)", () => {
     fs.mkdirSync(byHand, { recursive: true });
     fs.writeFileSync(path.join(byHand, "Warm Hand.cube"), cubeText(5, (r, g, b) => [Math.min(1, r * 1.1), g, b * 0.9]));
     await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await expect(ctx.window.locator("[data-lut-name='Warm Hand']")).toHaveCount(1, { timeout: 10_000 });
+    await expect(cell("Warm Hand")).toHaveCount(1, { timeout: 10_000 });
     fs.rmSync(path.join(byHand, "Warm Hand.cube"));
     await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await expect(ctx.window.locator("[data-lut-name='Warm Hand']")).toHaveCount(0, { timeout: 10_000 });
+    await expect(cell("Warm Hand")).toHaveCount(0, { timeout: 10_000 });
   });
 
   test("an added folder that moved is called out with Locate and Stop reading; a chosen LUT from it says it's gone", async () => {
@@ -295,7 +301,7 @@ test.describe("LUT tool (macOS)", () => {
     const added = await ctx.window.evaluate((p) => window.mediaWorkspace.addLutFolder(p), drive);
     expect(added.ok).toBe(true);
     await ctx.window.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await ctx.window.locator("[data-lut-name='Portra']").click();
+    await cell("Portra").click();
     await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
 
     fs.renameSync(drive, path.join(work, "Drive (moved)"));
@@ -305,6 +311,145 @@ test.describe("LUT tool (macOS)", () => {
 
     await ctx.window.getByTestId("lut-folder-missing").getByRole("button", { name: "Stop reading it" }).click();
     await expect(ctx.window.getByTestId("lut-folder-missing")).toHaveCount(0, { timeout: 10_000 });
+    await ctx.window.getByTestId("lut-clear").click();
+    await ctx.window.keyboard.press("Escape");
+    await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+  });
+
+  test("the arrow keys step through the LUTs on screen; only the one they stop on is an undo step", async () => {
+    await openEditorOnFirstAsset(ctx.window);
+    await ctx.window.getByTestId("tool-lut").click();
+    await expect(ctx.window.locator(PACK_CELL)).toHaveCount(3, { timeout: 10_000 });
+    // The pack cells in the order shown: the arrows walk them like text.
+    const order = await ctx.window.locator(PACK_CELL).evaluateAll((els) => els.map((el) => el.dataset.lutName));
+    const currentCell = ctx.window.locator("[data-lut-cell][data-current='true']");
+    const expectAt = async (name) => {
+      await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe(name);
+      await expect(currentCell).toHaveCount(1);
+      await expect(currentCell).toHaveAttribute("data-lut-name", name);
+      await expect(currentCell).toHaveAttribute("data-lut-group-key", /\|/);
+    };
+
+    // Clicked: an undo step of its own.
+    await cell(order[0]).click();
+    await expectAt(order[0]);
+    await ctx.window.keyboard.press("ArrowRight");
+    await expectAt(order[1]);
+    await ctx.window.keyboard.press("ArrowRight");
+    await expectAt(order[2]);
+    // Past the last one: stays.
+    await ctx.window.keyboard.press("ArrowRight");
+    await expectAt(order[2]);
+    await ctx.window.keyboard.press("ArrowLeft");
+    await expectAt(order[1]);
+    await expect.poll(async () => (await lutState()).gradedReady, { timeout: 15_000 }).toBe(true);
+
+    // Typing in the search box keeps its arrows.
+    await ctx.window.getByTestId("lut-search").focus();
+    await ctx.window.keyboard.press("ArrowRight");
+    await ctx.window.keyboard.press("ArrowLeft");
+    await sleep(200);
+    expect((await lutState()).lut.name).toBe(order[1]);
+    await ctx.window.getByTestId("lut-search").blur();
+
+    // The stop is recorded once the keys rest: one undo goes back to the
+    // clicked LUT, not through every one passed on the way.
+    await sleep(1_000);
+    await ctx.window.evaluate(() => window.__afterframeTest.undo());
+    await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe(order[0]);
+    await ctx.window.evaluate(() => window.__afterframeTest.redo());
+    await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe(order[1]);
+
+    // The LUT stopped on leads Recently used.
+    await expect(ctx.window.locator("[data-lut-group='recent'] [data-lut-cell]").first()).toHaveAttribute("data-lut-name", order[1]);
+
+    // ↑ ↓ go to the cell drawn above or below (the last of a shorter row),
+    // across group headers; read off the screen before each press.
+    const below = (dir) => ctx.window.evaluate((d) => {
+      const cells = [...document.querySelectorAll("[data-lut-cell]")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, top: Math.round(r.top), left: Math.round(r.left) };
+      });
+      const cur = cells.find((c) => c.el.dataset.current === "true");
+      const tops = [...new Set(cells.map((c) => c.top))].sort((a, b) => a - b);
+      const rowTop = tops[tops.indexOf(cur.top) + d];
+      const row = cells.filter((c) => c.top === rowTop).sort((a, b) => a.left - b.left);
+      const pick = rowTop === undefined ? cur : row.filter((c) => c.left <= cur.left + 1).pop() || row[0];
+      return { name: pick.el.dataset.lutName, group: pick.el.dataset.lutGroupKey };
+    }, dir);
+    for (const [key, dir] of [["ArrowUp", -1], ["ArrowUp", -1], ["ArrowDown", 1], ["ArrowDown", 1]]) {
+      const want = await below(dir);
+      await ctx.window.keyboard.press(key);
+      await expect(currentCell).toHaveAttribute("data-lut-name", want.name);
+      await expect(currentCell).toHaveAttribute("data-lut-group-key", want.group);
+      await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe(want.name);
+    }
+    await ctx.window.getByTestId("lut-clear").click();
+    await expect.poll(async () => (await lutState()).lut, { timeout: 5_000 }).toBe(null);
+  });
+
+  test("a favourite is starred, listed first, and the Favorites filter shows only those", async () => {
+    // From the cell's menu.
+    await cell("Invert").click({ button: "right" });
+    await ctx.window.locator("button", { hasText: "Add to Favorites" }).click();
+    await expect(ctx.window.locator("[data-lut-group='favorites'] [data-lut-cell]")).toHaveCount(1);
+    await expect(ctx.window.locator("[data-lut-group='favorites'] [data-lut-name='Invert']")).toBeVisible();
+    // Favorites come before Recently used, which comes before the packs.
+    const order = await ctx.window.locator("[data-lut-group]").evaluateAll((els) => els.map((el) => el.dataset.lutGroup));
+    expect(order.slice(0, 2)).toEqual(["favorites", "recent"]);
+    await expect(cell("Invert").getByTestId("lut-favorite-badge")).toBeVisible();
+    await expect(cell("Swap RB").getByTestId("lut-favorite-badge")).toHaveCount(0);
+
+    // Filtered down to one, the panel keeps its height.
+    const panelHeight = () => ctx.window.getByTestId("lut-panel").evaluate((el) => el.getBoundingClientRect().height);
+    const fullHeight = await panelHeight();
+    await ctx.window.getByTestId("lut-filter-favorites").click();
+    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(1);
+    expect(await panelHeight()).toBe(fullHeight);
+    await expect(ctx.window.locator("[data-lut-group='favorites'], [data-lut-group='recent']")).toHaveCount(0);
+
+    // And from the star on the chosen LUT: unstarred, the filter is empty and says how to star one.
+    await cell("Invert").click();
+    await expect(ctx.window.getByTestId("lut-favorite-toggle")).toHaveAttribute("aria-pressed", "true");
+    await ctx.window.getByTestId("lut-favorite-toggle").click();
+    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(0);
+    await expect(ctx.window.getByTestId("lut-no-match")).toContainText("No favorites yet");
+    await ctx.window.getByTestId("lut-favorite-toggle").click();
+    await expect(ctx.window.locator("[data-lut-cell]")).toHaveCount(1);
+    await ctx.window.getByTestId("lut-filter-all").click();
+    await expect(ctx.window.locator(PACK_CELL)).toHaveCount(3);
+  });
+
+  test("Hide Log LUTs leaves out the Log-tagged; previews come two or three to a row, remembered", async () => {
+    await ctx.window.getByTestId("lut-hide-log").click();
+    await expect(ctx.window.locator("[data-lut-name='Phntm_Test_Slog3']")).toHaveCount(0);
+    await expect(cell("Swap RB")).toHaveCount(1);
+    await ctx.window.getByTestId("lut-hide-log").click();
+    await expect(cell("Phntm_Test_Slog3")).toHaveCount(1);
+
+    const tracks = () => cell("Swap RB").evaluate((el) => getComputedStyle(el.parentElement).gridTemplateColumns.split(" ").length);
+    expect(await tracks()).toBe(3);
+    await ctx.window.getByTestId("lut-columns-2").click();
+    await expect.poll(tracks).toBe(2);
+    // Still two after the editor is closed and opened again.
+    await ctx.window.getByTestId("lut-clear").click();
+    await ctx.window.keyboard.press("Escape");
+    await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+    await openEditorOnFirstAsset(ctx.window);
+    await ctx.window.getByTestId("tool-lut").click();
+    await expect(ctx.window.getByTestId("lut-columns-2")).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(tracks).toBe(2);
+    await ctx.window.getByTestId("lut-columns-3").click();
+    await expect.poll(tracks).toBe(3);
+  });
+
+  test("the chosen LUT shows its whole name, its size and where it's kept; the file's path on hover", async () => {
+    await cell("Swap RB").click();
+    await expect(ctx.window.getByTestId("lut-selected-name")).toHaveText("Swap RB");
+    const info = ctx.window.getByTestId("lut-info");
+    await expect(info).toContainText("17³");
+    await expect(info).toContainText("In the LUT library");
+    await expect(info).toHaveAttribute("title", /Test Pack\/STANDARD\/Swap RB\.cube$/);
     await ctx.window.getByTestId("lut-clear").click();
     await ctx.window.keyboard.press("Escape");
   });

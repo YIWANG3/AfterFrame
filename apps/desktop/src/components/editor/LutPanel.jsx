@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Search, FileInput, FolderPlus, FolderOpen, Eye, X, ChevronDown, ChevronRight,
   Trash2, Tag, Undo2, Redo2, AlertTriangle, Plus, ChevronsDownUp, ChevronsUpDown,
+  Star, StarOff, History, Grid2x2, Grid3x3,
 } from "lucide-react";
 import api from "../../api";
 import { Spinner } from "../../ui";
@@ -26,7 +27,7 @@ function LogBadge({ t }) {
 }
 
 // One LUT: the photo graded by it, made when the cell scrolls into view.
-function LutCell({ entry, selected, error, thumb, aspect, scrollRoot, onRequest, onCancel, onClick, onContextMenu, t }) {
+function LutCell({ entry, groupKey, selected, current, error, thumb, aspect, scrollRoot, onRequest, onCancel, onClick, onContextMenu, t }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -44,6 +45,11 @@ function LutCell({ entry, selected, error, thumb, aspect, scrollRoot, onRequest,
     };
   }, [entry.id, thumb, scrollRoot, onRequest, onCancel]);
 
+  // The arrow keys move the current cell: keep it in view.
+  useEffect(() => {
+    if (current) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [current]);
+
   const broken = error || entry.error;
   return (
     <button
@@ -51,7 +57,9 @@ function LutCell({ entry, selected, error, thumb, aspect, scrollRoot, onRequest,
       type="button"
       data-lut-cell={entry.id}
       data-lut-name={entry.name}
+      data-lut-group-key={groupKey}
       data-selected={selected ? "true" : "false"}
+      data-current={current ? "true" : "false"}
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={broken ? `${entry.name} · ${t(`lut.errors.${broken}`, { defaultValue: broken })}` : entry.name}
@@ -74,6 +82,11 @@ function LutCell({ entry, selected, error, thumb, aspect, scrollRoot, onRequest,
           <div className="absolute inset-0 animate-pulse bg-hover/60" />
         )}
         {entry.log ? <div className="absolute left-1 top-1"><LogBadge t={t} /></div> : null}
+        {entry.favorite ? (
+          <div className="absolute right-1 top-1 rounded bg-black/55 p-[2px]" title={t("lut.favorite")} data-testid="lut-favorite-badge">
+            <Star className="h-2.5 w-2.5 fill-amber-300 text-amber-300" />
+          </div>
+        ) : null}
       </div>
       <span className={["truncate text-[10.5px] leading-tight", selected ? "text-text" : "text-muted"].join(" ")}>
         {entry.name}
@@ -136,6 +149,36 @@ function AddLutsMenu({ t, importing, onImport, onAddFolder }) {
   );
 }
 
+const GRID_COLUMNS = { 2: "grid-cols-2", 3: "grid-cols-3" };
+
+// The chosen LUT's particulars: its cube size and where it's kept; the full
+// path on hover. (Its whole name is the heading above, wrapped, not cut.)
+function LutInfo({ entry, library, t }) {
+  const folder = entry.source === "folder"
+    ? (library?.folders || []).find((f) => f.path === entry.root)?.name || entry.root?.split(/[\\/]/).pop()
+    : null;
+  return (
+    <div className="mt-1 flex items-center gap-1 text-[10.5px] leading-snug text-muted2" data-testid="lut-info" title={entry.path}>
+      <span className="min-w-0 flex-1 truncate">
+        {[
+          entry.lutSize ? `${entry.lutSize}³` : null,
+          folder ? t("lut.infoFolder", { name: folder }) : t("lut.infoLibrary"),
+        ].filter(Boolean).join(" · ")}
+      </span>
+      <button
+        type="button"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text"
+        onClick={() => api.revealLut(entry.id)}
+        title={t("lut.revealInFinder")}
+        aria-label={t("lut.revealInFinder")}
+        data-testid="lut-info-reveal"
+      >
+        <FolderOpen className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
 function baseLabel(base, t) {
   if (!base) return null;
   return t(`lut.base.${base}`);
@@ -150,7 +193,8 @@ export default function LutPanel({
   const [dropActive, setDropActive] = useState(false);
   const {
     library, loading, importing, query, setQuery, groups, errors,
-    select, setStrength, importPaths, addFolder, relocateFolder, removeFolder, setLogMark, trash,
+    select, browseTo, cursor, toggleFavorite, view, setView,
+    setStrength, importPaths, addFolder, relocateFolder, removeFolder, setLogMark, trash,
     grading, setComparing, requestThumb, cancelThumb, thumbFor, thumbAspect,
   } = tool;
   const selectedEntry = lut ? library?.luts?.find((l) => l.id === lut.id) : null;
@@ -158,6 +202,8 @@ export default function LutPanel({
   // window comes back): say so rather than fail at save.
   const selectedMissing = !!(lut && library && !loading && !selectedEntry);
   const selectedError = lut ? errors[lut.id] || selectedEntry?.error || (selectedMissing ? "missing" : null) : null;
+  // Once there are LUTs the panel keeps its full height: a filter or search
+  // that leaves a few mustn't shrink it and move everything under the pointer.
   const total = library?.luts?.length || 0;
   const strengthPct = Math.round((lut?.strength ?? 1) * 100);
   const unavailableFolders = (library?.folders || []).filter((f) => !f.available);
@@ -175,7 +221,54 @@ export default function LutPanel({
     if (paths.length) await importPaths(paths);
   }
 
+  // ← → step through the LUTs on screen in the order shown, ↑ ↓ to the cell
+  // above or below (the last of a shorter row), across group headers;
+  // collapsed groups are skipped. From the cell last chosen. Typing in the
+  // search box keeps its arrows.
+  const columns = view.columns;
+  const stepRef = useRef(null);
+  stepRef.current = (key) => {
+    const rows = [];
+    for (const g of groups) {
+      if (collapsed.has(g.key)) continue;
+      for (let i = 0; i < g.luts.length; i += columns) {
+        rows.push(g.luts.slice(i, i + columns).map((entry) => ({ groupKey: g.key, entry })));
+      }
+    }
+    const cells = rows.flat();
+    if (!cells.length) return false;
+    let at = cursor ? cells.findIndex((c) => c.groupKey === cursor.groupKey && c.entry.id === cursor.id) : -1;
+    if (at < 0 && lut) at = cells.findIndex((c) => c.entry.id === lut.id);
+    let target = cells[0];
+    if (at >= 0 && (key === "ArrowLeft" || key === "ArrowRight")) {
+      target = cells[Math.min(cells.length - 1, Math.max(0, at + (key === "ArrowLeft" ? -1 : 1)))];
+    } else if (at >= 0) {
+      let row = 0;
+      let start = 0;
+      while (start + rows[row].length <= at) start += rows[row++].length;
+      const next = rows[row + (key === "ArrowUp" ? -1 : 1)];
+      target = next ? next[Math.min(at - start, next.length - 1)] : cells[at];
+    }
+    if (target === cells[at]) return true;
+    browseTo(target.entry, target.groupKey);
+    return true;
+  };
+  useEffect(() => {
+    const onKey = (event) => {
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (stepRef.current(event.key)) event.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const menuItems = menu ? [
+    menu.entry.favorite
+      ? { key: "unfav", icon: StarOff, label: t("lut.unfavorite"), onClick: () => toggleFavorite(menu.entry) }
+      : { key: "fav", icon: Star, label: t("lut.favorite"), onClick: () => toggleFavorite(menu.entry) },
     { key: "reveal", icon: FolderOpen, label: t("lut.revealInFinder"), onClick: () => api.revealLut(menu.entry.id) },
     menu.entry.log
       ? { key: "unmark", icon: Tag, label: t("lut.unmarkLog"), onClick: () => setLogMark(menu.entry, false) }
@@ -187,7 +280,7 @@ export default function LutPanel({
 
   return (
     <div
-      className="relative flex max-h-[calc(100vh-10rem)] flex-col"
+      className={["relative flex flex-col", total > 0 ? "h-[calc(100vh-10rem)]" : "max-h-[calc(100vh-10rem)]"].join(" ")}
       data-testid="lut-panel"
       onDragOver={(event) => {
         if (!isFileDrag(event)) return;
@@ -221,8 +314,21 @@ export default function LutPanel({
         {lut ? (
           <div className="mt-3 rounded-lg bg-app px-3 py-2.5" data-testid="lut-selected">
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-text" title={lut.name}>{lut.name}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 break-words text-[12px] font-medium leading-snug text-text" title={lut.name} data-testid="lut-selected-name">{lut.name}</span>
               {selectedEntry?.log ? <LogBadge t={t} /> : null}
+              {selectedEntry ? (
+                <button
+                  type="button"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
+                  onClick={() => toggleFavorite(selectedEntry)}
+                  title={selectedEntry.favorite ? t("lut.unfavorite") : t("lut.favorite")}
+                  aria-label={selectedEntry.favorite ? t("lut.unfavorite") : t("lut.favorite")}
+                  aria-pressed={!!selectedEntry.favorite}
+                  data-testid="lut-favorite-toggle"
+                >
+                  <Star className={["h-3.5 w-3.5", selectedEntry.favorite ? "fill-amber-300 text-amber-300" : ""].join(" ")} />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
@@ -234,6 +340,7 @@ export default function LutPanel({
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
+            {selectedEntry ? <LutInfo entry={selectedEntry} library={library} t={t} /> : null}
             {selectedError ? (
               <div className="mt-1.5 text-[11px] leading-snug text-amber-400" data-testid="lut-selected-error">
                 {selectedMissing ? t("lut.selectedMissing") : t(`lut.errors.${selectedError}`, { defaultValue: selectedError })}
@@ -306,19 +413,77 @@ export default function LutPanel({
           </div>
         ))}
 
-        {groups.length > 1 ? (
-          <div className="mt-2 flex items-center justify-between text-[10.5px] text-muted2">
-            <span>{t("lut.groupsSummary", { groups: groups.length, count: groups.reduce((n, g) => n + g.luts.length, 0) })}</span>
-            <button
-              type="button"
-              data-testid="lut-toggle-all"
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted transition-colors hover:bg-hover hover:text-text"
-              onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.key)))}
-            >
-              {allCollapsed ? <ChevronsUpDown className="h-3 w-3" /> : <ChevronsDownUp className="h-3 w-3" />}
-              {allCollapsed ? t("lut.expandAll") : t("lut.collapseAll")}
-            </button>
-          </div>
+        {total > 0 ? (
+          <>
+            {/* What the list shows: everything or the favourites, Log LUTs or not. */}
+            <div className="mt-2 flex items-center gap-1" data-testid="lut-filters">
+              {[["all", t("lut.filterAll")], ["favorites", t("lut.filterFavorites")]].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  data-testid={`lut-filter-${key}`}
+                  aria-pressed={view.filter === key}
+                  className={[
+                    "rounded-md px-2 py-1 text-[11px] transition-colors",
+                    view.filter === key ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
+                  ].join(" ")}
+                  onClick={() => setView({ filter: key })}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                data-testid="lut-hide-log"
+                aria-pressed={view.hideLog}
+                className={[
+                  "ml-auto rounded-md px-2 py-1 text-[11px] transition-colors",
+                  view.hideLog ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
+                ].join(" ")}
+                onClick={() => setView({ hideLog: !view.hideLog })}
+                title={t("lut.hideLogHint")}
+              >
+                {t("lut.hideLog")}
+              </button>
+            </div>
+            {/* How many, how big, and all groups open or shut. */}
+            <div className="mt-1.5 flex items-center gap-1 text-[10.5px] text-muted2">
+              <span className="min-w-0 flex-1 truncate">
+                {t("lut.groupsSummary", {
+                  groups: groups.filter((g) => !g.special).length,
+                  count: new Set(groups.flatMap((g) => g.luts.map((l) => l.id))).size,
+                })}
+              </span>
+              {[[2, Grid2x2, t("lut.largeThumbs")], [3, Grid3x3, t("lut.smallThumbs")]].map(([cols, Icon, label]) => (
+                <button
+                  key={cols}
+                  type="button"
+                  data-testid={`lut-columns-${cols}`}
+                  aria-pressed={columns === cols}
+                  title={label}
+                  aria-label={label}
+                  className={[
+                    "flex h-6 w-6 items-center justify-center rounded transition-colors",
+                    columns === cols ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
+                  ].join(" ")}
+                  onClick={() => setView({ columns: cols })}
+                >
+                  <Icon className="h-3 w-3" />
+                </button>
+              ))}
+              {groups.length > 1 ? (
+                <button
+                  type="button"
+                  data-testid="lut-toggle-all"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted transition-colors hover:bg-hover hover:text-text"
+                  onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.key)))}
+                >
+                  {allCollapsed ? <ChevronsUpDown className="h-3 w-3" /> : <ChevronsDownUp className="h-3 w-3" />}
+                  {allCollapsed ? t("lut.expandAll") : t("lut.collapseAll")}
+                </button>
+              ) : null}
+            </div>
+          </>
         ) : null}
       </div>
 
@@ -346,12 +511,16 @@ export default function LutPanel({
             ) : null}
           </div>
         ) : groups.length === 0 ? (
-          <div className="py-6 text-center text-[11px] text-muted">{t("lut.noMatch")}</div>
+          <div className="px-2 py-6 text-center text-[11px] leading-relaxed text-muted" data-testid="lut-no-match">
+            {view.filter === "favorites" && !query.trim() && !(library?.luts || []).some((l) => l.favorite)
+              ? t("lut.noFavorites")
+              : t("lut.noMatch")}
+          </div>
         ) : (
           groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
             return (
-              <div key={group.key} className="mb-2" data-lut-group={group.title || "library"}>
+              <div key={group.key} className="mb-2" data-lut-group={group.special || group.title || "library"}>
                 <button
                   type="button"
                   className="flex w-full items-center gap-1 rounded px-1 py-1 text-left text-[10.5px] font-medium text-muted2 hover:text-text"
@@ -364,24 +533,30 @@ export default function LutPanel({
                   title={group.source === "folder" ? group.root : undefined}
                 >
                   {isCollapsed ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
-                  <span className="min-w-0 flex-1 truncate">{group.title || t("lut.ungrouped")}</span>
+                  {group.special === "favorites" ? <Star className="h-3 w-3 shrink-0 fill-amber-300/80 text-amber-300/80" /> : null}
+                  {group.special === "recent" ? <History className="h-3 w-3 shrink-0" /> : null}
+                  <span className="min-w-0 flex-1 truncate">
+                    {group.special ? t(`lut.${group.special}`) : group.title || t("lut.ungrouped")}
+                  </span>
                   {group.source === "folder" ? <FolderOpen className="h-3 w-3 shrink-0 opacity-60" /> : null}
                   <span className="tabular-nums opacity-70">{group.luts.length}</span>
                 </button>
                 {!isCollapsed ? (
-                  <div className="mt-1 grid grid-cols-3 gap-x-1.5 gap-y-2">
+                  <div className={["mt-1 grid gap-x-1.5 gap-y-2", GRID_COLUMNS[columns]].join(" ")}>
                     {group.luts.map((entry) => (
                       <LutCell
-                        key={entry.id}
+                        key={`${group.key}:${entry.id}`}
                         entry={entry}
+                        groupKey={group.key}
                         selected={lut?.id === entry.id}
+                        current={!!cursor && cursor.groupKey === group.key && cursor.id === entry.id}
                         error={errors[entry.id]}
                         thumb={thumbFor(entry.id)}
                         aspect={thumbAspect}
                         scrollRoot={scrollRef}
                         onRequest={requestThumb}
                         onCancel={cancelThumb}
-                        onClick={() => select(entry)}
+                        onClick={() => select(entry, group.key)}
                         onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, entry }); }}
                         t={t}
                       />

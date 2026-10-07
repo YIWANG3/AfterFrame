@@ -50,6 +50,10 @@ function register({ app, ipcMain, dialog, shell, readAppSettings, updateAppSetti
 
   ipcMain.handle("app:set-lut-log-mark", (_event, id, mark) => library.setLogMark(String(id || ""), mark));
 
+  ipcMain.handle("app:set-lut-favorite", (_event, id, on) => library.setFavorite(String(id || ""), !!on));
+
+  ipcMain.handle("app:note-lut-used", (_event, id) => library.noteUsed(String(id || "")));
+
   ipcMain.handle("app:reveal-lut", async (_event, id) => {
     const where = await library.locate(String(id || ""));
     if (!where) return false;

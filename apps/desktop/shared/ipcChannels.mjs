@@ -84,6 +84,8 @@ export const IPC_METHODS = [
   ["addLutFolder", "app:add-lut-folder", 1],
   ["removeLutFolder", "app:remove-lut-folder", 1],
   ["setLutLogMark", "app:set-lut-log-mark", 2],
+  ["setLutFavorite", "app:set-lut-favorite", 2],
+  ["noteLutUsed", "app:note-lut-used", 1],
   ["revealLut", "app:reveal-lut", 1],
   ["trashLut", "app:trash-lut", 1],
   ["clearLutLibrary", "app:clear-lut-library", 0],

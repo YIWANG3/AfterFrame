@@ -13,7 +13,7 @@ import {
   forgetLut, gradeCanvas, gradePixels, isLutFault, LutError, releaseLutWorkers, thumbnailConcurrency,
 } from "../lut/lutPool";
 
-const THUMB_EDGE = 200; // px, long edge: a ~96 px cell at 2× density
+const THUMB_EDGE = 280; // px, long edge: a ~140 px cell (two columns) at 2× density
 
 // One scan shared by every editor session: rescanning on each open is cheap
 // (the main process caches headers) but there is no need to.
@@ -77,6 +77,8 @@ export function useLutTool({
   useEffect(() => {
     if (!open) {
       scannedRef.current = false;
+      clearTimeout(stepCommitRef.current);
+      setCursor(null);
       // Closed: the workers' parsed tables and the text caches go too.
       releaseLutWorkers();
       return;
@@ -94,14 +96,54 @@ export function useLutTool({
   }, [open, active, refresh]);
 
   // ── selection ───────────────────────────────────────────────────────────
-  const select = useCallback((entry) => {
+  // A LUT settled on goes first among the recent ones; the list reorders in
+  // place from the answer (no rescan). Not while choosing from Recent itself:
+  // the cell would jump to the top under the pointer, and the arrow keys
+  // would walk back over the same few.
+  const noteUsed = useCallback(async (id, groupKey) => {
+    if (!api.has?.("noteLutUsed")) return;
+    const res = await api.noteLutUsed(id).catch(() => null);
+    if (!Array.isArray(res?.recent) || groupKey === "recent") return;
+    const rank = new Map(res.recent.map((rid, i) => [rid, i]));
+    setLibrary((lib) => {
+      if (!lib) return lib;
+      const next = { ...lib, luts: lib.luts.map((l) => ({ ...l, recent: rank.has(l.id) ? rank.get(l.id) : -1 })) };
+      cachedLibrary = next;
+      return next;
+    });
+  }, []);
+
+  // Which cell the keyboard moves from: a LUT can sit in Favourites or Recent
+  // as well as in its own group, so the id alone is not a place.
+  const [cursor, setCursor] = useState(null); // { groupKey, id }
+  const stepCommitRef = useRef(null);
+
+  const select = useCallback((entry, groupKey = null) => {
+    clearTimeout(stepCommitRef.current);
     const s = editorStateRef.current;
     if (!entry || s.lut?.id === entry.id) {
       record({ ...s, lut: null });
       return;
     }
+    setCursor({ groupKey, id: entry.id });
     record({ ...s, lut: { id: entry.id, name: entry.name, strength: s.lut?.strength ?? 1 } });
-  }, [editorStateRef, record]);
+    void noteUsed(entry.id, groupKey);
+  }, [editorStateRef, record, noteUsed]);
+
+  // The arrow keys browse: each press shows the next LUT at once, but only
+  // the one the user stops on becomes an undo step (and a recent one), so
+  // flicking through fifty LUTs isn't fifty undos.
+  const browseTo = useCallback((entry, groupKey) => {
+    const s = editorStateRef.current;
+    setCursor({ groupKey, id: entry.id });
+    apply({ ...s, lut: { id: entry.id, name: entry.name, strength: s.lut?.strength ?? 1 } });
+    clearTimeout(stepCommitRef.current);
+    stepCommitRef.current = setTimeout(() => {
+      record(editorStateRef.current);
+      void noteUsed(entry.id, groupKey);
+    }, 700);
+  }, [editorStateRef, apply, record, noteUsed]);
+  useEffect(() => () => clearTimeout(stepCommitRef.current), []);
 
   // Live while dragging (no history entry), recorded once on release.
   const setStrength = useCallback((value, { commit = false } = {}) => {
@@ -215,13 +257,22 @@ export function useLutTool({
     }
   };
 
+  // A LUT can be on screen twice (in Favourites and in its pack): count the
+  // cells that want it, and give its place in the queue up only when none do.
+  const wantedRef = useRef(new Map()); // id → cells in view
   const requestThumb = useCallback((id) => {
+    wantedRef.current.set(id, (wantedRef.current.get(id) || 0) + 1);
     if (!thumbBaseRef.current || thumbsRef.current.has(id) || queueRef.current.includes(id)) return;
     queueRef.current.push(id);
     pumpRef.current();
   }, []);
-  // A cell scrolled away gives its place in the queue up.
   const cancelThumb = useCallback((id) => {
+    const left = Math.max(0, (wantedRef.current.get(id) || 0) - 1);
+    if (left) {
+      wantedRef.current.set(id, left);
+      return;
+    }
+    wantedRef.current.delete(id);
     queueRef.current = queueRef.current.filter((x) => x !== id);
   }, []);
   const thumbFor = useCallback((id) => thumbsRef.current.get(id), []);
@@ -313,12 +364,45 @@ export function useLutTool({
     await refresh();
   }, [editorStateRef, refresh, select, pushToast, t]);
 
+  const toggleFavorite = useCallback(async (entry) => {
+    const res = await api.setLutFavorite(entry.id, !entry.favorite).catch(() => null);
+    if (!res?.ok) return;
+    setLibrary((lib) => {
+      if (!lib) return lib;
+      const next = { ...lib, luts: lib.luts.map((l) => (l.id === entry.id ? { ...l, favorite: res.favorite } : l)) };
+      cachedLibrary = next;
+      return next;
+    });
+  }, []);
+
+  // ── view: what the list shows, and how big ──────────────────────────────
+  // A per-person convenience, so the browser keeps it (not the history, not
+  // the settings file).
+  const [view, setViewState] = useState(readView);
+  const setView = useCallback((patch) => {
+    setViewState((v) => {
+      const next = { ...v, ...patch };
+      try { localStorage.setItem(VIEW_KEY, JSON.stringify(next)); } catch { /* private mode: not remembered */ }
+      return next;
+    });
+  }, []);
+
   // ── list for the panel ──────────────────────────────────────────────────
+  // Favourites and Recent come first (when the filter is All), then each pack
+  // and folder. A LUT may therefore show twice: in Favourites and in its pack.
   const groups = useMemo(() => {
     const luts = library?.luts || [];
     const q = query.trim().toLowerCase();
-    const shown = q ? luts.filter((l) => l.name.toLowerCase().includes(q) || l.group.toLowerCase().includes(q)) : luts;
+    const shown = luts.filter((l) => (!view.hideLog || !l.log)
+      && (view.filter !== "favorites" || l.favorite)
+      && (!q || l.name.toLowerCase().includes(q) || l.group.toLowerCase().includes(q)));
     const out = [];
+    if (view.filter === "all") {
+      const favs = shown.filter((l) => l.favorite);
+      if (favs.length) out.push({ key: "favorites", special: "favorites", luts: favs });
+      const recent = shown.filter((l) => l.recent >= 0).sort((a, b) => a.recent - b.recent);
+      if (recent.length) out.push({ key: "recent", special: "recent", luts: recent });
+    }
     let current = null;
     for (const l of shown) {
       const key = `${l.source}|${l.root}|${l.group}`;
@@ -329,12 +413,28 @@ export function useLutTool({
       current.luts.push(l);
     }
     return out;
-  }, [library, query]);
+  }, [library, query, view.filter, view.hideLog]);
 
   return {
     library, loading, importing, query, setQuery, groups, errors,
-    refresh, select, setStrength, importPaths, addFolder, relocateFolder, removeFolder, setLogMark, trash,
+    refresh, select, browseTo, cursor, setStrength, importPaths, addFolder, relocateFolder, removeFolder,
+    setLogMark, toggleFavorite, trash, view, setView,
     gradedPreview, gradedId, grading, comparing, setComparing,
     requestThumb, cancelThumb, thumbFor, thumbVersion, thumbAspect: thumbBase ? thumbBase.width / thumbBase.height : 1,
   };
+}
+
+const VIEW_KEY = "afterframe.lut.view";
+const VIEW_DEFAULT = { filter: "all", hideLog: false, columns: 3 };
+function readView() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
+    return {
+      filter: stored?.filter === "favorites" ? "favorites" : "all",
+      hideLog: stored?.hideLog === true,
+      columns: stored?.columns === 2 ? 2 : 3,
+    };
+  } catch {
+    return { ...VIEW_DEFAULT };
+  }
 }

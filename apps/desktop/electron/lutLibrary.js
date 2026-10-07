@@ -26,6 +26,7 @@ const MAX_FILE_BYTES = 64 * 1024 * 1024; // a 65³ .cube is ~7 MB
 const MAX_FILES_PER_ROOT = 5000; // someone adding their home folder
 const MAX_DEPTH = 8;
 const FOLDERS_MAX = 20;
+const RECENT_MAX = 12;
 const IO_CONCURRENCY = 16;
 
 const isCube = (name) => /\.cube$/i.test(name) && !name.startsWith(".");
@@ -116,17 +117,26 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
     if (index) return index;
     try {
       const raw = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-      if (raw?.version === INDEX_VERSION) index = { files: raw.files || {}, logMarks: raw.logMarks || {} };
+      if (raw?.version === INDEX_VERSION) {
+        index = {
+          files: raw.files || {},
+          logMarks: raw.logMarks || {},
+          favorites: raw.favorites || {},
+          recent: Array.isArray(raw.recent) ? raw.recent : [],
+        };
+      }
     } catch {
       // Missing or unreadable: it is a cache, rebuild it.
     }
-    index = index || { files: {}, logMarks: {} };
+    index = index || { files: {}, logMarks: {}, favorites: {}, recent: [] };
     return index;
   }
 
   async function saveIndex() {
     try {
-      await writeJsonAtomic(indexPath, { version: INDEX_VERSION, files: index.files, logMarks: index.logMarks });
+      await writeJsonAtomic(indexPath, {
+        version: INDEX_VERSION, files: index.files, logMarks: index.logMarks, favorites: index.favorites, recent: index.recent,
+      });
     } catch (error) {
       logger.warn?.("[luts] could not write the index:", error?.message || error);
     }
@@ -166,7 +176,8 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
       const dirs = path.dirname(rel) === "." ? [] : path.dirname(rel).split(path.sep);
       const name = path.basename(rel).replace(/\.cube$/i, "");
       const id = lutId(file);
-      const mark = index.logMarks[markKey(name, stat.size)];
+      const key = markKey(name, stat.size);
+      const mark = index.logMarks[key];
       const guess = guessLogInput({ name, folders: source === "library" ? dirs : [label, ...dirs], title: info.title, comments: info.comments });
       return {
         id,
@@ -182,6 +193,9 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
         logGuess: guess,
         log: mark === "log" ? true : mark === "normal" ? false : !!guess,
         logMarked: mark === "log" || mark === "normal",
+        favorite: !!index.favorites[key],
+        // 0 = used last; -1 = not among the recent ones.
+        recent: index.recent.indexOf(key),
       };
     });
     return { available, entries: entries.filter(Boolean), bytes };
@@ -371,6 +385,32 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
     return { ok: true };
   }
 
+  // Favourites and the recently used, kept like the Log mark: by name and
+  // size, so they follow a file the user moves.
+  async function setFavorite(id, on) {
+    loadIndex();
+    const where = await locate(id);
+    if (!where) return { error: "missing" };
+    const key = markKey(where.name, where.bytes);
+    if (on) index.favorites[key] = true;
+    else delete index.favorites[key];
+    await saveIndex();
+    return { ok: true, favorite: !!on };
+  }
+
+  // A LUT the user settled on: first among the recent ones. Answers the ids
+  // of the recent LUTs, most recent first, for the panel to reorder in place.
+  async function noteUsed(id) {
+    loadIndex();
+    const where = await locate(id);
+    if (!where) return { error: "missing" };
+    const key = markKey(where.name, where.bytes);
+    index.recent = [key, ...index.recent.filter((k) => k !== key)].slice(0, RECENT_MAX);
+    await saveIndex();
+    const idByKey = new Map([...byId].map(([lid, w]) => [markKey(w.name, w.bytes), lid]));
+    return { ok: true, recent: index.recent.map((k) => idByKey.get(k)).filter(Boolean) };
+  }
+
   // Only the library's own copies can be deleted from the app; a referenced
   // folder belongs to the user.
   async function libraryPath(id) {
@@ -386,6 +426,8 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
     addFolder,
     removeFolder,
     setLogMark,
+    setFavorite,
+    noteUsed,
     libraryPath,
     locate,
     folders,

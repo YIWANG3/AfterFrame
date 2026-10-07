@@ -217,6 +217,34 @@ test("files dropped into the library folder in Finder are listed on the next sca
   }
 });
 
+test("favourites and the recently used follow a moved file; the recent list is most recent first and bounded", async () => {
+  const { dir, library, write, cleanup } = setup();
+  try {
+    for (let i = 0; i < 14; i++) write(`Drive/Pack/Look ${i}.cube`, cube(2, (r, g, b) => [r, g, b * (1 - i / 100)]));
+    await library.addFolder(path.join(dir, "Drive"));
+    const byName = async () => new Map((await library.list()).luts.map((l) => [l.name, l]));
+    let luts = await byName();
+    assert.equal((await library.setFavorite(luts.get("Look 3").id, true)).favorite, true);
+    for (let i = 0; i < 14; i++) await library.noteUsed(luts.get(`Look ${i}`).id);
+    const used = await library.noteUsed(luts.get("Look 5").id);
+    assert.equal(used.recent.length, 12);
+    assert.equal(used.recent[0], luts.get("Look 5").id);
+    assert.equal(used.recent[1], luts.get("Look 13").id);
+
+    fs.mkdirSync(path.join(dir, "Drive/Elsewhere"));
+    fs.renameSync(path.join(dir, "Drive/Pack/Look 3.cube"), path.join(dir, "Drive/Elsewhere/Look 3.cube"));
+    luts = await byName();
+    assert.equal(luts.get("Look 3").group, "Elsewhere");
+    assert.equal(luts.get("Look 3").favorite, true);
+    assert.equal(luts.get("Look 5").recent, 0);
+    assert.equal(luts.get("Look 0").recent, -1, "pushed out of the twelve");
+    await library.setFavorite(luts.get("Look 3").id, false);
+    assert.equal((await byName()).get("Look 3").favorite, false);
+  } finally {
+    cleanup();
+  }
+});
+
 test("headers are cached by size and mtime: a rescan reads only what changed", async () => {
   const { dir, library, write, cleanup } = setup();
   try {
