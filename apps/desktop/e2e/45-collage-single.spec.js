@@ -67,6 +67,53 @@ test("single mode opens with the selection and offers the two-image templates", 
   await expect(ctx.window.getByRole("button", { name: "Single", exact: true })).toBeVisible();
 });
 
+for (const pickerMode of ["add", "replace"]) {
+  test(`${pickerMode} picker stays stable at the scrollbar threshold and still scrolls`, async () => {
+    if (pickerMode === "add") {
+      await ctx.window.getByRole("button", { name: "Add images", exact: true }).click();
+    } else {
+      const menu = await openCellMenu(0.5, 0.2);
+      await menu.getByRole("button", { name: "Replace", exact: true }).click();
+    }
+    const scroller = ctx.window.getByTestId("collage-picker-scroll");
+    const items = scroller.locator("[data-picker-item]");
+    await expect.poll(() => items.count()).toBeGreaterThanOrEqual(10);
+
+    // Choose a height between the grid's heights with and without a classic
+    // scrollbar. Previously each ResizeObserver update toggled the scrollbar,
+    // resizing every tile again on the next frame.
+    await scroller.evaluate((element) => {
+      const css = getComputedStyle(element);
+      const paddingX = parseFloat(css.paddingLeft) + parseFloat(css.paddingRight);
+      const paddingY = parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+      const rows = Math.ceil(element.querySelectorAll("[data-picker-item]").length / 4);
+      const tileSize = (element.getBoundingClientRect().width - paddingX - 3 * 4) / 4;
+      element.style.flex = "none";
+      element.style.height = `${rows * tileSize + (rows - 1) * 4 + paddingY - 3}px`;
+    });
+    await ctx.window.waitForTimeout(250);
+    const widths = await scroller.evaluate(async (element) => {
+      const samples = [];
+      for (let frame = 0; frame < 60; frame++) {
+        await new Promise(requestAnimationFrame);
+        samples.push(element.querySelector("[data-picker-item]").getBoundingClientRect().width);
+      }
+      return [...new Set(samples)];
+    });
+    expect(widths).toHaveLength(1);
+
+    await scroller.evaluate((element) => { element.style.height = "200px"; });
+    await expect.poll(() => scroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect(items.last()).toBeInViewport();
+    expect(await scroller.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    // Close only the picker, leaving the collage and its selection intact.
+    await scroller.locator("..").locator("button").first().click();
+    await expect(scroller).toHaveCount(0);
+  });
+}
+
 test("the picker lists the rest of the catalog, narrows by search and source, and adds one image", async () => {
   await ctx.window.getByRole("button", { name: "Add images", exact: true }).click();
   await expect(ctx.window.getByText(/^Add Images/)).toBeVisible();

@@ -398,7 +398,15 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
         </div>
 
         {/* Image grid */}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2" onScroll={handleScroll}>
+        {/* Tiles derive their height from the available width. Reserve the
+            scrollbar gutter so overflow cannot repeatedly resize the grid. */}
+        <div
+          ref={scrollRef}
+          data-testid="collage-picker-scroll"
+          className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2"
+          style={{ scrollbarGutter: "stable" }}
+          onScroll={handleScroll}
+        >
           {loading && items.length === 0 ? (
             <div className="flex items-center justify-center py-8 text-muted2">
               <Loader2 className="h-4 w-4 animate-spin" />
