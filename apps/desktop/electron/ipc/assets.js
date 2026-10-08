@@ -80,9 +80,16 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
         if (renderer) writeRenderer(target, renderer);
       } catch (err) {
         // The HD is still something to edit; a render that failed is no reason
-        // to keep the editor from opening.
+        // to keep the editor from opening. Its size goes with it, so the editor
+        // can say a save will have that many pixels and not the RAW's (a JPEG
+        // XL DNG on Windows, whose LibRaw has no JPEG XL decoder).
         console.warn("[workspace:raw-edit-source] full render failed:", err?.message || err);
-        return hdPath ? { path: hdPath, full: false, renderer: null, error: String(err?.message || err) } : null;
+        if (!hdPath) return null;
+        const hdSize = await require("sharp")(hdPath).metadata().catch(() => null);
+        return {
+          path: hdPath, full: false, renderer: null, error: String(err?.message || err),
+          width: hdSize?.width || null, height: hdSize?.height || null,
+        };
       }
       pruneCache(dir);
     }

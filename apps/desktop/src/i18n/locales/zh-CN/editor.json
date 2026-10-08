@@ -31,7 +31,10 @@
       "split": "切图",
       "frame": "边框",
       "lut": "LUT"
-    }
+    },
+    "rawPreviewOnlyTitle": "正在编辑 RAW 的预览图",
+    "rawPreviewOnly": "这张 RAW 在这台电脑上无法按全尺寸解码，编辑和保存会使用 {{width}}×{{height}} 的预览图，而不是 {{rawWidth}}×{{rawHeight}}。",
+    "rawPreviewOnlyUnknownSize": "这张 RAW 在这台电脑上无法按全尺寸解码，编辑和保存会使用较小的预览图。"
   },
   "lut": {
     "title": "LUT",

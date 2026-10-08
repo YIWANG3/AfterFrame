@@ -343,7 +343,14 @@ export default function EditorOverlay({
   const onDemandHd = useOnDemandHdPreview({ current: item, enabled: open, catalogKey });
   const awaitingHd = open && needsOnDemandHd(item) && onDemandHd === undefined;
   const rawHdPath = isRaw ? (item?.preview_hd_path || item?.image_preview_hd_path || onDemandHd || null) : null;
-  const rawEditSource = useRawEditSource({ item, hdPath: rawHdPath, enabled: open && !awaitingHd });
+  const rawEditSource = useRawEditSource({
+    item, hdPath: rawHdPath, enabled: open && !awaitingHd,
+    onPreviewOnly: (notice) => pushToast?.({
+      title: t("overlay.rawPreviewOnlyTitle"),
+      message: t(notice.key, notice.values),
+      ttl: 9000,
+    }),
+  });
   const awaitingRawSource = open && isRaw && rawEditSource === undefined;
   const awaitingSource = awaitingHd || awaitingRawSource;
   // The LUT tool grades a RAW on Apple's rendering of it, never the camera's
