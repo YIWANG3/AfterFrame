@@ -215,6 +215,14 @@ jobs:
           key: exiftool-13.59-${{ runner.os }}
       - name: Fetch ExifTool
         run: node apps/desktop/scripts/fetch-exiftool.mjs
+      # Video on Windows goes through the bundled FFmpeg (scripts/fetch-ffmpeg.mjs).
+      - name: Cache FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/native/.cache/ffmpeg-n9.0.2-17-g2a571b6068-win64-lgpl-shared-9.0.zip
+          key: ffmpeg-n9.0.2-17-g2a571b6068-${{ runner.os }}
+      - name: Fetch FFmpeg
+        run: node apps/desktop/scripts/fetch-ffmpeg.mjs
       # The unit suites run on Node and jsdom, not Electron.
       - name: Install desktop dependencies
         run: npm ci --prefix apps/desktop
@@ -249,4 +257,5 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           PYTHONPATH: services/sidecar/src
+          FFMPEG_PATH: ${{ github.workspace }}\apps\desktop\native\ffmpeg
         run: python -m unittest discover -s tests

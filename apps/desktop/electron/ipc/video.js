@@ -1,10 +1,13 @@
 // Video helpers the gallery and lightbox ask for: an on-demand H.264 playback
-// proxy for clips Chromium cannot decode (10-bit HEVC), and a keyframe
-// filmstrip for hover-scrub. Both run the bundled video-tool once and cache
-// under userData, which is already an allowed media dir. Extracted from
-// main.js (review 2026-09-16 §2).
+// proxy for clips Chromium cannot decode (10-bit HEVC; any HEVC on Windows),
+// and a keyframe filmstrip for hover-scrub. Both run the bundled video-tool
+// once and cache under userData, which is already an allowed media dir.
+// Extracted from main.js (review 2026-09-16 §2).
 //   allowlist       electron/media/allowlist.js
 //   videoToolPath   the native binary (packaged vs dev location is main's call)
+//   runVideoTool    where there is no such binary (Windows): (args, timeoutMs)
+//                   => Promise, the sidecar running the same commands with
+//                   FFmpeg; rejects when they fail
 
 const path = require("node:path");
 const fs = require("node:fs");
@@ -12,13 +15,19 @@ const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { spawnSafely } = require("../spawnSafely");
 
-function register({ ipcMain, app, allowlist, videoToolPath }) {
-  const runTool = (args) => new Promise((resolve) => {
-    let child;
-    try { child = spawnSafely(spawn, videoToolPath, args); } catch { resolve(false); return; }
-    child.on("error", () => resolve(false));
-    child.on("close", (code) => resolve(code === 0));
-  });
+// A long 4K clip on a slow PC takes minutes to transcode in software.
+const TRANSCODE_TIMEOUT_MS = 30 * 60_000;
+const FRAMES_TIMEOUT_MS = 3 * 60_000;
+
+function register({ ipcMain, app, allowlist, videoToolPath, runVideoTool = null }) {
+  const runTool = runVideoTool
+    ? (args, timeoutMs) => runVideoTool(args, timeoutMs).then(() => true, () => false)
+    : (args) => new Promise((resolve) => {
+      let child;
+      try { child = spawnSafely(spawn, videoToolPath, args); } catch { resolve(false); return; }
+      child.on("error", () => resolve(false));
+      child.on("close", (code) => resolve(code === 0));
+    });
 
   // Transcodes via the bundled video-tool, caches under userData, and returns
   // the proxy's absolute path (served by the media HTTP server). Idempotent.
@@ -34,7 +43,7 @@ function register({ ipcMain, app, allowlist, videoToolPath }) {
       allowlist.addAllowedMediaDir(dir);
       const out = path.join(dir, `${key}.mp4`);
       if (!fs.existsSync(out)) {
-        const ok = (await runTool(["transcode", resolved, out])) && fs.existsSync(out);
+        const ok = (await runTool(["transcode", resolved, out], TRANSCODE_TIMEOUT_MS)) && fs.existsSync(out);
         if (!ok) { try { fs.unlinkSync(out); } catch { /* ignore */ } return null; }
       }
       return out;
@@ -57,7 +66,7 @@ function register({ ipcMain, app, allowlist, videoToolPath }) {
       const dir = path.join(app.getPath("userData"), "video-keyframes", key);
       if (!fs.existsSync(path.join(dir, "manifest.json"))) {
         fs.mkdirSync(dir, { recursive: true });
-        if (!(await runTool(["frames", resolved, dir, "--count", String(n), "--max-edge", "320"]))) return [];
+        if (!(await runTool(["frames", resolved, dir, "--count", String(n), "--max-edge", "320"], FRAMES_TIMEOUT_MS))) return [];
       }
       return fs.readdirSync(dir)
         .filter((f) => /^frame_\d+\.jpg$/.test(f))

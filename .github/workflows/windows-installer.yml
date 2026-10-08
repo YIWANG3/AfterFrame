@@ -1,9 +1,10 @@
 name: Windows installer
 
 # The unsigned NSIS installer for Windows, built as on the Windows dev box:
-# sidecar (PyInstaller) → ExifTool → renderer → electron-builder, then checked
-# for what a broken build lacked before (sharp, the place index, a sidecar
-# and ExifTool that run, an app that starts).
+# sidecar (PyInstaller) → ExifTool → FFmpeg → renderer → electron-builder,
+# then checked for what a broken build lacked before (sharp, the place index,
+# a sidecar and ExifTool that run, an app that starts) and that the sidecar
+# reads a video with the bundled FFmpeg.
 #
 # Run it by hand (Actions ▸ Windows installer ▸ Run workflow) to get the
 # installer as a build artifact for 14 days. A pull request that changes this
@@ -59,6 +60,13 @@ jobs:
           key: exiftool-13.59-${{ runner.os }}
       - name: Fetch ExifTool
         run: node apps/desktop/scripts/fetch-exiftool.mjs
+      - name: Cache FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/native/.cache/ffmpeg-n9.0.2-17-g2a571b6068-win64-lgpl-shared-9.0.zip
+          key: ffmpeg-n9.0.2-17-g2a571b6068-${{ runner.os }}
+      - name: Fetch FFmpeg
+        run: node apps/desktop/scripts/fetch-ffmpeg.mjs
       - name: Install desktop dependencies
         run: npm ci --prefix apps/desktop
       - name: Build the sidecar
@@ -90,6 +98,17 @@ jobs:
           $summary = & "$resources/sidecar/media-workspace/media-workspace.exe" --catalog $catalog summary
           if ($LASTEXITCODE -ne 0) { throw "the packaged sidecar failed" }
           "sidecar summary: $(($summary | ConvertFrom-Json | ConvertTo-Json -Compress))"
+          foreach ($file in "ffmpeg.exe", "ffprobe.exe") {
+            if (-not (Test-Path "$resources/native/ffmpeg/$file")) { throw "the installer lacks native/ffmpeg/$file" }
+          }
+          $ffmpeg = & "$resources/native/ffmpeg/ffmpeg.exe" -hide_banner -version
+          if ($LASTEXITCODE -ne 0) { throw "the bundled FFmpeg doesn't run" }
+          "FFmpeg: $($ffmpeg[0])"
+          $env:FFMPEG_PATH = (Resolve-Path "$resources/native/ffmpeg").Path
+          $clip = (Resolve-Path "../e2e/fixtures/test-videos/z-sample-video.mp4").Path
+          $probe = & "$resources/sidecar/media-workspace/media-workspace.exe" --catalog $catalog video-tool probe $clip | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $probe.width -ne 3840) { throw "the packaged sidecar can't read a video with the bundled FFmpeg" }
+          "video probe: $($probe | ConvertTo-Json -Compress)"
           Get-ChildItem *.exe | ForEach-Object { "$($_.Name): $([math]::Round($_.Length / 1MB)) MB" }
       - name: Check that the packaged app starts
         shell: pwsh
