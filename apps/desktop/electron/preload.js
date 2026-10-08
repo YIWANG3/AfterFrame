@@ -75,6 +75,13 @@ contextBridge.exposeInMainWorld("mediaWorkspace", {
     ipcRenderer.on("workspace:watched-import", listener);
     return () => ipcRenderer.removeListener("workspace:watched-import", listener);
   },
+  // Photos a watched folder reported that the catalog holds as they are on
+  // disk (asset ids): nothing to import, but one shown missing came back.
+  onWatchedPresent: (callback) => {
+    const listener = (_event, assetIds) => callback(assetIds);
+    ipcRenderer.on("workspace:watched-present", listener);
+    return () => ipcRenderer.removeListener("workspace:watched-present", listener);
+  },
   getMediaServerPort: () => { try { return ipcRenderer.sendSync("app:get-media-port"); } catch { return 0; } },
   // i18n: synchronous so the first render is already in the right language.
   getInitialLocale: () => { try { return ipcRenderer.sendSync("app:get-locale"); } catch { return "en"; } },

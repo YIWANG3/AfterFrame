@@ -35,6 +35,7 @@ const api = {
   sendAgentRenderResult: (...args) => invoke("sendAgentRenderResult", ...args),
   onMenuAction: (...args) => invoke("onMenuAction", ...args),
   onWatchedImport: (cb) => window.mediaWorkspace?.onWatchedImport?.(cb),
+  onWatchedPresent: (cb) => window.mediaWorkspace?.onWatchedPresent?.(cb),
   getInitialLocale: (...args) => invoke("getInitialLocale", ...args),
 };
 

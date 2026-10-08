@@ -2178,8 +2178,13 @@ def _cmd_changed_media(args, connection, catalog, parser):
     # mtime: what the importer itself compares), and one the user removed that
     # hasn't been rewritten since (the auto import skips it the same way). The
     # rest, unreadable paths included, are the import's to decide.
+    # `present_asset_ids` are the dropped files the catalog holds. Browsing
+    # stats files live and leaves exists_on_disk alone, so a photo moved out
+    # and put back unchanged reads here as never gone, while a card browsed in
+    # between still shows it missing: the app re-checks those.
     changed: list[str] = []
     unchanged = 0
+    present_asset_ids: list[str] = []
     for given in args.paths:
         try:
             path = Path(given).resolve()
@@ -2189,7 +2194,7 @@ def _cmd_changed_media(args, connection, catalog, parser):
             continue
         known = connection.execute(
             """
-            SELECT assets.file_size, assets.modified_time, assets.exists_on_disk
+            SELECT assets.asset_id, assets.file_size, assets.modified_time, assets.exists_on_disk
             FROM asset_files
             JOIN assets ON assets.asset_id = asset_files.asset_id
             WHERE asset_files.path = ?
@@ -2206,13 +2211,14 @@ def _cmd_changed_media(args, connection, catalog, parser):
             and iso_mtime(path, stat) == str(known["modified_time"] or "")
         ):
             unchanged += 1
+            present_asset_ids.append(str(known["asset_id"]))
         elif known is None and removed is not None and (
             int(stat.st_size) == int(removed["file_size"]) and abs(stat.st_mtime - float(removed["mtime"])) < 2
         ):
             unchanged += 1
         else:
             changed.append(given)
-    print(json.dumps({"changed": changed, "unchanged": unchanged}))
+    print(json.dumps({"changed": changed, "unchanged": unchanged, "present_asset_ids": present_asset_ids}))
     return 0
 
 
