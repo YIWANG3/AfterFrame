@@ -91,7 +91,9 @@ function register({
     if (!targetPath) throw new Error("Missing target path");
     addAllowedMediaDir?.(require("node:path").dirname(targetPath));
     const output = Buffer.from(arrayBuffer);
-    return await writeImageWithSourceMetadata(targetPath, output, sourceMetadataPath);
+    // The canvas already encoded this at 0.92; sharp re-encodes it to add the
+    // metadata, and without a quality it would do so at its default 80.
+    return await writeImageWithSourceMetadata(targetPath, output, sourceMetadataPath, { quality: 92 });
   });
 
   // Orientation + user transforms + crop, as one sharp pipeline positioned at

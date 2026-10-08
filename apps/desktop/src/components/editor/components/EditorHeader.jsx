@@ -4,7 +4,7 @@
 // parent computes `dimsLabel` and passes flags. Extracted from EditorOverlay
 // (Phase 4).
 
-import { Download, X } from "lucide-react";
+import { Download, Loader2, X } from "lucide-react";
 import { Checkbox } from "../../../ui";
 
 export default function EditorHeader({
@@ -35,7 +35,8 @@ export default function EditorHeader({
           disabled={exportDisabled}
           title={t("overlay.save")}
         >
-          <Download className="h-3.5 w-3.5" />
+          {/* A full-size save of a 100 MP photo takes seconds: show it working. */}
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           {saving ? t("overlay.saving") : t("overlay.saveButton")}
         </button>
         <button

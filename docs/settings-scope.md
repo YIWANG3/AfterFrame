@@ -22,6 +22,7 @@ app settings are the default and do not need a repeated label:
 | People | Installed models, active model, update preference | Global | app support + app `settings.json` |
 | Library | Generate HD previews on future imports | Global | app `settings.json` |
 | Library | Depth, sticker, and video-proxy caches | Global | app support directories |
+| Library | LUT library (imported .cube copies) and the LUT folders read in place | Global | `afterframe/luts/` in app support, `lutFolders` in app `settings.json`, header cache and Log marks in `afterframe/luts-index.json` |
 | Integrations | Detected external editors | Global | detected at runtime |
 
 ## Follow-up decisions

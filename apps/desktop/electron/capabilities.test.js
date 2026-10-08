@@ -8,7 +8,7 @@ test("macOS declares nothing, so every feature stays available as before", () =>
 });
 
 test("Windows locks only the features with no engine there", () => {
-  assert.deepEqual(desktopCapabilities("win32"), { depth: false, stickerExtract: false, people: false });
+  assert.deepEqual(desktopCapabilities("win32"), { depth: false, stickerExtract: false, people: false, lut: false });
   for (const flag of ["video", "colors", "annotation", "aiRepaint", "fileSystem", "integrations"]) {
     assert.equal(desktopCapabilities("win32")[flag], undefined, `${flag} works on Windows`);
   }

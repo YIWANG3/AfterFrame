@@ -7,3 +7,4 @@ this is part of the shipping app or its build — it's history.
 - `mock-ui/` — early product-direction comparison (notion / crypto / lightroom themes)
 - `lightbox-lab/` — standalone Vite experiment for lightbox zoom/pan, superseded by the real Lightbox component
 - `collage-templates-preview.html` — collage template preview
+- `lut/` — LUT research scripts and the macOS Core Image RAW→LUT prototype behind `docs/lut-plan.md`

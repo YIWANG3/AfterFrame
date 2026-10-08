@@ -15,6 +15,17 @@ const PhotoFrame = createLucideIcon("photo-frame", [
   ["path", { d: "M8 17.5h4", key: "bar" }],
 ]);
 
+// The LUT tool: the word in a rounded frame, a badge with the weight of the
+// stroked icons around it. Photographers know "LUT"; no pictogram for a
+// colour lookup reads as one (two overlapping circles read as "blend").
+function LutGlyph() {
+  return (
+    <span className="flex h-[14px] items-center rounded-[3px] border-[1.4px] border-current px-[2.5px] text-[8px] font-bold leading-none tracking-[0.03em]">
+      LUT
+    </span>
+  );
+}
+
 function ToolTab({ active, icon: Icon, label, onClick }) {
   return (
     <button
@@ -41,6 +52,11 @@ export default function ToolRail({ tool, onSelect, t }) {
       data-editor-wheel-scope="toolbar"
     >
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
+      {/* macOS only for now, and hidden rather than locked elsewhere
+          (docs/lut-plan.md): the web build has no LUT library either. */}
+      {api.can("lut") && api.has("listLuts") ? (
+        <ToolTab active={tool === "lut"} icon={LutGlyph} label={t("overlay.tools.lut")} onClick={() => onSelect("lut")} />
+      ) : null}
       <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />
       <ToolTab active={tool === "text"} icon={Type} label={t("overlay.tools.text")} onClick={() => onSelect("text")} />
       <ToolTab active={tool === "frame"} icon={PhotoFrame} label={t("overlay.tools.frame")} onClick={() => onSelect("frame")} />
