@@ -17,7 +17,10 @@
 // A folder reports more than new and rewritten files. AirDropping a photo, a
 // Finder tag or opening it in another app writes only its extended attributes,
 // and importing for those runs a job with nothing to do. Before sending, the
-// sidecar drops the files the catalog already holds as they are.
+// sidecar drops the files the catalog already holds as they are. Those go to
+// the renderer as `workspace:watched-present` (their asset ids) instead: a
+// photo moved out and put back unchanged is one of them, and a card that saw
+// it gone re-checks.
 
 const fs = require("fs");
 const path = require("path");
@@ -64,11 +67,11 @@ function importTargets(files, limit = MAX_FILES_PER_IMPORT) {
   return dirs.filter((dir, index) => !dirs.slice(0, index).some((outer) => isInside(dir, outer)));
 }
 
-function send(paths, catalogPath) {
+function send(channel, payload, catalogPath) {
   if (!sameCatalog(catalog.path(), catalogPath)) return;
   const win = getWindow();
   if (win && win.webContents && !win.webContents.isDestroyed()) {
-    win.webContents.send("workspace:watched-import", paths);
+    win.webContents.send(channel, payload);
   }
 }
 
@@ -76,21 +79,24 @@ function isFile(p) {
   try { return fs.statSync(p).isFile(); } catch { return false; }
 }
 
-// The files an import would change. A batch the sidecar can't answer for is
-// kept: the import itself skips what hasn't changed.
-async function changedFiles(files) {
+// The files an import would change, and the assets of those the catalog holds
+// as they are on disk. A batch the sidecar can't answer for is kept: the
+// import itself skips what hasn't changed.
+async function checkFiles(files) {
   const changed = [];
+  const present = [];
   for (let start = 0; start < files.length; start += MAX_FILES_PER_IMPORT) {
     const batch = files.slice(start, start + MAX_FILES_PER_IMPORT);
     try {
       const result = await catalog.changed(batch);
       changed.push(...(Array.isArray(result?.changed) ? result.changed : batch));
+      if (Array.isArray(result?.present_asset_ids)) present.push(...result.present_asset_ids);
     } catch (err) {
       console.warn("[watcher] can't check for changes:", err?.message || err);
       changed.push(...batch);
     }
   }
-  return changed;
+  return { changed, present };
 }
 
 async function flush(eventGeneration, catalogPath) {
@@ -103,9 +109,10 @@ async function flush(eventGeneration, catalogPath) {
   const files = [...pending].filter(isFile);
   pending.clear();
   if (!files.length) return;
-  const changed = await changedFiles(files);
+  const { changed, present } = await checkFiles(files);
   if (eventGeneration !== generation) return;
-  if (changed.length) send(importTargets(changed), catalogPath);
+  if (changed.length) send("workspace:watched-import", importTargets(changed), catalogPath);
+  if (present.length) send("workspace:watched-present", present, catalogPath);
 }
 
 // `relative` is the changed path under `root`, as fs.watch reports it.
@@ -179,7 +186,7 @@ function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings,
         return { ...s, integrations: { ...(s?.integrations || {}), watchedDirs: next } };
       }, catalogPath);
       rebuild();
-      send([d], catalogPath); // catch up the newly-added dir's current contents (dedup-safe)
+      send("workspace:watched-import", [d], catalogPath); // catch up the newly-added dir's current contents (dedup-safe)
     }
     return watchedDirs();
   }

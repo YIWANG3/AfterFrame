@@ -65,10 +65,10 @@ class ChangedMediaTest(unittest.TestCase):
 
     def test_a_photo_sent_by_airdrop_has_nothing_to_import(self) -> None:
         photo = self.export("sent.jpg")
-        self.import_files(photo)
+        [asset_id] = self.import_files(photo)
         mark_sent_by_airdrop(photo)
 
-        self.assertEqual(self.changed(photo), {"changed": [], "unchanged": 1})
+        self.assertEqual(self.changed(photo), {"changed": [], "unchanged": 1, "present_asset_ids": [asset_id]})
 
     def test_new_rewritten_and_retouched_files_are_kept(self) -> None:
         rewritten = self.export("rewritten.jpg")
@@ -92,7 +92,21 @@ class ChangedMediaTest(unittest.TestCase):
         self.run_cli("verify-assets")
         shutil.move(self.elsewhere / photo.name, photo)  # size and mtime as imported
 
-        self.assertEqual(self.changed(photo)["changed"], [str(photo)])
+        result = self.changed(photo)
+        self.assertEqual(result["changed"], [str(photo)])
+        self.assertEqual(result["present_asset_ids"], [])
+
+    def test_a_photo_put_back_before_any_verify_is_dropped_by_its_asset(self) -> None:
+        # Browsing stats files without recording what it finds, so a photo
+        # moved out and back unchanged was never gone as far as the catalog
+        # knows. Nothing to import; its asset id lets the app re-check a card
+        # that was browsed while it was away and shows it missing.
+        photo = self.export("put-back.jpg")
+        [asset_id] = self.import_files(photo)
+        shutil.move(photo, self.elsewhere / photo.name)
+        shutil.move(self.elsewhere / photo.name, photo)
+
+        self.assertEqual(self.changed(photo), {"changed": [], "unchanged": 1, "present_asset_ids": [asset_id]})
 
     def test_a_removed_photo_stays_out_until_rewritten(self) -> None:
         photo = self.export("removed.jpg")
@@ -100,7 +114,7 @@ class ChangedMediaTest(unittest.TestCase):
         self.run_cli("delete-image-assets", "--asset-id", asset_id)
         mark_sent_by_airdrop(photo)
 
-        self.assertEqual(self.changed(photo), {"changed": [], "unchanged": 1})
+        self.assertEqual(self.changed(photo), {"changed": [], "unchanged": 1, "present_asset_ids": []})
 
         photo.write_bytes(b"\xff\xd8a-new-export-over-it\xff\xd9")
         self.assertEqual(self.changed(photo)["changed"], [str(photo)])

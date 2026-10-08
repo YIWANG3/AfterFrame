@@ -435,6 +435,23 @@ export default function useWorkspace({ pushToast } = {}) {
     return api.onCatalogChanged((payload) => catalogChangedRef.current?.(payload));
   }, []);
 
+  // A watched folder reported photos the catalog holds as they are on disk, so
+  // nothing was imported. One a card or the Inspector shows missing was moved
+  // out and put back (Put Back from the Trash): browsing stats it again. A
+  // Finder tag or AirDrop on a photo shown present changes nothing here.
+  const watchedPresentRef = useRef(null);
+  watchedPresentRef.current = (assetIds) => {
+    if (revealRef.current) return;
+    const ids = new Set(assetIds || []);
+    const shownMissing = (item) => ids.has(item?.asset_id) && item.exists_on_disk === false;
+    if (itemsRef.current.some(shownMissing)) void refreshBrowse();
+    else if (shownMissing(detailRef.current)) refreshShownDetail();
+  };
+  useEffect(() => {
+    if (!api.has("onWatchedPresent")) return undefined;
+    return api.onWatchedPresent((assetIds) => watchedPresentRef.current?.(assetIds));
+  }, []);
+
   // A reveal loads a destination itself, then installs it as the scope: the
   // loaded key is set first so the browse effect sees "already showing this".
   function installLoadedScope(next) {

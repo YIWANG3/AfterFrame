@@ -432,8 +432,10 @@ test.describe("a watched folder while the app runs", () => {
     await h.refresh();
     await expect(h.inspectorMissing()).toHaveCount(1, { timeout: 10_000 });
 
-    // Put back, then no manual Refresh: the watcher's import (which finds the
-    // path already in the catalog) is the only thing that tells the app.
+    // Put back, then no manual Refresh: the watcher is the only thing that
+    // tells the app. The catalog holds the file as it is (browsing never
+    // recorded it missing), so nothing is imported; the card and the
+    // Inspector that saw it gone check again.
     fs.renameSync(trashed, moved);
     await expect(h.missingBadge(h.cardById(record))).toHaveCount(0, { timeout: 30_000 });
     await expect(h.inspectorMissing()).toHaveCount(0, { timeout: 10_000 });

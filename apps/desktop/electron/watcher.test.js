@@ -17,10 +17,12 @@ function setup(t, { changedMedia } = {}) {
   fs.mkdirSync(path.join(watched, "day 1"), { recursive: true });
   fs.mkdirSync(path.join(catalogPath, "previews"), { recursive: true });
   const sent = [];
+  const present = [];
+  const channels = { "workspace:watched-import": sent, "workspace:watched-present": present };
   const handlers = {};
   const api = register({
     ipcMain: { handle: (name, fn) => { handlers[name] = fn; } },
-    getMainWindow: () => ({ webContents: { isDestroyed: () => false, send: (_channel, paths) => sent.push(paths) } }),
+    getMainWindow: () => ({ webContents: { isDestroyed: () => false, send: (channel, payload) => channels[channel].push(payload) } }),
     getCatalogPath: () => catalogPath,
     readCatalogSettings: () => ({ integrations: { watchedDirs: [watched] } }),
     updateCatalogSettings: async () => {},
@@ -31,7 +33,7 @@ function setup(t, { changedMedia } = {}) {
     api.stop();
     fs.rmSync(root, { recursive: true, force: true });
   });
-  return { api, watched, catalogPath, sent };
+  return { api, root, watched, catalogPath, sent, present };
 }
 
 test("watching a folder holds a handle per folder, not per file (#130)", { skip: !fdDir }, async (t) => {
@@ -65,15 +67,23 @@ async function waitFor(condition, ms = 5000) {
   while (!condition() && Date.now() < deadline) await sleep(100);
 }
 
+// The sidecar's changed-media over a catalog holding `known` (path -> asset id)
+// as it is on disk.
+function catalogHolding(known, checked = []) {
+  return async (paths) => {
+    checked.push(...paths);
+    return {
+      changed: paths.filter((p) => !known.has(p)),
+      unchanged: paths.filter((p) => known.has(p)).length,
+      present_asset_ids: paths.filter((p) => known.has(p)).map((p) => known.get(p)),
+    };
+  };
+}
+
 test("a photo AirDrop marked as sent isn't imported again", { skip: process.platform !== "darwin" }, async (t) => {
-  const known = new Set();
+  const known = new Map();
   const checked = [];
-  const { api, watched, sent } = setup(t, {
-    changedMedia: async (paths) => {
-      checked.push(...paths);
-      return { changed: paths.filter((p) => !known.has(p)), unchanged: 0 };
-    },
-  });
+  const { api, watched, sent, present } = setup(t, { changedMedia: catalogHolding(known, checked) });
   api.start();
   await sleep(300);
   const photo = path.join(watched, "day 1", "sent.jpg");
@@ -82,7 +92,7 @@ test("a photo AirDrop marked as sent isn't imported again", { skip: process.plat
   assert.deepEqual(sent.flat(), [photo]);
 
   // Imported: the catalog now holds it as it is on disk.
-  known.add(photo);
+  known.set(photo, "image_sent");
   sent.length = 0;
   checked.length = 0;
   execFileSync("xattr", ["-w", "com.apple.metadata:kMDItemUserSharedSentTransport", "com.apple.AirDrop", photo]);
@@ -90,6 +100,31 @@ test("a photo AirDrop marked as sent isn't imported again", { skip: process.plat
   await sleep(400);
   assert.deepEqual(checked, [photo]);
   assert.deepEqual(sent, []);
+  assert.deepEqual(present, [["image_sent"]]);
+});
+
+// Put Back from the Trash: the file returns as the catalog holds it, which
+// browsing never marked missing. Nothing to import, but a card that saw it
+// gone has to hear that it's back.
+test("a photo moved out and put back isn't imported; the renderer hears it's there", async (t) => {
+  const known = new Map();
+  const { api, root, watched, sent, present } = setup(t, { changedMedia: catalogHolding(known) });
+  api.start();
+  await sleep(300);
+  const photo = path.join(watched, "day 1", "DSC_0005.jpg");
+  fs.writeFileSync(photo, "jpeg");
+  await waitFor(() => sent.length);
+  known.set(photo, "image_back");
+  sent.length = 0;
+  await sleep(400);
+  const trashed = path.join(root, "DSC_0005.jpg");
+  fs.renameSync(photo, trashed);
+  await sleep(100);
+  fs.renameSync(trashed, photo);
+  await waitFor(() => present.length);
+  await sleep(400);
+  assert.deepEqual(sent, []);
+  assert.deepEqual(present.flat(), ["image_back"]);
 });
 
 test("files are imported when the catalog can't say whether they changed", async (t) => {
