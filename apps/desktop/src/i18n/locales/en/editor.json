@@ -1,6 +1,8 @@
 {
   "overlay": {
     "loading": "Loading editor…",
+    "renderingRaw": "Rendering the RAW…",
+    "renderingRawHint": "A high-resolution RAW (100 MP, say) is rendered at full size the first time it's opened, which takes a few seconds; it's quick after that.",
     "decodeError": "The source image cannot be decoded.",
     "noSource": "No preview is available to edit.",
     "close": "Close editor (Esc)",

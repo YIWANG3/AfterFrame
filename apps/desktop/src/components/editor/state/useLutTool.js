@@ -25,7 +25,7 @@ function errorCode(error) {
 
 export function useLutTool({
   open, active, previewSource, transformedPreview, editorStateRef, lut,
-  apply, record, pushToast, t,
+  baseReady = true, apply, record, pushToast, t,
 }) {
   const [library, setLibrary] = useState(cachedLibrary);
   const [loading, setLoading] = useState(false);
@@ -189,8 +189,10 @@ export function useLutTool({
   // The photo (rotated/flipped, uncropped, ungraded) at THUMB_EDGE; each LUT
   // is applied to a copy of it. Cached per photo state, made only for the
   // cells on screen (the panel asks through requestThumb), a few at a time.
+  // None while the picture is about to be replaced (a RAW's Apple render on
+  // its way): they'd be of the camera's JPEG, and thrown away in a moment.
   const thumbBase = useMemo(() => {
-    if (!open || !active || !transformedPreview) return null;
+    if (!open || !active || !transformedPreview || !baseReady) return null;
     const scale = Math.min(1, THUMB_EDGE / Math.max(transformedPreview.width, transformedPreview.height));
     const width = Math.max(1, Math.round(transformedPreview.width * scale));
     const height = Math.max(1, Math.round(transformedPreview.height * scale));
@@ -201,7 +203,7 @@ export function useLutTool({
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(transformedPreview, 0, 0, width, height);
     return { width, height, pixels: ctx.getImageData(0, 0, width, height).data };
-  }, [open, active, transformedPreview]);
+  }, [open, active, transformedPreview, baseReady]);
 
   const queueRef = useRef([]);
   const inFlightRef = useRef(new Set());

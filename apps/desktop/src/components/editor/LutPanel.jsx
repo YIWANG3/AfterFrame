@@ -306,7 +306,8 @@ export default function LutPanel({
           </div>
         </div>
         {base ? (
-          <div className="mt-1.5 text-[10.5px] leading-snug text-muted2" data-testid="lut-base" data-base={base}>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] leading-snug text-muted2" data-testid="lut-base" data-base={base}>
+            {base === "rendering" ? <Spinner className="h-3 w-3" /> : null}
             {baseLabel(base, t)}
           </div>
         ) : null}

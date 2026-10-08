@@ -243,7 +243,29 @@ test.describe("LUT tool (macOS)", () => {
     await ctx.window.evaluate(() => window.__afterframeTest.setAspect("1:1"));
     await expect.poll(async () => (await ctx.window.evaluate(() => window.__afterframeTest.getState())).aspectKey).toBe("1:1");
 
+    // Every frame until Apple's render is in: while it's on its way the photo
+    // says so, and no LUT thumbnail is made of the camera's JPEG.
+    const frames = ctx.window.evaluate(() => new Promise((resolve) => {
+      const seen = [];
+      const tick = () => {
+        const s = window.__afterframeTest.getLutState?.();
+        seen.push({
+          base: s?.base || null,
+          thumbs: document.querySelectorAll("[data-lut-cell] img").length,
+          loading: document.querySelector("[data-testid='editor-loading-label']")?.textContent || null,
+        });
+        if (s?.base === "apple" || s?.base === "libraw" || seen.length > 3000) resolve(seen);
+        else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }));
     await ctx.window.getByTestId("tool-lut").click();
+    const rendering = (await frames).filter((f) => f.base === "rendering");
+    expect(rendering.length).toBeGreaterThan(0); // sips takes a few frames even for this small DNG
+    for (const f of rendering) {
+      expect(f.thumbs, JSON.stringify(f)).toBe(0);
+      expect(f.loading, JSON.stringify(f)).toContain("Rendering the RAW with Apple's engine");
+    }
     await expect.poll(async () => (await lutState()).sourcePath, { timeout: 60_000 }).toMatch(/raw-edit-cache/);
     await expect.poll(async () => ["apple", "libraw"].includes((await lutState()).base), { timeout: 10_000 }).toBe(true);
     await expect(ctx.window.getByTestId("lut-base")).toBeVisible();

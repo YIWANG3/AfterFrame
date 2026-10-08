@@ -28,6 +28,7 @@ import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from 
 import { invalidatePersonalLogos, isPersonalLogoRef, preparePersonalLogo } from "./editor/render/personalLogos";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
+import EditorLoading from "./editor/components/EditorLoading";
 import ToolRail from "./editor/components/ToolRail";
 import PanelChrome from "./editor/components/PanelChrome";
 import CropPanel from "./editor/components/CropPanel";
@@ -359,6 +360,9 @@ export default function EditorOverlay({
   const sourceBaked = open && bakedItem === itemKey;
   const neutralRaw = useNeutralRawRender({ item, enabled: open && isRaw && lutAvailable && neutralWanted });
   const neutralPath = isRaw ? neutralRaw?.path || null : null;
+  // Apple's render asked for and not back yet (a couple of seconds): the
+  // picture on screen is still the camera's JPEG, about to be replaced.
+  const neutralRendering = isRaw && lutAvailable && !sourceBaked && neutralWanted && neutralRaw === undefined;
   const neutralSwapRef = useRef(null);
   neutralSwapRef.current = neutralPath;
   const resolvedSourcePath = awaitingSource ? null : (isRaw
@@ -772,6 +776,8 @@ export default function EditorOverlay({
   const lutState = editorState.lut;
   const lutTool = useLutTool({
     open, active: tool === "lut", previewSource, transformedPreview, editorStateRef, lut: lutState,
+    // No thumbnails of the camera's JPEG only to throw them away.
+    baseReady: !neutralRendering,
     apply: applyState, record: recordState, pushToast, t,
   });
   const lutGradedTransformed = useMemo(() => {
@@ -784,7 +790,7 @@ export default function EditorOverlay({
   const lutBase = !isRaw || !lutAvailable ? null
     : sourceBaked ? "baked"
     : neutralRaw?.path ? (neutralRaw.renderer === "libraw" ? "libraw" : "apple")
-    : neutralWanted && neutralRaw === undefined ? "rendering"
+    : neutralRendering ? "rendering"
     : "embedded";
 
   useEffect(() => {
@@ -1545,7 +1551,18 @@ export default function EditorOverlay({
         onPointerUp={viewportPointerEnd}
         onPointerCancel={viewportPointerEnd}
       >
-        {loadState === "loading" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{t("overlay.loading")}</div> : null}
+        {/* Nothing drawn yet: the catalog's preview stands in, dimmed. */}
+        {loadState === "loading" || lutBase === "rendering" ? (
+          <EditorLoading
+            previewPath={imageRect ? null : item?.preview_hd_path || item?.image_preview_hd_path || item?.image_preview_path || item?.preview_path || null}
+            viewportSize={viewportSize}
+            over={imageRect}
+            label={isRaw && awaitingSource ? t("overlay.renderingRaw")
+              : lutBase === "rendering" || (isRaw && neutralPath && !sourceBaked) ? t("lut.base.rendering")
+              : t("overlay.loading")}
+            hint={isRaw && awaitingSource ? t("overlay.renderingRawHint") : null}
+          />
+        ) : null}
         {loadState === "error" ? <div className="absolute inset-0 grid place-items-center text-[13px] text-muted">{loadError || message || "Failed to load image"}</div> : null}
 
         {imageRect ? (

@@ -1,6 +1,8 @@
 {
   "overlay": {
     "loading": "正在加载编辑器…",
+    "renderingRaw": "正在渲染 RAW…",
+    "renderingRawHint": "高像素 RAW（比如 1 亿像素）第一次打开要渲染全尺寸，需要几秒；再打开就快了。",
     "decodeError": "无法解码源图像。",
     "noSource": "没有可用于编辑的预览。",
     "close": "关闭编辑器 (Esc)",
