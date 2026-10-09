@@ -336,6 +336,16 @@ test("an export saved from the editor on a RAW names that RAW as its source and 
   await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${raw.asset_id}"]`).click();
   await expect(ctx.window.getByTestId("inspector-asset-title")).toHaveText("luna-browse.dng");
   await ctx.window.keyboard.press("e");
+  // This DNG's image data is JPEG XL, which LibRaw on Windows can't decode
+  // (Image I/O does on the Mac): there the editor edits the 256×144 preview
+  // the DNG embeds, and says so.
+  const previewOnly = process.platform === "win32";
+  if (previewOnly) {
+    await expect(ctx.window.getByText("Editing the RAW's preview", { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(ctx.window.getByText(
+      "This RAW can't be decoded at full size here, so edits and saves use its 256×144 preview instead of 1024×576.",
+    )).toBeVisible();
+  }
   await expect(ctx.window.getByRole("button", { name: /^Save$/ })).toBeVisible({ timeout: 30_000 });
   await waitForEditor(ctx.window, { preview: true, previewTimeout: 60_000 });
 
@@ -345,8 +355,9 @@ test("an export saved from the editor on a RAW names that RAW as its source and 
   await ctx.window.getByRole("button", { name: /^Save$/ }).click();
   await expect(ctx.window.getByText("Saved", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
   expect(fs.existsSync(out)).toBe(true);
-  // Untouched, so the RAW's own size: this RAW's HD preview is a full-size render.
-  expect(await sharp(out).metadata()).toMatchObject({ width: 1024, height: 576 });
+  // Untouched, so the RAW's own size: this RAW's HD preview is a full-size
+  // render. Or, where it can't be decoded, the preview's.
+  expect(await sharp(out).metadata()).toMatchObject(previewOnly ? { width: 256, height: 144 } : { width: 1024, height: 576 });
 
   const detail = await ctx.window.evaluate((p) => window.mediaWorkspace.getAssetDetail(p), out);
   expect(detail.raw_path).toBe(raw.image_path);

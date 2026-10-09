@@ -31,7 +31,10 @@
       "split": "Split",
       "frame": "Frame",
       "lut": "LUT"
-    }
+    },
+    "rawPreviewOnlyTitle": "Editing the RAW's preview",
+    "rawPreviewOnly": "This RAW can't be decoded at full size here, so edits and saves use its {{width}}×{{height}} preview instead of {{rawWidth}}×{{rawHeight}}.",
+    "rawPreviewOnlyUnknownSize": "This RAW can't be decoded at full size here, so edits and saves use its smaller preview."
   },
   "lut": {
     "title": "LUT",
