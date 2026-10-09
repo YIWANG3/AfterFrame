@@ -17,7 +17,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 从 [Releases](../../releases) 下载最新版本：
 
 - **Mac**：下载 `.dmg`。需要 macOS 14 或更新版本（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
-- **Windows**：下载 `-setup.exe`。需要 Windows 10 或 11（64 位）。安装包暂未签名，Windows 提示「Windows 已保护你的电脑」时，点 **更多信息**，再点 **仍要运行**。贴纸、人物和场景深度目前仅 macOS 版支持。
+- **Windows**：下载 `-setup.exe`。需要 Windows 10 或 11（64 位）。安装包暂未签名，Windows 提示「Windows 已保护你的电脑」时，点 **更多信息**，再点 **仍要运行**。贴纸、人物、场景深度和 LUT 目前仅 macOS 版支持。
 
 ![AfterFrame — 浏览与检查](docs/assets/cn/library.webp)
 
@@ -100,6 +100,8 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 ![AI 手写字（英文界面）](docs/assets/en/editor-handwriting.webp)
 
 ![四张使用 AI 手写字完成的夜景摄影作品（AfterFrame 制作）](docs/assets/editor-handwriting-gallery.jpg)
+
+- **LUT**（macOS）：给照片套 `.cube` LUT，强度可调。网格里能看到照片套上每个 LUT 的样子，按包和文件夹分组，支持搜索、收藏和最近使用。LUT 文件可以导入 AfterFrame 的 LUT 库，也可以直接读取原位置的 LUT 文件夹。Log 版 LUT 会被标出来，可以一键隐藏；按住看原图；RAW 用苹果的渲染来套，而不是相机内嵌的 JPEG
 
 - **蒙层图层**：可叠加的纯色/渐变压暗层，让标题在复杂背景上保持可读。蒙层就是普通图层：可与文字、贴纸自由排序、可叠多层，Apply 时一并烘焙进图像
 

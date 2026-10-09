@@ -17,7 +17,7 @@ AfterFrame is built for photographers who work with thousands of exported images
 Download the latest version from [Releases](../../releases):
 
 - **Mac:** the `.dmg`. macOS 14 or later (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
-- **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People and Scene Depth are in the macOS app only for now.
+- **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People, Scene Depth and LUTs are in the macOS app only for now.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
 
@@ -100,6 +100,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 ![AI Handwriting](docs/assets/en/editor-handwriting.webp)
 
 ![Four night photography pieces with AI handwriting — made with AfterFrame](docs/assets/editor-handwriting-gallery.jpg)
+
+- **LUT** (macOS) — apply `.cube` LUTs with a strength slider, from a grid that shows the photo through every LUT, grouped by pack and folder, with search, favorites and recently used. Import LUT files into AfterFrame's library or read a LUT folder where it is. Log LUTs are tagged so you can hide them, hold to see the original, and RAW files are graded on Apple's rendering instead of the camera's embedded JPEG
 
 - **Overlay layers** — stackable solid/gradient washes that dim the photo for readable titles. They are normal layers: reorder them against text and stickers, add several, and they bake into the image on Apply
 
