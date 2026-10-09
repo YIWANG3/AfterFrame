@@ -26,6 +26,33 @@ async function detail(png) {
   return sum / (width * height);
 }
 
+// capturePage() copies the last frame the compositor drew. The page can be well
+// ahead of it: on the CI VM the band's opacity already read 1 while the frame
+// with the scroll was still rasterizing, so the "blurred" strip came from
+// before the scroll (ratio 0.71, that stale frame's exact value). So after each
+// change, paint a stamp in the sidebar's corner in a new colour, and capture the
+// strip only once a capture shows that colour: frames only move forward, so the
+// strip's frame has every change made before the stamp.
+const STAMP_CHANNEL = { red: 0, blue: 2 };
+async function captureAfterStamp(app, window, locator, colour) {
+  await window.evaluate((background) => {
+    let stamp = document.getElementById("edge-stamp");
+    if (!stamp) {
+      stamp = document.createElement("div");
+      stamp.id = "edge-stamp";
+      stamp.style.cssText = "position:fixed;left:24px;bottom:24px;width:8px;height:8px;z-index:2147483647;pointer-events:none";
+      document.body.append(stamp);
+    }
+    stamp.style.background = background;
+  }, colour);
+  await expect.poll(async () => {
+    const png = await captureElement(app, window, window.locator("#edge-stamp"));
+    const { channels } = await sharp(png).stats();
+    return channels.slice(0, 3).every(({ mean }, i) => (i === STAMP_CHANNEL[colour] ? mean > 150 : mean < 100));
+  }, { timeout: 10_000 }).toBe(true);
+  return captureElement(app, window, locator);
+}
+
 test.describe("Scroll edge", () => {
   let app, window, userDataDir;
 
@@ -63,16 +90,18 @@ test.describe("Scroll edge", () => {
       getComputedStyle(document.querySelector('[data-testid="workspace-split"]'), "::before").opacity)).toBe("1");
     const probe = window.getByTestId("edge-probe");
 
-    const blurred = await detail(await captureElement(app, window, probe));
+    const blurred = await detail(await captureAfterStamp(app, window, probe, "red"));
     await window.evaluate((css) => {
       const style = document.createElement("style");
       style.id = "edge-no-blur";
       style.textContent = css;
       document.head.append(style);
     }, NO_BLUR);
-    await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    const sharpOnly = await detail(await captureElement(app, window, probe));
-    await window.evaluate(() => document.getElementById("edge-no-blur").remove());
+    const sharpOnly = await detail(await captureAfterStamp(app, window, probe, "blue"));
+    await window.evaluate(() => {
+      document.getElementById("edge-no-blur").remove();
+      document.getElementById("edge-stamp").remove();
+    });
 
     expect(sharpOnly).toBeGreaterThan(1);
     expect(blurred / sharpOnly).toBeLessThan(0.5);
