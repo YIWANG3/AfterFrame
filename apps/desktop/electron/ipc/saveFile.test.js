@@ -132,3 +132,19 @@ test("the saved file is upright for viewers too: no leftover orientation tag", a
     assert.equal((await sharp(savePath).metadata()).orientation ?? 1, 1, `orientation ${orientation}`);
   }
 });
+
+test("save-image asks for quality 92, never sharp's default 80", async () => {
+  const handlers = new Map();
+  const calls = [];
+  register({
+    ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
+    dialog: {},
+    rootDir: os.tmpdir(),
+    writeImageWithSourceMetadata: async (...args) => { calls.push(args); },
+  });
+  const pixels = new Uint8Array([1, 2, 3]).buffer;
+  await handlers.get("workspace:save-image")({}, "/tmp/out/collage.jpg", pixels, "/photos/a.jpg");
+  assert.equal(calls.length, 1);
+  const [target, buffer, source, options] = calls[0];
+  assert.deepEqual([target, [...buffer], source, options], ["/tmp/out/collage.jpg", [1, 2, 3], "/photos/a.jpg", { quality: 92 }]);
+});

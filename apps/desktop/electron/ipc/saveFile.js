@@ -91,8 +91,10 @@ function register({
     if (!targetPath) throw new Error("Missing target path");
     addAllowedMediaDir?.(require("node:path").dirname(targetPath));
     const output = Buffer.from(arrayBuffer);
-    // The canvas already encoded this at 0.92; sharp re-encodes it to add the
-    // metadata, and without a quality it would do so at its default 80.
+    // sharp encodes to the target's format to add the metadata; without a
+    // quality it would use its default 80. Collages send a lossless PNG, so
+    // this is their only lossy pass (and a .png target stays lossless); the
+    // editor's canvas save still sends a 0.92 JPEG for a JPEG target.
     return await writeImageWithSourceMetadata(targetPath, output, sourceMetadataPath, { quality: 92 });
   });
 

@@ -1,5 +1,6 @@
 // Web-build smoke: the shared App on the browser bridge, end to end.
 // Each test gets a fresh browser context (empty IndexedDB) from Playwright.
+const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
 
 const FIXTURE = "/e2e/fixtures/real-images/IMG_0695-Enhanced-NR-3.jpg"; // Canon EOS 6D EXIF
@@ -97,6 +98,10 @@ test("two selected photos open the collage and export a download", async ({ page
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/collage.*\.jpg$/i);
+  // The collage renders a lossless PNG; the bridge encodes the JPEG the name
+  // promises (sharp does it on desktop).
+  const bytes = fs.readFileSync(await (await download).path());
+  expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
 });
 
 test("videos are rejected with a toast instead of silently dropped", async ({ page }) => {

@@ -99,3 +99,28 @@ test("no source path: nothing is read, the pixels are still written", async (t) 
   assert.equal(result.path, target);
   assert.equal((await sharp(target).metadata()).format, "png");
 });
+
+// A collage renders to a lossless PNG and leaves the one encode to this save:
+// a .png target keeps every pixel, a .jpg is a single pass at the quality asked
+// for. It used to arrive as a 0.92 JPEG, so both were a JPEG of a JPEG.
+test("a lossless render is encoded once: exact pixels as PNG, one JPEG pass at the given quality", async (t) => {
+  const dir = tempDir(t);
+  const sourcePath = await sourceWithXmp(dir);
+  const { writeImageWithSourceMetadata } = createImageMetadataWriter({ readSourceMetadata: async () => SOURCE_FIELDS });
+  // Noise: any lossy step anywhere changes it.
+  const raw = { width: 64, height: 48, channels: 3 };
+  const pixels = Buffer.from(Array.from({ length: 64 * 48 * 3 }, (_, i) => (i * 7919) % 251));
+  const render = await sharp(pixels, { raw }).png().toBuffer();
+  const decode = async (input) => (await sharp(input).raw().toBuffer({ resolveWithObject: true })).data;
+
+  const png = path.join(dir, "collage.png");
+  await writeImageWithSourceMetadata(png, render, sourcePath, { quality: 92 });
+  assert.equal((await sharp(png).metadata()).format, "png");
+  assert.ok((await decode(png)).equals(pixels), "a PNG save changed the pixels");
+
+  const jpg = path.join(dir, "collage.jpg");
+  await writeImageWithSourceMetadata(jpg, render, sourcePath, { quality: 92 });
+  const oncePass = await sharp(render).jpeg({ quality: 92 }).toBuffer();
+  assert.ok((await decode(jpg)).equals(await decode(oncePass)), "not a single JPEG pass at quality 92");
+  assert.equal((await exifr.parse(jpg)).Make, "TestMake");
+});

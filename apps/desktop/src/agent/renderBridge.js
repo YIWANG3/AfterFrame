@@ -35,7 +35,7 @@ function loadImage(filePath) {
   });
 }
 
-function canvasToJpegBuffer(canvas, quality = 0.92, mime = "image/jpeg") {
+function canvasToBuffer(canvas, mime = "image/jpeg", quality = 0.92) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? blob.arrayBuffer().then(resolve, reject) : reject(new Error("toBlob failed"))),
@@ -80,7 +80,8 @@ async function handleCollage(payload) {
     bgColor: bgColor || "#000000",
     width: width || 3000,
   });
-  const buffer = await canvasToJpegBuffer(canvas);
+  // Lossless, like CollageOverlay's export: saveImage encodes it once.
+  const buffer = await canvasToBuffer(canvas, "image/png");
   await api.saveImage(savePath, buffer, files[0].imagePath);
   const asset = await api.quickRegister(savePath, files[0].imagePath, sourceAssetIds);
   return { saved_path: savePath, template_id: template.id, width: canvas.width, height: canvas.height, asset };
@@ -248,7 +249,7 @@ async function handleFrame(payload) {
   } else {
     canvas = renderFrame({ photo, exif, profile, template, registry, logoImages });
   }
-  const buffer = await canvasToJpegBuffer(canvas);
+  const buffer = await canvasToBuffer(canvas);
   await api.saveImage(savePath, buffer, imagePath);
   const asset = await api.quickRegister(savePath, imagePath);
   return { saved_path: savePath, template_id: template.id, width: canvas.width, height: canvas.height, asset };

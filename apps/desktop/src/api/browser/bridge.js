@@ -747,10 +747,30 @@ const importJobStatus = () => (importJob
   })
   : jobStatus());
 
-function downloadBuffer(savePath, buffer) {
+const isPngBytes = (buffer) => {
+  const b = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+  return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+};
+
+// A collage hands saveImage a lossless PNG and leaves the encoding to the save
+// (sharp, on desktop). Here the browser does it, once, at the same 0.92.
+async function encodePngAsJpeg(buffer) {
+  const bmp = await createImageBitmap(new Blob([buffer], { type: "image/png" }));
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  canvas.getContext("2d", { alpha: false }).drawImage(bmp, 0, 0);
+  bmp.close();
+  const jpeg = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.92));
+  if (!jpeg) throw new Error("Failed to encode image");
+  return jpeg;
+}
+
+async function downloadBuffer(savePath, buffer) {
   const name = String(savePath).split("/").pop() || "export.jpg";
   const type = /\.png$/i.test(name) ? "image/png" : "image/jpeg";
-  const url = URL.createObjectURL(new Blob([buffer], { type }));
+  const data = type === "image/jpeg" && isPngBytes(buffer) ? await encodePngAsJpeg(buffer) : buffer;
+  const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;

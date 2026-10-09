@@ -169,7 +169,7 @@ export function renderCollagePage({
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = targetH;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = bgColor || "#000000";
