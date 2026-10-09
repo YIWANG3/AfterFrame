@@ -16,6 +16,9 @@ let ctx;
 const cards = () => ctx.window.locator("[data-gallery-item='true']");
 const imageRows = () => ctx.window.getByTestId("collage-image-list").locator("> *");
 const canvas = () => ctx.window.getByTestId("collage-canvas");
+// The toast fires after saveImage + quickRegister, naming the file. Earlier
+// exports' toasts last 20 s and can expire mid-wait, so counting them races.
+const exportedToast = (file) => ctx.window.getByTestId("toast-card").filter({ hasText: "Collage exported" }).filter({ hasText: file });
 
 async function callTool(name, args) {
   const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
@@ -210,6 +213,45 @@ test("Export writes the JPEG at the chosen path and registers it as a version", 
   }
 });
 
+// The PNG choice in the save dialog used to write a lossless copy of a 0.92
+// JPEG. The render is lossless now: the padding band around the photos is
+// exactly the background colour, with none of the ringing a JPEG puts next
+// to an edge, and an opaque render carries no alpha channel.
+test("Export as PNG is a lossless render", async () => {
+  test.setTimeout(90_000);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-collage-png-"));
+  const out = path.join(dir, "pair_collage.png");
+  const padding = ctx.window.getByText("Padding", { exact: true }).locator("xpath=../..").locator('input[type="range"]');
+  const PAD = 40;
+  try {
+    await padding.fill(String(PAD));
+    await ctx.window.getByTitle("#3b1a1a", { exact: true }).click();
+    await ctx.app.evaluate(({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, out);
+    await ctx.window.waitForTimeout(500);
+    await ctx.window.getByRole("button", { name: "Export", exact: true }).click();
+    await expect(exportedToast(out)).toBeVisible({ timeout: 30_000 });
+
+    const { data, info } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+    expect((await sharp(out).metadata()).format).toBe("png");
+    expect([info.width, info.height, info.channels]).toEqual([3000, 3000, 3]);
+    const off = [];
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width; x++) {
+        if (x >= PAD && x < info.width - PAD && y >= PAD && y < info.height - PAD) continue;
+        const i = (y * info.width + x) * 3;
+        if (data[i] !== 0x3b || data[i + 1] !== 0x1a || data[i + 2] !== 0x1a) off.push([x, y, data[i], data[i + 1], data[i + 2]]);
+      }
+    }
+    expect(off.slice(0, 5), `${off.length} padding pixels are not #3b1a1a`).toEqual([]);
+  } finally {
+    await padding.fill("0");
+    await ctx.window.getByTitle("#000000", { exact: true }).click();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("Escape closes the overlay", async () => {
   await ctx.window.keyboard.press("Escape");
   await expect(ctx.window.getByRole("button", { name: "Single", exact: true })).toHaveCount(0);
@@ -246,11 +288,8 @@ test("a collage made inside a folder joins that folder while the box is ticked",
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, out);
     await ctx.window.waitForTimeout(500);
-    // Earlier toasts linger for 20 s: wait for one more, not for a unique one.
-    const toasts = ctx.window.getByText("Collage exported");
-    const before = await toasts.count();
     await ctx.window.getByRole("button", { name: "Export", exact: true }).click();
-    await expect(toasts).toHaveCount(before + 1, { timeout: 30_000 });
+    await expect(exportedToast(out)).toBeVisible({ timeout: 30_000 });
     return out;
   };
   try {

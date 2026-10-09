@@ -544,7 +544,9 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const offscreen = document.createElement("canvas");
       offscreen.width = targetWidth;
       offscreen.height = targetH;
-      const ctx = offscreen.getContext("2d");
+      // Opaque, like the JPEG it usually becomes: the PNG below then has no
+      // alpha channel to carry into a PNG save.
+      const ctx = offscreen.getContext("2d", { alpha: false });
       ctx.fillStyle = bg || "#000000";
       ctx.fillRect(0, 0, targetWidth, targetH);
 
@@ -584,7 +586,10 @@ const CollageCanvas = forwardRef(function CollageCanvas(
           drawCellImage(ctx, img, rect, { x: state.pan.x * panScale, y: state.pan.y * panScale }, state.zoom, br);
         }
       }
-      return new Promise((resolve) => offscreen.toBlob(resolve, "image/jpeg", 0.92));
+      // Lossless: the format is chosen after this, in the save dialog, and
+      // saveImage encodes once to it (JPEG at 92). A JPEG here was encoded a
+      // second time on save, and a PNG save kept its artifacts.
+      return new Promise((resolve) => offscreen.toBlob(resolve, "image/png"));
     },
   }), [selectedIdx, getState, setState, emitSelectedState, getLoadedImage, redraw]);
 
