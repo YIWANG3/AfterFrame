@@ -4,8 +4,9 @@ import { collapseRootPaths, mergeRoots, determineImportMode, fileName } from "..
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import api from "../api";
 import useJobs from "./useJobs";
+import { oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
+  DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
@@ -16,6 +17,11 @@ const NO_QUEUED_IMPORT = { rawDirs: [], imageDirs: [], auto: false };
 const THEME_STORAGE_KEY = "afterframe-theme";
 const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
 const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
+
+// The library sort is remembered (utils/prefs.js): the app opens, and a
+// catalog switch lands, on All Assets in the order last picked.
+const SORT_PREF = "gallery.sort";
+const startScope = () => ({ ...DEFAULT_SCOPE, sort: readPref(SORT_PREF, DEFAULT_SCOPE.sort, oneOf(LIBRARY_SORTS)) });
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
@@ -40,7 +46,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // below browses it. Nothing reads status/filters/query as separate state
   // across an await any more — that is what let a background refresh, or an
   // older click, land last with a scope the user had already left (#68).
-  const [scope, setScopeState] = useState(DEFAULT_SCOPE);
+  const [scope, setScopeState] = useState(startScope);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const updateScope = useCallback((patch) => setScopeState((current) => ({ ...current, ...patch })), []);
@@ -1101,8 +1107,9 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!switched) await api.switchCatalog(nextCatalogPath ?? null);
     // Facet filters reference catalog-local entities (person groups, tags) —
     // carrying them across catalogs yields empty or nonsense views. The sort
-    // resets too (app default).
-    installLoadedScope(DEFAULT_SCOPE);
+    // goes back to the remembered one.
+    const fresh = startScope();
+    installLoadedScope(fresh);
     setItems([]);
     setDetail(null);
     setBrowserReady(false);
@@ -1115,7 +1122,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setImportQueue(NO_QUEUED_IMPORT);
     setCollections([]);
     resetJobs();
-    await refreshAll({ scope: DEFAULT_SCOPE });
+    await refreshAll({ scope: fresh });
     pokeJobs();
   }
 
@@ -1279,7 +1286,11 @@ export default function useWorkspace({ pushToast } = {}) {
     status: scope.status,
     setStatus: (status) => updateScope({ status }),
     sort: scope.sort,
-    setSort: (sort) => updateScope({ sort }),
+    setSort: (sort) => {
+      updateScope({ sort });
+      // A folder-only sort ("added") is that folder's, not the library's.
+      if (LIBRARY_SORTS.includes(sort)) writePref(SORT_PREF, sort);
+    },
     query: typedQuery,
     setQuery: setTypedQuery,
     filters: scope.filters,

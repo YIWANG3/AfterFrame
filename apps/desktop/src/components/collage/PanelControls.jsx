@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, X } from "lucide-react";
+import { Plus, RotateCcw, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
 import { fileName, localFileUrl } from "../../utils/format";
 
@@ -81,13 +81,29 @@ export function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
 }
 
-export function Section({ label, children }) {
+export function Section({ label, action = null, children }) {
   return (
     <div className="border-b border-border/60 px-4 py-3">
-      <PanelLabel>{label}</PanelLabel>
+      {action ? (
+        <div className="flex items-center justify-between">
+          <PanelLabel>{label}</PanelLabel>
+          {action}
+        </div>
+      ) : <PanelLabel>{label}</PanelLabel>}
       <div className="mt-3">{children}</div>
     </div>
   );
+}
+
+// A remembered ratio that is none of the presets came from the W:H inputs:
+// show it there again (as the smallest whole pair) rather than leave them empty.
+function ratioParts(ratio) {
+  if (ASPECT_OPTIONS.some((opt) => Math.abs(ratio - opt.value) < 0.01)) return ["", ""];
+  for (let h = 1; h <= 50; h++) {
+    const w = Math.round(ratio * h);
+    if (w > 0 && Math.abs(w / h - ratio) < 0.0005) return [String(w), String(h)];
+  }
+  return ["", ""];
 }
 
 // Template thumbnail SVG — solid fill style like Meitu
@@ -169,16 +185,32 @@ export function CanvasSection({
   onBorderRadiusChange,
   bgColor,
   onBgColorChange,
+  onReset = null,
   exportWidth,
 }) {
   const { t } = useTranslation("collage");
-  const [customRatioW, setCustomRatioW] = useState("");
-  const [customRatioH, setCustomRatioH] = useState("");
+  const [customRatioW, setCustomRatioW] = useState(() => ratioParts(canvasRatio)[0]);
+  const [customRatioH, setCustomRatioH] = useState(() => ratioParts(canvasRatio)[1]);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const customColorBtnRef = useRef(null);
 
+  // These are remembered for the next collage; shown only when something
+  // differs from the defaults, so there is a way back from an odd setup.
+  const resetButton = onReset ? (
+    <button
+      type="button"
+      data-testid="collage-canvas-reset"
+      className="-my-0.5 flex h-4 items-center gap-1 rounded px-1 text-[10px] text-muted2 transition-colors hover:bg-hover hover:text-text"
+      title={t("resetCanvasHint")}
+      onClick={() => { onReset(); setCustomRatioW(""); setCustomRatioH(""); setShowColorPicker(false); }}
+    >
+      <RotateCcw className="h-3 w-3" />
+      {t("resetCanvas")}
+    </button>
+  ) : null;
+
   return (
-    <Section label={t("canvas")}>
+    <Section label={t("canvas")} action={resetButton}>
       <div className="space-y-3">
         <div>
           <div className="text-[11px] text-muted">{t("aspectRatio")}</div>

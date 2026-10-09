@@ -18,6 +18,8 @@
   "borderRadius": "圆角",
   "background": "背景",
   "customColor": "自定义颜色",
+  "resetCanvas": "恢复默认",
+  "resetCanvasHint": "画布恢复默认：1:1，无间距、内边距和圆角，黑色背景",
   "images": "图片",
   "cell": "单元格 {{n}}",
   "export": "导出",

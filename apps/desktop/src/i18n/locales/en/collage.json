@@ -18,6 +18,8 @@
   "borderRadius": "Border Radius",
   "background": "Background",
   "customColor": "Custom color",
+  "resetCanvas": "Defaults",
+  "resetCanvasHint": "Back to the default canvas: 1:1, no gap, padding or rounded corners, black background",
   "images": "Images",
   "cell": "Cell {{n}}",
   "export": "Export",

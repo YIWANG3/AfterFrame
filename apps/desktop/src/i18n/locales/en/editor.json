@@ -138,6 +138,7 @@
     "preview": "Preview",
     "output": "Output",
     "chooseFolder": "Choose folder…",
+    "useOriginalFolder": "Back to the original's folder",
     "layersBlocked": "Apply or remove text, sticker and border layers before splitting.",
     "exportN": "Export {{count}} panels",
     "exporting": "Exporting {{done}} / {{total}}…",

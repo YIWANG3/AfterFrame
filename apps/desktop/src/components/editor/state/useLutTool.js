@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import { confirm } from "../../confirm";
+import { numberIn, readPref, writePref } from "../../../utils/prefs";
 import {
   forgetLut, gradeCanvas, gradePixels, isLutFault, LutError, releaseLutWorkers, thumbnailConcurrency,
 } from "../lut/lutPool";
@@ -18,6 +19,11 @@ const THUMB_EDGE = 280; // px, long edge: a ~140 px cell (two columns) at 2× de
 // One scan shared by every editor session: rescanning on each open is cheap
 // (the main process caches headers) but there is no need to.
 let cachedLibrary = null;
+
+// A LUT chosen on a photo with none yet starts at the strength last set
+// (utils/prefs.js): someone who grades at 60 % keeps grading at 60 %.
+const STRENGTH_PREF = "lut.strength";
+const startStrength = (current) => current?.strength ?? readPref(STRENGTH_PREF, 1, numberIn(0, 1));
 
 function errorCode(error) {
   return error instanceof LutError ? error.code : error?.code || "failed";
@@ -126,7 +132,7 @@ export function useLutTool({
       return;
     }
     setCursor({ groupKey, id: entry.id });
-    record({ ...s, lut: { id: entry.id, name: entry.name, strength: s.lut?.strength ?? 1 } });
+    record({ ...s, lut: { id: entry.id, name: entry.name, strength: startStrength(s.lut) } });
     void noteUsed(entry.id, groupKey);
   }, [editorStateRef, record, noteUsed]);
 
@@ -136,7 +142,7 @@ export function useLutTool({
   const browseTo = useCallback((entry, groupKey) => {
     const s = editorStateRef.current;
     setCursor({ groupKey, id: entry.id });
-    apply({ ...s, lut: { id: entry.id, name: entry.name, strength: s.lut?.strength ?? 1 } });
+    apply({ ...s, lut: { id: entry.id, name: entry.name, strength: startStrength(s.lut) } });
     clearTimeout(stepCommitRef.current);
     stepCommitRef.current = setTimeout(() => {
       record(editorStateRef.current);
@@ -150,8 +156,10 @@ export function useLutTool({
     const s = editorStateRef.current;
     if (!s.lut) return;
     const next = { ...s, lut: { ...s.lut, strength: Math.min(1, Math.max(0, value)) } };
-    if (commit) record(next);
-    else apply(next);
+    if (commit) {
+      record(next);
+      writePref(STRENGTH_PREF, next.lut.strength);
+    } else apply(next);
   }, [editorStateRef, apply, record]);
 
   // ── graded preview ──────────────────────────────────────────────────────

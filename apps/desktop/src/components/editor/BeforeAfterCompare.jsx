@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Columns2, Rows2, X } from "lucide-react";
 import { localFileUrl } from "../../utils/format";
+import { oneOf, readPref, writePref } from "../../utils/prefs";
+
+// Side by side or top/bottom: one choice for every compare (the gallery's and
+// the editor's), remembered (utils/prefs.js). A caller that holds no layout
+// of its own gets the remembered one.
+const LAYOUT_PREF = "compare.layout";
+const checkLayout = oneOf(["side", "stack"]);
 
 function ToolbarBtn({ active, icon: Icon, label, onClick }) {
   return (
@@ -57,7 +64,12 @@ function CompareCell({ src, label, zoom, pan, originPct, onWheel, onPointerDown,
 // `resetKey`: what counts as "other photos" for the zoom and pan; by default
 // the two paths, but the gallery passes asset ids, because a RAW's path
 // changes once its HD preview arrives and that must not reset the view.
-export default function BeforeAfterCompare({ beforePath, afterPath, layout, labels, resetKey, onClose, onLayoutChange }) {
+export default function BeforeAfterCompare({ beforePath, afterPath, layout: layoutProp, labels, resetKey, onClose, onLayoutChange }) {
+  const layout = checkLayout(layoutProp) || readPref(LAYOUT_PREF, "side", checkLayout);
+  const chooseLayout = (next) => {
+    writePref(LAYOUT_PREF, next);
+    onLayoutChange?.(next);
+  };
   const { t } = useTranslation("editor");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -134,8 +146,8 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout, labe
       >
         <div aria-hidden="true" />
         <div className="flex items-center gap-1" data-testid="compare-layout-controls">
-          <ToolbarBtn active={layout === "side"} icon={Columns2} label={t("compare.sideBySide")} onClick={() => onLayoutChange?.("side")} />
-          <ToolbarBtn active={layout === "stack"} icon={Rows2} label={t("compare.topBottom")} onClick={() => onLayoutChange?.("stack")} />
+          <ToolbarBtn active={layout === "side"} icon={Columns2} label={t("compare.sideBySide")} onClick={() => chooseLayout("side")} />
+          <ToolbarBtn active={layout === "stack"} icon={Rows2} label={t("compare.topBottom")} onClick={() => chooseLayout("stack")} />
         </div>
         <button
           type="button"

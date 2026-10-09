@@ -37,7 +37,9 @@ export const scopeKeyOf = (scope) => browseScopeKey({
   base: scope.base,
 });
 
-// "Most recently added" only means something inside a folder.
+// The sorts that mean something anywhere. "Most recently added" only means
+// something inside a folder.
+export const LIBRARY_SORTS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 export const COLLECTION_SORTS = ["added-desc", "added-asc"];
 export const sortOutsideFolder = (sort) => (COLLECTION_SORTS.includes(sort) ? DEFAULT_SCOPE.sort : sort);
 

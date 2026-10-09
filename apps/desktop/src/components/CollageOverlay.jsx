@@ -2,7 +2,7 @@ import api from "../api";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Download, Loader2, X, ChevronDown, Folder, Images, LayoutGrid, ArrowUpDown, Search } from "lucide-react";
-import { browseCount, fileName, localFileUrl } from "../utils/format";
+import { browseCount, fileName, localFileUrl, pathSeparator } from "../utils/format";
 import CollageCanvas from "./collage/CollageCanvas";
 import CollagePanel from "./collage/CollagePanel";
 import BatchPanel from "./collage/BatchPanel";
@@ -13,6 +13,9 @@ import { ensureHdInChunks, needsCollageHd } from "./collage/collageHd";
 import { hdPreviews } from "../hooks/useOnDemandHdPreviews";
 import { topLayerOpen } from "../utils/topLayer";
 import { useAddToFolder } from "../hooks/useAddToFolder";
+import { usePref } from "../hooks/usePref";
+import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
+import { EXPORT_WIDTHS } from "./collage/PanelControls";
 import { Checkbox } from "../ui";
 
 const PANEL_WIDTH = 300;
@@ -25,6 +28,41 @@ const PICKER_GAP = 4;
 const PICKER_HORIZONTAL_PADDING = 24;
 const PICKER_OVERSCAN_PX = 600;
 const PICKER_PRELOAD_PX = 1200;
+
+// Remembered across sessions (utils/prefs.js): the canvas, the export width
+// and folder, the batch grouping and naming, and the layout last picked for
+// each image count. The images, the mode and per-page tweaks belong to one
+// collage and start fresh.
+const ORDER_OPTIONS = ["selection", "captureTime", "filename"];
+const LAYOUTS_KEY = "collage.layoutByCount";
+const checkLayouts = recordOf(text(64));
+const checkSize = numberIn(0, 2000);
+
+// The layout last picked for this many images, if it still exists.
+function rememberedLayout(count) {
+  const pool = getTemplatesForCount(count);
+  const id = readPref(LAYOUTS_KEY, {}, checkLayouts)[count];
+  return pool.find((tp) => tp.id === id) || pool[0] || null;
+}
+
+function rememberLayout(count, id) {
+  if (!count || !id) return;
+  writePref(LAYOUTS_KEY, { ...readPref(LAYOUTS_KEY, {}, checkLayouts), [count]: id });
+}
+
+// The folder the last export went to, if it is still there; else the save
+// dialog's own choice.
+async function rememberedExportDir() {
+  const dir = readPref("collage.exportDir", null, text(4096));
+  if (!dir || !api.has?.("statDirs")) return null;
+  const found = await api.statDirs([dir]).catch(() => []);
+  return found?.includes(dir) ? dir : null;
+}
+
+function parentDir(filePath) {
+  const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  return slash > 0 ? filePath.slice(0, slash) : null;
+}
 
 function builtInSources(summary) {
   const items = [{ id: "all", labelKey: "filterAll" }];
@@ -504,12 +542,12 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const canvasRef = useRef(null);
   const [images, setImages] = useState([]);
   const [template, setTemplate] = useState(null);
-  const [canvasRatio, setCanvasRatio] = useState(1);
-  const [gap, setGap] = useState(0);
-  const [padding, setPadding] = useState(0);
-  const [borderRadius, setBorderRadius] = useState(0);
-  const [bgColor, setBgColor] = useState("#000000");
-  const [exportWidth, setExportWidth] = useState(3000);
+  const [canvasRatio, setCanvasRatio, resetCanvasRatio] = usePref("collage.ratio", 1, numberIn(0.1, 10));
+  const [gap, setGap, resetGap] = usePref("collage.gap", 0, checkSize);
+  const [padding, setPadding, resetPadding] = usePref("collage.padding", 0, checkSize);
+  const [borderRadius, setBorderRadius, resetBorderRadius] = usePref("collage.radius", 0, checkSize);
+  const [bgColor, setBgColor, resetBgColor] = usePref("collage.background", "#000000", hexColor);
+  const [exportWidth, setExportWidth] = usePref("collage.exportWidth", 3000, oneOf(EXPORT_WIDTHS));
   const [exporting, setExporting] = useState(false);
   // Opened from a folder, the exports can join it. On the web, an export is a
   // download, not a catalog asset, so there is nothing to add.
@@ -524,13 +562,15 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
 
   // Batch mode
   const [mode, setMode] = useState("single");
-  const [groupSize, setGroupSize] = useState(4);
-  const [orderBy, setOrderBy] = useState("selection");
-  const [remainderMode, setRemainderMode] = useState("own");
+  const [groupSize, setGroupSize] = usePref("collage.groupSize", 4, intIn(2, MAX_TEMPLATE_COUNT));
+  // Not usePref: a drag-swap drops back to the selection order for this
+  // collage only. The order the user picks is what is remembered.
+  const [orderBy, setOrderBy] = useState(() => readPref("collage.order", "selection", oneOf(ORDER_OPTIONS)));
+  const [remainderMode, setRemainderMode] = usePref("collage.remainder", "own", oneOf(["own", "merge", "drop"]));
   const [batchTemplateId, setBatchTemplateId] = useState(null);
   const [pageOverrides, setPageOverrides] = useState({});
   const [layoutPopoverPage, setLayoutPopoverPage] = useState(-1);
-  const [namePrefix, setNamePrefix] = useState("collage");
+  const [namePrefix, setNamePrefix] = usePref("collage.namePrefix", "collage", text(80));
   const [exportProgress, setExportProgress] = useState(null);
   const batchPageRefs = useRef([]);
   // Cross-page drag: { fromPage, fromCell, item, x, y, target: {page, cell} | null }
@@ -565,8 +605,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
     const hdAbort = new AbortController();
     hdAbortRef.current = hdAbort;
     setImages(items);
-    const templates = getTemplatesForCount(items.length);
-    setTemplate(templates[0] || null);
+    setTemplate(rememberedLayout(items.length));
+    setOrderBy(readPref("collage.order", "selection", oneOf(ORDER_OPTIONS)));
     // Single mode can only lay out up to MAX_TEMPLATE_COUNT images on one
     // canvas; anything beyond that must be split, so default to batch.
     setMode(items.length > MAX_TEMPLATE_COUNT ? "batch" : "single");
@@ -591,7 +631,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   useEffect(() => {
     const pool = getTemplatesForCount(groupSize);
     if (!pool.some((tp) => tp.id === batchTemplateId)) {
-      setBatchTemplateId(pool[0]?.id || null);
+      setBatchTemplateId(rememberedLayout(groupSize)?.id || null);
     }
   }, [groupSize, batchTemplateId]);
 
@@ -616,6 +656,27 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   function applyLayoutToAllPages(tmplId) {
     setBatchTemplateId(tmplId);
     setPageOverrides({});
+    rememberLayout(groupSize, tmplId);
+  }
+
+  function chooseTemplate(tmpl) {
+    setTemplate(tmpl);
+    rememberLayout(images.length, tmpl?.id);
+  }
+
+  function chooseOrder(next) {
+    setOrderBy(next);
+    writePref("collage.order", next);
+  }
+
+  const canvasChanged = Math.abs(canvasRatio - 1) > 0.001 || gap > 0 || padding > 0 || borderRadius > 0
+    || bgColor.toLowerCase() !== "#000000";
+  function resetCanvas() {
+    resetCanvasRatio();
+    resetGap();
+    resetPadding();
+    resetBorderRadius();
+    resetBgColor();
   }
 
   function templateForPage(pageIdx, group) {
@@ -681,7 +742,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const ensureTemplateForCount = useEffectEvent((count) => {
     const templates = getTemplatesForCount(count);
     if (template && templates.some((t) => t.id === template.id)) return;
-    setTemplate(templates[0] || null);
+    setTemplate(rememberedLayout(count));
   });
   const imageCount = images.length;
   useEffect(() => {
@@ -723,12 +784,15 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
       const allSameSet = images.length > 1 && images.every((img) => img.resource_set_id && img.resource_set_id === images[0].resource_set_id);
       const baseStem = allSameSet ? (images[0].primary_stem || firstStem) : firstStem;
       const defaultName = `${baseStem}_collage.jpg`;
+      const lastDir = await rememberedExportDir();
 
       const savePath = await api.pickSavePath({
-        defaultPath: defaultName,
+        defaultPath: lastDir ? `${lastDir}${pathSeparator(lastDir)}${defaultName}` : defaultName,
         filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }, { name: "PNG", extensions: ["png"] }],
       });
       if (!savePath) return;
+      const savedDir = parentDir(savePath);
+      if (savedDir) writePref("collage.exportDir", savedDir);
 
       const buffer = await blob.arrayBuffer();
       const firstSrc = images[0]?.image_path || null;
@@ -832,8 +896,9 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
 
   async function handleBatchExport() {
     if (!groups.length || exporting) return;
-    const dir = await api.pickDirectory();
+    const dir = await api.pickDirectory({ defaultPath: (await rememberedExportDir()) || undefined });
     if (!dir) return;
+    writePref("collage.exportDir", dir);
     setExporting(true);
     setExportProgress({ done: 0, total: groups.length });
     const prefix = (namePrefix || "collage").replace(/[/\\:]/g, "_").trim() || "collage";
@@ -1108,7 +1173,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               groupSize={groupSize}
               onGroupSizeChange={setGroupSize}
               orderBy={orderBy}
-              onOrderByChange={setOrderBy}
+              onOrderByChange={chooseOrder}
               remainderMode={remainderMode}
               onRemainderModeChange={setRemainderMode}
               templateId={batchTemplateId}
@@ -1123,6 +1188,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               onBorderRadiusChange={setBorderRadius}
               bgColor={bgColor}
               onBgColorChange={setBgColor}
+              onResetCanvas={canvasChanged ? resetCanvas : null}
               exportWidth={exportWidth}
               onExportWidthChange={setExportWidth}
               namePrefix={namePrefix}
@@ -1136,7 +1202,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             images={images}
             onImagesChange={setImages}
             template={template}
-            onTemplateChange={setTemplate}
+            onTemplateChange={chooseTemplate}
             canvasRatio={canvasRatio}
             onCanvasRatioChange={setCanvasRatio}
             gap={gap}
@@ -1147,6 +1213,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             onBorderRadiusChange={setBorderRadius}
             bgColor={bgColor}
             onBgColorChange={setBgColor}
+            onResetCanvas={canvasChanged ? resetCanvas : null}
             exportWidth={exportWidth}
             onExportWidthChange={setExportWidth}
             onAddImages={() => setShowPicker(true)}

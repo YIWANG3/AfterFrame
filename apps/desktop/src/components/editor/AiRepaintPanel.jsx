@@ -18,6 +18,8 @@ import {
 import { getProviderType, ProviderModal } from "../ai/providers";
 import { Checkbox, SliderRow } from "../../ui";
 import { fileName } from "../../utils/format";
+import { usePref } from "../../hooks/usePref";
+import { bool, numberIn, oneOf, readPref, text, writePref } from "../../utils/prefs";
 
 /* ── Provider type templates (not instances) ── */
 
@@ -55,6 +57,8 @@ const RESOLUTION_OPTIONS = [
   { value: "2k", label: "2K" },
   { value: "4k", label: "4K" },
 ];
+
+const STYLE_PREF = "repaint.style";
 
 const INITIAL_STYLES = [
   { id: "classical-oil", name: "Classical Oil Painting", prompt: "Transform this photo into a classical oil painting style. Strictly preserve the original composition, perspective, subject placement, and scene layout. Do not add or remove major elements, and do not change the camera angle. Preserve the real architectural or human structure and the original lighting direction. Emphasize rigorous perspective, balanced composition, sculptural volume, restrained and sophisticated color relationships, and fine oil-paint texture. The final image should feel solemn, rational, harmonious, and classically refined. Avoid modern digital illustration aesthetics, exaggerated anime stylization, and excessive fantasy effects." },
@@ -274,11 +278,13 @@ export default function AiRepaintPanel({
   const [providerModalState, setProviderModalState] = useState(null); // null | { mode: "new" } | { mode: "edit", instanceId: string }
   const [editingStyleId, setEditingStyleId] = useState(null);
   const [styleDraft, setStyleDraft] = useState({ name: "", prompt: "" });
-  const [temperature, setTemperature] = useState(1);
-  const [aspectRatio, setAspectRatio] = useState("auto");
-  const [resolution, setResolution] = useState("4k");
+  // The run's settings, the style and the style list's look are remembered
+  // (utils/prefs.js); the prompt typed here is this photo's.
+  const [temperature, setTemperature] = usePref("repaint.temperature", 1, numberIn(0, 1));
+  const [aspectRatio, setAspectRatio] = usePref("repaint.aspect", "auto", oneOf(ASPECT_OPTIONS.map((o) => o.value)));
+  const [resolution, setResolution] = usePref("repaint.resolution", "4k", oneOf(RESOLUTION_OPTIONS.map((o) => o.value)));
   const [customPrompt, setCustomPrompt] = useState("");
-  const [compactStyles, setCompactStyles] = useState(false);
+  const [compactStyles, setCompactStyles] = usePref("repaint.compactStyles", false, bool);
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   const [generateStatus, setGenerateStatus] = useState({ running: false, status: null, error: null });
   const [results, setResults] = useState([]);
@@ -411,6 +417,8 @@ export default function AiRepaintPanel({
       setStyles(savedStyles);
       setSelectedStyleId((current) => {
         if (current && savedStyles.some((s) => s.id === current)) return current;
+        const remembered = readPref(STYLE_PREF, null, text(200));
+        if (remembered && savedStyles.some((s) => s.id === remembered)) return remembered;
         return savedStyles[0]?.id ?? null;
       });
     } else {
@@ -477,6 +485,11 @@ export default function AiRepaintPanel({
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+  }
+
+  function chooseStyle(styleId) {
+    setSelectedStyleId(styleId);
+    writePref(STYLE_PREF, styleId);
   }
 
   useEffect(() => {
@@ -870,7 +883,7 @@ export default function AiRepaintPanel({
                 key={style.id}
                 style={style}
                 active={selectedStyleId === style.id}
-                onSelect={() => setSelectedStyleId(style.id)}
+                onSelect={() => chooseStyle(style.id)}
                 onEdit={() => openEditStyle(style)}
                 onDelete={() => deleteStyle(style.id)}
               />
@@ -879,7 +892,7 @@ export default function AiRepaintPanel({
                 key={style.id}
                 style={style}
                 active={selectedStyleId === style.id}
-                onSelect={() => setSelectedStyleId(style.id)}
+                onSelect={() => chooseStyle(style.id)}
                 onEdit={() => openEditStyle(style)}
                 onDelete={() => deleteStyle(style.id)}
               />

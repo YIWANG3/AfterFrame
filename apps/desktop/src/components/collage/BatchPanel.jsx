@@ -40,6 +40,7 @@ export default function BatchPanel({
   onBorderRadiusChange,
   bgColor,
   onBgColorChange,
+  onResetCanvas,
   exportWidth,
   onExportWidthChange,
   namePrefix,
@@ -159,6 +160,7 @@ export default function BatchPanel({
         onBorderRadiusChange={onBorderRadiusChange}
         bgColor={bgColor}
         onBgColorChange={onBgColorChange}
+        onReset={onResetCanvas}
         exportWidth={exportWidth}
       />
 

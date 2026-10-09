@@ -3,6 +3,7 @@ import api from "../api";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
+import { COLLECTION_SORTS, LIBRARY_SORTS } from "../hooks/workspaceLogic";
 import {
   ChevronDown,
   Plus,
@@ -31,8 +32,8 @@ const DISPLAY_MODES = [
   { key: "justified", icon: LayoutDashboard },
   { key: "waterfall", icon: Columns2 },
 ];
+export const DISPLAY_MODE_KEYS = DISPLAY_MODES.map((mode) => mode.key);
 
-const LIBRARY_SORT_OPTIONS = ["imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc", "name-asc", "name-desc"];
 
 // Windows and Linux dialogs can't pick files and folders at once, so Import
 // is two entries there (electron/importDialog.js). Not on the web: no platform.
@@ -150,10 +151,8 @@ function DisplayModeDropdown({ displayMode, setDisplayMode }) {
 }
 
 // "Added" only means something inside a folder, so it is only offered there.
-const FOLDER_SORT_OPTIONS = ["added-desc", "added-asc"];
-
 function SortDropdown({ sort, setSort, inFolder = false }) {
-  const SORT_OPTIONS = inFolder ? [...FOLDER_SORT_OPTIONS, ...LIBRARY_SORT_OPTIONS] : LIBRARY_SORT_OPTIONS;
+  const SORT_OPTIONS = inFolder ? [...COLLECTION_SORTS, ...LIBRARY_SORTS] : LIBRARY_SORTS;
   const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);

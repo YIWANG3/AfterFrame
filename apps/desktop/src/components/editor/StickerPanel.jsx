@@ -6,6 +6,8 @@ import { Search, Sparkles, Trash2, Star, Loader2, RotateCcw } from "lucide-react
 import { SliderRow } from "../../ui";
 import { localFileUrl, fileName, stickerLabel } from "../../utils/format";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
+import { usePref } from "../../hooks/usePref";
+import { fields, hexColor, intIn } from "../../utils/prefs";
 
 // Sticker tool — only handles "production" of sticker PNGs:
 //   • Library tab: browse / star / delete entries from local sticker folder
@@ -191,13 +193,20 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
 
 /* ─── Create new tab ─────────────────────────────────────────── */
 
+const DEFAULT_OUTLINE = { width: 8, color: "#ffffff" };
+const checkOutline = (value) => {
+  const outline = fields({ width: intIn(0, 32), color: hexColor })(value);
+  return outline ? { ...DEFAULT_OUTLINE, ...outline } : undefined;
+};
+
 function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClearRegion }) {
   const { t } = useTranslation("editor");
   const [phase, setPhase] = useState("idle"); // idle | detecting | preview | saving
   const [, setScratchDir] = useState(null);
   const [instances, setInstances] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [outline, setOutline] = useState({ width: 8, color: "#ffffff" });
+  // The outline is remembered for the next cut-out (utils/prefs.js).
+  const [outline, setOutline] = usePref("sticker.outline", DEFAULT_OUTLINE, checkOutline);
   const [name, setName] = useState("");
   const [error, setError] = useState(null);
   const previousScratchRef = useRef(null);
