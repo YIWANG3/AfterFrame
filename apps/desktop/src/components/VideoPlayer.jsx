@@ -77,7 +77,14 @@ export default function VideoPlayer({ src, onError }) {
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); setMuted(e.currentTarget.muted); }}
+          onLoadedMetadata={(e) => {
+            setDuration(e.currentTarget.duration);
+            setMuted(e.currentTarget.muted);
+            // Chromium on Windows has no HEVC decoder of its own: such a clip
+            // "plays", sound and time running, with no picture and no error.
+            // That is an error too, for which the caller has a proxy.
+            if (!e.currentTarget.videoWidth) onError?.(e);
+          }}
         />
       </div>
 

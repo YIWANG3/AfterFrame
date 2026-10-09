@@ -301,6 +301,18 @@ def build_parser() -> argparse.ArgumentParser:
     render_raw_full_parser.add_argument("--source", type=Path, required=True)
     render_raw_full_parser.add_argument("--target", type=Path, required=True)
 
+    video_tool = subparsers.add_parser(
+        "video-tool",
+        help="The macOS video-tool's commands through FFmpeg, where there is no such tool (no catalog access).",
+    )
+    video_tool.add_argument("action", choices=["probe", "poster", "frames", "transcode"])
+    video_tool.add_argument("input", type=Path)
+    video_tool.add_argument("output", type=Path, nargs="?", help="The JPEG, the frames' folder or the MP4.")
+    video_tool.add_argument("--max-edge", type=int, default=0)
+    video_tool.add_argument("--count", type=int)
+    video_tool.add_argument("--interval", type=float)
+    video_tool.add_argument("--max", type=int, default=20, dest="max_frames")
+
     refresh_assets = subparsers.add_parser("refresh-assets", parents=[common])
     refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
 
@@ -773,6 +785,35 @@ def _utf8_stdio() -> None:
 _parser: argparse.ArgumentParser | None = None
 
 
+def _video_tool(args: argparse.Namespace) -> int:
+    """video-tool's commands through FFmpeg, for Electron where there is no
+    video-tool (Windows): the playback proxy and the hover filmstrip. Prints
+    JSON: the probe, the frames' manifest, or the file written."""
+    from . import ffmpeg_video
+
+    if args.action != "probe" and args.output is None:
+        print(f"video-tool {args.action} needs an output", file=sys.stderr)
+        return 64
+    try:
+        if args.action == "probe":
+            print(json.dumps(ffmpeg_video.probe(args.input)))
+        elif args.action == "poster":
+            ffmpeg_video.poster(args.input, args.output, max_edge=args.max_edge or ffmpeg_video.POSTER_EDGE)
+            print(json.dumps({"path": str(args.output)}))
+        elif args.action == "frames":
+            print(json.dumps(ffmpeg_video.frames(
+                args.input, args.output, interval=args.interval, count=args.count,
+                max_frames=args.max_frames, max_edge=args.max_edge or ffmpeg_video.FRAMES_EDGE,
+            )))
+        else:
+            ffmpeg_video.transcode(args.input, args.output)
+            print(json.dumps({"path": str(args.output)}))
+    except ffmpeg_video.VideoToolError as error:
+        print(f"video-tool {args.action}: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _get_parser() -> argparse.ArgumentParser:
     """Built once per process. The resident sidecar runs main() for every
     request, and building this parser was most of a small request's cost
@@ -839,6 +880,9 @@ def main(argv: list[str] | None = None) -> int:
             width, height = image.size
         print(json.dumps({"path": str(args.target), "width": width, "height": height, "renderer": renderer}))
         return 0
+
+    if args.command == "video-tool":
+        return _video_tool(args)
 
     if args.command == "annotation-test-connection":
         from . import annotation as _annotation

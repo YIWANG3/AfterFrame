@@ -1,0 +1,27 @@
+FFmpeg — third-party licenses
+=============================
+
+On Windows the sidecar makes video posters, durations, the hover filmstrip
+and the H.264 playback proxy with FFmpeg, run as separate programs
+(Resources/native/ffmpeg: ffmpeg.exe and ffprobe.exe with FFmpeg's shared
+libraries, avcodec and the others, which can be replaced with compatible
+builds). The macOS app doesn't ship it: it uses AVFoundation.
+
+FFmpeg n9.0.2-17-g2a571b6068
+  Copyright (c) 2000-2026 the FFmpeg developers
+  License: GNU Lesser General Public License, version 3 or later. It is an
+  LGPL build: configured with --enable-version3, without --enable-gpl or
+  --enable-nonfree.
+  Source: https://ffmpeg.org/download.html, git
+  https://git.ffmpeg.org/ffmpeg.git at n9.0.2-17-g2a571b6068
+  Built by BtbN/FFmpeg-Builds (autobuild-2026-09-30-13-08), whose scripts
+  name the source of every library in the build:
+  https://github.com/BtbN/FFmpeg-Builds
+  Full text: native/ffmpeg/LICENSE.txt
+  AfterFrame ships the build's programs and libraries unmodified, without
+  ffplay.exe, the headers and the import libraries.
+
+The libraries built into it are under licenses compatible with the LGPL.
+Among those the app relies on: dav1d (BSD-2-Clause), OpenH264
+(BSD-2-Clause), zimg (WTFPL) and zlib (zlib). The H.264 proxy is encoded
+with Windows' own Media Foundation encoder where Windows has one.

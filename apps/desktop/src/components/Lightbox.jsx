@@ -179,8 +179,8 @@ export default function Lightbox({
   activeAssetIdRef.current = currentItem?.asset_id || null;
   detailUrlRef.current = detailUrl;
   canUseDetailRef.current = canUseDetail;
-  // Video: play the original directly (Chromium decodes h264/HEVC on macOS),
-  // bypassing the image zoom/pan machinery. Falls back to the poster <img>
+  // Video: play the original directly (Chromium decodes h264/HEVC on macOS,
+  // HEVC only through a proxy on Windows), bypassing the image zoom/pan machinery. Falls back to the poster <img>
   // below when the original is missing.
   const isVideo = currentItem?.asset_type === "video";
   const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.image_path : null;
@@ -189,8 +189,9 @@ export default function Lightbox({
   // Reset the proxy when switching items.
   useEffect(() => { setProxySrc(null); setProxyPending(false); }, [currentItem?.asset_id]);
 
-  // On native decode failure (Chromium can't play this codec), transcode an
-  // H.264 proxy on demand and swap the <video> source to it.
+  // On native decode failure (Chromium can't play this codec, or plays it with
+  // no picture), transcode an H.264 proxy on demand and swap the <video>
+  // source to it.
   const requestVideoProxy = () => {
     if (!isVideo || proxySrc || proxyPending) return;
     const orig = currentItem?.image_path;

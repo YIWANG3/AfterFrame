@@ -629,6 +629,11 @@ videoIpc.register({
   videoToolPath: isPackaged
     ? path.join(process.resourcesPath, "native", "bin", "video-tool")
     : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool"),
+  // No video-tool off macOS: the sidecar runs its commands with FFmpeg, in a
+  // process of its own, as the resident one is serial.
+  runVideoTool: process.platform === "darwin"
+    ? null
+    : (args, timeoutMs) => sidecarTransport.callJsonOneShot(["video-tool", ...args], timeoutMs),
 });
 
 // Copy arbitrary text (asset paths/names) to the system clipboard. Done in the

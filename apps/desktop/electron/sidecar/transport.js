@@ -318,7 +318,14 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   const exifToolPath = isPackaged
     ? path.join(resourcesPath, "native", "exiftool")
     : path.join(rootDir, "apps", "desktop", "native", "exiftool");
-  const toolEnv = { VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath, EXIFTOOL_PATH: exifToolPath };
+  // FFmpeg, for video where there is no video-tool: Windows
+  // (scripts/fetch-ffmpeg.mjs).
+  const ffmpegPath = isPackaged
+    ? path.join(resourcesPath, "native", "ffmpeg")
+    : path.join(rootDir, "apps", "desktop", "native", "ffmpeg");
+  const toolEnv = {
+    VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath, EXIFTOOL_PATH: exifToolPath, FFMPEG_PATH: ffmpegPath,
+  };
 
   function sidecarCommand(command) {
     if (pausedCatalogs.has(getCatalogPath())) throw new Error("catalog reset in progress");

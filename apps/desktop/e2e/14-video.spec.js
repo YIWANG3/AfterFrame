@@ -64,9 +64,11 @@ test.describe("Video assets", () => {
   // phone and camera clips the report played.
   test("the clip really plays: frames decode, time runs, seeking and pausing take effect", async () => {
     // Chromium decodes HEVC with the system's decoder. Windows has none unless
-    // the HEVC Video Extensions are installed, and the app has no proxy for it
-    // there yet, so the clip stays black.
-    test.skip(process.platform !== "darwin", "HEVC playback needs macOS");
+    // the HEVC Video Extensions are installed: there the clip "plays" without
+    // a picture, and the lightbox swaps in an H.264 proxy (1080p) that the
+    // sidecar makes with FFmpeg, in software, so it takes a while.
+    const proxied = process.platform === "win32";
+    test.setTimeout(proxied ? 180_000 : 30_000);
     const card = window.locator("[data-gallery-item='true'][data-asset-type='video']").first();
     await card.dblclick();
     const video = window.locator("video");
@@ -84,10 +86,13 @@ test.describe("Video assets", () => {
       error: v.error?.code ?? null,
     }));
 
-    // Decoded, at its real size, and playing on its own (autoplay).
-    await expect.poll(async () => (await state()).readyState, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+    // Decoded, at its real size (the proxy's), and playing on its own (autoplay).
+    await expect.poll(async () => {
+      const now = await state();
+      return now.readyState >= 2 && now.width > 0;
+    }, { timeout: proxied ? 150_000 : 15_000 }).toBe(true);
     const first = await state();
-    expect(first).toMatchObject({ width: 3840, height: 2160, error: null });
+    expect(first).toMatchObject(proxied ? { width: 1920, height: 1080, error: null } : { width: 3840, height: 2160, error: null });
     expect(first.duration).toBeGreaterThan(2);
     expect(first.duration).toBeLessThan(2.2);
     await expect.poll(async () => (await state()).time, { timeout: 10_000 }).toBeGreaterThan(0.3);
