@@ -651,7 +651,10 @@ require("./devStaleness").register({
 
 // What this platform can do (api.can in the renderer); read once by preload.
 ipcMain.on("app:capabilities", (event) => {
-  event.returnValue = desktopCapabilities(process.platform);
+  const nativeBin = isPackaged
+    ? path.join(process.resourcesPath, "native", "bin")
+    : path.join(rootDir, "apps", "desktop", "native", "bin");
+  event.returnValue = desktopCapabilities(process.platform, { hasHelper: (name) => fs.existsSync(path.join(nativeBin, name)) });
 });
 
 ipcMain.handle("app:copy-text", (_event, text) => {

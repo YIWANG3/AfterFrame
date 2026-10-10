@@ -73,7 +73,7 @@ test.describe("Sticker tool", () => {
 
 test.describe("Sticker detection (real extract-sticker run)", () => {
   test("detected cutouts actually render — media:// allowlist guard", async () => {
-    test.skip(!onMacOS14(), "needs macOS 14+");
+    test.skip(!onMacOS14() || lacks("stickerExtract"), "needs macOS 14+ and a build with extract-sticker");
     test.setTimeout(120_000);
 
     const { app, window, userDataDir } = await launchApp({ testName: "sticker-detect" });

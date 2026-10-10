@@ -24,7 +24,7 @@ test.describe("without a face model", () => {
     const people = ctx.window.getByRole("button", { name: "People" });
     await expect(people).toHaveCount(1);
     await people.click();
-    await expect(ctx.window.getByRole("heading", { name: "People" })).toBeVisible();
+    await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
     // A build without the bundled model can't scan; the empty state points to
     // Settings instead of offering a download.
     await expect(ctx.window.getByText("No face model in this build")).toBeVisible();

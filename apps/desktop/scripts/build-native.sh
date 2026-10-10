@@ -10,7 +10,18 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."   # apps/desktop
 NATIVE_DIR="native"
+ARCH="arm64"
 OUT_DIR="$NATIVE_DIR/bin"
+MACOS14_FEATURES="true"
+# --build <name>: for another of the Mac builds (mac-builds.cjs), into
+# native/bin-<name> so the arm64 binaries stay where dev and dist:mac use them.
+if [ "${1:-}" = "--build" ]; then
+  BUILD="${2:?--build needs a name from mac-builds.cjs}"
+  ARCH="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').arch.replace('x64', 'x86_64')")"
+  MACOS14_FEATURES="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').macos14Features")"
+  OUT_DIR="$NATIVE_DIR/bin-$BUILD"
+  rm -rf "$OUT_DIR"   # all of it is packaged: nothing left from an earlier run
+fi
 mkdir -p "$OUT_DIR"
 
 # Prefer Xcode's toolchain — the CLT one on some machines has an SDK/compiler
@@ -31,13 +42,18 @@ fi
 # request 14).
 build() {
   local name="$1" src="$2" min_macos="$3"
-  echo "build-native: compiling $src -> $OUT_DIR/$name (macOS $min_macos+)"
-  xcrun -sdk macosx swiftc -O -target "arm64-apple-macos$min_macos" "$NATIVE_DIR/$src" -o "$OUT_DIR/$name"
+  echo "build-native: compiling $src -> $OUT_DIR/$name ($ARCH, macOS $min_macos+)"
+  xcrun -sdk macosx swiftc -O -target "$ARCH-apple-macos$min_macos" "$NATIVE_DIR/$src" -o "$OUT_DIR/$name"
 }
 
-build video-tool video-tool.swift 13.0
-build people-worker people-worker.swift 12.0
-build compute-depth compute-depth.swift 12.0
-build extract-sticker extract-sticker.swift 14.0
+build video-tool video-tool.swift 12.0
+# The macOS 12 builds have video only: people and depth run Core ML models that
+# need macOS 14, and stickers macOS 14's Vision request. electron/capabilities.js
+# locks what's missing.
+if [ "$MACOS14_FEATURES" = "true" ]; then
+  build people-worker people-worker.swift 12.0
+  build compute-depth compute-depth.swift 12.0
+  build extract-sticker extract-sticker.swift 14.0
+fi
 
 echo "build-native: done"

@@ -10,6 +10,7 @@
   },
   "desktop": {
     "macOnly": "Available in the macOS app for now",
+    "needsMacOS14": "Needs AfterFrame for macOS 14 or later",
     "hint": "This feature is available in the AfterFrame desktop app",
     "get": "Get the desktop app",
     "try": "Try the desktop app",

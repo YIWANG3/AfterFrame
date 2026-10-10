@@ -19,9 +19,16 @@ if (process.platform === "win32") {
   try { process.env.TEMP = process.env.TMP = fs.realpathSync.native(os.tmpdir()); } catch { /* keep it */ }
 }
 
-// A feature this platform's build locks ("macOS for now", electron/capabilities.js):
+// The helpers of the app under test: a packaged one's (AFTERFRAME_E2E_EXECUTABLE,
+// …/Contents/MacOS/AfterFrame), or dev's.
+const NATIVE_BIN = process.env.AFTERFRAME_E2E_EXECUTABLE
+  ? path.resolve(path.dirname(process.env.AFTERFRAME_E2E_EXECUTABLE), "..", "Resources", "native", "bin")
+  : path.join(__dirname, "..", "..", "native", "bin");
+
+// A feature this build locks ("macOS for now", a macOS 12 build: electron/capabilities.js):
 // its specs skip there instead of failing on a control that is meant to be off.
-const lacks = (feature) => desktopCapabilities(process.platform)[feature] === false;
+const lacks = (feature) =>
+  desktopCapabilities(process.platform, { hasHelper: (name) => fs.existsSync(path.join(NATIVE_BIN, name)) })[feature] === false;
 
 // Selects the cards (and anything else) carrying this file's path. In a CSS
 // string a backslash starts an escape, so Windows paths need theirs doubled.

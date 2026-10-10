@@ -10,7 +10,7 @@ import AppKit
 // `frames` samples evenly across the clip (or one frame every INTERVAL seconds)
 // and writes frame_0.jpg, frame_1.jpg, … plus a manifest.json. Picture only —
 // audio is ignored by design. Frames feed the multi-image AI annotator; poster
-// feeds the gallery thumbnail. Uses the async AVFoundation load APIs (macOS 13+).
+// feeds the gallery thumbnail. Uses the async AVFoundation load APIs (macOS 12+).
 
 func fail(_ message: String, _ code: Int32 = 1) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
@@ -87,8 +87,13 @@ func makeGenerator(_ asset: AVURLAsset, maxEdge: Int) -> AVAssetImageGenerator {
 }
 
 func copyFrame(_ gen: AVAssetImageGenerator, at seconds: Double) async throws -> CGImage {
-    let (image, _) = try await gen.image(at: CMTime(seconds: seconds, preferredTimescale: 600))
-    return image
+    let time = CMTime(seconds: seconds, preferredTimescale: 600)
+    if #available(macOS 13.0, *) {
+        let (image, _) = try await gen.image(at: time)
+        return image
+    }
+    // macOS 12 (the Intel build): the synchronous call the async one replaced.
+    return try gen.copyCGImage(at: time, actualTime: nil)
 }
 
 func cmd_probe(_ inputPath: String) async {
