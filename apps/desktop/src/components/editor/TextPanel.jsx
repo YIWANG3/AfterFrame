@@ -681,7 +681,7 @@ export default function TextPanel({
         <FooterBtn icon={Redo2} onClick={onRedo} disabled={!canRedo} />
         <button
           type="button"
-          className="ml-auto flex h-[30px] items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-4 text-[11px] font-semibold text-[#111] transition-all hover:brightness-110"
+          className="ml-auto flex h-[30px] items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-4 text-[11px] font-semibold text-accentInk transition-all hover:brightness-110"
           onClick={onApply}
         >
           {t("overlay.apply")}
