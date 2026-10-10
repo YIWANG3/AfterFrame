@@ -2,10 +2,18 @@
 // moves on to the next photo), Delete Rejected Photos…, Add Tags… for a
 // selection, ⌘P for proof in the lightbox, and Settings → Keyboard Shortcuts,
 // where keys are rebound, conflicts and system keys are caught, the menu
-// follows, and the change outlives a restart. One app; tests build in order.
+// follows, and the change outlives a restart. Last, the orientation filter,
+// which goes by how a photo shows (a camera's upright shot is landscape
+// pixels with a "rotate 90°" tag). One app; tests build in order.
 
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
+const { devPython } = require("../electron/sidecar/transport");
 
 test.describe.configure({ mode: "serial" });
 
@@ -233,4 +241,47 @@ test("rebound keys outlive a restart, and Restore Defaults brings the old ones b
   await expect(shortcutRow("photo.edit").locator("[data-shortcut-key='KeyE']")).toBeVisible();
   await expect(shortcutRow("flag.reject").locator("[data-shortcut-key='KeyX']")).toBeVisible();
   await expect.poll(settingsAccelerator).toBe("CmdOrCtrl+,");
+  await ctx.window.keyboard.press("Escape");
+  await expect(ctx.window.getByTestId("shortcuts-settings")).toHaveCount(0);
+});
+
+test("the orientation filter finds a camera's upright shot as portrait", async () => {
+  // A catalog from before the shape was recorded: the catch-up job reads it
+  // off the thumbnails. (The fixture has it, so nothing ran at launch.)
+  const unknown = async () => (await rows()).filter((row) => row.asset_type === "image" && !row.display_shape).length;
+  expect(await unknown()).toBe(0);
+  execFileSync(devPython(process.platform), ["-c",
+    "import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); c.execute('UPDATE assets SET display_shape = NULL'); c.commit()",
+    path.join(ctx.catalogDir, "catalog.sqlite3")]);
+  expect(await unknown()).toBeGreaterThan(0);
+  const started = await ctx.window.evaluate(() => window.mediaWorkspace.startOrientationScan());
+  expect(started.missing).toBeGreaterThan(0);
+  await expect.poll(unknown, { timeout: 20_000 }).toBe(0);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-orientation-"));
+  const upright = path.join(dir, "upright-shot.jpg");
+  const wide = path.join(dir, "wide-shot.jpg");
+  const pixels = { create: { width: 600, height: 400, channels: 3, background: { r: 60, g: 90, b: 140 } } };
+  await sharp(pixels).jpeg().withMetadata({ orientation: 6 }).toFile(upright);
+  await sharp(pixels).jpeg().toFile(wide);
+  try {
+    await ctx.app.evaluate(({ app }, paths) => {
+      for (const p of paths) app.emit("open-file", { preventDefault() {} }, p);
+    }, [upright, wide]);
+    await expect.poll(async () => {
+      const found = Object.fromEntries((await rows()).map((row) => [row.stem, row.display_shape]));
+      return [found["upright-shot"], found["wide-shot"]];
+    }, { timeout: 30_000 }).toEqual(["portrait", "landscape"]);
+
+    const shown = () => cards().evaluateAll((els) => els.map((el) => el.getAttribute("data-image-path").split(/[\\/]/).pop()));
+    if (!(await ctx.window.locator("[data-facet-orientation='true']").isVisible())) await ctx.window.keyboard.press("Backslash");
+    const portrait = ctx.window.locator("[data-facet-orientation='true'] [data-orientation-option='portrait']");
+    await portrait.click();
+    await expect.poll(shown).toContain("upright-shot.jpg");
+    expect(await shown()).not.toContain("wide-shot.jpg");
+    await portrait.click();
+    await expect.poll(shown).toContain("wide-shot.jpg");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

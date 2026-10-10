@@ -182,6 +182,24 @@ function createTaskStarters({
     return { ...formatJobStatus(job), missing: status?.missing || 0 };
   }
 
+  // How each photo shows (portrait / landscape), read off thumbnails made
+  // before the shape was recorded: a catalog from an older version, once.
+  // New thumbnails record theirs. Nothing to do is answered without a job.
+  async function startOrientationTask({ priority = 85 } = {}) {
+    const current = await latestJobStatus("orientation");
+    if (current.running) {
+      return current;
+    }
+    const status = await commands.orientationStatus();
+    const count = status?.missing || 0;
+    if (!(count > 0)) {
+      return { ...current, running: false, missing: 0 };
+    }
+    const job = await createJob("orientation", { count }, { priority });
+    launchSidecarJob(jobArgv.orientationJob({ jobId: job.job_id }));
+    return { ...formatJobStatus(job), missing: count };
+  }
+
   function deriveAiRepaintOutputPath(sourcePath) {
     const source = path.resolve(sourcePath);
     const ext = ".png";
@@ -397,6 +415,7 @@ function createTaskStarters({
     startPreviewTask,
     startAiRepaintTask,
     startColorsTask,
+    startOrientationTask,
     startTextImageTask,
     resolveProviderCredentials,
   };

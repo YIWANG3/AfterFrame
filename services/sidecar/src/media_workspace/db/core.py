@@ -59,6 +59,12 @@ _LATEST_COLUMNS = [
     ("assets", "app_rating", "INTEGER"),
     # Pick / reject flag, Lightroom's: 1 picked, -1 rejected, NULL or 0 none.
     ("assets", "app_flag", "INTEGER"),
+    # How the photo shows: portrait / landscape / square, read off its
+    # thumbnail (pixels and EXIF orientation, as the browser draws it). The
+    # file's own width/height are as stored, so a camera's upright shot
+    # (landscape pixels, "rotate 90°" tag) reads as landscape from them.
+    # '' = the thumbnail couldn't be read; NULL = not looked at yet.
+    ("assets", "display_shape", "TEXT"),
     ("raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'"),
     ("raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'"),
     ("raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'"),

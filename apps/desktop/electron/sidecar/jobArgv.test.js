@@ -61,6 +61,11 @@ const CASES = [
     neverSent: ["--limit"],
   },
   {
+    builder: "orientationJob",
+    minimal: { jobId: "j1" },
+    full: { jobId: "j1" },
+  },
+  {
     builder: "aiRepaintJob",
     minimal: { jobId: "j1", provider: "mock", inputPath: "/in.jpg", outputPath: "/out.png", prompt: "p" },
     full: {

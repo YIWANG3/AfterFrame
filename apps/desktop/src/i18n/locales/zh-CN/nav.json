@@ -257,7 +257,13 @@
       "apply": "应用",
       "needsCondition": "每组至少选一个条件"
     },
-    "flag": "旗标"
+    "flag": "旗标",
+    "orientation": {
+      "label": "方向",
+      "landscape": "横图",
+      "portrait": "竖图",
+      "square": "方图"
+    }
   },
   "activity": {
     "title": "后台活动",
@@ -289,7 +295,8 @@
       "people_index": "分析人物",
       "people_cluster": "整理人物分组",
       "generate_ai_repaint": "生成 AI 重绘",
-      "generate_text_image": "生成文字图片"
+      "generate_text_image": "生成文字图片",
+      "read_orientation": "读取照片方向"
     },
     "jobs": {
       "import": "导入",
@@ -298,7 +305,8 @@
       "annotation": "AI 标注",
       "ai_repaint": "AI 重绘",
       "people_index": "人物识别",
-      "colors": "色彩分析"
+      "colors": "色彩分析",
+      "orientation": "照片方向"
     }
   },
   "lightbox": {

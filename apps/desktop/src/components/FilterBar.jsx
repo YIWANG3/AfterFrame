@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal, Split, Flag, FlagOff } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal, Split, Flag, FlagOff, RectangleHorizontal, RectangleVertical, Square } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
@@ -540,6 +540,42 @@ function RatingFilter({ filters, onChange }) {
   );
 }
 
+// Landscape / portrait / square as the photo shows (the sidecar reads it off
+// the thumbnail, so a camera's upright shot counts as portrait). Several = OR.
+const ORIENTATION_OPTIONS = [
+  { value: "landscape", icon: RectangleHorizontal },
+  { value: "portrait", icon: RectangleVertical },
+  { value: "square", icon: Square },
+];
+function OrientationFilter({ filters, onChange }) {
+  const { t } = useTranslation("nav");
+  const picked = toList(filters.orientation);
+  const toggle = (value) => {
+    const next = picked.includes(value) ? picked.filter((v) => v !== value) : [...picked, value];
+    onChange(setOrDelete(filters, "orientation", next.length === 0 ? undefined : next.length === 1 ? next[0] : next));
+  };
+  return (
+    <div className="flex h-6 items-center gap-0.5 rounded-md border border-border/70 bg-app px-1" data-facet-orientation="true">
+      {ORIENTATION_OPTIONS.map(({ value, icon: Icon }) => {
+        const on = picked.includes(value);
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={on}
+            data-orientation-option={value}
+            onClick={() => toggle(value)}
+            className={["inline-flex items-center gap-1 rounded px-1 text-[10.5px] transition-colors", on ? "bg-accent/15 text-text" : "text-muted2 hover:text-text"].join(" ")}
+          >
+            <Icon className="h-3 w-3" />
+            {t(`filter.orientation.${value}`)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Pick / rejected / no flag (Lightroom's P / X / U); several picked are OR,
 // so "picked + no flag" is everything not rejected.
 const FLAG_OPTIONS = [
@@ -816,6 +852,7 @@ export const FACET_SLOTS = [
   { id: "lens", keys: ["lens"] },
   { id: "tag", keys: ["tag", "tag_match"] },
   { id: "extension", keys: ["extension"] },
+  { id: "orientation", keys: ["orientation"] },
   { id: "location_source", keys: ["location_source"] },
   { id: "country", keys: ["country"] },
   { id: "city", keys: ["city"] },
@@ -968,7 +1005,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
     text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), annotated: t("filter.annotated"),
     person_group: t("filter.person"), in_collection: t("filter.folder"), iso: t("filter.iso"), aperture: t("filter.aperture"),
-    focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"), flag: t("filter.flag"),
+    focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"), flag: t("filter.flag"), orientation: t("filter.orientation.label"),
   })[id];
 
   const scrollRef = useRef(null);
@@ -1053,6 +1090,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
           onSelect={(v) => onChange(setFacet("extension", "extension", v))}
         />
       )}
+      {shows("orientation") && <OrientationFilter filters={f} onChange={onChange} />}
 
       {shows("location_source") && (locationSources.length > 0 || toList(f.location_source).length > 0) && (
         <ListPopover

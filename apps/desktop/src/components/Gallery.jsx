@@ -14,7 +14,7 @@ function formatDuration(seconds) {
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
 import { useTranslation } from "react-i18next";
-import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
+import { fileName, galleryInfoLabel, buildJustifiedLayout, displaySize, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
 import { awaitingThumbnail, staleSourceRepairs, thumbnailNeeds } from "./galleryRepair";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
@@ -843,9 +843,7 @@ export default function Gallery({
     const positions = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const imageMeta = item.image_metadata || {};
-      const w = Number(imageMeta.width || 0);
-      const h = Number(imageMeta.height || 0);
+      const { width: w, height: h } = displaySize(item);
       const aspect = w > 0 && h > 0 ? w / h : 1;
       const imgHeight = colWidth / aspect;
       // Pick shortest column

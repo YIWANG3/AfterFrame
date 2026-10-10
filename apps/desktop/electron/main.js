@@ -302,7 +302,7 @@ const { writeImageWithSourceMetadata } = createImageMetadataWriter({
 });
 const {
   formatJobStatus, latestJobStatus, createJob,
-  startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask,
+  startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask, startOrientationTask,
   startAiRepaintTask, startTextImageTask,
 } = createTaskStarters({
   app,
@@ -522,7 +522,7 @@ jobsIpc.register({
   ipcMain,
   getCatalogState: catalog.state,
   formatJobStatus, latestJobStatus,
-  startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask,
+  startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask, startOrientationTask,
   commands: sidecarCommands,
   resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
 });

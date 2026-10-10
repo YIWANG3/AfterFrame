@@ -88,6 +88,7 @@ from .job_runner import (
     run_colors_job,
     run_enrichment_job,
     run_import_job,
+    run_orientation_job,
     run_people_index_job,
     run_preview_job,
 )
@@ -507,7 +508,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
     create_job_parser.add_argument("--priority", type=int, default=50)
 
@@ -515,7 +516,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
@@ -536,7 +537,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-active-jobs", parents=[common])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
@@ -606,6 +607,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_preview_job_parser.add_argument("--limit", type=int)
     run_preview_job_parser.add_argument("--force", action="store_true")
     run_preview_job_parser.add_argument("--skip-colors", action="store_true", help="do not extract dominant colours")
+
+    run_orientation_job_parser = subparsers.add_parser("run-orientation-job", parents=[common])
+    run_orientation_job_parser.add_argument("--job-id", required=True)
+    subparsers.add_parser("orientation-status", parents=[common])
 
     run_colors_job_parser = subparsers.add_parser("run-colors-job", parents=[common])
     run_colors_job_parser.add_argument("--job-id", required=True)
@@ -1522,6 +1527,18 @@ def _cmd_run_preview_job(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_run_orientation_job(args, connection, catalog, parser):
+    print(json.dumps(run_orientation_job(connection, catalog.root, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_orientation_status(args, connection, catalog, parser):
+    from .db import count_assets_missing_display_shape
+
+    print(json.dumps({"missing": count_assets_missing_display_shape(connection)}))
+    return 0
+
+
 def _cmd_run_colors_job(args, connection, catalog, parser):
     print(json.dumps(run_colors_job(connection, catalog.root, args.job_id, limit=args.limit, force=args.force), indent=2))
     return 0
@@ -1746,6 +1763,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
                 "app_flag": row["app_flag"],
+                "display_shape": row["display_shape"] or None,
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -1936,6 +1954,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
         "app_rating": row["app_rating"],
         "app_flag": row["app_flag"],
+        "display_shape": row["display_shape"] or None,
         "exists_on_disk": present,
         "imported_at": row["imported_at"],
         "match_status": row["match_status"],
@@ -2387,6 +2406,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
                 "app_flag": row["app_flag"],
+                "display_shape": row["display_shape"] or None,
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -2458,6 +2478,8 @@ COMMAND_HANDLERS = {
     "run-enrichment-job": _cmd_run_enrichment_job,
     "run-preview-job": _cmd_run_preview_job,
     "run-colors-job": _cmd_run_colors_job,
+    "run-orientation-job": _cmd_run_orientation_job,
+    "orientation-status": _cmd_orientation_status,
     "color-status": _cmd_color_status,
     "run-people-index-job": _cmd_run_people_index_job,
     "evaluate-ground-truth": _cmd_evaluate_ground_truth,

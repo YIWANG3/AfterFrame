@@ -1081,6 +1081,61 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
         raise
 
 
+def run_orientation_job(connection, catalog_path: Path, job_id: str) -> dict[str, Any]:
+    """How each photo shows (portrait / landscape / square), read off the
+    thumbnails made before the shape was recorded: the one-time catch-up for
+    an existing catalog. New thumbnails record theirs as they are made."""
+    from .db import list_assets_missing_display_shape, set_display_shape
+    from .preview_service import preview_shape
+
+    catalog = ensure_catalog(catalog_path)
+    if sys.platform != "win32":
+        try:
+            os.nice(5)  # background work: the resident sidecar and the app come first
+        except OSError:
+            pass
+    phase = {"key": "read_orientation", "label": "Read Orientation"}
+    payload = {"phase": phase["key"], "phase_label": phase["label"], "phase_index": 1, "phase_count": 1}
+    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
+    try:
+        rows = list_assets_missing_display_shape(connection)
+        total = len(rows)
+        read = unreadable = 0
+        reported_at = time.monotonic()
+        for index, row in enumerate(rows, start=1):
+            shape = preview_shape(catalog.root / row["relative_path"])
+            set_display_shape(connection, row["asset_id"], shape, commit=False)
+            if shape:
+                read += 1
+            else:
+                unreadable += 1
+            # A header read each: commit in batches, but often enough that the
+            # write lock is never held long.
+            if index % 200 == 0 or index == total or time.monotonic() - reported_at >= 1.0:
+                connection.commit()
+                reported_at = time.monotonic()
+                _check_cancel(connection, job_id)
+                update_job(
+                    connection, job_id, payload=payload,
+                    result={"current_phase": _phase_result(phase, {"processed": index, "total": total})},
+                    progress=_fraction(index, total), commit=True,
+                )
+        connection.commit()
+        result = {"read": read, "unreadable": unreadable, "total": total}
+        update_job(
+            connection, job_id, status="succeeded",
+            payload={**payload, "phase": None, "phase_label": None},
+            result={**result, "current_phase": None}, progress=1.0, error_text=None,
+        )
+        return result
+    except JobCancelled:
+        connection.commit()
+        return _mark_cancelled(connection, job_id, payload)
+    except Exception as error:
+        update_job(connection, job_id, status="failed", payload=payload, result={}, progress=0.0, error_text=str(error))
+        raise
+
+
 def run_annotation_job(
     connection,
     catalog_path: Path,

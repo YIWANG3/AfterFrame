@@ -4,6 +4,8 @@ import {
   browseCount,
   collapseRootPaths,
   determineImportMode,
+  displaySize,
+  galleryInfoLabel,
   escapePathLabel,
   fileName,
   formatBytes,
@@ -127,5 +129,26 @@ describe("formatDayRange", () => {
     expect(plain(formatDayRange("2023-12-30", "2024-01-02", "en", 2026))).toBe("Dec 30, 2023 – Jan 2, 2024");
     expect(plain(formatDayRange("2026-01-02", "2026-01-06", "en", 2026))).toBe("Jan 2 – 6");
     expect(plain(formatDayRange("2024-01-02", "2024-01-02", "en", 2026))).toBe("Jan 2, 2024");
+  });
+});
+
+describe("displaySize", () => {
+  const item = (width, height, display_shape) => ({ image_metadata: { width, height }, display_shape });
+
+  it("turns the stored size round when the photo shows the other way up", () => {
+    // A camera's upright shot: landscape pixels, shown portrait.
+    expect(displaySize(item(6000, 4000, "portrait"))).toEqual({ width: 4000, height: 6000 });
+    expect(displaySize(item(4000, 6000, "landscape"))).toEqual({ width: 6000, height: 4000 });
+  });
+
+  it("is what the gallery caption shows", () => {
+    expect(galleryInfoLabel({ ...item(6000, 4000, "portrait"), image_metadata: { width: 6000, height: 4000, file_size: 2048 } })).toBe("4000 × 6000 · 2 KB");
+  });
+
+  it("keeps the stored size when it already agrees, or nothing is known", () => {
+    expect(displaySize(item(6000, 4000, "landscape"))).toEqual({ width: 6000, height: 4000 });
+    expect(displaySize(item(6000, 4000, null))).toEqual({ width: 6000, height: 4000 });
+    expect(displaySize(item(500, 500, "portrait"))).toEqual({ width: 500, height: 500 });
+    expect(displaySize({})).toEqual({ width: 0, height: 0 });
   });
 });

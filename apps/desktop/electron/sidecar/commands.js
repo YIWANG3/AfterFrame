@@ -503,6 +503,12 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["color-status"]);
     },
 
+    // How many photos have a thumbnail whose shape (portrait / landscape)
+    // was never read.
+    orientationStatus() {
+      return callJson(["orientation-status"]);
+    },
+
     createJob(jobType, payload, { priority } = {}) {
       const argv = ["create-job", "--job-type", String(jobType), "--payload-json", JSON.stringify(payload || {})];
       if (Number.isFinite(priority)) argv.push("--priority", String(priority));

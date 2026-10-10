@@ -88,6 +88,9 @@ function compactAsset(row, port) {
     focal_length: meta.focal_length ?? null,
     width: meta.width ?? null,
     height: meta.height ?? null,
+    // How it shows (width/height are the pixels as stored, which a camera's
+    // upright shot keeps landscape). Absent until its thumbnail was read.
+    shape: row.display_shape || undefined,
     duration: row.asset_type === "video" ? meta.duration ?? null : undefined,
     match_status: row.match_status,
     caption: row.annotation?.caption ?? null,

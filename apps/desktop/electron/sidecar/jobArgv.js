@@ -133,6 +133,10 @@ function colorsJob({ jobId, force = false }) {
   return argv;
 }
 
+function orientationJob({ jobId }) {
+  return ["run-orientation-job", "--job-id", String(jobId)];
+}
+
 function peopleIndexJob({ jobId, modelId, modelVersion, modelPath, manifestHash, assetIds }) {
   const argv = [
     "run-people-index-job",
@@ -155,4 +159,5 @@ module.exports = {
   annotationJob,
   peopleIndexJob,
   colorsJob,
+  orientationJob,
 };

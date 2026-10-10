@@ -3,7 +3,7 @@ import api from "../api";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images, Flag, FlagOff } from "lucide-react";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
-import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
+import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO, displaySize } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
@@ -233,7 +233,9 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onSele
   const rawMeta = detail.raw_metadata || {};
   const imageName = fileName(detail.image_path);
   const formatValue = (detail.image_path || "").split(".").pop()?.toUpperCase() || t("unknown");
-  const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : t("unknown");
+  // As the photo shows (an upright shot is stored as landscape pixels).
+  const shown = displaySize(detail);
+  const dimensions = shown.width && shown.height ? `${shown.width} × ${shown.height}` : t("unknown");
   const fileSize = formatBytes(imageMeta.file_size || imageMeta.size_bytes) || t("unknown");
 
   // The catalog's rating only. Import already seeded it from the stars the

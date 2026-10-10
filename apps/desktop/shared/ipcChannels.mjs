@@ -115,6 +115,8 @@ export const IPC_METHODS = [
   ["startPreviewGeneration", "workspace:preview-start", 1],
   ["getColorsStatus", "workspace:colors-status", 0],
   ["startColorAnalysis", "workspace:colors-start", 1],
+  ["getOrientationStatus", "workspace:orientation-status", 0],
+  ["startOrientationScan", "workspace:orientation-start", 0],
   ["getActiveJobs", "workspace:active-jobs", 0],
   ["cancelJob", "workspace:cancel-job", 1],
   ["pauseJob", "workspace:pause-job", 1],

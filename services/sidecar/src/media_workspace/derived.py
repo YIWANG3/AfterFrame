@@ -25,13 +25,14 @@ from .catalog import CatalogPaths
 from .config import Thresholds
 from .db import (
     attach_asset_to_resource_set,
+    set_display_shape,
     upsert_image_asset,
     upsert_preview_entry,
     upsert_registry,
 )
 from .metadata import extract_image_candidate
 from .models import MatchDecision
-from .preview_service import PreviewService
+from .preview_service import PreviewService, preview_shape
 from .reverse_lookup import resolve_image
 
 # Formats Pillow reads + writes losslessly enough for crop/export. HEIC and
@@ -215,6 +216,8 @@ def register_image_file(
         try:
             preview_result = preview_service.generate_for_row(row, kind="preview", force=False)
             upsert_preview_entry(connection, asset_id, "preview", preview_result.relative_path, preview_result.width, preview_result.height, preview_result.status)
+            if preview_result.relative_path:
+                set_display_shape(connection, asset_id, preview_shape(catalog.root / preview_result.relative_path), commit=False)
             preview_hd_result = preview_service.generate_for_row(row, kind="preview-hd", force=False)
             upsert_preview_entry(connection, asset_id, "preview-hd", preview_hd_result.relative_path, preview_hd_result.width, preview_hd_result.height, preview_hd_result.status)
             connection.commit()

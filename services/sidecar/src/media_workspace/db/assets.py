@@ -910,6 +910,51 @@ def set_asset_rating(
     return updated
 
 
+DISPLAY_SHAPES = ("portrait", "landscape", "square")
+
+
+def set_display_shape(connection: sqlite3.Connection, asset_id: str, shape: str | None, commit: bool = True) -> None:
+    """Record how the photo shows (preview_service.preview_shape); '' when
+    its thumbnail couldn't be read, so the catch-up doesn't retry forever."""
+    value = shape if shape in DISPLAY_SHAPES else ""
+    connection.execute("UPDATE assets SET display_shape = ? WHERE asset_id = ?", (value, asset_id))
+    if commit:
+        connection.commit()
+
+
+def list_assets_missing_display_shape(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Photos with a thumbnail whose shape was never read (catalogs from
+    before it was recorded, thumbnails made by an older build)."""
+    return connection.execute(
+        """
+        SELECT assets.asset_id, preview_entries.relative_path
+        FROM assets
+        JOIN preview_entries
+          ON preview_entries.asset_id = assets.asset_id
+         AND preview_entries.kind = 'preview'
+         AND preview_entries.status = 'ready'
+         AND preview_entries.relative_path != ''
+        WHERE assets.display_shape IS NULL
+        ORDER BY assets.asset_id
+        """
+    ).fetchall()
+
+
+def count_assets_missing_display_shape(connection: sqlite3.Connection) -> int:
+    return int(connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM assets
+        JOIN preview_entries
+          ON preview_entries.asset_id = assets.asset_id
+         AND preview_entries.kind = 'preview'
+         AND preview_entries.status = 'ready'
+         AND preview_entries.relative_path != ''
+        WHERE assets.display_shape IS NULL
+        """
+    ).fetchone()[0])
+
+
 # A flag's stored value: 1 picked, -1 rejected, 0 none (cleared, like a
 # cleared rating — never NULL once the user has touched it).
 FLAG_VALUES = {"pick": 1, "reject": -1, "none": 0}

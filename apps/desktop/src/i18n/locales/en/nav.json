@@ -266,7 +266,13 @@
       "apply": "Apply",
       "needsCondition": "Pick at least one condition in a group"
     },
-    "flag": "Flag"
+    "flag": "Flag",
+    "orientation": {
+      "label": "Orientation",
+      "landscape": "Landscape",
+      "portrait": "Portrait",
+      "square": "Square"
+    }
   },
   "activity": {
     "title": "Background Activity",
@@ -298,7 +304,8 @@
       "people_index": "Analyze People",
       "people_cluster": "Build People Candidates",
       "generate_ai_repaint": "Generate AI Repaint",
-      "generate_text_image": "Generate Text Image"
+      "generate_text_image": "Generate Text Image",
+      "read_orientation": "Read Orientation"
     },
     "jobs": {
       "import": "Import",
@@ -307,7 +314,8 @@
       "annotation": "AI Annotation",
       "ai_repaint": "AI Repaint",
       "people_index": "People Recognition",
-      "colors": "Colour analysis"
+      "colors": "Colour analysis",
+      "orientation": "Photo orientation"
     }
   },
   "lightbox": {

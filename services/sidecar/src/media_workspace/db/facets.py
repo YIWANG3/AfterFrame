@@ -201,16 +201,22 @@ def _flag(filters: dict) -> list[Clause]:
     return [("(" + " OR ".join(picked) + ")", [])] if picked else []
 
 
-_ORIENTATION_SQL = {
-    "portrait": "assets.meta_height > assets.meta_width",
-    "landscape": "assets.meta_width > assets.meta_height",
-    "square": "(assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL)",
-}
+# How the photo shows (assets.display_shape, read off its thumbnail); until
+# that's known, its stored size — which misreads a camera's upright shots
+# (landscape pixels with a "rotate 90°" tag), hence the shape first.
+_SHOWN_SHAPE = (
+    "COALESCE(NULLIF(assets.display_shape, ''), CASE"
+    " WHEN assets.meta_height > assets.meta_width THEN 'portrait'"
+    " WHEN assets.meta_width > assets.meta_height THEN 'landscape'"
+    " WHEN assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL THEN 'square'"
+    " END)"
+)
+_ORIENTATIONS = ("portrait", "landscape", "square")
 
 
 def _orientation(filters: dict) -> list[Clause]:
-    picked = [_ORIENTATION_SQL[v] for v in _values(filters.get("orientation")) if v in _ORIENTATION_SQL]
-    return [("(" + " OR ".join(picked) + ")", [])] if picked else []
+    picked = [v for v in _values(filters.get("orientation")) if v in _ORIENTATIONS]
+    return [_in(_SHOWN_SHAPE, picked)] if picked else []
 
 
 def _asset_type(filters: dict) -> list[Clause]:

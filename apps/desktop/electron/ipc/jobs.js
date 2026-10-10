@@ -11,6 +11,7 @@ function register({
   startEnrichmentTask,
   startPreviewTask,
   startColorsTask,
+  startOrientationTask,
   commands,
   resumePeopleIndexJob,
 }) {
@@ -51,6 +52,14 @@ function register({
     } catch { return formatJobStatus(null); }
   });
   ipcMain.handle("workspace:colors-start", (_event, options) => startColorsTask(options || {}));
+
+  // Reading the shape of older thumbnails (portrait / landscape).
+  ipcMain.handle("workspace:orientation-status", async () => {
+    const empty = emptyStatus();
+    if (empty) return empty;
+    try { return await latestJobStatus("orientation"); } catch { return formatJobStatus(null); }
+  });
+  ipcMain.handle("workspace:orientation-start", () => startOrientationTask());
 
   // ── Unified job handling ───────────────────────────────────────────────────
   // All queued/running jobs across every type, formatted for the renderer.

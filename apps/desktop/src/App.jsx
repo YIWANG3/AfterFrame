@@ -290,6 +290,24 @@ export default function App() {
     })();
   }, [discoverCatalogKey, workspace.browserReady]);
 
+  // Once per catalog, too: thumbnails made before the photo's shape was
+  // recorded get it read (portrait / landscape, for the orientation filter
+  // and the layouts). A catalog from this version has nothing to do.
+  const orientationCatchUpRef = useRef(new Set());
+  useEffect(() => {
+    if (!discoverCatalogKey || !workspace.browserReady || !api.has("startOrientationScan")) return;
+    if (orientationCatchUpRef.current.has(discoverCatalogKey)) return;
+    orientationCatchUpRef.current.add(discoverCatalogKey);
+    void (async () => {
+      try {
+        const started = await api.startOrientationScan();
+        if (started?.jobId && started.running !== false) {
+          workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "orientation" });
+        }
+      } catch { /* best-effort */ }
+    })();
+  }, [discoverCatalogKey, workspace.browserReady]);
+
   // Discover entries open the gallery as a clean destination: no inherited
   // collection/status/query/facets, filter bar shown when there is something
   // to show, map drawer opened (and flown) only for map-shaped entries.
