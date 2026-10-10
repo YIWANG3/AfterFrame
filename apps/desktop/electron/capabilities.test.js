@@ -3,25 +3,24 @@ const assert = require("node:assert/strict");
 
 const { desktopCapabilities } = require("./capabilities");
 
-const SONOMA = "23.0.0";
-const MONTEREY = "21.6.0";
+const MACOS14_HELPERS = new Set(["video-tool", "people-worker", "compute-depth", "extract-sticker"]);
+const MACOS12_HELPERS = new Set(["video-tool"]);
 
-test("the regular macOS build declares nothing, so every feature stays available as before", () => {
-  assert.deepEqual(desktopCapabilities("darwin", { arch: "arm64", osRelease: SONOMA }), {});
-  assert.deepEqual(desktopCapabilities("darwin", { arch: "arm64", osRelease: "25.0.0" }), {});
+test("a macOS 14 build declares nothing, so every feature stays available as before", () => {
+  assert.deepEqual(desktopCapabilities("darwin", { hasHelper: (name) => MACOS14_HELPERS.has(name) }), {});
+  assert.deepEqual(desktopCapabilities("darwin"), {});
 });
 
-test("the Intel build locks what needs Apple silicon and macOS 14, on any macOS", () => {
-  for (const osRelease of [MONTEREY, SONOMA, "25.0.0"]) {
-    assert.deepEqual(desktopCapabilities("darwin", { arch: "x64", osRelease }), { depth: false, stickerExtract: false, people: false });
-  }
+test("a macOS 12 build locks the features whose helpers it leaves out", () => {
+  const caps = desktopCapabilities("darwin", { hasHelper: (name) => MACOS12_HELPERS.has(name) });
+  assert.deepEqual(caps, { depth: false, stickerExtract: false, people: false });
   for (const flag of ["video", "lut", "colors", "annotation", "aiRepaint", "fileSystem", "integrations"]) {
-    assert.equal(desktopCapabilities("darwin", { arch: "x64", osRelease: MONTEREY })[flag], undefined, `${flag} works on the Intel build`);
+    assert.equal(caps[flag], undefined, `${flag} works on the macOS 12 builds`);
   }
 });
 
-test("Apple silicon below macOS 14 locks the same three", () => {
-  assert.deepEqual(desktopCapabilities("darwin", { arch: "arm64", osRelease: MONTEREY }), { depth: false, stickerExtract: false, people: false });
+test("each locked feature follows its own helper", () => {
+  assert.deepEqual(desktopCapabilities("darwin", { hasHelper: (name) => name !== "extract-sticker" }), { stickerExtract: false });
 });
 
 test("Windows locks only the features with no engine there", () => {

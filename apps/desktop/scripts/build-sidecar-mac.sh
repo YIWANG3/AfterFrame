@@ -13,36 +13,38 @@
 #     (macOS 14+, about twice as fast as its OpenBLAS one here);
 #   - scripts/check-macos-minimum.mjs, which fails the build on anything newer.
 #
-# --intel builds it for the Intel build instead (electron-builder.intel.cjs:
-# x64, macOS 12+) into services/sidecar/dist-x64: an x86_64 CPython, run
-# through Rosetta on an Apple silicon Mac, and wheels for macOS 12, so numpy is
-# its OpenBLAS build there.
+# --build <name> builds it for another of the Mac builds (mac-builds.cjs) into
+# services/sidecar/dist-<name>, with that build's architecture and minimum:
+#   - Intel: an x86_64 CPython, run through Rosetta on an Apple silicon Mac, and
+#     rawpy 0.25.1, the last release with Intel Mac wheels;
+#   - macOS 12: wheels for 12, so numpy is its OpenBLAS build there.
 #
 # Needs uv: curl -LsSf https://astral.sh/uv/install.sh | sh
 #
 # Usage (from apps/desktop): npm run build:sidecar:mac
-#                            bash scripts/build-sidecar-mac.sh --intel
+#                            bash scripts/build-sidecar-mac.sh --build macos12-intel
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."   # → apps/desktop
 SIDECAR="$(cd ../../services/sidecar && pwd)"
 
+BUILD="arm64"
+SUFFIX=""
+if [[ "${1:-}" == "--build" ]]; then
+  BUILD="${2:?--build needs a name from mac-builds.cjs}"
+  SUFFIX="-$BUILD"
+fi
+ARCH="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').arch.replace('x64', 'x86_64')")"
+MINIMUM="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').minimum")"
 PYTHON="3.12"
 PLATFORM="aarch64-apple-darwin"
-ARCH="arm64"
-CONFIG="./package.json"
-SUFFIX=""
-if [[ "${1:-}" == "--intel" ]]; then
+if [[ "$ARCH" == "x86_64" ]]; then
   PYTHON="cpython-3.12-macos-x86_64"
   PLATFORM="x86_64-apple-darwin"
-  ARCH="x86_64"
-  CONFIG="./electron-builder.intel.cjs"
-  SUFFIX="-x64"
   arch -x86_64 /usr/bin/true 2>/dev/null \
     || { echo "✗ The Intel sidecar needs Rosetta: softwareupdate --install-rosetta" >&2; exit 1; }
 fi
-MINIMUM="$(node -p "const c = require('$CONFIG'); (c.build || c).mac.minimumSystemVersion")"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-$MINIMUM}"
 VENV="$SIDECAR/build/macos-venv$SUFFIX"
 DIST="$SIDECAR/dist$SUFFIX"

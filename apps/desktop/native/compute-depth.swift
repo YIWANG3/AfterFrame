@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 import Vision
 import CoreML
@@ -141,12 +142,12 @@ guard let base = CVPixelBufferGetBaseAddress(pb) else {
     exit(71)
 }
 
+// vImage widens the halves: Swift has no Float16 on Intel Macs.
 var depth = [Float](repeating: 0, count: dW * dH)
-for y in 0..<dH {
-    let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: Float16.self)
-    for x in 0..<dW {
-        depth[y * dW + x] = Float(row[x])
-    }
+depth.withUnsafeMutableBytes { out in
+    var source = vImage_Buffer(data: base, height: vImagePixelCount(dH), width: vImagePixelCount(dW), rowBytes: bytesPerRow)
+    var destination = vImage_Buffer(data: out.baseAddress, height: vImagePixelCount(dH), width: vImagePixelCount(dW), rowBytes: dW * 4)
+    _ = vImageConvert_Planar16FtoPlanarF(&source, &destination, vImage_Flags(kvImageNoFlags))
 }
 CVPixelBufferUnlockBaseAddress(pb, .readOnly)
 

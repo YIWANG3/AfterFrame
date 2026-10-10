@@ -12,11 +12,15 @@ cd "$(dirname "$0")/.."   # apps/desktop
 NATIVE_DIR="native"
 ARCH="arm64"
 OUT_DIR="$NATIVE_DIR/bin"
-# --intel: for the Intel build (x64, macOS 12+: electron-builder.intel.cjs),
-# into native/bin-x64 so the Apple silicon binaries stay where dev uses them.
-if [ "${1:-}" = "--intel" ]; then
-  ARCH="x86_64"
-  OUT_DIR="$NATIVE_DIR/bin-x64"
+MACOS14_FEATURES="true"
+# --build <name>: for another of the Mac builds (mac-builds.cjs), into
+# native/bin-<name> so the arm64 binaries stay where dev and dist:mac use them.
+if [ "${1:-}" = "--build" ]; then
+  BUILD="${2:?--build needs a name from mac-builds.cjs}"
+  ARCH="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').arch.replace('x64', 'x86_64')")"
+  MACOS14_FEATURES="$(node -p "require('./mac-builds.cjs').macBuild('$BUILD').macos14Features")"
+  OUT_DIR="$NATIVE_DIR/bin-$BUILD"
+  rm -rf "$OUT_DIR"   # all of it is packaged: nothing left from an earlier run
 fi
 mkdir -p "$OUT_DIR"
 
@@ -43,10 +47,10 @@ build() {
 }
 
 build video-tool video-tool.swift 12.0
-# The Intel build has video only: people and depth run Core ML models that
-# need macOS 14 and use Float16, which Swift lacks on Intel Macs; stickers need
-# macOS 14's Vision request. electron/capabilities.js locks the three there.
-if [ "$ARCH" = "arm64" ]; then
+# The macOS 12 builds have video only: people and depth run Core ML models that
+# need macOS 14, and stickers macOS 14's Vision request. electron/capabilities.js
+# locks what's missing.
+if [ "$MACOS14_FEATURES" = "true" ]; then
   build people-worker people-worker.swift 12.0
   build compute-depth compute-depth.swift 12.0
   build extract-sticker extract-sticker.swift 14.0

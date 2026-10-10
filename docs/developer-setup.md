@@ -129,9 +129,10 @@ npm run dist:mac
 Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`. `scripts/release.sh` wraps
 the signed, notarized build and the GitHub release.
 
-**The app needs macOS 14 or later** (`build.mac.minimumSystemVersion`). Every Apple Silicon Mac can
-update to it, numpy's fast Accelerate build needs it, and so do People, sticker cut-outs and the
-depth model. Older systems refuse to launch the app with the system's own message.
+**This build needs macOS 14 or later** (`build.mac.minimumSystemVersion`). Every Apple Silicon Mac
+can update to it, numpy's fast Accelerate build needs it, and so do People, sticker cut-outs and the
+depth model. Older systems refuse to launch it with the system's own message; the macOS 12 builds
+below are for them.
 
 **The macOS sidecar needs [uv](https://docs.astral.sh/uv/).** `dist:mac` builds the sidecar with
 `scripts/build-sidecar-mac.sh`, which doesn't use the Python on your PATH:
@@ -143,26 +144,27 @@ depth model. Older systems refuse to launch the app with the system's own messag
 Homebrew's Python won't do: it is built for the Mac it was installed on. 0.5.8 declared macOS 12
 but shipped a sidecar that needed macOS 15, so on macOS 12–14 nothing could be imported.
 
-**The Intel build** is for Intel Macs, and for Apple Silicon Macs still on macOS 12–13, which run it
-through Rosetta. It is x64 and needs macOS 12 or later (`electron-builder.intel.cjs`). Build it on
-an Apple Silicon Mac:
+**There are four Mac builds** (`apps/desktop/mac-builds.cjs`), Apple Silicon and Intel, each for
+macOS 14+ and for macOS 12+:
 
-```bash
-cd apps/desktop
-npm run dist:mac:intel
-```
+| Build | Command | DMG |
+|---|---|---|
+| Apple Silicon, macOS 14+ | `npm run dist:mac` | `release/AfterFrame-<version>-arm64.dmg` |
+| Intel, macOS 14+ | `npm run dist:mac:intel` | `release/intel/AfterFrame-<version>-Intel.dmg` |
+| Apple Silicon, macOS 12+ | `npm run dist:mac:macos12-arm64` | `release/macos12-arm64/AfterFrame-<version>-macOS12-arm64.dmg` |
+| Intel, macOS 12+ | `npm run dist:mac:macos12-intel` | `release/macos12-intel/AfterFrame-<version>-macOS12-Intel.dmg` |
 
-Output: `apps/desktop/release/AfterFrame-<version>-Intel.dmg`. `scripts/release.sh` builds, notarizes
-and publishes it next to the arm64 DMG, so the release Mac needs Rosetta. It differs from the arm64
-build in a few ways:
-- **Locked features.** People, sticker cut-outs and depth need Apple Silicon and macOS 14, so the
-  build leaves them out and `electron/capabilities.js` locks them.
-- **Slower numpy.** The sidecar is an x86_64 CPython run through Rosetta, with numpy's OpenBLAS
-  build.
-- **Older rawpy.** It uses rawpy 0.25.1, the last release with Intel Mac wheels. Its LibRaw 0.21
+All four are built on one Apple Silicon Mac. The Intel sidecars use an x86_64 CPython run through
+Rosetta, so that Mac needs Rosetta. `scripts/release.sh` builds, notarizes and publishes all four.
+
+How the builds differ:
+- **macOS 12 builds.** People, sticker cut-outs and depth need macOS 14 (Core ML models, Vision's
+  subject request). These builds leave out those helpers and models, and `electron/capabilities.js`
+  locks any feature whose helper is missing. numpy is its OpenBLAS build there; Accelerate needs 14.
+- **Intel builds.** They use rawpy 0.25.1, the last release with Intel Mac wheels. Its LibRaw 0.21
   can't open JPEG XL DNGs.
-- **A stricter check.** After packaging, `check-macos-minimum.mjs --arch x86_64` checks every binary
-  in the app.
+- **Checking every build.** After packaging, `scripts/after-pack.cjs` runs `check-macos-minimum.mjs`
+  over the whole app, with that build's minimum macOS and architecture.
 
 On Windows and Linux, `dist:win` / `dist:linux` run `build:sidecar`, which uses the Python on your
 PATH (the spec and `entry.py` are in the repo; PyInstaller doesn't cross-compile):

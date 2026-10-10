@@ -2,7 +2,7 @@
 // entries stay VISIBLE but inert (dimmed + tooltip) so users see what the
 // desktop version offers without stray navigation; the single conversion
 // entry point is DesktopHint in the sidebar. The desktop app locks only what
-// electron/capabilities.js declares (Windows, the Intel Mac build).
+// electron/capabilities.js declares (Windows, the macOS 12 builds).
 import { useTranslation } from "react-i18next";
 import { MonitorDown } from "lucide-react";
 import api from "../api";
@@ -11,9 +11,9 @@ export const DESKTOP_SITE_URL = "https://yiwang3.github.io/AfterFrame/";
 
 // The hint on a locked feature. The web build points at the desktop app; the
 // desktop app only locks what is macOS-only for now (Windows) or what needs
-// Apple silicon and macOS 14 (the Intel Mac build; electron/capabilities.js),
-// so it must not advertise itself.
-const DESKTOP_LOCKED_HINT_KEY = api.platform === "darwin" ? "desktop.appleSiliconOnly" : "desktop.macOnly";
+// macOS 14 (the macOS 12 builds; electron/capabilities.js), so it must not
+// advertise itself.
+const DESKTOP_LOCKED_HINT_KEY = api.platform === "darwin" ? "desktop.needsMacOS14" : "desktop.macOnly";
 export const LOCKED_HINT_KEY = api.capabilities.web ? "desktop.hint" : DESKTOP_LOCKED_HINT_KEY;
 
 export function openDesktopSite() {

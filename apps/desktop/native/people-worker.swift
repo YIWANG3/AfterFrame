@@ -12,6 +12,7 @@
 //   request:  {"id":"asset-42","asset_path":"/path/to/photo.jpg"}
 //   response: {"id":"asset-42","ok":true,"input_hash":"…","faces":[…]}
 
+import Accelerate
 import CoreGraphics
 import CoreImage
 import CoreML
@@ -317,8 +318,15 @@ private final class ArcFaceModel {
             let pointer = array.dataPointer.assumingMemoryBound(to: Double.self)
             return (0..<array.count).map { Float(pointer[$0]) }
         case .float16:
-            let pointer = array.dataPointer.assumingMemoryBound(to: Float16.self)
-            return (0..<array.count).map { Float(pointer[$0]) }
+            // vImage widens the halves: Swift has no Float16 on Intel Macs.
+            var values = [Float](repeating: 0, count: array.count)
+            values.withUnsafeMutableBytes { out in
+                let width = vImagePixelCount(array.count)
+                var source = vImage_Buffer(data: array.dataPointer, height: 1, width: width, rowBytes: array.count * 2)
+                var destination = vImage_Buffer(data: out.baseAddress, height: 1, width: width, rowBytes: array.count * 4)
+                _ = vImageConvert_Planar16FtoPlanarF(&source, &destination, vImage_Flags(kvImageNoFlags))
+            }
+            return values
         default:
             throw WorkerError.unsupportedModelOutput
         }
