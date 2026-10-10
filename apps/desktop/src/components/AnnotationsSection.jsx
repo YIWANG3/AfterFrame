@@ -82,11 +82,18 @@ function useAnnotationState(assetId) {
   };
 }
 
+// "2026-10-09T…" → the day, as the app's language writes it.
+function formatDay(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString() : "";
+}
+
 export default function AnnotationsSection({
   assetId,
   imagePath,
   onJumpToLocation,
   onLocationChanged,
+  onAnnotated,
   pushToast,
 }) {
   const { t } = useTranslation("annotation");
@@ -148,6 +155,8 @@ export default function AnnotationsSection({
       setCachedAnnotation(assetId, result || null);
       // The run's tags join the photo's (TagsSection shows the one list).
       setCachedTags(assetId, result?.tags || []);
+      // The description shown may now be the run's caption.
+      onAnnotated?.();
       onLocationChanged?.();
       pushToast?.({ title: t("toast.annotatedTitle"), message: t("toast.annotatedMsg"), ttl: 3500 });
     } catch (e) {
@@ -157,7 +166,7 @@ export default function AnnotationsSection({
     } finally {
       setRunning(false);
     }
-  }, [assetId, imagePath, onLocationChanged, pushToast, t]);
+  }, [assetId, imagePath, onAnnotated, onLocationChanged, pushToast, t]);
 
   // User veto: null the annotation's location + drop the resolved map point.
   const clearLocation = useCallback(async () => {
@@ -253,9 +262,11 @@ export default function AnnotationsSection({
 
   return (
     <>
+      {/* What the last run found that has no field of its own up top (the
+          description and tags joined the photo's own, above): when it ran,
+          and the text it read in the picture. */}
       <Section
-        title={t("section.description")}
-        badge={t("badge.ai")}
+        title={t("section.aiAnalysis")}
         collapsible
         action={
           <button
@@ -270,11 +281,16 @@ export default function AnnotationsSection({
           </button>
         }
       >
-        {annotation.caption ? (
-          <div className="text-[12px] leading-relaxed text-text">{annotation.caption}</div>
-        ) : (
-          <div className="text-[11px] italic text-muted2">{t("noCaption")}</div>
-        )}
+        <div className="text-[10px] leading-snug text-muted2" data-testid="annotation-meta">
+          {t("analyzedWith", { model: annotation.model || annotation.provider || "AI", date: formatDay(annotation.updated_at || annotation.created_at) })}
+        </div>
+        <div className="mt-1 text-[10px] leading-snug text-muted2">{t("keepsYours")}</div>
+        {annotation.detected_text ? (
+          <div className="mt-2">
+            <div className="text-[10px] text-muted2">{t("detectedText")}</div>
+            <div className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-text" data-testid="annotation-detected-text">{annotation.detected_text}</div>
+          </div>
+        ) : null}
       </Section>
 
       {hasLoc && (() => {

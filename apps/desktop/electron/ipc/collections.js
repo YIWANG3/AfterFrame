@@ -42,6 +42,12 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.setAssetRating(assetIds || [], rating);
   });
 
+  ipcMain.handle("workspace:set-asset-description", async (_event, assetIds, text) => {
+    const ids = [...new Set((assetIds || []).filter(Boolean))];
+    if (!ids.length) return null;
+    return await commands.setAssetDescription(ids, typeof text === "string" ? text : null);
+  });
+
   // flag: "pick" | "reject" | "none".
   ipcMain.handle("workspace:set-asset-flag", async (_event, assetIds, flag) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];

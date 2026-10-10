@@ -6,6 +6,7 @@ import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO, displaySize } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
 import TagsSection from "./TagsSection";
+import DescriptionSection from "./DescriptionSection";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
@@ -154,7 +155,7 @@ function PaletteStrip({ colors, onPick }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onFlagChange, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
+export default function Inspector({ detail, onRatingChange, onFlagChange, onDescriptionChange, onAnnotated, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [relinking, setRelinking] = useState(false);
   const [hoveredFaceId, setHoveredFaceId] = useState(null);
@@ -406,6 +407,14 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onSele
             ) : null}
           </Section>
 
+          <DescriptionSection
+            assetId={detail.asset_id}
+            description={detail.description}
+            source={detail.description_source}
+            aiCaption={detail.ai_caption}
+            onSave={(text) => onDescriptionChange?.(text)}
+          />
+
           <TagsSection assetId={detail.asset_id} onTagClick={onTagFilter} pushToast={pushToast} />
 
           <AnnotationsSection
@@ -413,6 +422,7 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onSele
             imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
             onJumpToLocation={onJumpToLocation}
             onLocationChanged={onLocationChanged}
+            onAnnotated={onAnnotated}
             pushToast={pushToast}
           />
 

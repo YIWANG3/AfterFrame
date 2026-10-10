@@ -128,5 +128,6 @@
     "trashed_one": "Moved 1 rejected photo to the Trash",
     "trashed_other": "Moved {{count}} rejected photos to the Trash"
   },
-  "compareNeedsTwo": "Select two photos to compare"
+  "compareNeedsTwo": "Select two photos to compare",
+  "descriptionFailed": "Could not save the description"
 }

@@ -93,7 +93,9 @@ function compactAsset(row, port) {
     shape: row.display_shape || undefined,
     duration: row.asset_type === "video" ? meta.duration ?? null : undefined,
     match_status: row.match_status,
-    caption: row.annotation?.caption ?? null,
+    // The description as shown: the user's if written, else the AI's caption.
+    caption: row.description ?? row.annotation?.caption ?? null,
+    caption_source: row.description_source || undefined,
     // Hand-added and AI tags alike (asset_tags).
     tags: row.tags?.length ? row.tags : row.annotation?.tags?.length ? row.annotation.tags : undefined,
     has_raw: !!row.raw_asset_id,
@@ -504,7 +506,7 @@ function createMcpServer(deps) {
     {
       name: "update_assets",
       description:
-        "Batch-edit asset metadata: set star rating (0-5, 0 clears), the pick/reject flag, and/or add/remove tags. " +
+        "Batch-edit asset metadata: set star rating (0-5, 0 clears), the pick/reject flag, the description, and/or add/remove tags. " +
         "The app UI refreshes automatically. Tags power search; ratings and flags power filters and smart collections.",
       inputSchema: {
         type: "object",
@@ -512,6 +514,7 @@ function createMcpServer(deps) {
           asset_ids: { type: "array", items: { type: "string" } },
           rating: { type: "number", description: "Star rating 0-5; 0 clears the rating" },
           flag: { type: "string", enum: ["pick", "reject", "none"], description: "Pick/reject flag, as Lightroom's P/X/U; none clears it" },
+          description: { type: "string", description: "The photo's description, as the user would write it (wins over the AI caption, which annotation never overwrites). An empty string leaves it empty." },
           add_tags: { type: "array", items: { type: "string" } },
           remove_tags: { type: "array", items: { type: "string" } },
         },
@@ -525,9 +528,10 @@ function createMcpServer(deps) {
         const removeTags = (args.remove_tags || []).map(String).filter(Boolean);
         const hasRating = args.rating !== undefined && args.rating !== null;
         const hasFlag = args.flag !== undefined && args.flag !== null;
+        const hasDescription = typeof args.description === "string";
         if (hasFlag && !["pick", "reject", "none"].includes(args.flag)) throw new Error("flag must be pick, reject or none.");
-        if (!hasRating && !hasFlag && !addTags.length && !removeTags.length) {
-          throw new Error("Nothing to do — pass rating, flag, add_tags and/or remove_tags.");
+        if (!hasRating && !hasFlag && !hasDescription && !addTags.length && !removeTags.length) {
+          throw new Error("Nothing to do — pass rating, flag, description, add_tags and/or remove_tags.");
         }
         let mutated = false;
         const errors = [];
@@ -540,6 +544,10 @@ function createMcpServer(deps) {
           }
           if (hasFlag) {
             await commands.setAssetFlag(ids, args.flag);
+            mutated = true;
+          }
+          if (hasDescription) {
+            await commands.setAssetDescription(ids, args.description);
             mutated = true;
           }
           // Every new tag onto every photo in one write; ids the catalog
@@ -574,6 +582,7 @@ function createMcpServer(deps) {
           updated: ids.length - new Set(errors.map((e) => e.asset_id)).size,
           rating: hasRating ? Number(args.rating) : undefined,
           flag: hasFlag ? args.flag : undefined,
+          description: hasDescription ? (args.description.trim() || null) : undefined,
           added_tags: addTags.length ? addTags : undefined,
           removed_tags: removeTags.length ? removeTags : undefined,
           errors: errors.length ? errors : undefined,

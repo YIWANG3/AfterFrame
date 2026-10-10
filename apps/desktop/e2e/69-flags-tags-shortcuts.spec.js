@@ -12,7 +12,7 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, mcpCall } = require("./helpers/app");
 const { devPython } = require("../electron/sidecar/transport");
 
 test.describe.configure({ mode: "serial" });
@@ -187,6 +187,59 @@ test("the Inspector's Tags are there without AI, and one more is added by hand",
   // Still not "AI annotated".
   const unannotated = await ctx.window.evaluate(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 500, filters: { annotated: "without" } })).map((row) => row.asset_id));
   expect(unannotated).toContain(tagged);
+});
+
+test("a description is written by hand; the AI's shows until one is, and comes back on request", async () => {
+  const description = ctx.window.getByTestId("inspector-description");
+  const shownOf = async (id) => {
+    const row = (await rows()).find((r) => r.asset_id === id);
+    return [row?.description ?? null, row?.description_source ?? null];
+  };
+  // A photo with nothing: "Add a description…", typed, saved with Enter.
+  const bare = (await rows()).find((row) => row.asset_type === "image" && !row.annotation && !row.description).asset_id;
+  await card(bare).click();
+  await expect(description).toHaveAttribute("data-source", "none");
+  await description.getByTestId("description-add").click();
+  await ctx.window.getByTestId("description-input").fill("Grandma's 80th");
+  await ctx.window.getByTestId("description-input").press("Enter");
+  await expect(description).toHaveAttribute("data-source", "user");
+  await expect(description).toContainText("Grandma's 80th");
+  await expect.poll(() => shownOf(bare)).toEqual(["Grandma's 80th", "user"]);
+  // Still not an AI annotation.
+  expect((await rows()).find((row) => row.asset_id === bare).annotation).toBeNull();
+
+  // The fixture's 004-green has an AI caption: shown, badged AI.
+  const green = (await rows()).find((row) => row.stem === "004-green");
+  await card(green.asset_id).click();
+  await expect(description).toHaveAttribute("data-source", "ai");
+  const aiText = green.description;
+  expect(aiText).toBeTruthy();
+  await expect(ctx.window.getByTestId("annotation-meta")).toBeVisible();
+  // Edited, it is the user's — and the AI's can be had back.
+  await description.getByRole("button", { name: aiText }).click();
+  await ctx.window.getByTestId("description-input").fill("Sydney, the night we landed");
+  await ctx.window.getByTestId("description-input").press("Enter");
+  await expect(description).toHaveAttribute("data-source", "user");
+  await expect.poll(() => shownOf(green.asset_id)).toEqual(["Sydney, the night we landed", "user"]);
+  await description.getByTestId("description-use-ai").click();
+  await expect(description).toHaveAttribute("data-source", "ai");
+  await expect.poll(() => shownOf(green.asset_id)).toEqual([aiText, "ai"]);
+  // Emptied, it stays empty: the AI's doesn't creep back.
+  await description.getByRole("button", { name: aiText }).click();
+  await ctx.window.getByTestId("description-input").fill("");
+  await ctx.window.getByTestId("description-input").press("Enter");
+  await expect(description.getByTestId("description-add")).toBeVisible();
+  await expect.poll(() => shownOf(green.asset_id)).toEqual([null, "user"]);
+  // Escape leaves a draft unsaved.
+  await description.getByTestId("description-add").click();
+  await ctx.window.getByTestId("description-input").fill("not this");
+  await ctx.window.getByTestId("description-input").press("Escape");
+  await expect.poll(() => shownOf(green.asset_id)).toEqual([null, "user"]);
+
+  // An agent writes one the same way.
+  const response = await mcpCall(ctx.mcpPort, "tools/call", { name: "update_assets", arguments: { asset_ids: [bare], description: "Party at home" } });
+  expect(response.isError).toBeFalsy();
+  await expect.poll(() => shownOf(bare)).toEqual(["Party at home", "user"]);
 });
 
 test("⌘⌫ deletes the rejected photos of the view from the library", async () => {

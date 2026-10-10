@@ -124,5 +124,6 @@
     "trashed_one": "已将 {{count}} 张排除的照片移到废纸篓",
     "trashed_other": "已将 {{count}} 张排除的照片移到废纸篓"
   },
-  "compareNeedsTwo": "选中两张照片才能对比"
+  "compareNeedsTwo": "选中两张照片才能对比",
+  "descriptionFailed": "描述保存失败"
 }

@@ -910,6 +910,27 @@ def set_asset_rating(
     return updated
 
 
+def set_asset_description(
+    connection: sqlite3.Connection,
+    asset_ids: list[str],
+    text: str | None,
+    commit: bool = True,
+) -> int:
+    """The description the user wrote for these photos. Empty is a choice
+    too: nothing shows, AI caption or not. None hands the field back to the
+    AI's caption."""
+    value = None if text is None else text.strip()
+    updated = 0
+    for asset_id in asset_ids:
+        updated += connection.execute(
+            "UPDATE assets SET user_description = ?, updated_at = CURRENT_TIMESTAMP WHERE asset_id = ?",
+            (value, asset_id),
+        ).rowcount
+    if commit:
+        connection.commit()
+    return updated
+
+
 DISPLAY_SHAPES = ("portrait", "landscape", "square")
 
 

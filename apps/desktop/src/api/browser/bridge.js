@@ -220,6 +220,10 @@ async function ingestFile(file, source = "generated") {
     // hasn't made theirs, which the next run replaces (as the sidecar's asset_tags).
     tags: [],
     aiTags: [],
+    // The description as shown and whose (the user's wins over the AI's).
+    description: null,
+    description_source: null,
+    userDescription: null,
     has_face: false,
     imported_at: new Date().toISOString(),
     modified_time: Math.floor((file.lastModified || Date.now()) / 1000),
@@ -287,7 +291,7 @@ function matchesSearch(asset, search) {
   const q = String(search).toLowerCase();
   const meta = asset.image_metadata || {};
   const ann = asset.annotation;
-  return [asset.stem, meta.camera_model, meta.lens_model, ann?.caption, ann?.detected_text]
+  return [asset.stem, meta.camera_model, meta.lens_model, asset.userDescription, ann?.caption, ann?.detected_text]
     .some((v) => v && String(v).toLowerCase().includes(q))
     || (asset.tags || []).some((t) => String(t).toLowerCase().includes(q));
 }
@@ -384,7 +388,8 @@ function matchesFacetConditions(asset, filters) {
   // chips never show (no options), and a rule naming one matches nothing.
   if (facetValues(filters.country).length || facetValues(filters.city).length) return false;
   const contains = (text, needle) => String(text || "").toLowerCase().includes(String(needle).trim().toLowerCase());
-  if (String(filters.caption_contains || "").trim() && !contains(asset.annotation?.caption, filters.caption_contains)) return false;
+  // The description as shown: the user's, else the AI's caption.
+  if (String(filters.caption_contains || "").trim() && !contains(asset.description, filters.caption_contains)) return false;
   if (String(filters.ocr_contains || "").trim() && !contains(asset.annotation?.detected_text, filters.ocr_contains)) return false;
   if (String(filters.path_contains || "").trim() && !contains(asset.image_path || asset.file_name, filters.path_contains)) return false;
   const folders = facetValues(filters.in_collection);
@@ -677,7 +682,22 @@ async function annotateOne(opts) {
     updated_at: now,
   };
   await setAssetAnnotation(asset.asset_id, annotation);
+  showDescription(asset);
   return annotation;
+}
+
+// The user's description wins; the AI's caption fills in where there is none.
+function showDescription(asset) {
+  const ai = (asset.annotation?.caption || "").trim();
+  if (asset.userDescription != null) {
+    // An empty one is the user's too: nothing shows.
+    asset.description = asset.userDescription.trim() || null;
+    asset.description_source = "user";
+  } else {
+    asset.description = ai || null;
+    asset.description_source = ai ? "ai" : null;
+  }
+  asset.ai_caption = ai || null;
 }
 
 // GET the provider's model list — cheapest possible connectivity/CORS probe.
@@ -859,7 +879,7 @@ export const browserBridge = {
         assets.push({
           asset_id: `web-${nextId++}`, source: "sample", asset_type: "image",
           file_name: name, stem: name.replace(/\.[^.]+$/, ""),
-          exists_on_disk: true, app_rating: 0, annotation: null, tags: [], aiTags: [], has_face: false,
+          exists_on_disk: true, app_rating: 0, annotation: null, tags: [], aiTags: [], description: null, description_source: null, userDescription: null, has_face: false,
           imported_at: new Date().toISOString(), image_metadata: sampleManifest[name],
           image_path: original, preview_path: thumb, image_preview_path: thumb,
           image_preview_hd_path: original, preview_hd_path: original, _objectUrls: [],
@@ -1128,6 +1148,17 @@ export const browserBridge = {
     const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
     for (const a of assets) if (ids.has(a.asset_id)) a.app_rating = rating;
     return { ok: true };
+  },
+  setAssetDescription: async (assetIds, text) => {
+    const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
+    let updated = 0;
+    for (const a of assets) {
+      if (!ids.has(a.asset_id)) continue;
+      a.userDescription = text === null ? null : String(text || "").trim();
+      showDescription(a);
+      updated += 1;
+    }
+    return { ok: true, description: text === null ? null : String(text || "").trim() || null, reset: text === null, updated };
   },
   setAssetFlag: async (assetIds, flag) => {
     const value = { pick: 1, reject: -1, none: 0 }[flag];

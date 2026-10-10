@@ -95,6 +95,7 @@ export const IPC_METHODS = [
   ["deleteImageAssets", "workspace:delete-image-assets", 1],
   ["setAssetRating", "workspace:set-asset-rating", 2],
   ["setAssetFlag", "workspace:set-asset-flag", 2],
+  ["setAssetDescription", "workspace:set-asset-description", 2],
   ["listSystemFonts", "workspace:list-system-fonts", 0],
   ["startNativeDrag", "workspace:native-drag", 1],
   // ── collections ──

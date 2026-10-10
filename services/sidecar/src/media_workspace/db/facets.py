@@ -401,7 +401,8 @@ FACETS: tuple[Facet, ...] = (
     _place_facet("country", "country_code", upper=True),
     _place_facet("city", "city_en"),
     Facet("color", ("color", "color_tolerance"), _color, modifiers=("color_tolerance",)),
-    _contains_facet("caption_contains", "(SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
+    # The description as shown: the user's, else the AI's caption.
+    _contains_facet("caption_contains", "CASE WHEN assets.user_description IS NOT NULL THEN assets.user_description ELSE (SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id) END"),
     _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),
     Facet("geo", ("geo",), _geo),

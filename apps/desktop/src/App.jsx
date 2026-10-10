@@ -646,8 +646,10 @@ export default function App() {
   const onJobFinished = useEffectEvent((fin) => {
     if (fin.jobType === "annotation") {
       invalidateAnnotations();
-      // The run's tags joined the photos' own.
+      // The run's tags joined the photos' own, and its captions show where
+      // the user wrote no description.
       invalidateTags();
+      void workspaceRef.current.reloadDetail?.();
       const r = fin.result || {};
       if (fin.status === "succeeded") {
         const failed = Number(r.failed || 0);
@@ -1655,6 +1657,8 @@ export default function App() {
               detail={workspace.detail}
               onRatingChange={applyRating}
               onFlagChange={(flag) => applyFlag(flag)}
+              onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
+              onAnnotated={() => workspace.reloadDetail?.()}
               onSelectAsset={selectRelatedAsset}
               onRelinked={() => workspace.refreshAll({ force: true })}
               onOpenPersonGroup={openPersonGroup}

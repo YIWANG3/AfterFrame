@@ -904,6 +904,43 @@ export default function useWorkspace({ pushToast } = {}) {
     bumpCatalogRevision();
   }
 
+  // The description the user writes (Inspector), shown at once. "" leaves
+  // it empty (their choice); null hands it back to the AI's caption.
+  async function setAssetDescription(assetIds, text) {
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    if (!targetIds.length) return false;
+    const targetSet = new Set(targetIds);
+    const value = text === null ? null : String(text || "").trim();
+    const shown = (record) => {
+      const ai = (record.ai_caption || record.annotation?.caption || "").trim();
+      return value !== null
+        ? { description: value || null, description_source: "user" }
+        : { description: ai || null, description_source: ai ? "ai" : null };
+    };
+    const previous = new Map();
+    for (const item of items) if (targetSet.has(item.asset_id)) previous.set(item.asset_id, { description: item.description ?? null, description_source: item.description_source ?? null });
+    if (detail && targetSet.has(detail.asset_id) && !previous.has(detail.asset_id)) {
+      previous.set(detail.asset_id, { description: detail.description ?? null, description_source: detail.description_source ?? null });
+    }
+    const apply = (resolve) => {
+      setItems((current) => current.map((item) => (targetSet.has(item.asset_id) ? { ...item, ...resolve(item) } : item)));
+      setDetail((current) => (current && targetSet.has(current.asset_id) ? { ...current, ...resolve(current) } : current));
+    };
+    apply(shown);
+    try {
+      await api.setAssetDescription(targetIds, value);
+    } catch (error) {
+      apply((record) => previous.get(record.asset_id) || {});
+      pushToast?.({ title: t("descriptionFailed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
+      return false;
+    }
+    if (scopeRef.current.query?.trim() || scopeRef.current.filters?.caption_contains) {
+      if (!revealRef.current) void refreshBrowse();
+    }
+    bumpCatalogRevision();
+    return true;
+  }
+
   // The gallery's "Add Tags…": every tag onto every photo, in one write. The
   // Inspector's tags, the tag filter's options and a view that selects by
   // tag all follow.
@@ -1453,6 +1490,7 @@ export default function useWorkspace({ pushToast } = {}) {
     deleteImageAssetsFromDisk,
     setAssetRating,
     setAssetFlag,
+    setAssetDescription,
     addTagsToAssets,
     collectRejected,
   };

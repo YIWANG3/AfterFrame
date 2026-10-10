@@ -341,6 +341,14 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv);
     },
 
+    // The user's description: "" leaves it empty; null hands it back to
+    // the AI's caption.
+    setAssetDescription(assetIds, text) {
+      const argv = text === null ? ["set-asset-description", "--reset"] : ["set-asset-description", "--text", String(text ?? "")];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      return callJson(argv);
+    },
+
     setAssetFlag(assetIds, flag) {
       const argv = ["set-asset-flag", "--flag", String(flag)];
       for (const id of assetIds) argv.push("--asset-id", String(id));

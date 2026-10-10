@@ -65,6 +65,10 @@ _LATEST_COLUMNS = [
     # (landscape pixels, "rotate 90°" tag) reads as landscape from them.
     # '' = the thumbnail couldn't be read; NULL = not looked at yet.
     ("assets", "display_shape", "TEXT"),
+    # The description the user wrote: it wins over the AI's caption
+    # (asset_ai_annotations.caption), which a run never writes here. NULL:
+    # they never did (the AI's shows); '' : they cleared it (nothing shows).
+    ("assets", "user_description", "TEXT"),
     ("raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'"),
     ("raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'"),
     ("raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'"),

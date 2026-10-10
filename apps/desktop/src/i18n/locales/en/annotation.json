@@ -3,7 +3,8 @@
     "ai": "AI",
     "description": "Description",
     "tags": "Tags",
-    "location": "Location"
+    "location": "Location",
+    "aiAnalysis": "AI analysis"
   },
   "badge": {
     "ai": "AI",
@@ -60,5 +61,16 @@
     "cancel": "Cancel",
     "apply": "Add"
   },
-  "noTags": "No tags yet"
+  "noTags": "No tags yet",
+  "analyzedWith": "By {{model}}, {{date}}",
+  "keepsYours": "Its description and tags are above; what you write or add stays when it runs again.",
+  "detectedText": "Text in the picture",
+  "description": {
+    "add": "Add a description…",
+    "edit": "Click to edit",
+    "aiHint": "Written by AI — click to edit; saving makes it yours",
+    "placeholder": "Describe this photo…",
+    "keys": "Enter saves · Shift+Enter new line · Esc cancels",
+    "useAi": "Use the AI's description"
+  }
 }

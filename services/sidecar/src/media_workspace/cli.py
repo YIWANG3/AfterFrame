@@ -67,6 +67,7 @@ from .db import (
     request_job_pause,
     request_job_resume,
     set_app_setting,
+    set_asset_description,
     set_asset_flag,
     set_asset_rating,
     set_catalog_path,
@@ -192,6 +193,31 @@ def _row_tags(row) -> list[str]:
         return [tag for tag in json.loads(row["asset_tags_json"] or "[]") if tag]
     except (IndexError, KeyError, ValueError):
         return []
+
+
+def _row_description(row) -> tuple[str | None, str | None]:
+    """The photo's description as shown, and whose: the user's if they wrote
+    one, else the AI's caption. (None, None) when there is neither."""
+    try:
+        user = row["user_description"]
+        ai = (row["ai_caption"] or "").strip()
+    except (IndexError, KeyError):
+        return None, None
+    if user is not None:
+        return (user.strip() or None), "user"  # an empty one is theirs too
+    if ai:
+        return ai, "ai"
+    return None, None
+
+
+def _description_fields(row) -> dict:
+    text, source = _row_description(row)
+    try:
+        ai = (row["ai_caption"] or "").strip() or None
+    except (IndexError, KeyError):
+        ai = None
+    # ai_caption: what shows again if the user clears theirs.
+    return {"description": text, "description_source": source, "ai_caption": ai}
 
 
 def _annotation_from_row(row) -> dict | None:
@@ -446,6 +472,11 @@ def build_parser() -> argparse.ArgumentParser:
     set_rating = subparsers.add_parser("set-asset-rating", parents=[common])
     set_rating.add_argument("--asset-id", action="append", required=True)
     set_rating.add_argument("--rating", type=int, choices=[0, 1, 2, 3, 4, 5], required=True)
+
+    set_description = subparsers.add_parser("set-asset-description", parents=[common])
+    set_description.add_argument("--asset-id", action="append", required=True)
+    set_description.add_argument("--text", default="", help="empty leaves it empty, AI caption or not")
+    set_description.add_argument("--reset", action="store_true", help="hand it back to the AI's caption")
 
     set_flag = subparsers.add_parser("set-asset-flag", parents=[common])
     set_flag.add_argument("--asset-id", action="append", required=True)
@@ -1784,6 +1815,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
                 "app_flag": row["app_flag"],
                 "display_shape": row["display_shape"] or None,
                 "tags": _row_tags(row),
+                **_description_fields(row),
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -1976,6 +2008,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "app_flag": row["app_flag"],
         "display_shape": row["display_shape"] or None,
         "tags": _row_tags(row),
+        **_description_fields(row),
         "exists_on_disk": present,
         "imported_at": row["imported_at"],
         "match_status": row["match_status"],
@@ -2398,6 +2431,13 @@ def _cmd_set_asset_rating(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_set_asset_description(args, connection, catalog, parser):
+    updated = set_asset_description(connection, args.asset_id, None if args.reset else args.text)
+    text = None if args.reset else (args.text or "").strip() or None
+    print(json.dumps({"ok": True, "asset_ids": args.asset_id, "description": text, "reset": bool(args.reset), "updated": updated}, ensure_ascii=False))
+    return 0
+
+
 def _cmd_set_asset_flag(args, connection, catalog, parser):
     updated = set_asset_flag(connection, args.asset_id, args.flag)
     print(json.dumps({"ok": True, "asset_ids": args.asset_id, "flag": args.flag, "updated": updated}))
@@ -2429,6 +2469,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
                 "app_flag": row["app_flag"],
                 "display_shape": row["display_shape"] or None,
                 "tags": _row_tags(row),
+                **_description_fields(row),
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -2550,6 +2591,7 @@ COMMAND_HANDLERS = {
     "collection-remove-items": _cmd_collection_remove_items,
     "set-asset-rating": _cmd_set_asset_rating,
     "set-asset-flag": _cmd_set_asset_flag,
+    "set-asset-description": _cmd_set_asset_description,
     "browse-collection": _cmd_browse_collection,
 }
 
