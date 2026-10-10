@@ -44,6 +44,7 @@ const { createSidecarTransport } = require("./sidecar/transport");
 const { createSettingsStore } = require("./settingsStore");
 const { createCatalogState } = require("./catalog");
 const { IPC_METHODS } = require("../shared/ipcChannels.mjs");
+const { sanitizeOverrides: sanitizeShortcutOverrides } = require("../shared/shortcuts.mjs");
 const { createImageMetadataWriter } = require("./imageMetadata");
 const { createTaskStarters } = require("./tasks");
 const { createTokenStore } = require("./tokens");
@@ -373,6 +374,7 @@ const appShell = createAppShell({
   preloadPath: path.join(__dirname, "preload.js"),
   indexHtml: path.join(__dirname, "..", "dist", "index.html"),
   screen, nativeTheme,
+  getShortcuts: () => readAppSettings()?.shortcuts || {},
 });
 
 // Windows title strip (WindowTitleBar.jsx): its menu button, and the caption
@@ -621,6 +623,21 @@ ipcMain.handle("app:save-preview-settings", async (_event, next) => {
     previews: { ...(s?.previews || {}), ...(next || {}) },
   }));
   return persisted.previews ?? {};
+});
+
+// Keyboard shortcuts the user rebound (Settings → Keyboard Shortcuts), stored
+// as overrides of shared/shortcuts.mjs's defaults under settings.shortcuts.
+// Saving reinstalls the menu so its accelerators follow.
+ipcMain.handle("app:get-shortcuts", () => sanitizeShortcutOverrides(readAppSettings()?.shortcuts, process.platform));
+ipcMain.handle("app:save-shortcuts", async (_event, next) => {
+  const clean = sanitizeShortcutOverrides(next, process.platform);
+  const persisted = await updateAppSettings((s) => ({ ...s, shortcuts: clean }));
+  appShell.installMenu();
+  return persisted.shortcuts ?? {};
+});
+ipcMain.handle("app:set-menu-accelerators", (_event, on) => {
+  appShell.setMenuAccelerators(on !== false);
+  return true;
 });
 
 // Playback proxy + keyframe filmstrip — see ./ipc/video.js.

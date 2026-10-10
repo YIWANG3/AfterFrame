@@ -104,5 +104,29 @@
     "snapshotName": "{{name}} (snapshot)",
     "failed": "Could not save the smart collection"
   },
-  "smartCollectionRulesLost": "Its conditions were not stored. Quit and reopen AfterFrame, then save it again."
+  "smartCollectionRulesLost": "Its conditions were not stored. Quit and reopen AfterFrame, then save it again.",
+  "flagFailed": "Could not save flag",
+  "batchTags": {
+    "added_one": "Tags added to 1 photo",
+    "added_other": "Tags added to {{count}} photos",
+    "separator": ", ",
+    "failed": "Could not add tags"
+  },
+  "rejected": {
+    "failed": "Could not find the rejected photos",
+    "none": "No rejected photos in this view",
+    "noneHint": "Select a photo and press {{key}} to reject it.",
+    "title": "Delete Rejected Photos",
+    "msg_one": "1 rejected photo in this view.",
+    "msg_other": "{{count}} rejected photos in this view.",
+    "detail": "Remove from Library keeps the files on disk. Move to Trash deletes the originals too; they can be put back from the Trash.",
+    "detailLibraryOnly": "They leave this library; the files stay.",
+    "removeFromLibrary": "Remove from Library",
+    "moveToTrash": "Move to Trash",
+    "removed_one": "Removed 1 rejected photo from the library",
+    "removed_other": "Removed {{count}} rejected photos from the library",
+    "trashed_one": "Moved 1 rejected photo to the Trash",
+    "trashed_other": "Moved {{count}} rejected photos to the Trash"
+  },
+  "compareNeedsTwo": "Select two photos to compare"
 }

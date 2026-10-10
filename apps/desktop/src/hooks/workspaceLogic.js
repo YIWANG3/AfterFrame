@@ -132,6 +132,36 @@ export const scopeSelectsByRating = (scope) => !!scope && (
   (!scope.collectionId && scope.status === "rated") || filtersUseRating(scope.filters) || rulesUseRating(scope.base)
 );
 
+// The same question for the flag and for tags: setting a flag or adding a tag
+// in a view that selects by it can move photos in or out.
+const filtersNaming = (keys) => {
+  const names = (filters) => !!filters && (
+    keys.some((key) => !isEmptyValue(filters[key])) || listOf(filters.any_of).some(names)
+  );
+  return names;
+};
+const rulesNaming = (filtersName) => {
+  const names = (rules) => !!rules && (filtersName(rules.filters) || names(rules.base));
+  return names;
+};
+const scopeNaming = (keys) => {
+  const filtersName = filtersNaming(keys);
+  const rulesName = rulesNaming(filtersName);
+  return (scope) => !!scope && (filtersName(scope.filters) || rulesName(scope.base));
+};
+export const scopeSelectsByFlag = scopeNaming(["flag"]);
+export const scopeSelectsByTag = scopeNaming(["tag"]);
+
+// The filters that find the rejected photos of a view: the view's own, with
+// the flag condition replaced by "rejected" (and no longer excluded).
+export function rejectedFilters(filters) {
+  const next = { ...(filters || {}), flag: "reject" };
+  const excluded = listOf(next.exclude).filter((name) => name !== "flag");
+  if (excluded.length) next.exclude = excluded;
+  else delete next.exclude;
+  return next;
+}
+
 // Opening a smart collection: its rules become the base set, and the filter
 // bar starts EMPTY — picking a format in there narrows the collection, it does
 // not rewrite it. The sort is the user's, not the collection's.
@@ -260,6 +290,7 @@ export function detailIsStale(detail, payload) {
   return row.image_path !== detail.image_path
     || row.exists_on_disk !== detail.exists_on_disk
     || (row.app_rating ?? null) !== (detail.app_rating ?? null)
+    || (row.app_flag ?? null) !== (detail.app_flag ?? null)
     || JSON.stringify(row.image_metadata ?? {}) !== JSON.stringify(detail.image_metadata ?? {});
 }
 

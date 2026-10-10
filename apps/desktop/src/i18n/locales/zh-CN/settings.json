@@ -12,7 +12,8 @@
     "library": "图库",
     "about": "关于",
     "integrations": "集成",
-    "watermark": "水印"
+    "watermark": "水印",
+    "shortcuts": "快捷键"
   },
   "general": {
     "title": "通用",
@@ -265,7 +266,7 @@
     "importTitle": "导入设置",
     "sections": {
       "general": "通用",
-      "generalHint": "语言、外观、高清预览",
+      "generalHint": "语言、外观、高清预览、快捷键",
       "repaint": "AI 重绘",
       "repaintHint": "服务商、所选模型、风格库",
       "annotation": "AI 标注",
@@ -350,5 +351,105 @@
     },
     "renameCamera": "改名",
     "followBrand": "跟随品牌"
+  },
+  "shortcuts": {
+    "intro": "点击按键即可修改，然后按下新的组合键；Esc 取消。灰色的是系统按键或固定按键，不能修改。",
+    "resetAll": "恢复默认",
+    "resetAllTitle": "恢复全部快捷键？",
+    "resetAllMsg": "所有快捷键都会恢复成默认按键。",
+    "pressKeys": "按下按键…",
+    "change": "点击修改",
+    "removeKey": "移除 {{keys}}",
+    "addKey": "再加一个按键",
+    "resetOne": "恢复默认",
+    "none": "未设置",
+    "locked": "系统按键或固定按键，不能修改",
+    "conflict": "{{keys}} 已被「{{actions}}」使用。",
+    "listSeparator": "、",
+    "takeOver": "改用到这里",
+    "keepOld": "取消",
+    "problem": {
+      "reserved": "{{keys}} 是系统按键，不能使用。",
+      "needsModifier": "这个操作需要同时按住修饰键（如 ⌘）。",
+      "modifierOnly": "请再按一个按键，不能只按修饰键。"
+    },
+    "advanceNote": "按住 {{shift}} 再按旗标或评分键：标记后自动跳到下一张。",
+    "keys": {
+      "space": "空格"
+    },
+    "groups": {
+      "cull": "筛片",
+      "organize": "照片",
+      "browse": "浏览",
+      "lightbox": "大图",
+      "app": "应用",
+      "editor": "编辑器"
+    },
+    "actions": {
+      "flag": {
+        "pick": "标记为留用",
+        "reject": "标记为排除",
+        "none": "取消旗标"
+      },
+      "rating": {
+        "0": "清除评分",
+        "1": "评 1 星",
+        "2": "评 2 星",
+        "3": "评 3 星",
+        "4": "评 4 星",
+        "5": "评 5 星"
+      },
+      "photo": {
+        "addTags": "添加标签…",
+        "edit": "编辑",
+        "compare": "对比两张照片",
+        "reveal": "在访达中显示",
+        "delete": "从图库移除",
+        "deleteRejected": "删除排除的照片…"
+      },
+      "select": {
+        "all": "全选",
+        "none": "取消选择"
+      },
+      "lightbox": {
+        "toggle": "打开 / 关闭大图",
+        "proof": "校样模式"
+      },
+      "view": {
+        "search": "搜索",
+        "filters": "显示 / 隐藏筛选栏",
+        "map": "显示 / 隐藏地图",
+        "thumbLarger": "放大缩略图",
+        "thumbSmaller": "缩小缩略图",
+        "refresh": "刷新",
+        "fullscreen": "切换全屏"
+      },
+      "app": {
+        "settings": "设置",
+        "shortcuts": "快捷键"
+      },
+      "catalog": {
+        "new": "新建图库",
+        "open": "打开图库…"
+      },
+      "import": {
+        "run": "运行导入流程"
+      },
+      "editor": {
+        "save": "保存"
+      }
+    },
+    "fixed": {
+      "navigate": "移动选择 / 上一张、下一张",
+      "close": "关闭 / 返回",
+      "undo": "撤销",
+      "redo": "重做",
+      "copyLayers": "拷贝 / 粘贴图层",
+      "deleteLayer": "删除图层",
+      "apply": "应用",
+      "pan": "按住拖动画面",
+      "copyPaste": "拷贝 / 粘贴 / 剪切",
+      "quit": "退出"
+    }
   }
 }

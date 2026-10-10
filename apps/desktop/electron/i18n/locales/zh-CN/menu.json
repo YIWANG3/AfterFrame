@@ -18,6 +18,7 @@
   "copyPath": "复制文件路径",
   "copyName": "复制名称",
   "delete": "删除",
+  "deleteRejected": "删除排除的照片…",
   "selectAll": "全选",
   "minimize": "最小化",
   "zoom": "缩放",

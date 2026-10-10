@@ -910,6 +910,35 @@ def set_asset_rating(
     return updated
 
 
+# A flag's stored value: 1 picked, -1 rejected, 0 none (cleared, like a
+# cleared rating — never NULL once the user has touched it).
+FLAG_VALUES = {"pick": 1, "reject": -1, "none": 0}
+
+
+def set_asset_flag(
+    connection: sqlite3.Connection,
+    asset_ids: list[str],
+    flag: str,
+    commit: bool = True,
+) -> int:
+    if flag not in FLAG_VALUES:
+        raise ValueError(f"unknown flag: {flag}")
+    value = FLAG_VALUES[flag]
+    updated = 0
+    for asset_id in asset_ids:
+        updated += connection.execute(
+            """
+            UPDATE assets
+            SET app_flag = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE asset_id = ?
+            """,
+            (value, asset_id),
+        ).rowcount
+    if commit:
+        connection.commit()
+    return updated
+
+
 def list_collage_sources(connection: sqlite3.Connection, asset_id: str) -> list[sqlite3.Row]:
     """Source assets composing this collage, in recipe order."""
     return connection.execute(

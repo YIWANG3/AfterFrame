@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Minus, Pencil, Plus, SwatchBook, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag, FlagOff, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
@@ -6,6 +6,7 @@ import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView
 import { useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import VideoPlayer from "./VideoPlayer";
 import api from "../api";
+import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
@@ -122,6 +123,8 @@ export default function Lightbox({
   onIndexChange,
 }) {
   const { t } = useTranslation("nav");
+  // The pills show the keys, which the user may have rebound.
+  useShortcuts();
   const viewportRef = useRef(null);
   const imageRef = useRef(null);
   const detailImageRef = useRef(null);
@@ -607,6 +610,7 @@ export default function Lightbox({
         "fixed inset-0 z-[10050] flex flex-col",
         proofMode ? "bg-white" : "bg-black/90 backdrop-blur-sm",
       ].join(" ")}
+      data-lightbox-proof={proofMode ? "true" : "false"}
       onClick={onClose}
     >
       <div className={[
@@ -619,13 +623,33 @@ export default function Lightbox({
             {items.length > 0 ? `${clampedIndex + 1} / ${items.length}` : ""}
             {(metaWidth > 0 && metaHeight > 0) ? ` · ${metaWidth} × ${metaHeight}` : ""}
           </div>
+          {/* What culling keys set (P / X / U, 0-5): there is no grid badge to
+              see in here. */}
+          {currentItem && (currentItem.app_flag === 1 || currentItem.app_flag === -1 || currentItem.app_rating > 0) ? (
+            <div className="mt-1.5 flex items-center gap-2 text-[11.5px]" data-testid="lightbox-marks">
+              {currentItem.app_flag === 1 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-black/80" data-lightbox-flag="pick">
+                  <Flag className="h-3 w-3 fill-current" />{t("flag.pick")}
+                </span>
+              ) : currentItem.app_flag === -1 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[#ff8a80]" data-lightbox-flag="reject">
+                  <FlagOff className="h-3 w-3" />{t("flag.reject")}
+                </span>
+              ) : null}
+              {currentItem.app_rating > 0 ? (
+                <span className="inline-flex items-center gap-0.5 text-[rgb(225,180,105)]" aria-label={t("lightbox.stars", { count: currentItem.app_rating })}>
+                  {Array.from({ length: currentItem.app_rating }, (_, i) => <Star key={i} className="h-3 w-3 fill-current" />)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
           {onEdit && !isVideo && (
             <ActionPill
               icon={Pencil}
               label={t("lightbox.edit")}
-              shortcut="E"
+              shortcut={shortcutLabel("photo.edit")}
               onClick={(event) => {
                 event.stopPropagation();
                 onEdit(onDemandHd ? { ...currentItem, preview_hd_path: onDemandHd } : currentItem);
@@ -636,7 +660,7 @@ export default function Lightbox({
             <ActionPill
               icon={SwatchBook}
               label={t("lightbox.proof")}
-              shortcut="P"
+              shortcut={shortcutLabel("lightbox.proof")}
               active={proofMode}
               onClick={onToggleProof}
             />

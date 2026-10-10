@@ -22,6 +22,7 @@ from .assets import (
     load_raw_candidates_by_camera_token,
     load_raw_candidates_by_capture_window,
     load_raw_enrichment_candidates,
+    set_asset_flag,
     set_asset_rating,
     upsert_catalog_root,
     upsert_image_asset,

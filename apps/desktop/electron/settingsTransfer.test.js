@@ -17,6 +17,7 @@ const SOURCE = {
   lastCatalogPath: "/Users/a/Desktop/main.afcatalog",
   locale: "zh-CN",
   previews: { generateHd: true },
+  shortcuts: { "flag.pick": ["KeyK"] },
   integrations: { watchedDirs: ["/Users/a/Pictures"] },
   peopleRecognition: { activeModelKey: "m", models: { m: { modelPath: "/Users/a/model" } } },
   aiPreferences: {
@@ -65,7 +66,7 @@ test("export carries only whitelisted, machine-independent fields", async () => 
   assert.ok(!text.includes("watchedDirs"));
   assert.ok(!text.includes("modelsCache"));
   assert.ok(!text.includes("gem-key"));
-  assert.deepEqual(bundle.sections.general, { locale: "zh-CN", theme: "light", previews: { generateHd: true } });
+  assert.deepEqual(bundle.sections.general, { locale: "zh-CN", theme: "light", previews: { generateHd: true }, shortcuts: { "flag.pick": ["KeyK"] } });
   assert.deepEqual(bundle.sections.repaint.styles, STYLES, "ai-styles.json wins over legacy settings.aiStyles");
   assert.equal(bundle.sections.annotation.maxTags, 12);
 });
@@ -120,6 +121,7 @@ test("merge into an empty profile restores everything", async () => {
   assert.equal(merged.locale, "zh-CN");
   assert.equal(merged.theme, "light");
   assert.deepEqual(merged.settings.previews, { generateHd: true });
+  assert.deepEqual(merged.settings.shortcuts, { "flag.pick": ["KeyK"] });
   assert.equal(merged.settings.aiPreferences.activeProvider, "p_oai");
   assert.equal(merged.settings.aiAnnotation.activeProviderId, "a_claude");
   assert.equal(merged.settings.aiAnnotation.maxTags, 12);

@@ -34,6 +34,7 @@ const pendingFiles = new Map();
 // BYOK provider keys. Persisted in localStorage at the user's request — the
 // key never leaves this browser except in requests straight to the provider.
 const TOKENS_KEY = "afterframe.aiTokens";
+const SHORTCUTS_KEY = "afterframe.shortcuts";
 const sessionTokens = (() => {
   try { return new Map(Object.entries(JSON.parse(localStorage.getItem(TOKENS_KEY)) || {})); }
   catch { return new Map(); }
@@ -300,7 +301,7 @@ const facetValues = (raw) => (raw == null || raw === "" ? [] : Array.isArray(raw
 const FACET_OWN_KEYS = {
   camera: ["camera"], lens: ["lens"], iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
-  capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"],
+  capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"], flag: ["flag"],
   orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], extension: ["extension"],
   people: ["people"], annotated: ["annotated"], person_group: ["person_group"], location_source: ["location_source"],
   country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
@@ -346,6 +347,11 @@ function matchesFacetConditions(asset, filters) {
   if (filters.rating_min != null && !(asset.app_rating >= filters.rating_min)) return false;
   // Unrated is 0 stars: rating_max 0 means "not rated yet".
   if (filters.rating_max != null && !((asset.app_rating || 0) <= filters.rating_max)) return false;
+  const flags = facetValues(filters.flag);
+  if (flags.length) {
+    const flag = asset.app_flag === 1 ? "pick" : asset.app_flag === -1 ? "reject" : "none";
+    if (!flags.includes(flag)) return false;
+  }
   const orientations = facetValues(filters.orientation);
   if (orientations.length) {
     const shape = meta.height > meta.width ? "portrait" : meta.width > meta.height ? "landscape" : meta.width ? "square" : null;
@@ -944,6 +950,14 @@ export const browserBridge = {
     return [];
   },
   getPreviewSettings: async () => ({ generateHd: false }),
+  // Rebound keyboard shortcuts (overrides only; see shared/shortcuts.mjs).
+  getShortcuts: async () => {
+    try { return JSON.parse(localStorage.getItem(SHORTCUTS_KEY) || "{}"); } catch { return {}; }
+  },
+  saveShortcuts: async (overrides) => {
+    try { localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(overrides || {})); } catch { /* private mode */ }
+    return overrides || {};
+  },
   savePreviewSettings: async () => {},
 
   // ── browse ──
@@ -1098,10 +1112,19 @@ export const browserBridge = {
     return assets.find((a) => a.asset_id === assetId) || null;
   },
   ensureHdPreviews: async () => {},
-  setAssetRating: async (assetId, rating) => {
-    const a = assets.find((x) => x.asset_id === assetId);
-    if (a) a.app_rating = rating;
+  // The renderer passes the selection, a list (an id alone still works).
+  setAssetRating: async (assetIds, rating) => {
+    const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
+    for (const a of assets) if (ids.has(a.asset_id)) a.app_rating = rating;
     return { ok: true };
+  },
+  setAssetFlag: async (assetIds, flag) => {
+    const value = { pick: 1, reject: -1, none: 0 }[flag];
+    if (value === undefined) throw new Error(`unknown flag: ${flag}`);
+    const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
+    let updated = 0;
+    for (const a of assets) if (ids.has(a.asset_id)) { a.app_flag = value; updated += 1; }
+    return { ok: true, flag, updated };
   },
   deleteImageAssets: async (assetIds) => {
     const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
@@ -1366,6 +1389,15 @@ export const browserBridge = {
     if (t && !ann.tags.some((x) => normalizeTag(x) === t)) ann.tags = [...ann.tags, t];
     ann.updated_at = new Date().toISOString();
     return await setAssetAnnotation(assetId, ann);
+  },
+  addAssetTags: async (assetIds, tags) => {
+    const updated = [];
+    for (const assetId of new Set(assetIds || [])) {
+      if (!assets.some((a) => a.asset_id === assetId)) continue;
+      for (const tag of tags || []) await browserBridge.addAssetTag(assetId, tag);
+      updated.push(assetId);
+    }
+    return { ok: true, asset_ids: updated, tags: [...new Set((tags || []).map(normalizeTag).filter(Boolean))] };
   },
   removeAssetTag: async (assetId, tag) => {
     const asset = assets.find((a) => a.asset_id === assetId);

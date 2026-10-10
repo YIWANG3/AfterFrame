@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal, Split } from "lucide-react";
+import { ChevronDown, Check, X, Star, ScanFace, Sparkles, Map as MapIcon, ListFilter, Save, SlidersHorizontal, Split, Flag, FlagOff } from "lucide-react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
@@ -540,6 +540,42 @@ function RatingFilter({ filters, onChange }) {
   );
 }
 
+// Pick / rejected / no flag (Lightroom's P / X / U); several picked are OR,
+// so "picked + no flag" is everything not rejected.
+const FLAG_OPTIONS = [
+  { value: "pick", icon: Flag },
+  { value: "reject", icon: FlagOff },
+  { value: "none", icon: null },
+];
+function FlagFilter({ filters, onChange }) {
+  const { t } = useTranslation("nav");
+  const picked = toList(filters.flag);
+  const toggle = (value) => {
+    const next = picked.includes(value) ? picked.filter((v) => v !== value) : [...picked, value];
+    onChange(setOrDelete(filters, "flag", next.length === 0 ? undefined : next.length === 1 ? next[0] : next));
+  };
+  return (
+    <div className="flex h-6 items-center gap-0.5 rounded-md border border-border/70 bg-app px-1" data-facet-flag="true">
+      {FLAG_OPTIONS.map(({ value, icon: Icon }) => {
+        const on = picked.includes(value);
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={on}
+            data-flag-option={value}
+            onClick={() => toggle(value)}
+            className={["inline-flex items-center gap-1 rounded px-1 text-[10.5px] transition-colors", on ? "bg-accent/15 text-text" : "text-muted2 hover:text-text"].join(" ")}
+          >
+            {Icon ? <Icon className={["h-3 w-3", on && value === "pick" ? "fill-current" : ""].join(" ")} /> : null}
+            {t(value === "none" ? "flag.unflagged" : `flag.${value}`)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function PersonFilterOptions({ value, onSelect, onLoaded }) {
   const { t } = useTranslation("nav");
   const [groups, setGroups] = useState(null);
@@ -794,6 +830,7 @@ export const FACET_SLOTS = [
   { id: "focal", keys: ["focal_min", "focal_max"] },
   { id: "date", keys: ["date_from", "date_to", "date_within_days"] },
   { id: "rating", keys: ["rating_min", "rating_max"] },
+  { id: "flag", keys: ["flag"] },
 ];
 export const HIDDEN_FACETS_KEY = "afterframe.filterBar.hidden";
 const SLOT_IDS = new Set(FACET_SLOTS.map((slot) => slot.id));
@@ -931,7 +968,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     location_source: t("filter.locationSource.label"), country: t("filter.country"), city: t("filter.city"),
     text: t("filter.textContains"), color: t("filter.color"), people: t("filter.people"), annotated: t("filter.annotated"),
     person_group: t("filter.person"), in_collection: t("filter.folder"), iso: t("filter.iso"), aperture: t("filter.aperture"),
-    focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"),
+    focal: t("filter.focal"), date: t("filter.date"), rating: t("filter.rating"), flag: t("filter.flag"),
   })[id];
 
   const scrollRef = useRef(null);
@@ -1122,6 +1159,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
       {shows("date") && <DateRangePopover captureRange={facetValues?.capture_time} filters={f} onChange={onChange} />}
 
       {shows("rating") && <RatingFilter filters={f} onChange={onChange} />}
+      {shows("flag") && <FlagFilter filters={f} onChange={onChange} />}
 
       {/* Location chip — created by moving the map, removable here. Removing
           it only drops filters.geo; the map drawer stays open. */}

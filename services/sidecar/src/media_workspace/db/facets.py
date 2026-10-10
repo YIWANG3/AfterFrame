@@ -188,6 +188,19 @@ def _rating(filters: dict) -> list[Clause]:
     return out
 
 
+_FLAG_SQL = {
+    "pick": "assets.app_flag = 1",
+    "reject": "assets.app_flag = -1",
+    # Never flagged is NULL, a cleared flag 0: both are "no flag".
+    "none": "COALESCE(assets.app_flag, 0) = 0",
+}
+
+
+def _flag(filters: dict) -> list[Clause]:
+    picked = [_FLAG_SQL[v] for v in _values(filters.get("flag")) if v in _FLAG_SQL]
+    return [("(" + " OR ".join(picked) + ")", [])] if picked else []
+
+
 _ORIENTATION_SQL = {
     "portrait": "assets.meta_height > assets.meta_width",
     "landscape": "assets.meta_width > assets.meta_height",
@@ -370,6 +383,7 @@ FACETS: tuple[Facet, ...] = (
     _range_facet("shutter", "meta_shutter"),
     Facet("capture_time", ("date_from", "date_to", "date_within_days"), _capture_time),
     Facet("rating", ("rating_min", "rating_max"), _rating),
+    Facet("flag", ("flag",), _flag),
     Facet("orientation", ("orientation",), _orientation),
     Facet("asset_type", ("asset_type",), _asset_type),
     Facet("tag", ("tag", "tag_match"), _tag, modifiers=("tag_match",)),

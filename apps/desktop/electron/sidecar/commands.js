@@ -341,6 +341,19 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv);
     },
 
+    setAssetFlag(assetIds, flag) {
+      const argv = ["set-asset-flag", "--flag", String(flag)];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      return callJson(argv);
+    },
+
+    addAssetTags(assetIds, tags) {
+      const argv = ["add-asset-tags"];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      for (const tag of tags) argv.push("--tag", String(tag));
+      return callJson(argv);
+    },
+
     addAssetTag(assetId, tag) {
       return callJson(["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
     },

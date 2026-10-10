@@ -7,7 +7,7 @@ import useJobs from "./useJobs";
 import { oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
   DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
-  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, sortOutsideFolder,
+  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, scopeSelectsByFlag, scopeSelectsByTag, rejectedFilters, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
@@ -22,6 +22,9 @@ const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
 // catalog switch lands, on All Assets in the order last picked.
 const SORT_PREF = "gallery.sort";
 const startScope = () => ({ ...DEFAULT_SCOPE, sort: readPref(SORT_PREF, DEFAULT_SCOPE.sort, oneOf(LIBRARY_SORTS)) });
+
+// What a flag is stored as (sidecar db/assets.py FLAG_VALUES).
+const FLAG_VALUES = { pick: 1, reject: -1, none: 0 };
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
@@ -821,6 +824,10 @@ export default function useWorkspace({ pushToast } = {}) {
 
     try {
       await api.setAssetRating(targetIds, nextRating);
+      // A detail asked for just before the key press (click, then a number
+      // at once) answers after the change was shown, with the old rating:
+      // the sidecar takes requests in order. Show the change again.
+      applyRating(() => nextRating);
       // A rating is the most common smart-collection condition.
       if (collections.some((c) => c.kind === "smart")) void loadCollections();
       // In a view that selects by rating, a photo that no longer qualifies
@@ -843,6 +850,87 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     // Ratings order cluster covers on the map — invalidate its point cache.
     bumpCatalogRevision();
+  }
+
+  // Pick / reject / none, as Lightroom's P / X / U. Optimistic, like the
+  // rating: the tiles change at once and go back if the write fails.
+  async function setAssetFlag(assetIds, flag) {
+    const value = FLAG_VALUES[flag];
+    if (value === undefined) return;
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    if (!targetIds.length) return;
+    const targetSet = new Set(targetIds);
+    const previousFlags = new Map();
+    for (const item of items) {
+      if (targetSet.has(item.asset_id)) previousFlags.set(item.asset_id, item.app_flag ?? null);
+    }
+    if (detail && targetSet.has(detail.asset_id) && !previousFlags.has(detail.asset_id)) {
+      previousFlags.set(detail.asset_id, detail.app_flag ?? null);
+    }
+    const applyFlag = (resolve) => {
+      setItems((current) =>
+        current.map((item) => (targetSet.has(item.asset_id)
+          ? { ...item, app_flag: resolve(item.asset_id, item.app_flag) }
+          : item)),
+      );
+      setDetail((current) => (current && targetSet.has(current.asset_id)
+        ? { ...current, app_flag: resolve(current.asset_id, current.app_flag) }
+        : current));
+    };
+    applyFlag(() => value);
+    try {
+      await api.setAssetFlag(targetIds, flag);
+      // As for the rating: a detail asked for just before is answered first.
+      applyFlag(() => value);
+      if (collections.some((c) => c.kind === "smart")) void loadCollections();
+      // In a view that picks by flag ("rejected" while culling), a photo that
+      // no longer qualifies leaves the grid now.
+      if (scopeSelectsByFlag(scopeRef.current) && !revealRef.current) void refreshBrowse();
+    } catch (error) {
+      applyFlag((assetId, current) => (previousFlags.has(assetId) ? previousFlags.get(assetId) : current));
+      pushToast?.({
+        title: t("flagFailed"),
+        message: String(error?.message || error),
+        tone: "error",
+        ttl: 6000,
+      });
+      return;
+    }
+    bumpCatalogRevision();
+  }
+
+  // The gallery's "Add Tags…": every tag onto every photo, in one write. The
+  // Inspector's tags, the tag filter's options and a view that selects by
+  // tag all follow.
+  async function addTagsToAssets(assetIds, tags) {
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
+    if (!targetIds.length || !clean.length) return null;
+    const result = await api.addAssetTags(targetIds, clean);
+    invalidateAnnotations();
+    loadFacetValues();
+    if (collections.some((c) => c.kind === "smart")) void loadCollections();
+    if (scopeSelectsByTag(scopeRef.current) && !revealRef.current) void refreshBrowse();
+    bumpCatalogRevision();
+    return result;
+  }
+
+  // The rejected photos of the view on screen (its folder, search and
+  // filters; the flag condition becomes "rejected"), every page of them —
+  // what "Delete Rejected Photos…" acts on. Only ids and paths.
+  async function collectRejected() {
+    const scope = scopeRef.current;
+    const filters = rejectedFilters(scope.filters);
+    const search = scope.query.trim() || undefined;
+    const rows = [];
+    for (let offset = 0; ; offset += 500) {
+      const page = scope.collectionId
+        ? await api.browseCollection(scope.collectionId, { limit: 500, offset, search, filters, sort: scope.sort || undefined })
+        : await api.browseImages({ status: scope.status, limit: 500, offset, search, filters, base: scope.base || undefined, sort: scope.sort || undefined });
+      for (const row of page || []) rows.push({ asset_id: row.asset_id, image_path: row.image_path });
+      if (!page || page.length < 500) break;
+    }
+    return rows;
   }
 
   // ── scope changes: each one is a write to `scope`; the effect browses ──
@@ -1359,5 +1447,8 @@ export default function useWorkspace({ pushToast } = {}) {
     deleteImageAssets,
     deleteImageAssetsFromDisk,
     setAssetRating,
+    setAssetFlag,
+    addTagsToAssets,
+    collectRejected,
   };
 }

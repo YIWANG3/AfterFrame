@@ -365,8 +365,8 @@ def split_shared_asset_ids(connection: sqlite3.Connection, commit: bool = True) 
             connection.execute("""
                 INSERT INTO assets (
                     asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key,
-                    extension, fingerprint, file_size, modified_time, metadata_json, app_rating
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    extension, fingerprint, file_size, modified_time, metadata_json, app_rating, app_flag
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(asset_id) DO NOTHING
             """, (
                 new_id,
@@ -381,6 +381,7 @@ def split_shared_asset_ids(connection: sqlite3.Connection, commit: bool = True) 
                 asset_row["modified_time"],
                 asset_row["metadata_json"],
                 asset_row["app_rating"],
+                asset_row["app_flag"],
             ))
 
             # Update registry to point to new asset

@@ -52,6 +52,7 @@ import { useDepthModel } from "./editor/state/useDepthModel";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
 import { useAddToFolder } from "../hooks/useAddToFolder";
 import { bool, clearPref, readPref, text, writePref } from "../utils/prefs";
+import { matchShortcut } from "../shortcuts/store";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
@@ -1453,7 +1454,8 @@ export default function EditorOverlay({
       else handleUndo();
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+    // Save (⌘S unless rebound in Settings → Keyboard Shortcuts).
+    if (matchShortcut(event, ["editor"])?.id === "editor.save") {
       event.preventDefault();
       void handleQuickSave();
     }

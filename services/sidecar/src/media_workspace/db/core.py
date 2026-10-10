@@ -57,6 +57,8 @@ _LATEST_COLUMNS = [
     ("catalog_info", "place_data_version", "TEXT"),
     ("catalog_info", "colors_version", "TEXT"),
     ("assets", "app_rating", "INTEGER"),
+    # Pick / reject flag, Lightroom's: 1 picked, -1 rejected, NULL or 0 none.
+    ("assets", "app_flag", "INTEGER"),
     ("raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'"),
     ("raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'"),
     ("raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'"),

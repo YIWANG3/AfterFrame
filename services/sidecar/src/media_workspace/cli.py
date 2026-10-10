@@ -67,6 +67,7 @@ from .db import (
     request_job_pause,
     request_job_resume,
     set_app_setting,
+    set_asset_flag,
     set_asset_rating,
     set_catalog_path,
     set_person_group_cover,
@@ -435,6 +436,10 @@ def build_parser() -> argparse.ArgumentParser:
     set_rating.add_argument("--asset-id", action="append", required=True)
     set_rating.add_argument("--rating", type=int, choices=[0, 1, 2, 3, 4, 5], required=True)
 
+    set_flag = subparsers.add_parser("set-asset-flag", parents=[common])
+    set_flag.add_argument("--asset-id", action="append", required=True)
+    set_flag.add_argument("--flag", choices=["pick", "reject", "none"], required=True)
+
     browse_col = subparsers.add_parser("browse-collection", parents=[common])
     browse_col.add_argument("--collection-id", required=True)
     browse_col.add_argument("--limit", type=int, default=120)
@@ -734,6 +739,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_tag_p = subparsers.add_parser("add-asset-tag", parents=[common])
     add_tag_p.add_argument("--asset-id", required=True)
     add_tag_p.add_argument("--tag", required=True)
+
+    # Several photos, several tags, one write: the gallery's "Add Tags…".
+    add_tags_p = subparsers.add_parser("add-asset-tags", parents=[common])
+    add_tags_p.add_argument("--asset-id", action="append", required=True)
+    add_tags_p.add_argument("--tag", action="append", required=True)
 
     remove_tag_p = subparsers.add_parser("remove-asset-tag", parents=[common])
     remove_tag_p.add_argument("--asset-id", required=True)
@@ -1269,6 +1279,13 @@ def _cmd_add_asset_tag(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_add_asset_tags(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    result = _annotation.add_asset_tags(connection, args.asset_id, args.tag)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
 def _cmd_remove_asset_tag(args, connection, catalog, parser):
     from . import annotation as _annotation
     payload = _annotation.remove_asset_tag(connection, args.asset_id, args.tag)
@@ -1728,6 +1745,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
                 "image_path": row["image_path"],
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
+                "app_flag": row["app_flag"],
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -1917,6 +1935,7 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "image_path": row["image_path"],
         "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
         "app_rating": row["app_rating"],
+        "app_flag": row["app_flag"],
         "exists_on_disk": present,
         "imported_at": row["imported_at"],
         "match_status": row["match_status"],
@@ -2339,6 +2358,12 @@ def _cmd_set_asset_rating(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_set_asset_flag(args, connection, catalog, parser):
+    updated = set_asset_flag(connection, args.asset_id, args.flag)
+    print(json.dumps({"ok": True, "asset_ids": args.asset_id, "flag": args.flag, "updated": updated}))
+    return 0
+
+
 def _cmd_browse_collection(args, connection, catalog, parser):
     payload = []
     rows = browse_collection(
@@ -2361,6 +2386,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
                 "image_path": row["image_path"],
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
+                "app_flag": row["app_flag"],
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -2402,6 +2428,7 @@ COMMAND_HANDLERS = {
     "annotation-count": _cmd_annotation_count,
     "get-annotation": _cmd_get_annotation,
     "add-asset-tag": _cmd_add_asset_tag,
+    "add-asset-tags": _cmd_add_asset_tags,
     "remove-asset-tag": _cmd_remove_asset_tag,
     "list-tags": _cmd_list_tags,
     "init-catalog": _cmd_init_catalog,
@@ -2477,6 +2504,7 @@ COMMAND_HANDLERS = {
     "collection-add-items": _cmd_collection_add_items,
     "collection-remove-items": _cmd_collection_remove_items,
     "set-asset-rating": _cmd_set_asset_rating,
+    "set-asset-flag": _cmd_set_asset_flag,
     "browse-collection": _cmd_browse_collection,
 }
 

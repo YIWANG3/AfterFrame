@@ -100,5 +100,29 @@
     "snapshotName": "{{name}}(快照)",
     "failed": "保存智能合集失败"
   },
-  "smartCollectionRulesLost": "筛选条件没有存进去。请完全退出并重新打开 AfterFrame,再保存一次。"
+  "smartCollectionRulesLost": "筛选条件没有存进去。请完全退出并重新打开 AfterFrame,再保存一次。",
+  "flagFailed": "旗标保存失败",
+  "batchTags": {
+    "added_one": "已给 {{count}} 张照片添加标签",
+    "added_other": "已给 {{count}} 张照片添加标签",
+    "separator": "、",
+    "failed": "标签添加失败"
+  },
+  "rejected": {
+    "failed": "无法读取排除的照片",
+    "none": "当前视图中没有排除的照片",
+    "noneHint": "选中照片按 {{key}} 标记为排除。",
+    "title": "删除排除的照片",
+    "msg_one": "当前视图中有 {{count}} 张排除的照片。",
+    "msg_other": "当前视图中有 {{count}} 张排除的照片。",
+    "detail": "「从图库移除」只删除记录，文件保留；「移到废纸篓」会一并删除原始文件，可从废纸篓恢复。",
+    "detailLibraryOnly": "从当前图库移除，文件保留。",
+    "removeFromLibrary": "从图库移除",
+    "moveToTrash": "移到废纸篓",
+    "removed_one": "已从图库移除 {{count}} 张排除的照片",
+    "removed_other": "已从图库移除 {{count}} 张排除的照片",
+    "trashed_one": "已将 {{count}} 张排除的照片移到废纸篓",
+    "trashed_other": "已将 {{count}} 张排除的照片移到废纸篓"
+  },
+  "compareNeedsTwo": "选中两张照片才能对比"
 }

@@ -41,7 +41,8 @@
     "modified": "Modified",
     "gps": "GPS",
     "locationSource": "Source",
-    "gpsJump": "View the capture location on the map"
+    "gpsJump": "View the capture location on the map",
+    "flag": "Flag"
   },
   "missing": {
     "badge": "Missing",
@@ -104,5 +105,9 @@
     "exif": "GPS (EXIF)",
     "ai": "AI inferred",
     "manual": "Manual"
+  },
+  "flag": {
+    "pick": "Pick",
+    "reject": "Reject"
   }
 }

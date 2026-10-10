@@ -49,5 +49,15 @@
     "addTagFailed": "无法添加标签",
     "removeTagFailed": "无法移除标签",
     "failedFallback": "失败"
+  },
+  "batch": {
+    "title_one": "给 {{count}} 张照片添加标签",
+    "title_other": "给 {{count}} 张照片添加标签",
+    "hint": "照片原有的标签会保留。",
+    "placeholder": "输入标签后按回车",
+    "existing": "图库中的标签",
+    "removeTag": "移除 {{tag}}",
+    "cancel": "取消",
+    "apply": "添加"
   }
 }

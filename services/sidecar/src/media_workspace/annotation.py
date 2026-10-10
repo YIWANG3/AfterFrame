@@ -709,6 +709,39 @@ def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, so
     return get_annotation(connection, asset_id)
 
 
+def add_asset_tags(connection: sqlite3.Connection, asset_ids: list[str], tags: list[str], *, source: str = "user") -> dict[str, Any]:
+    """Add every tag to every asset in one transaction (the gallery's batch
+    "Add Tags…"). Ids the catalog doesn't hold are skipped, not created."""
+    clean: list[str] = []
+    seen: set[str] = set()
+    for tag in tags or []:
+        tag = (tag or "").strip()
+        if tag and normalize_tag(tag) not in seen:
+            seen.add(normalize_tag(tag))
+            clean.append(tag)
+    wanted = list(dict.fromkeys(a for a in asset_ids or [] if a))
+    known = {
+        row["asset_id"]
+        for start in range(0, len(wanted), 500)
+        for row in connection.execute(
+            f"SELECT asset_id FROM assets WHERE asset_id IN ({','.join('?' * len(wanted[start:start + 500]))})",
+            wanted[start:start + 500],
+        )
+    } if wanted else set()
+    updated = [a for a in wanted if a in known]
+    if clean:
+        for asset_id in updated:
+            for tag in clean:
+                add_asset_tag(connection, asset_id, tag, source=source, commit=False)
+        connection.commit()
+    return {
+        "ok": True,
+        "asset_ids": updated,
+        "tags": clean,
+        "missing": [a for a in wanted if a not in known],
+    }
+
+
 def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any] | None:
     """Remove a tag from an asset (both tags_json and asset_tags)."""
     tag = (tag or "").strip()

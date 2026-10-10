@@ -49,5 +49,15 @@
     "addTagFailed": "Couldn't add tag",
     "removeTagFailed": "Couldn't remove tag",
     "failedFallback": "Failed"
+  },
+  "batch": {
+    "title_one": "Add Tags to 1 Photo",
+    "title_other": "Add Tags to {{count}} Photos",
+    "hint": "Tags these photos already have stay.",
+    "placeholder": "Type a tag, then Enter",
+    "existing": "Tags in this library",
+    "removeTag": "Remove {{tag}}",
+    "cancel": "Cancel",
+    "apply": "Add"
   }
 }

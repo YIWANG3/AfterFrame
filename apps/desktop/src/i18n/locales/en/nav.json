@@ -265,7 +265,8 @@
       "cancel": "Cancel",
       "apply": "Apply",
       "needsCondition": "Pick at least one condition in a group"
-    }
+    },
+    "flag": "Flag"
   },
   "activity": {
     "title": "Background Activity",
@@ -316,7 +317,8 @@
     "resetToFit": "Reset to fit",
     "failedToLoad": "Failed to load image",
     "loadingLarge": "Loading large image...",
-    "preparingVideo": "Preparing video…"
+    "preparingVideo": "Preparing video…",
+    "stars": "{{count}} stars"
   },
   "gallery": {
     "loading": "Loading…",
@@ -343,7 +345,9 @@
       "refreshFromDisk_other": "Refresh {{count}} from Disk",
       "copyPath": "Copy File Path",
       "copyName": "Copy Name",
-      "openWith": "Open With"
+      "openWith": "Open With",
+      "flag": "Flag",
+      "addTags": "Add Tags…"
     }
   },
   "map": {
@@ -357,5 +361,11 @@
       "city": "City"
     },
     "noLocation": "No mappable location for this photo"
+  },
+  "flag": {
+    "pick": "Pick",
+    "reject": "Rejected",
+    "none": "Remove Flag",
+    "unflagged": "No Flag"
   }
 }

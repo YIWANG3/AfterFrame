@@ -18,6 +18,7 @@
   "copyPath": "Copy File Path",
   "copyName": "Copy Name",
   "delete": "Delete",
+  "deleteRejected": "Delete Rejected Photos…",
   "selectAll": "Select All",
   "minimize": "Minimize",
   "zoom": "Zoom",

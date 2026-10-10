@@ -16,7 +16,14 @@ let request = null;
 
 export function confirm(options) {
   if (!request) return Promise.resolve(false);
-  return request(options);
+  return request(options).then((result) => result === true);
+}
+
+// Which of several actions: `choices` is [{ id, label, danger }]; resolves to
+// the id picked, or null on Cancel / Esc.
+export function choose(options) {
+  if (!request) return Promise.resolve(null);
+  return request(options).then((result) => (typeof result === "string" ? result : null));
 }
 
 export function ConfirmHost() {
@@ -46,6 +53,7 @@ export function ConfirmHost() {
       open={!!state}
       {...(state || {})}
       onConfirm={() => settle(true)}
+      onChoose={(id) => settle(id)}
       onCancel={() => settle(false)}
     />
   );
