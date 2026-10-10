@@ -216,6 +216,10 @@ async function ingestFile(file, source = "generated") {
     exists_on_disk: true,
     app_rating: 0,
     annotation: null,
+    // The photo's tags, hand-added and AI alike; aiTags: the AI ones the user
+    // hasn't made theirs, which the next run replaces (as the sidecar's asset_tags).
+    tags: [],
+    aiTags: [],
     has_face: false,
     imported_at: new Date().toISOString(),
     modified_time: Math.floor((file.lastModified || Date.now()) / 1000),
@@ -285,7 +289,7 @@ function matchesSearch(asset, search) {
   const ann = asset.annotation;
   return [asset.stem, meta.camera_model, meta.lens_model, ann?.caption, ann?.detected_text]
     .some((v) => v && String(v).toLowerCase().includes(q))
-    || (ann?.tags || []).some((t) => String(t).toLowerCase().includes(q));
+    || (asset.tags || []).some((t) => String(t).toLowerCase().includes(q));
 }
 
 // Mirrors the sidecar's facet filter semantics (db/browse.py _facet_clauses),
@@ -361,7 +365,7 @@ function matchesFacetConditions(asset, filters) {
   if (extensions.length && !extensions.includes(fileExt(asset.file_name))) return false;
   const wanted = facetValues(filters.tag).map(normalizeTag);
   if (wanted.length) {
-    const has = new Set((asset.annotation?.tags || []).map(normalizeTag));
+    const has = new Set((asset.tags || []).map(normalizeTag));
     const hit = filters.tag_match === "all" ? wanted.every((t) => has.has(t)) : wanted.some((t) => has.has(t));
     if (!hit) return false;
   }
@@ -528,7 +532,7 @@ function aggregateTags(limit = 50, needle = "", universe = assets) {
   const q = needle.toLowerCase();
   const m = new Map();
   for (const a of universe) {
-    for (const t of a.annotation?.tags || []) {
+    for (const t of a.tags || []) {
       if (!q || t.toLowerCase().includes(q)) m.set(t, (m.get(t) || 0) + 1);
     }
   }
@@ -649,17 +653,24 @@ async function annotateOne(opts) {
   const now = new Date().toISOString();
   const maxTags = opts.maxTags || 10;
   const maxCaption = opts.maxCaptionChars || 200;
+  const aiTags = [...new Set((Array.isArray(parsed.tags) ? parsed.tags : [])
+    .map((t) => (typeof t === "string" ? t : t?.tag))
+    .filter((t) => typeof t === "string" && t.trim())
+    .map((t) => normalizeTag(t)))]
+    .slice(0, maxTags);
+  // The run's tags join the photo's: the previous run's are replaced, the
+  // user's stay (and an AI tag the user has is still the user's).
+  const userTags = (asset.tags || []).filter((t) => !(asset.aiTags || []).includes(t));
+  asset.aiTags = aiTags.filter((t) => !userTags.includes(t));
+  asset.tags = [...userTags, ...asset.aiTags];
   const annotation = {
     asset_id: asset.asset_id,
     provider: opts.provider,
     model: opts.model || null,
     schema_version: 1,
     caption: typeof parsed.caption === "string" ? parsed.caption.slice(0, maxCaption) : "",
-    tags: (Array.isArray(parsed.tags) ? parsed.tags : [])
-      .map((t) => (typeof t === "string" ? t : t?.tag))
-      .filter((t) => typeof t === "string" && t.trim())
-      .map((t) => normalizeTag(t))
-      .slice(0, maxTags),
+    tags: asset.tags,
+    ai_tags: aiTags,
     location: parsed.location && typeof parsed.location === "object" && !Array.isArray(parsed.location) ? parsed.location : null,
     detected_text: typeof parsed.detected_text === "string" ? parsed.detected_text : null,
     created_at: now,
@@ -848,7 +859,7 @@ export const browserBridge = {
         assets.push({
           asset_id: `web-${nextId++}`, source: "sample", asset_type: "image",
           file_name: name, stem: name.replace(/\.[^.]+$/, ""),
-          exists_on_disk: true, app_rating: 0, annotation: null, has_face: false,
+          exists_on_disk: true, app_rating: 0, annotation: null, tags: [], aiTags: [], has_face: false,
           imported_at: new Date().toISOString(), image_metadata: sampleManifest[name],
           image_path: original, preview_path: thumb, image_preview_path: thumb,
           image_preview_hd_path: original, preview_hd_path: original, _objectUrls: [],
@@ -1379,16 +1390,23 @@ export const browserBridge = {
   getAnnotation: async (assetId) => {
     return assets.find((a) => a.asset_id === assetId)?.annotation || null;
   },
+  // A tag by hand: onto the photo's tags (no annotation is made — a
+  // hand-tagged photo is still un-annotated). One the AI proposed becomes the user's.
   addAssetTag: async (assetId, tag) => {
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset) return null;
     const t = normalizeTag(tag);
-    const ann = asset.annotation
-      ? { ...asset.annotation }
-      : { asset_id: assetId, provider: "user", model: "manual", schema_version: 1, caption: "", tags: [], location: null, detected_text: null, created_at: new Date().toISOString() };
-    if (t && !ann.tags.some((x) => normalizeTag(x) === t)) ann.tags = [...ann.tags, t];
-    ann.updated_at = new Date().toISOString();
-    return await setAssetAnnotation(assetId, ann);
+    if (t) {
+      asset.tags = asset.tags || [];
+      if (!asset.tags.includes(t)) asset.tags = [...asset.tags, t];
+      asset.aiTags = (asset.aiTags || []).filter((x) => x !== t);
+      if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
+    }
+    return { asset_id: assetId, tags: asset.tags || [] };
+  },
+  getAssetTags: async (assetId) => {
+    const asset = assets.find((a) => a.asset_id === assetId);
+    return { asset_id: assetId, tags: asset?.tags || [] };
   },
   addAssetTags: async (assetIds, tags) => {
     const updated = [];
@@ -1401,10 +1419,12 @@ export const browserBridge = {
   },
   removeAssetTag: async (assetId, tag) => {
     const asset = assets.find((a) => a.asset_id === assetId);
-    if (!asset?.annotation) return asset?.annotation || null;
+    if (!asset) return null;
     const t = normalizeTag(tag);
-    const ann = { ...asset.annotation, tags: asset.annotation.tags.filter((x) => normalizeTag(x) !== t), updated_at: new Date().toISOString() };
-    return await setAssetAnnotation(assetId, ann);
+    asset.tags = (asset.tags || []).filter((x) => normalizeTag(x) !== t);
+    asset.aiTags = (asset.aiTags || []).filter((x) => normalizeTag(x) !== t);
+    if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
+    return { asset_id: assetId, tags: asset.tags };
   },
   listTags: async (limit = 50) => {
     return aggregateTags(limit).map((t) => t.value);

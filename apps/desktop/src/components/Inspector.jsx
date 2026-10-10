@@ -5,6 +5,7 @@ import { ChevronRight, Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPe
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO, displaySize } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
+import TagsSection from "./TagsSection";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
@@ -405,10 +406,11 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onSele
             ) : null}
           </Section>
 
+          <TagsSection assetId={detail.asset_id} onTagClick={onTagFilter} pushToast={pushToast} />
+
           <AnnotationsSection
             assetId={detail.asset_id}
             imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
-            onTagClick={onTagFilter}
             onJumpToLocation={onJumpToLocation}
             onLocationChanged={onLocationChanged}
             pushToast={pushToast}

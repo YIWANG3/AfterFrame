@@ -59,5 +59,6 @@
     "removeTag": "Remove {{tag}}",
     "cancel": "Cancel",
     "apply": "Add"
-  }
+  },
+  "noTags": "No tags yet"
 }

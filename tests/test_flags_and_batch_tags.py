@@ -113,19 +113,16 @@ class FlagsAndBatchTagsTest(unittest.TestCase):
             ("image_a", "beach", "user"), ("image_a", "trip", "user"),
             ("image_b", "beach", "user"), ("image_b", "trip", "user"),
         ])
-        # The Inspector's tag list (tags_json) shows them too.
-        shown = json.loads(self.connection.execute(
-            "SELECT tags_json FROM asset_ai_annotations WHERE asset_id = 'image_b'").fetchone()[0])
-        self.assertEqual(shown, ["trip", "beach"])
+        # A hand-tagged photo is still one AI hasn't described: no annotation row.
+        self.assertEqual(self.connection.execute("SELECT COUNT(*) FROM asset_ai_annotations").fetchone()[0], 0)
+        self.assertEqual(self.run_cli("get-asset-tags", "--asset-id", "image_b")["tags"], ["trip", "beach"])
         self.assertEqual(self.stems({"tag": "trip"}), ["a", "b"])
 
     def test_batch_tags_keep_the_tags_a_photo_had(self) -> None:
         self.run_cli("add-asset-tag", "--asset-id", "image_a", "--tag", "old")
-        self.run_cli("add-asset-tags", "--asset-id", "image_a", "--tag", "new", "--tag", "old")
-        shown = json.loads(self.connection.execute(
-            "SELECT tags_json FROM asset_ai_annotations WHERE asset_id = 'image_a'").fetchone()[0])
-        self.assertEqual(shown, ["old", "new"])
-
+        self.run_cli("add-asset-tags", "--asset-id", "image_a", "--tag", "new", "--tag", "OLD")
+        # "OLD" is the photo's "old": the library's spelling wins, once.
+        self.assertEqual(self.run_cli("get-asset-tags", "--asset-id", "image_a")["tags"], ["old", "new"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,9 @@ _BROWSE_SELECT_COLUMNS = """\
             assets.app_rating,
             assets.app_flag,
             assets.display_shape,
+            (SELECT json_group_array(tags_all.tag) FROM (
+                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
+              ) AS tags_all) AS asset_tags_json,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
             assets.file_size AS catalog_file_size,
@@ -541,6 +544,9 @@ def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sql
             assets.app_rating,
             assets.app_flag,
             assets.display_shape,
+            (SELECT json_group_array(tags_all.tag) FROM (
+                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
+              ) AS tags_all) AS asset_tags_json,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
             registry.match_status,
@@ -615,6 +621,9 @@ def get_image_asset_detail_by_path(connection: sqlite3.Connection, image_path: s
             assets.app_rating,
             assets.app_flag,
             assets.display_shape,
+            (SELECT json_group_array(tags_all.tag) FROM (
+                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
+              ) AS tags_all) AS asset_tags_json,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
             registry.match_status,

@@ -227,7 +227,7 @@ export function searchableFields(item) {
     item.raw_metadata?.lens_model,
     item.annotation?.caption,
     item.annotation?.detected_text,
-    ...(item.annotation?.tags || []),
+    ...(item.tags || item.annotation?.tags || []),
   ];
 }
 

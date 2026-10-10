@@ -59,5 +59,6 @@
     "removeTag": "移除 {{tag}}",
     "cancel": "取消",
     "apply": "添加"
-  }
+  },
+  "noTags": "还没有标签"
 }

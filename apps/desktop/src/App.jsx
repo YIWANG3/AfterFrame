@@ -47,6 +47,7 @@ import TagBatchDialog from "./components/TagBatchDialog";
 import { loadShortcuts, matchShortcut, shortcutLabel } from "./shortcuts/store";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
+import { invalidateTags } from "./components/annotation/tagStore";
 import WindowTitleBar from "./components/WindowTitleBar";
 
 const MAP_EXPANDED_KEY = "afterframe-map-expanded";
@@ -645,6 +646,8 @@ export default function App() {
   const onJobFinished = useEffectEvent((fin) => {
     if (fin.jobType === "annotation") {
       invalidateAnnotations();
+      // The run's tags joined the photos' own.
+      invalidateTags();
       const r = fin.result || {};
       if (fin.status === "succeeded") {
         const failed = Number(r.failed || 0);

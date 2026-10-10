@@ -2,6 +2,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useTranslation } from "react-i18next";
 import { collapseRootPaths, mergeRoots, determineImportMode, fileName } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
+import { invalidateTags, seedTags } from "../components/annotation/tagStore";
 import api from "../api";
 import useJobs from "./useJobs";
 import { oneOf, readPref, writePref } from "../utils/prefs";
@@ -364,6 +365,7 @@ export default function useWorkspace({ pushToast } = {}) {
       if (browserRequestIdRef.current !== requestId) return;
       loadedScopeRef.current = scopeKeyOf(target);
       seedAnnotations(payload);
+      seedTags(payload);
       setBrowserOffset(nextOffset + payload.length);
       setBrowserHasMore(payload.length === (append ? PAGE_SIZE : pageLimit));
       if (append) {
@@ -433,6 +435,7 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     if (revealRef.current) return;
     invalidateAnnotations();
+    invalidateTags();
     void refreshBrowse();
     // Smart collection counts are live queries over the assets.
     void loadCollections();
@@ -552,6 +555,7 @@ export default function useWorkspace({ pushToast } = {}) {
       installLoadedScope(target);
       if (resetScope) pushToast?.({ title: t("relatedAsset.showingAll"), ttl: 4000 });
       seedAnnotations(payload);
+      seedTags(payload);
       setItems(nextItems);
       setRevealAssetRequest(request);
       setBrowserOffset(offset + payload.length);
@@ -608,6 +612,7 @@ export default function useWorkspace({ pushToast } = {}) {
         return { found, missing: [...wanted] };
       }
       seedAnnotations(collected);
+      seedTags(collected);
       setItems(appendPage([], collected));
       setBrowserOffset(offset);
       setBrowserHasMore(lastPageFull);
@@ -907,7 +912,7 @@ export default function useWorkspace({ pushToast } = {}) {
     const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
     if (!targetIds.length || !clean.length) return null;
     const result = await api.addAssetTags(targetIds, clean);
-    invalidateAnnotations();
+    invalidateTags(targetIds);
     loadFacetValues();
     if (collections.some((c) => c.kind === "smart")) void loadCollections();
     if (scopeSelectsByTag(scopeRef.current) && !revealRef.current) void refreshBrowse();

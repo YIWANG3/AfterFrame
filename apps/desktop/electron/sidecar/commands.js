@@ -358,6 +358,10 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
     },
 
+    getAssetTags(assetId) {
+      return callJson(["get-asset-tags", "--asset-id", String(assetId)]);
+    },
+
     removeAssetTag(assetId, tag) {
       return callJson(["remove-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
     },

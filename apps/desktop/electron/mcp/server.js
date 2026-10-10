@@ -94,7 +94,8 @@ function compactAsset(row, port) {
     duration: row.asset_type === "video" ? meta.duration ?? null : undefined,
     match_status: row.match_status,
     caption: row.annotation?.caption ?? null,
-    tags: row.annotation?.tags?.length ? row.annotation.tags : undefined,
+    // Hand-added and AI tags alike (asset_tags).
+    tags: row.tags?.length ? row.tags : row.annotation?.tags?.length ? row.annotation.tags : undefined,
     has_raw: !!row.raw_asset_id,
     has_face: row.has_face ? true : undefined,
     // Only surfaced when something is wrong — keeps the common case compact.

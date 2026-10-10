@@ -153,13 +153,40 @@ test("T adds every tag to every selected photo", async () => {
   await ctx.window.getByTestId("tag-batch-apply").click();
   await expect(dialog).toHaveCount(0);
   await expect.poll(async () => {
-    const byId = Object.fromEntries((await rows()).map((row) => [row.asset_id, row.annotation?.tags || []]));
+    const byId = Object.fromEntries((await rows()).map((row) => [row.asset_id, row.tags || []]));
     return [byId[a], byId[b]].map((tags) => ["trip", "beach"].every((tag) => tags.includes(tag)));
   }, { timeout: 5_000 }).toEqual([true, true]);
+  // Hand tags are not an AI annotation: the photos are still un-annotated.
+  const annotations = Object.fromEntries((await rows()).map((row) => [row.asset_id, row.annotation]));
+  expect([annotations[a], annotations[b]]).toEqual([null, null]);
   // The menu offers the same.
   await card(a).click({ button: "right" });
   await expect(ctx.window.getByText("Add Tags…", { exact: true })).toBeVisible();
   await ctx.window.keyboard.press("Escape");
+});
+
+test("the Inspector's Tags are there without AI, and one more is added by hand", async () => {
+  const tagged = await idAt(6);
+  // A photo never annotated, never tagged (the fixture's 004-green has an
+  // annotation whose tag "city" counts as a tag of the photo).
+  const bare = (await rows()).find((row) => row.asset_type === "image" && !row.annotation && !(row.tags || []).length).asset_id;
+  const tags = ctx.window.getByTestId("inspector-tags");
+  // The section is there, empty.
+  await card(bare).click();
+  await expect(tags).toHaveAttribute("data-count", "0");
+  await expect(tags).toContainText("No tags yet");
+  // The one tagged in bulk shows those tags, and takes one more by hand.
+  await card(tagged).click();
+  await expect(tags.locator("[data-tag='trip']")).toBeVisible();
+  await expect(tags.locator("[data-tag='beach']")).toBeVisible();
+  await tags.getByTestId("tag-add").click();
+  await tags.getByTestId("tag-add-input").fill("by-hand");
+  await tags.getByTestId("tag-add-input").press("Enter");
+  await expect(tags.locator("[data-tag='by-hand']")).toBeVisible();
+  await expect.poll(async () => (await rows()).find((row) => row.asset_id === tagged)?.tags).toEqual(["trip", "beach", "by-hand"]);
+  // Still not "AI annotated".
+  const unannotated = await ctx.window.evaluate(async () => (await window.mediaWorkspace.browseImages({ status: "all", limit: 500, filters: { annotated: "without" } })).map((row) => row.asset_id));
+  expect(unannotated).toContain(tagged);
 });
 
 test("⌘⌫ deletes the rejected photos of the view from the library", async () => {

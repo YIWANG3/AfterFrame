@@ -134,6 +134,7 @@ export const IPC_METHODS = [
   ["getAnnotation", "workspace:get-annotation", 1],
   ["addAssetTag", "workspace:add-asset-tag", 2],
   ["addAssetTags", "workspace:add-asset-tags", 2],
+  ["getAssetTags", "workspace:get-asset-tags", 1],
   ["removeAssetTag", "workspace:remove-asset-tag", 2],
   ["listTags", "workspace:list-tags", 1],
   ["testAnnotationConnection", "workspace:test-annotation-connection", 1],
