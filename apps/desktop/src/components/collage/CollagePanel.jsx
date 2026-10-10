@@ -19,6 +19,7 @@ export default function CollagePanel({
   onBorderRadiusChange,
   bgColor,
   onBgColorChange,
+  onResetCanvas,
   exportWidth,
   onExportWidthChange,
   onAddImages,
@@ -137,6 +138,7 @@ export default function CollagePanel({
         onBorderRadiusChange={onBorderRadiusChange}
         bgColor={bgColor}
         onBgColorChange={onBgColorChange}
+        onReset={onResetCanvas}
         exportWidth={exportWidth}
       />
 

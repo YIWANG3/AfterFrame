@@ -12,10 +12,12 @@ import api from "./api";
 import { registerRenderBridge } from "./agent/renderBridge";
 import i18n from "./i18n";
 import usePaneResize from "./hooks/usePaneResize";
+import { usePref } from "./hooks/usePref";
+import { intIn, oneOf } from "./utils/prefs";
 import useSelection from "./hooks/useSelection";
 import useAgentBridge from "./hooks/useAgentBridge";
 import Sidebar from "./components/Sidebar";
-import Toolbar from "./components/Toolbar";
+import Toolbar, { DISPLAY_MODE_KEYS } from "./components/Toolbar";
 import Gallery from "./components/Gallery";
 import Inspector from "./components/Inspector";
 import JobDock from "./components/JobDock";
@@ -95,8 +97,10 @@ export default function App() {
   workspaceRef.current = workspace;
   const [showSidebar] = useState(true);
   const [showInspector] = useState(true);
-  const [displayMode, setDisplayMode] = useState("grid");
-  const [thumbSize, setThumbSize] = useState(180);
+  // How the gallery shows photos is remembered (utils/prefs.js); what it
+  // shows (the view, the filters) starts fresh.
+  const [displayMode, setDisplayMode] = usePref("gallery.displayMode", "grid", oneOf(DISPLAY_MODE_KEYS));
+  const [thumbSize, setThumbSize] = usePref("gallery.thumbSize", 180, intIn(120, 300));
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editorItem, setEditorItem] = useState(null);
   // The folder the editor was opened from (null in any other view): what it
@@ -957,7 +961,7 @@ export default function App() {
     const a = itemById.get(assetIds[0]);
     const b = itemById.get(assetIds[1]);
     if (!a?.image_path || !b?.image_path) return;
-    setCompareState({ items: [a, b], layout: "side" });
+    setCompareState({ items: [a, b] });
   }
 
   // An active filter must be on screen: a hidden bar that is still filtering is
@@ -1569,7 +1573,7 @@ export default function App() {
         <GalleryCompare
           items={compareState.items}
           catalogKey={activeCatalogPath}
-          layout={compareState.layout || "side"}
+          layout={compareState.layout}
           onClose={() => setCompareState(null)}
           onLayoutChange={(layout) => setCompareState((s) => s ? { ...s, layout } : s)}
         />

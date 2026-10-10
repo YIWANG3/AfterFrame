@@ -22,14 +22,26 @@ import CameraLogosBlock from "./components/CameraLogosBlock";
 import { isTextLayer, isStickerLayer, isOverlayLayer, isFrameLayer, layerLabel } from "./layerStack";
 import {
   FONT_OPTIONS, COLOR_SWATCHES, PRESETS,
-  createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, getBgPadding,
+  createDefaultLayer, createStickerLayer, createOverlayLayer, applyPreset, getBgPadding, pickTextStyle,
 } from "./textState";
+import { fontFamilyAvailable, loadSystemFontFamilies } from "./fontFamilies";
+import { readPref, writePref } from "../../utils/prefs";
 import { LOCKED_HINT_KEY } from "../DesktopOnly";
 import {
   alignLeft, alignCenterH, alignRight,
   alignTop, alignCenterV, alignBottom,
   distributeH, distributeV,
 } from "./textAlign";
+
+const TEXT_STYLE_PREF = "text.style";
+
+// The look for a new text layer; a font no longer installed (another Mac, the
+// web build) falls back to the default one, the rest of the look stays.
+function rememberedTextStyle() {
+  const style = readPref(TEXT_STYLE_PREF, {}, pickTextStyle);
+  if (style.fontFamily && !fontFamilyAvailable(style.fontFamily)) delete style.fontFamily;
+  return style;
+}
 
 export default function TextPanel({
   layers = [],
@@ -127,8 +139,31 @@ export default function TextPanel({
   const currentId = current?.id;
   useEffect(() => { syncPadLinks(); }, [currentId]);
 
+  // "+ Text" starts from the look of the text the user last styled — in this
+  // panel, on the canvas or with a preset, on this photo or an earlier one —
+  // rather than the built-in default (utils/prefs.js). Selecting a layer
+  // alone changes nothing, and frame text, with a look of its own, is left
+  // out. Undo/redo of a style counts: what is on screen is what was chosen.
+  const styleSource = !frameMode && currentIsText && !isFrameLayer(current) ? current : null;
+  const styleSourceId = styleSource?.id ?? null;
+  const styleJson = styleSource ? JSON.stringify(pickTextStyle(styleSource)) : null;
+  const lastStyleRef = useRef(null);
+  useEffect(() => {
+    const prev = lastStyleRef.current;
+    lastStyleRef.current = styleSourceId ? { id: styleSourceId, json: styleJson } : null;
+    if (styleSourceId && prev?.id === styleSourceId && prev.json !== styleJson) {
+      writePref(TEXT_STYLE_PREF, JSON.parse(styleJson));
+    }
+  }, [styleSourceId, styleJson]);
+  // A remembered system font may have been uninstalled since: list what is
+  // installed now, so "+ Text" can tell.
+  useEffect(() => {
+    const family = readPref(TEXT_STYLE_PREF, {}, pickTextStyle).fontFamily;
+    if (family && !FONT_OPTIONS.some((f) => f.family === family)) void loadSystemFontFamilies();
+  }, []);
+
   const addLayer = () => {
-    const nl = createDefaultLayer();
+    const nl = createDefaultLayer(rememberedTextStyle());
     onLayersChange([...layers, nl]);
     onSelectionChange(new Set([nl.id]));
   };
@@ -984,20 +1019,7 @@ function FontSelect({ value, onChange }) {
   const openValueRef = useRef(value);
 
   const loadFonts = async () => {
-    try {
-      // Prefer Chromium's queryLocalFonts (works in packaged Electron)
-      if (window.queryLocalFonts) {
-        const fontData = await window.queryLocalFonts();
-        const families = [...new Set(fontData.map((f) => f.family))].sort();
-        setSystemFonts(families);
-        return;
-      }
-    } catch {}
-    // Fallback to IPC
-    try {
-      const fonts = await api.listSystemFonts();
-      if (Array.isArray(fonts)) setSystemFonts(fonts);
-    } catch {}
+    setSystemFonts(await loadSystemFontFamilies());
   };
 
   // Load on mount so arrow-cycling works before the dropdown is ever opened,

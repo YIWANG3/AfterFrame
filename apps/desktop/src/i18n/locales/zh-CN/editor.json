@@ -135,6 +135,7 @@
     "preview": "预览",
     "output": "输出",
     "chooseFolder": "选择文件夹…",
+    "useOriginalFolder": "改回原图所在文件夹",
     "layersBlocked": "请先应用或删除文字、贴纸和边框图层，再进行切图。",
     "exportN": "导出 {{count}} 张",
     "exporting": "正在导出 {{done}} / {{total}}…",

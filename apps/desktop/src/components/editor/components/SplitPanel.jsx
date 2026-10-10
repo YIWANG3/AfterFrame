@@ -131,7 +131,7 @@ export default function SplitPanel({
   count, isAutoCount, onCommitCount,
   rect, previewSource, sourceDims,
   onResetRegion,
-  outputDir, subfolder, onSubfolderChange, onChooseFolder,
+  outputDir, subfolder, onSubfolderChange, onChooseFolder, onUseOriginalFolder = null,
   folder, addToFolder, onAddToFolderChange,
   blockedReason,
   exporting, progress, onExport,
@@ -255,6 +255,16 @@ export default function SplitPanel({
                   <FolderOpen className="h-3.5 w-3.5" />
                 </button>
               </div>
+              {onUseOriginalFolder ? (
+                <button
+                  type="button"
+                  className="mt-1 text-[11px] text-accent hover:underline"
+                  data-testid="split-use-original-folder"
+                  onClick={onUseOriginalFolder}
+                >
+                  {t("split.useOriginalFolder")}
+                </button>
+              ) : null}
               <Checkbox
                 className="mt-2"
                 label={t("split.subfolder")}

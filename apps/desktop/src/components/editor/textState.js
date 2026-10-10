@@ -221,6 +221,40 @@ export function createDefaultLayer(overrides = {}) {
   };
 }
 
+// A text layer's look, without what it says, where it sits or how deep in the
+// scene: what the text tool remembers from the text the user last styled and
+// gives the next "+ Text" (TextPanel). Sizes are in the display basis the
+// panel edits in, so a remembered size looks the same on the next photo.
+export const TEXT_STYLE_KEYS = [
+  "fontFamily", "fontSize", "fontWeight", "bold", "italic", "underline", "strikethrough",
+  "tracking", "lineHeight", "textCase", "align",
+  "fillMode", "fillColor", "fillOpacity",
+  "gradientFrom", "gradientFromOpacity", "gradientTo", "gradientToOpacity", "gradientAngle",
+  "opacity",
+  "strokeEnabled", "strokeMode", "strokeColor", "strokeWidth",
+  "strokeGradFrom", "strokeGradFromOpacity", "strokeGradTo", "strokeGradToOpacity", "strokeGradAngle",
+  "bgMode", "bgColor", "bgOpacity",
+  "bgGradFrom", "bgGradFromOpacity", "bgGradTo", "bgGradToOpacity", "bgGradAngle",
+  "bgPadTop", "bgPadRight", "bgPadBottom", "bgPadLeft",
+  "shadow", "shadowX", "shadowY", "shadowBlur", "shadowColor", "shadowOpacity",
+  "glow", "glowColor", "glowBlur", "glowOpacity", "glowIntensity",
+];
+
+const isStyleValue = (value) => (typeof value === "string" && value.length <= 200)
+  || (typeof value === "number" && Number.isFinite(value))
+  || typeof value === "boolean";
+
+// Only the style keys, and only plain values: also the check on a stored style.
+export function pickTextStyle(layer) {
+  const style = {};
+  if (!layer || typeof layer !== "object") return style;
+  for (const key of TEXT_STYLE_KEYS) {
+    if (isStyleValue(layer[key])) style[key] = layer[key];
+  }
+  if (style.fontSize !== undefined && !(style.fontSize > 0)) delete style.fontSize;
+  return style;
+}
+
 // Sticker layer — image overlay sourced from the sticker library. Shares
 // position / rotation / opacity / shadow / depth with text layers; everything
 // font-related is N/A.

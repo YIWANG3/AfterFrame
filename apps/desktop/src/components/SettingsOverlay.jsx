@@ -4,6 +4,7 @@ import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound }
 import api from "../api";
 import { DesktopOnlyPane, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { TOP_LAYER_ATTR } from "../utils/topLayer";
+import { oneOf, readPref, writePref } from "../utils/prefs";
 import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
 import RepaintSettings from "./settings/RepaintSettings";
@@ -32,9 +33,14 @@ const TABS = [
   { id: "about", key: "about", icon: Info },
 ];
 
+// Settings opens on the tab it was left on (utils/prefs.js), unless the
+// caller asks for one.
+const TAB_PREF = "settings.tab";
+const rememberedTab = () => readPref(TAB_PREF, "general", oneOf(TABS.map((entry) => entry.id)));
+
 export default function SettingsOverlay({
   open,
-  initialTab = "general",
+  initialTab = null,
   onClose,
   theme,
   setTheme,
@@ -42,12 +48,12 @@ export default function SettingsOverlay({
   summary,
   onSwitchCatalog,
 }) {
-  const [tab, setTab] = useState(initialTab);
+  const [tab, setTab] = useState(() => initialTab || rememberedTab());
   const { t } = useTranslation("settings");
   const modalRef = useRef(null);
   const rootRef = useRef(null);
 
-  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
+  useEffect(() => { if (open) setTab(initialTab || rememberedTab()); }, [open, initialTab]);
 
   // Settings opens over whatever view is up (editor, collage, lightbox) and
   // owns the keyboard while it is: focus moves in, and keys stop at its root
@@ -114,7 +120,7 @@ export default function SettingsOverlay({
                 <button
                   key={entry.id}
                   type="button"
-                  onClick={() => setTab(entry.id)}
+                  onClick={() => { setTab(entry.id); writePref(TAB_PREF, entry.id); }}
                   title={locked ? t(LOCKED_HINT_KEY, { ns: "common" }) : undefined}
                   className={[
                     "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",

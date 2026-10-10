@@ -12,10 +12,31 @@ import { getImageRect } from "../imageMath";
 import {
   createDefaultSplitRect, denormalizeSplitRect, fitSplitRect, getSplitPanelAspect,
   moveSplitRect, normalizeSplitRect, reshapeSplitRect, resizeSplitRect, resolveSplitCount,
+  CUSTOM_SPLIT_ASPECT_KEY, SPLIT_ASPECT_KEYS, isValidCustomAspect,
 } from "../splitMath";
 import { BASE_STATE, cloneState, rectEquals } from "./editorStateModel";
+import { readPref, writePref } from "../../../utils/prefs";
 
 const ZOOM_FREE = { imageZoom: 1, imageOffsetX: 0, imageOffsetY: 0 };
+
+// The panel ratio is remembered (utils/prefs.js): a photo opens with the one
+// last picked. The panel count and the region belong to that photo.
+const ASPECT_PREF = "split.aspect";
+
+function checkSplitAspect(value) {
+  if (!value || typeof value !== "object") return undefined;
+  if (value.aspectKey !== CUSTOM_SPLIT_ASPECT_KEY && !SPLIT_ASPECT_KEYS.includes(value.aspectKey)) return undefined;
+  const custom = isValidCustomAspect(value.custom)
+    ? { width: value.custom.width, height: value.custom.height }
+    : BASE_STATE.split.custom;
+  return { aspectKey: value.aspectKey, custom };
+}
+
+// The split slot a photo starts with.
+export function initialSplitState() {
+  const remembered = readPref(ASPECT_PREF, null, checkSplitAspect);
+  return remembered ? { ...BASE_STATE.split, ...remembered } : BASE_STATE.split;
+}
 
 function nearlyEqualRect(a, b, epsilon = 0.5) {
   if (!a || !b) return a === b;
@@ -102,6 +123,7 @@ export function useSplitTool({
     const nextCount = countFor(nextAspect, s.split?.count);
     const px = reshapeSplitRect(rectPx, bounds, nextAspect * nextCount, s.freeAngle || 0);
     record(withRegion({ aspectKey, custom: nextCustom }, px));
+    writePref(ASPECT_PREF, { aspectKey, custom: nextCustom });
   }
 
   // `nextCount` null = back to automatic.

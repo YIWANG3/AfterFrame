@@ -44,13 +44,14 @@ import { useEditorImage } from "./editor/state/useEditorImage";
 import { useEditorViewport } from "./editor/state/useEditorViewport";
 import { useEditorSave } from "./editor/state/useEditorSave";
 import { useCropTool } from "./editor/state/useCropTool";
-import { useSplitTool } from "./editor/state/useSplitTool";
+import { initialSplitState, useSplitTool } from "./editor/state/useSplitTool";
 import { useSplitExport, resolveSplitOutputDir } from "./editor/state/useSplitExport";
 import { useTextTool } from "./editor/state/useTextTool";
 import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
 import { useAddToFolder } from "../hooks/useAddToFolder";
+import { bool, clearPref, readPref, text, writePref } from "../utils/prefs";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
@@ -86,10 +87,23 @@ function padEquals(a, b) {
   return pa.top === pb.top && pa.right === pb.right && pa.bottom === pb.bottom && pa.left === pb.left;
 }
 
+const SPLIT_DIR_PREF = "split.outputDir";
+const SPLIT_SUBFOLDER_PREF = "split.subfolder";
+
+// The folder split panels last went to, if it is still there (an unplugged
+// drive, a deleted folder: back to the original's folder).
+async function rememberedSplitDir() {
+  const dir = readPref(SPLIT_DIR_PREF, null, text(4096));
+  if (!dir || !api.has?.("statDirs")) return null;
+  const found = await api.statDirs([dir]).catch(() => []);
+  return found?.includes(dir) ? dir : null;
+}
+
 function createInitialSnapshot(viewportSize, transformedPreview) {
   const placement = getBasePlacement(viewportSize, transformedPreview);
   const baseState = {
     ...BASE_STATE,
+    split: initialSplitState(),
     imageZoom: 1,
   };
   const imageRect = getImageRect(baseState, transformedPreview, placement);
@@ -315,7 +329,8 @@ export default function EditorOverlay({
   const [message, setMessage] = useState("");
   // Split export destination: target folder (null = the original's folder)
   // and whether to create a <stem>_split subfolder inside it. Not part of the
-  // undo history — a destination, not an edit.
+  // undo history — a destination, not an edit. Both are remembered for the
+  // next photo (utils/prefs.js); a remembered folder that is gone is dropped.
   const [splitOutputDir, setSplitOutputDir] = useState(null);
   const [splitSubfolder, setSplitSubfolder] = useState(true);
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
@@ -651,7 +666,8 @@ export default function EditorOverlay({
     setMessage("");
     setCompareState(null);
     setSplitOutputDir(null);
-    setSplitSubfolder(true);
+    setSplitSubfolder(readPref(SPLIT_SUBFOLDER_PREF, true, bool));
+    void rememberedSplitDir().then((dir) => { if (active && dir) setSplitOutputDir(dir); });
     setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
@@ -916,7 +932,17 @@ export default function EditorOverlay({
   splitDestRef.current = { outputDir: splitOutputDir, subfolder: splitSubfolder };
   async function chooseSplitFolder() {
     const dir = await api.pickDirectory({ defaultPath: resolveSplitOutputDir(saveBasePath, splitOutputDir, false) || undefined });
-    if (dir) setSplitOutputDir(dir);
+    if (!dir) return;
+    setSplitOutputDir(dir);
+    writePref(SPLIT_DIR_PREF, dir);
+  }
+  function splitNextToOriginal() {
+    setSplitOutputDir(null);
+    clearPref(SPLIT_DIR_PREF);
+  }
+  function chooseSplitSubfolder(next) {
+    setSplitSubfolder(next);
+    writePref(SPLIT_SUBFOLDER_PREF, next);
   }
 
   // Frame presets — their own module so EditorOverlay stays the orchestrator.
@@ -1235,7 +1261,7 @@ export default function EditorOverlay({
           id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale,
           naturalWidth: l.naturalWidth, naturalHeight: l.naturalHeight,
           // Text styling the panel/gesture specs assert on.
-          text: l.text, fontFamily: l.fontFamily, fontSize: l.fontSize, rotation: l.rotation,
+          text: l.text, fontFamily: l.fontFamily, fontSize: l.fontSize, italic: l.italic, fillColor: l.fillColor, rotation: l.rotation,
           strokeEnabled: !!l.strokeEnabled, strokeWidth: l.strokeWidth, shadow: !!l.shadow, shadowX: l.shadowX, bgMode: l.bgMode,
           // Data URLs are megabytes — expose only the kind, not the payload.
           stickerPathKind: typeof l.stickerPath === "string"
@@ -1837,8 +1863,9 @@ export default function EditorOverlay({
                 onResetRegion={splitTool.resetRegion}
                 outputDir={resolveSplitOutputDir(saveBasePath, splitOutputDir, splitSubfolder)}
                 subfolder={splitSubfolder}
-                onSubfolderChange={setSplitSubfolder}
+                onSubfolderChange={chooseSplitSubfolder}
                 onChooseFolder={chooseSplitFolder}
+                onUseOriginalFolder={splitOutputDir ? splitNextToOriginal : null}
                 folder={fileSaveFolder}
                 addToFolder={folderJoin.addToFolder}
                 onAddToFolderChange={folderJoin.setAddToFolder}
@@ -1911,7 +1938,7 @@ export default function EditorOverlay({
         <BeforeAfterCompare
           beforePath={sourcePath}
           afterPath={compareState.afterPath}
-          layout={compareState.layout || "side"}
+          layout={compareState.layout}
           onClose={() => setCompareState(null)}
           onLayoutChange={(layout) => setCompareState((s) => s ? { ...s, layout } : s)}
         />
