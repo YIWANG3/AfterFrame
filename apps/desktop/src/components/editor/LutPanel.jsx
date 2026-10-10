@@ -111,18 +111,17 @@ function AddLutsMenu({ t, importing, onImport, onAddFolder }) {
       document.removeEventListener("keydown", key, true);
     };
   }, [open]);
+  // What each way does to the files is the hover hint, not text under it.
   const item = (testId, Icon, title, hint, onClick) => (
     <button
       type="button"
       data-testid={testId}
-      className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-hover"
+      title={hint}
+      className="flex w-full items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] text-text transition-colors hover:bg-hover"
       onClick={() => { setOpen(false); onClick(); }}
     >
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
-      <span className="min-w-0">
-        <span className="block text-[12px] text-text">{title}</span>
-        <span className="mt-0.5 block text-[10.5px] leading-snug text-muted2">{hint}</span>
-      </span>
+      <Icon className="h-3.5 w-3.5 shrink-0 text-muted" />
+      {title}
     </button>
   );
   return (
@@ -140,7 +139,7 @@ function AddLutsMenu({ t, importing, onImport, onAddFolder }) {
         {importing ? t("lut.importing") : t("lut.add")}
       </button>
       {open ? (
-        <div className="absolute right-0 top-8 z-30 w-[248px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" data-testid="lut-add-menu">
+        <div className="absolute right-0 top-8 z-30 w-max rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" data-testid="lut-add-menu">
           {item("lut-import", FileInput, t("lut.importFiles"), t("lut.importFilesHint"), onImport)}
           {item("lut-add-folder", FolderPlus, t("lut.addFolderShort"), t("lut.addFolderHint"), onAddFolder)}
         </div>
@@ -492,24 +491,31 @@ export default function LutPanel({
         {total === 0 ? (
           <div className="flex flex-col items-center gap-3 px-2 py-6 text-center">
             <div className="text-[12px] text-text">{loading ? t("lut.loading") : t("lut.empty")}</div>
-            {!loading ? <div className="text-[11px] leading-relaxed text-muted">{t("lut.emptyHint")}</div> : null}
             {!loading ? (
-              <div className="flex flex-col gap-2 self-stretch text-left">
+              <div className="flex flex-col gap-2 self-stretch">
+                {/* accentInk: the accent is white in the dark theme, near-black in the light one. */}
                 <button
                   type="button"
-                  className="rounded-md bg-[rgb(var(--accent-color))] px-3 py-2 text-white disabled:opacity-50"
+                  data-testid="lut-empty-import"
+                  title={t("lut.importFilesHint")}
+                  className="rounded-md bg-[rgb(var(--accent-color))] px-3 py-2 text-[11.5px] font-medium text-accentInk transition-all hover:brightness-110 disabled:opacity-50"
                   onClick={() => importPaths(null)}
                   disabled={importing}
                 >
-                  <span className="block text-[11.5px] font-medium">{importing ? t("lut.importing") : t("lut.importFiles")}</span>
-                  <span className="mt-0.5 block text-[10.5px] leading-snug text-white/75">{t("lut.importFilesHint")}</span>
+                  {importing ? t("lut.importing") : t("lut.importFiles")}
                 </button>
-                <button type="button" className="rounded-md border border-border/60 px-3 py-2 hover:bg-hover" onClick={addFolder}>
-                  <span className="block text-[11.5px] text-text">{t("lut.addFolderShort")}</span>
-                  <span className="mt-0.5 block text-[10.5px] leading-snug text-muted2">{t("lut.addFolderHint")}</span>
+                <button
+                  type="button"
+                  data-testid="lut-empty-add-folder"
+                  title={t("lut.addFolderHint")}
+                  className="rounded-md border border-border/60 px-3 py-2 text-[11.5px] text-text hover:bg-hover"
+                  onClick={addFolder}
+                >
+                  {t("lut.addFolderShort")}
                 </button>
               </div>
             ) : null}
+            {!loading ? <div className="text-[10.5px] text-muted2">{t("lut.emptyHint")}</div> : null}
           </div>
         ) : groups.length === 0 ? (
           <div className="px-2 py-6 text-center text-[11px] leading-relaxed text-muted" data-testid="lut-no-match">

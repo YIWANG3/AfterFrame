@@ -99,7 +99,7 @@ function ToastItem({ toast, onDismiss }) {
               className={[
                 "rounded-md px-2.5 py-1 text-[11px] transition-colors",
                 action.primary
-                  ? "bg-[rgb(var(--accent-color))] text-[rgb(var(--accent-fg))] hover:opacity-90"
+                  ? "bg-[rgb(var(--accent-color))] text-accentInk hover:opacity-90"
                   : "border border-border/60 bg-app text-text hover:border-border hover:bg-hover",
               ].join(" ")}
             >

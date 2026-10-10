@@ -89,6 +89,19 @@ test.describe("LUT tool (macOS)", () => {
     await tab.click();
     await expect(ctx.window.getByTestId("lut-panel")).toBeVisible();
     await expect(ctx.window.getByTestId("lut-list")).toContainText("No LUTs yet", { timeout: 10_000 });
+    // Two plain buttons; what each does to the files is the hover hint.
+    const importButton = ctx.window.getByTestId("lut-empty-import");
+    await expect(importButton).toHaveText("Import LUT files…");
+    await expect(importButton).toHaveAttribute("title", /Copied into the LUT library/);
+    await expect(ctx.window.getByTestId("lut-empty-add-folder")).toHaveAttribute("title", /nothing copied/);
+    // The filled button's text reads in both themes: the accent is white in
+    // the dark one, so white text vanished there.
+    for (const theme of ["dark", "light"]) {
+      await ctx.window.evaluate((name) => document.documentElement.setAttribute("data-theme", name), theme);
+      const [text, fill] = await importButton.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
+      expect(text, `${theme} theme`).not.toBe(fill);
+    }
+    await ctx.window.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   });
 
   test("importing a folder copies its LUTs into the library, keeps the pack's name, and skips duplicates", async () => {
@@ -289,8 +302,8 @@ test.describe("LUT tool (macOS)", () => {
     await openEditorOnFirstAsset(ctx.window);
     await ctx.window.getByTestId("tool-lut").click();
     await ctx.window.getByTestId("lut-add").click();
-    await expect(ctx.window.getByTestId("lut-import")).toContainText("Copied into AfterFrame's LUT library");
-    await expect(ctx.window.getByTestId("lut-add-folder")).toContainText("nothing copied");
+    await expect(ctx.window.getByTestId("lut-import")).toHaveAttribute("title", /Copied into the LUT library/);
+    await expect(ctx.window.getByTestId("lut-add-folder")).toHaveAttribute("title", /nothing copied/);
     await ctx.window.keyboard.press("Escape");
     await expect(ctx.window.getByTestId("lut-add-menu")).toHaveCount(0);
 
