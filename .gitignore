@@ -49,6 +49,7 @@ release/
 *.dmg
 *.zip
 services/sidecar/dist/
+services/sidecar/dist-x64/
 services/sidecar/build/
 
 # analysis

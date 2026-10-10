@@ -76,6 +76,7 @@ module.exports = [
     files: [
       "electron/**/*.js",
       "*.config.js",
+      "electron-builder.intel.cjs",
     ],
     languageOptions: {
       ecmaVersion: "latest",

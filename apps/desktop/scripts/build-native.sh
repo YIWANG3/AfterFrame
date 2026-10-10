@@ -10,7 +10,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."   # apps/desktop
 NATIVE_DIR="native"
+ARCH="arm64"
 OUT_DIR="$NATIVE_DIR/bin"
+# --intel: for the Intel build (x64, macOS 12+: electron-builder.intel.cjs),
+# into native/bin-x64 so the Apple silicon binaries stay where dev uses them.
+if [ "${1:-}" = "--intel" ]; then
+  ARCH="x86_64"
+  OUT_DIR="$NATIVE_DIR/bin-x64"
+fi
 mkdir -p "$OUT_DIR"
 
 # Prefer Xcode's toolchain — the CLT one on some machines has an SDK/compiler
@@ -31,13 +38,18 @@ fi
 # request 14).
 build() {
   local name="$1" src="$2" min_macos="$3"
-  echo "build-native: compiling $src -> $OUT_DIR/$name (macOS $min_macos+)"
-  xcrun -sdk macosx swiftc -O -target "arm64-apple-macos$min_macos" "$NATIVE_DIR/$src" -o "$OUT_DIR/$name"
+  echo "build-native: compiling $src -> $OUT_DIR/$name ($ARCH, macOS $min_macos+)"
+  xcrun -sdk macosx swiftc -O -target "$ARCH-apple-macos$min_macos" "$NATIVE_DIR/$src" -o "$OUT_DIR/$name"
 }
 
-build video-tool video-tool.swift 13.0
-build people-worker people-worker.swift 12.0
-build compute-depth compute-depth.swift 12.0
-build extract-sticker extract-sticker.swift 14.0
+build video-tool video-tool.swift 12.0
+# The Intel build has video only: people and depth run Core ML models that
+# need macOS 14 and use Float16, which Swift lacks on Intel Macs; stickers need
+# macOS 14's Vision request. electron/capabilities.js locks the three there.
+if [ "$ARCH" = "arm64" ]; then
+  build people-worker people-worker.swift 12.0
+  build compute-depth compute-depth.swift 12.0
+  build extract-sticker extract-sticker.swift 14.0
+fi
 
 echo "build-native: done"

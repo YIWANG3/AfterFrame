@@ -19,9 +19,18 @@ if (process.platform === "win32") {
   try { process.env.TEMP = process.env.TMP = fs.realpathSync.native(os.tmpdir()); } catch { /* keep it */ }
 }
 
+// The app's architecture. For the Intel build run through Rosetta
+// (AFTERFRAME_E2E_EXECUTABLE) it isn't the test runner's.
+function appArch() {
+  const executable = process.env.AFTERFRAME_E2E_EXECUTABLE;
+  if (!executable || process.platform !== "darwin") return process.arch;
+  const archs = execFileSync("lipo", ["-archs", executable], { encoding: "utf8" }).trim().split(/\s+/);
+  return archs.includes("arm64") ? "arm64" : "x64";
+}
+
 // A feature this platform's build locks ("macOS for now", electron/capabilities.js):
 // its specs skip there instead of failing on a control that is meant to be off.
-const lacks = (feature) => desktopCapabilities(process.platform)[feature] === false;
+const lacks = (feature) => desktopCapabilities(process.platform, { arch: appArch() })[feature] === false;
 
 // Selects the cards (and anything else) carrying this file's path. In a CSS
 // string a backslash starts an escape, so Windows paths need theirs doubled.

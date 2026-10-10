@@ -143,6 +143,26 @@ depth model. Older systems refuse to launch the app with the system's own messag
 Homebrew's Python won't do: it is built for the Mac it was installed on. 0.5.8 declared macOS 12
 but shipped a sidecar that needed macOS 15, so on macOS 12–14 nothing could be imported.
 
+**The Intel build** is for Intel Macs, and for Apple Silicon Macs still on macOS 12–13, which run it
+through Rosetta. It is x64 and needs macOS 12 or later (`electron-builder.intel.cjs`). Build it on
+an Apple Silicon Mac:
+
+```bash
+cd apps/desktop
+npm run dist:mac:intel
+```
+
+Output: `apps/desktop/release/AfterFrame-<version>-Intel.dmg`. It differs from the arm64 build in a
+few ways:
+- **Locked features.** People, sticker cut-outs and depth need Apple Silicon and macOS 14, so the
+  build leaves them out and `electron/capabilities.js` locks them.
+- **Slower numpy.** The sidecar is an x86_64 CPython run through Rosetta, with numpy's OpenBLAS
+  build.
+- **Older rawpy.** It uses rawpy 0.25.1, the last release with Intel Mac wheels. Its LibRaw 0.21
+  can't open JPEG XL DNGs.
+- **A stricter check.** After packaging, `check-macos-minimum.mjs --arch x86_64` checks every binary
+  in the app.
+
 On Windows and Linux, `dist:win` / `dist:linux` run `build:sidecar`, which uses the Python on your
 PATH (the spec and `entry.py` are in the repo; PyInstaller doesn't cross-compile):
 

@@ -7,11 +7,14 @@
 // couldn't load, so nothing could be imported or browsed — and nothing in the
 // build noticed.
 //
-//   node scripts/check-macos-minimum.mjs [dir ...]   # default: the built sidecar
+//   node scripts/check-macos-minimum.mjs [--minimum 12.0] [--arch x86_64] [dir ...]
 //
-// The app's minimum is package.json build.mac.minimumSystemVersion, or
-// Electron's own (LSMinimumSystemVersion in its Info.plist) when that isn't
-// set. Every Mach-O file under the given folders must need no newer macOS.
+// The minimum is --minimum, else package.json build.mac.minimumSystemVersion,
+// else Electron's own (LSMinimumSystemVersion in its Info.plist). Every Mach-O
+// file under the given folders (default: the built sidecar) must need no newer
+// macOS and, with --arch, must contain that architecture: the Intel build is
+// cross-built on an Apple silicon Mac, where an arm64-only file slips in
+// unnoticed.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -68,6 +71,10 @@ function minimumOf(file) {
   return found.sort(compareVersions).pop() || null;
 }
 
+function archsOf(file) {
+  return execFileSync("lipo", ["-archs", file], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim().split(/\s+/);
+}
+
 function* files(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -76,9 +83,16 @@ function* files(dir) {
   }
 }
 
-const minimum = appMinimum();
-const dirs = process.argv.slice(2).length ? process.argv.slice(2).map((dir) => path.resolve(dir)) : DEFAULT_DIRS;
+const args = process.argv.slice(2);
+const option = (name) => {
+  const at = args.indexOf(name);
+  return at === -1 ? null : args.splice(at, 2)[1];
+};
+const minimum = option("--minimum") || appMinimum();
+const arch = option("--arch");
+const dirs = args.length ? args.map((dir) => path.resolve(dir)) : DEFAULT_DIRS;
 const tooNew = [];
+const wrongArch = [];
 let checked = 0;
 for (const dir of dirs) {
   if (!fs.existsSync(dir)) {
@@ -90,7 +104,17 @@ for (const dir of dirs) {
     checked += 1;
     const needs = minimumOf(file);
     if (needs && compareVersions(needs, minimum) > 0) tooNew.push({ needs, file: path.relative(dir, file) });
+    if (arch) {
+      const archs = archsOf(file);
+      if (!archs.includes(arch)) wrongArch.push({ archs: archs.join(" "), file: path.relative(dir, file) });
+    }
   }
+}
+
+if (wrongArch.length) {
+  console.error(`✗ ${wrongArch.length} of ${checked} binaries have no ${arch} code:`);
+  for (const { archs, file } of wrongArch.slice(0, 15)) console.error(`    ${archs}  ${file}`);
+  if (wrongArch.length > 15) console.error(`    … and ${wrongArch.length - 15} more`);
 }
 
 if (tooNew.length) {
@@ -98,6 +122,6 @@ if (tooNew.length) {
   for (const { needs, file } of tooNew.slice(0, 15)) console.error(`    macOS ${needs}  ${file}`);
   if (tooNew.length > 15) console.error(`    … and ${tooNew.length - 15} more`);
   console.error("  The sidecar must be built with a Python made for an older macOS: scripts/build-sidecar-mac.sh.");
-  process.exit(1);
 }
-console.log(`check-macos-minimum: ${checked} binaries, none needs more than macOS ${minimum}`);
+if (tooNew.length || wrongArch.length) process.exit(1);
+console.log(`check-macos-minimum: ${checked} binaries, none needs more than macOS ${minimum}${arch ? `, all have ${arch}` : ""}`);
