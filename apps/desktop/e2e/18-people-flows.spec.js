@@ -24,7 +24,7 @@ test.afterAll(async () => {
 
 async function openPeoplePage() {
   await ctx.window.getByRole("navigation").getByRole("button", { name: "People" }).click();
-  await expect(ctx.window.getByRole("heading", { name: "People" })).toBeVisible();
+  await expect(ctx.window.getByRole("heading", { name: "People", exact: true })).toBeVisible();
 }
 
 test("people wall shows the named person and the candidate with face covers", async () => {
