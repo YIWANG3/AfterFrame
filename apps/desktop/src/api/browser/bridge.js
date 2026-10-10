@@ -34,6 +34,7 @@ const pendingFiles = new Map();
 // BYOK provider keys. Persisted in localStorage at the user's request — the
 // key never leaves this browser except in requests straight to the provider.
 const TOKENS_KEY = "afterframe.aiTokens";
+const SHORTCUTS_KEY = "afterframe.shortcuts";
 const sessionTokens = (() => {
   try { return new Map(Object.entries(JSON.parse(localStorage.getItem(TOKENS_KEY)) || {})); }
   catch { return new Map(); }
@@ -215,6 +216,14 @@ async function ingestFile(file, source = "generated") {
     exists_on_disk: true,
     app_rating: 0,
     annotation: null,
+    // The photo's tags, hand-added and AI alike; aiTags: the AI ones the user
+    // hasn't made theirs, which the next run replaces (as the sidecar's asset_tags).
+    tags: [],
+    aiTags: [],
+    // The description as shown and whose (the user's wins over the AI's).
+    description: null,
+    description_source: null,
+    userDescription: null,
     has_face: false,
     imported_at: new Date().toISOString(),
     modified_time: Math.floor((file.lastModified || Date.now()) / 1000),
@@ -282,9 +291,9 @@ function matchesSearch(asset, search) {
   const q = String(search).toLowerCase();
   const meta = asset.image_metadata || {};
   const ann = asset.annotation;
-  return [asset.stem, meta.camera_model, meta.lens_model, ann?.caption, ann?.detected_text]
+  return [asset.stem, meta.camera_model, meta.lens_model, asset.userDescription, ann?.caption, ann?.detected_text]
     .some((v) => v && String(v).toLowerCase().includes(q))
-    || (ann?.tags || []).some((t) => String(t).toLowerCase().includes(q));
+    || (asset.tags || []).some((t) => String(t).toLowerCase().includes(q));
 }
 
 // Mirrors the sidecar's facet filter semantics (db/browse.py _facet_clauses),
@@ -300,7 +309,7 @@ const facetValues = (raw) => (raw == null || raw === "" ? [] : Array.isArray(raw
 const FACET_OWN_KEYS = {
   camera: ["camera"], lens: ["lens"], iso: ["iso_min", "iso_max"], aperture: ["aperture_min", "aperture_max"],
   focal: ["focal_min", "focal_max"], shutter: ["shutter_min", "shutter_max"],
-  capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"],
+  capture_time: ["date_from", "date_to", "date_within_days"], rating: ["rating_min", "rating_max"], flag: ["flag"],
   orientation: ["orientation"], asset_type: ["asset_type"], tag: ["tag", "tag_match"], extension: ["extension"],
   people: ["people"], annotated: ["annotated"], person_group: ["person_group"], location_source: ["location_source"],
   country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
@@ -346,6 +355,11 @@ function matchesFacetConditions(asset, filters) {
   if (filters.rating_min != null && !(asset.app_rating >= filters.rating_min)) return false;
   // Unrated is 0 stars: rating_max 0 means "not rated yet".
   if (filters.rating_max != null && !((asset.app_rating || 0) <= filters.rating_max)) return false;
+  const flags = facetValues(filters.flag);
+  if (flags.length) {
+    const flag = asset.app_flag === 1 ? "pick" : asset.app_flag === -1 ? "reject" : "none";
+    if (!flags.includes(flag)) return false;
+  }
   const orientations = facetValues(filters.orientation);
   if (orientations.length) {
     const shape = meta.height > meta.width ? "portrait" : meta.width > meta.height ? "landscape" : meta.width ? "square" : null;
@@ -355,7 +369,7 @@ function matchesFacetConditions(asset, filters) {
   if (extensions.length && !extensions.includes(fileExt(asset.file_name))) return false;
   const wanted = facetValues(filters.tag).map(normalizeTag);
   if (wanted.length) {
-    const has = new Set((asset.annotation?.tags || []).map(normalizeTag));
+    const has = new Set((asset.tags || []).map(normalizeTag));
     const hit = filters.tag_match === "all" ? wanted.every((t) => has.has(t)) : wanted.some((t) => has.has(t));
     if (!hit) return false;
   }
@@ -374,7 +388,8 @@ function matchesFacetConditions(asset, filters) {
   // chips never show (no options), and a rule naming one matches nothing.
   if (facetValues(filters.country).length || facetValues(filters.city).length) return false;
   const contains = (text, needle) => String(text || "").toLowerCase().includes(String(needle).trim().toLowerCase());
-  if (String(filters.caption_contains || "").trim() && !contains(asset.annotation?.caption, filters.caption_contains)) return false;
+  // The description as shown: the user's, else the AI's caption.
+  if (String(filters.caption_contains || "").trim() && !contains(asset.description, filters.caption_contains)) return false;
   if (String(filters.ocr_contains || "").trim() && !contains(asset.annotation?.detected_text, filters.ocr_contains)) return false;
   if (String(filters.path_contains || "").trim() && !contains(asset.image_path || asset.file_name, filters.path_contains)) return false;
   const folders = facetValues(filters.in_collection);
@@ -522,7 +537,7 @@ function aggregateTags(limit = 50, needle = "", universe = assets) {
   const q = needle.toLowerCase();
   const m = new Map();
   for (const a of universe) {
-    for (const t of a.annotation?.tags || []) {
+    for (const t of a.tags || []) {
       if (!q || t.toLowerCase().includes(q)) m.set(t, (m.get(t) || 0) + 1);
     }
   }
@@ -643,24 +658,46 @@ async function annotateOne(opts) {
   const now = new Date().toISOString();
   const maxTags = opts.maxTags || 10;
   const maxCaption = opts.maxCaptionChars || 200;
+  const aiTags = [...new Set((Array.isArray(parsed.tags) ? parsed.tags : [])
+    .map((t) => (typeof t === "string" ? t : t?.tag))
+    .filter((t) => typeof t === "string" && t.trim())
+    .map((t) => normalizeTag(t)))]
+    .slice(0, maxTags);
+  // The run's tags join the photo's: the previous run's are replaced, the
+  // user's stay (and an AI tag the user has is still the user's).
+  const userTags = (asset.tags || []).filter((t) => !(asset.aiTags || []).includes(t));
+  asset.aiTags = aiTags.filter((t) => !userTags.includes(t));
+  asset.tags = [...userTags, ...asset.aiTags];
   const annotation = {
     asset_id: asset.asset_id,
     provider: opts.provider,
     model: opts.model || null,
     schema_version: 1,
     caption: typeof parsed.caption === "string" ? parsed.caption.slice(0, maxCaption) : "",
-    tags: (Array.isArray(parsed.tags) ? parsed.tags : [])
-      .map((t) => (typeof t === "string" ? t : t?.tag))
-      .filter((t) => typeof t === "string" && t.trim())
-      .map((t) => normalizeTag(t))
-      .slice(0, maxTags),
+    tags: asset.tags,
+    ai_tags: aiTags,
     location: parsed.location && typeof parsed.location === "object" && !Array.isArray(parsed.location) ? parsed.location : null,
     detected_text: typeof parsed.detected_text === "string" ? parsed.detected_text : null,
     created_at: now,
     updated_at: now,
   };
   await setAssetAnnotation(asset.asset_id, annotation);
+  showDescription(asset);
   return annotation;
+}
+
+// The user's description wins; the AI's caption fills in where there is none.
+function showDescription(asset) {
+  const ai = (asset.annotation?.caption || "").trim();
+  if (asset.userDescription != null) {
+    // An empty one is the user's too: nothing shows.
+    asset.description = asset.userDescription.trim() || null;
+    asset.description_source = "user";
+  } else {
+    asset.description = ai || null;
+    asset.description_source = ai ? "ai" : null;
+  }
+  asset.ai_caption = ai || null;
 }
 
 // GET the provider's model list — cheapest possible connectivity/CORS probe.
@@ -842,7 +879,7 @@ export const browserBridge = {
         assets.push({
           asset_id: `web-${nextId++}`, source: "sample", asset_type: "image",
           file_name: name, stem: name.replace(/\.[^.]+$/, ""),
-          exists_on_disk: true, app_rating: 0, annotation: null, has_face: false,
+          exists_on_disk: true, app_rating: 0, annotation: null, tags: [], aiTags: [], description: null, description_source: null, userDescription: null, has_face: false,
           imported_at: new Date().toISOString(), image_metadata: sampleManifest[name],
           image_path: original, preview_path: thumb, image_preview_path: thumb,
           image_preview_hd_path: original, preview_hd_path: original, _objectUrls: [],
@@ -944,6 +981,14 @@ export const browserBridge = {
     return [];
   },
   getPreviewSettings: async () => ({ generateHd: false }),
+  // Rebound keyboard shortcuts (overrides only; see shared/shortcuts.mjs).
+  getShortcuts: async () => {
+    try { return JSON.parse(localStorage.getItem(SHORTCUTS_KEY) || "{}"); } catch { return {}; }
+  },
+  saveShortcuts: async (overrides) => {
+    try { localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(overrides || {})); } catch { /* private mode */ }
+    return overrides || {};
+  },
   savePreviewSettings: async () => {},
 
   // ── browse ──
@@ -1098,10 +1143,30 @@ export const browserBridge = {
     return assets.find((a) => a.asset_id === assetId) || null;
   },
   ensureHdPreviews: async () => {},
-  setAssetRating: async (assetId, rating) => {
-    const a = assets.find((x) => x.asset_id === assetId);
-    if (a) a.app_rating = rating;
+  // The renderer passes the selection, a list (an id alone still works).
+  setAssetRating: async (assetIds, rating) => {
+    const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
+    for (const a of assets) if (ids.has(a.asset_id)) a.app_rating = rating;
     return { ok: true };
+  },
+  setAssetDescription: async (assetIds, text) => {
+    const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
+    let updated = 0;
+    for (const a of assets) {
+      if (!ids.has(a.asset_id)) continue;
+      a.userDescription = text === null ? null : String(text || "").trim();
+      showDescription(a);
+      updated += 1;
+    }
+    return { ok: true, description: text === null ? null : String(text || "").trim() || null, reset: text === null, updated };
+  },
+  setAssetFlag: async (assetIds, flag) => {
+    const value = { pick: 1, reject: -1, none: 0 }[flag];
+    if (value === undefined) throw new Error(`unknown flag: ${flag}`);
+    const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
+    let updated = 0;
+    for (const a of assets) if (ids.has(a.asset_id)) { a.app_flag = value; updated += 1; }
+    return { ok: true, flag, updated };
   },
   deleteImageAssets: async (assetIds) => {
     const ids = new Set(Array.isArray(assetIds) ? assetIds : [assetIds]);
@@ -1356,23 +1421,41 @@ export const browserBridge = {
   getAnnotation: async (assetId) => {
     return assets.find((a) => a.asset_id === assetId)?.annotation || null;
   },
+  // A tag by hand: onto the photo's tags (no annotation is made — a
+  // hand-tagged photo is still un-annotated). One the AI proposed becomes the user's.
   addAssetTag: async (assetId, tag) => {
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset) return null;
     const t = normalizeTag(tag);
-    const ann = asset.annotation
-      ? { ...asset.annotation }
-      : { asset_id: assetId, provider: "user", model: "manual", schema_version: 1, caption: "", tags: [], location: null, detected_text: null, created_at: new Date().toISOString() };
-    if (t && !ann.tags.some((x) => normalizeTag(x) === t)) ann.tags = [...ann.tags, t];
-    ann.updated_at = new Date().toISOString();
-    return await setAssetAnnotation(assetId, ann);
+    if (t) {
+      asset.tags = asset.tags || [];
+      if (!asset.tags.includes(t)) asset.tags = [...asset.tags, t];
+      asset.aiTags = (asset.aiTags || []).filter((x) => x !== t);
+      if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
+    }
+    return { asset_id: assetId, tags: asset.tags || [] };
+  },
+  getAssetTags: async (assetId) => {
+    const asset = assets.find((a) => a.asset_id === assetId);
+    return { asset_id: assetId, tags: asset?.tags || [] };
+  },
+  addAssetTags: async (assetIds, tags) => {
+    const updated = [];
+    for (const assetId of new Set(assetIds || [])) {
+      if (!assets.some((a) => a.asset_id === assetId)) continue;
+      for (const tag of tags || []) await browserBridge.addAssetTag(assetId, tag);
+      updated.push(assetId);
+    }
+    return { ok: true, asset_ids: updated, tags: [...new Set((tags || []).map(normalizeTag).filter(Boolean))] };
   },
   removeAssetTag: async (assetId, tag) => {
     const asset = assets.find((a) => a.asset_id === assetId);
-    if (!asset?.annotation) return asset?.annotation || null;
+    if (!asset) return null;
     const t = normalizeTag(tag);
-    const ann = { ...asset.annotation, tags: asset.annotation.tags.filter((x) => normalizeTag(x) !== t), updated_at: new Date().toISOString() };
-    return await setAssetAnnotation(assetId, ann);
+    asset.tags = (asset.tags || []).filter((x) => normalizeTag(x) !== t);
+    asset.aiTags = (asset.aiTags || []).filter((x) => normalizeTag(x) !== t);
+    if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
+    return { asset_id: assetId, tags: asset.tags };
   },
   listTags: async (limit = 50) => {
     return aggregateTags(limit).map((t) => t.value);

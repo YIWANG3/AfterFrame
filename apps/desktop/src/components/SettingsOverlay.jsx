@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound } from "lucide-react";
+import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound, Keyboard } from "lucide-react";
 import api from "../api";
 import { DesktopOnlyPane, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { TOP_LAYER_ATTR } from "../utils/topLayer";
@@ -13,6 +13,8 @@ import IntegrationsSettings from "./settings/IntegrationsSettings";
 import AboutSettings from "./settings/AboutSettings";
 import PeopleSettings from "./settings/PeopleSettings";
 import WatermarkSettings from "./settings/WatermarkSettings";
+import ShortcutsSettings from "./settings/ShortcutsSettings";
+import { matchShortcut } from "../shortcuts/store";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -24,6 +26,7 @@ import WatermarkSettings from "./settings/WatermarkSettings";
 // DesktopOnlyPane, advertising what the desktop app offers.
 const TABS = [
   { id: "general", key: "general", icon: Languages },
+  { id: "shortcuts", key: "shortcuts", icon: Keyboard },
   { id: "ai", key: "ai", icon: Brain, cap: "annotation" },
   { id: "repaint", key: "repaint", icon: Wand2, cap: "aiRepaint" },
   { id: "people", key: "people", icon: UsersRound, cap: "people" },
@@ -37,6 +40,9 @@ const TABS = [
 // caller asks for one.
 const TAB_PREF = "settings.tab";
 const rememberedTab = () => readPref(TAB_PREF, "general", oneOf(TABS.map((entry) => entry.id)));
+
+// Escape, or the Settings key itself (⌘, unless rebound), closes Settings.
+const isCloseKey = (event) => event.key === "Escape" || matchShortcut(event, ["global"])?.id === "app.settings";
 
 export default function SettingsOverlay({
   open,
@@ -69,7 +75,7 @@ export default function SettingsOverlay({
     function onKey(e) {
       if (e.target !== document.body && e.target !== document.documentElement) return;
       e.stopPropagation();
-      if (e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key === ",")) { e.preventDefault(); onClose?.(); }
+      if (isCloseKey(e)) { e.preventDefault(); onClose?.(); }
     }
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
@@ -87,8 +93,7 @@ export default function SettingsOverlay({
       onKeyDown={(e) => {
         e.stopPropagation();
         // An inline rename handles its own Escape (and marks it handled).
-        const closeKey = e.key === "Escape" || ((e.metaKey || e.ctrlKey) && e.key === ",");
-        if (closeKey && !e.defaultPrevented) { e.preventDefault(); onClose?.(); }
+        if (isCloseKey(e) && !e.defaultPrevented) { e.preventDefault(); onClose?.(); }
       }}
       onKeyUp={(e) => e.stopPropagation()}
     >
@@ -138,6 +143,7 @@ export default function SettingsOverlay({
               const pane = (
                 <>
                   {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
+                  {tab === "shortcuts" && <ShortcutsSettings />}
                   {tab === "ai" && <AnnotationSettings />}
                   {tab === "repaint" && <RepaintSettings />}
                   {tab === "people" && <PeopleSettings />}

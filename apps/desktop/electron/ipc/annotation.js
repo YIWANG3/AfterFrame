@@ -177,6 +177,23 @@ function register({
     return await commands.addAssetTag(assetId, tag);
   });
 
+  // A photo's tags, hand-added and AI alike: { asset_id, tags }.
+  ipcMain.handle("workspace:get-asset-tags", async (_event, assetId) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb() || !assetId) return { asset_id: assetId || null, tags: [] };
+    return await commands.getAssetTags(assetId);
+  });
+
+  // Several photos, several tags, one write (the gallery's "Add Tags…").
+  ipcMain.handle("workspace:add-asset-tags", async (_event, assetIds, tags) => {
+    const { catalogHasDb } = getCatalogState();
+    if (!catalogHasDb()) throw new Error("Open a catalog first.");
+    const ids = [...new Set((assetIds || []).filter(Boolean))];
+    const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
+    if (!ids.length || !clean.length) return null;
+    return await commands.addAssetTags(ids, clean);
+  });
+
   ipcMain.handle("workspace:remove-asset-tag", async (_event, assetId, tag) => {
     const { catalogHasDb } = getCatalogState();
     if (!catalogHasDb()) throw new Error("Open a catalog first.");

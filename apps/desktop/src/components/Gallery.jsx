@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import api from "../api";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw, Flag, FlagOff, Tag, X } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -14,10 +14,11 @@ function formatDuration(seconds) {
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
 import { useTranslation } from "react-i18next";
-import { fileName, galleryInfoLabel, buildJustifiedLayout, localFileUrl } from "../utils/format";
+import { fileName, galleryInfoLabel, buildJustifiedLayout, displaySize, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
 import { awaitingThumbnail, staleSourceRepairs, thumbnailNeeds } from "./galleryRepair";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
+import { shortcutLabel } from "../shortcuts/store";
 
 const GAP = 12;
 const TILE_GAP = 2;
@@ -186,7 +187,25 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onClose }) {
+// A submenu entry with the key that does the same from the keyboard.
+function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
+  return (
+    <button
+      type="button"
+      className="flex w-full cursor-pointer items-center justify-between gap-4 whitespace-nowrap rounded-[6px] px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+      onClick={onClick}
+      {...rest}
+    >
+      <span className="flex items-center gap-2.5">
+        {Icon && <Icon className="h-3.5 w-3.5" />}
+        {label}
+      </span>
+      {shortcut ? <span className="text-[10px] text-muted2">{shortcut}</span> : null}
+    </button>
+  );
+}
+
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useEffect(() => {
@@ -231,12 +250,22 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
     >
-      <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut="E" onClick={() => { onEdit?.(item.image_path); onClose(); }} />
+      <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut={shortcutLabel("photo.edit")} onClick={() => { onEdit?.(item.image_path); onClose(); }} />
+      {onFlag && (
+        <MenuItem icon={Flag} label={t("gallery.menu.flag")}>
+          <SubMenuItem icon={Flag} label={t("flag.pick")} shortcut={shortcutLabel("flag.pick")} data-menu-flag="pick" onClick={() => { onFlag("pick"); onClose(); }} />
+          <SubMenuItem icon={FlagOff} label={t("flag.reject")} shortcut={shortcutLabel("flag.reject")} data-menu-flag="reject" onClick={() => { onFlag("reject"); onClose(); }} />
+          <SubMenuItem icon={X} label={t("flag.none")} shortcut={shortcutLabel("flag.none")} data-menu-flag="none" onClick={() => { onFlag("none"); onClose(); }} />
+        </MenuItem>
+      )}
+      {onAddTags && (
+        <MenuItem icon={Tag} label={t("gallery.menu.addTags", { count: assetIds?.length || 1 })} shortcut={shortcutLabel("photo.addTags")} onClick={() => { onAddTags(); onClose(); }} />
+      )}
       {onShowInAllAssets && (
         <MenuItem icon={LocateFixed} label={t("gallery.menu.showInAllAssets")} onClick={() => { onShowInAllAssets(item.asset_id); onClose(); }} />
       )}
       {assetIds?.length === 2 && (
-        <MenuItem icon={Columns2} label={t("gallery.menu.compare")} onClick={() => { onCompare?.(assetIds); onClose(); }} />
+        <MenuItem icon={Columns2} label={t("gallery.menu.compare")} shortcut={shortcutLabel("photo.compare")} onClick={() => { onCompare?.(assetIds); onClose(); }} />
       )}
       {assetIds?.length >= 2 && (
         <MenuItem icon={LayoutGrid} label={t("gallery.menu.collage")} onClick={() => { onCollage?.(assetIds); onClose(); }} />
@@ -272,7 +301,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
           ))}
         </MenuItem>
       )}
-      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut={api.platform === "win32" ? "Ctrl+↵" : "⌘↵"} locked={!api.can("fileSystem")} onClick={() => { onReveal?.(item.image_path); onClose(); }} />
+      <MenuItem icon={Eye} label={t("gallery.menu.reveal")} shortcut={shortcutLabel("photo.reveal")} locked={!api.can("fileSystem")} onClick={() => { onReveal?.(item.image_path); onClose(); }} />
       <MenuItem
         icon={RefreshCw}
         label={t("gallery.menu.refreshFromDisk", { count: assetIds?.length || 1 })}
@@ -281,7 +310,7 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
       />
       <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} locked={!api.can("fileSystem")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
-      <MenuItem icon={Trash2} label={t("gallery.menu.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
+      <MenuItem icon={Trash2} label={t("gallery.menu.delete")} shortcut={shortcutLabel("photo.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
       <MenuItem icon={Trash} label={t("gallery.menu.deleteFromDisk")} locked={!api.can("fileSystem")} onClick={() => { onDeleteFromDisk?.(); onClose(); }} />
 
       {(manualFolders.length > 0 || inActiveFolder) && (
@@ -430,6 +459,7 @@ const CardContent = memo(function CardContent({
       data-asset-id={item.asset_id}
       data-asset-type={item.asset_type}
       data-image-path={item.image_path}
+      data-flag={item.app_flag === 1 ? "pick" : item.app_flag === -1 ? "reject" : "none"}
       draggable
       className="group absolute text-left focus:outline-none"
       style={{
@@ -466,7 +496,12 @@ const CardContent = memo(function CardContent({
             alt={item.stem}
             scrollRootRef={containerRef}
             fit={fit}
-            className={item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : ""}
+            className={[
+              item.exists_on_disk === false ? "saturate-[.55] brightness-[.78]" : "",
+              // Rejected photos fade back, as Lightroom's do while culling. A
+              // filter, not opacity: the image's own fade-in owns that.
+              item.app_flag === -1 ? "brightness-[.4] saturate-[.7]" : "",
+            ].join(" ")}
             onLoadError={item.exists_on_disk === false ? undefined : () => onPreviewError?.(item)}
             onLoadSuccess={() => onPreviewLoaded?.(item)}
             onNaturalSize={onNaturalSize}
@@ -497,6 +532,18 @@ const CardContent = memo(function CardContent({
             title={t("gallery.hasPerson")}
           >
             <ScanFace className="h-3 w-3" />
+          </div>
+        ) : null}
+        {item.app_flag === 1 || item.app_flag === -1 ? (
+          <div
+            className={[
+              "pointer-events-none absolute bottom-1.5 left-1.5 rounded-full p-1 shadow-sm",
+              item.app_flag === 1 ? "bg-white/90 text-black/80" : "bg-black/75 text-[#ff8a80]",
+            ].join(" ")}
+            title={t(item.app_flag === 1 ? "flag.pick" : "flag.reject")}
+            data-flag-badge={item.app_flag === 1 ? "pick" : "reject"}
+          >
+            {item.app_flag === 1 ? <Flag className="h-3 w-3 fill-current" /> : <FlagOff className="h-3 w-3" />}
           </div>
         ) : null}
         {item.asset_type === "video" ? (
@@ -562,6 +609,8 @@ export default function Gallery({
   onCompare,
   onCollage,
   onAnnotate,
+  onFlag,
+  onAddTags,
   // Only passed when the grid shows less than the whole library.
   onShowInAllAssets,
 }) {
@@ -794,9 +843,7 @@ export default function Gallery({
     const positions = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const imageMeta = item.image_metadata || {};
-      const w = Number(imageMeta.width || 0);
-      const h = Number(imageMeta.height || 0);
+      const { width: w, height: h } = displaySize(item);
       const aspect = w > 0 && h > 0 ? w / h : 1;
       const imgHeight = colWidth / aspect;
       // Pick shortest column
@@ -1108,6 +1155,8 @@ export default function Gallery({
           onCompare={onCompare}
           onCollage={onCollage}
           onAnnotate={(ids, opts) => onAnnotate?.(ids, opts)}
+          onFlag={onFlag ? (flag) => onFlag(flag, contextMenu.assetIds || [contextMenu.item.asset_id]) : undefined}
+          onAddTags={onAddTags ? () => onAddTags(contextMenu.assetIds || [contextMenu.item.asset_id]) : undefined}
           onClose={closeContextMenu}
         />
       )}

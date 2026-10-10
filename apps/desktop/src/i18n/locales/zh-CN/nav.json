@@ -256,6 +256,13 @@
       "cancel": "取消",
       "apply": "应用",
       "needsCondition": "每组至少选一个条件"
+    },
+    "flag": "旗标",
+    "orientation": {
+      "label": "方向",
+      "landscape": "横图",
+      "portrait": "竖图",
+      "square": "方图"
     }
   },
   "activity": {
@@ -288,7 +295,8 @@
       "people_index": "分析人物",
       "people_cluster": "整理人物分组",
       "generate_ai_repaint": "生成 AI 重绘",
-      "generate_text_image": "生成文字图片"
+      "generate_text_image": "生成文字图片",
+      "read_orientation": "读取照片方向"
     },
     "jobs": {
       "import": "导入",
@@ -297,7 +305,8 @@
       "annotation": "AI 标注",
       "ai_repaint": "AI 重绘",
       "people_index": "人物识别",
-      "colors": "色彩分析"
+      "colors": "色彩分析",
+      "orientation": "照片方向"
     }
   },
   "lightbox": {
@@ -307,7 +316,8 @@
     "resetToFit": "重置到适应",
     "failedToLoad": "图片加载失败",
     "loadingLarge": "正在加载大图…",
-    "preparingVideo": "正在准备视频…"
+    "preparingVideo": "正在准备视频…",
+    "stars": "{{count}} 星"
   },
   "gallery": {
     "loading": "加载中…",
@@ -334,7 +344,9 @@
       "refreshFromDisk_other": "从磁盘刷新 {{count}} 项",
       "copyPath": "复制文件路径",
       "copyName": "复制名称",
-      "openWith": "打开方式"
+      "openWith": "打开方式",
+      "flag": "旗标",
+      "addTags": "添加标签…"
     }
   },
   "map": {
@@ -348,5 +360,11 @@
       "city": "城市"
     },
     "noLocation": "这张照片没有可定位的坐标"
+  },
+  "flag": {
+    "pick": "留用",
+    "reject": "排除",
+    "none": "取消旗标",
+    "unflagged": "无旗标"
   }
 }

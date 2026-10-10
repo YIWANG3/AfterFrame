@@ -12,7 +12,8 @@
     "library": "Library",
     "about": "About",
     "integrations": "Integrations",
-    "watermark": "Watermark"
+    "watermark": "Watermark",
+    "shortcuts": "Shortcuts"
   },
   "general": {
     "title": "General",
@@ -265,7 +266,7 @@
     "importTitle": "Import settings",
     "sections": {
       "general": "General",
-      "generalHint": "Language, appearance, HD previews",
+      "generalHint": "Language, appearance, HD previews, keyboard shortcuts",
       "repaint": "AI Repaint",
       "repaintHint": "Providers, selected models, style library",
       "annotation": "AI Annotation",
@@ -350,5 +351,105 @@
     },
     "renameCamera": "Rename",
     "followBrand": "Brand's"
+  },
+  "shortcuts": {
+    "intro": "Click a key to change it, then press the new keys; Esc cancels. Keys in grey belong to the system or are fixed, and can't be changed.",
+    "resetAll": "Restore Defaults",
+    "resetAllTitle": "Restore all shortcuts?",
+    "resetAllMsg": "Every shortcut goes back to its default keys.",
+    "pressKeys": "Press keys…",
+    "change": "Click to change",
+    "removeKey": "Remove {{keys}}",
+    "addKey": "Add another key",
+    "resetOne": "Restore default",
+    "none": "None",
+    "locked": "A system or fixed key; it can't be changed",
+    "conflict": "{{keys}} is already used by “{{actions}}”.",
+    "listSeparator": ", ",
+    "takeOver": "Use It Here",
+    "keepOld": "Cancel",
+    "problem": {
+      "reserved": "{{keys}} is a system key and can't be used.",
+      "needsModifier": "This one needs a modifier key held with it (⌘, ⌥ or ⌃).",
+      "modifierOnly": "Press a key as well, not just modifiers."
+    },
+    "advanceNote": "Hold {{shift}} with a flag or rating key to move on to the next photo once it's set.",
+    "keys": {
+      "space": "Space"
+    },
+    "groups": {
+      "cull": "Culling",
+      "organize": "Photos",
+      "browse": "Browsing",
+      "lightbox": "Lightbox",
+      "app": "App",
+      "editor": "Editor"
+    },
+    "actions": {
+      "flag": {
+        "pick": "Flag as Pick",
+        "reject": "Flag as Rejected",
+        "none": "Remove Flag"
+      },
+      "rating": {
+        "0": "Clear Rating",
+        "1": "Rate 1 Star",
+        "2": "Rate 2 Stars",
+        "3": "Rate 3 Stars",
+        "4": "Rate 4 Stars",
+        "5": "Rate 5 Stars"
+      },
+      "photo": {
+        "addTags": "Add Tags…",
+        "edit": "Edit",
+        "compare": "Compare Two Photos",
+        "reveal": "Show in Finder",
+        "delete": "Remove from Library",
+        "deleteRejected": "Delete Rejected Photos…"
+      },
+      "select": {
+        "all": "Select All",
+        "none": "Deselect All"
+      },
+      "lightbox": {
+        "toggle": "Open / Close Lightbox",
+        "proof": "Proof Mode"
+      },
+      "view": {
+        "search": "Search",
+        "filters": "Show / Hide Filters",
+        "map": "Show / Hide Map",
+        "thumbLarger": "Larger Thumbnails",
+        "thumbSmaller": "Smaller Thumbnails",
+        "refresh": "Refresh",
+        "fullscreen": "Toggle Full Screen"
+      },
+      "app": {
+        "settings": "Settings",
+        "shortcuts": "Keyboard Shortcuts"
+      },
+      "catalog": {
+        "new": "New Catalog",
+        "open": "Open Catalog…"
+      },
+      "import": {
+        "run": "Run Import"
+      },
+      "editor": {
+        "save": "Save"
+      }
+    },
+    "fixed": {
+      "navigate": "Move the Selection / Previous, Next",
+      "close": "Close / Back",
+      "undo": "Undo",
+      "redo": "Redo",
+      "copyLayers": "Copy / Paste Layers",
+      "deleteLayer": "Delete Layer",
+      "apply": "Apply",
+      "pan": "Hold to Pan",
+      "copyPaste": "Copy / Paste / Cut",
+      "quit": "Quit"
+    }
   }
 }

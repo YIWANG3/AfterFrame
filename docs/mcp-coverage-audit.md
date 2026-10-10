@@ -10,7 +10,7 @@
 |---|---|---|
 | 检索 / 问答 / 缩略图 / 唤起 App 定位 | ✅ | `search_assets` `get_asset` `view_assets` `show_in_app` `get_catalog_info` |
 | 选中态 | ✅ | `get_selection` |
-| 评分 / 标签 | ✅ | `update_assets`（仅 rating + add/remove tag） |
+| 评分 / 旗标 / 标签 | ✅ | `update_assets`（rating、flag pick/reject/none、add/remove tag；加标签一次写入）；`search_assets` 与智能合集规则可按 `flag` 筛选 |
 | 合集（手动） | ✅ | `manage_collections` list/create/rename/delete/add/remove/browse |
 | 导入目录 / RAW 根注册 | ✅ | `import_directory` |
 | AI 标注 | ✅ | `annotate_assets` |
@@ -36,7 +36,7 @@
 | 任意矩形裁剪 + 旋转/翻转 | 🔴→🟡 | `workspace:process-and-save`（sharp）已是无头能力，只是没接 MCP |
 | 对比视图 / 灯箱校样 | 🔴 | 纯 UI，本来也不该是 tool（`view_assets` / `show_in_app` 已够） |
 | 设置（provider key、标注 provider、locale、HD 预览开关、people/depth 模型、外部编辑器） | 🟡/— | 主进程 IPC；按设计不该让 agent 改 key；locale/HD 开关可选 |
-| 智能合集规则、标题/说明手改、旗标/色标/备注 | ⚫ | schema 里就没有 flag/label/note；`rules_json` 有列但没人求值，UI 只建 manual |
+| 智能合集规则、标题/说明手改、色标/备注 | ⚫ | schema 里没有 label/note（旗标已有：`assets.app_flag`）；`rules_json` 有列但没人求值，UI 只建 manual |
 
 ## 2. 为什么大块功能是 🔴：所有"合成类"输出都依赖浏览器 canvas
 

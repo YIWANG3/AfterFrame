@@ -17,7 +17,7 @@ from . import raw_decode, video
 from .catalog import CatalogPaths
 from .color_profiles import adobe_rgb_icc
 from .config import DEFAULT_RAW_EXTENSIONS
-from .db import list_assets_for_preview, upsert_preview_entry
+from .db import list_assets_for_preview, set_display_shape, upsert_preview_entry
 from .db.colors import analyze_asset_colors
 from .processes import no_window
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
@@ -276,6 +276,23 @@ def transcode_to_jpeg(source: Path, target: Path) -> None:
         partial.unlink(missing_ok=True)
 
 
+def preview_shape(path: Path) -> str:
+    """How a thumbnail shows: its pixels turned by its EXIF orientation, as
+    the browser draws it. "portrait" / "landscape" / "square", or "" when it
+    can't be read. Only the header is read."""
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
+            orientation = image.getexif().get(_ORIENTATION_TAG) or 1
+    except Exception:
+        return ""
+    if orientation in (5, 6, 7, 8):
+        width, height = height, width
+    if not width or not height:
+        return ""
+    return "portrait" if height > width else "landscape" if width > height else "square"
+
+
 @dataclass(slots=True)
 class PreviewResult:
     asset_id: str
@@ -456,6 +473,9 @@ class PreviewService:
                         # first write, so the lock isn't held for it.
                         if analyze_colors and kind == "preview" and row["asset_type"] == "image":
                             analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
+                        # And how it shows (portrait / landscape), for the filter.
+                        if kind == "preview" and result.relative_path:
+                            set_display_shape(connection, result.asset_id, preview_shape(self.catalog.root / result.relative_path), commit=False)
                         upsert_preview_entry(
                             connection,
                             asset_id=result.asset_id,

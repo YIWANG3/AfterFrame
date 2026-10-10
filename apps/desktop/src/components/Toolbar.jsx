@@ -351,6 +351,8 @@ export default function Toolbar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          // ⌘F (src/shortcuts) focuses this box.
+          data-toolbar-search="true"
           placeholder={t("toolbar.search")}
           className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
         />

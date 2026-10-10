@@ -42,9 +42,12 @@ import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
 import ToastStack, { useToasts } from "./components/Toast";
 import DevStaleNotice from "./components/DevStaleNotice";
-import { ConfirmHost, confirm } from "./components/confirm";
+import { ConfirmHost, confirm, choose } from "./components/confirm";
+import TagBatchDialog from "./components/TagBatchDialog";
+import { loadShortcuts, matchShortcut, shortcutLabel } from "./shortcuts/store";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
+import { invalidateTags } from "./components/annotation/tagStore";
 import WindowTitleBar from "./components/WindowTitleBar";
 
 const MAP_EXPANDED_KEY = "afterframe-map-expanded";
@@ -108,6 +111,11 @@ export default function App() {
   const [editorSourceId, setEditorSourceId] = useState(null);
   const [externalEditors, setExternalEditors] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The tab Settings opens on when something asks for one (⌘/ → shortcuts);
+  // null opens the tab it was left on.
+  const [settingsTab, setSettingsTab] = useState(null);
+  // The photos "Add Tags…" is open for (null when it's closed).
+  const [tagDialogIds, setTagDialogIds] = useState(null);
   const [sampleBusy, setSampleBusy] = useState(false);
   const [proofMode, setProofMode] = useState(false);
   const [layoutItems, setLayoutItems] = useState([]);
@@ -278,6 +286,24 @@ export default function App() {
         const started = await api.startColorAnalysis({ auto: true });
         if (started?.jobId && started.running !== false) {
           workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "colors" });
+        }
+      } catch { /* best-effort */ }
+    })();
+  }, [discoverCatalogKey, workspace.browserReady]);
+
+  // Once per catalog, too: thumbnails made before the photo's shape was
+  // recorded get it read (portrait / landscape, for the orientation filter
+  // and the layouts). A catalog from this version has nothing to do.
+  const orientationCatchUpRef = useRef(new Set());
+  useEffect(() => {
+    if (!discoverCatalogKey || !workspace.browserReady || !api.has("startOrientationScan")) return;
+    if (orientationCatchUpRef.current.has(discoverCatalogKey)) return;
+    orientationCatchUpRef.current.add(discoverCatalogKey);
+    void (async () => {
+      try {
+        const started = await api.startOrientationScan();
+        if (started?.jobId && started.running !== false) {
+          workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "orientation" });
         }
       } catch { /* best-effort */ }
     })();
@@ -599,6 +625,9 @@ export default function App() {
     } else if (action === "edit:delete") {
       if (editable || editorItem || viewMode !== "assets") return;
       void deleteAssets(targetAssetIds());
+    } else if (action === "edit:delete-rejected") {
+      if (editorItem) return;
+      void deleteRejected();
     } else if (action === "edit:copy-path") {
       void copyAssetField(targetAssetIds(), "path");
     } else if (action === "edit:copy-name") {
@@ -617,6 +646,10 @@ export default function App() {
   const onJobFinished = useEffectEvent((fin) => {
     if (fin.jobType === "annotation") {
       invalidateAnnotations();
+      // The run's tags joined the photos' own, and its captions show where
+      // the user wrote no description.
+      invalidateTags();
+      void workspaceRef.current.reloadDetail?.();
       const r = fin.result || {};
       if (fin.status === "succeeded") {
         const failed = Number(r.failed || 0);
@@ -733,9 +766,13 @@ export default function App() {
   useEffect(() => {
     if (!api.has("onMenuAction")) return undefined;
     return api.onMenuAction((action) => {
-      if (action === "app:open-settings") setSettingsOpen(true);
+      if (action === "app:open-settings") openSettings();
     });
   }, []);
+
+  // The user's rebound keys (Settings → Keyboard Shortcuts), before the
+  // first key press if they can be.
+  useEffect(() => { void loadShortcuts(); }, []);
 
   // First-run / no-catalog gate. info loads via refreshAll; until then info is
   // null (don't flash the welcome). In packaged mode a fresh install has no
@@ -918,12 +955,122 @@ export default function App() {
     setLightboxOpen(true);
   }
 
-  function applyRating(nextRating) {
-    const targetIds = selectedAssetIds.length
+  // What a rating or flag key acts on: the selection, else the photo shown.
+  function keyTargets() {
+    return selectedAssetIds.length
       ? selectedAssetIds
       : [workspace.selectedAssetId].filter((id) => id != null);
+  }
+
+  // Shift held with a rating or flag key: on to the next photo once it's set
+  // (Lightroom's "set and advance"). One photo at a time only.
+  function advanceAfter(targetIds) {
+    if (targetIds.length !== 1) return;
+    if (selectedIndex >= 0 && selectedIndex < currentItems.length - 1) selectByIndex(selectedIndex + 1);
+  }
+
+  function applyRating(nextRating, { advance = false } = {}) {
+    const targetIds = keyTargets();
     if (!targetIds.length) return;
     void workspace.setAssetRating(targetIds, nextRating);
+    if (advance) advanceAfter(targetIds);
+  }
+
+  // flag: "pick" | "reject" | "none" (P / X / U).
+  function applyFlag(flag, { advance = false, ids = null } = {}) {
+    const targetIds = ids?.length ? ids : keyTargets();
+    if (!targetIds.length) return;
+    void workspace.setAssetFlag(targetIds, flag);
+    if (advance) advanceAfter(targetIds);
+  }
+
+  function openSettings(tab = null) {
+    setSettingsTab(tab);
+    setSettingsOpen(true);
+  }
+
+  function openTagDialog(ids) {
+    const list = (ids?.length ? ids : targetAssetIds()).filter(Boolean);
+    if (list.length) setTagDialogIds(list);
+  }
+
+  async function applyBatchTags(tags) {
+    const ids = tagDialogIds || [];
+    try {
+      const result = await workspace.addTagsToAssets(ids, tags);
+      setTagDialogIds(null);
+      pushToast({
+        title: t("batchTags.added", { count: result?.asset_ids?.length ?? ids.length }),
+        message: tags.join(t("batchTags.separator")),
+        ttl: 3500,
+      });
+    } catch (error) {
+      pushToast({ title: t("batchTags.failed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
+    }
+  }
+
+  // Lightroom's "Delete Rejected Photos…": the rejected photos of the view on
+  // screen, out of the library or into the Trash, the user's choice.
+  async function deleteRejected() {
+    if (viewMode !== "assets" || noCatalog) return;
+    let rejected;
+    try {
+      rejected = await workspaceRef.current.collectRejected();
+    } catch (error) {
+      pushToast({ title: t("rejected.failed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
+      return;
+    }
+    if (!rejected.length) {
+      pushToast({ title: t("rejected.none"), message: t("rejected.noneHint", { key: shortcutLabel("flag.reject") || "X" }), ttl: 4000 });
+      return;
+    }
+    const ids = rejected.map((row) => row.asset_id);
+    const canTrash = api.can("fileSystem");
+    const choice = await choose({
+      title: t("rejected.title"),
+      message: t("rejected.msg", { count: ids.length }),
+      detail: t(canTrash ? "rejected.detail" : "rejected.detailLibraryOnly"),
+      choices: [
+        { id: "library", label: t("rejected.removeFromLibrary") },
+        ...(canTrash ? [{ id: "trash", label: t("rejected.moveToTrash"), danger: true }] : []),
+      ],
+      cancelLabel: t("cancel"),
+      danger: true,
+    });
+    if (choice === "library") {
+      await workspaceRef.current.deleteImageAssets(ids);
+      pushToast({ title: t("rejected.removed", { count: ids.length }), ttl: 4000 });
+    } else if (choice === "trash") {
+      const paths = rejected.map((row) => row.image_path).filter(Boolean);
+      const result = await workspaceRef.current.deleteImageAssetsFromDisk(ids, paths);
+      if (result?.failed?.length) {
+        pushToast({ title: t("diskDeleteFailed", { count: result.failed.length }), tone: "error", ttl: 5000 });
+      } else {
+        pushToast({ title: t("rejected.trashed", { count: ids.length }), ttl: 4000 });
+      }
+    }
+  }
+
+  function revealSelected() {
+    if (!api.can("fileSystem")) return;
+    const path = itemById.get(workspace.selectedAssetId)?.image_path;
+    if (path) void api.revealPath(path);
+  }
+
+  function compareSelected() {
+    const ids = targetAssetIds();
+    if (ids.length !== 2) {
+      pushToast({ title: t("compareNeedsTwo"), ttl: 3000 });
+      return;
+    }
+    handleCompare(ids);
+  }
+
+  function focusSearch() {
+    const input = document.querySelector("[data-toolbar-search='true']");
+    if (!input) return;
+    input.focus();
+    input.select?.();
   }
 
 
@@ -999,52 +1146,112 @@ export default function App() {
     }
   }, [workspace.selectedAssetId]);
 
+  // A library shortcut's action (src/shortcuts has the keys, which the user
+  // can rebind). Returns false when it had nothing to act on, so the key is
+  // left to whatever else wants it.
+  function runLibraryShortcut(id, advance) {
+    const hasTarget = selectedAssetIds.length > 0 || !!workspace.selectedAssetId;
+    if (id.startsWith("rating.")) {
+      if (!hasTarget) return false;
+      applyRating(Number(id.slice("rating.".length)), { advance });
+      return true;
+    }
+    switch (id) {
+      case "flag.pick":
+      case "flag.reject":
+      case "flag.none":
+        if (!hasTarget) return false;
+        applyFlag(id.slice("flag.".length), { advance });
+        return true;
+      case "photo.addTags":
+        if (!hasTarget) return false;
+        openTagDialog();
+        return true;
+      case "photo.edit":
+        if (!lightboxOpen && !workspace.selectedAssetId) return false;
+        openEditor();
+        return true;
+      case "photo.compare":
+        compareSelected();
+        return true;
+      case "photo.reveal":
+        revealSelected();
+        return true;
+      case "photo.delete": {
+        const ids = targetAssetIds();
+        if (!ids.length) return false;
+        void deleteAssets(ids);
+        return true;
+      }
+      case "photo.deleteRejected":
+        void deleteRejected();
+        return true;
+      case "select.all":
+        return selectAllAssets();
+      case "select.none":
+        clearSelection();
+        return true;
+      case "lightbox.toggle":
+        if (!workspace.selectedAssetId) return false;
+        setLightboxOpen((current) => !current);
+        return true;
+      case "lightbox.proof":
+        setProofMode((current) => !current);
+        return true;
+      case "view.search":
+        focusSearch();
+        return true;
+      case "view.filters":
+        setShowFilters((current) => !current);
+        return true;
+      case "view.map":
+        setMapExpanded((current) => !current);
+        return true;
+      case "view.thumbLarger":
+      case "view.thumbSmaller": {
+        const step = id === "view.thumbLarger" ? 20 : -20;
+        setThumbSize((size) => Math.max(120, Math.min(300, size + step)));
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+
   // Global shortcuts. An effect event so the handler reads the current
   // selection / view / lightbox state while the listener is bound once.
   const onGlobalKeyDown = useEffectEvent((event) => {
-    // Cmd+, opens Settings — handled before the modifier early-return
-    // since this shortcut REQUIRES the modifier.
-    if ((event.metaKey || event.ctrlKey) && event.key === "," && !event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      setSettingsOpen((open) => !open);
-      return;
+    const typing = shouldIgnoreKey(event);
+    // App-wide keys first: they work over the editor and the other views too.
+    // In a text field only one with a modifier (⌘,) — a bare key is typing.
+    // The native menu answers its own keys (⌘N, ⌘R…) before they get here.
+    const global = matchShortcut(event, ["global"]);
+    if (global && !(typing && !event.metaKey && !event.ctrlKey && !event.altKey)) {
+      if (global.id === "app.settings") {
+        event.preventDefault();
+        if (settingsOpen) setSettingsOpen(false);
+        else openSettings();
+        return;
+      }
+      if (global.id === "app.shortcuts") {
+        event.preventDefault();
+        openSettings("shortcuts");
+        return;
+      }
     }
-    // Cmd+A selects all assets in the gallery. Skipped when focus is in a
-    // text field (native text select-all wins) or in the editor/stickers.
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a" && !event.shiftKey && !event.altKey) {
-      if (shouldIgnoreKey(event)) return; // text field: native select-all wins
-      if (selectAllAssets()) event.preventDefault();
-      return;
-    }
-    if (editorItem || viewMode === "people") return;
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (shouldIgnoreKey(event)) return;
+    // The rest belong to the grid and the lightbox: not while the editor,
+    // a compare, a collage or a dialog is over them.
+    if (editorItem || viewMode === "people" || compareState || collageItems || tagDialogIds) return;
+    if (event.defaultPrevented || typing) return;
 
-    // Delete / Backspace removes the selected assets (with confirmation).
-    // Skipped in stickers view, which has its own deletion path.
-    if (event.key === "Delete" || event.key === "Backspace") {
-      if (viewMode !== "assets") return;
-      const ids = targetAssetIds();
-      if (!ids.length) return;
-      event.preventDefault();
-      void deleteAssets(ids);
-      return;
-    }
-
-    if (event.code === "Space") {
-      if (viewMode === "stickers") {
+    if (viewMode === "stickers") {
+      if (matchShortcut(event, ["library"])?.id === "lightbox.toggle") {
         if (!stickerView.selected) return;
         event.preventDefault();
         setLightboxOpen((current) => !current);
         return;
       }
-      if (!workspace.selectedAssetId) return;
-      event.preventDefault();
-      setLightboxOpen((current) => !current);
-      return;
-    }
-
-    if (viewMode === "stickers") {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       // Arrow navigation. In the lightbox we stay linear (single image
       // pager). In the grid we measure column count from the DOM so
       // up/down jump rows the same way Gallery does.
@@ -1094,32 +1301,15 @@ export default function App() {
       return;
     }
 
-    // M toggles the map drawer (assets view only; text fields already
-    // returned above via shouldIgnoreKey).
-    if (event.key.toLowerCase() === "m" && viewMode === "assets" && !lightboxOpen) {
-      event.preventDefault();
-      setMapExpanded((current) => !current);
+    if (viewMode !== "assets") return;
+    const hit = matchShortcut(event, lightboxOpen ? ["library", "lightbox"] : ["library", "gallery"]);
+    if (hit) {
+      if (runLibraryShortcut(hit.id, hit.advance)) event.preventDefault();
       return;
     }
 
-    if (/^[0-5]$/.test(event.key) && (selectedAssetIds.length || workspace.selectedAssetId)) {
-      event.preventDefault();
-      applyRating(Number(event.key));
-      return;
-    }
-
-    if (event.key.toLowerCase() === "e" && (lightboxOpen || workspace.selectedAssetId)) {
-      event.preventDefault();
-      openEditor();
-      return;
-    }
-
-    if (lightboxOpen && event.key.toLowerCase() === "p") {
-      event.preventDefault();
-      setProofMode((current) => !current);
-      return;
-    }
-
+    // The fixed keys: Esc leaves proof, then the lightbox; the arrows move.
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === "Escape") {
       if (!lightboxOpen) return;
       event.preventDefault();
@@ -1255,7 +1445,7 @@ export default function App() {
             <PeopleView
               people={peopleGroups}
               onOpenGroup={openPersonGroup}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenSettings={() => openSettings()}
             />
           ) : viewMode === "discover" ? (
             <>
@@ -1431,6 +1621,8 @@ export default function App() {
                   onCompare={handleCompare}
                   onCollage={handleCollage}
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
+                  onFlag={(flag, ids) => applyFlag(flag, { ids })}
+                  onAddTags={openTagDialog}
                   onShowInAllAssets={workspace.narrowed ? showInAllAssets : undefined}
                 />
                 </div>
@@ -1464,6 +1656,9 @@ export default function App() {
             <Inspector
               detail={workspace.detail}
               onRatingChange={applyRating}
+              onFlagChange={(flag) => applyFlag(flag)}
+              onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
+              onAnnotated={() => workspace.reloadDetail?.()}
               onSelectAsset={selectRelatedAsset}
               onRelinked={() => workspace.refreshAll({ force: true })}
               onOpenPersonGroup={openPersonGroup}
@@ -1534,13 +1729,21 @@ export default function App() {
       />
       <SettingsOverlay
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        initialTab={settingsTab}
+        onClose={() => { setSettingsOpen(false); setSettingsTab(null); }}
         theme={workspace.theme}
         setTheme={workspace.setTheme}
         info={workspace.info}
         summary={workspace.summary}
         onSwitchCatalog={workspace.switchCatalog}
       />
+      {tagDialogIds && (
+        <TagBatchDialog
+          count={tagDialogIds.length}
+          onApply={applyBatchTags}
+          onClose={() => setTagDialogIds(null)}
+        />
+      )}
       <ConfirmHost />
       <EditorOverlay
         open={!!editorItem}

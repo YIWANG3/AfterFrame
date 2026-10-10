@@ -1,4 +1,4 @@
-// Inspector block showing AI annotations (caption / tags / location) and
+// Inspector block showing AI annotations (caption / location / text) and
 // the per-asset "Annotate with AI" trigger. Reads from the shared annotation
 // store so:
 //   - flipping providers in Settings updates the button state instantly
@@ -7,7 +7,7 @@
 import api from "../api";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, RotateCcw, ChevronRight, X, Plus, Wand2, MapPinOff, LoaderCircle } from "lucide-react";
+import { Sparkles, RotateCcw, ChevronRight, Wand2, MapPinOff, LoaderCircle } from "lucide-react";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
 import {
   subscribe,
@@ -18,6 +18,7 @@ import {
   setCachedAnnotation,
   fetchAnnotation as fetchAnnotationFromStore,
 } from "./annotation/annotationStore";
+import { setCachedTags } from "./annotation/tagStore";
 
 function SectionLabel({ title, badge }) {
   return (
@@ -33,7 +34,7 @@ function SectionLabel({ title, badge }) {
   );
 }
 
-function Section({ title, badge, action, collapsible = false, defaultOpen = true, children }) {
+export function Section({ title, badge, action, collapsible = false, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
   // border-t to match Inspector's Section: these render as siblings of the
   // Inspector sections, so a border-b here doubles up with the next section's
@@ -81,81 +82,18 @@ function useAnnotationState(assetId) {
   };
 }
 
-// Inline tag adder: type to search existing tags (server-side, scales to many)
-// or Enter to add a brand-new one.
-function TagAdder({ onAdd, existing }) {
-  const { t } = useTranslation("annotation");
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const t = setTimeout(async () => {
-      const res = (await api.searchFacet({ field: "tag", q: q.trim(), limit: 8 })) || [];
-      const have = new Set((existing || []).map((x) => String(x).toLowerCase()));
-      setSuggestions(res.filter((r) => !have.has(String(r.value).toLowerCase())));
-    }, 180);
-    return () => clearTimeout(t);
-  }, [q, open, existing]);
-
-  function commit(tag) {
-    const v = (tag ?? q).trim();
-    if (v) onAdd(v);
-    setQ("");
-    setOpen(false);
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
-      >
-        <Plus className="h-2.5 w-2.5" /> {t("add")}
-      </button>
-    );
-  }
-  return (
-    <div className="relative">
-      <input
-        autoFocus
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          else if (e.key === "Escape") { setQ(""); setOpen(false); }
-        }}
-        placeholder={t("addTag")}
-        className="w-28 rounded-md border border-accent/50 bg-app px-2 py-[2px] text-[10px] text-text outline-none placeholder:text-muted2"
-      />
-      {suggestions.length > 0 && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-44 w-44 overflow-y-auto rounded-md border border-border/60 bg-chrome py-1 shadow-overlay">
-          {suggestions.map((s) => (
-            <button
-              key={s.value}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); commit(s.value); }}
-              className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[10px] text-muted hover:bg-hover hover:text-text"
-            >
-              <span className="truncate">{s.value}</span>
-              <span className="shrink-0 text-[9px] tabular-nums text-muted2">{s.count}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+// "2026-10-09T…" → the day, as the app's language writes it.
+function formatDay(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString() : "";
 }
 
 export default function AnnotationsSection({
   assetId,
   imagePath,
-  onTagClick,
   onJumpToLocation,
   onLocationChanged,
+  onAnnotated,
   pushToast,
 }) {
   const { t } = useTranslation("annotation");
@@ -215,6 +153,10 @@ export default function AnnotationsSection({
         hint,
       });
       setCachedAnnotation(assetId, result || null);
+      // The run's tags join the photo's (TagsSection shows the one list).
+      setCachedTags(assetId, result?.tags || []);
+      // The description shown may now be the run's caption.
+      onAnnotated?.();
       onLocationChanged?.();
       pushToast?.({ title: t("toast.annotatedTitle"), message: t("toast.annotatedMsg"), ttl: 3500 });
     } catch (e) {
@@ -224,27 +166,7 @@ export default function AnnotationsSection({
     } finally {
       setRunning(false);
     }
-  }, [assetId, imagePath, onLocationChanged, pushToast, t]);
-
-  const addTag = useCallback(async (tag) => {
-    if (!assetId || !tag) return;
-    try {
-      const updated = await api.addAssetTag(assetId, tag);
-      setCachedAnnotation(assetId, updated || null);
-    } catch (e) {
-      pushToast?.({ title: t("toast.addTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
-    }
-  }, [assetId, pushToast, t]);
-
-  const removeTag = useCallback(async (tag) => {
-    if (!assetId || !tag) return;
-    try {
-      const updated = await api.removeAssetTag(assetId, tag);
-      setCachedAnnotation(assetId, updated || null);
-    } catch (e) {
-      pushToast?.({ title: t("toast.removeTagFailed"), message: e?.message || t("toast.failedFallback"), ttl: 4000, tone: "error" });
-    }
-  }, [assetId, pushToast, t]);
+  }, [assetId, imagePath, onAnnotated, onLocationChanged, pushToast, t]);
 
   // User veto: null the annotation's location + drop the resolved map point.
   const clearLocation = useCallback(async () => {
@@ -340,9 +262,11 @@ export default function AnnotationsSection({
 
   return (
     <>
+      {/* What the last run found that has no field of its own up top (the
+          description and tags joined the photo's own, above): when it ran,
+          and the text it read in the picture. */}
       <Section
-        title={t("section.description")}
-        badge={t("badge.ai")}
+        title={t("section.aiAnalysis")}
         collapsible
         action={
           <button
@@ -357,40 +281,16 @@ export default function AnnotationsSection({
           </button>
         }
       >
-        {annotation.caption ? (
-          <div className="text-[12px] leading-relaxed text-text">{annotation.caption}</div>
-        ) : (
-          <div className="text-[11px] italic text-muted2">{t("noCaption")}</div>
-        )}
-      </Section>
-
-      <Section title={t("section.tags")} badge={annotation.tags?.length ? `${annotation.tags.length}` : undefined} collapsible>
-        <div className="flex flex-wrap items-center gap-1">
-          {(annotation.tags || []).map((tag) => (
-            <span
-              key={tag}
-              className="group/tag inline-flex items-center rounded-md border border-transparent bg-app px-2 py-[2px] text-[10px] text-muted transition-colors hover:border-border hover:text-text"
-            >
-              <button
-                type="button"
-                onClick={() => onTagClick?.(tag)}
-                title={t("filterBy", { tag })}
-                className="hover:text-text"
-              >
-                {tag}
-              </button>
-              <button
-                type="button"
-                onClick={() => removeTag(tag)}
-                title={t("removeTag")}
-                className="ml-0.5 hidden rounded p-px text-muted2 transition-colors hover:text-red-400 group-hover/tag:inline-flex"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            </span>
-          ))}
-          <TagAdder onAdd={addTag} existing={annotation.tags || []} />
+        <div className="text-[10px] leading-snug text-muted2" data-testid="annotation-meta">
+          {t("analyzedWith", { model: annotation.model || annotation.provider || "AI", date: formatDay(annotation.updated_at || annotation.created_at) })}
         </div>
+        <div className="mt-1 text-[10px] leading-snug text-muted2">{t("keepsYours")}</div>
+        {annotation.detected_text ? (
+          <div className="mt-2">
+            <div className="text-[10px] text-muted2">{t("detectedText")}</div>
+            <div className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-text" data-testid="annotation-detected-text">{annotation.detected_text}</div>
+          </div>
+        ) : null}
       </Section>
 
       {hasLoc && (() => {

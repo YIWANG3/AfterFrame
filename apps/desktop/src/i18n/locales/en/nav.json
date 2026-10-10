@@ -265,6 +265,13 @@
       "cancel": "Cancel",
       "apply": "Apply",
       "needsCondition": "Pick at least one condition in a group"
+    },
+    "flag": "Flag",
+    "orientation": {
+      "label": "Orientation",
+      "landscape": "Landscape",
+      "portrait": "Portrait",
+      "square": "Square"
     }
   },
   "activity": {
@@ -297,7 +304,8 @@
       "people_index": "Analyze People",
       "people_cluster": "Build People Candidates",
       "generate_ai_repaint": "Generate AI Repaint",
-      "generate_text_image": "Generate Text Image"
+      "generate_text_image": "Generate Text Image",
+      "read_orientation": "Read Orientation"
     },
     "jobs": {
       "import": "Import",
@@ -306,7 +314,8 @@
       "annotation": "AI Annotation",
       "ai_repaint": "AI Repaint",
       "people_index": "People Recognition",
-      "colors": "Colour analysis"
+      "colors": "Colour analysis",
+      "orientation": "Photo orientation"
     }
   },
   "lightbox": {
@@ -316,7 +325,8 @@
     "resetToFit": "Reset to fit",
     "failedToLoad": "Failed to load image",
     "loadingLarge": "Loading large image...",
-    "preparingVideo": "Preparing video…"
+    "preparingVideo": "Preparing video…",
+    "stars": "{{count}} stars"
   },
   "gallery": {
     "loading": "Loading…",
@@ -343,7 +353,9 @@
       "refreshFromDisk_other": "Refresh {{count}} from Disk",
       "copyPath": "Copy File Path",
       "copyName": "Copy Name",
-      "openWith": "Open With"
+      "openWith": "Open With",
+      "flag": "Flag",
+      "addTags": "Add Tags…"
     }
   },
   "map": {
@@ -357,5 +369,11 @@
       "city": "City"
     },
     "noLocation": "No mappable location for this photo"
+  },
+  "flag": {
+    "pick": "Pick",
+    "reject": "Rejected",
+    "none": "Remove Flag",
+    "unflagged": "No Flag"
   }
 }

@@ -79,6 +79,8 @@ function collectExport({ settings = {}, styles = null, frameTemplates = [], them
     if (typeof settings.locale === "string") general.locale = settings.locale;
     if (typeof theme === "string" && theme) general.theme = theme;
     if (isObject(settings.previews)) general.previews = clone(settings.previews);
+    // Rebound keyboard shortcuts (overrides of shared/shortcuts.mjs's defaults).
+    if (isObject(settings.shortcuts) && Object.keys(settings.shortcuts).length) general.shortcuts = clone(settings.shortcuts);
     out.general = general;
   }
 
@@ -278,6 +280,8 @@ function mergeBundle({ settings: localSettings = {}, styles: localStyles = null,
     if (typeof general.locale === "string") locale = general.locale;
     if (typeof general.theme === "string") theme = general.theme;
     if (isObject(general.previews)) settings.previews = { ...(settings.previews || {}), ...clone(general.previews) };
+    // The keymap comes over whole: half of one could leave a key on two actions.
+    if (isObject(general.shortcuts)) settings.shortcuts = clone(general.shortcuts);
   }
 
   if (wanted.has("repaint")) {

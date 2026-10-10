@@ -10,9 +10,12 @@
 //   screen, nativeTheme   electron (the window fits the work area; Windows
 //                         paints its first frame in the theme's colour)
 //   platform              process.platform (a parameter so tests can pick)
+//   getShortcuts          the user's shortcut overrides (shared/shortcuts.mjs);
+//                         the menu's accelerators follow them
 
 const { windowChromeOptions, WIN_SYMBOL_COLOR } = require("./windowChrome");
 const { splitsImport } = require("./importDialog");
+const { menuAccelerator } = require("../shared/shortcuts.mjs");
 
 // Menu roles that only mean something on macOS; elsewhere they are omitted.
 const MAC_ONLY_ROLES = new Set(["services", "hide", "hideOthers", "unhide", "zoom", "front"]);
@@ -29,9 +32,12 @@ function withoutMacOnlyItems(template) {
 
 function createAppShell({
   BrowserWindow, Menu, makeT, getLocale, devServerUrl, preloadPath, indexHtml,
-  screen, nativeTheme, platform = process.platform,
+  screen, nativeTheme, platform = process.platform, getShortcuts = () => ({}),
 }) {
   const anyWindow = () => BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  // The menu's rebindable accelerators are off while Settings records a new
+  // key, so ⌘N reaches the recorder instead of opening a catalog.
+  let acceleratorsOn = true;
 
   // ── external "Open With…" / dock-icon drop import ──
   // macOS fires `open-file` once per dropped file. We batch them in a 50ms
@@ -144,13 +150,17 @@ function createAppShell({
     // Symbols — which we don't create and can't relabel; those stay OS-localized,
     // exactly like every other Mac app.) The app-menu title stays the brand name.
     const t = makeT(getLocale());
+    // Accelerators the user can rebind (Settings → Keyboard Shortcuts); a
+    // menu item they unbound shows no keys.
+    const shortcuts = getShortcuts() || {};
+    const keys = (menuId) => (acceleratorsOn ? menuAccelerator(menuId, shortcuts, platform) : undefined);
     const template = [
       {
         label: "AfterFrame",
         submenu: [
           { label: t("menu.about"), role: "about" },
           { type: "separator" },
-          { label: t("menu.settings"), accelerator: "CmdOrCtrl+,", click: () => sendMenuAction("app:open-settings") },
+          { label: t("menu.settings"), accelerator: keys("app:open-settings"), click: () => sendMenuAction("app:open-settings") },
           { type: "separator" },
           { label: t("menu.scratchCatalog"), click: () => sendMenuAction("catalog:scratch") },
           { type: "separator" },
@@ -166,8 +176,8 @@ function createAppShell({
       {
         label: t("menu.file"),
         submenu: [
-          { label: t("menu.newCatalog"), accelerator: "CmdOrCtrl+N", click: () => sendMenuAction("catalog:new") },
-          { label: t("menu.openCatalog"), accelerator: "CmdOrCtrl+O", click: () => sendMenuAction("catalog:open") },
+          { label: t("menu.newCatalog"), accelerator: keys("catalog:new"), click: () => sendMenuAction("catalog:new") },
+          { label: t("menu.openCatalog"), accelerator: keys("catalog:open"), click: () => sendMenuAction("catalog:open") },
           { type: "separator" },
           ...(splitsImport(platform)
             ? [
@@ -177,7 +187,7 @@ function createAppShell({
             : [{ label: t("menu.import"), click: () => sendMenuAction("import:pick-export") }]),
           { label: t("menu.addRawSources"), click: () => sendMenuAction("import:pick-source") },
           { type: "separator" },
-          { label: t("menu.runImport"), accelerator: "CmdOrCtrl+I", click: () => sendMenuAction("import:start") },
+          { label: t("menu.runImport"), accelerator: keys("import:start"), click: () => sendMenuAction("import:start") },
           { label: t("menu.runEnrichment"), click: () => sendMenuAction("import:enrich") },
           { label: t("menu.generatePreviews"), click: () => sendMenuAction("import:previews") },
           { type: "separator" },
@@ -202,16 +212,18 @@ function createAppShell({
           // No accelerator: a global ⌫ would hijack typing. The renderer owns the
           // Delete/Backspace shortcut and skips it inside text fields.
           { label: t("menu.delete"), click: () => sendMenuAction("edit:delete") },
+          // No accelerator either (⌘⌫ deletes to the line start in a text field).
+          { label: t("menu.deleteRejected"), click: () => sendMenuAction("edit:delete-rejected") },
           { type: "separator" },
           // ⌘A is routed to the renderer so it can pick text-select vs gallery
           // select-all based on focus, instead of role:"selectAll" (text only).
-          { label: t("menu.selectAll"), accelerator: "CmdOrCtrl+A", click: () => sendMenuAction("edit:select-all") },
+          { label: t("menu.selectAll"), accelerator: keys("edit:select-all"), click: () => sendMenuAction("edit:select-all") },
         ],
       },
       {
         label: t("menu.view"),
         submenu: [
-          { label: t("menu.refresh"), accelerator: "CmdOrCtrl+R", click: () => sendMenuAction("view:refresh") },
+          { label: t("menu.refresh"), accelerator: keys("view:refresh"), click: () => sendMenuAction("view:refresh") },
           { label: t("menu.toggleTheme"), click: () => sendMenuAction("view:toggle-theme") },
           { type: "separator" },
           { label: t("menu.devTools"), role: "toggleDevTools", accelerator: "Alt+CommandOrControl+I" },
@@ -219,7 +231,7 @@ function createAppShell({
           {
             id: "toggle-fullscreen",
             label: t("menu.toggleFullscreen"),
-            accelerator: platform === "darwin" ? "Ctrl+Command+F" : "F11",
+            accelerator: keys("toggle-fullscreen"),
             click: (_item, browserWindow) => toggleAppFullscreen(browserWindow),
           },
         ],
@@ -238,6 +250,11 @@ function createAppShell({
   }
 
   const installMenu = () => Menu.setApplicationMenu(buildAppMenu());
+  const setMenuAccelerators = (on) => {
+    if (acceleratorsOn === !!on) return;
+    acceleratorsOn = !!on;
+    installMenu();
+  };
 
   // Windows: the title strip's menu button (WindowTitleBar.jsx). The window
   // has no menu bar of its own (titleBarStyle "hidden"), so the application
@@ -258,7 +275,7 @@ function createAppShell({
   }
 
   return {
-    createWindow, buildAppMenu, installMenu, sendMenuAction, toggleAppFullscreen, queueExternalImport, flushExternalImports,
+    createWindow, buildAppMenu, installMenu, setMenuAccelerators, sendMenuAction, toggleAppFullscreen, queueExternalImport, flushExternalImports,
     popupAppMenu, setTitleBarTheme,
   };
 }

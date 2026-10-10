@@ -79,6 +79,7 @@ function compactAsset(row, port) {
     stem: row.stem,
     image_path: row.image_path,
     rating: row.app_rating || 0,
+    flag: row.app_flag === 1 ? "pick" : row.app_flag === -1 ? "reject" : undefined,
     capture_time: meta.capture_time || null,
     camera: meta.camera_model || null,
     lens: meta.lens_model || null,
@@ -87,10 +88,16 @@ function compactAsset(row, port) {
     focal_length: meta.focal_length ?? null,
     width: meta.width ?? null,
     height: meta.height ?? null,
+    // How it shows (width/height are the pixels as stored, which a camera's
+    // upright shot keeps landscape). Absent until its thumbnail was read.
+    shape: row.display_shape || undefined,
     duration: row.asset_type === "video" ? meta.duration ?? null : undefined,
     match_status: row.match_status,
-    caption: row.annotation?.caption ?? null,
-    tags: row.annotation?.tags?.length ? row.annotation.tags : undefined,
+    // The description as shown: the user's if written, else the AI's caption.
+    caption: row.description ?? row.annotation?.caption ?? null,
+    caption_source: row.description_source || undefined,
+    // Hand-added and AI tags alike (asset_tags).
+    tags: row.tags?.length ? row.tags : row.annotation?.tags?.length ? row.annotation.tags : undefined,
     has_raw: !!row.raw_asset_id,
     has_face: row.has_face ? true : undefined,
     // Only surfaced when something is wrong — keeps the common case compact.
@@ -135,14 +142,14 @@ const ONE_OR_MANY = { anyOf: [{ type: "string" }, { type: "array", items: { type
 // a map area is not something a smart collection saves.)
 const FACET_ARG_KEYS = [
   "camera", "lens", "iso_min", "iso_max", "aperture_min", "aperture_max",
-  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "rating_max", "orientation", "tag", "tag_match",
+  "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "rating_max", "flag", "orientation", "tag", "tag_match",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
   "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains",
 ];
 // The conditions an agent may flip with `exclude`, by the names it sends them
 // under → the sidecar's facet names (db/facets.py).
 const EXCLUDABLE_ARGS = {
-  camera: "camera", lens: "lens", tag: "tag", extension: "extension", orientation: "orientation",
+  camera: "camera", lens: "lens", tag: "tag", extension: "extension", orientation: "orientation", flag: "flag",
   asset_type: "asset_type", location_source: "location_source", country: "country", city: "city",
   color: "color", person_id: "person_group", collection_id: "in_collection",
   caption_contains: "caption_contains", ocr_contains: "ocr_contains", path_contains: "path_contains",
@@ -313,6 +320,10 @@ function createMcpServer(deps) {
           date_within_days: { type: "number", description: "Captured in the last N days (relative to today)" },
           rating_min: { type: "number", description: "Minimum star rating 1-5" },
           rating_max: { type: "number", description: "Maximum star rating 0-5; 0 means unrated. With rating_min equal to it: exactly that many stars" },
+          flag: {
+            anyOf: [{ type: "string", enum: ["pick", "reject", "none"] }, { type: "array", items: { type: "string", enum: ["pick", "reject", "none"] } }],
+            description: "Pick/reject flag (Lightroom's P/X/U): pick, reject, or none (unflagged). A list means any of them.",
+          },
           orientation: { type: "string", enum: ["portrait", "landscape", "square"] },
           tag: { ...ONE_OR_MANY, description: "Exact tag match. A list means any of them." },
           location_source: {
@@ -495,13 +506,15 @@ function createMcpServer(deps) {
     {
       name: "update_assets",
       description:
-        "Batch-edit asset metadata: set star rating (0-5, 0 clears) and/or add/remove tags. " +
-        "The app UI refreshes automatically. Tags power search; ratings power the 'rated' filter and smart collections.",
+        "Batch-edit asset metadata: set star rating (0-5, 0 clears), the pick/reject flag, the description, and/or add/remove tags. " +
+        "The app UI refreshes automatically. Tags power search; ratings and flags power filters and smart collections.",
       inputSchema: {
         type: "object",
         properties: {
           asset_ids: { type: "array", items: { type: "string" } },
           rating: { type: "number", description: "Star rating 0-5; 0 clears the rating" },
+          flag: { type: "string", enum: ["pick", "reject", "none"], description: "Pick/reject flag, as Lightroom's P/X/U; none clears it" },
+          description: { type: "string", description: "The photo's description, as the user would write it (wins over the AI caption, which annotation never overwrites). An empty string leaves it empty." },
           add_tags: { type: "array", items: { type: "string" } },
           remove_tags: { type: "array", items: { type: "string" } },
         },
@@ -514,8 +527,11 @@ function createMcpServer(deps) {
         const addTags = (args.add_tags || []).map(String).filter(Boolean);
         const removeTags = (args.remove_tags || []).map(String).filter(Boolean);
         const hasRating = args.rating !== undefined && args.rating !== null;
-        if (!hasRating && !addTags.length && !removeTags.length) {
-          throw new Error("Nothing to do — pass rating, add_tags and/or remove_tags.");
+        const hasFlag = args.flag !== undefined && args.flag !== null;
+        const hasDescription = typeof args.description === "string";
+        if (hasFlag && !["pick", "reject", "none"].includes(args.flag)) throw new Error("flag must be pick, reject or none.");
+        if (!hasRating && !hasFlag && !hasDescription && !addTags.length && !removeTags.length) {
+          throw new Error("Nothing to do — pass rating, flag, description, add_tags and/or remove_tags.");
         }
         let mutated = false;
         const errors = [];
@@ -526,18 +542,29 @@ function createMcpServer(deps) {
             await commands.setAssetRating(ids, rating);
             mutated = true;
           }
+          if (hasFlag) {
+            await commands.setAssetFlag(ids, args.flag);
+            mutated = true;
+          }
+          if (hasDescription) {
+            await commands.setAssetDescription(ids, args.description);
+            mutated = true;
+          }
+          // Every new tag onto every photo in one write; ids the catalog
+          // doesn't hold come back as missing.
+          if (addTags.length) {
+            try {
+              const added = await commands.addAssetTags(ids, addTags);
+              mutated = true;
+              for (const id of added?.missing || []) errors.push({ asset_id: id, op: "add_tags", error: "unknown asset" });
+            } catch (error) {
+              for (const id of ids) errors.push({ asset_id: id, op: "add_tags", error: error.message });
+            }
+          }
           // Sequential on purpose: SQLite single-writer, and per-asset-per-tag CLI.
           // Per-asset errors are collected, not thrown — a mid-loop failure must
           // not hide the writes that already landed.
           for (const id of ids) {
-            for (const tag of addTags) {
-              try {
-                await commands.addAssetTag(id, tag);
-                mutated = true;
-              } catch (error) {
-                errors.push({ asset_id: id, op: `add_tag:${tag}`, error: error.message });
-              }
-            }
             for (const tag of removeTags) {
               try {
                 await commands.removeAssetTag(id, tag);
@@ -554,6 +581,8 @@ function createMcpServer(deps) {
         return {
           updated: ids.length - new Set(errors.map((e) => e.asset_id)).size,
           rating: hasRating ? Number(args.rating) : undefined,
+          flag: hasFlag ? args.flag : undefined,
+          description: hasDescription ? (args.description.trim() || null) : undefined,
           added_tags: addTags.length ? addTags : undefined,
           removed_tags: removeTags.length ? removeTags : undefined,
           errors: errors.length ? errors : undefined,
@@ -577,7 +606,7 @@ function createMcpServer(deps) {
             type: "object",
             description: "Smart collection conditions, AND-combined. At least one is required. Same names and meanings as " +
               "search_assets (camera, lens, tag, extension, country and city take one value or a list meaning any of them; tag_match: 'all' requires every tag): query, status, camera, lens, iso_min/max, aperture_min/max, focal_min/max, shutter_min/max, " +
-              "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, " +
+              "date_from, date_to, date_within_days, rating_min, rating_max (0 = unrated), flag (pick | reject | none), orientation, tag, asset_type, extension, people, person_id, annotated, location_source, country, city, color, color_tolerance, caption_contains, ocr_contains, path_contains, " +
               "collection_id ('only photos in that folder'); " +
               "exclude (a list of those condition names to turn into their opposite: exclude ['collection_id'] = not in that folder); " +
               "any_of (a list of groups of the same conditions, at least one of which must hold: OR).",

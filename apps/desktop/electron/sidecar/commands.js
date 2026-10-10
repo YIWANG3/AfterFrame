@@ -341,8 +341,33 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(argv);
     },
 
+    // The user's description: "" leaves it empty; null hands it back to
+    // the AI's caption.
+    setAssetDescription(assetIds, text) {
+      const argv = text === null ? ["set-asset-description", "--reset"] : ["set-asset-description", "--text", String(text ?? "")];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      return callJson(argv);
+    },
+
+    setAssetFlag(assetIds, flag) {
+      const argv = ["set-asset-flag", "--flag", String(flag)];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      return callJson(argv);
+    },
+
+    addAssetTags(assetIds, tags) {
+      const argv = ["add-asset-tags"];
+      for (const id of assetIds) argv.push("--asset-id", String(id));
+      for (const tag of tags) argv.push("--tag", String(tag));
+      return callJson(argv);
+    },
+
     addAssetTag(assetId, tag) {
       return callJson(["add-asset-tag", "--asset-id", String(assetId), "--tag", String(tag)]);
+    },
+
+    getAssetTags(assetId) {
+      return callJson(["get-asset-tags", "--asset-id", String(assetId)]);
     },
 
     removeAssetTag(assetId, tag) {
@@ -488,6 +513,12 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     // How many photos have their dominant colours, and how many still need them.
     colorStatus() {
       return callJson(["color-status"]);
+    },
+
+    // How many photos have a thumbnail whose shape (portrait / landscape)
+    // was never read.
+    orientationStatus() {
+      return callJson(["orientation-status"]);
     },
 
     createJob(jobType, payload, { priority } = {}) {

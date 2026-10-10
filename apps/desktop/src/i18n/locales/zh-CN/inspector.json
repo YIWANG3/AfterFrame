@@ -41,7 +41,8 @@
     "modified": "修改时间",
     "gps": "GPS",
     "locationSource": "位置来源",
-    "gpsJump": "在地图上查看拍摄位置"
+    "gpsJump": "在地图上查看拍摄位置",
+    "flag": "旗标"
   },
   "missing": {
     "badge": "缺失",
@@ -99,5 +100,9 @@
     "exif": "GPS (EXIF)",
     "ai": "AI 推测",
     "manual": "手动指定"
+  },
+  "flag": {
+    "pick": "留用",
+    "reject": "排除"
   }
 }

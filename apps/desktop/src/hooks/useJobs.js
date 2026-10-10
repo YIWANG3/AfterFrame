@@ -34,6 +34,7 @@ export default function useJobs(bridgeRef) {
       else if (meta.jobType === "ai_repaint") final = await api.getAiRepaintStatus();
       else if (meta.jobType === "people_index") final = await api.getPeopleIndexStatus();
       else if (meta.jobType === "colors") final = await api.getColorsStatus();
+      else if (meta.jobType === "orientation") final = await api.getOrientationStatus();
     } catch { /* sidecar hiccup — still emit the finish event below */ }
     const cancelled = final?.status === "cancelled";
 
@@ -65,6 +66,9 @@ export default function useJobs(bridgeRef) {
       await bridge.refreshAll({ preserveView: true });
     } else if (meta.jobType === "colors") {
       if (!cancelled) bridge.colorsReady?.();
+    } else if (meta.jobType === "orientation") {
+      // The shapes reach the grid: the orientation filter and the layouts.
+      if (!cancelled) await bridge.refreshAll({ preserveView: true });
     } else if (meta.jobType === "ai_repaint") {
       // The job runner registers the repainted file as a new version asset —
       // reload so it appears in the grid without a manual refresh.

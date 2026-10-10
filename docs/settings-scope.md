@@ -16,6 +16,7 @@ app settings are the default and do not need a repeated label:
 | People | Face embeddings, groups, index progress/model version | Current Catalog | `.afcatalog/catalog.sqlite3` |
 | General | Language | Global | app `settings.json` |
 | General | Theme and panel widths | Global | renderer `localStorage` |
+| Keyboard Shortcuts | Rebound keys (overrides of `shared/shortcuts.mjs`'s defaults; the native menu's accelerators follow) | Global | `shortcuts` in app `settings.json` (web: `afterframe.shortcuts` in `localStorage`); in `.afsettings` under General |
 | AI Annotation | Provider list, active provider, behavior | Global | app `settings.json` |
 | AI Annotation | Provider credentials | Global | encrypted app `settings.json` |
 | AI Repaint | Providers, models, credentials | Global | app `settings.json` |

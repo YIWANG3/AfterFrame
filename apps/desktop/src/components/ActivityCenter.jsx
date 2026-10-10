@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import {
   Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Palette, Pause, Play,
-  CheckCircle2, XCircle, CircleSlash,
+  CheckCircle2, XCircle, CircleSlash, RectangleVertical,
 } from "lucide-react";
 
 export const JOB_META = {
@@ -19,6 +19,7 @@ export const JOB_META = {
   ai_repaint: { label: "AI Repaint", icon: Wand2 },
   people_index: { label: "People Recognition", icon: ScanFace },
   colors: { label: "Colour Analysis", icon: Palette },
+  orientation: { label: "Photo Orientation", icon: RectangleVertical },
 };
 
 // The sidecar names a job's phase in English ("Match with RAW"); its key is

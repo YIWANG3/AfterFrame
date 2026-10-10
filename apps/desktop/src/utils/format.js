@@ -253,9 +253,26 @@ export function navItems(summary) {
 
 export function galleryInfoLabel(item) {
   const imageMeta = item.image_metadata || {};
-  const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : null;
+  // As the photo shows, like Lightroom: an upright shot reads 4000 × 6000.
+  const { width, height } = displaySize(item);
+  const dimensions = width && height ? `${width} × ${height}` : null;
   const sizeLabel = formatBytes(imageMeta.file_size || imageMeta.size_bytes);
   return [dimensions, sizeLabel].filter(Boolean).join(" · ");
+}
+
+// A photo's width and height as it shows. The stored size is the pixels as
+// kept in the file, so a camera's upright shot (landscape pixels with a
+// "rotate 90°" tag) is landscape there; display_shape, read off the
+// thumbnail, says how it really shows, and turns the size round to match.
+export function displaySize(item) {
+  const meta = item?.image_metadata || {};
+  let width = Number(meta.width || 0);
+  let height = Number(meta.height || 0);
+  const shape = item?.display_shape;
+  if ((shape === "portrait" && width > height) || (shape === "landscape" && height > width)) {
+    [width, height] = [height, width];
+  }
+  return { width, height };
 }
 
 export function buildJustifiedLayout(items, containerWidth, targetHeight, gap, captionHeight = 52) {
@@ -264,9 +281,7 @@ export function buildJustifiedLayout(items, containerWidth, targetHeight, gap, c
   }
   const geometry = justifiedLayout(
     items.map((item) => {
-      const imageMeta = item.image_metadata || {};
-      const width = Number(imageMeta.width || 0);
-      const height = Number(imageMeta.height || 0);
+      const { width, height } = displaySize(item);
       return {
         width: width > 0 ? width : 1,
         height: height > 0 ? height : 1,

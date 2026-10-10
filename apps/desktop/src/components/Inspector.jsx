@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images } from "lucide-react";
-import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO } from "../utils/format";
+import { ChevronRight, Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images, Flag, FlagOff } from "lucide-react";
+import { shortcutLabel, useShortcuts } from "../shortcuts/store";
+import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO, displaySize } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
+import TagsSection from "./TagsSection";
+import DescriptionSection from "./DescriptionSection";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
@@ -27,6 +30,39 @@ function StarRating({ value = 0, onChange }) {
           />
         </button>
       ))}
+    </div>
+  );
+}
+
+// Pick / reject, as Lightroom's flags: clicking the one that is on clears it.
+function FlagControl({ value, onChange }) {
+  const { t } = useTranslation("inspector");
+  useShortcuts();
+  const current = value === 1 ? "pick" : value === -1 ? "reject" : "none";
+  const buttons = [
+    { flag: "pick", icon: Flag, on: "bg-white/90 text-black/80", key: "flag.pick" },
+    { flag: "reject", icon: FlagOff, on: "bg-[#ff8a80]/20 text-[#ff8a80]", key: "flag.reject" },
+  ];
+  return (
+    <div className="flex gap-1" data-testid="inspector-flag" data-value={current}>
+      {buttons.map(({ flag, icon: Icon, on, key }) => {
+        const active = current === flag;
+        const keys = shortcutLabel(key);
+        return (
+          <button
+            key={flag}
+            type="button"
+            aria-pressed={active}
+            data-flag-button={flag}
+            title={keys ? `${t(`flag.${flag}`)} (${keys})` : t(`flag.${flag}`)}
+            onClick={() => onChange?.(active ? "none" : flag)}
+            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] transition-colors ${active ? on : "text-muted2 hover:bg-hover hover:text-text"}`}
+          >
+            <Icon className={`h-3 w-3 ${active && flag === "pick" ? "fill-current" : ""}`} />
+            {t(`flag.${flag}`)}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -119,7 +155,7 @@ function PaletteStrip({ colors, onPick }) {
   );
 }
 
-export default function Inspector({ detail, onRatingChange, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
+export default function Inspector({ detail, onRatingChange, onFlagChange, onDescriptionChange, onAnnotated, onSelectAsset, onTagFilter, onColorFilter, onRelinked, onOpenPersonGroup, onPeopleChanged, onJumpToLocation, onLocationChanged, pushToast }) {
   const { t } = useTranslation("inspector");
   const [relinking, setRelinking] = useState(false);
   const [hoveredFaceId, setHoveredFaceId] = useState(null);
@@ -199,7 +235,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
   const rawMeta = detail.raw_metadata || {};
   const imageName = fileName(detail.image_path);
   const formatValue = (detail.image_path || "").split(".").pop()?.toUpperCase() || t("unknown");
-  const dimensions = imageMeta.width && imageMeta.height ? `${imageMeta.width} × ${imageMeta.height}` : t("unknown");
+  // As the photo shows (an upright shot is stored as landscape pixels).
+  const shown = displaySize(detail);
+  const dimensions = shown.width && shown.height ? `${shown.width} × ${shown.height}` : t("unknown");
   const fileSize = formatBytes(imageMeta.file_size || imageMeta.size_bytes) || t("unknown");
 
   // The catalog's rating only. Import already seeded it from the stars the
@@ -357,6 +395,9 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
                 onChange={(next) => onRatingChange?.(next)}
               />
             </DetailRow>
+            <DetailRow label={t("rows.flag")}>
+              <FlagControl value={detail.app_flag} onChange={(next) => onFlagChange?.(next)} />
+            </DetailRow>
             <DetailRow label={t("rows.dimensions")}>{dimensions}</DetailRow>
             {isVideo && videoDuration ? <DetailRow label={t("rows.duration")}>{videoDuration}</DetailRow> : null}
             <DetailRow label={t("rows.size")}>{fileSize}</DetailRow>
@@ -366,12 +407,22 @@ export default function Inspector({ detail, onRatingChange, onSelectAsset, onTag
             ) : null}
           </Section>
 
+          <DescriptionSection
+            assetId={detail.asset_id}
+            description={detail.description}
+            source={detail.description_source}
+            aiCaption={detail.ai_caption}
+            onSave={(text) => onDescriptionChange?.(text)}
+          />
+
+          <TagsSection assetId={detail.asset_id} onTagClick={onTagFilter} pushToast={pushToast} />
+
           <AnnotationsSection
             assetId={detail.asset_id}
             imagePath={detail.image_path || detail.image_preview_path || detail.raw_preview_path}
-            onTagClick={onTagFilter}
             onJumpToLocation={onJumpToLocation}
             onLocationChanged={onLocationChanged}
+            onAnnotated={onAnnotated}
             pushToast={pushToast}
           />
 

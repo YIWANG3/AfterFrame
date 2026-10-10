@@ -3,7 +3,8 @@
     "ai": "AI",
     "description": "描述",
     "tags": "标签",
-    "location": "位置"
+    "location": "位置",
+    "aiAnalysis": "AI 分析"
   },
   "badge": {
     "ai": "AI",
@@ -49,5 +50,27 @@
     "addTagFailed": "无法添加标签",
     "removeTagFailed": "无法移除标签",
     "failedFallback": "失败"
+  },
+  "batch": {
+    "title_one": "给 {{count}} 张照片添加标签",
+    "title_other": "给 {{count}} 张照片添加标签",
+    "hint": "照片原有的标签会保留。",
+    "placeholder": "输入标签后按回车",
+    "existing": "图库中的标签",
+    "removeTag": "移除 {{tag}}",
+    "cancel": "取消",
+    "apply": "添加"
+  },
+  "noTags": "还没有标签",
+  "analyzedWith": "{{model}} · {{date}}",
+  "keepsYours": "生成的描述和标签已在上方；你写的、加的，重新分析不会覆盖。",
+  "detectedText": "图中文字",
+  "description": {
+    "add": "添加描述…",
+    "edit": "点击修改",
+    "aiHint": "AI 生成，点击修改；保存后就是你的",
+    "placeholder": "描述一下这张照片…",
+    "keys": "回车保存 · Shift+回车换行 · Esc 取消",
+    "useAi": "改用 AI 的描述"
   }
 }

@@ -188,16 +188,35 @@ def _rating(filters: dict) -> list[Clause]:
     return out
 
 
-_ORIENTATION_SQL = {
-    "portrait": "assets.meta_height > assets.meta_width",
-    "landscape": "assets.meta_width > assets.meta_height",
-    "square": "(assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL)",
+_FLAG_SQL = {
+    "pick": "assets.app_flag = 1",
+    "reject": "assets.app_flag = -1",
+    # Never flagged is NULL, a cleared flag 0: both are "no flag".
+    "none": "COALESCE(assets.app_flag, 0) = 0",
 }
 
 
-def _orientation(filters: dict) -> list[Clause]:
-    picked = [_ORIENTATION_SQL[v] for v in _values(filters.get("orientation")) if v in _ORIENTATION_SQL]
+def _flag(filters: dict) -> list[Clause]:
+    picked = [_FLAG_SQL[v] for v in _values(filters.get("flag")) if v in _FLAG_SQL]
     return [("(" + " OR ".join(picked) + ")", [])] if picked else []
+
+
+# How the photo shows (assets.display_shape, read off its thumbnail); until
+# that's known, its stored size — which misreads a camera's upright shots
+# (landscape pixels with a "rotate 90°" tag), hence the shape first.
+_SHOWN_SHAPE = (
+    "COALESCE(NULLIF(assets.display_shape, ''), CASE"
+    " WHEN assets.meta_height > assets.meta_width THEN 'portrait'"
+    " WHEN assets.meta_width > assets.meta_height THEN 'landscape'"
+    " WHEN assets.meta_width = assets.meta_height AND assets.meta_width IS NOT NULL THEN 'square'"
+    " END)"
+)
+_ORIENTATIONS = ("portrait", "landscape", "square")
+
+
+def _orientation(filters: dict) -> list[Clause]:
+    picked = [v for v in _values(filters.get("orientation")) if v in _ORIENTATIONS]
+    return [_in(_SHOWN_SHAPE, picked)] if picked else []
 
 
 def _asset_type(filters: dict) -> list[Clause]:
@@ -370,6 +389,7 @@ FACETS: tuple[Facet, ...] = (
     _range_facet("shutter", "meta_shutter"),
     Facet("capture_time", ("date_from", "date_to", "date_within_days"), _capture_time),
     Facet("rating", ("rating_min", "rating_max"), _rating),
+    Facet("flag", ("flag",), _flag),
     Facet("orientation", ("orientation",), _orientation),
     Facet("asset_type", ("asset_type",), _asset_type),
     Facet("tag", ("tag", "tag_match"), _tag, modifiers=("tag_match",)),
@@ -381,7 +401,8 @@ FACETS: tuple[Facet, ...] = (
     _place_facet("country", "country_code", upper=True),
     _place_facet("city", "city_en"),
     Facet("color", ("color", "color_tolerance"), _color, modifiers=("color_tolerance",)),
-    _contains_facet("caption_contains", "(SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
+    # The description as shown: the user's, else the AI's caption.
+    _contains_facet("caption_contains", "CASE WHEN assets.user_description IS NOT NULL THEN assets.user_description ELSE (SELECT ann.caption FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id) END"),
     _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),
     Facet("geo", ("geo",), _geo),

@@ -10,6 +10,9 @@ import {
   facetScopeOf,
   filterItemsByQuery,
   hasRefinement,
+  rejectedFilters,
+  scopeSelectsByFlag,
+  scopeSelectsByTag,
   isNarrowedScope,
   rulesDirty,
   rulesFromScope,
@@ -121,6 +124,35 @@ describe("detailIsStale", () => {
   it("has nothing to compare for a photo shown from outside the grid, or none", () => {
     expect(detailIsStale(detail, [item("p2")])).toBe(false);
     expect(detailIsStale(null, [row()])).toBe(false);
+  });
+});
+
+describe("scopeSelectsByFlag / scopeSelectsByTag", () => {
+  const scope = (extra) => ({ ...DEFAULT_SCOPE, ...extra });
+
+  it("finds the condition in the bar, an any-of group or a smart collection's rules", () => {
+    expect(scopeSelectsByFlag(scope({ filters: { flag: "reject" } }))).toBe(true);
+    expect(scopeSelectsByFlag(scope({ filters: { any_of: [{ flag: ["pick", "none"] }] } }))).toBe(true);
+    expect(scopeSelectsByFlag(scope({ base: { status: "all", filters: {}, base: { status: "all", filters: { flag: "pick" } } } }))).toBe(true);
+    expect(scopeSelectsByTag(scope({ filters: { tag: ["trip"] } }))).toBe(true);
+  });
+
+  it("ignores views that don't pick by it", () => {
+    expect(scopeSelectsByFlag(DEFAULT_SCOPE)).toBe(false);
+    expect(scopeSelectsByFlag(scope({ filters: { flag: [] , tag: "trip" } }))).toBe(false);
+    expect(scopeSelectsByTag(scope({ filters: { flag: "pick" } }))).toBe(false);
+  });
+});
+
+describe("rejectedFilters", () => {
+  it("keeps the view's conditions and asks for the rejects", () => {
+    expect(rejectedFilters({ camera: "X", flag: "pick" })).toEqual({ camera: "X", flag: "reject" });
+    expect(rejectedFilters(undefined)).toEqual({ flag: "reject" });
+  });
+
+  it("stops excluding the flag, and only the flag", () => {
+    expect(rejectedFilters({ flag: "reject", exclude: ["flag"] })).toEqual({ flag: "reject" });
+    expect(rejectedFilters({ tag: "x", exclude: ["flag", "tag"] })).toEqual({ tag: "x", flag: "reject", exclude: ["tag"] });
   });
 });
 

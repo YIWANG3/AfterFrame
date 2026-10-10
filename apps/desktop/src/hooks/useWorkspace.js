@@ -2,12 +2,13 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useTranslation } from "react-i18next";
 import { collapseRootPaths, mergeRoots, determineImportMode, fileName } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
+import { invalidateTags, seedTags } from "../components/annotation/tagStore";
 import api from "../api";
 import useJobs from "./useJobs";
 import { oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
   DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
-  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, sortOutsideFolder,
+  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, scopeSelectsByFlag, scopeSelectsByTag, rejectedFilters, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
@@ -22,6 +23,9 @@ const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
 // catalog switch lands, on All Assets in the order last picked.
 const SORT_PREF = "gallery.sort";
 const startScope = () => ({ ...DEFAULT_SCOPE, sort: readPref(SORT_PREF, DEFAULT_SCOPE.sort, oneOf(LIBRARY_SORTS)) });
+
+// What a flag is stored as (sidecar db/assets.py FLAG_VALUES).
+const FLAG_VALUES = { pick: 1, reject: -1, none: 0 };
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
@@ -361,6 +365,7 @@ export default function useWorkspace({ pushToast } = {}) {
       if (browserRequestIdRef.current !== requestId) return;
       loadedScopeRef.current = scopeKeyOf(target);
       seedAnnotations(payload);
+      seedTags(payload);
       setBrowserOffset(nextOffset + payload.length);
       setBrowserHasMore(payload.length === (append ? PAGE_SIZE : pageLimit));
       if (append) {
@@ -430,6 +435,7 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     if (revealRef.current) return;
     invalidateAnnotations();
+    invalidateTags();
     void refreshBrowse();
     // Smart collection counts are live queries over the assets.
     void loadCollections();
@@ -549,6 +555,7 @@ export default function useWorkspace({ pushToast } = {}) {
       installLoadedScope(target);
       if (resetScope) pushToast?.({ title: t("relatedAsset.showingAll"), ttl: 4000 });
       seedAnnotations(payload);
+      seedTags(payload);
       setItems(nextItems);
       setRevealAssetRequest(request);
       setBrowserOffset(offset + payload.length);
@@ -605,6 +612,7 @@ export default function useWorkspace({ pushToast } = {}) {
         return { found, missing: [...wanted] };
       }
       seedAnnotations(collected);
+      seedTags(collected);
       setItems(appendPage([], collected));
       setBrowserOffset(offset);
       setBrowserHasMore(lastPageFull);
@@ -821,6 +829,10 @@ export default function useWorkspace({ pushToast } = {}) {
 
     try {
       await api.setAssetRating(targetIds, nextRating);
+      // A detail asked for just before the key press (click, then a number
+      // at once) answers after the change was shown, with the old rating:
+      // the sidecar takes requests in order. Show the change again.
+      applyRating(() => nextRating);
       // A rating is the most common smart-collection condition.
       if (collections.some((c) => c.kind === "smart")) void loadCollections();
       // In a view that selects by rating, a photo that no longer qualifies
@@ -843,6 +855,124 @@ export default function useWorkspace({ pushToast } = {}) {
     }
     // Ratings order cluster covers on the map — invalidate its point cache.
     bumpCatalogRevision();
+  }
+
+  // Pick / reject / none, as Lightroom's P / X / U. Optimistic, like the
+  // rating: the tiles change at once and go back if the write fails.
+  async function setAssetFlag(assetIds, flag) {
+    const value = FLAG_VALUES[flag];
+    if (value === undefined) return;
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    if (!targetIds.length) return;
+    const targetSet = new Set(targetIds);
+    const previousFlags = new Map();
+    for (const item of items) {
+      if (targetSet.has(item.asset_id)) previousFlags.set(item.asset_id, item.app_flag ?? null);
+    }
+    if (detail && targetSet.has(detail.asset_id) && !previousFlags.has(detail.asset_id)) {
+      previousFlags.set(detail.asset_id, detail.app_flag ?? null);
+    }
+    const applyFlag = (resolve) => {
+      setItems((current) =>
+        current.map((item) => (targetSet.has(item.asset_id)
+          ? { ...item, app_flag: resolve(item.asset_id, item.app_flag) }
+          : item)),
+      );
+      setDetail((current) => (current && targetSet.has(current.asset_id)
+        ? { ...current, app_flag: resolve(current.asset_id, current.app_flag) }
+        : current));
+    };
+    applyFlag(() => value);
+    try {
+      await api.setAssetFlag(targetIds, flag);
+      // As for the rating: a detail asked for just before is answered first.
+      applyFlag(() => value);
+      if (collections.some((c) => c.kind === "smart")) void loadCollections();
+      // In a view that picks by flag ("rejected" while culling), a photo that
+      // no longer qualifies leaves the grid now.
+      if (scopeSelectsByFlag(scopeRef.current) && !revealRef.current) void refreshBrowse();
+    } catch (error) {
+      applyFlag((assetId, current) => (previousFlags.has(assetId) ? previousFlags.get(assetId) : current));
+      pushToast?.({
+        title: t("flagFailed"),
+        message: String(error?.message || error),
+        tone: "error",
+        ttl: 6000,
+      });
+      return;
+    }
+    bumpCatalogRevision();
+  }
+
+  // The description the user writes (Inspector), shown at once. "" leaves
+  // it empty (their choice); null hands it back to the AI's caption.
+  async function setAssetDescription(assetIds, text) {
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    if (!targetIds.length) return false;
+    const targetSet = new Set(targetIds);
+    const value = text === null ? null : String(text || "").trim();
+    const shown = (record) => {
+      const ai = (record.ai_caption || record.annotation?.caption || "").trim();
+      return value !== null
+        ? { description: value || null, description_source: "user" }
+        : { description: ai || null, description_source: ai ? "ai" : null };
+    };
+    const previous = new Map();
+    for (const item of items) if (targetSet.has(item.asset_id)) previous.set(item.asset_id, { description: item.description ?? null, description_source: item.description_source ?? null });
+    if (detail && targetSet.has(detail.asset_id) && !previous.has(detail.asset_id)) {
+      previous.set(detail.asset_id, { description: detail.description ?? null, description_source: detail.description_source ?? null });
+    }
+    const apply = (resolve) => {
+      setItems((current) => current.map((item) => (targetSet.has(item.asset_id) ? { ...item, ...resolve(item) } : item)));
+      setDetail((current) => (current && targetSet.has(current.asset_id) ? { ...current, ...resolve(current) } : current));
+    };
+    apply(shown);
+    try {
+      await api.setAssetDescription(targetIds, value);
+    } catch (error) {
+      apply((record) => previous.get(record.asset_id) || {});
+      pushToast?.({ title: t("descriptionFailed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
+      return false;
+    }
+    if (scopeRef.current.query?.trim() || scopeRef.current.filters?.caption_contains) {
+      if (!revealRef.current) void refreshBrowse();
+    }
+    bumpCatalogRevision();
+    return true;
+  }
+
+  // The gallery's "Add Tags…": every tag onto every photo, in one write. The
+  // Inspector's tags, the tag filter's options and a view that selects by
+  // tag all follow.
+  async function addTagsToAssets(assetIds, tags) {
+    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
+    const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
+    if (!targetIds.length || !clean.length) return null;
+    const result = await api.addAssetTags(targetIds, clean);
+    invalidateTags(targetIds);
+    loadFacetValues();
+    if (collections.some((c) => c.kind === "smart")) void loadCollections();
+    if (scopeSelectsByTag(scopeRef.current) && !revealRef.current) void refreshBrowse();
+    bumpCatalogRevision();
+    return result;
+  }
+
+  // The rejected photos of the view on screen (its folder, search and
+  // filters; the flag condition becomes "rejected"), every page of them —
+  // what "Delete Rejected Photos…" acts on. Only ids and paths.
+  async function collectRejected() {
+    const scope = scopeRef.current;
+    const filters = rejectedFilters(scope.filters);
+    const search = scope.query.trim() || undefined;
+    const rows = [];
+    for (let offset = 0; ; offset += 500) {
+      const page = scope.collectionId
+        ? await api.browseCollection(scope.collectionId, { limit: 500, offset, search, filters, sort: scope.sort || undefined })
+        : await api.browseImages({ status: scope.status, limit: 500, offset, search, filters, base: scope.base || undefined, sort: scope.sort || undefined });
+      for (const row of page || []) rows.push({ asset_id: row.asset_id, image_path: row.image_path });
+      if (!page || page.length < 500) break;
+    }
+    return rows;
   }
 
   // ── scope changes: each one is a write to `scope`; the effect browses ──
@@ -1359,5 +1489,9 @@ export default function useWorkspace({ pushToast } = {}) {
     deleteImageAssets,
     deleteImageAssetsFromDisk,
     setAssetRating,
+    setAssetFlag,
+    setAssetDescription,
+    addTagsToAssets,
+    collectRejected,
   };
 }

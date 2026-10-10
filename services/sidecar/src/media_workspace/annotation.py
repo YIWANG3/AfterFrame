@@ -301,9 +301,10 @@ def merge_with_existing_tags(connection: sqlite3.Connection, raw_tags: list[str]
         if not norm:
             continue
         canonical = by_norm.get(norm, raw.strip())
-        if canonical in seen:
+        # One per tag whatever the case: "Trip" and "trip" are the same tag.
+        if norm in seen:
             continue
-        seen.add(canonical)
+        seen.add(norm)
         out.append(canonical)
     return out
 
@@ -641,7 +642,10 @@ def get_annotation(connection: sqlite3.Connection, asset_id: str) -> dict[str, A
         "model": row["model"],
         "schema_version": row["schema_version"],
         "caption": row["caption"],
-        "tags": json.loads(row["tags_json"] or "[]"),
+        # The photo's tags, hand-added and AI alike (asset_tags); ai_tags is
+        # what the last annotation run proposed.
+        "tags": get_asset_tags(connection, asset_id),
+        "ai_tags": json.loads(row["tags_json"] or "[]"),
         "location": effective_location(row["metadata_json"], json.loads(row["location_json"]) if row["location_json"] else None),
         "detected_text": row["detected_text"],
         "created_at": row["created_at"],
@@ -673,62 +677,93 @@ def clear_ai_location(connection: sqlite3.Connection, asset_id: str) -> dict[str
     return get_annotation(connection, asset_id)
 
 
-def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, source: str = "user", commit: bool = True) -> dict[str, Any] | None:
-    """Manually add a tag to an asset. Keeps tags_json (display) and asset_tags
-    (search/filter) in sync. Creates a minimal annotation row if none exists."""
-    tag = (tag or "").strip()
-    if not tag:
-        return get_annotation(connection, asset_id)
-    now = datetime.now(UTC).isoformat()
+# ── A photo's tags ───────────────────────────────────────────────────────────
+#
+# One list per photo, in asset_tags: what the user typed and what an
+# annotation run proposed, each row saying which (source 'user' / 'ai').
+# Search, the tag filter, the Inspector and MCP all read it. A run replaces
+# its own earlier proposals and never touches the user's; a tag the user adds
+# that the AI had proposed becomes theirs. asset_ai_annotations.tags_json is
+# only the record of what the last run proposed.
+
+def get_asset_tags(connection: sqlite3.Connection, asset_id: str) -> list[str]:
+    """The photo's tags, in the order they were put on it."""
+    rows = connection.execute(
+        "SELECT tag FROM asset_tags WHERE asset_id = ? ORDER BY created_at, rowid", (asset_id,)
+    ).fetchall()
+    return [row["tag"] for row in rows]
+
+
+def _put_user_tag(connection: sqlite3.Connection, asset_id: str, tag: str, now: str) -> None:
+    """`tag` (already in the library's spelling) onto the photo as the user's.
+    One the photo has in another case is that one, made the user's."""
     norm = normalize_tag(tag)
-    connection.execute(
-        "INSERT OR IGNORE INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, ?, ?)",
-        (asset_id, tag, source, now),
-    )
-    row = connection.execute("SELECT tags_json FROM asset_ai_annotations WHERE asset_id = ?", (asset_id,)).fetchone()
-    if row is not None:
-        tags = json.loads(row["tags_json"] or "[]")
-        if norm not in {normalize_tag(t) for t in tags}:
-            tags.append(tag)
-            connection.execute(
-                "UPDATE asset_ai_annotations SET tags_json = ?, updated_at = ? WHERE asset_id = ?",
-                (json.dumps(tags, ensure_ascii=False), now, asset_id),
-            )
+    rows = connection.execute("SELECT tag FROM asset_tags WHERE asset_id = ?", (asset_id,)).fetchall()
+    same = next((row["tag"] for row in rows if normalize_tag(row["tag"]) == norm), None)
+    if same is not None:
+        connection.execute("UPDATE asset_tags SET source = 'user' WHERE asset_id = ? AND tag = ?", (asset_id, same))
     else:
         connection.execute(
-            """
-            INSERT INTO asset_ai_annotations
-                (asset_id, provider, model, schema_version, caption, tags_json,
-                 location_json, detected_text, raw_response, created_at, updated_at)
-            VALUES (?, 'user', 'manual', ?, '', ?, NULL, NULL, NULL, ?, ?)
-            """,
-            (asset_id, ANNOTATION_SCHEMA_VERSION, json.dumps([tag], ensure_ascii=False), now, now),
+            "INSERT INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, 'user', ?)",
+            (asset_id, tag, now),
         )
-    if commit:
-        connection.commit()
-    return get_annotation(connection, asset_id)
 
 
-def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any] | None:
-    """Remove a tag from an asset (both tags_json and asset_tags)."""
+def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any]:
+    """A tag onto a photo by hand. It makes no annotation row: a hand-tagged
+    photo is still one AI hasn't described, so "annotate missing" still
+    takes it and the "AI annotated" filter doesn't count it."""
     tag = (tag or "").strip()
-    if not tag:
-        return get_annotation(connection, asset_id)
-    norm = normalize_tag(tag)
-    connection.execute(
-        "DELETE FROM asset_tags WHERE asset_id = ? AND LOWER(TRIM(tag)) = ?",
-        (asset_id, norm),
-    )
-    row = connection.execute("SELECT tags_json FROM asset_ai_annotations WHERE asset_id = ?", (asset_id,)).fetchone()
-    if row is not None:
-        tags = [t for t in json.loads(row["tags_json"] or "[]") if normalize_tag(t) != norm]
-        connection.execute(
-            "UPDATE asset_ai_annotations SET tags_json = ?, updated_at = ? WHERE asset_id = ?",
-            (json.dumps(tags, ensure_ascii=False), datetime.now(UTC).isoformat(), asset_id),
-        )
+    if tag:
+        spelled = merge_with_existing_tags(connection, [tag])
+        if spelled:
+            _put_user_tag(connection, asset_id, spelled[0], datetime.now(UTC).isoformat())
     if commit:
         connection.commit()
-    return get_annotation(connection, asset_id)
+    return {"asset_id": asset_id, "tags": get_asset_tags(connection, asset_id)}
+
+
+def add_asset_tags(connection: sqlite3.Connection, asset_ids: list[str], tags: list[str]) -> dict[str, Any]:
+    """Add every tag to every asset in one transaction (the gallery's batch
+    "Add Tags…"). Ids the catalog doesn't hold are skipped, not created."""
+    # The library's spelling for each, looked up once, duplicates folded.
+    clean = merge_with_existing_tags(connection, [(tag or "").strip() for tag in tags or []])
+    wanted = list(dict.fromkeys(a for a in asset_ids or [] if a))
+    known = {
+        row["asset_id"]
+        for start in range(0, len(wanted), 500)
+        for row in connection.execute(
+            f"SELECT asset_id FROM assets WHERE asset_id IN ({','.join('?' * len(wanted[start:start + 500]))})",
+            wanted[start:start + 500],
+        )
+    } if wanted else set()
+    updated = [a for a in wanted if a in known]
+    if clean:
+        now = datetime.now(UTC).isoformat()
+        for asset_id in updated:
+            for tag in clean:
+                _put_user_tag(connection, asset_id, tag, now)
+        connection.commit()
+    return {
+        "ok": True,
+        "asset_ids": updated,
+        "tags": clean,
+        "missing": [a for a in wanted if a not in known],
+    }
+
+
+def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any]:
+    """Take a tag off a photo, whoever put it there."""
+    tag = (tag or "").strip()
+    if tag:
+        norm = normalize_tag(tag)
+        rows = connection.execute("SELECT tag FROM asset_tags WHERE asset_id = ?", (asset_id,)).fetchall()
+        for row in rows:
+            if normalize_tag(row["tag"]) == norm:
+                connection.execute("DELETE FROM asset_tags WHERE asset_id = ? AND tag = ?", (asset_id, row["tag"]))
+    if commit:
+        connection.commit()
+    return {"asset_id": asset_id, "tags": get_asset_tags(connection, asset_id)}
 
 
 def list_top_tags(connection: sqlite3.Connection, limit: int = TAG_REUSE_HINT_LIMIT) -> list[str]:

@@ -67,6 +67,8 @@ from .db import (
     request_job_pause,
     request_job_resume,
     set_app_setting,
+    set_asset_description,
+    set_asset_flag,
     set_asset_rating,
     set_catalog_path,
     set_person_group_cover,
@@ -87,6 +89,7 @@ from .job_runner import (
     run_colors_job,
     run_enrichment_job,
     run_import_job,
+    run_orientation_job,
     run_people_index_job,
     run_preview_job,
 )
@@ -184,6 +187,39 @@ def _serve_loop(args) -> int:
     return 0
 
 
+def _row_tags(row) -> list[str]:
+    """The photo's tags from a browse/detail row (asset_tags, both sources)."""
+    try:
+        return [tag for tag in json.loads(row["asset_tags_json"] or "[]") if tag]
+    except (IndexError, KeyError, ValueError):
+        return []
+
+
+def _row_description(row) -> tuple[str | None, str | None]:
+    """The photo's description as shown, and whose: the user's if they wrote
+    one, else the AI's caption. (None, None) when there is neither."""
+    try:
+        user = row["user_description"]
+        ai = (row["ai_caption"] or "").strip()
+    except (IndexError, KeyError):
+        return None, None
+    if user is not None:
+        return (user.strip() or None), "user"  # an empty one is theirs too
+    if ai:
+        return ai, "ai"
+    return None, None
+
+
+def _description_fields(row) -> dict:
+    text, source = _row_description(row)
+    try:
+        ai = (row["ai_caption"] or "").strip() or None
+    except (IndexError, KeyError):
+        ai = None
+    # ai_caption: what shows again if the user clears theirs.
+    return {"description": text, "description_source": source, "ai_caption": ai}
+
+
 def _annotation_from_row(row) -> dict | None:
     """Inline annotation payload for browse rows (same shape as get-annotation).
 
@@ -199,7 +235,9 @@ def _annotation_from_row(row) -> dict | None:
         "model": row["anno_model"],
         "schema_version": row["anno_schema_version"],
         "caption": row["anno_caption"],
-        "tags": json.loads(row["anno_tags_json"] or "[]"),
+        # The photo's tags (hand-added and AI alike); ai_tags is what the run proposed.
+        "tags": _row_tags(row),
+        "ai_tags": json.loads(row["anno_tags_json"] or "[]"),
         "location": effective_location(row["image_metadata_json"], json.loads(row["anno_location_json"]) if row["anno_location_json"] else None),
         "detected_text": row["anno_detected_text"],
         "created_at": row["anno_created_at"],
@@ -435,6 +473,15 @@ def build_parser() -> argparse.ArgumentParser:
     set_rating.add_argument("--asset-id", action="append", required=True)
     set_rating.add_argument("--rating", type=int, choices=[0, 1, 2, 3, 4, 5], required=True)
 
+    set_description = subparsers.add_parser("set-asset-description", parents=[common])
+    set_description.add_argument("--asset-id", action="append", required=True)
+    set_description.add_argument("--text", default="", help="empty leaves it empty, AI caption or not")
+    set_description.add_argument("--reset", action="store_true", help="hand it back to the AI's caption")
+
+    set_flag = subparsers.add_parser("set-asset-flag", parents=[common])
+    set_flag.add_argument("--asset-id", action="append", required=True)
+    set_flag.add_argument("--flag", choices=["pick", "reject", "none"], required=True)
+
     browse_col = subparsers.add_parser("browse-collection", parents=[common])
     browse_col.add_argument("--collection-id", required=True)
     browse_col.add_argument("--limit", type=int, default=120)
@@ -502,7 +549,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
     create_job_parser.add_argument("--priority", type=int, default=50)
 
@@ -510,7 +557,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
@@ -531,7 +578,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list-active-jobs", parents=[common])
 
     list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
     list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
@@ -601,6 +648,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_preview_job_parser.add_argument("--limit", type=int)
     run_preview_job_parser.add_argument("--force", action="store_true")
     run_preview_job_parser.add_argument("--skip-colors", action="store_true", help="do not extract dominant colours")
+
+    run_orientation_job_parser = subparsers.add_parser("run-orientation-job", parents=[common])
+    run_orientation_job_parser.add_argument("--job-id", required=True)
+    subparsers.add_parser("orientation-status", parents=[common])
 
     run_colors_job_parser = subparsers.add_parser("run-colors-job", parents=[common])
     run_colors_job_parser.add_argument("--job-id", required=True)
@@ -734,6 +785,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_tag_p = subparsers.add_parser("add-asset-tag", parents=[common])
     add_tag_p.add_argument("--asset-id", required=True)
     add_tag_p.add_argument("--tag", required=True)
+
+    # Several photos, several tags, one write: the gallery's "Add Tags…".
+    add_tags_p = subparsers.add_parser("add-asset-tags", parents=[common])
+    add_tags_p.add_argument("--asset-id", action="append", required=True)
+    add_tags_p.add_argument("--tag", action="append", required=True)
+
+    get_tags_p = subparsers.add_parser("get-asset-tags", parents=[common])
+    get_tags_p.add_argument("--asset-id", required=True)
 
     remove_tag_p = subparsers.add_parser("remove-asset-tag", parents=[common])
     remove_tag_p.add_argument("--asset-id", required=True)
@@ -1269,6 +1328,19 @@ def _cmd_add_asset_tag(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_get_asset_tags(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    print(json.dumps({"asset_id": args.asset_id, "tags": _annotation.get_asset_tags(connection, args.asset_id)}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_add_asset_tags(args, connection, catalog, parser):
+    from . import annotation as _annotation
+    result = _annotation.add_asset_tags(connection, args.asset_id, args.tag)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
 def _cmd_remove_asset_tag(args, connection, catalog, parser):
     from . import annotation as _annotation
     payload = _annotation.remove_asset_tag(connection, args.asset_id, args.tag)
@@ -1505,6 +1577,18 @@ def _cmd_run_preview_job(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_run_orientation_job(args, connection, catalog, parser):
+    print(json.dumps(run_orientation_job(connection, catalog.root, args.job_id), indent=2))
+    return 0
+
+
+def _cmd_orientation_status(args, connection, catalog, parser):
+    from .db import count_assets_missing_display_shape
+
+    print(json.dumps({"missing": count_assets_missing_display_shape(connection)}))
+    return 0
+
+
 def _cmd_run_colors_job(args, connection, catalog, parser):
     print(json.dumps(run_colors_job(connection, catalog.root, args.job_id, limit=args.limit, force=args.force), indent=2))
     return 0
@@ -1728,6 +1812,10 @@ def _cmd_browse_images(args, connection, catalog, parser):
                 "image_path": row["image_path"],
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
+                "app_flag": row["app_flag"],
+                "display_shape": row["display_shape"] or None,
+                "tags": _row_tags(row),
+                **_description_fields(row),
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -1917,6 +2005,10 @@ def _cmd_asset_detail(args, connection, catalog, parser):
         "image_path": row["image_path"],
         "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
         "app_rating": row["app_rating"],
+        "app_flag": row["app_flag"],
+        "display_shape": row["display_shape"] or None,
+        "tags": _row_tags(row),
+        **_description_fields(row),
         "exists_on_disk": present,
         "imported_at": row["imported_at"],
         "match_status": row["match_status"],
@@ -2339,6 +2431,19 @@ def _cmd_set_asset_rating(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_set_asset_description(args, connection, catalog, parser):
+    updated = set_asset_description(connection, args.asset_id, None if args.reset else args.text)
+    text = None if args.reset else (args.text or "").strip() or None
+    print(json.dumps({"ok": True, "asset_ids": args.asset_id, "description": text, "reset": bool(args.reset), "updated": updated}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_set_asset_flag(args, connection, catalog, parser):
+    updated = set_asset_flag(connection, args.asset_id, args.flag)
+    print(json.dumps({"ok": True, "asset_ids": args.asset_id, "flag": args.flag, "updated": updated}))
+    return 0
+
+
 def _cmd_browse_collection(args, connection, catalog, parser):
     payload = []
     rows = browse_collection(
@@ -2361,6 +2466,10 @@ def _cmd_browse_collection(args, connection, catalog, parser):
                 "image_path": row["image_path"],
                 "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
                 "app_rating": row["app_rating"],
+                "app_flag": row["app_flag"],
+                "display_shape": row["display_shape"] or None,
+                "tags": _row_tags(row),
+                **_description_fields(row),
                 "exists_on_disk": present,
                 "source_changed": source_changed,
                 "imported_at": row["imported_at"],
@@ -2402,6 +2511,8 @@ COMMAND_HANDLERS = {
     "annotation-count": _cmd_annotation_count,
     "get-annotation": _cmd_get_annotation,
     "add-asset-tag": _cmd_add_asset_tag,
+    "add-asset-tags": _cmd_add_asset_tags,
+    "get-asset-tags": _cmd_get_asset_tags,
     "remove-asset-tag": _cmd_remove_asset_tag,
     "list-tags": _cmd_list_tags,
     "init-catalog": _cmd_init_catalog,
@@ -2431,6 +2542,8 @@ COMMAND_HANDLERS = {
     "run-enrichment-job": _cmd_run_enrichment_job,
     "run-preview-job": _cmd_run_preview_job,
     "run-colors-job": _cmd_run_colors_job,
+    "run-orientation-job": _cmd_run_orientation_job,
+    "orientation-status": _cmd_orientation_status,
     "color-status": _cmd_color_status,
     "run-people-index-job": _cmd_run_people_index_job,
     "evaluate-ground-truth": _cmd_evaluate_ground_truth,
@@ -2477,6 +2590,8 @@ COMMAND_HANDLERS = {
     "collection-add-items": _cmd_collection_add_items,
     "collection-remove-items": _cmd_collection_remove_items,
     "set-asset-rating": _cmd_set_asset_rating,
+    "set-asset-flag": _cmd_set_asset_flag,
+    "set-asset-description": _cmd_set_asset_description,
     "browse-collection": _cmd_browse_collection,
 }
 

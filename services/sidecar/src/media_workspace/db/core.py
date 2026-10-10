@@ -57,6 +57,18 @@ _LATEST_COLUMNS = [
     ("catalog_info", "place_data_version", "TEXT"),
     ("catalog_info", "colors_version", "TEXT"),
     ("assets", "app_rating", "INTEGER"),
+    # Pick / reject flag, Lightroom's: 1 picked, -1 rejected, NULL or 0 none.
+    ("assets", "app_flag", "INTEGER"),
+    # How the photo shows: portrait / landscape / square, read off its
+    # thumbnail (pixels and EXIF orientation, as the browser draws it). The
+    # file's own width/height are as stored, so a camera's upright shot
+    # (landscape pixels, "rotate 90°" tag) reads as landscape from them.
+    # '' = the thumbnail couldn't be read; NULL = not looked at yet.
+    ("assets", "display_shape", "TEXT"),
+    # The description the user wrote: it wins over the AI's caption
+    # (asset_ai_annotations.caption), which a run never writes here. NULL:
+    # they never did (the AI's shows); '' : they cleared it (nothing shows).
+    ("assets", "user_description", "TEXT"),
     ("raw_metadata_cache", "metadata_level", "TEXT NOT NULL DEFAULT 'full'"),
     ("raw_metadata_cache", "fingerprint_level", "TEXT NOT NULL DEFAULT 'head-tail'"),
     ("raw_metadata_cache", "enrichment_status", "TEXT NOT NULL DEFAULT 'done'"),
@@ -73,8 +85,11 @@ _LATEST_COLUMNS = [
 # Everything init_db brings a catalog up to, as one number: the schema version
 # and what _apply_latest_schema runs. A full init stores it in the database
 # header (PRAGMA user_version); a catalog carrying it needs no init again.
+# One-time data fixes _apply_latest_schema makes; naming a new one here brings
+# every catalog through a full init once more, so it runs.
+_DATA_FIXES = ("asset-files-backfill", "hand-tag-stand-ins")
 INIT_STAMP = zlib.crc32(
-    repr((SCHEMA_VERSION, SCHEMA_STATEMENTS, _LATEST_COLUMNS, _FACET_COLUMNS, _FACET_INDEXES)).encode()
+    repr((SCHEMA_VERSION, SCHEMA_STATEMENTS, _LATEST_COLUMNS, _FACET_COLUMNS, _FACET_INDEXES, _DATA_FIXES)).encode()
 ) & 0x7FFFFFFF
 
 
@@ -185,6 +200,7 @@ def _apply_latest_schema(connection: sqlite3.Connection) -> None:
     for table_name, column_name, column_spec in _LATEST_COLUMNS:
         _ensure_column(connection, table_name, column_name, column_spec)
     _backfill_asset_files(connection)
+    _drop_hand_tag_stand_ins(connection)
     for name, sql_type, json_path in _FACET_COLUMNS:
         _ensure_column(
             connection,
@@ -194,6 +210,36 @@ def _apply_latest_schema(connection: sqlite3.Connection) -> None:
         )
     for index_sql in _FACET_INDEXES:
         connection.execute(index_sql)
+
+
+def _drop_hand_tag_stand_ins(connection: sqlite3.Connection) -> None:
+    """Tags live in asset_tags alone now (annotation.py): the Inspector, search
+    and the filter all read it. Two things from before are put right once:
+
+    - a tag added by hand made a stand-in annotation row (provider 'user',
+      model 'manual', nothing else in it) when the photo had none, which made
+      it count as AI-annotated — "annotate missing" skipped it, the "AI
+      annotated" filter counted it. The stand-ins go;
+    - any tag an annotation's own list (tags_json) has that asset_tags lacks
+      is copied there, so no tag the Inspector used to show goes missing."""
+    rows = connection.execute(
+        "SELECT asset_id, provider, model, caption, detected_text, location_json, tags_json FROM asset_ai_annotations"
+    ).fetchall()
+    for row in rows:
+        asset_id, provider, model, caption, detected_text, location_json, tags_json = row
+        stand_in = provider == "user" and model == "manual" and not caption and detected_text is None and location_json is None
+        try:
+            tags = json.loads(tags_json or "[]")
+        except ValueError:
+            tags = []
+        for tag in tags if isinstance(tags, list) else []:
+            if isinstance(tag, str) and tag.strip():
+                connection.execute(
+                    "INSERT OR IGNORE INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                    (asset_id, tag.strip(), "user" if stand_in else "ai"),
+                )
+        if stand_in:
+            connection.execute("DELETE FROM asset_ai_annotations WHERE asset_id = ?", (asset_id,))
 
 
 def _backfill_asset_files(connection: sqlite3.Connection) -> None:

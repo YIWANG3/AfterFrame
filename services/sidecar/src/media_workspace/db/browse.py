@@ -20,6 +20,13 @@ _BROWSE_SELECT_COLUMNS = """\
             registry.image_path AS image_path,
             assets.metadata_json AS image_metadata_json,
             assets.app_rating,
+            assets.app_flag,
+            assets.display_shape,
+            (SELECT json_group_array(tags_all.tag) FROM (
+                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
+              ) AS tags_all) AS asset_tags_json,
+            assets.user_description,
+            (SELECT ai.caption FROM asset_ai_annotations AS ai WHERE ai.asset_id = assets.asset_id) AS ai_caption,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
             assets.file_size AS catalog_file_size,
@@ -162,11 +169,12 @@ def _search_clause(search: str | None) -> tuple[str, list[object]]:
     clause = (
         "AND (assets.stem LIKE ? OR registry.image_path LIKE ? "
         "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
+        "OR assets.user_description LIKE ? "
         "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
         "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
     )
     like_pattern = f"%{search}%"
-    return clause, [like_pattern] * 7
+    return clause, [like_pattern] * 8
 
 
 def _view_where(
@@ -537,6 +545,13 @@ def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sql
             assets.canonical_path AS image_path,
             assets.metadata_json AS image_metadata_json,
             assets.app_rating,
+            assets.app_flag,
+            assets.display_shape,
+            (SELECT json_group_array(tags_all.tag) FROM (
+                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
+              ) AS tags_all) AS asset_tags_json,
+            assets.user_description,
+            (SELECT ai.caption FROM asset_ai_annotations AS ai WHERE ai.asset_id = assets.asset_id) AS ai_caption,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
             registry.match_status,
@@ -609,6 +624,13 @@ def get_image_asset_detail_by_path(connection: sqlite3.Connection, image_path: s
             registry.image_path AS image_path,
             assets.metadata_json AS image_metadata_json,
             assets.app_rating,
+            assets.app_flag,
+            assets.display_shape,
+            (SELECT json_group_array(tags_all.tag) FROM (
+                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
+              ) AS tags_all) AS asset_tags_json,
+            assets.user_description,
+            (SELECT ai.caption FROM asset_ai_annotations AS ai WHERE ai.asset_id = assets.asset_id) AS ai_caption,
             assets.exists_on_disk,
             assets.created_at AS imported_at,
             registry.match_status,

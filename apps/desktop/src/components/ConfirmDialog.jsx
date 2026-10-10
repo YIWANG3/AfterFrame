@@ -7,7 +7,9 @@ import { AlertTriangle } from "lucide-react";
    the global confirm() helper (see confirm.jsx) so any component
    can request a confirmation without prop drilling. Esc cancels;
    no button is auto-focused (a destructive default would be a
-   foot-gun) so there's no stray focus ring. */
+   foot-gun) so there's no stray focus ring.
+   With `choices` ([{ id, label, danger }]) it asks which of several
+   actions to take instead: one button each, stacked, then Cancel. */
 
 export default function ConfirmDialog({
   open,
@@ -17,7 +19,9 @@ export default function ConfirmDialog({
   confirmLabel = "OK",
   cancelLabel = "Cancel",
   danger = false,
+  choices = null,
   onConfirm,
+  onChoose,
   onCancel,
 }) {
   useEffect(() => {
@@ -45,7 +49,28 @@ export default function ConfirmDialog({
           {message && <p className="mt-1.5 text-[12.5px] leading-snug text-muted">{message}</p>}
           {detail && <p className="mt-1 text-[11.5px] leading-relaxed text-muted2">{detail}</p>}
         </div>
-        <div className="mt-4 flex gap-2">
+        {choices?.length ? (
+          <div className="mt-4 flex flex-col gap-2">
+            {choices.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                data-choice={choice.id}
+                onClick={() => onChoose?.(choice.id)}
+                className={`rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors focus:outline-none ${choice.danger ? "bg-red-600 text-white hover:bg-red-500" : "border border-border bg-transparent text-text hover:bg-hover"}`}
+              >
+                {choice.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:bg-hover hover:text-text focus:outline-none"
+            >
+              {cancelLabel}
+            </button>
+          </div>
+        ) : <div className="mt-4 flex gap-2">
           <button
             type="button"
             onClick={onCancel}
@@ -60,7 +85,7 @@ export default function ConfirmDialog({
           >
             {confirmLabel}
           </button>
-        </div>
+        </div>}
       </div>
     </div>,
     document.body,
