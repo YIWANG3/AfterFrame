@@ -27,8 +27,8 @@
     "dist": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder",
     "dist:mac": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder --mac",
     "dist:mac:release": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder --mac -c.mac.notarize=true",
-    "dist:mac:intel": "npm run build:native -- --intel && npm run fetch:exiftool && npm run build:sidecar:mac -- --intel && node scripts/install-sharp-x64.mjs && npm run build && electron-builder --mac --config electron-builder.intel.cjs",
-    "dist:mac:intel:release": "npm run build:native -- --intel && npm run fetch:exiftool && npm run build:sidecar:mac -- --intel && node scripts/install-sharp-x64.mjs && npm run build && cross-env AFTERFRAME_NOTARIZE=1 electron-builder --mac --config electron-builder.intel.cjs",
+    "dist:mac:intel": "npm run build:native -- --intel && npm run fetch:exiftool && npm run build:sidecar:mac -- --intel && node scripts/install-sharp-x64.mjs && npm run build && electron-builder --mac --x64 --config electron-builder.intel.cjs",
+    "dist:mac:intel:release": "npm run build:native -- --intel && npm run fetch:exiftool && npm run build:sidecar:mac -- --intel && node scripts/install-sharp-x64.mjs && npm run build && cross-env AFTERFRAME_NOTARIZE=1 electron-builder --mac --x64 --config electron-builder.intel.cjs",
     "dist:win": "npm run fetch:exiftool && npm run fetch:ffmpeg && npm run build:sidecar && npm run build && electron-builder --win",
     "dist:linux": "npm run fetch:exiftool && npm run build:sidecar && npm run build && electron-builder --linux",
     "e2e": "npm run build && playwright test",
@@ -52,6 +52,8 @@
       "electron/**/*",
       "shared/**/*",
       "!electron/**/*.test.js",
+      "!node_modules/@img/sharp-darwin-x64/**",
+      "!node_modules/@img/sharp-libvips-darwin-x64/**",
       "licenses/**/*"
     ],
     "extraResources": [

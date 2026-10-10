@@ -18,9 +18,13 @@ module.exports = {
   extraResources: build.extraResources.map((entry) =>
     entry.to === "sidecar/media-workspace" ? { ...entry, from: "../../services/sidecar/dist-x64/media-workspace" } : entry,
   ),
-  // sharp's x64 binaries come from scripts/install-sharp-x64.mjs; the arm64
-  // ones npm installed on this Mac stay out.
-  files: [...build.files, "!node_modules/@img/sharp-darwin-arm64/**", "!node_modules/@img/sharp-libvips-darwin-arm64/**"],
+  // sharp's x64 binaries come from scripts/install-sharp-x64.mjs (the arm64
+  // build leaves them out); the arm64 ones npm installed on this Mac stay out.
+  files: [
+    ...build.files.filter((pattern) => !pattern.includes("darwin-x64")),
+    "!node_modules/@img/sharp-darwin-arm64/**",
+    "!node_modules/@img/sharp-libvips-darwin-arm64/**",
+  ],
   mac: {
     ...build.mac,
     minimumSystemVersion: MINIMUM,

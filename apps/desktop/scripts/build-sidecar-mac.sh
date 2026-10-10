@@ -39,6 +39,8 @@ if [[ "${1:-}" == "--intel" ]]; then
   ARCH="x86_64"
   CONFIG="./electron-builder.intel.cjs"
   SUFFIX="-x64"
+  arch -x86_64 /usr/bin/true 2>/dev/null \
+    || { echo "✗ The Intel sidecar needs Rosetta: softwareupdate --install-rosetta" >&2; exit 1; }
 fi
 MINIMUM="$(node -p "const c = require('$CONFIG'); (c.build || c).mac.minimumSystemVersion")"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-$MINIMUM}"

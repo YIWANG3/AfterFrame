@@ -152,8 +152,9 @@ cd apps/desktop
 npm run dist:mac:intel
 ```
 
-Output: `apps/desktop/release/AfterFrame-<version>-Intel.dmg`. It differs from the arm64 build in a
-few ways:
+Output: `apps/desktop/release/AfterFrame-<version>-Intel.dmg`. `scripts/release.sh` builds, notarizes
+and publishes it next to the arm64 DMG, so the release Mac needs Rosetta. It differs from the arm64
+build in a few ways:
 - **Locked features.** People, sticker cut-outs and depth need Apple Silicon and macOS 14, so the
   build leaves them out and `electron/capabilities.js` locks them.
 - **Slower numpy.** The sidecar is an x86_64 CPython run through Rosetta, with numpy's OpenBLAS
