@@ -16,7 +16,7 @@ AfterFrame is built for photographers who work with thousands of exported images
 
 Download the latest version from [Releases](../../releases):
 
-- **Mac:** the `.dmg`. macOS 14 or later (Apple Silicon). Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
+- **Mac:** `-arm64.dmg` for Apple Silicon on macOS 14 or later. On macOS 12 or 13, or on an Intel Mac, take `-macOS12-arm64.dmg` (Apple Silicon) or `-macOS12-Intel.dmg` (Intel): the same app without People, Scene Depth and Stickers, which need macOS 14. Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
 - **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People, Scene Depth and LUTs are in the macOS app only for now.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
@@ -52,6 +52,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
+- **Keyboard shortcuts you can rebind** in Settings → Shortcuts, the menu's included
+- Tools open on the settings you used last, after a restart too: text style, collage canvas and export, Split, LUT strength, AI styles, and the gallery's view and sort
 - **Backup & transfer** your settings to another Mac — AI provider configs, API keys and app preferences export to one passphrase-encrypted file (Settings → General), since keychain-encrypted keys do not survive a plain copy of the settings file
 - Local-first: your files stay on your drives, nothing is uploaded
 
@@ -64,13 +66,15 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
 - Star rating system (imports Lightroom XMP ratings)
+- Pick and reject flags as in Lightroom (**P** / **X** / **U**, with **Shift** to move on to the next photo), and **Delete Rejected Photos…** to take the rejects out of the library or move them to the Trash
+- **Add Tags…** (**T**) tags every selected photo at once. Your tags and the AI's share one list, and a description you write wins over the AI's caption
 - Virtual-scroll gallery that handles 10,000+ images smoothly
 
 ![Lightbox](docs/assets/en/lightbox.webp)
 
 ### Search & Filter
 - Full-text search across filename, camera/lens, and AI annotations (caption, detected text/OCR, tags) — find photos by what's actually in them
-- Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, star rating, colour (any colour, matched against each photo's dominant colours), country and city, location source, and description / text in the picture / path — combined live. Tick several values of one facet, and choose which facets sit on the bar
+- Faceted filter bar: camera and lens, ISO / aperture / focal-length ranges, capture-date range, star rating, flag, orientation (landscape / portrait / square, as the photo shows), colour (any colour, matched against each photo's dominant colours), country and city, location source, and description / text in the picture / path — combined live. Tick several values of one facet, and choose which facets sit on the bar
 - Filters refine where you are: inside a folder, the filter bar and search cover that folder, with counts to match
 - Tag filtering: click any tag in the inspector, or pick from a searchable tag list (server-side search, scales to thousands of tags)
 
@@ -202,9 +206,12 @@ npm start
 cd apps/desktop
 npm run dist:mac          # rebuild sidecar, then package + sign (Developer ID)
 npm run dist:mac:release  # also notarize — set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
+npm run dist:mac:macos12-arm64  # Apple Silicon, macOS 12+, without People, Scene Depth and Stickers
+npm run dist:mac:macos12-intel  # Intel, macOS 12+, the same
+npm run dist:mac:intel          # Intel, macOS 14+
 ```
 
-The `.dmg` will be in `apps/desktop/release/`. On macOS the sidecar step needs [uv](https://docs.astral.sh/uv/): it builds the sidecar from uv's CPython 3.12 with wheels for macOS 14, and fails if any bundled binary needs a newer macOS (see `docs/developer-setup.md`). ExifTool is fetched into `native/exiftool` by the build. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
+The `.dmg` will be in `apps/desktop/release/`, and the other builds' in `apps/desktop/release/<build>/` (`bash scripts/dist-mac-build.sh <build> --release` notarizes one). On macOS the sidecar step needs [uv](https://docs.astral.sh/uv/): it builds the sidecar from uv's CPython 3.12 with wheels for macOS 14, and fails if any bundled binary needs a newer macOS (see `docs/developer-setup.md`). ExifTool is fetched into `native/exiftool` by the build. Signing uses the Developer ID Application certificate in your keychain; `dist:mac:release` additionally uploads the build to Apple for notarization.
 
 `npm run build` updates the workspace renderer only; it does not update an
 installed `/Applications/AfterFrame.app`. To verify the actual packaged app
