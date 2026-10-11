@@ -16,7 +16,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 从 [Releases](../../releases) 下载最新版本：
 
-- **Mac**：下载 `.dmg`。需要 macOS 14 或更新版本（Apple Silicon）。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
+- **Mac**：Apple Silicon 且 macOS 14 或更新版本，下载 `-arm64.dmg`。macOS 12 或 13，或者 Intel Mac，下载 `-macOS12-arm64.dmg`（Apple Silicon）或 `-macOS12-Intel.dmg`（Intel）：功能相同，只是没有人物、场景深度和贴纸，这三项需要 macOS 14。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
 - **Windows**：下载 `-setup.exe`。需要 Windows 10 或 11（64 位）。安装包暂未签名，Windows 提示「Windows 已保护你的电脑」时，点 **更多信息**，再点 **仍要运行**。贴纸、人物、场景深度和 LUT 目前仅 macOS 版支持。
 
 ![AfterFrame — 浏览与检查](docs/assets/cn/library.webp)
@@ -52,6 +52,8 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - HEIC / HEIF 支持 — 原图按需转码为 JPEG，iPhone 照片在 Lightbox、编辑器、拼图中以全分辨率正常显示
 - 统一后台活动面板：导入、预览、标注、AI 任务的进度集中显示，随时可取消
 - 中英双语界面（English / 简体中文）—— 在 设置 → 通用 中实时切换
+- **快捷键可以自己改**：设置 → 快捷键，菜单里的也算
+- 工具打开时沿用上次的设置，重启后也一样：文字样式、拼图画布和导出、切图、LUT 强度、AI 风格，以及画廊的视图和排序
 - **备份与迁移**：把设置搬到另一台 Mac。AI 服务商配置、API 密钥和应用偏好导出为一个口令加密的文件（设置 → 通用）；密钥由本机钥匙串加密，直接拷贝设置文件到新电脑是解不开的
 - 本地优先：文件始终保留在你的硬盘上，不会上传
 
@@ -64,13 +66,15 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 - 文件夹列表可排序（自定义顺序、名称、最新、照片最多）和按名称搜索；新建的文件夹排在最上面
 - 完整元数据检查器：EXIF、相机、镜头、曝光、日期
 - 星级评分（自动导入 Lightroom XMP 评分）
+- 和 Lightroom 一样的留用 / 排除旗标（**P** / **X** / **U**，按住 **Shift** 顺便跳到下一张），**删除排除的照片…** 把排除的照片移出图库或移到废纸篓
+- **添加标签…**（**T**）一次给所有选中的照片加标签。你加的标签和 AI 的标签在同一个列表里，你写的描述优先于 AI 的描述
 - 虚拟滚动画廊，流畅处理 10,000+ 张图片
 
 ![灯箱浏览](docs/assets/cn/lightbox.webp)
 
 ### 搜索与筛选
 - 全文搜索：跨 文件名、相机/镜头、以及 AI 标注（描述、识别文字/OCR、标签）—— 按照片"内容"找图
-- Facet 筛选条：相机、镜头、ISO / 光圈 / 焦距 区间、拍摄日期范围、星级评分、颜色（任选一种颜色，按每张照片的主色匹配）、国家和城市、位置来源、描述 / 图中文字 / 路径，实时组合。同一项可多选，筛选栏上放哪些项也可自选
+- Facet 筛选条：相机、镜头、ISO / 光圈 / 焦距 区间、拍摄日期范围、星级评分、旗标、方向（横图 / 竖图 / 方图，按照片显示的样子算）、颜色（任选一种颜色，按每张照片的主色匹配）、国家和城市、位置来源、描述 / 图中文字 / 路径，实时组合。同一项可多选，筛选栏上放哪些项也可自选
 - 筛选跟着当前位置走：在文件夹里，筛选栏和搜索只作用于这个文件夹，计数也一致
 - 标签筛选：在检查面板点任意标签,或从可搜索的标签列表中选（服务端搜索,支持数千标签）
 
@@ -196,9 +200,12 @@ npm start
 cd apps/desktop
 npm run dist:mac          # 重打 sidecar，再打包 + 签名（Developer ID）
 npm run dist:mac:release  # 额外公证 —— 需设置 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
+npm run dist:mac:macos12-arm64  # Apple Silicon，macOS 12+，没有人物、场景深度和贴纸
+npm run dist:mac:macos12-intel  # Intel，macOS 12+，同上
+npm run dist:mac:intel          # Intel，macOS 14+
 ```
 
-`.dmg` 输出在 `apps/desktop/release/`。macOS 上 sidecar 步骤需要 [uv](https://docs.astral.sh/uv/)：它用 uv 的 CPython 3.12 和面向 macOS 14 的 wheel 构建 sidecar，打进去的二进制只要有一个需要更新的 macOS 就直接失败（见 `docs/developer-setup.md`）。ExifTool 由构建脚本下载到 `native/exiftool`。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
+`.dmg` 输出在 `apps/desktop/release/`，其他几种包在 `apps/desktop/release/<包名>/`（`bash scripts/dist-mac-build.sh <包名> --release` 会公证）。macOS 上 sidecar 步骤需要 [uv](https://docs.astral.sh/uv/)：它用 uv 的 CPython 3.12 和面向 macOS 14 的 wheel 构建 sidecar，打进去的二进制只要有一个需要更新的 macOS 就直接失败（见 `docs/developer-setup.md`）。ExifTool 由构建脚本下载到 `native/exiftool`。签名使用钥匙串中的 Developer ID Application 证书；`dist:mac:release` 会额外把构建上传到 Apple 公证。
 
 ## 项目结构
 
