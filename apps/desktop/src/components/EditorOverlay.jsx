@@ -376,6 +376,18 @@ export default function EditorOverlay({
   // lost, so the LUT grades what Apply made.
   const lutAvailable = api.can("lut") && api.has("listLuts");
   const itemKey = item?.asset_id ?? item?.image_path ?? null;
+  // A tool belongs to the photo it was picked on. The editor stays mounted
+  // when closed, and the reset below waits for the next photo's picture, so
+  // until then the last tool would still be current: a RAW opened after a
+  // session that ended in the LUT tool asked for Apple's render at once, and
+  // opened on it when that came back before its HD. Reopened, or on the next
+  // photo, the editor is on Crop from the first render.
+  const toolOwner = open ? itemKey : null;
+  const [toolFor, setToolFor] = useState(toolOwner);
+  if (toolFor !== toolOwner) {
+    setToolFor(toolOwner);
+    setTool("crop");
+  }
   // Per photo (keyed, so the first render of the next photo is already clean).
   const [neutralItem, setNeutralItem] = useState(null);
   const [bakedItem, setBakedItem] = useState(null);
@@ -1215,8 +1227,10 @@ export default function EditorOverlay({
     // waitForEditor({ preview: true }) waits for this — on a slow runner the
     // viewport measures late, the base snapshot lands after the test's first
     // edit, and an undo at history index 0 is a no-op (CI 19-editor-layers,
-    // 2026-09-17).
-    getEditReady: () => previewReadyRef.current && !!baseSnapshotRef.current,
+    // 2026-09-17). And reset for this photo: a reopened editor still holds
+    // the last session's preview and snapshot until its picture is decided
+    // (a RAW's HD, seconds on an Intel Mac), and an edit made then is wiped.
+    getEditReady: () => resetItemRef.current === itemKey && previewReadyRef.current && !!baseSnapshotRef.current,
     getSaving: () => saving,
     sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
       const source = sourceImageRef.current;

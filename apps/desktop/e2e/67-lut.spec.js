@@ -218,6 +218,8 @@ test.describe("LUT tool (macOS)", () => {
     await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe("Swap RB");
     await ctx.window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(async () => (await lutState()).lut, { timeout: 5_000 }).toBe(null);
+    // Closed in the LUT tool, which the RAW test below reopens after.
+    expect(await ctx.window.evaluate(() => window.__afterframeTest.getTool())).toBe("lut");
     await ctx.window.keyboard.press("Escape");
     await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
   });
@@ -250,6 +252,10 @@ test.describe("LUT tool (macOS)", () => {
     await ctx.window.keyboard.press("e");
     await expect(ctx.window.getByRole("button", { name: /^Save$/ })).toBeVisible({ timeout: 30_000 });
     await waitForEditor(ctx.window, { preview: true, previewTimeout: 90_000 });
+    // The last test closed the editor in the LUT tool: this one opens on Crop
+    // and asks nothing of Apple's engine until the LUT tool is opened.
+    expect(await ctx.window.evaluate(() => window.__afterframeTest.getTool())).toBe("crop");
+    expect(await lutState()).toMatchObject({ base: "embedded" });
     expect((await lutState()).sourcePath).not.toMatch(/raw-edit-cache/);
 
     // An edit made before the LUT tool is opened.
@@ -387,8 +393,14 @@ test.describe("LUT tool (macOS)", () => {
     expect((await lutState()).lut.name).toBe(order[1]);
     await ctx.window.getByTestId("lut-search").blur();
 
-    // The stop is recorded once the keys rest: one undo goes back to the
-    // clicked LUT, not through every one passed on the way.
+    // The stop is recorded once the keys rest (700 ms): one undo goes back to
+    // the clicked LUT, not through every one passed on the way. The keys go
+    // in one after another: a check between them takes longer than that on
+    // an Intel Mac under Rosetta, and every cell checked would be a stop.
+    await cell(order[0]).click();
+    await expectAt(order[0]);
+    for (const key of ["ArrowRight", "ArrowRight", "ArrowLeft"]) await ctx.window.keyboard.press(key);
+    await expectAt(order[1]);
     await sleep(1_000);
     await ctx.window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe(order[0]);
@@ -413,6 +425,9 @@ test.describe("LUT tool (macOS)", () => {
       return { name: pick.el.dataset.lutName, group: pick.el.dataset.lutGroupKey };
     }, dir);
     for (const [key, dir] of [["ArrowUp", -1], ["ArrowUp", -1], ["ArrowDown", 1], ["ArrowDown", 1]]) {
+      // The last stop rests first: it re-sorts Recently used, which on a slow
+      // Mac otherwise lands between reading the screen and the key press.
+      await sleep(1_000);
       const want = await below(dir);
       await ctx.window.keyboard.press(key);
       await expect(currentCell).toHaveAttribute("data-lut-name", want.name);
