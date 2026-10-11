@@ -182,8 +182,9 @@ export default function Lightbox({
   activeAssetIdRef.current = currentItem?.asset_id || null;
   detailUrlRef.current = detailUrl;
   canUseDetailRef.current = canUseDetail;
-  // Video: play the original directly (Chromium decodes h264/HEVC on macOS,
-  // HEVC only through a proxy on Windows), bypassing the image zoom/pan machinery. Falls back to the poster <img>
+  // Video: AVPlayer draws originals on macOS (including ProRes); other
+  // platforms use Chromium and a compatibility proxy when needed. Bypass
+  // the image zoom/pan machinery. Fall back to the poster <img>
   // below when the original is missing.
   const isVideo = currentItem?.asset_type === "video";
   const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.image_path : null;
@@ -722,6 +723,7 @@ export default function Lightbox({
             <VideoPlayer
               key={httpMediaUrl(proxySrc || videoSrc)}
               src={httpMediaUrl(proxySrc || videoSrc)}
+              nativePath={proxySrc ? null : videoSrc}
               onError={requestVideoProxy}
             />
             {proxyPending ? (

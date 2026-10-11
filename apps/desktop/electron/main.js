@@ -58,6 +58,7 @@ const { importDialogOptions } = require("./importDialog");
 const { catalogDialogOptions } = require("./catalogDialog");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
+const nativeVideoIpc = require("./ipc/nativeVideo");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -641,6 +642,13 @@ ipcMain.handle("app:set-menu-accelerators", (_event, on) => {
 });
 
 // Playback proxy + keyframe filmstrip — see ./ipc/video.js.
+nativeVideoIpc.register({
+  ipcMain, BrowserWindow, app, allowlist: media,
+  toggleFullscreen: appShell.toggleAppFullscreen,
+  addonPath: isPackaged
+    ? path.join(process.resourcesPath, "native", "bin", "video-player.node")
+    : path.join(rootDir, "apps", "desktop", "native", "bin", "video-player.node"),
+});
 videoIpc.register({
   ipcMain, app, allowlist: media,
   videoToolPath: isPackaged

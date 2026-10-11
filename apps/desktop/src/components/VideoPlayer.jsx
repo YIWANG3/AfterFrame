@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { topLayerOpen } from "../utils/topLayer";
+import useNativeVideo from "../hooks/useNativeVideo";
 
 // mm:ss (or h:mm:ss) for the scrubber readout.
 function fmtTime(seconds) {
@@ -15,41 +16,48 @@ function fmtTime(seconds) {
 // Custom video player — replaces Chromium's default controls with an
 // app-styled bar (play/pause, scrubber, time, volume, fullscreen). Click the
 // frame to toggle play. Used in the Lightbox for video assets.
-export default function VideoPlayer({ src, onError }) {
+export default function VideoPlayer({ src, nativePath, onError }) {
   const videoRef = useRef(null);
+  const surfaceRef = useRef(null);
   const containerRef = useRef(null);
+  const native = useNativeVideo(nativePath, surfaceRef);
+  const { enabled: nativeEnabled, togglePlay: nativeTogglePlay, seek: nativeSeek, toggleMute: nativeToggleMute, toggleFullscreen: nativeToggleFullscreen } = native;
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
 
   const togglePlay = useCallback(() => {
+    if (nativeEnabled) { nativeTogglePlay(); return; }
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play().catch(() => {});
     else v.pause();
-  }, []);
+  }, [nativeEnabled, nativeTogglePlay]);
 
   const seek = useCallback((value) => {
+    if (nativeEnabled) { nativeSeek(value); return; }
     const v = videoRef.current;
     if (!v) return;
     v.currentTime = value;
     setTime(value);
-  }, []);
+  }, [nativeEnabled, nativeSeek]);
 
   const toggleMute = useCallback(() => {
+    if (nativeEnabled) { nativeToggleMute(); return; }
     const v = videoRef.current;
     if (!v) return;
     v.muted = !v.muted;
     setMuted(v.muted);
-  }, []);
+  }, [nativeEnabled, nativeToggleMute]);
 
   const toggleFullscreen = useCallback(() => {
+    if (nativeEnabled) { nativeToggleFullscreen(); return; }
     const el = containerRef.current;
     if (!el) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else el.requestFullscreen?.().catch(() => {});
-  }, []);
+  }, [nativeEnabled, nativeToggleFullscreen]);
 
   // Spacebar toggles play while a video is open.
   useEffect(() => {
@@ -61,12 +69,15 @@ export default function VideoPlayer({ src, onError }) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [togglePlay]);
 
-  const progress = duration > 0 ? (time / duration) * 100 : 0;
+  const playback = native.enabled ? native : { playing, time, duration, muted };
+  const progress = playback.duration > 0 ? (playback.time / playback.duration) * 100 : 0;
 
   return (
     <div ref={containerRef} className="absolute inset-0 flex flex-col bg-black" onClick={(e) => e.stopPropagation()}>
-      <div className="relative min-h-0 flex-1 cursor-pointer" onClick={togglePlay}>
-        <video
+      {/* Native layers sit above Chromium: reserve the lightbox arrow gutters
+          so its DOM navigation remains visible and clickable. */}
+      <div ref={surfaceRef} data-video-engine={native.enabled ? "avplayer" : "html"} data-video-session={native.enabled ? native.session : undefined} data-video-ready={native.enabled ? String(native.ready) : undefined} className={`relative min-h-0 flex-1 cursor-pointer ${native.enabled ? "mx-16" : ""}`} onClick={togglePlay}>
+        {!native.enabled && <video
           ref={videoRef}
           key={src}
           src={src}
@@ -85,7 +96,7 @@ export default function VideoPlayer({ src, onError }) {
             // That is an error too, for which the caller has a proxy.
             if (!e.currentTarget.videoWidth) onError?.(e);
           }}
-        />
+        />}
       </div>
 
       <div
@@ -93,10 +104,10 @@ export default function VideoPlayer({ src, onError }) {
         onClick={(e) => e.stopPropagation()}
       >
         <button type="button" onClick={togglePlay} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white focus:outline-none">
-          {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
+          {playback.playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
         </button>
 
-        <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-white/70">{fmtTime(time)}</span>
+        <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-white/70">{fmtTime(playback.time)}</span>
 
         {/* Div-based bar (solid accent fill, round thumb, no border); the native
             range sits transparent on top for drag + keyboard seeking. */}
@@ -108,19 +119,19 @@ export default function VideoPlayer({ src, onError }) {
           <input
             type="range"
             min={0}
-            max={duration || 0}
+            max={playback.duration || 0}
             step={0.05}
-            value={Math.min(time, duration || 0)}
+            value={Math.min(playback.time, playback.duration || 0)}
             onChange={(e) => seek(Number(e.target.value))}
             aria-label="Seek"
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
         </div>
 
-        <span className="w-12 shrink-0 text-[11px] tabular-nums text-white/70">{fmtTime(duration)}</span>
+        <span className="w-12 shrink-0 text-[11px] tabular-nums text-white/70">{fmtTime(playback.duration)}</span>
 
         <button type="button" onClick={toggleMute} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white focus:outline-none">
-          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          {playback.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
         </button>
         <button type="button" onClick={toggleFullscreen} className="flex h-8 w-8 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white focus:outline-none">
           <Maximize2 className="h-4 w-4" />
