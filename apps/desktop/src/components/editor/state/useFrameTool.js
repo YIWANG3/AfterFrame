@@ -147,11 +147,15 @@ export function useFrameTool({ active, item, transformedPreview, normalizedCrop 
     return userDataRef.current;
   }
   // Read again on each visit to the tool and each photo opened: the editor
-  // can stay in the Frame tool from one photo to the next.
+  // can stay in the Frame tool from one photo to the next. A read is dropped
+  // when the tool is put down, so a preset applied the moment it is picked
+  // up again, before this effect has run, reads the profile anew instead of
+  // the last visit's (a camera renamed since went unseen).
   useEffect(() => {
-    if (!active) return;
+    if (!active) return undefined;
     userDataRef.current = null;
     loadUserData();
+    return () => { userDataRef.current = null; };
   }, [active, item?.asset_id]);
 
   // Library stickers a user template carries, loaded by path for the thumbnails.
