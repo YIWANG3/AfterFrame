@@ -53,8 +53,8 @@ export default function ToolRail({ tool, onSelect, t }) {
     >
       <ToolTab active={tool === "crop"} icon={Crop} label={t("overlay.tools.crop")} onClick={() => onSelect("crop")} />
       {/* macOS only for now, and hidden rather than locked elsewhere
-          (docs/lut-plan.md): the web build has no LUT library either. */}
-      {api.can("lut") && api.has("listLuts") ? (
+          (docs/lut-plan.md): Windows and the web build declare lut false. */}
+      {api.can("lut") ? (
         <ToolTab active={tool === "lut"} icon={LutGlyph} label={t("overlay.tools.lut")} onClick={() => onSelect("lut")} />
       ) : null}
       <ToolTab active={tool === "split"} icon={Columns3} label={t("overlay.tools.split")} onClick={() => onSelect("split")} />

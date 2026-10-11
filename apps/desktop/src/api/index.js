@@ -14,11 +14,11 @@ const api = {
   // Capability check — facade methods always exist, so guards that previously
   // tested `window.mediaWorkspace?.method` must ask the bridge instead.
   has: (method) => typeof bridge()[method] === "function",
-  // Coarse feature flags a bridge may declare (web bridge sets these); absent
-  // on the desktop bridge, where every capability is implied by has().
+  // The features a bridge lacks, declared false (shared/capabilities.mjs has
+  // the list), plus `web: true` in the browser build.
   get capabilities() { return bridge().capabilities || {}; },
-  // Capability gate for UI: hidden only when the bridge EXPLICITLY declares
-  // the flag false — undeclared (desktop) means available.
+  // Feature gate for UI: off only when the bridge EXPLICITLY declares the
+  // flag false; undeclared means available.
   can: (flag) => !flag || bridge().capabilities?.[flag] !== false,
 
   // ── hand-written: not plain invokes ──

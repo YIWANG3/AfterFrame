@@ -374,7 +374,7 @@ export default function EditorOverlay({
   // the picture swaps to that render for the rest of the session — edits,
   // layers and history stay. Not after an Apply: the baked picture would be
   // lost, so the LUT grades what Apply made.
-  const lutAvailable = api.can("lut") && api.has("listLuts");
+  const lutAvailable = api.can("lut");
   const itemKey = item?.asset_id ?? item?.image_path ?? null;
   // A tool belongs to the photo it was picked on. The editor stays mounted
   // when closed, and the reset below waits for the next photo's picture, so
