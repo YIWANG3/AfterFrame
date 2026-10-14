@@ -88,6 +88,7 @@ export default function SettingsOverlay({
       ref={rootRef}
       tabIndex={-1}
       {...{ [TOP_LAYER_ATTR]: "true" }}
+      data-settings-overlay=""
       className="fixed inset-0 z-[11200] flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       onKeyDown={(e) => {
