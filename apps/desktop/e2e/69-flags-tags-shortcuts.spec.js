@@ -356,9 +356,12 @@ test("the orientation filter finds a camera's upright shot as portrait", async (
     const shown = () => cards().evaluateAll((els) => els.map((el) => el.getAttribute("data-image-path").split(/[\\/]/).pop()));
     if (!(await ctx.window.locator("[data-facet-orientation='true']").isVisible())) await ctx.window.keyboard.press("Backslash");
     const portrait = ctx.window.locator("[data-facet-orientation='true'] [data-orientation-option='portrait']");
+    await expect.poll(shown, { timeout: 15_000 }).toEqual(expect.arrayContaining(["upright-shot.jpg", "wide-shot.jpg"]));
     await portrait.click();
-    await expect.poll(shown).toContain("upright-shot.jpg");
-    expect(await shown()).not.toContain("wide-shot.jpg");
+    // Both are on screen before the click, so wait for the filter to take the
+    // wide one off: the upright one is there from the start.
+    await expect.poll(shown).not.toContain("wide-shot.jpg");
+    expect(await shown()).toContain("upright-shot.jpg");
     await portrait.click();
     await expect.poll(shown).toContain("wide-shot.jpg");
   } finally {
