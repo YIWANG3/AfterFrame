@@ -172,7 +172,11 @@ test("the cell menu replaces one image through the picker; the image list remove
 
 test("the cell menu removes the photo under the pointer, no matching it to a list row", async () => {
   // Two photos, Left / Right: right-click the right cell, and the left one stays.
+  // Back at two photos the collage restores the layout last picked for two,
+  // Top / Bottom from the first test, where (0.75, 0.5) is the line between the
+  // cells: an odd canvas height put the click in the top one.
   await expect(imageRows()).toHaveCount(2);
+  await ctx.window.getByTitle("Left / Right", { exact: true }).click();
   const keep = await imageRows().first().innerText();
   const menu = await openCellMenu(0.75, 0.5);
   await menu.getByRole("button", { name: "Remove", exact: true }).click();
