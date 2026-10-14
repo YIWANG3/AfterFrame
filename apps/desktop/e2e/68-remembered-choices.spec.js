@@ -52,6 +52,17 @@ async function closeCollage() {
   await expect(ctx.window.getByTestId("collage-canvas")).toHaveCount(0);
 }
 
+// The toolbar hides its thumbnail slider and Layout menu when the gallery
+// pane is narrow (index.css, container queries). CI's display is 1024 px
+// wide, so the window opens at 1024 there: widen it before using them.
+async function makeRoomForGalleryControls() {
+  await ctx.app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    win.setSize(1440, win.getSize()[1]);
+  });
+  await expect(ctx.window.getByLabel("Thumbnail size")).toBeVisible();
+}
+
 async function restart() {
   await collectCoverage(ctx.app); // the restart bypasses closeApp
   await ctx.app.close();
@@ -113,6 +124,7 @@ test("the split keeps its panel ratio, the gallery its layout, Settings its tab"
   await expect.poll(splitAspect).toBe("1:1");
   await closeEditor();
 
+  await makeRoomForGalleryControls();
   await ctx.window.getByTitle("Layout", { exact: true }).click();
   await ctx.window.getByRole("button", { name: "Waterfall", exact: true }).click();
   await ctx.window.getByLabel("Thumbnail size").fill("240");
@@ -132,6 +144,7 @@ test("the split keeps its panel ratio, the gallery its layout, Settings its tab"
 
 test("after a restart, everything comes back", async () => {
   await restart();
+  await makeRoomForGalleryControls();
 
   await expect(ctx.window.getByLabel("Thumbnail size")).toHaveValue("240");
   await expect(ctx.window.getByRole("button", { name: "Name A-Z", exact: true })).toBeVisible();
