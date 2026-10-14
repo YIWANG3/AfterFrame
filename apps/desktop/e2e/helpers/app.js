@@ -188,7 +188,26 @@ async function launchApp({ testName = "e2e", withCatalog = true, noCatalog = fal
   });
   const window = await app.firstWindow();
   captureAppLogs(app, window, testName);
+  await waitForAppMounted(window);
   return { app, window, userDataDir, catalogDir: workCatalog, mcpPort };
+}
+
+// firstWindow() resolves once the BrowserWindow exists, before its page has
+// run a line of script. The renderer usually starts within half a second, but
+// on CI's macOS runners it now and then takes 9–13 s while the sidecar and
+// main are long ready. A spec's first 5 s expect or 10 s wait then spent all
+// its time on the launch: e2e/20, 30 and 59 failed that way (2026-10-14). So a
+// launch returns only once App has mounted (its first effect installs the
+// test backdoor), with the time a slow start needs.
+const APP_MOUNT_TIMEOUT = 45_000;
+async function waitForAppMounted(window) {
+  try {
+    await window.waitForFunction(
+      () => typeof window.__afterframeTest?.openEditor === "function", null, { timeout: APP_MOUNT_TIMEOUT },
+    );
+  } catch (err) {
+    throw new Error(`The app's window did not mount within ${APP_MOUNT_TIMEOUT / 1000} s (see e2e/.artifacts/app-logs): ${err.message}`);
+  }
 }
 
 // The seeded catalogs were built on one machine and store absolute source
