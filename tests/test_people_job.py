@@ -5,6 +5,7 @@ import math
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -211,11 +212,87 @@ class PeopleIndexJobTest(unittest.TestCase):
             self.assertEqual(result["groups"], 1)
             connection.close()
 
-    def _write_fake_worker(self, root: Path) -> Path:
-        script = root / "fake-people-worker.py"
+    def test_a_worker_chatty_on_stderr_does_not_stall_the_scan(self) -> None:
+        # Frameworks inside the worker print to stderr (the real worker sends
+        # their stdout chatter there too). More than a pipe holds must not
+        # block the worker, so the runner has to read stderr as it goes.
+        outcome: dict[str, dict] = {}
+
+        def scan() -> None:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                connection, model = self._seed_catalog(root, assets=3)
+                worker = self._write_fake_worker(root, stderr_per_request=256 * 1024)
+                job = create_job(connection, "people_index")
+                outcome["result"] = run_people_index_job(
+                    connection,
+                    job["job_id"],
+                    model_id="arcface-r100",
+                    model_version="test-v1",
+                    model_path=model,
+                    manifest_hash="manifest-hash",
+                    worker_path=worker,
+                )
+                connection.close()
+
+        runner = threading.Thread(target=scan, daemon=True)
+        runner.start()
+        runner.join(timeout=60)
+        self.assertFalse(runner.is_alive(), "the worker blocked writing to a full stderr pipe")
+        self.assertEqual(outcome["result"]["analyzed"], 3)
+
+    def test_a_worker_that_dies_reports_what_it_printed_to_stderr(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            connection, model = self._seed_catalog(root, assets=1)
+            worker = self._write_worker(
+                root,
+                "import sys\n"
+                "sys.stdin.readline()\n"
+                "sys.stderr.write('Unable to load the Core ML model\\n')\n"
+                "sys.exit(2)\n",
+            )
+            job = create_job(connection, "people_index")
+            with self.assertRaisesRegex(RuntimeError, "Unable to load the Core ML model"):
+                run_people_index_job(
+                    connection,
+                    job["job_id"],
+                    model_id="arcface-r100",
+                    model_version="test-v1",
+                    model_path=model,
+                    manifest_hash="manifest-hash",
+                    worker_path=worker,
+                )
+            failed = get_job(connection, job["job_id"])
+            self.assertEqual(failed["status"], "failed")
+            self.assertIn("Unable to load the Core ML model", failed["error"])
+            connection.close()
+
+    def _seed_catalog(self, root: Path, *, assets: int):
+        catalog = ensure_catalog(root / "demo.afcatalog")
+        model = root / "ArcFaceR100.mlpackage"
+        model.write_bytes(b"model-placeholder")
+        connection = connect(catalog.db_path)
+        init_db(connection)
+        set_catalog_path(connection, catalog.root)
+        for index in range(1, assets + 1):
+            source = root / f"portrait-{index}.jpg"
+            source.write_bytes(f"photo-{index}".encode())
+            connection.execute(
+                """
+                INSERT INTO assets (
+                    asset_id, asset_type, canonical_path, stem, normalized_stem,
+                    stem_key, extension, fingerprint, file_size, modified_time
+                ) VALUES (?, 'image', ?, ?, ?, ?, '.jpg', 'fingerprint', 1, '2026-07-10T00:00:00Z')
+                """,
+                (f"asset-{index}", str(source), f"portrait-{index}", f"portrait-{index}", f"portrait-{index}"),
+            )
+        connection.commit()
+        return connection, model
+
+    def _write_fake_worker(self, root: Path, *, stderr_per_request: int = 0) -> Path:
         embedding = [1.0 / math.sqrt(512)] * 512
-        code = f'''#!{sys.executable}
-import json
+        code = f'''import json
 import pathlib
 import sys
 
@@ -229,9 +306,16 @@ for line in sys.stdin:
         response = {{"id": request["id"], "ok": True, "skipped": True, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": [], "error": None}}
     else:
         response = {{"id": request["id"], "ok": True, "skipped": False, "input_hash": "input-hash-a", "image_size": {{"width": 100, "height": 100}}, "faces": [{{"bounding_box": [0.1, 0.1, 0.5, 0.5], "landmarks": [0.1, 0.1, 0.2, 0.1, 0.15, 0.2, 0.1, 0.3, 0.2, 0.3], "confidence": 1.0, "quality": "standard", "embedding": embedding}}], "error": None}}
+    if {stderr_per_request}:
+        sys.stderr.write("x" * {stderr_per_request} + "\\n")
+        sys.stderr.flush()
     print(json.dumps(response), flush=True)
 '''
-        script.write_text(code, encoding="utf-8")
+        return self._write_worker(root, code)
+
+    def _write_worker(self, root: Path, code: str) -> Path:
+        script = root / "fake-people-worker.py"
+        script.write_text(f"#!{sys.executable}\n{code}", encoding="utf-8")
         if os.name == "nt":
             # Windows runs programs, not scripts with a #! line: wrap it in a
             # .cmd that hands it to this Python, as npm does for its scripts.

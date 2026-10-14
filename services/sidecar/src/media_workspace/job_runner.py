@@ -4,7 +4,9 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +135,15 @@ def _mark_people_paused(
         error_text=None,
     )
     return final
+
+
+def _drain_stderr(stream: Any, tail: deque[str]) -> None:
+    # Read a worker's stderr while it runs: frameworks print there (the people
+    # worker sends their stdout chatter there too), and a pipe nobody reads
+    # fills up and blocks the worker mid-response. The last lines explain a crash.
+    with stream:
+        for line in stream:
+            tail.append(line.rstrip("\n"))
 
 
 def run_people_index_job(
@@ -271,6 +282,8 @@ def run_people_index_job(
         return final
 
     worker: subprocess.Popen[str] | None = None
+    stderr_drain: threading.Thread | None = None
+    stderr_tail: deque[str] = deque(maxlen=50)
     active_cursor = {"offset": offset, "total": len(candidates)}
     analyzed_since_cluster = 0
     try:
@@ -281,11 +294,14 @@ def run_people_index_job(
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
+            errors="replace",  # stray bytes on stderr mustn't stop the drain
             bufsize=1,
             **no_window(),
         )
         assert worker.stdin is not None
         assert worker.stdout is not None
+        stderr_drain = threading.Thread(target=_drain_stderr, args=(worker.stderr, stderr_tail), daemon=True)
+        stderr_drain.start()
         for position in range(offset, len(candidates)):
             _check_cancel(connection, job_id)
             _check_pause(connection, job_id)
@@ -330,7 +346,8 @@ def run_people_index_job(
             worker.stdin.flush()
             raw_response = worker.stdout.readline()
             if not raw_response:
-                detail = worker.stderr.read().strip() if worker.stderr else ""
+                stderr_drain.join(timeout=5)
+                detail = "\n".join(stderr_tail).strip()
                 raise RuntimeError(detail or "People Worker stopped before returning a response")
             response = json.loads(raw_response)
             if str(response.get("id", "")) != str(candidate["asset_id"]):
@@ -496,9 +513,11 @@ def run_people_index_job(
                     except subprocess.TimeoutExpired:
                         worker.kill()
                         worker.wait(timeout=5)
-            for stream in (worker.stdout, worker.stderr):
-                if stream is not None and not stream.closed:
-                    stream.close()
+            if worker.stdout is not None and not worker.stdout.closed:
+                worker.stdout.close()
+            # The drain thread closes stderr when the worker's end closes.
+            if stderr_drain is not None:
+                stderr_drain.join(timeout=1)
 
 
 _HD_PHASE = {"key": "generate_previews_hd", "label": "Generate HD Previews", "progress": 1.0}

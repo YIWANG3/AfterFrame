@@ -11,6 +11,7 @@
 // In --serve mode stdin/stdout use one JSON object per line:
 //   request:  {"id":"asset-42","asset_path":"/path/to/photo.jpg"}
 //   response: {"id":"asset-42","ok":true,"input_hash":"…","faces":[…]}
+// stdout carries nothing else: anything a framework prints there goes to stderr.
 
 import Accelerate
 import CoreGraphics
@@ -632,12 +633,25 @@ private func analyze(request: Request, model: ArcFaceModel) -> Response {
     }
 }
 
-private func writeJSON<T: Encodable>(_ value: T) {
+// Frameworks print to stdout through C stdio: on Intel Macs MPSGraph prints
+// "MPSGraph doesn't support padded tensors…" without a newline when the model
+// loads. The buffer flushes at exit, after the self-test's JSON, or earlier,
+// in front of a response. Keep the real stdout on a private descriptor for the
+// protocol and point fd 1 at stderr, before anything loads.
+private func reserveStdoutForProtocol() -> FileHandle {
+    let protocolFD = dup(STDOUT_FILENO)
+    guard protocolFD >= 0, dup2(STDERR_FILENO, STDOUT_FILENO) >= 0 else {
+        return FileHandle.standardOutput
+    }
+    return FileHandle(fileDescriptor: protocolFD, closeOnDealloc: true)
+}
+
+private func writeJSON<T: Encodable>(_ value: T, to output: FileHandle) {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     guard let data = try? encoder.encode(value) else { return }
-    FileHandle.standardOutput.write(data)
-    FileHandle.standardOutput.write(Data([10]))
+    output.write(data)
+    output.write(Data([10]))
 }
 
 private func writeError(_ message: String) {
@@ -668,17 +682,18 @@ private struct Arguments {
 
 do {
     let arguments = try Arguments()
+    let output = reserveStdoutForProtocol()
     let model = try ArcFaceModel(modelURL: arguments.modelURL)
     if arguments.selfTest {
-        writeJSON(try model.selfTest())
+        writeJSON(try model.selfTest(), to: output)
     } else {
         while let line = readLine(strippingNewline: true) {
             guard !line.isEmpty else { continue }
             do {
                 let request = try JSONDecoder().decode(Request.self, from: Data(line.utf8))
-                writeJSON(analyze(request: request, model: model))
+                writeJSON(analyze(request: request, model: model), to: output)
             } catch {
-                writeJSON(Response(id: "", ok: false, skipped: false, inputHash: nil, imageSize: nil, faces: [], error: error.localizedDescription))
+                writeJSON(Response(id: "", ok: false, skipped: false, inputHash: nil, imageSize: nil, faces: [], error: error.localizedDescription), to: output)
             }
         }
     }
