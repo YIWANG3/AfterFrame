@@ -57,7 +57,7 @@ test.describe("First run (no catalog)", () => {
   });
 
   test("settings shortcut remains available before opening a catalog", async () => {
-    await window.keyboard.press("Meta+,");
+    await window.keyboard.press("ControlOrMeta+,");
     await expect(window.getByRole("button", { name: "General", exact: true })).toBeVisible();
     await window.keyboard.press("Escape");
   });

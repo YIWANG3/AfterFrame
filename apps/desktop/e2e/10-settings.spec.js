@@ -17,7 +17,7 @@ test.afterAll(async () => {
 });
 
 test("opens with the settings shortcut on the General tab; AI Annotation is a click away", async () => {
-  await ctx.window.keyboard.press("Meta+,");
+  await ctx.window.keyboard.press("ControlOrMeta+,");
   await expect(ctx.window.getByText("Appearance")).toBeVisible({ timeout: 5_000 });
   await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "AI Annotation" }).click();
   await expect(ctx.window.getByText("Auto-annotation providers")).toBeVisible({ timeout: 5_000 });
@@ -55,7 +55,7 @@ test("People tab without the bundled model offers choosing one", async () => {
   // This test also runs independently via --grep, where the earlier test that
   // opens the shared Settings overlay is intentionally skipped.
   if (!await ctx.window.getByRole("button", { name: "General" }).isVisible()) {
-    await ctx.window.keyboard.press("Meta+,");
+    await ctx.window.keyboard.press("ControlOrMeta+,");
   }
   // Scope to the settings tab list — the app sidebar also has a "People" button.
   await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People" }).click();
@@ -128,7 +128,7 @@ test("Settings opens over the editor and a collage, and keeps its keys to itself
   await waitForEditor(w, { preview: true });
   await w.evaluate(() => window.__afterframeTest.setTool("text"));
   await w.evaluate(() => window.__afterframeTest.addTextLayer("keep me"));
-  await w.keyboard.press("Meta+,");
+  await w.keyboard.press("ControlOrMeta+,");
   await expect.poll(settingsOnTop).toBe(true);
   await w.keyboard.press("Backspace");
   await w.keyboard.press("Delete");
@@ -146,7 +146,7 @@ test("Settings opens over the editor and a collage, and keeps its keys to itself
   await cards.nth(0).click({ button: "right" });
   await w.getByText(/^Collage$/).click();
   await expect(w.getByTestId("collage-canvas")).toBeVisible({ timeout: 10_000 });
-  await w.keyboard.press("Meta+,");
+  await w.keyboard.press("ControlOrMeta+,");
   await expect.poll(settingsOnTop).toBe(true);
   await w.keyboard.press("Escape");
   await expect(w.locator("[data-top-layer]")).toHaveCount(0);

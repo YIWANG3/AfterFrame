@@ -85,7 +85,7 @@ test("Settings ▸ Library shows the count and can re-analyse everything", async
   await expect.poll(() => ctx.window.evaluate(() => window.mediaWorkspace.getColorsStatus()), { timeout: 30_000 })
     .toMatchObject({ running: false, analyzed: 13, missing: 0 });
   await expect(ctx.window.getByTestId("job-dock-card")).toHaveCount(0, { timeout: 15_000 });
-  await ctx.window.keyboard.press("Meta+,");
+  await ctx.window.keyboard.press("ControlOrMeta+,");
   await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Library" }).click();
   await expect(ctx.window.getByText(/13 photos have a palette, 0 do not/)).toBeVisible();
   await expect(ctx.window.getByRole("button", { name: "Analyse missing" })).toBeDisabled();

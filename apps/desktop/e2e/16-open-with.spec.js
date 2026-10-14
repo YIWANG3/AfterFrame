@@ -1,5 +1,6 @@
 // "Open with" external-editor submenu in the gallery context menu.
-// Editors are auto-detected from /Applications, so the submenu only appears
+// Editors are auto-detected from /Applications (on Windows, from the Start
+// menu's shortcuts), so the submenu only appears
 // when the test machine has a known editor installed — guard accordingly so
 // CI without editors doesn't fail. We never click an editor (that would launch
 // a real app); we only verify the submenu surfaces a detected editor.
@@ -23,7 +24,7 @@ test.describe("Open with external editor", () => {
     expect(Array.isArray(editors)).toBe(true);
     for (const e of editors) {
       expect(e.label).toBeTruthy();
-      expect(e.appPath).toMatch(/\.app$/);
+      expect(e.appPath).toMatch(process.platform === "win32" ? /\.exe$/i : /\.app$/);
     }
   });
 

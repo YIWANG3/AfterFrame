@@ -107,6 +107,7 @@ test("photos whose import was cancelled before their thumbnails get them, made o
     await importThroughToolbar(ctx.app, ctx.window, [dir]);
     await expect.poll(async () => (await rowsUnder(dir)).length, { timeout: 60_000, intervals: [100] }).toBeGreaterThan(4);
     const card = ctx.window.getByTestId("job-dock-card").first();
+    const cancelClicked = Date.now();
     await card.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect.poll(importStatus, { timeout: 60_000, intervals: [200] }).toBe("cancelled");
     const cancelled = Date.now();
@@ -125,7 +126,9 @@ test("photos whose import was cancelled before their thumbnails get them, made o
     await expect(cards.first().locator("img")).toHaveJSProperty("complete", true);
     expect(await cards.first().locator("img").evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
     expect(repairsSince(cancelled)).toEqual([]);
-    expect(ownProcess.filter((entry) => entry.at >= cancelled && entry.line.includes("generate-previews --kind preview --path")).length)
+    // Counted from the click: when the job ends, the gallery can start that
+    // process before the poll above has seen "cancelled" (the Windows box).
+    expect(ownProcess.filter((entry) => entry.at >= cancelClicked && entry.line.includes("generate-previews --kind preview --path")).length)
       .toBeGreaterThan(0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

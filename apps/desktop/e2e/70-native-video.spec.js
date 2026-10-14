@@ -49,7 +49,7 @@ test("ProRes plays at original resolution without a proxy; controls and native v
     await transport.getByRole("button").nth(1).click();
     await expect.poll(async () => (await state()).muted).toBe(true);
     // Native picture must not cover Settings, which lives in the DOM above it.
-    await w.keyboard.press("Meta+,");
+    await w.keyboard.press("ControlOrMeta+,");
     await expect(w.locator("[data-top-layer]")).toBeVisible();
     await expect.poll(async () => (await state()).visible).toBe(false);
     await w.keyboard.press("Escape");

@@ -52,7 +52,7 @@ test.describe("with the built-in face model", () => {
   });
 
   test("Settings shows the built-in model as active and not removable", async () => {
-    await ctx.window.keyboard.press("Meta+,");
+    await ctx.window.keyboard.press("ControlOrMeta+,");
     await ctx.window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "People" }).click();
     await expect(ctx.window.getByText(/Built into AfterFrame · 125 MB/)).toBeVisible();
     await expect(ctx.window.getByRole("button", { name: /Download/ })).toHaveCount(0);

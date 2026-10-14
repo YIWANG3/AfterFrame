@@ -75,7 +75,7 @@ async function choose(scope, logoId) {
   await expect(picker).toHaveCount(0);
 }
 async function openWatermarkSettings() {
-  await window.keyboard.press("Meta+,");
+  await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
 }
 async function darkAt(file, { x, y }) {
