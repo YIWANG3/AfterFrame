@@ -16,7 +16,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 
 从 [Releases](../../releases) 下载最新版本：
 
-- **Mac**：Apple Silicon 且 macOS 14 或更新版本，下载 `-arm64.dmg`。macOS 12 或 13，或者 Intel Mac，下载 `-macOS12-arm64.dmg`（Apple Silicon）或 `-macOS12-Intel.dmg`（Intel）：功能相同，只是没有人物、场景深度和贴纸，这三项需要 macOS 14。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
+- **Mac**：macOS 14 或更新版本，Apple Silicon 下载 `-arm64.dmg`，Intel Mac 下载 `-Intel.dmg`。macOS 12 或 13，下载 `-macOS12-arm64.dmg`（Apple Silicon）或 `-macOS12-Intel.dmg`（Intel）：功能相同，只是没有人物、场景深度和贴纸，这三项需要 macOS 14。已使用 Apple Developer ID 签名。若某个版本尚未公证，macOS 首次打开时可能会提示 — 右键点选 **打开**，或前往系统设置 → 隐私与安全性中允许打开。
 - **Windows**：下载 `-setup.exe`。需要 Windows 10 或 11（64 位）。安装包暂未签名，Windows 提示「Windows 已保护你的电脑」时，点 **更多信息**，再点 **仍要运行**。贴纸、人物、场景深度和 LUT 目前仅 macOS 版支持。
 
 ![AfterFrame — 浏览与检查](docs/assets/cn/library.webp)
@@ -44,7 +44,7 @@ AfterFrame 面向拥有大量导出图片的摄影师，提供快速的可视化
 AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬盘上，其余一切都被索引、保持快速。
 
 - 基于 Catalog 的工作流 — 每个项目一个 `.afcatalog`
-- 导入流水线：自动提取元数据与生成预览；大批量导入时照片按批出现，缩略图一起出来
+- 导入流水线：自动提取元数据与生成预览；大批量导入时照片按批出现，缩略图一起出来。在 Mac 上，把照片、视频或文件夹拖到程序坞里的图标上即可导入
 - 元数据由 [ExifTool](https://exiftool.org/) 读取：相机、镜头、曝光、拍摄时间、GPS 和色彩空间，覆盖 JPEG、HEIF 和 RAW，CR3 和 IIQ 也能读
 - RAW 由 [LibRaw](https://www.libraw.org/) 读取，支持 1200 多款相机：相机内嵌预览够大就直接用，不够大就完整解码；RAW 的高清预览在打开照片时才生成，不在导入时做
 - 两档预览：始终生成快速的 512px 缩略图，另有可选的 2000px 高清预览（设置 → 图库 开关，默认关闭以节省磁盘）
@@ -128,8 +128,8 @@ AfterFrame 的核心 —— 基于 Catalog 的工作流，原图始终留在硬�
 ### 视频
 - 视频与照片一同索引 —— 导入时探测时长、分辨率与编码，并自动生成封面帧
 - 画廊卡片显示封面与时长徽章；鼠标悬停即可在关键帧胶片条上拖动预览，无需打开
-- 在灯箱中完整播放，自定义播放器（播放/暂停、进度条、音量、全屏、空格键）
-- 对系统无法原生解码的编码（如 10-bit HEVC）自动按需转出 H.264 代理，保证仍能流畅播放
+- 在灯箱中完整播放，自定义播放器（播放/暂停、进度条、音量、全屏、空格键）。macOS 上由 AVPlayer 直接播放原文件，原始分辨率，ProRes 也能播，不转码
+- 在 Windows 上，以及 Mac 上 AVPlayer 打不开的片子：对系统无法原生解码的编码（如 10-bit HEVC）自动按需转出 H.264 代理，保证仍能流畅播放
 
 ### AI 重绘（BYOK）
 自带 API Key 模式。AfterFrame 不内置也不代理任何 AI 服务 — 你自行配置 API 密钥，所有请求从你的电脑直连 API。
