@@ -32,7 +32,3 @@ export default function Button({ variant = "secondary", className = "", type = "
     </button>
   );
 }
-
-// Raw class strings for places that need the look on a non-<button> element
-// (labels, links) or want to compose manually.
-export const BUTTON_VARIANTS = VARIANTS;

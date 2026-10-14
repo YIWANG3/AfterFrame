@@ -103,7 +103,7 @@ only ever shrinks.
 The desktop app calls the sidecar CLI automatically. For manual testing:
 
 ```bash
-PYTHONPATH=services/sidecar/src python3 -m media_workspace --catalog data/default.afcatalog browse-exports --limit 10
+PYTHONPATH=services/sidecar/src python3 -m media_workspace --catalog data/default.afcatalog browse-images --status all --limit 10
 ```
 
 Common commands:
@@ -116,7 +116,7 @@ python3 -m media_workspace init-catalog --catalog data/new.afcatalog
 python3 -m media_workspace scan-raw --catalog data/default.afcatalog --raw-dir /path/to/raws
 
 # Generate previews
-python3 -m media_workspace generate-previews --catalog data/default.afcatalog --kind preview --asset-type export
+python3 -m media_workspace generate-previews --catalog data/default.afcatalog --kind preview --asset-type image
 ```
 
 ### Building for distribution

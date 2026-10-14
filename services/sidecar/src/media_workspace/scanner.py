@@ -328,10 +328,6 @@ def enrich_raw_assets(
     }
 
 
-def worker_count_hint(workers: int | None) -> int:
-    return max(1, workers or DEFAULT_SCAN_WORKERS)
-
-
 def iter_candidate_paths(raw_dir: Path):
     raw_dir = raw_dir.resolve()
     if raw_dir.is_file():

@@ -198,17 +198,6 @@ export function isLutFault(error) {
   return error instanceof LutError && error.code !== "worker_failed" && error.code !== "not_loaded" && error.code !== "failed";
 }
 
-// Checks that LUT `id` can be read and parsed; resolves, or rejects with a
-// LutError naming why not.
-export async function loadLut(id) {
-  const pool = workerSlots(1);
-  if (!pool) {
-    await inlineLut(id);
-    return;
-  }
-  await ensureLoaded(pool[0], id);
-}
-
 /**
  * A graded copy of `source` (a canvas or anything drawable with width/height)
  * as a new canvas of the same size. Works band by band — one band of rows per

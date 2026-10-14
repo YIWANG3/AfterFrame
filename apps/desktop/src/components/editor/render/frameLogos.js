@@ -193,17 +193,6 @@ export function builtInModelMarks(brand, model) {
   return (brand?.variants || []).filter((variant) => matchesModel(variant, model));
 }
 
-/** Every built-in mark a camera shows, in the manifest's order: the brand's
- *  general marks, with a model's own mark (Luna Ultra) in place of the
- *  general one of its kind. Sony: α and SONY. */
-export function builtInMarks(brand, model) {
-  const variants = brand?.variants || [];
-  const own = variants.filter((variant) => matchesModel(variant, model));
-  return variants.filter((variant) => (variant.models?.length
-    ? own.includes(variant)
-    : !own.some((mine) => mine.kind === variant.kind)));
-}
-
 // ── A camera brand's logo, chosen by the user ─────────────────────────────
 // watermarkProfile.brandLogos maps a brand to one of my logos (Settings ›
 // Watermark, or the Frame tool): a built-in brand by its id, a camera with no

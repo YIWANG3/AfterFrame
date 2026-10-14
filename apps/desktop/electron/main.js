@@ -718,7 +718,7 @@ if (devServerUrl) {
   });
 }
 
-// quick-register / collage-sources / delete-image-assets are in ipc/assets.js
+// quick-register / delete-image-assets are in ipc/assets.js
 // (registered above), so the inline handlers for those are removed here.
 
 ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });

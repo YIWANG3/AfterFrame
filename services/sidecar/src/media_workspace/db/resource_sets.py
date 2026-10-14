@@ -22,17 +22,6 @@ def _resource_set_id() -> str:
     return f"set_{uuid4().hex[:20]}"
 
 
-def get_resource_set(connection: sqlite3.Connection, set_id: str) -> sqlite3.Row | None:
-    return connection.execute(
-        """
-        SELECT set_id, primary_asset_id, raw_asset_id, created_at, updated_at
-        FROM resource_sets
-        WHERE set_id = ?
-        """,
-        (set_id,),
-    ).fetchone()
-
-
 def get_resource_set_for_asset(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
     return connection.execute(
         """

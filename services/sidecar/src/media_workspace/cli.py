@@ -5,20 +5,11 @@ import json
 import os
 import re
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
 from .ai_repaint import (
-    DEFAULT_GEMINI_MODEL,
-    DEFAULT_OPENAI_MODEL,
-    OPENAI_PROVIDER,
     list_provider_models,
-    run_mock_repaint,
-    run_nanobanana_repaint,
-    run_openai_repaint,
 )
-from .analysis import analyze_metadata_coverage
-from .benchmark import benchmark_dataset
 from .catalog import ensure_catalog
 from .config import Thresholds
 from .db import (
@@ -32,7 +23,6 @@ from .db import (
     create_collection,
     create_job,
     dedupe_preview_entries,
-    delete_app_setting,
     delete_collection,
     delete_image_asset_from_catalog,
     find_image_asset_ids_by_stem,
@@ -50,7 +40,6 @@ from .db import (
     list_collections,
     list_image_assets,
     list_image_assets_missing_resource_set,
-    list_jobs,
     list_map_points,
     list_pending,
     list_person_groups,
@@ -66,7 +55,6 @@ from .db import (
     reorder_collections,
     request_job_pause,
     request_job_resume,
-    set_app_setting,
     set_asset_description,
     set_asset_flag,
     set_asset_rating,
@@ -81,8 +69,6 @@ from .db import (
     upsert_catalog_root,
     verify_assets,
 )
-from .evaluation import evaluate_ground_truth
-from .ground_truth import export_ground_truth
 from .job_runner import (
     run_ai_repaint_job,
     run_annotation_job,
@@ -97,7 +83,6 @@ from .metadata import extract_image_candidate, iso_mtime
 from .preview_service import PreviewService
 from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
-from .watcher import ImageWatcher
 
 # run-import-job, run-preview-job, … : the detached background job runners.
 JOB_RUNNER_COMMAND = re.compile(r"^run-[a-z-]+-job$")
@@ -106,13 +91,6 @@ JOB_BUSY_TIMEOUT_MS = 60_000
 
 def _provider_token_key(provider: str) -> str:
     return f"ai_provider_token:{provider}"
-
-
-DERIVED_STEM_MARKERS = [
-    "_ai-repaint",
-    "_edited",
-    "_crop",
-]
 
 
 def _infer_origin_stem(stem: str) -> tuple[str | None, str]:
@@ -268,37 +246,6 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_raw.add_argument("--workers", type=int)
     enrich_raw.add_argument("--fingerprint-mode", choices=["head-only"], default="head-only")
 
-    analyze = subparsers.add_parser("analyze-metadata", parents=[common])
-    analyze.add_argument("--raw-dir", type=Path, action="append", default=[])
-    analyze.add_argument("--image-dir", type=Path, action="append", default=[])
-
-    evaluate = subparsers.add_parser("evaluate-ground-truth", parents=[common])
-    evaluate.add_argument("--truth-csv", type=Path, required=True)
-    evaluate.add_argument("--refresh", action="store_true")
-
-    export_truth = subparsers.add_parser("export-ground-truth", parents=[common])
-    export_truth.add_argument("--output-csv", type=Path, required=True)
-    export_truth.add_argument(
-        "--status",
-        choices=["matched", "unmatched", "pending"],
-        action="append",
-        required=True,
-    )
-
-    benchmark = subparsers.add_parser("benchmark-dataset", parents=[common])
-    benchmark.add_argument("--raw-dir", type=Path, action="append", required=True)
-    benchmark.add_argument("--image-dir", type=Path, action="append", required=True)
-    benchmark.add_argument("--truth-csv", type=Path)
-    benchmark.add_argument("--auto-threshold", type=float, default=0.85)
-    benchmark.add_argument("--manual-threshold", type=float, default=0.7)
-    benchmark.add_argument("--skip-previews", action="store_true")
-    benchmark.add_argument("--force-scan", action="store_true")
-    benchmark.add_argument("--force-previews", action="store_true")
-    benchmark.add_argument("--scan-workers", type=int)
-    benchmark.add_argument("--fingerprint-mode", choices=["head-tail", "head-only"], default="head-tail")
-    benchmark.add_argument("--metadata-profile", choices=["full", "matcher"], default="full")
-    benchmark.add_argument("--report-json", type=Path)
-
     resolve = subparsers.add_parser("resolve-image", parents=[common])
     resolve.add_argument("--path", type=Path, required=True)
     resolve.add_argument("--auto-threshold", type=float, default=0.85)
@@ -310,12 +257,6 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_batch.add_argument("--auto-threshold", type=float, default=0.85)
     resolve_batch.add_argument("--manual-threshold", type=float, default=0.7)
     resolve_batch.add_argument("--refresh", action="store_true")
-
-    watch = subparsers.add_parser("watch-images", parents=[common])
-    watch.add_argument("--image-dir", type=Path, action="append", required=True)
-    watch.add_argument("--interval", type=float, default=2.0)
-    watch.add_argument("--auto-threshold", type=float, default=0.85)
-    watch.add_argument("--manual-threshold", type=float, default=0.7)
 
     previews = subparsers.add_parser("generate-previews", parents=[common])
     previews.add_argument("--kind", choices=["preview", "preview-hd"], default="preview")
@@ -523,9 +464,6 @@ def build_parser() -> argparse.ArgumentParser:
     export_assets_p.add_argument("--format", choices=["jpeg", "png", "webp"], help="Transcode to this format")
     export_assets_p.add_argument("--quality", type=int, default=90)
 
-    collage_src = subparsers.add_parser("collage-sources", parents=[common])
-    collage_src.add_argument("--asset-id", required=True)
-
     repaint_history = subparsers.add_parser("list-repaint-history", parents=[common])
     repaint_history.add_argument("--asset-path", type=Path, required=True)
 
@@ -576,10 +514,6 @@ def build_parser() -> argparse.ArgumentParser:
     resume_job_parser.add_argument("--job-id", required=True)
 
     subparsers.add_parser("list-active-jobs", parents=[common])
-
-    list_jobs_parser = subparsers.add_parser("list-jobs", parents=[common])
-    list_jobs_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
-    list_jobs_parser.add_argument("--limit", type=int, default=20)
 
     list_people_groups_parser = subparsers.add_parser("list-people-groups", parents=[common])
     list_people_groups_parser.add_argument("--state", choices=["candidate", "confirmed", "ignored"])
@@ -672,13 +606,6 @@ def build_parser() -> argparse.ArgumentParser:
     get_provider_token = subparsers.add_parser("get-provider-token", parents=[common])
     get_provider_token.add_argument("--provider", required=True)
 
-    set_provider_token = subparsers.add_parser("set-provider-token", parents=[common])
-    set_provider_token.add_argument("--provider", required=True)
-    set_provider_token.add_argument("--token", required=True)
-
-    delete_provider_token = subparsers.add_parser("delete-provider-token", parents=[common])
-    delete_provider_token.add_argument("--provider", required=True)
-
     subparsers.add_parser("repair-resource-sets", parents=[common])
     subparsers.add_parser("split-shared-assets", parents=[common])
 
@@ -723,16 +650,6 @@ def build_parser() -> argparse.ArgumentParser:
     list_models_parser.add_argument("--provider", choices=["nanobanana", "openai", "openai_compatible", "jimeng", "ark"], default="nanobanana")
     list_models_parser.add_argument("--api-key")
     list_models_parser.add_argument("--base-url")
-
-    repaint = subparsers.add_parser("ai-repaint", parents=[common])
-    repaint.add_argument("--provider", choices=["nanobanana", "openai", "jimeng", "mock"], default="nanobanana")
-    repaint.add_argument("--input", type=Path, required=True)
-    repaint.add_argument("--output", type=Path, required=True)
-    repaint.add_argument("--prompt", required=True)
-    repaint.add_argument("--api-key")
-    repaint.add_argument("--model", default=DEFAULT_GEMINI_MODEL)
-    repaint.add_argument("--aspect-ratio")
-    repaint.add_argument("--image-size", choices=["1K", "2K", "4K"])
 
     annotate_p = subparsers.add_parser("annotate-asset", parents=[common])
     annotate_p.add_argument("--asset-id", required=True)
@@ -901,28 +818,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         return _serve_loop(args)
 
-    if args.command == "benchmark-dataset":
-        thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-        payload = benchmark_dataset(
-            catalog_path=args.catalog,
-            raw_dirs=args.raw_dir,
-            image_dirs=args.image_dir,
-            truth_csv=args.truth_csv,
-            thresholds=thresholds,
-            include_previews=not args.skip_previews,
-            force_scan=args.force_scan,
-            force_previews=args.force_previews,
-            scan_workers=args.scan_workers,
-            fingerprint_mode=args.fingerprint_mode,
-            metadata_profile=args.metadata_profile,
-        )
-        rendered = json.dumps(payload, indent=2)
-        if args.report_json:
-            args.report_json.parent.mkdir(parents=True, exist_ok=True)
-            args.report_json.write_text(rendered + "\n", encoding="utf-8")
-        print(rendered)
-        return 0
-
     # Catalog-free commands (no DB connection required) — must run before
     # ensure_catalog() so users can configure providers without a catalog open.
     if args.command == "decode-raw":
@@ -1016,18 +911,6 @@ def main(argv: list[str] | None = None) -> int:
 def _cmd_get_provider_token(args, connection, catalog, parser):
     payload = get_app_setting(connection, _provider_token_key(args.provider))
     print(json.dumps(payload or {}, indent=2))
-    return 0
-
-
-def _cmd_set_provider_token(args, connection, catalog, parser):
-    set_app_setting(connection, _provider_token_key(args.provider), {"token": args.token})
-    print(json.dumps({"provider": args.provider, "configured": True}, indent=2))
-    return 0
-
-
-def _cmd_delete_provider_token(args, connection, catalog, parser):
-    delete_app_setting(connection, _provider_token_key(args.provider))
-    print(json.dumps({"provider": args.provider, "configured": False}, indent=2))
     return 0
 
 
@@ -1191,37 +1074,6 @@ def _cmd_run_text_image_job(args, connection, catalog, parser):
         ref_image_path=getattr(args, "ref_image", None),
     )
     print(json.dumps(payload, indent=2))
-    return 0
-
-
-def _cmd_ai_repaint(args, connection, catalog, parser):
-    if args.provider == "mock":
-        payload = run_mock_repaint(
-            input_path=args.input,
-            output_path=args.output,
-            prompt=args.prompt,
-        )
-    elif args.provider == OPENAI_PROVIDER:
-        payload = run_openai_repaint(
-            input_path=args.input,
-            output_path=args.output,
-            prompt=args.prompt,
-            api_key=args.api_key,
-            model=args.model or DEFAULT_OPENAI_MODEL,
-            aspect_ratio=args.aspect_ratio,
-            image_size=args.image_size,
-        )
-    else:
-        payload = run_nanobanana_repaint(
-            input_path=args.input,
-            output_path=args.output,
-            prompt=args.prompt,
-            api_key=args.api_key,
-            model=args.model,
-            aspect_ratio=args.aspect_ratio,
-            image_size=args.image_size,
-        )
-    print(json.dumps(asdict(payload), indent=2))
     return 0
 
 
@@ -1394,15 +1246,6 @@ def _cmd_enrich_raw(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_analyze_metadata(args, connection, catalog, parser):
-    payload = analyze_metadata_coverage(
-        raw_dirs=[path.resolve() for path in args.raw_dir],
-        image_dirs=[path.resolve() for path in args.image_dir],
-    )
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
 def _cmd_create_job(args, connection, catalog, parser):
     payload = json.loads(args.payload_json or "{}")
     print(json.dumps(create_job(connection, args.job_type, payload=payload, priority=args.priority), indent=2))
@@ -1416,11 +1259,6 @@ def _cmd_get_job(args, connection, catalog, parser):
 
 def _cmd_latest_job(args, connection, catalog, parser):
     print(json.dumps(get_latest_job(connection, args.job_type), indent=2))
-    return 0
-
-
-def _cmd_list_jobs(args, connection, catalog, parser):
-    print(json.dumps(list_jobs(connection, job_type=args.job_type, limit=args.limit), indent=2))
     return 0
 
 
@@ -1617,18 +1455,6 @@ def _cmd_run_people_index_job(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_evaluate_ground_truth(args, connection, catalog, parser):
-    payload = evaluate_ground_truth(connection, args.truth_csv.resolve(), refresh=args.refresh)
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
-def _cmd_export_ground_truth(args, connection, catalog, parser):
-    payload = export_ground_truth(connection, args.output_csv, statuses=args.status)
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
 def _cmd_resolve_image(args, connection, catalog, parser):
     thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
     decision = resolve_image(connection, args.path, thresholds=thresholds, refresh=args.refresh)
@@ -1650,18 +1476,6 @@ def _cmd_resolve_image_batch(args, connection, catalog, parser):
     thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
     payload = resolve_image_batch(connection, args.image_dir, thresholds=thresholds, refresh=args.refresh)
     print(json.dumps(payload, indent=2))
-    return 0
-
-
-def _cmd_watch_images(args, connection, catalog, parser):
-    thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-    watcher = ImageWatcher(
-        connection,
-        image_dirs=tuple(args.image_dir),
-        thresholds=thresholds,
-        poll_interval_seconds=args.interval,
-    )
-    watcher.run()
     return 0
 
 
@@ -2134,19 +1948,6 @@ def _cmd_list_repaint_history(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_collage_sources(args, connection, catalog, parser):
-    # Get sources if this asset is a collage
-    from .db import list_collage_sources, list_collages_using_asset
-    sources = list_collage_sources(connection, args.asset_id)
-    # Get collages that use this asset as a source
-    used_in = list_collages_using_asset(connection, args.asset_id)
-    print(json.dumps({
-        "sources": [dict(r) for r in sources],
-        "used_in_collages": [dict(r) for r in used_in],
-    }, ensure_ascii=False))
-    return 0
-
-
 def _cmd_quick_register(args, connection, catalog, parser):
     from .derived import register_image_file
     payload = register_image_file(
@@ -2498,14 +2299,11 @@ def _cmd_browse_collection(args, connection, catalog, parser):
 # Command registry — adding a CLI verb is one function + one entry here.
 COMMAND_HANDLERS = {
     "get-provider-token": _cmd_get_provider_token,
-    "set-provider-token": _cmd_set_provider_token,
-    "delete-provider-token": _cmd_delete_provider_token,
     "repair-resource-sets": _cmd_repair_resource_sets,
     "split-shared-assets": _cmd_split_shared_assets,
     "list-ai-models": _cmd_list_ai_models,
     "run-ai-repaint-job": _cmd_run_ai_repaint_job,
     "run-text-image-job": _cmd_run_text_image_job,
-    "ai-repaint": _cmd_ai_repaint,
     "annotate-asset": _cmd_annotate_asset,
     "run-annotation-job": _cmd_run_annotation_job,
     "annotation-count": _cmd_annotation_count,
@@ -2518,11 +2316,9 @@ COMMAND_HANDLERS = {
     "init-catalog": _cmd_init_catalog,
     "scan-raw": _cmd_scan_raw,
     "enrich-raw": _cmd_enrich_raw,
-    "analyze-metadata": _cmd_analyze_metadata,
     "create-job": _cmd_create_job,
     "get-job": _cmd_get_job,
     "latest-job": _cmd_latest_job,
-    "list-jobs": _cmd_list_jobs,
     "list-people-groups": _cmd_list_people_groups,
     "similar-people-groups": _cmd_similar_people_groups,
     "people-group-detail": _cmd_people_group_detail,
@@ -2546,11 +2342,8 @@ COMMAND_HANDLERS = {
     "orientation-status": _cmd_orientation_status,
     "color-status": _cmd_color_status,
     "run-people-index-job": _cmd_run_people_index_job,
-    "evaluate-ground-truth": _cmd_evaluate_ground_truth,
-    "export-ground-truth": _cmd_export_ground_truth,
     "resolve-image": _cmd_resolve_image,
     "resolve-export-batch": _cmd_resolve_image_batch,
-    "watch-images": _cmd_watch_images,
     "generate-previews": _cmd_generate_previews,
     "refresh-assets": _cmd_refresh_assets,
     "facet-values": _cmd_facet_values,
@@ -2568,7 +2361,6 @@ COMMAND_HANDLERS = {
     "list-pending": _cmd_list_pending,
     "confirm-match": _cmd_confirm_match,
     "list-repaint-history": _cmd_list_repaint_history,
-    "collage-sources": _cmd_collage_sources,
     "quick-register": _cmd_quick_register,
     "create-derived": _cmd_create_derived,
     "add-text": _cmd_add_text,

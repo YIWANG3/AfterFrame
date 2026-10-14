@@ -19,7 +19,6 @@ export const MODIFIER_ORDER = ["Mod", "Ctrl", "Alt", "Shift"];
 //   gallery  — the photo grid only (lightbox closed)
 //   lightbox — the lightbox only
 //   editor   — the image editor
-export const SCOPES = ["global", "library", "gallery", "lightbox", "editor"];
 const SCOPE_OVERLAP = {
   global: ["global", "library", "gallery", "lightbox", "editor"],
   library: ["global", "library", "gallery", "lightbox"],

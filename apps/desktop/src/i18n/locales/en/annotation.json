@@ -22,7 +22,6 @@
   "configureTip": "Configure a provider in Settings → AI",
   "configureHint": "Configure your provider in Settings → AI to enable annotation.",
   "generatesHint": "Generates a caption, tags, and a location guess.",
-  "noCaption": "No caption returned.",
   "noProviderError": "No provider configured. Open Settings → AI to add one.",
   "loadFailed": "Failed to load annotation",
   "loc": {

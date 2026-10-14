@@ -4,9 +4,7 @@
     "zh-CN": "中文"
   },
   "actions": {
-    "save": "保存",
-    "cancel": "取消",
-    "close": "关闭"
+    "cancel": "取消"
   },
   "desktop": {
     "macOnly": "目前仅 macOS 版支持",

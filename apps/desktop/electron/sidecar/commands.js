@@ -419,12 +419,6 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["list-repaint-history", "--asset-path", String(assetPath)]).then((rows) => rows || []);
     },
 
-    // Collage provenance: the source assets of a collage and the collages an
-    // asset appears in.
-    collageSources(assetId) {
-      return callJson(["collage-sources", "--asset-id", String(assetId)]);
-    },
-
     // ── AI providers / annotation ────────────────────────────────────────
     // apiKey rides on argv only until the transport strips it into the
     // environment (see sidecar/transport.js extractSecretEnv).

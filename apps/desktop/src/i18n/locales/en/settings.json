@@ -16,7 +16,6 @@
     "shortcuts": "Shortcuts"
   },
   "general": {
-    "title": "General",
     "language": "Language",
     "languageHint": "Interface language. Takes effect immediately.",
     "theme": "Appearance",
@@ -108,7 +107,6 @@
     "remove": "Remove",
     "cacheStorage": "Cache & storage",
     "cacheSubtitle": "All caches live under ~/Library/Application Support/AfterFrame.",
-    "previewThumbnails": "Preview thumbnails",
     "depthMaps": "Depth maps",
     "depthMapsHint": "Cached depth fields for depth-aware text. Safe to delete — regenerated on demand.",
     "stickerLibrary": "Sticker library",
@@ -220,7 +218,6 @@
     "cancel": "Cancel"
   },
   "integrations": {
-    "title": "Integrations",
     "editorsTitle": "External editors",
     "editorsSubtitle": "Auto-detected photo editors available in the gallery right-click → Open With.",
     "noEditors": "No supported editors detected.",

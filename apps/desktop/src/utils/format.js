@@ -149,17 +149,6 @@ export function formatPercent(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
 }
 
-export function statusLabel(status) {
-  if (status === "auto_bound" || status === "manual_confirmed") return "With Raw";
-  if (status === "unmatched") return "Standalone";
-  return "Unknown";
-}
-
-export function scoreLabel(score) {
-  if (score == null) return null;
-  return Number(score).toFixed(2);
-}
-
 export function formatShutterSpeed(value) {
   const v = Number(value);
   if (!v || Number.isNaN(v)) return null;
@@ -212,22 +201,6 @@ export function determineImportMode(summary, { rawDirs = [], imageDirs = [] }) {
   if (hasRawInput) return hasIndexedImages(summary) ? "source_with_media" : "source_only";
   if (hasImageInput) return hasIndexedSources(summary) ? "processed_with_sources" : "processed_only";
   return "combined";
-}
-
-export function progressNote(task) {
-  const currentPhase = task?.result?.current_phase;
-  if (!currentPhase?.result) return "";
-  const result = currentPhase.result;
-  const processed = Number(result.processed ?? 0);
-  const total = Number(result.total ?? 0);
-  const discovered = Number(result.discovered ?? 0);
-  if (total > 0) {
-    return `${currentPhase.label}: ${processed} / ${total} (${formatPercent(processed / total)})`;
-  }
-  if (discovered > 0) {
-    return `${currentPhase.label}: processed ${processed}, discovered ${discovered}`;
-  }
-  return `${currentPhase.label}: starting...`;
 }
 
 // How many photos All Assets shows: exports, and the RAW files and videos

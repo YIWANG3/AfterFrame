@@ -97,9 +97,7 @@
     "showMoreFaces_other": "加载更多（还有 {{count}} 张脸）"
   },
   "locationSource": {
-    "exif": "GPS (EXIF)",
-    "ai": "AI 推测",
-    "manual": "手动指定"
+    "exif": "GPS (EXIF)"
   },
   "flag": {
     "pick": "留用",

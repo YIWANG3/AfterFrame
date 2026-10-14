@@ -55,48 +55,6 @@ export function getAspectRatio(aspectKey, originalAspect) {
   return preset.aspect;
 }
 
-export function createDefaultCropRect(bounds, aspect) {
-  if (!aspect) {
-    return normalizeRect(
-      {
-        x: 0,
-        y: 0,
-        width: bounds.width,
-        height: bounds.height,
-      },
-      bounds,
-    );
-  }
-
-  let width = bounds.width;
-  let height = width / aspect;
-  if (height > bounds.height) {
-    height = bounds.height;
-    width = height * aspect;
-  }
-
-  return normalizeRect(
-    {
-      x: (bounds.width - width) / 2,
-      y: (bounds.height - height) / 2,
-      width,
-      height,
-    },
-    bounds,
-  );
-}
-
-export function moveCropRect(rect, bounds, deltaX, deltaY) {
-  return normalizeRect(
-    {
-      ...rect,
-      x: rect.x + deltaX,
-      y: rect.y + deltaY,
-    },
-    bounds,
-  );
-}
-
 function resizeFreeCropRect(rect, handle, point, bounds) {
   let left = rect.x;
   let top = rect.y;

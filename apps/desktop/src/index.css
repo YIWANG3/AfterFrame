@@ -125,13 +125,6 @@ button:disabled {
   cursor: default;
 }
 
-.line-clamp-2-custom {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -268,16 +261,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: rgb(var(--text-color));
   font-weight: 600;
   border-radius: 0;
-}
-.rdp-dark .rdp-chevron {
-  fill: rgb(var(--muted-text));
-}
-.rdp-dark .rdp-button_previous:hover .rdp-chevron,
-.rdp-dark .rdp-button_next:hover .rdp-chevron {
-  fill: rgb(var(--text-color));
-}
-.rdp-dark .rdp-outside {
-  opacity: 0.35;
 }
 
 /* 纤细滚动条:7px 槽、3px 拇指,滚动容器 hover 时才显(接鼠标时系统条是常驻粗条,不能依赖 overlay) */

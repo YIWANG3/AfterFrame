@@ -157,7 +157,7 @@ AfterFrame embeds an [MCP](https://modelcontextprotocol.io) server, so any AI ag
 
 > "Import the photos on my Desktop" · "Find the vertical shots from last month and show them to me" · "Crop these to 4:3 for Xiaohongshu" · "Tag everything that has no tags yet" · "Export this collection at 2048px JPEG"
 
-- **17 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, import, crop, export, tags/ratings, collections, AI annotation & repaint jobs, deletion — plus job control
+- **34 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, import, crop, export, tags/ratings, collections and smart collections, people, the map and locations, AI annotation & repaint jobs, collages, frames and text rendered by the app's own pipeline, library maintenance, deletion — plus job control
 - **Two-way selection bridge** — select photos in the app and say "these"; the agent's picks get highlighted and scrolled into view right in your gallery (`show_in_app`)
 - **Visible & cancellable** — agent-started work appears in the same background-activity dock as your own, with live progress and a Cancel button
 - **Local-only** — the server listens on `127.0.0.1:41706` while the app runs; same BYOK privacy stance as everything else

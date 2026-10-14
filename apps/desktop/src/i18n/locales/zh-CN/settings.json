@@ -16,7 +16,6 @@
     "shortcuts": "快捷键"
   },
   "general": {
-    "title": "通用",
     "language": "语言",
     "languageHint": "界面语言,立即生效。",
     "theme": "外观",
@@ -108,7 +107,6 @@
     "remove": "移除",
     "cacheStorage": "缓存与存储",
     "cacheSubtitle": "所有缓存位于 ~/Library/Application Support/AfterFrame。",
-    "previewThumbnails": "预览缩略图",
     "depthMaps": "深度图",
     "depthMapsHint": "深度感知文字用的深度图缓存。可放心删除，需要时会重新生成。",
     "stickerLibrary": "贴纸库",
@@ -220,7 +218,6 @@
     "cancel": "取消"
   },
   "integrations": {
-    "title": "集成",
     "editorsTitle": "外部编辑器",
     "editorsSubtitle": "自动探测到的图片编辑器,可在画廊右键 →「打开方式」中使用。",
     "noEditors": "未探测到支持的编辑器。",

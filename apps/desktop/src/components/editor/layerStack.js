@@ -29,10 +29,6 @@ export function isOverlayLayer(layer) {
   return layer && layer.type === LAYER_TYPES.OVERLAY;
 }
 
-export function getTextLayers(layers) {
-  return (layers || []).filter(isTextLayer);
-}
-
 export function moveLayerBy(layers, id, direction) {
   const idx = layers.findIndex((l) => l.id === id);
   if (idx < 0) return layers;
@@ -46,14 +42,6 @@ export function moveLayerBy(layers, id, direction) {
 
 export function removeLayerById(layers, id) {
   return (layers || []).filter((l) => l.id !== id);
-}
-
-export function replaceLayerById(layers, id, patch) {
-  return (layers || []).map((l) => (l.id === id ? { ...l, ...patch } : l));
-}
-
-export function cloneLayerStack(layers) {
-  return (layers || []).map((l) => ({ ...l }));
 }
 
 export function layerLabel(layer) {

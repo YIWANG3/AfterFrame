@@ -1,5 +1,7 @@
 # LUT 预览（套 LUT）设计方案
 
+> **状态（2026-10-14）**：P1 已随 0.5.11 发布（#190），只做 Mac；P2 未开始。
+>
 > **状态（2026-10-07）**：P1 已在 `feat/lut` 上实现，只做 Mac。e2e 是 `67-lut.spec.js`，单测在 `src/components/editor/lut/` 和 `electron/lutLibrary.test.js`。
 >
 > 在作者的真实素材上实测（M1 Max）：
