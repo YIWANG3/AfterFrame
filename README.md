@@ -16,7 +16,7 @@ AfterFrame is built for photographers who work with thousands of exported images
 
 Download the latest version from [Releases](../../releases):
 
-- **Mac:** `-arm64.dmg` for Apple Silicon on macOS 14 or later. On macOS 12 or 13, or on an Intel Mac, take `-macOS12-arm64.dmg` (Apple Silicon) or `-macOS12-Intel.dmg` (Intel): the same app without People, Scene Depth and Stickers, which need macOS 14. Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
+- **Mac:** on macOS 14 or later, `-arm64.dmg` for Apple Silicon or `-Intel.dmg` for an Intel Mac. On macOS 12 or 13, take `-macOS12-arm64.dmg` (Apple Silicon) or `-macOS12-Intel.dmg` (Intel): the same app without People, Scene Depth and Stickers, which need macOS 14. Signed with an Apple Developer ID. If a build isn't notarized yet, macOS may warn on first launch — right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security.
 - **Windows:** the `-setup.exe`. Windows 10 or 11, 64-bit. The installer isn't signed yet: when Windows says "Windows protected your PC", click **More info**, then **Run anyway**. Stickers, People, Scene Depth and LUTs are in the macOS app only for now.
 
 ![AfterFrame — Browse & Inspect](docs/assets/en/library.webp)
@@ -44,7 +44,7 @@ Download the latest version from [Releases](../../releases):
 The core of AfterFrame — a catalog-based workflow that keeps your originals on disk and everything else indexed and fast.
 
 - Catalog-based workflow — one `.afcatalog` per project
-- Import pipeline with automatic metadata extraction and preview generation; on a large import, photos show up a batch at a time, thumbnails included
+- Import pipeline with automatic metadata extraction and preview generation; on a large import, photos show up a batch at a time, thumbnails included. On a Mac, drop photos, videos or folders on the Dock icon to import them
 - Metadata read with [ExifTool](https://exiftool.org/): camera, lens, exposure, capture time, GPS and colour space from JPEG, HEIF and RAW files, CR3 and IIQ included
 - RAW files from 1,200+ cameras read with [LibRaw](https://www.libraw.org/): the camera's embedded preview when it's big enough, a full decode when it isn't; RAW HD previews are made when you open the photo, not at import
 - Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
@@ -130,8 +130,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 ### Video
 - Index video files alongside photos — each clip is probed for duration, dimensions, and codec on import, and a poster frame is generated automatically
 - Gallery cards show the poster with a duration badge; hover to scrub a keyframe filmstrip without opening anything
-- Full playback in the lightbox via a custom player (play/pause, scrubber, volume, fullscreen, spacebar)
-- Automatic on-the-fly H.264 proxy for codecs the OS can't decode natively (e.g. 10-bit HEVC), so clips still play back
+- Full playback in the lightbox via a custom player (play/pause, scrubber, volume, fullscreen, spacebar). On macOS, AVPlayer plays the original file at full resolution, ProRes included, with nothing transcoded
+- On Windows, and on a Mac when AVPlayer can't open a clip: an automatic on-the-fly H.264 proxy for codecs the OS can't decode natively (e.g. 10-bit HEVC), so clips still play back
 
 ### AI Repaint (BYOK)
 Bring your own API key. AfterFrame does not bundle or proxy any AI service — you connect your own provider and all requests go directly from your machine to the API.
