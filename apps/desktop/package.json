@@ -126,7 +126,85 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": false
+      "notarize": false,
+      "extendInfo": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Folder",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "None",
+            "LSItemContentTypes": [
+              "public.folder"
+            ]
+          },
+          {
+            "CFBundleTypeName": "Photo",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "None",
+            "CFBundleTypeExtensions": [
+              "3fr",
+              "ari",
+              "arw",
+              "avif",
+              "bay",
+              "cap",
+              "cr2",
+              "cr3",
+              "crw",
+              "dcr",
+              "dcs",
+              "dng",
+              "drf",
+              "eip",
+              "erf",
+              "fff",
+              "gpr",
+              "heic",
+              "iiq",
+              "jpeg",
+              "jpg",
+              "k25",
+              "kdc",
+              "mdc",
+              "mef",
+              "mos",
+              "mrw",
+              "nef",
+              "nrw",
+              "orf",
+              "pef",
+              "png",
+              "ptx",
+              "pxn",
+              "raf",
+              "raw",
+              "rw2",
+              "rwl",
+              "rwz",
+              "sr2",
+              "srf",
+              "srw",
+              "tif",
+              "tiff",
+              "webp",
+              "x3f"
+            ]
+          },
+          {
+            "CFBundleTypeName": "Video",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "None",
+            "CFBundleTypeExtensions": [
+              "avi",
+              "m4v",
+              "mkv",
+              "mov",
+              "mp4",
+              "webm"
+            ]
+          }
+        ]
+      }
     },
     "dmg": {
       "contents": [
