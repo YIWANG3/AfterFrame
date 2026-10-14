@@ -99,6 +99,9 @@ jobs:
       # path_in_use; the spec waits for the repair); 25-collage-batch assumed
       # three page cards per row (#80). Both are back. Opt-in suites
       # (27-agent, demo) skip themselves.
+      # A new spec belongs in this list unless it is left out above: 66–69
+      # were missed, and 68 then failed every nightly for days (CI's 1024-px
+      # display) without a PR ever running it.
       - name: Run Electron E2E (CI subset)
         run: >
           npm run e2e:only --prefix apps/desktop --
@@ -167,6 +170,10 @@ jobs:
           e2e/63-save-dialog.spec.js
           e2e/64-import-self-repair.spec.js
           e2e/65-search-during-import.spec.js
+          e2e/66-show-in-all-assets.spec.js
+          e2e/67-lut.spec.js
+          e2e/68-remembered-choices.spec.js
+          e2e/69-flags-tags-shortcuts.spec.js
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
