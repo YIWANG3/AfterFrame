@@ -204,7 +204,7 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
           <ColorAnalysisRow />
         </Group>
       )}
-      {api.can("lut") && api.has("listLuts") ? <LutLibraryGroup /> : null}
+      {api.can("lut") ? <LutLibraryGroup /> : null}
       <Group title={t("library.cacheStorage")} subtitle={t("library.cacheSubtitle")}>
         <FieldRow label={t("library.depthMaps")} hint={t("library.depthMapsHint")}>
           <OpenFolderButton kind="depth" label={t("library.openFolder")} />

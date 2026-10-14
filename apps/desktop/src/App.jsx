@@ -933,7 +933,7 @@ export default function App() {
     }
     // Web bridge accepts only images; tell the user instead of silently
     // dropping their videos/RAWs (desktop resolves a path for everything).
-    if (unsupported > 0 && api.capabilities.video === false) {
+    if (unsupported > 0 && !api.can("video")) {
       pushToast({ title: t("webUnsupportedFiles", { count: unsupported }), ttl: 6000 });
     }
     if (paths.length) workspace.addImagesFromPaths(paths);

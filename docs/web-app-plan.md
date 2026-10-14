@@ -52,7 +52,7 @@ apps/desktop/src/web-main.jsx← 新增：Web 壳（安装 browser bridge → �
 ```
 
 - Web 壳启动时检测 `window.mediaWorkspace` 不存在 → 调 `__setBridge(browserBridge)`（把现有 `__setBridgeForTests` 提升为正式注入口）。
-- **能力标志（capability flags）**：bridge 增加 `api.capabilities`（如 `{ depth: false, stickerExtract: false, catalog: false, systemFonts: false }`），组件用它隐藏 Web 端不支持的 UI，而不是靠 `typeof window.mediaWorkspace` 到处判断。
+- **能力标志（capability flags）**：bridge 增加 `api.capabilities`（如 `{ depth: false, stickerExtract: false, catalog: false, systemFonts: false }`），组件用它隐藏 Web 端不支持的 UI，而不是靠 `typeof window.mediaWorkspace` 到处判断。（已实现：所有开关列在 `apps/desktop/shared/capabilities.mjs`，Web 端声明在 `src/api/browser/bridge.js`，`src/api/capabilities.test.js` 检查两边对得上。）
 - 组件代码今后只 import `api.*`。桌面端改功能 → Web 端 `vite build` 自然带上，无同步成本。
 
 ### 1.4 browser bridge 各能力的 Web 实现

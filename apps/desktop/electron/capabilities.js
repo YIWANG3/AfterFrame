@@ -1,6 +1,6 @@
 // Feature flags the desktop bridge declares to the renderer (api.can, the
-// same mechanism the web build uses). Undeclared means available, so the
-// macOS 14 builds declare nothing.
+// same mechanism the web build uses; shared/capabilities.mjs lists them).
+// Undeclared means available, so the macOS 14 builds declare nothing.
 //
 // Off macOS: scene depth (Core ML), subject extraction (Vision) and people
 // recognition (Vision + Core ML) have no engine yet (docs/windows-support-plan.md

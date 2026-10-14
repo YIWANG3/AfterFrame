@@ -29,3 +29,13 @@ test("Windows locks only the features with no engine there", () => {
     assert.equal(desktopCapabilities("win32")[flag], undefined, `${flag} works on Windows`);
   }
 });
+
+test("every flag declared is a feature of shared/capabilities.mjs", async () => {
+  const { FEATURE_NAMES } = await import("../shared/capabilities.mjs");
+  const declared = [
+    desktopCapabilities("darwin", { hasHelper: (name) => MACOS12_HELPERS.has(name) }),
+    desktopCapabilities("win32"),
+    desktopCapabilities("linux"),
+  ].flatMap(Object.keys);
+  for (const flag of declared) assert.ok(FEATURE_NAMES.includes(flag), `${flag} is not in shared/capabilities.mjs`);
+});

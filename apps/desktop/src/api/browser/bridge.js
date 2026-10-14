@@ -820,24 +820,25 @@ async function downloadBuffer(savePath, buffer) {
 
 export const browserBridge = {
   isPackaged: true,
-  // Explicit false = the matching UI renders locked ("Desktop app" badge,
-  // click opens the download page — see DesktopOnly.jsx). Desktop declares none.
+  // The features of shared/capabilities.mjs this build has (true, for the
+  // record) and lacks (false: the UI hides it, or shows it locked with a
+  // "Desktop app" badge whose click opens the download page, DesktopOnly.jsx).
   capabilities: {
     web: true,
-    catalog: "memory",
-    rawSources: false,   // RAW pairing needs the sidecar
-    sidecarJobs: false,  // import pipeline / enrichment / preview generation
     annotation: true,    // BYOK direct fetch (Anthropic / OpenAI-compatible)
-    fileSystem: false,   // reveal in Finder, copy path, refresh/delete from disk
     aiRepaint: true,     // BYOK Gemini direct fetch
     aiRepaintMultiProvider: false, // ark/jimeng/OpenAI need the sidecar
-    depth: false,
-    stickerExtract: false,
-    people: false,       // CoreML face indexing
-    libraryManagement: false,
-    integrations: false, // MCP server etc.
-    video: false,        // decoding/proxy/keyframes live in the sidecar
     colors: false,       // dominant colours come from the sidecar's preview pass
+    depth: false,
+    fileSystem: false,   // reveal in Finder, copy path, refresh/delete from disk
+    integrations: false, // MCP server etc.
+    libraryManagement: false,
+    lut: false,          // no LUT library in the browser yet (docs/lut-plan.md)
+    people: false,       // CoreML face indexing
+    rawSources: false,   // RAW pairing needs the sidecar
+    sidecarJobs: false,  // import pipeline / enrichment / preview generation
+    stickerExtract: false,
+    video: false,        // decoding/proxy/keyframes live in the sidecar
   },
   openExternal: (url) => { window.open(url, "_blank", "noopener"); },
   listPeopleGroups: async () => [],
