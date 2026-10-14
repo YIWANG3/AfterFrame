@@ -641,7 +641,8 @@ ipcMain.handle("app:set-menu-accelerators", (_event, on) => {
   return true;
 });
 
-// Playback proxy + keyframe filmstrip — see ./ipc/video.js.
+// macOS plays originals with AVPlayer, and the player's fullscreen button
+// uses the shell's — see ./ipc/nativeVideo.js.
 nativeVideoIpc.register({
   ipcMain, BrowserWindow, app, allowlist: media,
   toggleFullscreen: appShell.toggleAppFullscreen,
@@ -649,6 +650,7 @@ nativeVideoIpc.register({
     ? path.join(process.resourcesPath, "native", "bin", "video-player.node")
     : path.join(rootDir, "apps", "desktop", "native", "bin", "video-player.node"),
 });
+// Playback proxy + keyframe filmstrip — see ./ipc/video.js.
 videoIpc.register({
   ipcMain, app, allowlist: media,
   videoToolPath: isPackaged

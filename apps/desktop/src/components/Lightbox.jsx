@@ -193,6 +193,14 @@ export default function Lightbox({
   // Reset the proxy when switching items.
   useEffect(() => { setProxySrc(null); setProxyPending(false); }, [currentItem?.asset_id]);
 
+  // A video's fullscreen button (macOS) fills the screen with the window.
+  // Leaving the lightbox puts the window back as it was; stepping on to the
+  // next clip doesn't.
+  useEffect(() => {
+    if (!open || api.platform !== "darwin" || !api.has("restoreVideoFullscreen")) return undefined;
+    return () => { Promise.resolve(api.restoreVideoFullscreen()).catch(() => {}); };
+  }, [open]);
+
   // On native decode failure (Chromium can't play this codec, or plays it with
   // no picture), transcode an H.264 proxy on demand and swap the <video>
   // source to it.

@@ -8,8 +8,8 @@ function setup(allow = async () => true, platform = "darwin") {
   const sender = new EventEmitter();
   Object.assign(sender, { id: 1, mainFrame: {}, getZoomFactor: () => 1.5 });
   const window = new EventEmitter();
-  let fullscreen = false;
-  Object.assign(window, { webContents: sender, isDestroyed: () => false, isSimpleFullScreen: () => fullscreen, getContentSize: () => [900, 600], getNativeWindowHandle: () => Buffer.alloc(8) });
+  let simpleFullScreen = false;
+  Object.assign(window, { webContents: sender, isDestroyed: () => false, isSimpleFullScreen: () => simpleFullScreen, getContentSize: () => [900, 600], getNativeWindowHandle: () => Buffer.alloc(8) });
   const addon = {
     open: (arg) => { calls.push(["open", arg]); return calls.length; },
     close: (arg) => calls.push(["close", arg]),
@@ -17,12 +17,14 @@ function setup(allow = async () => true, platform = "darwin") {
     state: () => ({ ready: true, time: 1 }),
   };
   const app = new EventEmitter();
-  const toggleFullscreen = () => { fullscreen = !fullscreen; };
+  const toggleFullscreen = () => { simpleFullScreen = !simpleFullScreen; };
   register({ ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, BrowserWindow: { fromWebContents: () => window }, app, allowlist: { isAllowedMediaPathLoaded: allow }, addonPath: "test.node", loadAddon: () => addon, toggleFullscreen, platform });
   const event = { sender, senderFrame: sender.mainFrame };
   const ask = (verb, ...args) => handlers.get(`app:native-video-${verb}`)(event, ...args);
+  const fullscreen = () => handlers.get("app:video-fullscreen")(event);
+  const restore = () => handlers.get("app:video-fullscreen-restore")(event);
   const request = (session) => ({ session, path: __filename, bounds: { x: 10, y: 20, width: 100, height: 80 } });
-  return { ask, calls, request, sender, event, app, window, toggleFullscreen };
+  return { ask, fullscreen, restore, calls, request, sender, event, app, window, toggleFullscreen };
 }
 
 test("original path is allowlisted before native open; renderer bounds respect zoom", async () => {
@@ -82,19 +84,46 @@ test("subframes cannot control or close an existing player", async () => {
   await ask("close", "first");
 });
 
-test("player fullscreen uses the shell and restores the previous mode on close", async () => {
-  const { ask, request, window, toggleFullscreen } = setup();
+test("player fullscreen uses the shell; the lightbox, not a clip change, restores it", async () => {
+  const { ask, fullscreen, restore, request, window, toggleFullscreen } = setup();
   await ask("open", request("first"));
-  assert.equal(await ask("command", "first", "fullscreen"), true);
+  assert.equal(await fullscreen(), true);
   assert.equal(window.isSimpleFullScreen(), true);
+  // Stepping to the next clip closes the first player and stays fullscreen.
   await ask("close", "first");
-  assert.equal(window.isSimpleFullScreen(), false);
-  toggleFullscreen(); // Opening from an already fullscreen app must preserve it.
   await ask("open", request("second"));
-  await ask("command", "second", "fullscreen");
-  assert.equal(window.isSimpleFullScreen(), false);
-  await ask("close", "second");
   assert.equal(window.isSimpleFullScreen(), true);
+  assert.equal(await restore(), true);
+  assert.equal(window.isSimpleFullScreen(), false);
+  assert.equal(await restore(), false); // nothing left to restore
+  toggleFullscreen(); // Opening from an already fullscreen app must preserve it.
+  await fullscreen();
+  assert.equal(window.isSimpleFullScreen(), false);
+  await restore();
+  assert.equal(window.isSimpleFullScreen(), true);
+});
+
+test("fullscreen works without a native player (the HTML fallback), never off macOS or from subframes", async () => {
+  const { fullscreen, restore, window, event } = setup();
+  assert.equal(await fullscreen(), true);
+  assert.equal(window.isSimpleFullScreen(), true);
+  await restore();
+  assert.equal(window.isSimpleFullScreen(), false);
+  const trustedFrame = event.senderFrame;
+  event.senderFrame = {};
+  assert.equal(await fullscreen(), false);
+  event.senderFrame = trustedFrame;
+  const other = setup(undefined, "win32");
+  assert.equal(await other.fullscreen(), false);
+  assert.equal(other.window.isSimpleFullScreen(), false);
+});
+
+test("a zero-sized surface hides the picture instead of refusing the bounds", async () => {
+  const { ask, calls, request } = setup();
+  assert.deepEqual(await ask("open", { ...request("first"), bounds: { x: 0, y: 0, width: 0, height: 0 } }), { session: "first" });
+  assert.equal(await ask("command", "first", "bounds", { x: 10, y: 10, width: 0, height: 40 }), true);
+  assert.deepEqual(calls.at(-1)[1].bounds, { x: 15, y: 15, width: 0, height: 60 });
+  await assert.rejects(async () => ask("command", "first", "bounds", { x: 0, y: 0, width: -1, height: 10 }), /Invalid video bounds/);
 });
 
 test("navigation and app quit stop playback; malformed commands are refused", async () => {

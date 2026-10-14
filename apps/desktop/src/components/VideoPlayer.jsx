@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { topLayerOpen } from "../utils/topLayer";
 import useNativeVideo from "../hooks/useNativeVideo";
+import api from "../api";
 
 // mm:ss (or h:mm:ss) for the scrubber readout.
 function fmtTime(seconds) {
@@ -21,7 +22,7 @@ export default function VideoPlayer({ src, nativePath, onError }) {
   const surfaceRef = useRef(null);
   const containerRef = useRef(null);
   const native = useNativeVideo(nativePath, surfaceRef);
-  const { enabled: nativeEnabled, togglePlay: nativeTogglePlay, seek: nativeSeek, toggleMute: nativeToggleMute, toggleFullscreen: nativeToggleFullscreen } = native;
+  const { enabled: nativeEnabled, togglePlay: nativeTogglePlay, seek: nativeSeek, toggleMute: nativeToggleMute } = native;
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -51,13 +52,19 @@ export default function VideoPlayer({ src, nativePath, onError }) {
     setMuted(v.muted);
   }, [nativeEnabled, nativeToggleMute]);
 
+  // macOS, either engine: the window fills the screen (the shell's simple
+  // fullscreen) and the lightbox puts it back when it closes. DOM fullscreen
+  // can leave the transparent window stuck, and can't hold the native picture.
   const toggleFullscreen = useCallback(() => {
-    if (nativeEnabled) { nativeToggleFullscreen(); return; }
+    if (api.platform === "darwin" && api.has("toggleVideoFullscreen")) {
+      Promise.resolve(api.toggleVideoFullscreen()).catch(() => {});
+      return;
+    }
     const el = containerRef.current;
     if (!el) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else el.requestFullscreen?.().catch(() => {});
-  }, [nativeEnabled, nativeToggleFullscreen]);
+  }, []);
 
   // Spacebar toggles play while a video is open.
   useEffect(() => {

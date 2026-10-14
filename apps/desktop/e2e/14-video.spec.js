@@ -52,6 +52,9 @@ test.describe("Video assets", () => {
     // Both share the same app controls (the Seek range is a stable anchor).
     const video = window.locator("[data-video-engine]");
     await expect(video).toBeVisible({ timeout: 15_000 });
+    // The engine reads "avplayer" from the first render, and a native failure
+    // falls back to <video> quietly: only a first frame proves AVPlayer opened.
+    if (NATIVE) await expect(video).toHaveAttribute("data-video-ready", "true", { timeout: 15_000 });
     await expect(video).toHaveAttribute("data-video-engine", NATIVE ? "avplayer" : "html");
     if (!NATIVE) await expect(window.locator("video")).toHaveAttribute("src", new RegExp(`${VIDEO_FILE.replace(".", "\\.")}`));
     await expect(window.getByLabel("Seek")).toBeVisible();
@@ -96,6 +99,9 @@ test.describe("Video assets", () => {
       return now.ready && now.width > 0;
     }, { timeout: proxied ? 150_000 : 15_000 }).toBe(true);
     const first = await state();
+    // Still the engine it started on: a native player that failed would have
+    // handed over to <video>, whose state reads the same.
+    await expect(video).toHaveAttribute("data-video-engine", NATIVE ? "avplayer" : "html");
     expect(first).toMatchObject(proxied ? { width: 1920, height: 1080, error: null } : { width: 3840, height: 2160, error: null });
     expect(first.duration).toBeGreaterThan(2);
     expect(first.duration).toBeLessThan(2.2);

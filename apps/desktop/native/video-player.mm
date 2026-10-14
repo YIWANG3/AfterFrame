@@ -89,10 +89,15 @@ static napi_value openPlayer(napi_env env, napi_callback_info info) {
     AFVideoSession *session = [AFVideoSession new];
     session.player = [AVPlayer playerWithURL:[NSURL fileURLWithPath:path]];
     session.view = [[AFVideoView alloc] initWithFrame:NSZeroRect];
+    // Between the page's bounds updates (a live resize), keep the margins the
+    // lightbox gives the surface: fixed to every edge of the window.
+    session.view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     session.view.wantsLayer = YES;
     session.playerLayer = [AVPlayerLayer playerLayerWithPlayer:session.player];
     session.playerLayer.videoGravity = AVLayerVideoGravityResizeAspect;
     session.playerLayer.backgroundColor = NSColor.blackColor.CGColor;
+    session.playerLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+    session.playerLayer.actions = @{ @"bounds": NSNull.null, @"position": NSNull.null };
     [session.view.layer addSublayer:session.playerLayer];
     [parent addSubview:session.view positioned:NSWindowAbove relativeTo:nil];
     layout(env, session, property(env, arg, "bounds"));
@@ -119,6 +124,15 @@ static napi_value state(napi_env env, napi_callback_info info) {
     setBool(env, out, "failed", item.status == AVPlayerItemStatusFailed);
     setBool(env, out, "visible", !s.view.hidden);
     setBool(env, out, "seeking", s.seeking);
+    // Where the picture is, in the page's terms (points from the top left).
+    NSView *parent = s.view.superview;
+    NSRect frame = s.view.frame;
+    napi_value rect; napi_create_object(env, &rect);
+    setNumber(env, rect, "x", frame.origin.x);
+    setNumber(env, rect, "y", parent.isFlipped ? frame.origin.y : parent.bounds.size.height - NSMaxY(frame));
+    setNumber(env, rect, "width", frame.size.width);
+    setNumber(env, rect, "height", frame.size.height);
+    napi_set_named_property(env, out, "frame", rect);
     double duration = CMTimeGetSeconds(item.duration), time = CMTimeGetSeconds(s.player.currentTime);
     setBool(env, out, "ended", std::isfinite(duration) && duration > 0 && time >= duration - 0.05 && s.player.rate == 0);
     return out;

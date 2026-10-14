@@ -200,6 +200,8 @@ export const IPC_METHODS = [
   ["nativeVideoState", "app:native-video-state", 1],
   ["nativeVideoCommand", "app:native-video-command", 3],
   ["nativeVideoClose", "app:native-video-close", 1],
+  ["toggleVideoFullscreen", "app:video-fullscreen", 0],
+  ["restoreVideoFullscreen", "app:video-fullscreen-restore", 0],
   ["videoKeyframes", "app:video-keyframes", 2],
   ["openCacheDir", "app:open-cache-dir", 1],
   ["getPreviewSettings", "app:get-preview-settings", 0],
