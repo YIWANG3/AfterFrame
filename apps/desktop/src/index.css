@@ -433,10 +433,10 @@ html.electron.fs .noise-overlay > .grid > section.bg-app .library-view > .app-to
    给覆盖层整块标 no-drag 把窗口从拖拽区里减掉;覆盖层自己的头部一行给回可拖,控件 no-drag */
 html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
 html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10,
-html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12,
+html.electron .fixed.inset-0[data-settings-overlay] > .rounded-xl > .h-12,
 html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
 html.electron .fixed.inset-0.z-\[10100\] > .h-11 > *, html.electron .fixed.inset-0.z-\[10200\] > .h-10 > *,
-html.electron .fixed.inset-0.z-\[3000\] > .rounded-xl > .h-12 > *,
+html.electron .fixed.inset-0[data-settings-overlay] > .rounded-xl > .h-12 > *,
 html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start > * { -webkit-app-region: no-drag; }
 /* 侧栏内零分割线(底部折叠钮 / 设置上方的两条线) */
 aside.border-r .border-t, aside.border-r .border-b, aside.border-r [class*="border-t"], aside.border-r [class*="border-b"] { border-color: transparent; }
@@ -736,35 +736,36 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 /* ───────── 10 · Modal / 设置:实色卡 18px、无边框、无分割线 ───────── */
 /* 内部浮窗圆角:窗口 26 → 设置这种大浮窗同 26(它就是窗中窗);新建风格 / 服务商 / 拼图选图这类小对话框 20;菜单 / 弹层仍 14 */
 .rounded-xl.border.bg-chrome, .rounded-xl.border.bg-panel { border-color: transparent; background: rgb(var(--chrome-bg)); border-radius: 20px; }
-.fixed.inset-0.z-\[3000\] > .rounded-xl.border.bg-chrome { border-radius: 26px; }
+.fixed.inset-0[data-settings-overlay] > .rounded-xl.border.bg-chrome { border-radius: 26px; }
 .rounded-xl.border.bg-chrome .border-b, .rounded-xl.border.bg-chrome .border-r { border-color: transparent; }
 .rounded-xl.border.bg-chrome .bg-panel { background: var(--fill); border-radius: 14px; }
 .rounded-xl.border.bg-chrome .border-b.border-border\/50 { border-color: transparent; }
 .fixed.inset-0.bg-app\/80 { background: rgba(0,0,0,.45); }
 /* ───────── 10b · 设置页控件统一(用户:「统一一下,稍微偏圆一点」):
    之前按钮 rounded(4px)、输入框 rounded-md(10px)、多行框 rounded(4px)混着。统一为 28 高、8px 圆角、无描边、fill 底;
-   主按钮 accent 底同圆角;focus 用 1px 内环 ───────── */
-.fixed.inset-0.z-\[3000\] :is(button.h-7, button.h-8)[class*="rounded"]:not([class*="rounded-full"]) { border-radius: 8px; }
+   主按钮 accent 底同圆角;focus 用 1px 内环。
+   设置面板按 data-settings-overlay 选中,别按 z-index 选:#107 把层级从 3000 挪到 11200 时,按 z-[3000] 写的这些规则整段失效过 ───────── */
+.fixed.inset-0[data-settings-overlay] :is(button.h-7, button.h-8)[class*="rounded"]:not([class*="rounded-full"]) { border-radius: 8px; }
 /* 卡片底已经是 --fill,卡内控件要再亮一档(fill-2)才分得出来 */
-.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); color: rgb(var(--text-color)); }
-.fixed.inset-0.z-\[3000\] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
-.fixed.inset-0.z-\[3000\] button.border-accent.bg-accent { border-color: transparent; color: rgb(var(--accent-ink)); }
-.fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
+.fixed.inset-0[data-settings-overlay] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); color: rgb(var(--text-color)); }
+.fixed.inset-0[data-settings-overlay] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
+.fixed.inset-0[data-settings-overlay] button.border-accent.bg-accent { border-color: transparent; color: rgb(var(--accent-ink)); }
+.fixed.inset-0[data-settings-overlay] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
   border-radius: 8px; border-color: transparent; background-color: var(--fill-2);
 }
-.fixed.inset-0.z-\[3000\] :is(input, select, textarea)[class*="rounded"]:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); outline: none; }
+.fixed.inset-0[data-settings-overlay] :is(input, select, textarea)[class*="rounded"]:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); outline: none; }
 /* 密钥这类「图标 + 输入」的组合框(div.h-8 带边框)同样处理 */
-.fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app { border-radius: 8px; border-color: transparent; background: var(--fill-2); }
+.fixed.inset-0[data-settings-overlay] div.h-8.rounded-md.border.bg-app { border-radius: 8px; border-color: transparent; background: var(--fill-2); }
 /* 子卡(服务商 / 模型行):深色用 fill,浅色用白底,与灰卡拉开;组件通过 --sub-card 取 */
 :root { --sub-card: var(--fill); }
 :root[data-theme="light"] { --sub-card: rgb(255 255 255 / 0.85); }
 :root[data-theme="light"] { --sel-ring-alpha: 0.55; }
 /* 浅色主题遮罩不要黑 45%,叠出来发脏 */
 :root[data-theme="light"] .fixed.inset-0.bg-app\/80 { background: rgba(0, 0, 0, 0.22); }
-.fixed.inset-0.z-\[3000\] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
+.fixed.inset-0[data-settings-overlay] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
 
 /* 下拉箭头:字段底色改用 background-color 写,别把自绘箭头抹掉;并给编辑器面板 / 设置 / 小对话框里的 select 统一一枚箭头 */
-[data-editor-wheel-scope="panel"] select, .fixed.inset-0.z-\[3000\] select, .shadow-overlay.bg-chrome select {
+[data-editor-wheel-scope="panel"] select, .fixed.inset-0[data-settings-overlay] select, .shadow-overlay.bg-chrome select {
   appearance: none; -webkit-appearance: none; padding-right: 26px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
   background-repeat: no-repeat; background-position: right 8px center; background-size: 12px 12px;

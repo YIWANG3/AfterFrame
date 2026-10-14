@@ -3,11 +3,12 @@
 // that nobody owned. New layers MUST pick from here, not invent numbers.
 export const Z = {
   dropdown: 100, //     toolbar menus, sort dropdown, context menus
-  settings: 3000, //    settings overlay
   designSystem: 9000,
   lightbox: 10050,
   editor: 10100, //     editor / full-screen work surfaces
   overlay: 10200, //    collage, before/after compare
   overlayTop: 10210, // modals stacked above the editor (provider/style modals)
-  dock: 11000, //       job dock + toast stack — always on top
+  dock: 11000, //       job dock + toast stack
+  settings: 11200, //   settings overlay — above every view, the dock included
+  confirm: 13000, //    ConfirmDialog — above everything, settings included
 };
