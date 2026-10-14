@@ -34,7 +34,7 @@ test("folders scroll independently inside the rounded sidebar", async () => {
       const lastBox = await last.boundingBox();
       expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(listBox.y + listBox.height);
       await last.click();
-      await page.keyboard.press("Meta+,");
+      await page.keyboard.press("ControlOrMeta+,");
       await expect(page.getByRole("button", { name: "General", exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
     }

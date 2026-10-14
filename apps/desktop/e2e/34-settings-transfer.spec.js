@@ -21,7 +21,7 @@ test.afterAll(() => {
 
 async function openGeneralSettings(window) {
   await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
-  await window.keyboard.press("Meta+,");
+  await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "General" }).click();
   await expect(window.getByText("Backup & transfer")).toBeVisible();
 }

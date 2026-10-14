@@ -135,7 +135,7 @@ test("the split keeps its panel ratio, the gallery its layout, Settings its tab"
   await expect.poll(() => cards().first().getAttribute("data-image-path")).not.toBe(firstByImport);
   firstByName = await cards().first().getAttribute("data-image-path");
 
-  await ctx.window.keyboard.press("Meta+,");
+  await ctx.window.keyboard.press("ControlOrMeta+,");
   await settingsTabs().getByRole("button", { name: "About" }).click();
   await expect(ctx.window.getByText(/local-first photo workspace/i)).toBeVisible();
   await ctx.window.keyboard.press("Escape");
@@ -153,7 +153,7 @@ test("after a restart, everything comes back", async () => {
   await expect(ctx.window.getByRole("button", { name: "Waterfall", exact: true })).toHaveClass(/text-text/);
   await ctx.window.keyboard.press("Escape");
 
-  await ctx.window.keyboard.press("Meta+,");
+  await ctx.window.keyboard.press("ControlOrMeta+,");
   await expect(ctx.window.getByText(/local-first photo workspace/i)).toBeVisible();
   await ctx.window.keyboard.press("Escape");
   await expect(settingsTabs()).toHaveCount(0);

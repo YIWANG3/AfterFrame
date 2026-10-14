@@ -40,7 +40,7 @@ async function closeEditor() {
   await expect(window.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
 }
 async function openWatermarkSettings() {
-  await window.keyboard.press("Meta+,");
+  await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
 }
 const personalLayers = (state) => state.layers.filter((l) => l.logoRef?.source === "personal");

@@ -47,7 +47,7 @@ test.afterAll(async () => {
 });
 
 test("the author set in Settings is what the Frame tool's Photo info › Author writes", async () => {
-  await window.keyboard.press("Meta+,");
+  await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
   const field = window.locator("[data-watermark-author]");
   await field.fill(AUTHOR);
@@ -166,7 +166,7 @@ test("an agent sees the user template and can apply it", async () => {
 
 test("deleting it in Settings removes it everywhere", async () => {
   const [tpl] = await templates();
-  await window.keyboard.press("Meta+,");
+  await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
   const row = window.locator(`[data-settings-frame-template="${tpl.id}"]`);
   await expect(row).toContainText("Bar, renamed");
