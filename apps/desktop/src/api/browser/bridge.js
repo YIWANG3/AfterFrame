@@ -1458,9 +1458,6 @@ export const browserBridge = {
     if (asset.annotation) asset.annotation = { ...asset.annotation, tags: asset.tags };
     return { asset_id: assetId, tags: asset.tags };
   },
-  listTags: async (limit = 50) => {
-    return aggregateTags(limit).map((t) => t.value);
-  },
   clearAiLocation: async (assetId) => {
     const asset = assets.find((a) => a.asset_id === assetId);
     if (!asset?.annotation) return asset?.annotation || null;

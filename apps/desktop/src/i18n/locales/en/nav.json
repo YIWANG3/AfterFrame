@@ -88,8 +88,6 @@
     "viewCovers": "Show covers",
     "viewList": "Show as list",
     "folderMeta": "{{count}} items",
-    "settings": "Settings",
-    "settingsTip": "Settings (⌘,)",
     "rename": "Rename",
     "delete": "Delete",
     "annotateFolder": "Annotate un-annotated in this folder",
@@ -205,8 +203,7 @@
     "pickedMore": "{{first}} +{{count}}",
     "match": {
       "any": "Any of these",
-      "all": "All of these",
-      "exclude": "Exclude"
+      "all": "All of these"
     },
     "locationSource": {
       "label": "Location",
@@ -254,7 +251,6 @@
     "groups": {
       "entry": "Condition groups (or)…",
       "chip": "Any of {{count}} groups",
-      "remove": "Remove the groups",
       "title": "Condition groups",
       "hint": "A photo shows when it matches every condition on the filter bar and at least one of these groups. The conditions inside one group must all hold.",
       "group": "Group {{n}}",

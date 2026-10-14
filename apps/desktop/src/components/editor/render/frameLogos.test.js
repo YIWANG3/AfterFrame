@@ -6,7 +6,6 @@ import {
   brandIdForExif,
   brandKeyForExif,
   buildLogoRegistry,
-  builtInMarks,
   cameraNamer,
   cameraNamesFor,
   labelExif,
@@ -67,14 +66,6 @@ describe("frame logo selection", () => {
     expect(pickVariant(one, { variantId: "pro", model: "Lite" })?.id).toBe("symbol");
     expect(pickVariant(one, { variantId: "wordmark", model: "Lite", strict: true })).toBeNull();
     expect(pickVariant(one, { kind: "wordmark", model: "Lite" })?.id).toBe("symbol");
-  });
-
-  it("lists every mark a camera shows, a model's own in place of the general one", () => {
-    expect(builtInMarks(brand, "Insta360 X5").map((v) => v.id)).toEqual(["wordmark"]);
-    expect(builtInMarks(brand, "Luna Ultra").map((v) => v.id)).toEqual(["luna-ultra"]);
-    const sony = { variants: [{ id: "symbol", kind: "symbol" }, { id: "wordmark", kind: "wordmark" }] };
-    expect(builtInMarks(sony, "ILCE-7CM2").map((v) => v.id)).toEqual(["symbol", "wordmark"]);
-    expect(builtInMarks(null, "x")).toEqual([]);
   });
 
   it("preserves strict variant slots in dual-logo templates", () => {

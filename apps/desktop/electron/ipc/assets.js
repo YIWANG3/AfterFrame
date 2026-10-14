@@ -1,5 +1,5 @@
-// Asset-level IPC: quick-register (after a save), collage-sources lookup,
-// delete-image-assets, and the cross-platform "reveal in Finder/Explorer".
+// Asset-level IPC: quick-register (after a save), delete-image-assets, and the
+// cross-platform "reveal in Finder/Explorer".
 
 function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedMediaDir, getCatalogState, getUserDataPath, t }) {
   const fs = require("node:fs");
@@ -110,11 +110,6 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
     // The renderer will media:// this file right after registering it.
     addAllowedMediaDir?.(require("node:path").dirname(imagePath));
     return await commands.quickRegister({ imagePath, originPath, collageSourceIds });
-  });
-
-  ipcMain.handle("workspace:collage-sources", async (_event, assetId) => {
-    if (!assetId) return { sources: [], used_in_collages: [] };
-    return await commands.collageSources(assetId);
   });
 
   // Cheap watched-dir catch-up check (startup): returns only media files not yet

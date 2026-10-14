@@ -29,7 +29,6 @@ UI 截图按界面语言归档：`cn/` 为简体中文，`en/` 为英文；各�
 | `people`：人物库 | ✓ | ✓ |
 | `editor-crop`：裁剪 | ✓ | ✓ |
 | `editor-text`：文字编辑 | ✓ | ✓ |
-| `editor-text-new-york`：New York 文字编辑 | ✓ | — |
 | `editor-text-depth`：深度文字 | — | ✓ |
 | `editor-handwriting`：AI 手写字 | — | ✓ |
 | `collage-batch`：批量拼图 | ✓ | ✓ |

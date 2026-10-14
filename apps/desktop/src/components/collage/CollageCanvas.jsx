@@ -27,16 +27,6 @@ function isReady(img) {
   return !!img && img.complete && img.naturalWidth > 0;
 }
 
-
-
-
-
-
-
-
-export const COLLAGE_ZOOM_MIN = MIN_ZOOM;
-export const COLLAGE_ZOOM_MAX = MAX_ZOOM;
-
 const CollageCanvas = forwardRef(function CollageCanvas(
   { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, mode = "single", highlightCell = -1, dimCell = -1, sharedStates, onSwap, onReplace, onRemove, onCellDragOut, onSelectionChange, onSelectedStateChange },
   ref,

@@ -102,9 +102,7 @@
     "showMoreFaces_other": "Show more ({{count}} more faces)"
   },
   "locationSource": {
-    "exif": "GPS (EXIF)",
-    "ai": "AI inferred",
-    "manual": "Manual"
+    "exif": "GPS (EXIF)"
   },
   "flag": {
     "pick": "Pick",

@@ -4,9 +4,7 @@
     "zh-CN": "中文"
   },
   "actions": {
-    "save": "Save",
-    "cancel": "Cancel",
-    "close": "Close"
+    "cancel": "Cancel"
   },
   "desktop": {
     "macOnly": "Available in the macOS app for now",

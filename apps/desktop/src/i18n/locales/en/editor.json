@@ -126,7 +126,6 @@
     }
   },
   "split": {
-    "title": "Seamless Split",
     "count": "Panels",
     "fewer": "Fewer panels",
     "more": "More panels",
@@ -222,7 +221,6 @@
       "inferring": "Inferring depth…",
       "ready": "Depth ready — regenerate",
       "showMap": "Show depth map",
-      "loading": "Loading…",
       "model": "Model",
       "useBundled": "Use bundled model",
       "selectModel": "Select a CoreML depth model",
@@ -240,7 +238,6 @@
     "addHandwriting": "AI handwriting",
     "glow": "Glow",
     "glowIntensity": "Intensity",
-    "insertInfo": "Insert photo info",
     "tokens": {
       "camera_model": "Camera",
       "lens_model": "Lens",
@@ -252,14 +249,11 @@
     }
   },
   "sticker": {
-    "title": "Sticker",
     "inLibrary": "{{count}} stickers",
-    "createNew": "Create new",
     "library": "Library",
     "search": "Search stickers…",
     "noStickers": "No stickers yet",
     "emptyHint": "Make your first one by extracting a subject from the current image.",
-    "createSticker": "Create sticker",
     "star": "Star",
     "unstar": "Unstar",
     "delete": "Delete",
@@ -297,7 +291,6 @@
     "parameters": "Parameters",
     "aspectRatio": "Aspect ratio",
     "aspectRatioColon": "Aspect ratio:",
-    "auto": "Auto",
     "resolution": "Resolution",
     "resolutionColon": "Resolution:",
     "temperature": "Temperature",
@@ -314,7 +307,6 @@
     "compactView": "Compact view",
     "results": "Results",
     "versions": "Versions",
-    "created": "Created:",
     "createdColon": "Created:",
     "compareSide": "Compare side-by-side",
     "exitCompare": "Exit compare",

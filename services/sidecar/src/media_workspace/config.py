@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 
 # RAW extensions vary by manufacturer; cover the full common set so files are
 # recognized on import regardless of camera brand. (Whether a given format also
@@ -49,13 +48,3 @@ DEFAULT_IMAGE_EXTENSIONS = {
 class Thresholds:
     auto_bind: float = 0.90
     manual_review: float = 0.7
-
-
-@dataclass(slots=True)
-class WorkspaceConfig:
-    catalog_path: Path
-    raw_dirs: tuple[Path, ...] = ()
-    image_dirs: tuple[Path, ...] = ()
-    poll_interval_seconds: float = 2.0
-    thresholds: Thresholds = field(default_factory=Thresholds)
-

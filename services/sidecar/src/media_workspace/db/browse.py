@@ -91,9 +91,6 @@ def _browse_order_clause(sort: str | None) -> str:
 
 # Inside a folder the toolbar's sort applies like anywhere else, plus one order
 # only a folder has: when each photo was added to it (requires the `ci` join).
-COLLECTION_SORTS = ("added-desc", "added-asc")
-
-
 def _collection_order_clause(sort: str | None) -> str:
     if sort == "added-asc":
         return "ci.added_at ASC, assets.stem, assets.asset_id"

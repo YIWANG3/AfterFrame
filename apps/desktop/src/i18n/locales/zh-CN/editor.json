@@ -123,7 +123,6 @@
     }
   },
   "split": {
-    "title": "无缝切图",
     "count": "片数",
     "fewer": "减少片数",
     "more": "增加片数",
@@ -219,7 +218,6 @@
       "inferring": "正在推断深度…",
       "ready": "深度就绪，重新生成",
       "showMap": "显示深度图",
-      "loading": "加载中…",
       "model": "模型",
       "useBundled": "使用内置模型",
       "selectModel": "选择 CoreML 深度模型",
@@ -237,7 +235,6 @@
     "addHandwriting": "AI 手写字",
     "glow": "外发光",
     "glowIntensity": "强度",
-    "insertInfo": "插入照片信息",
     "tokens": {
       "camera_model": "机型",
       "lens_model": "镜头",
@@ -249,14 +246,11 @@
     }
   },
   "sticker": {
-    "title": "贴纸",
     "inLibrary": "{{count}} 个",
-    "createNew": "新建",
     "library": "贴纸库",
     "search": "搜索贴纸…",
     "noStickers": "暂无贴纸",
     "emptyHint": "从当前图像中提取一个主体来制作第一个贴纸。",
-    "createSticker": "制作贴纸",
     "star": "收藏",
     "unstar": "取消收藏",
     "delete": "删除",
@@ -294,7 +288,6 @@
     "parameters": "参数",
     "aspectRatio": "长宽比",
     "aspectRatioColon": "长宽比:",
-    "auto": "自动",
     "resolution": "分辨率",
     "resolutionColon": "分辨率:",
     "temperature": "温度",
@@ -311,7 +304,6 @@
     "compactView": "紧凑视图",
     "results": "结果",
     "versions": "版本",
-    "created": "创建于:",
     "createdColon": "创建于:",
     "compareSide": "并排对比",
     "exitCompare": "退出对比",

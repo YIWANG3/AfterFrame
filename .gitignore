@@ -76,7 +76,7 @@ apps/desktop/e2e/fixtures/big-frame-*.jpg
 # python packaging artefacts
 *.egg-info/
 dist-web/
-e2e-web/.artifacts/
+apps/desktop/e2e-web/.artifacts/
 
 # Local-only UI experiments and their photo assets
 /apps/desktop/lg-demo-electron/

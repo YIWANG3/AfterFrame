@@ -22,7 +22,6 @@
   "configureTip": "在 设置 → AI 中配置服务商",
   "configureHint": "在 设置 → AI 中配置服务商以启用标注。",
   "generatesHint": "生成描述、标签和位置推测。",
-  "noCaption": "未返回描述。",
   "noProviderError": "未配置服务商。打开 设置 → AI 添加一个。",
   "loadFailed": "加载标注失败",
   "loc": {

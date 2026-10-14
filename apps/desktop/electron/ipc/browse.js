@@ -196,22 +196,6 @@ function register({ ipcMain, commands, getCatalogState }) {
     }
   });
 
-  // Force-regenerate the thumbnail previews for specific source files — the
-  // gallery calls this when a preview <img> fails to load (missing/corrupt
-  // preview file), so broken thumbnails self-heal on view without a re-import.
-  ipcMain.handle("workspace:regenerate-previews", async (_event, paths) => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return { generated: 0, skipped: 0 };
-    const list = [...new Set((paths || []).map(String).filter(Boolean))];
-    if (!list.length) return { generated: 0, skipped: 0 };
-    try {
-      return await commands.regeneratePreviews(list);
-    } catch (err) {
-      console.warn("[workspace:regenerate-previews] sidecar error:", err.message);
-      return { error: String(err.message) };
-    }
-  });
-
   // Thumbnails missing from the gallery: an import cancelled before its
   // thumbnail pass, a file whose thumbnail failed. Made where missing, in a
   // background process, one pass at a time (two would only read the same disk
@@ -247,17 +231,6 @@ function register({ ipcMain, commands, getCatalogState }) {
     } catch (err) {
       console.warn("[workspace:refresh-assets] sidecar error:", err.message);
       throw err;
-    }
-  });
-
-  ipcMain.handle("workspace:pending", async () => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return [];
-    try {
-      return await commands.listPending();
-    } catch (err) {
-      console.warn("[workspace:pending] sidecar error:", err.message);
-      return [];
     }
   });
 }

@@ -29,7 +29,6 @@ export const IPC_METHODS = [
   ["registerRoots", "workspace:register-roots", 2],
   ["switchCatalog", "workspace:switch-catalog", 1],
   // ── browse & assets ──
-  ["getPending", "workspace:pending", 0],
   ["browseImages", "workspace:browse", 1],
   ["locateImageAsset", "workspace:locate-image-asset", 1],
   ["browseMapPoints", "workspace:browse-map-points", 1],
@@ -44,7 +43,6 @@ export const IPC_METHODS = [
   ["ensureHdPreviews", "workspace:ensure-hd-previews", 1],
   ["ensurePreviews", "workspace:ensure-previews", 1],
   ["rawEditSource", "workspace:raw-edit-source", 1],
-  ["regeneratePreviews", "workspace:regenerate-previews", 1],
   ["refreshAssets", "workspace:refresh-assets", 1],
   ["detectEditors", "app:detect-editors", 0],
   ["openInEditor", "app:open-in-editor", 2],
@@ -66,7 +64,6 @@ export const IPC_METHODS = [
   ["processAndSave", "workspace:process-and-save", 1],
   ["processAndSavePanels", "workspace:process-and-save-panels", 1],
   ["quickRegister", "workspace:quick-register", 3],
-  ["getCollageSources", "workspace:collage-sources", 1],
   ["scanNewMedia", "workspace:scan-new-media", 1],
   ["getFrameLogos", "app:frame-logos", 0],
   ["getWatermarkProfile", "app:watermark-profile", 0],
@@ -137,7 +134,6 @@ export const IPC_METHODS = [
   ["addAssetTags", "workspace:add-asset-tags", 2],
   ["getAssetTags", "workspace:get-asset-tags", 1],
   ["removeAssetTag", "workspace:remove-asset-tag", 2],
-  ["listTags", "workspace:list-tags", 1],
   ["testAnnotationConnection", "workspace:test-annotation-connection", 1],
   ["listAnnotationModels", "workspace:list-annotation-models", 1],
   // ── ai repaint ──

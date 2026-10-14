@@ -88,8 +88,6 @@
     "viewCovers": "切换为缩略图视图",
     "viewList": "切换为文字视图",
     "folderMeta": "{{count}} 张",
-    "settings": "设置",
-    "settingsTip": "设置 (⌘,)",
     "rename": "重命名",
     "delete": "删除",
     "annotateFolder": "标注此文件夹中未标注的图片",
@@ -196,8 +194,7 @@
     "pickedMore": "{{first}} +{{count}}",
     "match": {
       "any": "含任意一个",
-      "all": "同时含全部",
-      "exclude": "排除"
+      "all": "同时含全部"
     },
     "locationSource": {
       "label": "位置",
@@ -245,7 +242,6 @@
     "groups": {
       "entry": "条件分组（或）…",
       "chip": "满足任一组（{{count}} 组）",
-      "remove": "移除条件分组",
       "title": "条件分组",
       "hint": "照片要满足筛选栏上的全部条件，并且至少满足下面其中一组。同一组里的条件要同时满足。",
       "group": "第 {{n}} 组",

@@ -217,13 +217,6 @@ function register({
     return await commands.getAnnotation(assetId);
   });
 
-  ipcMain.handle("workspace:list-tags", async (_event, limit) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) return [];
-    const n = Number.isFinite(limit) ? Math.max(1, Math.min(1000, limit)) : 200;
-    return await commands.listTags(n);
-  });
-
   // Catalog-independent — works even when no catalog is open. Used by the
   // Settings panel for "Test connection" and "Fetch models" buttons.
   ipcMain.handle("workspace:test-annotation-connection", async (_event, options) => {

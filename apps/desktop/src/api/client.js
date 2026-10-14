@@ -1,6 +1,6 @@
 // Single owner of the preload bridge (window.mediaWorkspace). Components and
 // hooks import `api` from src/api — never touch window.mediaWorkspace
-// directly. Tests can swap the bridge with `__setBridgeForTests`.
+// directly.
 
 let bridgeOverride = null;
 
@@ -12,10 +12,6 @@ export function bridge() {
 // components keep calling api.* unchanged.
 export function installBridge(impl) {
   bridgeOverride = impl;
-}
-
-export function __setBridgeForTests(mock) {
-  bridgeOverride = mock;
 }
 
 export function invoke(method, ...args) {

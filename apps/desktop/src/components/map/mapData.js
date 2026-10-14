@@ -45,13 +45,6 @@ export function loadMapDetailData() {
   return mapDetailPromise;
 }
 
-// Backwards-compatible aggregate for callers that need every zoom level at
-// once. PhotoMap can still show an honest loading state while this resolves.
-export function loadMapData() {
-  return Promise.all([loadMapCoreData(), loadMapDetailData()])
-    .then(([core, detail]) => ({ ...core, ...detail }));
-}
-
 let maplibrePromise = null;
 
 export function loadMaplibre() {

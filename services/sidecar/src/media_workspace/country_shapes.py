@@ -116,9 +116,3 @@ def load_country_shapes() -> CountryShapes | None:
     except OSError:
         _load_failed = True
     return _shapes
-
-
-def set_country_shapes_for_tests(payload: dict | None) -> None:
-    global _shapes, _load_failed
-    _shapes = CountryShapes(payload) if payload is not None else None
-    _load_failed = False

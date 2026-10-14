@@ -67,5 +67,6 @@
 ## 4. 顺手发现
 
 - `cli.py` 里 `annotation-test-connection` / `annotation-list-models` / `benchmark-dataset` 有 argparse 子命令但不在 `_dispatch`，CLI 直接调会报错（App 走的是 `ipc/annotation.js` 另一条路）。
+  （2026-10-14 更正：这三个在 `main()` 里、`_dispatch` 之前就处理了，直接调不会报错；`benchmark-dataset` 已随 benchmark 模块删除。）
 - `manage_collections` 的 `update` 只传 name，`commands.updateCollection` 其实支持 `rulesJson` / `sortOrder`。
 - `create-collection` 在 MCP 里写死 `kind="manual"`。
