@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
+import { TOP_LAYER_ATTR } from "../utils/topLayer";
 
 /* ─── ConfirmDialog ───────────────────────────────────────────
    App-styled, presentational confirm dialog. Usually driven via
@@ -37,6 +38,7 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
+      {...{ [TOP_LAYER_ATTR]: "true" }}
       className="fixed inset-0 z-[13000] flex items-center justify-center bg-app/70 backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel?.(); }}
     >

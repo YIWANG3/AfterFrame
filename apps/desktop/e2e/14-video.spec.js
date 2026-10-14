@@ -9,6 +9,7 @@ const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, mcpCall } = require("./helpers/app");
 
 const VIDEO_FILE = "z-sample-video.mp4";
+const NATIVE = process.platform === "darwin";
 
 test.describe("Video assets", () => {
   let app, window, userDataDir, mcpPort;
@@ -43,20 +44,24 @@ test.describe("Video assets", () => {
     await expect(card.getByText("0:02")).toBeVisible();
   });
 
-  test("double-click opens the Lightbox with a playable video element", async () => {
+  test("double-click opens the Lightbox with a video playback surface", async () => {
     const card = window.locator("[data-gallery-item='true'][data-asset-type='video']").first();
     await card.dblclick();
 
-    // The custom VideoPlayer mounts a <video> sourced from the media server,
-    // plus an app-styled control bar (the Seek range is a stable anchor).
-    const video = window.locator("video");
+    // macOS mounts an AVPlayer surface; other platforms mount <video>.
+    // Both share the same app controls (the Seek range is a stable anchor).
+    const video = window.locator("[data-video-engine]");
     await expect(video).toBeVisible({ timeout: 15_000 });
-    await expect(video).toHaveAttribute("src", new RegExp(`${VIDEO_FILE.replace(".", "\\.")}`));
+    // The engine reads "avplayer" from the first render, and a native failure
+    // falls back to <video> quietly: only a first frame proves AVPlayer opened.
+    if (NATIVE) await expect(video).toHaveAttribute("data-video-ready", "true", { timeout: 15_000 });
+    await expect(video).toHaveAttribute("data-video-engine", NATIVE ? "avplayer" : "html");
+    if (!NATIVE) await expect(window.locator("video")).toHaveAttribute("src", new RegExp(`${VIDEO_FILE.replace(".", "\\.")}`));
     await expect(window.getByLabel("Seek")).toBeVisible();
 
     // Close the Lightbox so it doesn't bleed into later expectations.
     await window.keyboard.press("Escape");
-    await expect(window.locator("video")).toHaveCount(0);
+    await expect(window.locator("[data-video-engine]")).toHaveCount(0);
   });
 
   // The 0.5.8 report's gap: the test above passes for a <video> that is
@@ -71,35 +76,40 @@ test.describe("Video assets", () => {
     test.setTimeout(proxied ? 180_000 : 30_000);
     const card = window.locator("[data-gallery-item='true'][data-asset-type='video']").first();
     await card.dblclick();
-    const video = window.locator("video");
+    const video = window.locator("[data-video-engine]");
     await expect(video).toBeVisible({ timeout: 15_000 });
-    const state = () => video.evaluate((v) => ({
-      readyState: v.readyState,
-      width: v.videoWidth,
-      height: v.videoHeight,
-      duration: v.duration,
-      time: v.currentTime,
-      paused: v.paused,
-      ended: v.ended,
-      seeking: v.seeking,
-      frames: v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0,
-      error: v.error?.code ?? null,
-    }));
+    const state = () => window.evaluate(async () => {
+      const surface = document.querySelector("[data-video-engine]");
+      if (surface.dataset.videoEngine === "avplayer") {
+        const native = await window.mediaWorkspace.nativeVideoState(surface.dataset.videoSession);
+        return native ? { ...native, paused: !native.playing, error: native.failed ? "AVPlayer failed" : null } : { ready: false };
+      }
+      const v = surface.querySelector("video");
+      return {
+        ready: v.readyState >= 2, width: v.videoWidth, height: v.videoHeight,
+        duration: v.duration, time: v.currentTime, paused: v.paused, ended: v.ended,
+        seeking: v.seeking, frames: v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0,
+        error: v.error?.code ?? null,
+      };
+    });
 
     // Decoded, at its real size (the proxy's), and playing on its own (autoplay).
     await expect.poll(async () => {
       const now = await state();
-      return now.readyState >= 2 && now.width > 0;
+      return now.ready && now.width > 0;
     }, { timeout: proxied ? 150_000 : 15_000 }).toBe(true);
     const first = await state();
+    // Still the engine it started on: a native player that failed would have
+    // handed over to <video>, whose state reads the same.
+    await expect(video).toHaveAttribute("data-video-engine", NATIVE ? "avplayer" : "html");
     expect(first).toMatchObject(proxied ? { width: 1920, height: 1080, error: null } : { width: 3840, height: 2160, error: null });
     expect(first.duration).toBeGreaterThan(2);
     expect(first.duration).toBeLessThan(2.2);
     await expect.poll(async () => (await state()).time, { timeout: 10_000 }).toBeGreaterThan(0.3);
-    expect((await state()).frames).toBeGreaterThan(0);
+    if (!NATIVE) expect((await state()).frames).toBeGreaterThan(0);
 
     // Pause with the player's own button: time holds still.
-    const playPause = window.locator("video").locator("xpath=ancestor::div[contains(@class,'flex-col')][1]").getByRole("button").first();
+    const playPause = video.locator("xpath=ancestor::div[contains(@class,'flex-col')][1]").getByRole("button").first();
     await playPause.click();
     await expect.poll(async () => (await state()).paused).toBe(true);
     const held = (await state()).time;
@@ -110,7 +120,7 @@ test.describe("Video assets", () => {
     await window.getByLabel("Seek").fill("1");
     await expect.poll(async () => {
       const now = await state();
-      return !now.seeking && now.readyState >= 2 && Math.abs(now.time - 1) < 0.1;
+      return !now.seeking && now.ready && Math.abs(now.time - 1) < 0.1;
     }, { timeout: 10_000 }).toBe(true);
     await expect(window.getByText("0:01", { exact: true })).toBeVisible();
 
@@ -118,10 +128,10 @@ test.describe("Video assets", () => {
     await playPause.click();
     await expect.poll(async () => (await state()).time, { timeout: 10_000 }).toBeGreaterThan(1.2);
     await expect.poll(async () => (await state()).ended, { timeout: 10_000 }).toBe(true);
-    expect((await state()).frames).toBeGreaterThan(first.frames);
+    if (!NATIVE) expect((await state()).frames).toBeGreaterThan(first.frames);
 
     await window.keyboard.press("Escape");
-    await expect(window.locator("video")).toHaveCount(0);
+    await expect(window.locator("[data-video-engine]")).toHaveCount(0);
   });
 
   test("the video is visible on the MCP agent surface with a poster", async () => {

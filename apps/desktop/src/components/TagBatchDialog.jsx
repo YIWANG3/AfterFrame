@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Tag, X } from "lucide-react";
 import api from "../api";
 import Modal from "../ui/Modal";
+import { TOP_LAYER_ATTR } from "../utils/topLayer";
 
 export default function TagBatchDialog({ count, onApply, onClose }) {
   const { t } = useTranslation("annotation");
@@ -54,7 +55,7 @@ export default function TagBatchDialog({ count, onApply, onClose }) {
 
   return (
     <Modal onClose={onClose} z="overlayTop" className="max-w-[400px]">
-      <div className="p-4" data-testid="tag-batch-dialog">
+      <div className="p-4" data-testid="tag-batch-dialog" {...{ [TOP_LAYER_ATTR]: "true" }}>
         <div className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
           <Tag className="h-4 w-4 text-accent" />
           {t("batch.title", { count })}

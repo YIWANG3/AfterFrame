@@ -182,8 +182,9 @@ export default function Lightbox({
   activeAssetIdRef.current = currentItem?.asset_id || null;
   detailUrlRef.current = detailUrl;
   canUseDetailRef.current = canUseDetail;
-  // Video: play the original directly (Chromium decodes h264/HEVC on macOS,
-  // HEVC only through a proxy on Windows), bypassing the image zoom/pan machinery. Falls back to the poster <img>
+  // Video: AVPlayer draws originals on macOS (including ProRes); other
+  // platforms use Chromium and a compatibility proxy when needed. Bypass
+  // the image zoom/pan machinery. Fall back to the poster <img>
   // below when the original is missing.
   const isVideo = currentItem?.asset_type === "video";
   const videoSrc = isVideo && currentItem?.exists_on_disk !== false ? currentItem?.image_path : null;
@@ -191,6 +192,14 @@ export default function Lightbox({
 
   // Reset the proxy when switching items.
   useEffect(() => { setProxySrc(null); setProxyPending(false); }, [currentItem?.asset_id]);
+
+  // A video's fullscreen button (macOS) fills the screen with the window.
+  // Leaving the lightbox puts the window back as it was; stepping on to the
+  // next clip doesn't.
+  useEffect(() => {
+    if (!open || api.platform !== "darwin" || !api.has("restoreVideoFullscreen")) return undefined;
+    return () => { Promise.resolve(api.restoreVideoFullscreen()).catch(() => {}); };
+  }, [open]);
 
   // On native decode failure (Chromium can't play this codec, or plays it with
   // no picture), transcode an H.264 proxy on demand and swap the <video>
@@ -722,6 +731,7 @@ export default function Lightbox({
             <VideoPlayer
               key={httpMediaUrl(proxySrc || videoSrc)}
               src={httpMediaUrl(proxySrc || videoSrc)}
+              nativePath={proxySrc ? null : videoSrc}
               onError={requestVideoProxy}
             />
             {proxyPending ? (
