@@ -11,13 +11,9 @@ import sqlite3
 from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses
 from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
 
-# Shared between list_image_assets and browse_collection — the two SELECTs
-# went out of sync by hand twice before (annotation columns). Single source.
-_BROWSE_SELECT_COLUMNS = """\
-            assets.asset_id,
-            assets.asset_type,
-            assets.stem,
-            registry.image_path AS image_path,
+# What a row says about the photo itself — EXIF, rating, flag, shape, tags,
+# descriptions. The browse rows and the detail rows read it the same way.
+_ASSET_COLUMNS = """\
             assets.metadata_json AS image_metadata_json,
             assets.app_rating,
             assets.app_flag,
@@ -28,7 +24,27 @@ _BROWSE_SELECT_COLUMNS = """\
             assets.user_description,
             (SELECT ai.caption FROM asset_ai_annotations AS ai WHERE ai.asset_id = assets.asset_id) AS ai_caption,
             assets.exists_on_disk,
-            assets.created_at AS imported_at,
+            assets.created_at AS imported_at"""
+
+# The resource set a photo belongs to (needs `_RESOURCE_SET_JOINS`).
+_RESOURCE_SET_COLUMNS = """\
+            rsi.set_id AS resource_set_id,
+            rsi.role AS resource_role,
+            rsi.version_kind AS version_kind,
+            rsi.sort_order AS resource_sort_order,
+            rs.primary_asset_id AS set_primary_asset_id,
+            rs.raw_asset_id AS set_raw_asset_id,
+            primary_assets.stem AS primary_stem,
+            set_counts.set_item_count AS set_item_count"""
+
+# Shared between list_image_assets and browse_collection — the two SELECTs
+# went out of sync by hand twice before (annotation columns). Single source.
+_BROWSE_SELECT_COLUMNS = f"""\
+            assets.asset_id,
+            assets.asset_type,
+            assets.stem,
+            registry.image_path AS image_path,
+{_ASSET_COLUMNS},
             assets.file_size AS catalog_file_size,
             assets.modified_time,
             registry.match_status,
@@ -38,14 +54,7 @@ _BROWSE_SELECT_COLUMNS = """\
             raw_assets.metadata_json AS raw_metadata_json,
             preview_entries.relative_path AS preview_relative_path,
             preview_hd_entries.relative_path AS preview_hd_relative_path,
-            rsi.set_id AS resource_set_id,
-            rsi.role AS resource_role,
-            rsi.version_kind AS version_kind,
-            rsi.sort_order AS resource_sort_order,
-            rs.primary_asset_id AS set_primary_asset_id,
-            rs.raw_asset_id AS set_raw_asset_id,
-            primary_assets.stem AS primary_stem,
-            set_counts.set_item_count AS set_item_count,
+{_RESOURCE_SET_COLUMNS},
             anno.provider AS anno_provider,
             anno.model AS anno_model,
             anno.schema_version AS anno_schema_version,
@@ -57,7 +66,7 @@ _BROWSE_SELECT_COLUMNS = """\
             anno.updated_at AS anno_updated_at,
             EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id) AS has_face"""
 
-_BROWSE_SHARED_JOINS = """\
+_RESOURCE_SET_JOINS = """\
         LEFT JOIN assets AS raw_assets
             ON raw_assets.asset_id = registry.raw_asset_id
         LEFT JOIN resource_set_items AS rsi
@@ -71,7 +80,10 @@ _BROWSE_SHARED_JOINS = """\
             FROM resource_set_items
             GROUP BY set_id
         ) AS set_counts
-            ON set_counts.set_id = rs.set_id
+            ON set_counts.set_id = rs.set_id"""
+
+_BROWSE_SHARED_JOINS = f"""\
+{_RESOURCE_SET_JOINS}
         LEFT JOIN preview_entries
             ON preview_entries.asset_id = assets.asset_id
            AND preview_entries.kind = 'preview'
@@ -532,25 +544,16 @@ def camera_makes(connection: sqlite3.Connection) -> list[dict[str, object]]:
     ]
 
 
-def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
-    return connection.execute(
-        """
-        SELECT
+# The detail row (lightbox / inspector): the browse row's identity and
+# resource set, plus the matcher's working data and the RAW's own preview.
+# `image_path` is the one column the two detail queries read differently.
+def _detail_select_columns(image_path: str) -> str:
+    return f"""\
             assets.asset_id,
             assets.asset_type,
             assets.stem,
-            assets.canonical_path AS image_path,
-            assets.metadata_json AS image_metadata_json,
-            assets.app_rating,
-            assets.app_flag,
-            assets.display_shape,
-            (SELECT json_group_array(tags_all.tag) FROM (
-                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
-              ) AS tags_all) AS asset_tags_json,
-            assets.user_description,
-            (SELECT ai.caption FROM asset_ai_annotations AS ai WHERE ai.asset_id = assets.asset_id) AS ai_caption,
-            assets.exists_on_disk,
-            assets.created_at AS imported_at,
+            {image_path} AS image_path,
+{_ASSET_COLUMNS},
             registry.match_status,
             registry.score,
             registry.raw_asset_id,
@@ -561,14 +564,30 @@ def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sql
             image_preview.relative_path AS image_preview_relative_path,
             raw_preview.relative_path AS raw_preview_relative_path,
             image_preview_hd.relative_path AS image_preview_hd_relative_path,
-            rsi.set_id AS resource_set_id,
-            rsi.role AS resource_role,
-            rsi.version_kind AS version_kind,
-            rsi.sort_order AS resource_sort_order,
-            rs.primary_asset_id AS set_primary_asset_id,
-            rs.raw_asset_id AS set_raw_asset_id,
-            primary_assets.stem AS primary_stem,
-            set_counts.set_item_count AS set_item_count
+{_RESOURCE_SET_COLUMNS}"""
+
+
+_DETAIL_JOINS = f"""\
+{_RESOURCE_SET_JOINS}
+        LEFT JOIN preview_entries AS image_preview
+            ON image_preview.asset_id = assets.asset_id
+           AND image_preview.kind = 'preview'
+           AND image_preview.status = 'ready'
+        LEFT JOIN preview_entries AS raw_preview
+            ON raw_preview.asset_id = registry.raw_asset_id
+           AND raw_preview.kind = 'preview'
+           AND raw_preview.status = 'ready'
+        LEFT JOIN preview_entries AS image_preview_hd
+            ON image_preview_hd.asset_id = assets.asset_id
+           AND image_preview_hd.kind = 'preview-hd'
+           AND image_preview_hd.status = 'ready'"""
+
+
+def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        f"""
+        SELECT
+{_detail_select_columns("assets.canonical_path")}
         FROM assets
         LEFT JOIN image_lookup_registry AS registry
             ON registry.rowid = (
@@ -578,32 +597,7 @@ def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sql
                 ORDER BY reg.updated_at DESC, reg.created_at DESC, reg.image_path DESC
                 LIMIT 1
             )
-        LEFT JOIN assets AS raw_assets
-            ON raw_assets.asset_id = registry.raw_asset_id
-        LEFT JOIN resource_set_items AS rsi
-            ON rsi.asset_id = assets.asset_id
-        LEFT JOIN resource_sets AS rs
-            ON rs.set_id = rsi.set_id
-        LEFT JOIN assets AS primary_assets
-            ON primary_assets.asset_id = rs.primary_asset_id
-        LEFT JOIN (
-            SELECT set_id, COUNT(*) AS set_item_count
-            FROM resource_set_items
-            GROUP BY set_id
-        ) AS set_counts
-            ON set_counts.set_id = rs.set_id
-        LEFT JOIN preview_entries AS image_preview
-            ON image_preview.asset_id = assets.asset_id
-           AND image_preview.kind = 'preview'
-           AND image_preview.status = 'ready'
-        LEFT JOIN preview_entries AS raw_preview
-            ON raw_preview.asset_id = registry.raw_asset_id
-           AND raw_preview.kind = 'preview'
-           AND raw_preview.status = 'ready'
-        LEFT JOIN preview_entries AS image_preview_hd
-            ON image_preview_hd.asset_id = assets.asset_id
-           AND image_preview_hd.kind = 'preview-hd'
-           AND image_preview_hd.status = 'ready'
+{_DETAIL_JOINS}
         WHERE assets.asset_id = ?
           AND assets.asset_type IN ('image', 'video', 'raw')
         """,
@@ -613,71 +607,14 @@ def get_image_asset_detail(connection: sqlite3.Connection, asset_id: str) -> sql
 
 def get_image_asset_detail_by_path(connection: sqlite3.Connection, image_path: str) -> sqlite3.Row | None:
     return connection.execute(
-        """
+        f"""
         SELECT
-            assets.asset_id,
-            assets.asset_type,
-            assets.stem,
-            registry.image_path AS image_path,
-            assets.metadata_json AS image_metadata_json,
-            assets.app_rating,
-            assets.app_flag,
-            assets.display_shape,
-            (SELECT json_group_array(tags_all.tag) FROM (
-                SELECT tag FROM asset_tags WHERE asset_tags.asset_id = assets.asset_id ORDER BY created_at, rowid
-              ) AS tags_all) AS asset_tags_json,
-            assets.user_description,
-            (SELECT ai.caption FROM asset_ai_annotations AS ai WHERE ai.asset_id = assets.asset_id) AS ai_caption,
-            assets.exists_on_disk,
-            assets.created_at AS imported_at,
-            registry.match_status,
-            registry.score,
-            registry.raw_asset_id,
-            registry.feature_vector_json,
-            registry.candidate_json,
-            raw_assets.canonical_path AS raw_path,
-            raw_assets.metadata_json AS raw_metadata_json,
-            image_preview.relative_path AS image_preview_relative_path,
-            raw_preview.relative_path AS raw_preview_relative_path,
-            image_preview_hd.relative_path AS image_preview_hd_relative_path,
-            rsi.set_id AS resource_set_id,
-            rsi.role AS resource_role,
-            rsi.version_kind AS version_kind,
-            rsi.sort_order AS resource_sort_order,
-            rs.primary_asset_id AS set_primary_asset_id,
-            rs.raw_asset_id AS set_raw_asset_id,
-            primary_assets.stem AS primary_stem,
-            set_counts.set_item_count AS set_item_count
+{_detail_select_columns("registry.image_path")}
         FROM image_lookup_registry AS registry
         JOIN assets
             ON assets.asset_id = registry.image_asset_id
            AND assets.asset_type IN ('image', 'video', 'raw')
-        LEFT JOIN assets AS raw_assets
-            ON raw_assets.asset_id = registry.raw_asset_id
-        LEFT JOIN resource_set_items AS rsi
-            ON rsi.asset_id = assets.asset_id
-        LEFT JOIN resource_sets AS rs
-            ON rs.set_id = rsi.set_id
-        LEFT JOIN assets AS primary_assets
-            ON primary_assets.asset_id = rs.primary_asset_id
-        LEFT JOIN (
-            SELECT set_id, COUNT(*) AS set_item_count
-            FROM resource_set_items
-            GROUP BY set_id
-        ) AS set_counts
-            ON set_counts.set_id = rs.set_id
-        LEFT JOIN preview_entries AS image_preview
-            ON image_preview.asset_id = assets.asset_id
-           AND image_preview.kind = 'preview'
-           AND image_preview.status = 'ready'
-        LEFT JOIN preview_entries AS raw_preview
-            ON raw_preview.asset_id = registry.raw_asset_id
-           AND raw_preview.kind = 'preview'
-           AND raw_preview.status = 'ready'
-        LEFT JOIN preview_entries AS image_preview_hd
-            ON image_preview_hd.asset_id = assets.asset_id
-           AND image_preview_hd.kind = 'preview-hd'
-           AND image_preview_hd.status = 'ready'
+{_DETAIL_JOINS}
         WHERE registry.image_path = ?
         """,
         (image_path,),

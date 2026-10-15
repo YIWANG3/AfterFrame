@@ -9,11 +9,124 @@ import os
 import sqlite3
 from hashlib import sha1
 from pathlib import Path
+from typing import Any, NamedTuple
 
 from ..models import ImageCandidate, MatchDecision, RawMetadata
 from .core import RESOLVER_VERSION, _file_id, _json, _preview_cache_key
 from .locations import upsert_asset_location_from_metadata
 from .resource_sets import get_resource_set_for_asset, link_assets
+
+
+class _AssetFile(NamedTuple):
+    """What the assets row records about the file itself."""
+
+    asset_id: str
+    path: str
+    stem: str
+    normalized_stem: str
+    stem_key: str
+    extension: str
+    fingerprint: str
+    file_size: int
+    modified_time: str
+
+    @classmethod
+    def of(cls, asset_id: str, metadata: RawMetadata | ImageCandidate) -> _AssetFile:
+        return cls(
+            asset_id, str(metadata.path), metadata.stem, metadata.normalized_stem, metadata.stem_key,
+            metadata.extension, metadata.fingerprint, metadata.file_size, metadata.modified_time,
+        )
+
+
+def _file_metadata_fields(metadata: RawMetadata | ImageCandidate) -> dict[str, Any]:
+    """The metadata_json keys a RAW and a photo share — what browse and the
+    inspector read (EXIF, GPS, dimensions, the matcher's stems, file stats)."""
+    return {
+        "capture_time": metadata.capture_time,
+        "rating": metadata.rating,
+        "camera_make": metadata.camera_make,
+        "camera_model": metadata.camera_model,
+        "lens_model": metadata.lens_model,
+        "lens_make": metadata.lens_make,
+        "software": metadata.software,
+        "iso": metadata.iso,
+        "aperture": metadata.aperture,
+        "shutter_speed": metadata.shutter_speed,
+        "focal_length": metadata.focal_length,
+        "flash": metadata.flash,
+        "white_balance": metadata.white_balance,
+        "color_space": metadata.color_space,
+        "lens_specification": metadata.lens_specification,
+        "gps_latitude": metadata.gps_latitude,
+        "gps_longitude": metadata.gps_longitude,
+        "width": metadata.width,
+        "height": metadata.height,
+        "normalized_stem": metadata.normalized_stem,
+        "stem_key": metadata.stem_key,
+        "file_size": metadata.file_size,
+        "modified_time": metadata.modified_time,
+    }
+
+
+def _upsert_asset_row(
+    connection: sqlite3.Connection,
+    asset_type: str,
+    file: _AssetFile,
+    asset_metadata: dict[str, Any],
+    *,
+    app_rating: int | None = None,
+) -> None:
+    """The assets row and its primary asset_files row, for any media type.
+
+    A re-import refreshes the file's stats and metadata and marks it present
+    again, but never overwrites a rating the user set in the app (COALESCE);
+    `app_rating` is the file's embedded rating, the value a first import
+    starts from (videos carry none)."""
+    connection.execute(
+        """
+        INSERT INTO assets (
+            asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
+            fingerprint, file_size, modified_time, metadata_json, app_rating
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(asset_id) DO UPDATE SET
+            canonical_path = excluded.canonical_path,
+            stem = excluded.stem,
+            normalized_stem = excluded.normalized_stem,
+            stem_key = excluded.stem_key,
+            extension = excluded.extension,
+            fingerprint = excluded.fingerprint,
+            file_size = excluded.file_size,
+            modified_time = excluded.modified_time,
+            metadata_json = excluded.metadata_json,
+            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
+            exists_on_disk = 1,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            file.asset_id,
+            asset_type,
+            file.path,
+            file.stem,
+            file.normalized_stem,
+            file.stem_key,
+            file.extension,
+            file.fingerprint,
+            file.file_size,
+            file.modified_time,
+            _json(asset_metadata),
+            app_rating,
+        ),
+    )
+    connection.execute(
+        """
+        INSERT INTO asset_files (file_id, asset_id, path, role)
+        VALUES (?, ?, ?, 'primary')
+        ON CONFLICT(path) DO UPDATE SET
+            asset_id = excluded.asset_id,
+            role = excluded.role
+        """,
+        (_file_id(file.asset_id, file.path), file.asset_id, file.path),
+    )
 
 
 def upsert_raw_asset(
@@ -41,77 +154,12 @@ def upsert_raw_asset(
     if existing is not None:
         metadata.asset_id = existing[0]
     asset_metadata = {
-        "capture_time": metadata.capture_time,
-        "rating": metadata.rating,
-        "camera_make": metadata.camera_make,
-        "camera_model": metadata.camera_model,
-        "lens_model": metadata.lens_model,
-        "lens_make": metadata.lens_make,
-        "software": metadata.software,
-        "iso": metadata.iso,
-        "aperture": metadata.aperture,
-        "shutter_speed": metadata.shutter_speed,
-        "focal_length": metadata.focal_length,
-        "flash": metadata.flash,
-        "white_balance": metadata.white_balance,
-        "color_space": metadata.color_space,
-        "lens_specification": metadata.lens_specification,
-        "gps_latitude": metadata.gps_latitude,
-        "gps_longitude": metadata.gps_longitude,
-        "width": metadata.width,
-        "height": metadata.height,
-        "normalized_stem": metadata.normalized_stem,
-        "stem_key": metadata.stem_key,
-        "file_size": metadata.file_size,
-        "modified_time": metadata.modified_time,
+        **_file_metadata_fields(metadata),
         "metadata_level": metadata.metadata_level,
         "fingerprint_level": metadata.fingerprint_level,
         "enrichment_status": metadata.enrichment_status,
     }
-    connection.execute(
-        """
-        INSERT INTO assets (
-            asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
-            fingerprint, file_size, modified_time, metadata_json, app_rating
-        ) VALUES (?, 'raw', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(asset_id) DO UPDATE SET
-            canonical_path = excluded.canonical_path,
-            stem = excluded.stem,
-            normalized_stem = excluded.normalized_stem,
-            stem_key = excluded.stem_key,
-            extension = excluded.extension,
-            fingerprint = excluded.fingerprint,
-            file_size = excluded.file_size,
-            modified_time = excluded.modified_time,
-            metadata_json = excluded.metadata_json,
-            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
-            exists_on_disk = 1,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            metadata.asset_id,
-            str(metadata.path),
-            metadata.stem,
-            metadata.normalized_stem,
-            metadata.stem_key,
-            metadata.extension,
-            metadata.fingerprint,
-            metadata.file_size,
-            metadata.modified_time,
-            _json(asset_metadata),
-            metadata.rating,
-        ),
-    )
-    connection.execute(
-        """
-        INSERT INTO asset_files (file_id, asset_id, path, role)
-        VALUES (?, ?, ?, 'primary')
-        ON CONFLICT(path) DO UPDATE SET
-            asset_id = excluded.asset_id,
-            role = excluded.role
-        """,
-        (_file_id(metadata.asset_id, str(metadata.path)), metadata.asset_id, str(metadata.path)),
-    )
+    _upsert_asset_row(connection, "raw", _AssetFile.of(metadata.asset_id, metadata), asset_metadata, app_rating=metadata.rating)
     upsert_asset_location_from_metadata(connection, metadata.asset_id, asset_metadata)
     if not register_source:
         if commit:
@@ -209,47 +257,10 @@ def upsert_video_asset(
         "file_size": file_size,
         "modified_time": modified_time,
     }
-    connection.execute(
-        """
-        INSERT INTO assets (
-            asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
-            fingerprint, file_size, modified_time, metadata_json
-        ) VALUES (?, 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(asset_id) DO UPDATE SET
-            canonical_path = excluded.canonical_path,
-            stem = excluded.stem,
-            normalized_stem = excluded.normalized_stem,
-            stem_key = excluded.stem_key,
-            extension = excluded.extension,
-            fingerprint = excluded.fingerprint,
-            file_size = excluded.file_size,
-            modified_time = excluded.modified_time,
-            metadata_json = excluded.metadata_json,
-            exists_on_disk = 1,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            asset_id,
-            path,
-            stem,
-            normalized_stem,
-            stem_key,
-            extension,
-            fingerprint,
-            file_size,
-            modified_time,
-            _json(asset_metadata),
-        ),
-    )
-    connection.execute(
-        """
-        INSERT INTO asset_files (file_id, asset_id, path, role)
-        VALUES (?, ?, ?, 'primary')
-        ON CONFLICT(path) DO UPDATE SET
-            asset_id = excluded.asset_id,
-            role = excluded.role
-        """,
-        (_file_id(asset_id, path), asset_id, path),
+    _upsert_asset_row(
+        connection, "video",
+        _AssetFile(asset_id, path, stem, normalized_stem, stem_key, extension, fingerprint, file_size, modified_time),
+        asset_metadata,
     )
     if commit:
         connection.commit()
@@ -262,75 +273,8 @@ def upsert_image_asset(connection: sqlite3.Connection, export: ImageCandidate, c
         (str(export.path),),
     ).fetchone()
     asset_id = str(existing["asset_id"]) if existing else export.asset_id
-    asset_metadata = {
-        "capture_time": export.capture_time,
-        "rating": export.rating,
-        "camera_make": export.camera_make,
-        "camera_model": export.camera_model,
-        "lens_model": export.lens_model,
-        "lens_make": export.lens_make,
-        "software": export.software,
-        "iso": export.iso,
-        "aperture": export.aperture,
-        "shutter_speed": export.shutter_speed,
-        "focal_length": export.focal_length,
-        "flash": export.flash,
-        "white_balance": export.white_balance,
-        "color_space": export.color_space,
-        "lens_specification": export.lens_specification,
-        "gps_latitude": export.gps_latitude,
-        "gps_longitude": export.gps_longitude,
-        "width": export.width,
-        "height": export.height,
-        "normalized_stem": export.normalized_stem,
-        "stem_key": export.stem_key,
-        "file_size": export.file_size,
-        "modified_time": export.modified_time,
-    }
-    connection.execute(
-        """
-        INSERT INTO assets (
-            asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
-            fingerprint, file_size, modified_time, metadata_json, app_rating
-        ) VALUES (?, 'image', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(asset_id) DO UPDATE SET
-            canonical_path = excluded.canonical_path,
-            stem = excluded.stem,
-            normalized_stem = excluded.normalized_stem,
-            stem_key = excluded.stem_key,
-            extension = excluded.extension,
-            fingerprint = excluded.fingerprint,
-            file_size = excluded.file_size,
-            modified_time = excluded.modified_time,
-            metadata_json = excluded.metadata_json,
-            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
-            exists_on_disk = 1,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            asset_id,
-            str(export.path),
-            export.stem,
-            export.normalized_stem,
-            export.stem_key,
-            export.extension,
-            export.fingerprint,
-            export.file_size,
-            export.modified_time,
-            _json(asset_metadata),
-            export.rating,
-        ),
-    )
-    connection.execute(
-        """
-        INSERT INTO asset_files (file_id, asset_id, path, role)
-        VALUES (?, ?, ?, 'primary')
-        ON CONFLICT(path) DO UPDATE SET
-            asset_id = excluded.asset_id,
-            role = excluded.role
-        """,
-        (_file_id(asset_id, str(export.path)), asset_id, str(export.path)),
-    )
+    asset_metadata = _file_metadata_fields(export)
+    _upsert_asset_row(connection, "image", _AssetFile.of(asset_id, export), asset_metadata, app_rating=export.rating)
     upsert_asset_location_from_metadata(connection, asset_id, asset_metadata)
     if commit:
         connection.commit()
