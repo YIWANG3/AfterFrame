@@ -188,7 +188,7 @@ class VisualJobTest(unittest.TestCase):
     def test_the_preview_pass_uses_the_helper_the_app_names(self):
         with patch.dict(os.environ, {"IMAGE_FEATURES_PATH": str(self.fake_helper())}):
             self.render_previews()
-        self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1")["embedded"], 4)
+        self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1"), {"hashed": 4, "embedded": 4, "missing": 0, "duplicate_groups": 1})
         self.assertEqual(find_similar(self.connection, "image_one", limit=1)[0]["asset_id"], "image_one_again")
 
     def test_hashes_alone_find_the_re_encode_and_group_it(self):

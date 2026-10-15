@@ -237,39 +237,83 @@ def find_similar(connection: sqlite3.Connection, asset_id: str, *, limit: int = 
 
 
 class VisualAnalyzer:
-    """Hash (and, with the helper, feature-print) previews one at a time and
-    put each photo in its look-alike group. The preview pass uses one for a
-    batch, the visual job for its catch-up; both commit themselves."""
+    """Hash (and, with the helper, feature-print) previews and put each photo
+    in its look-alike group. The preview pass uses one for a batch, the
+    visual job for its catch-up; both commit themselves.
+
+    Measuring (`measure`) is safe from several threads at once — each gets
+    its own helper process, so the preview pass takes the prints alongside
+    its renders — and storing (`store`) is for the thread that owns the
+    connection."""
 
     def __init__(self, connection: sqlite3.Connection, helper_path: Path | None) -> None:
+        import threading
+
         from ..visual import FeatureHelper, FeatureHelperError
 
         self.connection = connection
-        self.helper: FeatureHelper | None = None
+        self.helper_path = helper_path
+        self._helpers: list[FeatureHelper] = []
+        self._local = threading.local()
+        self._lock = threading.Lock()
+        self.embedding_model: str | None = None
         if helper_path:
             try:
-                self.helper = FeatureHelper(helper_path)
+                self._local.helper = FeatureHelper(helper_path)
+                self._helpers.append(self._local.helper)
+                self.embedding_model = self._local.helper.model
             except FeatureHelperError:
-                self.helper = None  # hashes alone, as on a machine without it
-        self.embedding_model = self.helper.model if self.helper else None
+                self.helper_path = None  # hashes alone, as on a machine without it
         self._indexes: dict[str, VisualIndex] = {}
         self.embedded = 0
         self.grouped = 0
 
-    def analyze(self, asset_id: str, asset_type: str, preview_path: Path) -> bool:
-        """False when the preview can't be read (the next pass retries)."""
+    @property
+    def helper(self):
+        """This thread's helper, started on first use; None without one."""
+        from ..visual import FeatureHelper, FeatureHelperError
+
+        if not self.helper_path:
+            return None
+        helper = getattr(self._local, "helper", None)
+        if helper is None:
+            try:
+                helper = FeatureHelper(self.helper_path)
+            except FeatureHelperError:
+                return None
+            self._local.helper = helper
+            with self._lock:
+                self._helpers.append(helper)
+        return helper
+
+    def measure(self, asset_id: str, preview_path: Path) -> tuple[int | None, np.ndarray | None]:
+        """The hash and (with a helper) the feature print of a preview; the
+        hash is None when the preview can't be read."""
         from ..visual import FeatureHelperError, perceptual_hash
 
         phash = perceptual_hash(preview_path)
         if phash is None:
-            return False
+            return None, None
         vector = None
-        if self.helper:
+        helper = self.helper
+        if helper is not None:
             try:
-                _, vector = self.helper.embed(asset_id, preview_path)
-                self.embedded += 1
+                _, vector = helper.embed(asset_id, preview_path)
             except FeatureHelperError:
                 vector = None
+        return phash, vector
+
+    def analyze(self, asset_id: str, asset_type: str, preview_path: Path) -> bool:
+        """Measure and store. False when the preview can't be read (the next
+        pass retries)."""
+        phash, vector = self.measure(asset_id, preview_path)
+        return self.store(asset_id, asset_type, phash, vector)
+
+    def store(self, asset_id: str, asset_type: str, phash: int | None, vector: np.ndarray | None) -> bool:
+        if phash is None:
+            return False
+        if vector is not None:
+            self.embedded += 1
         replace_asset_visual(self.connection, asset_id, phash=phash, embedding=vector, embedding_model=self.embedding_model)
         # One index per kind for the whole pass; a photo is matched against
         # what was there before it, then becomes part of it.
@@ -283,9 +327,11 @@ class VisualAnalyzer:
         return True
 
     def close(self) -> None:
-        if self.helper:
-            self.helper.close()
-            self.helper = None
+        with self._lock:
+            helpers, self._helpers = self._helpers, []
+        for helper in helpers:
+            helper.close()
+        self.helper_path = None
 
 
 def similar_assets(connection: sqlite3.Connection, catalog_root: Path, asset_id: str, *, limit: int = 24) -> list[dict]:
