@@ -1296,19 +1296,13 @@ def _cmd_run_visual_job(args, connection, catalog, parser):
 
 def _cmd_visual_status(args, connection, catalog, parser):
     from .db.visual import visual_status
-    from .visual import FeatureHelper, FeatureHelperError, helper_path_from_env
+    from .visual import HELPERS, helper_path_from_env
 
-    # With a helper here, photos without its vector count as missing;
-    # without one, hashes alone are complete.
-    model = None
+    # With a helper this machine uses, photos without its vector count as
+    # missing; without one (none, or a slow one: HELPERS decides, as it does
+    # for the job and the preview pass), hashes alone are complete.
     helper = helper_path_from_env(args.helper_path)
-    if helper:
-        try:
-            probe = FeatureHelper(helper)
-            model = probe.model
-            probe.close()
-        except FeatureHelperError:
-            model = None
+    model = HELPERS.model(helper) if helper else None
     print(json.dumps(visual_status(connection, embedding_model=model)))
     return 0
 
