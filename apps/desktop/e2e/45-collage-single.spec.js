@@ -228,6 +228,32 @@ test("gap, padding and corner radius take a typed value", async () => {
   await expect(ctx.window.getByTestId("collage-canvas-reset")).toHaveCount(0);
 });
 
+// Edge blur fades each photo into the background over the last N export px
+// of its cell: the canvas's own edge, which is a cell edge, goes from the
+// photo to black.
+test("edge blur fades the photos out at their cells' edges", async () => {
+  const size = await canvas().boundingBox();
+  // Just inside the canvas's left edge, past the 2px selection ring a selected cell draws there.
+  const edge = () => meanColor(4, size.height * 0.3, 6, size.height * 0.4);
+  const middle = () => meanColor(size.width * 0.2, size.height * 0.4, size.width * 0.1, size.height * 0.2);
+  const brightness = ([r, g, b]) => (r + g + b) / 3;
+  const edgeBefore = brightness(await edge());
+  const middleBefore = brightness(await middle());
+  expect(edgeBefore).toBeGreaterThan(20); // the photo reaches the edge
+
+  const input = ctx.window.getByTestId("collage-edge-blur-input");
+  await input.fill("400");
+  await expect(ctx.window.getByText("Edge Blur", { exact: true }).locator("xpath=../..").locator('input[type="range"]')).toHaveValue("205");
+  await expect.poll(async () => brightness(await edge())).toBeLessThan(Math.min(12, edgeBefore * 0.3));
+  // The middle of the cell is untouched: the fade stays near the edges.
+  expect(Math.abs(brightness(await middle()) - middleBefore)).toBeLessThan(6);
+  await expect(ctx.window.getByTestId("collage-canvas-reset")).toBeVisible();
+
+  await input.fill("0");
+  await expect.poll(async () => brightness(await edge())).toBeGreaterThan(edgeBefore * 0.7);
+  await expect(ctx.window.getByTestId("collage-canvas-reset")).toHaveCount(0);
+});
+
 // A photo zoomed out or panned no longer fills its cell, and the export shows
 // background there. The box marks those areas and counts the cells.
 test("Highlight uncovered areas marks the cell its photo no longer fills", async () => {

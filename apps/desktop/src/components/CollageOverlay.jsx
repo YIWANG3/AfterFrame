@@ -528,6 +528,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const [gap, setGap, resetGap] = usePref("collage.gap", 0, checkSize);
   const [padding, setPadding, resetPadding] = usePref("collage.padding", 0, checkSize);
   const [borderRadius, setBorderRadius, resetBorderRadius] = usePref("collage.radius", 0, checkSize);
+  // Each photo fades out over this many export px before its cell's edge.
+  const [edgeBlur, setEdgeBlur, resetEdgeBlur] = usePref("collage.edgeBlur", 0, checkSize);
   const [bgColor, setBgColor, resetBgColor] = usePref("collage.background", "#000000", hexColor);
   const [exportWidth, setExportWidth] = usePref("collage.exportWidth", 4096, oneOf(EXPORT_WIDTHS));
   // Highlight the parts of a cell its photo does not reach (a zoomed-out or
@@ -658,13 +660,14 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
     writePref("collage.order", next);
   }
 
-  const canvasChanged = Math.abs(canvasRatio - 1) > 0.001 || gap > 0 || padding > 0 || borderRadius > 0
+  const canvasChanged = Math.abs(canvasRatio - 1) > 0.001 || gap > 0 || padding > 0 || borderRadius > 0 || edgeBlur > 0
     || bgColor.toLowerCase() !== "#000000";
   function resetCanvas() {
     resetCanvasRatio();
     resetGap();
     resetPadding();
     resetBorderRadius();
+    resetEdgeBlur();
     resetBgColor();
   }
   // Cells not fully covered on what is on screen: the one canvas, or every
@@ -676,8 +679,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const coverage = { show: showGaps, setShow: setShowGaps, gapCells };
   // The canvas settings as one object for the panels (CanvasSection).
   const canvasSettings = {
-    ratio: canvasRatio, gap, padding, radius: borderRadius, bg: bgColor,
-    setRatio: setCanvasRatio, setGap, setPadding, setRadius: setBorderRadius, setBg: setBgColor,
+    ratio: canvasRatio, gap, padding, radius: borderRadius, edgeBlur, bg: bgColor,
+    setRatio: setCanvasRatio, setGap, setPadding, setRadius: setBorderRadius, setEdgeBlur, setBg: setBgColor,
     onReset: canvasChanged ? resetCanvas : null,
   };
 
@@ -1052,6 +1055,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
                         gap={gap}
                         padding={padding}
                         borderRadius={borderRadius}
+                        edgeBlur={edgeBlur}
                         bgColor={bgColor}
                         exportWidth={exportWidth}
                         mode="batch"
@@ -1137,6 +1141,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               gap={gap}
               padding={padding}
               borderRadius={borderRadius}
+              edgeBlur={edgeBlur}
               bgColor={bgColor}
               exportWidth={exportWidth}
               showGaps={showGaps}

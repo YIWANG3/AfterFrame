@@ -77,7 +77,7 @@ function isReady(img) {
 }
 
 const CollageCanvas = forwardRef(function CollageCanvas(
-  { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, className, mode = "single", highlightCell = -1, dimCell = -1, showGaps = false, sharedStates, onSwap, onReplace, onRemove, onCellDragOut, onSelectionChange, onSelectedStateChange, onCoverageChange },
+  { images, template, canvasRatio, gap, padding, borderRadius, edgeBlur = 0, bgColor, exportWidth, className, mode = "single", highlightCell = -1, dimCell = -1, showGaps = false, sharedStates, onSwap, onReplace, onRemove, onCellDragOut, onSelectionChange, onSelectedStateChange, onCoverageChange },
   ref,
 ) {
   const { t } = useTranslation("collage");
@@ -120,8 +120,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
 
   // Emit selection changes to parent
   // Store latest props in refs so redraw/handlers always see current values
-  const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, highlightCell, dimCell, showGaps });
-  propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, highlightCell, dimCell, showGaps };
+  const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, edgeBlur, bgColor, exportWidth, highlightCell, dimCell, showGaps });
+  propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, edgeBlur, bgColor, exportWidth, highlightCell, dimCell, showGaps };
 
   useEffect(() => {
     onSelectionChangeRef.current?.(selectedIdx);
@@ -165,7 +165,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   // list as deps, always dispatching to the newest paint.
   function paint() {
     const canvas = canvasRef.current;
-    const { template: tmpl, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs, exportWidth: ew, highlightCell: hl, dimCell: dim, showGaps: gaps } = propsRef.current;
+    const { template: tmpl, gap: g, padding: p, borderRadius: br, edgeBlur: eb, bgColor: bg, images: imgs, exportWidth: ew, highlightCell: hl, dimCell: dim, showGaps: gaps } = propsRef.current;
     if (!canvas || !tmpl?.cells) return;
 
     const ctx = canvas.getContext("2d");
@@ -201,7 +201,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       const img = getLoadedImage(imgs[i]);
       const state = getState(i);
       if (img) {
-        drawCellImage(ctx, img, rect, state.pan, state.zoom, displayBr);
+        drawCellImage(ctx, img, rect, state.pan, state.zoom, displayBr, (eb || 0) * scale);
       } else {
         ctx.save();
         if (displayBr > 0) { roundRectPath(ctx, rect.x, rect.y, rect.w, rect.h, displayBr); ctx.clip(); }
@@ -339,7 +339,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     }
     scheduleRedraw();
     return () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; } };
-  }, [images, template, canvasRatio, gap, padding, borderRadius, bgColor, exportWidth, scheduleRedraw]);
+  }, [images, template, canvasRatio, gap, padding, borderRadius, edgeBlur, bgColor, exportWidth, scheduleRedraw]);
 
   // Hit test
   function hitTest(px, py) {
@@ -603,7 +603,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       setSelectedIdx(-1);
     },
     async exportToBlob(targetWidth = 4096) {
-      const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, bgColor: bg, images: imgs } = propsRef.current;
+      const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, edgeBlur: eb, bgColor: bg, images: imgs } = propsRef.current;
       if (!tmpl?.cells) return null;
       const targetH = Math.round(targetWidth / (ratio || 1));
       const offscreen = document.createElement("canvas");
@@ -648,7 +648,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
           console.warn(`[Collage] cell ${i} exported from a lower-res source (${img.naturalWidth}x${img.naturalHeight}); best candidate not ready: ${best}`);
         }
         if (img) {
-          drawCellImage(ctx, img, rect, { x: state.pan.x * panScale, y: state.pan.y * panScale }, state.zoom, br);
+          drawCellImage(ctx, img, rect, { x: state.pan.x * panScale, y: state.pan.y * panScale }, state.zoom, br, eb || 0);
         }
       }
       // Lossless: the format is chosen after this, in the save dialog, and

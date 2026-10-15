@@ -73,7 +73,45 @@ export function getImageRect(img, cellRect, pan, zoom) {
   return { x: x + (w - drawW) / 2 + pan.x, y: y + (h - drawH) / 2 + pan.y, w: drawW, h: drawH };
 }
 
-export function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
+// The cell's image with a soft edge, as a scratch canvas in device pixels:
+// the image fades to nothing over the last `edgeBlur` user-space px before
+// the cell's edge, rounded corners included. The mask is the cell inset by
+// edgeBlur and blurred by half of it, so the image is opaque from about
+// 2 × edgeBlur in and gone at the edge; composited onto the page it fades
+// into whatever is behind it (the background).
+function featheredCell(ctx, img, cellRect, pan, zoom, borderRadius, edgeBlur) {
+  const { x, y, w, h } = cellRect;
+  const m = ctx.getTransform();
+  const sx = Math.abs(m.a) || 1;
+  const sy = Math.abs(m.d) || 1;
+  const off = document.createElement("canvas");
+  off.width = Math.max(1, Math.ceil(w * sx));
+  off.height = Math.max(1, Math.ceil(h * sy));
+  const o = off.getContext("2d");
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = ctx.imageSmoothingQuality || "high";
+  o.setTransform(sx, 0, 0, sy, -x * sx, -y * sy);
+  const draw = getImageRect(img, cellRect, pan, zoom);
+  o.drawImage(img, draw.x, draw.y, draw.w, draw.h);
+  // The mask, in device pixels so the blur radius means the same at every
+  // canvas scale.
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalCompositeOperation = "destination-in";
+  const s = Math.min(sx, sy);
+  const inset = edgeBlur * s;
+  o.filter = `blur(${inset / 2}px)`;
+  o.fillStyle = "#000";
+  roundRectPath(
+    o, inset, inset,
+    Math.max(0, off.width - inset * 2), Math.max(0, off.height - inset * 2),
+    Math.max(0, (borderRadius - edgeBlur) * s),
+  );
+  o.fill();
+  o.filter = "none";
+  return off;
+}
+
+export function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius, edgeBlur = 0) {
   const { x, y, w, h } = cellRect;
   ctx.save();
   if (borderRadius > 0) {
@@ -84,8 +122,12 @@ export function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
     ctx.rect(x, y, w, h);
     ctx.clip();
   }
-  const draw = getImageRect(img, cellRect, pan, zoom);
-  ctx.drawImage(img, draw.x, draw.y, draw.w, draw.h);
+  if (edgeBlur > 0) {
+    ctx.drawImage(featheredCell(ctx, img, cellRect, pan, zoom, borderRadius, edgeBlur), x, y, w, h);
+  } else {
+    const draw = getImageRect(img, cellRect, pan, zoom);
+    ctx.drawImage(img, draw.x, draw.y, draw.w, draw.h);
+  }
   ctx.restore();
 }
 
@@ -197,6 +239,7 @@ export function renderCollagePage({
   gap = 0,
   padding = 0,
   borderRadius = 0,
+  edgeBlur = 0,
   bgColor = "#000000",
   states = [],
   width = 4096,
@@ -221,6 +264,7 @@ export function renderCollagePage({
       state.pan || { x: 0, y: 0 },
       state.zoom || 1,
       borderRadius,
+      edgeBlur,
     );
   }
   return canvas;

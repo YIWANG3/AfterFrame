@@ -206,8 +206,8 @@ function SliderField({ label, value, max, onChange, testId }) {
 /**
  * The "Canvas" section: aspect ratio, gap, padding, border radius, background.
  * Identical between single and batch modes. `canvas` is the overlay's canvas
- * settings object: { ratio, gap, padding, radius, bg, setRatio, setGap,
- * setPadding, setRadius, setBg, onReset } (onReset null: nothing to reset).
+ * settings object: { ratio, gap, padding, radius, edgeBlur, bg, setRatio, setGap,
+ * setPadding, setRadius, setEdgeBlur, setBg, onReset } (onReset null: nothing to reset).
  */
 export function CanvasSection({ canvas, exportWidth }) {
   const {
@@ -215,6 +215,7 @@ export function CanvasSection({ canvas, exportWidth }) {
     gap, setGap: onGapChange,
     padding, setPadding: onPaddingChange,
     radius: borderRadius, setRadius: onBorderRadiusChange,
+    edgeBlur, setEdgeBlur,
     bg: bgColor, setBg: onBgColorChange,
     onReset,
   } = canvas;
@@ -290,6 +291,7 @@ export function CanvasSection({ canvas, exportWidth }) {
         <SliderField label={t("gap")} value={gap} max={Math.round(exportWidth * 0.1)} onChange={onGapChange} testId="collage-gap-input" />
         <SliderField label={t("padding")} value={padding} max={Math.round(exportWidth * 0.1)} onChange={onPaddingChange} testId="collage-padding-input" />
         <SliderField label={t("borderRadius")} value={borderRadius} max={Math.round(exportWidth * 0.15)} onChange={onBorderRadiusChange} testId="collage-radius-input" />
+        <SliderField label={t("edgeBlur")} value={edgeBlur} max={Math.round(exportWidth * 0.05)} onChange={setEdgeBlur} testId="collage-edge-blur-input" />
 
         <div>
           <div className="text-[11px] text-muted">{t("background")}</div>
