@@ -71,7 +71,8 @@ def scene(path: Path, seed: int, *, flip: bool = False, quality: int = 92, scale
 
 # A stand-in for native/image-features.swift that speaks its protocol: the
 # vector is the picture's 4×4 grey thumbnail, normalised, so re-encodes of
-# one picture come out close and different pictures apart.
+# one picture come out close and different pictures apart. Python answers
+# slower than the slow-print gate allows, so the tests widen it.
 FAKE_HELPER = textwrap.dedent(
     """\
     #!{python}
@@ -170,6 +171,12 @@ class VisualJobTest(unittest.TestCase):
         self.connection.commit()
 
     def fake_helper(self) -> Path:
+        from media_workspace import visual
+
+        # Python answers slower than the slow-print gate allows a real helper.
+        widened = patch.object(visual, "SLOW_PRINT_SECONDS", 10.0)
+        widened.start()
+        self.addCleanup(widened.stop)
         script = self.root / "image-features.py"
         script.write_text(FAKE_HELPER.format(python=sys.executable), encoding="utf-8")
         if os.name == "nt":
@@ -180,6 +187,14 @@ class VisualJobTest(unittest.TestCase):
             return helper
         script.chmod(script.stat().st_mode | stat.S_IEXEC)
         return script
+
+    def test_a_slow_helper_is_left_aside_and_the_hashes_still_come(self):
+        from media_workspace import visual
+
+        helper = self.fake_helper()
+        with patch.object(visual, "SLOW_PRINT_SECONDS", 0.0), patch.dict(os.environ, {"IMAGE_FEATURES_PATH": str(helper)}):
+            self.render_previews()
+        self.assertEqual(visual_status(self.connection), {"hashed": 4, "embedded": 0, "missing": 0, "duplicate_groups": 1})
 
     def test_previews_bring_their_hash_and_group_the_re_encode(self):
         self.render_previews()

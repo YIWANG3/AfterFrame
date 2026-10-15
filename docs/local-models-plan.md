@@ -71,6 +71,7 @@
 - 近似重复的判定是两条同时成立：汉明距离 ≤ 8，且两边都有 feature print 时距离 ≤ 0.4。只有哈希（Windows）时只看汉明。
 - 哈希和向量和色彩一样挂在预览生成里（新预览自带），visual 任务只做存量补齐，开库时自动跑一次。
 - 连拍（feat/bursts）：每张分析完后在同相机、±2 秒的邻居里找同场景的（有向量看距离 ≤ 0.9，否则汉明 ≤ 16），逐帧串成组，桥接的组合并；`asset_visual.burst_group`，浏览行带 `burst_group`/`burst_size`。折叠只在网格做（`workspaceLogic.foldBursts`：当前排序下相邻的同组帧折成第一帧加角标），近似重复和「相似照片」两个视图不折叠，定位某张照片时自动展开它所在的组。
+- 没有神经引擎的机器（Intel Mac、CI 虚拟机）上 Vision 一张要 70 毫秒以上，导入会被拖慢几倍：sidecar 启动助手时量一次推理，超过 50 毫秒就只用哈希（`visual.SLOW_PRINT_SECONDS`）。助手进程按 sidecar 进程常驻复用，渲染线程借用。
 - 助手是 `native/image-features.swift`，sidecar 通过 `IMAGE_FEATURES_PATH` 找到它，和 people-worker 同一种接法；macOS 12/13 用 revision 1（2048 维，模型名 vision-fp-r1），14 起 revision 2（768 维，vision-fp-r2），两者不互通，按 `embedding_model` 分开。
 
 **开放问题。** 同一个库在 Mac 和 Windows 之间搬时两套向量不互通，只能各自重算；先接受，文档里写明。连拍折叠和现有的排序、多选、marquee 怎么共存，开工前画一下。

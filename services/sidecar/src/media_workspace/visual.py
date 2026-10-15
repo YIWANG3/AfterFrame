@@ -198,6 +198,23 @@ class FeatureHelper:
         self.close()
 
 
+# A print slower than this (on a Mac without the neural engine — Intel, a
+# virtual machine — Vision takes 70 ms and more a photo where the engine
+# takes 5) would make an import crawl: such a machine keeps to the hash.
+SLOW_PRINT_SECONDS = 0.05
+
+
+def _probe_image() -> Path:
+    """A small picture to time a print on, made once per process."""
+    import tempfile
+
+    path = Path(tempfile.gettempdir()) / f"afterframe-print-probe-{os.getpid()}.jpg"
+    if not path.exists():
+        pixels = np.add.outer(np.arange(128), np.arange(128)).astype(np.uint8)
+        Image.fromarray(pixels, "L").convert("RGB").save(path, quality=85)
+    return path
+
+
 class HelperPool:
     """The image-features helpers of this process, kept for its lifetime
     and lent to one thread at a time. Starting one costs a probe and the
@@ -222,10 +239,27 @@ class HelperPool:
         with self._lock:
             if helper_path in self._models:
                 return self._models[helper_path]
+        import sys
+        import time
+
+        helper: FeatureHelper | None = None
+        model: str | None = None
         try:
-            helper: FeatureHelper | None = FeatureHelper(helper_path)
-            model: str | None = helper.model if helper else None
+            helper = FeatureHelper(helper_path)
+            model = helper.model
+            # The first print loads the model; the second says what a print
+            # costs here. Too slow, and this process keeps to the hash.
+            probe = _probe_image()
+            helper.embed("probe", probe)
+            started = time.monotonic()
+            helper.embed("probe", probe)
+            if time.monotonic() - started > SLOW_PRINT_SECONDS:
+                print(f"image-features: a print takes {time.monotonic() - started:.3f}s here; hashing only", file=sys.stderr)
+                helper.close()
+                helper, model = None, None
         except FeatureHelperError:
+            if helper is not None:
+                helper.close()
             helper, model = None, None
         with self._lock:
             self._models[helper_path] = model
