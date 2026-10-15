@@ -4,7 +4,7 @@
 
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Unlink, ScanFace, Flag, FlagOff, Play } from "lucide-react";
+import { Unlink, ScanFace, Flag, FlagOff, Play, Layers } from "lucide-react";
 import api from "../api";
 import { fileName, galleryInfoLabel, localFileUrl } from "../utils/format";
 import PreviewImage from "./PreviewImage";
@@ -111,6 +111,7 @@ const GalleryCard = memo(function GalleryCard({
   importRunning = false,
   onPreviewError,
   onPreviewLoaded,
+  onToggleBurst,
 }) {
   const { t } = useTranslation("nav");
   const title = fileName(item.image_path) || item.stem;
@@ -213,6 +214,8 @@ const GalleryCard = memo(function GalleryCard({
       data-asset-type={item.asset_type}
       data-image-path={item.image_path}
       data-flag={item.app_flag === 1 ? "pick" : item.app_flag === -1 ? "reject" : "none"}
+      data-burst-group={item.burst_group || undefined}
+      data-burst={item.burst ? (item.burst.collapsed ? "collapsed" : "expanded") : undefined}
       draggable
       className="group absolute text-left focus:outline-none"
       style={{
@@ -278,6 +281,27 @@ const GalleryCard = memo(function GalleryCard({
             <Unlink className="h-2.5 w-2.5" />
             {t("gallery.missing")}
           </div>
+        ) : null}
+        {item.burst ? (
+          // The stack: the frames shot with this one. Below the Missing
+          // badge when both show; a click opens or folds the stack, nothing
+          // else (the card's own click would select it).
+          <button
+            type="button"
+            className={[
+              "absolute left-1.5 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors",
+              item.exists_on_disk === false ? "top-8" : "top-1.5",
+              item.burst.collapsed ? "bg-black/70 text-white hover:bg-black/85" : "bg-accent/90 text-white hover:bg-accent",
+            ].join(" ")}
+            title={t(item.burst.collapsed ? "gallery.burstOpen" : "gallery.burstClose", { count: item.burst.count })}
+            data-burst-badge={item.burst.collapsed ? "collapsed" : "expanded"}
+            onClick={(event) => { event.stopPropagation(); event.preventDefault(); onToggleBurst?.(item.burst.group); }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            <Layers className="h-2.5 w-2.5" />
+            {item.burst.count}
+          </button>
         ) : null}
         {item.has_face ? (
           <div

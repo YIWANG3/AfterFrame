@@ -401,11 +401,14 @@ SCHEMA_STATEMENTS = [
         embedding BLOB,
         embedding_model TEXT,
         dup_group TEXT,
+        burst_group TEXT,
         analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_asset_visual_group ON asset_visual(dup_group)",
+    # idx_asset_visual_burst is in db/core.py's _FACET_INDEXES: burst_group is a
+    # _LATEST_COLUMNS column, which a catalog from #230 gets after these run.
     """
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(
         location_id,

@@ -37,7 +37,10 @@ with Image.open(original["canonical_path"]) as image:
 stat = image_path.stat()
 modified = datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat()
 metadata = json.loads(original["metadata_json"])
-metadata.update(normalized_stem="b0016108-copy", stem_key="b0016108-copy", modified_time=modified, file_size=stat.st_size)
+# An hour later than the original: a re-export, not a frame shot with it (a
+# burst folds in the grid; the look-alike pair is meant to show as two cards).
+metadata.update(normalized_stem="b0016108-copy", stem_key="b0016108-copy", modified_time=modified, file_size=stat.st_size,
+                capture_time="2025-05-10T11:11:36")
 row = {k: original[k] for k in columns}
 row.update(asset_id=COPY, stem="B0016108-copy", normalized_stem="b0016108-copy", stem_key="b0016108-copy",
            canonical_path=str(image_path), fingerprint=COPY, file_size=stat.st_size, modified_time=modified,

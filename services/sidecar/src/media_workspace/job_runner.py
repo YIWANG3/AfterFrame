@@ -1074,7 +1074,10 @@ def run_visual_job(
                 if index == total or time.monotonic() - reported_at >= 1.0:
                     reported_at = time.monotonic()
                     progress({"processed": index, "total": total})
-            return {"analyzed": analyzed, "embedded": analyzer.embedded, "grouped": analyzer.grouped, "failed": failed, "total": total}
+            return {
+                "analyzed": analyzed, "embedded": analyzer.embedded, "grouped": analyzer.grouped, "bursts": analyzer.bursts,
+                "failed": failed, "total": total,
+            }
         finally:
             analyzer.close()
 

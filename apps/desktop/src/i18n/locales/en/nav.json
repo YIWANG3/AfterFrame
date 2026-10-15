@@ -334,6 +334,8 @@
     "previewPending": "Preparing preview…",
     "noAssets": "No assets in this view",
     "missing": "Missing",
+    "burstOpen": "Burst of {{count}} frames — show them all",
+    "burstClose": "Burst of {{count}} frames — fold",
     "missingTip": "Original file moved or deleted",
     "hasPerson": "Contains a detected face",
     "menu": {

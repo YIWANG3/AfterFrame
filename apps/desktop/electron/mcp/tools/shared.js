@@ -35,6 +35,9 @@ function compactAsset(row, port) {
     tags: row.tags?.length ? row.tags : row.annotation?.tags?.length ? row.annotation.tags : undefined,
     has_raw: !!row.raw_asset_id,
     has_face: row.has_face ? true : undefined,
+    // The burst (frames shot together) the photo is in, and how many.
+    burst_group: row.burst_group || undefined,
+    burst_size: row.burst_group ? row.burst_size : undefined,
     // Only surfaced when something is wrong — keeps the common case compact.
     missing_original: row.exists_on_disk === false ? true : undefined,
     source_changed: row.source_changed === true ? true : undefined,

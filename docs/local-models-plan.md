@@ -1,6 +1,6 @@
 # 本地模型与开源库扩展规划：相似图、语义搜索、挑片、OCR、离线标签、视频场景
 
-> **状态（2026-10-14）**：A 的第一步已实现（分支 feat/similar-images）：pHash 和 Mac 的 Vision feature print 随预览生成写入 `asset_visual`，近似重复分组、侧栏「近似重复」、右键「查找相似照片」、Inspector「相似」条、MCP 的 find_similar / list_lookalikes / index_lookalikes 和 search_assets 的 similar_to。与下文设计的出入见 A 节末尾。连拍分组、Windows 的 DINOv2 向量未做。来源是一轮对"开源模型能为 AfterFrame 所用"的梳理，按下面的边界筛过一遍。
+> **状态（2026-10-14）**：A 的第一步已实现（分支 feat/similar-images）：pHash 和 Mac 的 Vision feature print 随预览生成写入 `asset_visual`，近似重复分组、侧栏「近似重复」、右键「查找相似照片」、Inspector「相似」条、MCP 的 find_similar / list_lookalikes / index_lookalikes 和 search_assets 的 similar_to。与下文设计的出入见 A 节末尾。连拍分组随后在 feat/bursts 上实现（同一相机、拍摄时间相差 2 秒内、feature print 距离 ≤ 0.9，无向量时汉明 ≤ 16；网格里折叠成一叠，角标点开）。Windows 的 DINOv2 向量未做。来源是一轮对"开源模型能为 AfterFrame 所用"的梳理，按下面的边界筛过一遍。
 > 每项的现状对照代码核实过（只读代码，未运行）。模型体积是按参数量估的 fp16 / int8 值，开工前的 spike 要实测。
 
 ## 边界
@@ -70,6 +70,7 @@
 - feature print 对输入尺寸敏感（512px 与原图相差 0.46），所以所有向量都从 512 预览算，只在同一档内比较；在 512 下近似重复 0.2 到 0.3、同场景 0.8、无关 1.1 以上，区分度够。
 - 近似重复的判定是两条同时成立：汉明距离 ≤ 8，且两边都有 feature print 时距离 ≤ 0.4。只有哈希（Windows）时只看汉明。
 - 哈希和向量和色彩一样挂在预览生成里（新预览自带），visual 任务只做存量补齐，开库时自动跑一次。
+- 连拍（feat/bursts）：每张分析完后在同相机、±2 秒的邻居里找同场景的（有向量看距离 ≤ 0.9，否则汉明 ≤ 16），逐帧串成组，桥接的组合并；`asset_visual.burst_group`，浏览行带 `burst_group`/`burst_size`。折叠只在网格做（`workspaceLogic.foldBursts`：当前排序下相邻的同组帧折成第一帧加角标），近似重复和「相似照片」两个视图不折叠，定位某张照片时自动展开它所在的组。
 - 助手是 `native/image-features.swift`，sidecar 通过 `IMAGE_FEATURES_PATH` 找到它，和 people-worker 同一种接法；macOS 12/13 用 revision 1（2048 维，模型名 vision-fp-r1），14 起 revision 2（768 维，vision-fp-r2），两者不互通，按 `embedding_model` 分开。
 
 **开放问题。** 同一个库在 Mac 和 Windows 之间搬时两套向量不互通，只能各自重算；先接受，文档里写明。连拍折叠和现有的排序、多选、marquee 怎么共存，开工前画一下。

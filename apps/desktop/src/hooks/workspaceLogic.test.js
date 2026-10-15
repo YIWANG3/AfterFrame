@@ -21,6 +21,7 @@ import {
   scopeSelectsByRating,
   shouldResetScopeForReveal,
   sortOutsideFolder,
+  foldBursts,
 } from "./workspaceLogic";
 
 const item = (asset_id, extra = {}) => ({ asset_id, stem: asset_id, ...extra });
@@ -31,6 +32,29 @@ describe("browseScopeKey", () => {
     const b = browseScopeKey({ status: "all", collectionId: null, search: "", sort: "name-asc", filters: {} });
     expect(a).toBe(b);
     expect(browseScopeKey({ status: "all", sort: "name-asc", search: "x" })).not.toBe(a);
+  });
+});
+
+describe("foldBursts", () => {
+  const frame = (id, group) => ({ asset_id: id, burst_group: group || null });
+  const items = [frame("a"), frame("b1", "g1"), frame("b2", "g1"), frame("b3", "g1"), frame("c"), frame("d1", "g2"), frame("e"), frame("d2", "g2")];
+
+  it("folds a run of one burst into its first frame with the count, and leaves single frames alone", () => {
+    const shown = foldBursts(items, new Set());
+    expect(shown.map((item) => item.asset_id)).toEqual(["a", "b1", "c", "d1", "e", "d2"]);
+    expect(shown[1].burst).toEqual({ group: "g1", count: 3, collapsed: true });
+    expect(shown[3].burst).toBeUndefined();
+  });
+
+  it("shows every frame of an expanded burst, each marked as part of the open stack", () => {
+    const shown = foldBursts(items, new Set(["g1"]));
+    expect(shown.map((item) => item.asset_id)).toEqual(["a", "b1", "b2", "b3", "c", "d1", "e", "d2"]);
+    expect(shown[2].burst).toEqual({ group: "g1", count: 3, collapsed: false });
+  });
+
+  it("does not touch the rows themselves", () => {
+    foldBursts(items, new Set());
+    expect(items[1].burst).toBeUndefined();
   });
 });
 

@@ -10,7 +10,7 @@ import useImportPipeline from "./useImportPipeline";
 import { usePref } from "./usePref";
 import { adoptLegacyPref, intIn, oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
-  DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
+  DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, foldBursts, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, rejectedFilters, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
@@ -67,6 +67,12 @@ export default function useWorkspace({ pushToast } = {}) {
   const relatedNavigationRef = useRef(0);
   const detailRequestRef = useRef(0);
   const [revealAssetRequest, setRevealAssetRequest] = useState(null);
+  // The revealed photo may sit inside a folded burst: open its stack as soon
+  // as its row is loaded (expandBurstOf is defined with the stacks below).
+  const expandBurstRef = useRef(null);
+  useEffect(() => {
+    if (revealAssetRequest?.assetId) expandBurstRef.current?.(revealAssetRequest.assetId);
+  }, [revealAssetRequest, items]);
   // Inspector relationships may point outside the active search/filter page.
   // Keep that explicit selection authoritative while background browse
   // requests settle; otherwise a late response replaces it with the first
@@ -151,9 +157,9 @@ export default function useWorkspace({ pushToast } = {}) {
     visualReady: () => {
       refreshShownDetail();
       void api.getSummary().then((next) => next && setSummary(next)).catch(() => {});
-      if (scopeRef.current.status === "lookalikes") {
-        void loadBrowser({ scope: scopeRef.current, preserveView: true });
-      }
+      // The rows carry their burst (and a Look-alikes grid its members):
+      // re-read the loaded pages in place, as a background refresh does.
+      void loadBrowser({ scope: scopeRef.current, preserveView: true });
     },
     colorsReady: () => {
       loadFacetValues();
@@ -236,6 +242,32 @@ export default function useWorkspace({ pushToast } = {}) {
   // then replaces `items` wholesale. Field list + the superset invariant live
   // in workspaceLogic.searchableFields.
   const filteredItems = useMemo(() => filterItemsByQuery(items, typedQuery), [items, typedQuery]);
+  // Burst stacks the user has opened (burst_group ids); a new place starts
+  // with them all folded. What the grid shows is filteredItems with the
+  // closed stacks folded to their first frame (workspaceLogic.foldBursts).
+  const [expandedBursts, setExpandedBursts] = useState(() => new Set());
+  // The views that list related photos (Look-alikes, "photos like this one")
+  // show every frame: folding there would hide the very photos asked for.
+  const foldsBursts = scope.status !== "lookalikes" && !scope.similarTo;
+  const visibleItems = useMemo(
+    () => (foldsBursts ? foldBursts(filteredItems, expandedBursts) : filteredItems),
+    [filteredItems, expandedBursts, foldsBursts],
+  );
+  const toggleBurst = useCallback((group) => {
+    if (!group) return;
+    setExpandedBursts((current) => {
+      const next = new Set(current);
+      if (next.has(group)) next.delete(group); else next.add(group);
+      return next;
+    });
+  }, []);
+  // A photo asked for (a reveal, a related-asset click) must be on screen,
+  // so its stack opens.
+  const expandBurstOf = useCallback((assetId) => {
+    const group = itemsRef.current.find((item) => item.asset_id === assetId)?.burst_group;
+    if (group) setExpandedBursts((current) => (current.has(group) ? current : new Set([...current, group])));
+  }, []);
+  expandBurstRef.current = expandBurstOf;
 
   // Typed search → scope.query after 250ms. Programmatic scope changes set
   // both at once (browseTo, reveals), so this only fires for keystrokes. The
@@ -682,6 +714,7 @@ export default function useWorkspace({ pushToast } = {}) {
       // including the one just left, has to be browsed.
       loadedScopeRef.current = null;
       setNavigation((count) => count + 1);
+      setExpandedBursts(new Set());
     }
     setTypedQuery(full.query);
     setScopeState(full);
@@ -893,6 +926,8 @@ export default function useWorkspace({ pushToast } = {}) {
     info,
     summary,
     filteredItems,
+    visibleItems,
+    toggleBurst,
     detail,
     reloadDetail: () => loadDetail(selectedAssetId),
     selectedAssetId,

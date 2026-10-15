@@ -325,6 +325,8 @@
     "previewPending": "正在准备预览…",
     "noAssets": "此视图中没有素材",
     "missing": "缺失",
+    "burstOpen": "连拍 {{count}} 张，点击展开",
+    "burstClose": "连拍 {{count}} 张，点击收起",
     "missingTip": "原文件已移动或删除",
     "hasPerson": "包含已检测到的人脸",
     "menu": {

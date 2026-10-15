@@ -303,7 +303,9 @@ export default function App() {
   const resizeSidebar = usePaneResize(workspace.setSidebarWidth, ...SIDEBAR_WIDTH_RANGE);
   // Dragged from the right edge, so the value grows leftwards.
   const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -INSPECTOR_WIDTH_RANGE[1], -INSPECTOR_WIDTH_RANGE[0]);
-  const currentItems = workspace.filteredItems;
+  // What the grid shows: the loaded page, narrowed by the search box, with
+  // closed burst stacks folded to their first frame.
+  const currentItems = workspace.visibleItems;
   const orderedIds = useMemo(() => currentItems.map((item) => item.asset_id), [currentItems]);
   const itemById = useMemo(
     () => new Map(currentItems.map((item) => [item.asset_id, item])),
@@ -1430,6 +1432,7 @@ export default function App() {
                   onFlag={(flag, ids) => applyFlag(flag, { ids })}
                   onAddTags={openTagDialog}
                   onFindSimilar={api.has("findSimilar") ? findSimilar : undefined}
+                  onToggleBurst={workspace.toggleBurst}
                   onShowInAllAssets={workspace.narrowed ? showInAllAssets : undefined}
                 />
                 </div>

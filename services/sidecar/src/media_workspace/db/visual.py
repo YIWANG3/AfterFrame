@@ -10,16 +10,21 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
 
 from ..visual import (
+    BURST_MAX_DISTANCE,
+    BURST_MAX_HAMMING,
+    BURST_MAX_SECONDS,
     DUPLICATE_MAX_DISTANCE,
     DUPLICATE_MAX_HAMMING,
     HASH_VERSION,
     distances_to_all,
     from_signed,
+    hamming,
     hamming_to_all,
     pack_embedding,
     to_signed,
@@ -255,6 +260,7 @@ class VisualAnalyzer:
         self._indexes: dict[str, VisualIndex] = {}
         self.embedded = 0
         self.grouped = 0
+        self.bursts = 0
 
     def analyze(self, asset_id: str, asset_type: str, preview_path: Path) -> bool:
         """False when the preview can't be read (the next pass retries)."""
@@ -280,6 +286,8 @@ class VisualAnalyzer:
         if group:
             self.grouped += 1
         index.add(asset_id, phash, vector, group)
+        if assign_burst_group(self.connection, asset_id, asset_type, phash, vector, self.embedding_model):
+            self.bursts += 1
         return True
 
     def close(self) -> None:
@@ -360,6 +368,93 @@ def assign_duplicate_group(
     if commit:
         connection.commit()
     return group
+
+
+def _parse_capture_time(value: str | None):
+    """A photo's capture time as stored (the camera's clock, 'YYYY-MM-DDTHH:MM:SS';
+    a video's carries an offset), or None."""
+    from datetime import datetime
+
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value)).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def assign_burst_group(
+    connection: sqlite3.Connection, asset_id: str, asset_type: str, phash: int, embedding: np.ndarray | None, embedding_model: str | None, *,
+    commit: bool = False,
+) -> str | None:
+    """Put a just-analysed photo in the burst of the frames shot with it:
+    the same camera's photos within BURST_MAX_SECONDS whose pictures are of
+    the same scene. Frames join the group of the ones they match (groups
+    they bridge are merged), so a long burst chains frame by frame. Returns
+    the group, or None when the photo stands alone."""
+    own = connection.execute("SELECT meta_capture_time, meta_camera_model FROM assets WHERE asset_id = ?", (asset_id,)).fetchone()
+    taken = _parse_capture_time(own["meta_capture_time"]) if own else None
+    if taken is None:
+        connection.execute("UPDATE asset_visual SET burst_group = NULL WHERE asset_id = ?", (asset_id,))
+        if commit:
+            connection.commit()
+        return None
+    window = timedelta(seconds=BURST_MAX_SECONDS)
+    # Capture times compare as the strings they are stored as; the bounds
+    # take the same shape, so the index on meta_capture_time serves.
+    low, high = (taken - window).isoformat(timespec="seconds"), (taken + window).isoformat(timespec="seconds")
+    neighbours = connection.execute(
+        """
+        SELECT assets.asset_id, v.burst_group, v.phash, v.embedding, v.embedding_model
+        FROM assets JOIN asset_visual v ON v.asset_id = assets.asset_id
+        WHERE assets.asset_type = ? AND assets.asset_id != ? AND assets.exists_on_disk = 1
+          AND assets.meta_camera_model IS ? AND assets.meta_capture_time BETWEEN ? AND ?
+          AND v.phash IS NOT NULL
+        """,
+        (asset_type, asset_id, own["meta_camera_model"], low, high),
+    ).fetchall()
+    matched: list[sqlite3.Row] = []
+    for row in neighbours:
+        if embedding is not None and row["embedding"] is not None and row["embedding_model"] == embedding_model:
+            alike = float(np.linalg.norm(unpack_embedding(row["embedding"]) - embedding)) <= BURST_MAX_DISTANCE
+        else:
+            alike = hamming(phash, from_signed(row["phash"])) <= BURST_MAX_HAMMING
+        if alike:
+            matched.append(row)
+    if not matched:
+        connection.execute("UPDATE asset_visual SET burst_group = NULL WHERE asset_id = ?", (asset_id,))
+        if commit:
+            connection.commit()
+        return None
+    groups = sorted({row["burst_group"] for row in matched if row["burst_group"]})
+    group = groups[0] if groups else uuid.uuid4().hex[:12]
+    if len(groups) > 1:
+        others = groups[1:]
+        connection.execute(f"UPDATE asset_visual SET burst_group = ? WHERE burst_group IN ({','.join('?' * len(others))})", (group, *others))
+    ungrouped = [row["asset_id"] for row in matched if row["burst_group"] != group]
+    if ungrouped:
+        connection.execute(f"UPDATE asset_visual SET burst_group = ? WHERE asset_id IN ({','.join('?' * len(ungrouped))})", (group, *ungrouped))
+    connection.execute("UPDATE asset_visual SET burst_group = ? WHERE asset_id = ?", (group, asset_id))
+    if commit:
+        connection.commit()
+    return group
+
+
+def burst_frames(connection: sqlite3.Connection, asset_id: str) -> list[str]:
+    """The asset ids of the burst a photo is in, in capture order (the photo
+    itself included); [] when it stands alone."""
+    return [
+        row[0]
+        for row in connection.execute(
+            """
+            SELECT assets.asset_id FROM asset_visual v JOIN assets ON assets.asset_id = v.asset_id
+            WHERE v.burst_group = (SELECT burst_group FROM asset_visual WHERE asset_id = ?) AND v.burst_group IS NOT NULL
+              AND assets.exists_on_disk = 1
+            ORDER BY assets.meta_capture_time, assets.stem
+            """,
+            (asset_id,),
+        )
+    ]
 
 
 def list_duplicate_groups(connection: sqlite3.Connection, *, limit: int = 100, offset: int = 0) -> list[dict]:

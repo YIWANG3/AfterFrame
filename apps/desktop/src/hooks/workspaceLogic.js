@@ -54,6 +54,32 @@ const FILTER_MODIFIER_KEYS = new Set(["tag_match", "color_tolerance", "exclude"]
 export const activeFilterCount = (filters) => Object.entries(filters || {})
   .filter(([key, value]) => !FILTER_MODIFIER_KEYS.has(key) && !isEmptyValue(value)).length;
 
+// The grid's burst stacks. Frames of one burst (rows sharing burst_group,
+// sidecar db/visual.py) that sit next to each other in the current order
+// fold into one card — the first frame, with the count — unless the group is
+// in `expanded`. Only runs of two or more fold: one frame of a burst whose
+// others are filtered out is just a photo. Each shown frame of a stack
+// carries `burst: {group, count, collapsed}` for the card's badge.
+export function foldBursts(items, expanded) {
+  const result = [];
+  let index = 0;
+  while (index < items.length) {
+    const group = items[index].burst_group;
+    let end = index + 1;
+    if (group) while (end < items.length && items[end].burst_group === group) end += 1;
+    const count = end - index;
+    if (count < 2) {
+      result.push(items[index]);
+    } else if (expanded?.has(group)) {
+      for (let at = index; at < end; at += 1) result.push({ ...items[at], burst: { group, count, collapsed: false } });
+    } else {
+      result.push({ ...items[index], burst: { group, count, collapsed: true } });
+    }
+    index = end;
+  }
+  return result;
+}
+
 // Is the user narrowing the place they are in? Drives "the filter bar cannot be
 // hidden while it is filtering" and which actions the bar offers.
 export const hasRefinement = (scope) => !!scope.query.trim() || activeFilterCount(scope.filters) > 0;

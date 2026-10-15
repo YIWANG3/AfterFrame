@@ -65,7 +65,9 @@ _BROWSE_SELECT_COLUMNS = f"""\
             anno.detected_text AS anno_detected_text,
             anno.created_at AS anno_created_at,
             anno.updated_at AS anno_updated_at,
-            EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id) AS has_face"""
+            EXISTS (SELECT 1 FROM asset_faces AS face WHERE face.asset_id = assets.asset_id) AS has_face,
+            visual.burst_group,
+            (SELECT COUNT(*) FROM asset_visual AS frames WHERE frames.burst_group = visual.burst_group) AS burst_size"""
 
 _RESOURCE_SET_JOINS = """\
         LEFT JOIN assets AS raw_assets
@@ -85,6 +87,8 @@ _RESOURCE_SET_JOINS = """\
 
 _BROWSE_SHARED_JOINS = f"""\
 {_RESOURCE_SET_JOINS}
+        LEFT JOIN asset_visual AS visual
+            ON visual.asset_id = assets.asset_id
         LEFT JOIN preview_entries
             ON preview_entries.asset_id = assets.asset_id
            AND preview_entries.kind = 'preview'

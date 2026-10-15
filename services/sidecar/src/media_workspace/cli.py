@@ -1462,6 +1462,9 @@ def _browse_row_payload(row, catalog) -> dict:
         "primary_stem": row["primary_stem"],
         "set_item_count": row["set_item_count"],
         "has_face": bool(row["has_face"]),
+        # The burst the photo was shot in (db/visual.py), for the grid's stacks.
+        "burst_group": row["burst_group"] or None,
+        "burst_size": int(row["burst_size"] or 0) if row["burst_group"] else 0,
         "annotation": _annotation_from_row(row),
     }
 

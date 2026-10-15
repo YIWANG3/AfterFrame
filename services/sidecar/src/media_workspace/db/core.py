@@ -48,6 +48,7 @@ _FACET_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_assets_meta_aperture ON assets(meta_aperture)",
     "CREATE INDEX IF NOT EXISTS idx_assets_meta_focal ON assets(meta_focal)",
     "CREATE INDEX IF NOT EXISTS idx_assets_meta_capture_time ON assets(meta_capture_time)",
+    "CREATE INDEX IF NOT EXISTS idx_asset_visual_burst ON asset_visual(burst_group)",
 ]
 
 
@@ -65,6 +66,9 @@ _LATEST_COLUMNS = [
     # (landscape pixels, "rotate 90°" tag) reads as landscape from them.
     # '' = the thumbnail couldn't be read; NULL = not looked at yet.
     ("assets", "display_shape", "TEXT"),
+    # The burst a photo was shot in (db/visual.py); catalogs from #230 have
+    # the table without it.
+    ("asset_visual", "burst_group", "TEXT"),
     # The description the user wrote: it wins over the AI's caption
     # (asset_ai_annotations.caption), which a run never writes here. NULL:
     # they never did (the AI's shows); '' : they cleared it (nothing shows).

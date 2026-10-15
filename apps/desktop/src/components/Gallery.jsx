@@ -52,6 +52,8 @@ export default function Gallery({
   onShowInAllAssets,
   // Only passed where the look-alike index can answer (the desktop app).
   onFindSimilar,
+  // Opens or folds a burst stack (its burst_group).
+  onToggleBurst,
 }) {
   const { t } = useTranslation("nav");
   const containerRef = useRef(null);
@@ -64,11 +66,12 @@ export default function Gallery({
   // wrappers — otherwise the memo never bails and every poll tick re-renders
   // every visible card.
   const cardHandlersRef = useRef({});
-  cardHandlersRef.current = { onSelect, onOpen, onPrepareDragSelection, openContextMenu };
+  cardHandlersRef.current = { onSelect, onOpen, onPrepareDragSelection, openContextMenu, onToggleBurst };
   const stableOnSelect = useCallback((id, event) => cardHandlersRef.current.onSelect?.(id, event), []);
   const stableOnOpen = useCallback((id) => cardHandlersRef.current.onOpen?.(id), []);
   const stableOnPrepareDrag = useCallback((id) => cardHandlersRef.current.onPrepareDragSelection?.(id), []);
   const stableOnContextMenu = useCallback((event, item) => cardHandlersRef.current.openContextMenu?.(event, item), []);
+  const stableOnToggleBurst = useCallback((group) => cardHandlersRef.current.onToggleBurst?.(group), []);
 
   // On-demand repair: when a preview <img> fails, re-read the source metadata
   // and regenerate its preview, then cache-bust the src. This uses the same
@@ -505,6 +508,7 @@ export default function Gallery({
                 importRunning={importRunning}
                 onPreviewError={stableOnPreviewError}
                 onPreviewLoaded={stableOnPreviewLoaded}
+                onToggleBurst={stableOnToggleBurst}
               />
             </div>
           );

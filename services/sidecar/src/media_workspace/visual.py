@@ -25,8 +25,10 @@ from PIL import Image
 
 from .processes import no_window
 
-# Bump when the hash changes: the visual job then redoes every photo.
-HASH_VERSION = "phash-32-8-1"
+# Names everything a photo's asset_visual row holds (the hash, and what is
+# derived with it: the look-alike and burst groups). Bump when any of that
+# changes: the visual job then redoes every photo.
+HASH_VERSION = "phash-32-8-1/bursts-1"
 _HASH_EDGE = 32
 _HASH_LOW = 8  # the 8×8 low-frequency corner: 64 bits
 
@@ -36,6 +38,13 @@ DUPLICATE_MAX_HAMMING = 8
 # …and, when both have a feature print, the pictures must look alike too
 # (one picture's crops and flips: under 0.3; two shots of one scene: 0.8).
 DUPLICATE_MAX_DISTANCE = 0.4
+
+# A burst: frames from one camera this close in time whose pictures are of
+# one scene — by feature print (two shots of a scene: 0.8; unrelated: over
+# 1.1), or, with no print on one side, loosely by hash.
+BURST_MAX_SECONDS = 2
+BURST_MAX_DISTANCE = 0.9
+BURST_MAX_HAMMING = 16
 
 
 def _dct_matrix(n: int) -> np.ndarray:
