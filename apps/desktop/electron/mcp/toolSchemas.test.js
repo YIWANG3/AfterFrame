@@ -2,16 +2,19 @@
 // `args` in its handler (what the code expects). Nothing ties the two: a
 // property the handler reads but the schema never lists is one an agent
 // cannot know to send, so the call quietly does less than it should. This
-// scans server.js as text — the tools live in one array literal with a fixed
-// shape — and fails on that direction. The reverse (declared but never read
-// by name) is only reported, because some handlers hand the whole args
-// object to a filter builder.
+// scans tools/*.js as text — the tools are object literals of a fixed shape
+// (tools/index.js) — and fails on that direction. The reverse (declared but
+// never read by name) is only reported, because some handlers hand the whole
+// args object to a filter builder.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const source = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
+const TOOLS_DIR = path.join(__dirname, "tools");
+const toolFiles = fs.readdirSync(TOOLS_DIR)
+  .filter((name) => name.endsWith(".js") && !["index.js", "shared.js"].includes(name))
+  .map((name) => ({ name, source: fs.readFileSync(path.join(TOOLS_DIR, name), "utf8") }));
 
 // Walk a balanced { ... } body starting just after its opening brace.
 function braceBody(text, from) {
@@ -43,7 +46,7 @@ function topLevelKeys(body) {
   return keys;
 }
 
-function parseTools() {
+function parseTools(source, file) {
   const tools = [];
   const nameRe = /^ {4,6}name: "([a-z_]+)",\s*$/gm;
   const starts = [];
@@ -78,15 +81,19 @@ function parseTools() {
         }
       }
     }
-    tools.push({ name: tool.name, declared: new Set(declared), reads, wholesale: /\b(?:args|input)\b(?![?.\w])/.test(body) });
+    tools.push({ name: tool.name, file, declared: new Set(declared), reads, wholesale: /\b(?:args|input)\b(?![?.\w])/.test(body) });
   });
   return tools;
 }
 
-const tools = parseTools();
+const tools = toolFiles.flatMap(({ name, source }) => parseTools(source, name));
 
-test("parsed every tool in the array", () => {
+test("parsed every tool, from every tool file, each name once", () => {
+  assert.ok(toolFiles.length >= 5, `found ${toolFiles.length} tool files`);
   assert.ok(tools.length >= 30, `parsed ${tools.length} tools`);
+  for (const { name } of toolFiles) assert.ok(tools.some((t) => t.file === name), `${name} defines no tool the scan can see`);
+  const names = tools.map((t) => t.name);
+  assert.deepEqual(names.filter((n, i) => names.indexOf(n) !== i), [], "a tool name defined twice");
   for (const t of tools) assert.ok(t.declared.size + t.reads.size > 0 || t.name, t.name);
 });
 
