@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件夹管理页 · 原型</title>
+<style>
+  :root{color-scheme:dark;--app:#141416;--chrome:#1c1c1f;--pane:#19191c;--fill:#26262a;--fill2:#2e2e33;--border:#2f2f35;--text:#ececf1;--muted:#a3a3ad;--muted2:#7c7c86;--accent:#7aa2ff;--danger:#ff6b6b;--hover:#27272c;--selected:#2b2f3f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--app);color:var(--text);font:13px/1.4 -apple-system,"PingFang SC","Helvetica Neue",sans-serif;height:100vh;display:grid;grid-template-columns:220px 1fr;overflow:hidden}
+  aside{background:var(--chrome);padding:14px 10px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:2px;font-size:13px}
+  aside .h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);padding:14px 10px 6px;display:flex;justify-content:space-between;align-items:center}
+  aside .h .icons{display:flex;gap:4px;letter-spacing:0;text-transform:none}
+  aside .h .icons span{width:18px;height:18px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted2);font-size:11px}
+  aside .h .icons span.on{color:var(--text);background:var(--fill2)}
+  aside .row{padding:6px 10px;border-radius:6px;color:var(--muted);display:flex;justify-content:space-between;cursor:pointer}
+  aside .row:hover{background:var(--hover);color:var(--text)}
+  aside .row small{color:var(--muted2);font-variant-numeric:tabular-nums}
+  main{display:flex;flex-direction:column;min-width:0;min-height:0;height:100vh;padding:8px}
+  .panel{background:var(--pane);border-radius:8px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+  /* 行 1：Toolbar.jsx 的 app-toolbar（h-11，bg-chrome，px-2.5，gap-1） */
+  .toolbar{height:44px;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--chrome);flex-shrink:0}
+  .ib{width:32px;height:32px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;background:transparent;border:0;font-size:15px}
+  .ib:hover{background:var(--hover);color:var(--text)} .ib.on{color:var(--text);background:var(--fill2)}
+  .ib .badge{position:absolute;right:-2px;top:-2px;min-width:14px;height:14px;border-radius:999px;background:var(--accent);color:#0c1020;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 4px}
+  .title{margin:0 8px;min-width:0;flex:1;display:flex;align-items:baseline;gap:6px}
+  .title h1{font-size:13px;font-weight:600;margin:0;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .title .n{font-size:12px;color:var(--muted2)}
+  .sortbtn{height:32px;width:100px;border-radius:6px;border:1px solid var(--border);background:var(--app);color:var(--text);font-size:12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:4px}
+  .sortbtn:hover{border-color:#3a3a41}
+  .modes{display:flex;gap:4px;margin:0 2px}
+  .search{height:32px;flex:0 1 176px;min-width:96px;border-radius:6px;border:1px solid var(--border);background:var(--app);color:var(--text);padding:0 8px 0 28px;font-size:12px;outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a3a3ad' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:8px center}
+  .search:focus{border-color:rgba(122,162,255,.5)}
+  /* 行 2：FilterBar.jsx 的行（border-b border-border/60 bg-chrome/60 px-2 py-1.5，chip h-6 text-[11px]） */
+  .filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid rgba(47,47,53,.6);background:rgba(28,28,31,.6);flex-shrink:0}
+  .facets{display:flex;flex:1;min-width:0;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{height:24px;display:inline-flex;align-items:center;gap:4px;padding:0 8px;border-radius:6px;border:1px solid rgba(47,47,53,.7);background:var(--app);color:var(--muted);font-size:11px;cursor:pointer;position:relative}
+  .chip:hover{border-color:var(--border);color:var(--text)}
+  .chip.on{border-color:rgba(122,162,255,.5);background:rgba(122,162,255,.1);color:var(--text)}
+  .chip .cv{font-size:9px;color:var(--muted2)}
+  .chip.add{border-style:dashed}
+  .pop{position:absolute;left:0;top:28px;z-index:20;min-width:160px;border-radius:8px;border:1px solid rgba(47,47,53,.6);background:var(--chrome);padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.45);display:none}
+  .chip.open .pop{display:block}
+  .pop div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:11px;color:var(--muted);cursor:pointer}
+  .pop div:hover{background:var(--hover);color:var(--text)}
+  .pop div .k{color:var(--accent);width:12px}
+  .pop div .c{color:var(--muted2);font-size:10px;font-variant-numeric:tabular-nums}
+  .actions{display:flex;gap:6px;flex-shrink:0}
+  /* 内容 */
+  .scroll{flex:1;overflow:auto;padding:16px 18px 90px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:18px 16px}
+  .card{position:relative;cursor:default;user-select:none}
+  .cover{aspect-ratio:1;border-radius:12px;background:var(--fill);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.04);display:grid;gap:1px;color:var(--muted2)}
+  .cover.n0{display:flex;align-items:center;justify-content:center}
+  .cover.n1{grid-template-columns:1fr}
+  .cover.n2{grid-template-columns:1fr 1fr}
+  .cover.n3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}.cover.n3 i:first-child{grid-row:1/3}
+  .cover.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .cover i{display:block;background-size:cover}
+  .c1{background:linear-gradient(135deg,#3b4a6b,#8a5a3c)} .c2{background:linear-gradient(135deg,#2f5f4e,#c8a24b)} .c3{background:linear-gradient(135deg,#5a3c6b,#2b4b7a)} .c4{background:linear-gradient(135deg,#7a3b3b,#2f2f33)} .c5{background:linear-gradient(135deg,#2a2a2e,#4b6d8a)} .c6{background:linear-gradient(135deg,#6b5a2a,#1f3d2a)} .c7{background:linear-gradient(160deg,#8a7a6a,#3a2f2a)} .c8{background:linear-gradient(200deg,#4f6b8a,#1e2430)}
+  .card.sel .cover{outline:2px solid var(--accent);outline-offset:1px}
+  .check{position:absolute;left:8px;top:8px;width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);background:rgba(0,0,0,.35);opacity:0;transition:.12s;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;z-index:2}
+  .card:hover .check,.card.sel .check{opacity:1}
+  .card.sel .check{background:var(--accent);border-color:var(--accent);color:#0c1020}
+  .dots{position:absolute;right:8px;top:8px;width:22px;height:22px;border-radius:6px;background:rgba(0,0,0,.45);color:#fff;opacity:0;display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:1px;z-index:2}
+  .card:hover .dots{opacity:1}
+  .name{margin-top:8px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{font-size:11px;color:var(--muted2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;font-weight:500;color:var(--muted2);font-size:11px;padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--pane);cursor:pointer}
+  th.on{color:var(--text)} th.r,td.r{text-align:right;font-variant-numeric:tabular-nums}
+  td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--muted);white-space:nowrap}
+  tr:hover td{background:var(--hover)} tr.sel td{background:var(--selected);color:var(--text)}
+  td .th{width:28px;height:28px;border-radius:6px;display:inline-block;vertical-align:middle;background:var(--fill)}
+  td.name{color:var(--text)} td .cb{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--muted2);display:inline-block;vertical-align:middle}
+  tr.sel td .cb{background:var(--accent);border-color:var(--accent)}
+  .bar{position:absolute;left:50%;bottom:22px;display:flex;align-items:center;gap:8px;padding:8px 10px 8px 14px;border-radius:12px;background:rgba(36,36,42,.85);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.08);box-shadow:0 12px 32px rgba(0,0,0,.45);font-size:12px;opacity:0;pointer-events:none;transition:.15s;transform:translate(-50%,8px)}
+  .bar.show{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+  .bar .btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer}
+  .bar .btn:hover{background:var(--hover);color:var(--text)} .bar .btn.danger{color:var(--danger)}
+  .bar .x{color:var(--muted2);cursor:pointer;padding:0 4px}
+  .hidden{display:none}
+  .legend{position:fixed;left:14px;bottom:12px;font-size:11px;color:var(--muted2);background:var(--chrome);border:1px solid var(--border);border-radius:8px;padding:8px 10px;max-width:196px;line-height:1.5}
+  .legend b{color:var(--text)}
+</style>
+</head>
+<body>
+<aside>
+  <div class="row">全部素材 <small>31,204</small></div>
+  <div class="row">最近添加 <small>412</small></div>
+  <div class="row">已评分 <small>2,318</small></div>
+  <div class="row">发现</div>
+  <div class="row">贴纸</div>
+  <div class="row">人物</div>
+  <div class="h"><span>智能合集</span></div>
+  <div class="row">最近 30 天 <small>412</small></div>
+  <div class="h"><span>文件夹</span><span class="icons"><span title="搜索">🔍</span><span title="排序">⇅</span><span title="视图">▦</span><span title="新建">＋</span><span class="on" title="管理文件夹">⚙︎</span></span></div>
+  <div class="row">东京 2025 <small>128</small></div>
+  <div class="row">GFX 胶片测试 <small>64</small></div>
+  <div class="row">客户 · 林工作室 <small>212</small></div>
+  <div class="row">街拍精选 <small>37</small></div>
+  <div class="row">待挑选 <small>0</small></div>
+  <div class="row">富士 X100VI 开箱 <small>18</small></div>
+  <div class="row">婚礼 · 阿杰 & 小雨 <small>640</small></div>
+  <div class="row">…</div>
+</aside>
+<main>
+  <div class="panel">
+    <div class="toolbar">
+      <button class="ib" title="新建文件夹">＋</button>
+      <div class="title"><h1>文件夹</h1><span class="n">· 128</span></div>
+      <button class="sortbtn">最近加入照片</button>
+      <div class="modes"><button class="ib on" id="vGrid" title="网格">▦</button><button class="ib" id="vList" title="列表">☰</button></div>
+      <input class="search" placeholder="搜索文件夹">
+      <button class="ib on" style="position:relative" title="筛选">⚟<span class="badge" id="fbadge">1</span></button>
+    </div>
+    <div class="filters">
+      <div class="facets">
+        <span class="chip on" id="statusChip"><span id="statusLabel">全部</span><span class="cv">▾</span>
+          <div class="pop" id="statusPop"><div data-v="all"><span><span class="k">✓</span> 全部</span><span class="c">128</span></div><div data-v="empty"><span><span class="k"></span> 空的</span><span class="c">3</span></div><div data-v="recent"><span><span class="k"></span> 30 天内有变化</span><span class="c">12</span></div></div>
+        </span>
+        <span class="chip">张数 <span class="cv">▾</span></span>
+        <span class="chip">拍摄时间 <span class="cv">▾</span></span>
+        <span class="chip">最近加入 <span class="cv">▾</span></span>
+        <span class="chip add">＋ 添加筛选</span>
+      </div>
+      <div class="actions"><span class="chip" id="clearChip">清除 1 ✕</span></div>
+    </div>
+    <div class="scroll">
+      <div class="grid" id="grid"></div>
+      <table id="table" class="hidden"><thead><tr><th style="width:28px"></th><th style="width:36px"></th><th>名称</th><th class="r">张数</th><th>拍摄时间</th><th class="on">最近加入 ↓</th><th>创建于</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="bar" id="bar"><span id="barText">已选 0 个文件夹</span><button class="btn">AI 标注</button><button class="btn danger">删除</button><span class="x" id="barX">✕</span></div>
+  </div>
+</main>
+<div class="legend"><b>原型说明</b><br>单击选中，⌘/Ctrl 加选，Shift 范围选，Esc 清空；▦/☰ 切视图；「状态」chip 可下拉。封面是色块占位，按张数 1 / 2 / 3 / 4+ 拼。</div>
+<script>
+const data=[
+ ["东京 2025",128,"2025年3月 – 6月","3 天前","2025-03-02",[1,2,3,4]],
+ ["GFX 胶片测试",64,"2025年9月","昨天","2025-09-14",[2,5,7,8]],
+ ["客户 · 林工作室",212,"2024年11月 – 2025年8月","2 周前","2024-11-20",[3,6,1,7]],
+ ["街拍精选",37,"2023年 – 2025年","1 个月前","2023-05-11",[4,8,5,2]],
+ ["待挑选",0,"—","—","2025-10-01",[]],
+ ["富士 X100VI 开箱",18,"2025年2月","8 个月前","2025-02-18",[5,1,6,3]],
+ ["婚礼 · 阿杰 & 小雨",640,"2025年5月","4 个月前","2025-05-20",[6,7,2,8]],
+ ["京都红叶",1,"2024年11月","11 个月前","2024-11-28",[1]],
+ ["拼图素材",2,"2025年1月 – 9月","5 天前","2025-01-04",[2,3]],
+ ["上海 · 外滩夜景",3,"2025年7月","2 个月前","2025-07-09",[8,4,5]],
+ ["空文件夹 2",0,"—","—","2025-09-30",[]],
+ ["咖啡馆",73,"2024年 – 2025年","3 周前","2024-02-02",[7,3,1,6]],
+ ["哈苏 907X 试机",29,"2025年8月","1 个月前","2025-08-15",[5,6,8,1]],
+ ["猫",154,"2022年 – 2025年","6 天前","2022-10-10",[6,2,4,7]],
+ ["未分类导出",8,"2025年9月","2 周前","2025-09-21",[1,8,3,5]],
+ ["空文件夹 3",0,"—","—","2025-10-10",[]],
+];
+const grid=document.getElementById('grid'),tbody=document.querySelector('#table tbody');
+let sel=new Set(),anchor=null,status='all';
+function rows(){return data.map((d,i)=>({i,d})).filter(({d})=>status==='all'||(status==='empty'?d[1]===0:/天前|昨天|周前/.test(d[3])));}
+function cover(d){const n=Math.min(d[5].length,4);if(!n)return `<div class="cover n0">▣<span class="check">✓</span><span class="dots">···</span></div>`;return `<div class="cover n${n}">${d[5].slice(0,4).map(c=>`<i class="c${c}"></i>`).join('')}<span class="check">✓</span><span class="dots">···</span></div>`;}
+function render(){
+  const list=rows();
+  grid.innerHTML=list.map(({i,d})=>`<div class="card ${sel.has(i)?'sel':''}" data-i="${i}">${cover(d)}<div class="name">${d[0]}</div><div class="meta">${d[1]?d[1]+' 张 · '+d[2]:'空'}</div></div>`).join('');
+  tbody.innerHTML=list.map(({i,d})=>`<tr class="${sel.has(i)?'sel':''}" data-i="${i}"><td><span class="cb"></span></td><td><span class="th ${d[5][0]?'c'+d[5][0]:''}"></span></td><td class="name">${d[0]}</td><td class="r">${d[1]}</td><td>${d[2]}</td><td>${d[3]}</td><td>${d[4]}</td></tr>`).join('');
+  document.getElementById('bar').classList.toggle('show',sel.size>0);
+  const active=status!=='all';document.getElementById('fbadge').style.display=active?'flex':'none';document.getElementById('clearChip').style.display=active?'inline-flex':'none';document.getElementById('statusChip').classList.toggle('on',active);
+  const total=[...sel].reduce((n,i)=>n+data[i][1],0);
+  document.getElementById('barText').textContent=`已选 ${sel.size} 个文件夹（共 ${total.toLocaleString()} 张）`;
+}
+function pick(e){const el=e.target.closest('[data-i]');if(!el)return;const i=+el.dataset.i;const order=rows().map(r=>r.i);
+  if(e.shiftKey&&anchor!==null){const a=order.indexOf(anchor),b=order.indexOf(i);sel=new Set(order.slice(Math.min(a,b),Math.max(a,b)+1));}
+  else if(e.metaKey||e.ctrlKey){sel.has(i)?sel.delete(i):sel.add(i);anchor=i;}
+  else{sel=new Set([i]);anchor=i;}
+  render();}
+grid.addEventListener('click',pick);tbody.addEventListener('click',pick);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){sel.clear();document.getElementById('statusChip').classList.remove('open');render();}if((e.metaKey||e.ctrlKey)&&e.key==='a'){e.preventDefault();sel=new Set(rows().map(r=>r.i));render();}});
+document.getElementById('barX').onclick=()=>{sel.clear();render();};
+const vGrid=document.getElementById('vGrid'),vList=document.getElementById('vList');
+vGrid.onclick=()=>{grid.classList.remove('hidden');document.getElementById('table').classList.add('hidden');vGrid.classList.add('on');vList.classList.remove('on');};
+vList.onclick=()=>{grid.classList.add('hidden');document.getElementById('table').classList.remove('hidden');vList.classList.add('on');vGrid.classList.remove('on');};
+const chip=document.getElementById('statusChip'),pop=document.getElementById('statusPop');
+chip.addEventListener('click',e=>{const opt=e.target.closest('[data-v]');if(opt){status=opt.dataset.v;pop.querySelectorAll('[data-v]').forEach(o=>o.querySelector('.k').textContent=o.dataset.v===status?'✓':'');document.getElementById('statusLabel').textContent=opt.querySelector('span').textContent.replace('✓','').trim();chip.classList.remove('open');sel.clear();render();return;}chip.classList.toggle('open');});
+document.addEventListener('pointerdown',e=>{if(!chip.contains(e.target))chip.classList.remove('open');});
+document.getElementById('clearChip').onclick=()=>{status='all';document.getElementById('statusLabel').textContent='全部';pop.querySelectorAll('[data-v]').forEach(o=>o.querySelector('.k').textContent=o.dataset.v==='all'?'✓':'');render();};
+render();
+</script>
+</body>
+</html>

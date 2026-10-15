@@ -1707,6 +1707,17 @@ def _cmd_list_collections(args, connection, catalog, parser):
                 "item_count": row["item_count"],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
+                # The folder page's columns (db/collections.py collection_stats);
+                # None / [] for smart collections and empty folders.
+                "last_added_at": row.get("last_added_at"),
+                "captured_from": row.get("captured_from"),
+                "captured_to": row.get("captured_to"),
+                # Newest first: the first is the single cover the sidebar and
+                # Discover show, all of them make the folder page's mosaic.
+                "cover_preview_paths": [
+                    str((catalog.root / relative).resolve())
+                    for relative in (row.get("cover_relative_paths") or [])
+                ],
             }
         )
     print(json.dumps(payload, indent=2))

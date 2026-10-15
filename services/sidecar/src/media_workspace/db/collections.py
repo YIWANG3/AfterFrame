@@ -29,7 +29,9 @@ def list_collections(connection: sqlite3.Connection) -> list[dict]:
         """
     ).fetchall()
     collections = [dict(r) for r in rows]
+    stats = collection_stats(connection)
     for collection in collections:
+        collection.update(stats.get(collection["collection_id"]) or empty_stats())
         if collection["kind"] != "smart":
             continue
         rules = parse_rules(collection["rules_json"])
@@ -38,6 +40,65 @@ def list_collections(connection: sqlite3.Connection) -> list[dict]:
             count_image_assets(connection, "all", base=rules) if rules else 0
         )
     return collections
+
+
+# ── Folder statistics (docs/folders-page-plan.md §4.1) ─────────────────────
+
+# How many of a folder's newest photos make its cover mosaic.
+COVER_COUNT = 4
+
+
+def empty_stats() -> dict:
+    """The stats shape of a folder with nothing in it (and of smart collections)."""
+    return {"last_added_at": None, "captured_from": None, "captured_to": None, "cover_relative_paths": []}
+
+
+def collection_stats(connection: sqlite3.Connection) -> dict[str, dict]:
+    """Per folder, what the folder page shows besides the count: when a photo
+    last joined, the capture-time span of its photos, and the previews of its
+    newest `COVER_COUNT` photos (the first is the single cover). Two passes
+    over collection_items, no per-folder queries. Folders without items are
+    absent; callers fill in `empty_stats()`."""
+    stats: dict[str, dict] = {}
+    for row in connection.execute(
+        """
+        SELECT ci.collection_id,
+               MAX(ci.added_at) AS last_added_at,
+               MIN(NULLIF(json_extract(a.metadata_json, '$.capture_time'), '')) AS captured_from,
+               MAX(NULLIF(json_extract(a.metadata_json, '$.capture_time'), '')) AS captured_to
+        FROM collection_items ci
+        JOIN assets a ON a.asset_id = ci.asset_id
+        GROUP BY ci.collection_id
+        """
+    ):
+        stats[row["collection_id"]] = {
+            "last_added_at": row["last_added_at"],
+            "captured_from": row["captured_from"],
+            "captured_to": row["captured_to"],
+            "cover_relative_paths": [],
+        }
+    # Newest added first; a photo without a ready preview is skipped, so the
+    # mosaic never shows a hole for it.
+    for row in connection.execute(
+        """
+        SELECT collection_id, relative_path FROM (
+            SELECT ci.collection_id, pe.relative_path,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ci.collection_id ORDER BY ci.added_at DESC, ci.asset_id
+                   ) AS rn
+            FROM collection_items ci
+            JOIN preview_entries pe
+              ON pe.asset_id = ci.asset_id AND pe.kind = 'preview' AND pe.status = 'ready'
+        )
+        WHERE rn <= ?
+        ORDER BY collection_id, rn
+        """,
+        (COVER_COUNT,),
+    ):
+        entry = stats.get(row["collection_id"])
+        if entry is not None:
+            entry["cover_relative_paths"].append(row["relative_path"])
+    return stats
 
 
 def _checked_rules_json(rules_json: str) -> str:

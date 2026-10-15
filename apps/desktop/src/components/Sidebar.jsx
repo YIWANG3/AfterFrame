@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
+import { Images, Clock, Star, Link, FolderPlus, FolderCog, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
@@ -78,9 +78,11 @@ export default function Sidebar({
   onOpenStickerBrowser,
   onOpenPeople,
   onOpenDiscover,
+  onOpenFolders,
   stickerMode = false,
   peopleMode = false,
   discoverMode = false,
+  foldersMode = false,
 }) {
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
@@ -101,10 +103,9 @@ export default function Sidebar({
       return next;
     });
   };
-  // Covers: the sidecar's collection rows carry no cover, so fetch each
-  // folder's first asset lazily (only in covers view), keyed by id + count so
-  // a folder that gains/loses photos refreshes its cover.
-  const [covers, setCovers] = useState({});
+  // Covers: the newest photo added to the folder, which the collection rows
+  // carry (cover_preview_paths, db/collections.py collection_stats).
+  const coverOf = (c) => c.cover_preview_paths?.[0] || null;
   const manualCollections = (collections || []).filter((c) => c.kind === "manual");
   const [folderSort, setFolderSort] = useState(() => {
     try {
@@ -128,30 +129,6 @@ export default function Sidebar({
   // A new folder goes on top of the custom order; under another sort it lands
   // wherever that puts it, so scroll it into view once the list has it.
   const [revealFolderId, setRevealFolderId] = useState(null);
-  const coverKey = manualCollections.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
-  useEffect(() => {
-    if (folderView !== "covers") return undefined;
-    let cancelled = false;
-    const stale = manualCollections.filter((c) => covers[c.collection_id]?.count !== (c.item_count || 0));
-    if (!stale.length) return undefined;
-    (async () => {
-      const next = {};
-      await Promise.all(stale.map(async (c) => {
-        let path = null;
-        if ((c.item_count || 0) > 0) {
-          try {
-            const rows = await api.browseCollection(c.collection_id, { limit: 1, offset: 0 });
-            const first = Array.isArray(rows) ? rows[0] : rows?.items?.[0];
-            path = first?.preview_path || first?.image_path || null;
-          } catch { path = null; }
-        }
-        next[c.collection_id] = { path, count: c.item_count || 0 };
-      }));
-      if (!cancelled) setCovers((prev) => ({ ...prev, ...next }));
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderView, coverKey]);
   const [editingId, setEditingId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
   const [draggingFolderId, setDraggingFolderId] = useState(null);
@@ -261,7 +238,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !stickerMode && !peopleMode && !discoverMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !stickerMode && !peopleMode && !discoverMode && !foldersMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
@@ -324,7 +301,7 @@ export default function Sidebar({
 
         <SmartCollections
           collections={collections}
-          activeId={stickerMode || peopleMode || discoverMode ? null : activeSmartCollectionId}
+          activeId={stickerMode || peopleMode || discoverMode || foldersMode ? null : activeSmartCollectionId}
           view={folderView}
           onOpen={onOpenSmartCollection}
           onEditRules={onEditSmartCollection}
@@ -369,6 +346,19 @@ export default function Sidebar({
               >
                 <FolderPlus className="h-3.5 w-3.5" />
               </button>
+              {onOpenFolders && (
+                <button
+                  type="button"
+                  data-testid="sidebar-manage-folders"
+                  className={`rounded-md p-0.5 transition-colors hover:bg-hover hover:text-text ${foldersMode ? "bg-selected text-accent" : "text-muted2"}`}
+                  title={t("sidebar.manageFolders")}
+                  aria-label={t("sidebar.manageFolders")}
+                  aria-pressed={foldersMode}
+                  onClick={(e) => { e.currentTarget.blur(); onOpenFolders(); }}
+                >
+                  <FolderCog className="h-3.5 w-3.5" />
+                </button>
+              )}
             </span>
           </div>
 
@@ -447,8 +437,8 @@ export default function Sidebar({
                   return (
                     <div key={col.collection_id} className={`flex w-full items-center rounded-md px-2.5 py-1.5 ${active ? "bg-selected" : ""}`}>
                       <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                        {covers[col.collection_id]?.path ? (
-                          <img src={localFileUrl(covers[col.collection_id].path)} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-[8px] object-cover" />
+                        {coverOf(col) ? (
+                          <img src={localFileUrl(coverOf(col))} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-[8px] object-cover" />
                         ) : (
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-2)]">
                             <Folder className="h-4 w-4 stroke-[1.6] text-muted2" />
@@ -556,9 +546,9 @@ export default function Sidebar({
                 >
                   {folderView === "covers" ? (
                     <span className="flex min-w-0 items-center gap-2.5">
-                      {covers[col.collection_id]?.path ? (
+                      {coverOf(col) ? (
                         <img
-                          src={localFileUrl(covers[col.collection_id].path)}
+                          src={localFileUrl(coverOf(col))}
                           alt=""
                           draggable={false}
                           className="h-10 w-10 shrink-0 rounded-[8px] object-cover"

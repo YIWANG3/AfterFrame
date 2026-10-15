@@ -2,7 +2,7 @@
 // changed, non-empty value; Escape cancels.
 import { useEffect, useRef, useState } from "react";
 
-export default function InlineEdit({ initial, onConfirm, onCancel }) {
+export default function InlineEdit({ initial, onConfirm, onCancel, placeholder }) {
   const ref = useRef(null);
   const done = useRef(false);
   const [value, setValue] = useState(initial);
@@ -25,6 +25,7 @@ export default function InlineEdit({ initial, onConfirm, onCancel }) {
       ref={ref}
       className="w-full rounded-md bg-hover px-2 py-0.5 text-[13px] text-text outline-none border border-accent/50"
       value={value}
+      placeholder={placeholder}
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

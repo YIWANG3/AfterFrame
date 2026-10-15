@@ -460,6 +460,14 @@ html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-
 .noise-overlay > .grid > section.bg-app .library-view > .app-toolbar > * { pointer-events: auto; }
 /* 筛选行也浮在工具栏之下一行 */
 .noise-overlay > .grid > section.bg-app > .flex-wrap.border-b { position: absolute; top: 52px; left: 0; right: 0; z-index: 49; }
+/* The folder page (FoldersView) owns its filter row inside the view like People
+   owns its toolbar: same floating plane, same one-row rule, same top padding. */
+.noise-overlay > .grid > section.bg-app .library-view > .flex-wrap.border-b { position: absolute; top: 52px; left: 0; right: 0; z-index: 49; flex-wrap: nowrap; overflow: hidden; }
+.noise-overlay > .grid > section.bg-app .library-view > .flex-wrap.border-b > .filter-bar-scroll { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.noise-overlay > .grid > section.bg-app .library-view > .flex-wrap.border-b > .filter-bar-scroll::-webkit-scrollbar { display: none; }
+.noise-overlay > .grid > section.bg-app .library-view > .flex-wrap.border-b > .filter-bar-scroll > * { flex-shrink: 0; }
+section.bg-app .library-view:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"] { padding-top: 100px !important; }
+section.bg-app .library-view:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webkit-scrollbar-track { margin-top: 96px; }
 /* One row, always: on a narrow window the bar scrolls sideways instead of
    wrapping over the photos (the gallery's top padding assumes one row).
    Popovers are portaled to <body>, so the scroll container clips nothing

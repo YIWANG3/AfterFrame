@@ -40,6 +40,7 @@ import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import PeopleView from "./components/PeopleView";
+import FoldersView from "./components/FoldersView";
 import PeopleInspector from "./components/PeopleInspector";
 import usePeopleGroups from "./hooks/usePeopleGroups";
 import DesignSystemPanel from "./components/DesignSystemPanel";
@@ -106,7 +107,7 @@ export default function App() {
     setCollageSourceId(workspace.activeCollectionId || null);
     setCollageItems(items);
   }
-  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people" | "discover"
+  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people" | "discover" | "folders"
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const workspaceSplitRef = useRef(null);
@@ -1184,12 +1185,14 @@ export default function App() {
           stickerMode={viewMode === "stickers"}
           peopleMode={viewMode === "people"}
           discoverMode={viewMode === "discover"}
+          foldersMode={viewMode === "folders"}
           onOpenDiscover={() => openView("discover")}
           onOpenStickerBrowser={() => {
             openView("stickers");
             stickerView.refresh();
           }}
           onOpenPeople={() => openView("people")}
+          onOpenFolders={() => openView("folders")}
         />
 
         <section
@@ -1248,8 +1251,23 @@ export default function App() {
                 catalogKey={workspace.info?.catalogPath || null}
                 onOpen={openDiscoverTarget}
                 onOpenPerson={openPersonGroup}
+                onOpenFolders={() => openView("folders")}
               />
             </>
+          ) : viewMode === "folders" ? (
+            <FoldersView
+              collections={workspace.collections}
+              onOpenFolder={(id) => {
+                goToGallery();
+                clearPeopleGroupFilter();
+                workspace.selectCollection(id);
+              }}
+              onCreateFolder={workspace.createCollection}
+              onRenameFolder={workspace.renameCollection}
+              onDeleteFolder={workspace.deleteCollection}
+              onAnnotateFolder={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
+              pushToast={pushToast}
+            />
           ) : (
             <>
               <Toolbar
@@ -1445,7 +1463,8 @@ export default function App() {
           />
         ) : (
           <Inspector
-            detail={workspace.detail}
+            // The folder page has no photo selection; the pane shows its empty state.
+            detail={viewMode === "folders" ? null : workspace.detail}
             onRatingChange={applyRating}
             onFlagChange={(flag) => applyFlag(flag)}
             onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}

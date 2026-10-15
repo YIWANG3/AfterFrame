@@ -27,13 +27,13 @@ const PLACE_MIN_PHOTOS = 5;
 
 // ── Page data cache ──
 // The view is unmounted on every switch away, so without this each visit
-// re-ran the sidecar's place clustering (~1s), three cover queries and one
-// browse per folder. Keyed by catalog + revision: the same library state
-// yields the same page, so re-entering is instant and a catalog change (import,
-// rating, annotation) invalidates everything at once. App calls
-// prefetchDiscover once the catalog is ready so even the first open is warm.
+// re-ran the sidecar's place clustering (~1s) and three cover queries. Keyed
+// by catalog + revision: the same library state yields the same page, so
+// re-entering is instant and a catalog change (import, rating, annotation)
+// invalidates everything at once. App calls prefetchDiscover once the catalog
+// is ready so even the first open is warm. (Folder covers come with the
+// collection rows themselves: cover_preview_paths.)
 const pageCache = new Map(); // key → { data, promise }
-const folderCoverCache = new Map(); // collection_id → { path, count }
 
 function pageKey(catalogKey, catalogRevision) {
   return `${catalogKey || ""}#${catalogRevision || 0}`;
@@ -113,12 +113,17 @@ function geoFilterFor(entry, label) {
   return { mode: "bounds", ...entry.bounds, min_precision: "locality", label };
 }
 
-function Row({ id, title, meta, children }) {
+function Row({ id, title, meta, action, children }) {
   return (
     <section id={`discover-${id}`} data-discover-section={id} className="mt-9 first:mt-0">
       <div className="mb-4 flex items-end justify-between px-1">
         <h2 tabIndex={-1} className="text-[22px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
         {meta ? <span className="text-[12px] text-muted2">{meta}</span> : null}
+        {action ? (
+          <button type="button" onClick={action.onClick} className="text-[12px] text-muted2 transition-colors hover:text-text">
+            {action.label} ›
+          </button>
+        ) : null}
       </div>
       <div className="-mx-6 flex gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {children}
@@ -170,6 +175,7 @@ export default function DiscoverView({
   catalogKey,
   onOpen,
   onOpenPerson,
+  onOpenFolders,
 }) {
   const { t, i18n } = useTranslation("nav");
   const locale = i18n.language || undefined;
@@ -187,8 +193,9 @@ export default function DiscoverView({
   // revision miss the catalog's previous page stays on screen while the new
   // one loads, rather than flashing empty.
   const [page, setPage] = useState(() => pageCache.get(key)?.data || latestByCatalog.get(catalogKey || "") || null);
-  const [covers, setCovers] = useState(() => Object.fromEntries(folderCoverCache));
   const manual = (collections || []).filter((c) => c.kind === "manual");
+  // The newest photo added to the folder (db/collections.py collection_stats).
+  const coverOf = (c) => c.cover_preview_paths?.[0] || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -206,28 +213,6 @@ export default function DiscoverView({
   const months = page?.months || [];
   const pinnedCovers = page?.pinnedCovers || {};
 
-  const coverKey = manual.map((c) => `${c.collection_id}:${c.item_count || 0}`).join("|");
-  useEffect(() => {
-    let cancelled = false;
-    const stale = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.count !== (c.item_count || 0));
-    if (!stale.length) return undefined;
-    (async () => {
-      const next = {};
-      await Promise.all(stale.map(async (c) => {
-        try {
-          const rows = await api.browseCollection(c.collection_id, { limit: 1, offset: 0 });
-          const first = Array.isArray(rows) ? rows[0] : rows?.items?.[0];
-          next[c.collection_id] = { path: first?.preview_path || first?.image_path || null, count: c.item_count || 0 };
-        } catch { next[c.collection_id] = { path: null, count: c.item_count || 0 }; }
-      }));
-      if (cancelled) return;
-      for (const [id, entry] of Object.entries(next)) folderCoverCache.set(id, entry);
-      setCovers((prev) => ({ ...prev, ...next }));
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverKey]);
-
   const thumb = (item) => (item ? localFileUrl(item.preview_path || item.image_path) : null);
   const rangeLabel = (from, to) => formatDayRange(from, to, locale);
   const monthLabel = (g) => new Date(g.year, g.month - 1, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
@@ -235,7 +220,7 @@ export default function DiscoverView({
 
   const memories = discover.memories.filter((m) => m.cover_preview_path).slice(0, MEMORY_LIMIT);
   const placeTiles = discover.places.filter((p) => p.cover_preview_path && p.count >= PLACE_MIN_PHOTOS);
-  const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && covers[c.collection_id]?.path);
+  const folderCards = manual.filter((c) => (c.item_count || 0) > 0 && coverOf(c));
   const peopleWithFace = (people || []).filter((g) => g.cover_preview_path || g.cover_image_path);
   const pinned = [
     { key: "recent", label: t("discover.recentTitle"), cover: thumb(pinnedCovers.recent), onClick: () => onOpen?.({ status: "recent" }) },
@@ -324,11 +309,11 @@ export default function DiscoverView({
         )}
 
         {folderCards.length > 0 && (
-          <Row id="albums" title={t("discover.albums")}>
+          <Row id="albums" title={t("discover.albums")} action={onOpenFolders ? { label: t("discover.allFolders"), onClick: onOpenFolders } : null}>
             {folderCards.map((col) => (
               <Tile
                 key={col.collection_id}
-                cover={localFileUrl(covers[col.collection_id].path)}
+                cover={localFileUrl(coverOf(col))}
                 title={<><span className="mr-1.5 tabular-nums">{col.item_count || 0}</span>{col.name}</>}
                 onClick={() => onOpen?.({ collectionId: col.collection_id })}
               />
