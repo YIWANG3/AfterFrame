@@ -133,6 +133,14 @@ function colorsJob({ jobId, force = false }) {
   return argv;
 }
 
+// The image-features helper reaches the runner as IMAGE_FEATURES_PATH
+// (transport.js), like the people worker; without one it hashes only.
+function visualJob({ jobId, force = false }) {
+  const argv = ["run-visual-job", "--job-id", String(jobId)];
+  if (force) argv.push("--force");
+  return argv;
+}
+
 function orientationJob({ jobId }) {
   return ["run-orientation-job", "--job-id", String(jobId)];
 }
@@ -159,5 +167,6 @@ module.exports = {
   annotationJob,
   peopleIndexJob,
   colorsJob,
+  visualJob,
   orientationJob,
 };

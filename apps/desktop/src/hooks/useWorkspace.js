@@ -146,6 +146,15 @@ export default function useWorkspace({ pushToast } = {}) {
     // Colours changed nothing about which photos are in the grid or their
     // order: only the Colour chip (options exist now) and the open photo's
     // palette. A full refresh would re-browse and lose a scrolled position.
+    // The look-alike index grew: the open photo's similar strip and the
+    // sidebar's count; a grid showing look-alikes gets its new members.
+    visualReady: () => {
+      refreshShownDetail();
+      void api.getSummary().then((next) => next && setSummary(next)).catch(() => {});
+      if (scopeRef.current.status === "lookalikes") {
+        void loadBrowser({ scope: scopeRef.current, preserveView: true });
+      }
+    },
     colorsReady: () => {
       loadFacetValues();
       refreshShownDetail();
@@ -356,6 +365,7 @@ export default function useWorkspace({ pushToast } = {}) {
           filters: activeFilters,
           // The smart collection being viewed: the set the filters refine.
           base: target.base || undefined,
+          similarTo: target.similarTo || undefined,
         });
       }
       if (activeFilters?.person_group) {
@@ -641,7 +651,7 @@ export default function useWorkspace({ pushToast } = {}) {
     for (let offset = 0; ; offset += 500) {
       const page = scope.collectionId
         ? await api.browseCollection(scope.collectionId, { limit: 500, offset, search, filters, sort: scope.sort || undefined })
-        : await api.browseImages({ status: scope.status, limit: 500, offset, search, filters, base: scope.base || undefined, sort: scope.sort || undefined });
+        : await api.browseImages({ status: scope.status, limit: 500, offset, search, filters, base: scope.base || undefined, sort: scope.sort || undefined, similarTo: scope.similarTo || undefined });
       for (const row of page || []) rows.push({ asset_id: row.asset_id, image_path: row.image_path });
       if (!page || page.length < 500) break;
     }
@@ -718,6 +728,12 @@ export default function useWorkspace({ pushToast } = {}) {
   function filterByPerson(groupId) {
     if (!groupId) return;
     goTo({ filters: { person_group: groupId } });
+  }
+
+  // "Find similar": the photos that look like this one, as a view of their own.
+  function findSimilarTo(assetId) {
+    if (!assetId) return;
+    goTo({ similarTo: assetId });
   }
 
   // Open the gallery as a fresh destination: collection, status, query and
@@ -887,6 +903,8 @@ export default function useWorkspace({ pushToast } = {}) {
     // The scope, exposed field by field for the toolbar/sidebar/filter bar,
     // with setters that each write one field of it.
     status: scope.status,
+    similarTo: scope.similarTo,
+    findSimilarTo,
     sort: scope.sort,
     setSort: (sort) => {
       updateScope({ sort });

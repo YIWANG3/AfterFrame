@@ -5,8 +5,9 @@
 // races) is only covered by E2E, and two of the bugs in the 2026-09-16 review
 // lived in exactly this logic.
 
-export const browseScopeKey = ({ status, collectionId, search, sort, filters, base }) => JSON.stringify({
+export const browseScopeKey = ({ status, collectionId, search, sort, filters, base, similarTo }) => JSON.stringify({
   status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {}, base: base || null,
+  similarTo: similarTo || null,
 });
 
 // The gallery's browse destination, as one value. Everything that decides
@@ -19,12 +20,14 @@ export const browseScopeKey = ({ status, collectionId, search, sort, filters, ba
 //   the refinement       query + filters — what the filter bar and the search
 //                        box hold. It only ever narrows INSIDE the base set,
 //                        and changing location clears it.
+// `similarTo`: the view "photos like this one" (that asset first, then the
+// look-alike index's nearest); it replaces the sort with that order.
 // `smartCollectionId` names the smart collection (sidebar highlight, title).
 // `editingRules`: the filter bar is showing that collection's OWN conditions
 // for editing, instead of a refinement on top of them; `base` is then only
 // the nested part of its rules, which the bar cannot show.
 export const DEFAULT_SCOPE = Object.freeze({
-  status: "all", collectionId: null, smartCollectionId: null, base: null, editingRules: false,
+  status: "all", collectionId: null, smartCollectionId: null, base: null, editingRules: false, similarTo: null,
   query: "", filters: {}, sort: "imported-desc",
 });
 
@@ -35,6 +38,7 @@ export const scopeKeyOf = (scope) => browseScopeKey({
   sort: scope.sort,
   filters: scope.filters,
   base: scope.base,
+  similarTo: scope.similarTo,
 });
 
 // The sorts that mean something anywhere. "Most recently added" only means
@@ -58,7 +62,7 @@ export const hasRefinement = (scope) => !!scope.query.trim() || activeFilterCoun
 // smart collection, a search or a filter? Then a photo found here can be shown
 // among its neighbours in All Assets.
 export const isNarrowedScope = (scope) => scope.status !== DEFAULT_SCOPE.status
-  || !!scope.collectionId || !!scope.smartCollectionId || !!scope.base || hasRefinement(scope);
+  || !!scope.collectionId || !!scope.smartCollectionId || !!scope.base || !!scope.similarTo || hasRefinement(scope);
 
 // The view facet counts are taken inside (db/browse.py _facet_scope): what
 // the grid is showing, minus the sort, which does not change any count.

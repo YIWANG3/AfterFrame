@@ -18,6 +18,7 @@ from .color_profiles import adobe_rgb_icc
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, set_display_shape, upsert_preview_entry
 from .db.colors import analyze_asset_colors
+from .db.visual import VISUAL_ASSET_TYPES, VisualAnalyzer
 from .imaging import register_heif
 from .platform_tools import has_image_io
 from .processes import no_window
@@ -405,8 +406,23 @@ class PreviewService:
         paths: list[Path] | None = None,
         force_paths: list[Path] | None = None,
         analyze_colors: bool = True,
+        analyze_visual: bool = True,
     ) -> dict[str, int]:
         rows = list_assets_for_preview(connection, asset_type=asset_type, kind=kind, limit=limit, paths=paths)
+        # The thumbnail is the look-alike sample too (hash, and on a Mac the
+        # feature print): one analyzer for the batch, made when first needed.
+        visual: VisualAnalyzer | None = None
+
+        def analyze_visual_for(asset_id: str, asset_type_of_row: str, relative_path: str) -> None:
+            nonlocal visual
+            if not (analyze_visual and kind == "preview" and asset_type_of_row in VISUAL_ASSET_TYPES and relative_path):
+                return
+            if visual is None:
+                from .visual import helper_path_from_env
+
+                visual = VisualAnalyzer(connection, helper_path_from_env())
+            visual.analyze(asset_id, asset_type_of_row, self.catalog.root / relative_path)
+
         forced = {str(path.resolve()) for path in (force_paths or [])}
         generated = 0
         skipped = 0
@@ -424,6 +440,10 @@ class PreviewService:
                 # A preview from before colours existed: read its colours now.
                 if analyze_colors and kind == "preview" and row["asset_type"] == "image" and not row["has_colors"]:
                     analyze_asset_colors(connection, row["asset_id"], self.catalog.root / row["existing_relative_path"])
+                    connection.commit()
+                # A preview from before the look-alike index: hash it now.
+                if not row["has_visual"]:
+                    analyze_visual_for(row["asset_id"], row["asset_type"], row["existing_relative_path"])
                     connection.commit()
                 skipped += 1
                 processed += 1
@@ -447,68 +467,74 @@ class PreviewService:
         # Each result is written and committed before waiting for the next:
         # an open transaction holds the catalog's write lock, and other
         # processes (the app's own reads and writes) would wait on renders.
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
-            futures = {
-                pool.submit(self.generate_for_row, row, kind=kind, force=row_force): row
-                for row, row_force in to_render
-            }
-            try:
-                for future in as_completed(futures):
-                    row = futures[future]
-                    try:
-                        result = future.result()
-                        # The thumbnail is the colour sample too: same file,
-                        # already decoded once, a few ms more. Read before the
-                        # first write, so the lock isn't held for it.
-                        if analyze_colors and kind == "preview" and row["asset_type"] == "image":
-                            analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
-                        # And how it shows (portrait / landscape), for the filter.
-                        if kind == "preview" and result.relative_path:
-                            set_display_shape(connection, result.asset_id, preview_shape(self.catalog.root / result.relative_path), commit=False)
-                        upsert_preview_entry(
-                            connection,
-                            asset_id=result.asset_id,
-                            kind=result.kind,
-                            relative_path=result.relative_path,
-                            width=result.width,
-                            height=result.height,
-                            status=result.status,
-                            commit=False,
+        try:
+            with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+                futures = {
+                    pool.submit(self.generate_for_row, row, kind=kind, force=row_force): row
+                    for row, row_force in to_render
+                }
+                try:
+                    for future in as_completed(futures):
+                        row = futures[future]
+                        try:
+                            result = future.result()
+                            # The thumbnail is the colour sample too: same file,
+                            # already decoded once, a few ms more. Read before the
+                            # first write, so the lock isn't held for it.
+                            if analyze_colors and kind == "preview" and row["asset_type"] == "image":
+                                analyze_asset_colors(connection, result.asset_id, self.catalog.root / result.relative_path)
+                            if result.status == "ready":
+                                analyze_visual_for(result.asset_id, row["asset_type"], result.relative_path)
+                            # And how it shows (portrait / landscape), for the filter.
+                            if kind == "preview" and result.relative_path:
+                                set_display_shape(connection, result.asset_id, preview_shape(self.catalog.root / result.relative_path), commit=False)
+                            upsert_preview_entry(
+                                connection,
+                                asset_id=result.asset_id,
+                                kind=result.kind,
+                                relative_path=result.relative_path,
+                                width=result.width,
+                                height=result.height,
+                                status=result.status,
+                                commit=False,
+                            )
+                            generated += 1
+                        except SourceNotReadyError:
+                            # Keep an existing good preview/DB entry. A later watcher
+                            # change event retries after the editor finishes writing.
+                            deferred += 1
+                        except Exception:
+                            upsert_preview_entry(
+                                connection,
+                                asset_id=row["asset_id"],
+                                kind=kind,
+                                relative_path="",
+                                width=None,
+                                height=None,
+                                status="failed",
+                                commit=False,
+                            )
+                            failed += 1
+                        processed += 1
+                        connection.commit()
+                        report_progress(
+                            progress_callback,
+                            phase="generate_previews",
+                            processed=processed,
+                            total=total,
+                            generated=generated,
+                            skipped=skipped,
+                            failed=failed,
+                            deferred=deferred,
                         )
-                        generated += 1
-                    except SourceNotReadyError:
-                        # Keep an existing good preview/DB entry. A later watcher
-                        # change event retries after the editor finishes writing.
-                        deferred += 1
-                    except Exception:
-                        upsert_preview_entry(
-                            connection,
-                            asset_id=row["asset_id"],
-                            kind=kind,
-                            relative_path="",
-                            width=None,
-                            height=None,
-                            status="failed",
-                            commit=False,
-                        )
-                        failed += 1
-                    processed += 1
-                    connection.commit()
-                    report_progress(
-                        progress_callback,
-                        phase="generate_previews",
-                        processed=processed,
-                        total=total,
-                        generated=generated,
-                        skipped=skipped,
-                        failed=failed,
-                        deferred=deferred,
-                    )
-            except BaseException:
-                pool.shutdown(wait=False, cancel_futures=True)
-                connection.commit()  # keep previews finished before the cancel
-                raise
-        connection.commit()
+                except BaseException:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    connection.commit()  # keep previews finished before the cancel
+                    raise
+            connection.commit()
+        finally:
+            if visual is not None:
+                visual.close()
         return {"generated": generated, "skipped": skipped, "failed": failed, "deferred": deferred, "total": total}
 
     def _render_image(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:

@@ -196,6 +196,11 @@ export default function App() {
   useCatalogCatchUp(api.can("colors") ? readyCatalogKey : null, async () => {
     followJob("colors")(await api.startColorAnalysis({ auto: true }));
   });
+  // Photos whose preview has no look-alike hash yet get one (and, on a Mac,
+  // a feature print): after an import, and once for an existing library.
+  useCatalogCatchUp(api.has("startVisualAnalysis") ? readyCatalogKey : null, async () => {
+    followJob("visual")(await api.startVisualAnalysis({}));
+  });
   // Thumbnails made before the photo's shape was recorded get it read
   // (portrait / landscape, for the orientation filter and the layouts).
   useCatalogCatchUp(api.has("startOrientationScan") ? readyCatalogKey : null, async () => {
@@ -324,6 +329,13 @@ export default function App() {
 
   // Gallery menu "Show in All Assets": just this photo stays selected, so the
   // next action doesn't pick up the rest of what was selected in the search.
+  function findSimilar(assetId) {
+    goToGallery();
+    setSelectedIds([assetId]);
+    setSelectionAnchorId(assetId);
+    workspace.findSimilarTo(assetId);
+  }
+
   function showInAllAssets(assetId) {
     setSelectedIds([assetId]);
     setSelectionAnchorId(assetId);
@@ -1152,6 +1164,7 @@ export default function App() {
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
           activeSmartCollectionId={workspace.activeSmartCollectionId}
+          similarTo={workspace.similarTo}
           onOpenSmartCollection={(collection) => {
             goToGallery();
             workspace.openSmartCollection(collection);
@@ -1256,7 +1269,8 @@ export default function App() {
                 title={workspace.activeCollectionId
                   ? (workspace.collections.find((c) => c.collection_id === workspace.activeCollectionId)?.name || "Folder")
                   : (activeSmartCollection?.name
-                    || (peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : tNav(`browse.${workspace.status}`, filterTitle(workspace.status))))}
+                    || (workspace.similarTo ? tNav("browse.similar")
+                      : peopleGroup ? (peopleGroup.name?.trim() || tNav("filter.person")) : tNav(`browse.${workspace.status}`, filterTitle(workspace.status))))}
                 query={workspace.query}
                 setQuery={workspace.setQuery}
                 sort={workspace.sort}
@@ -1415,6 +1429,7 @@ export default function App() {
                   onAnnotate={(ids, opts) => runAnnotation(ids, opts)}
                   onFlag={(flag, ids) => applyFlag(flag, { ids })}
                   onAddTags={openTagDialog}
+                  onFindSimilar={api.has("findSimilar") ? findSimilar : undefined}
                   onShowInAllAssets={workspace.narrowed ? showInAllAssets : undefined}
                 />
                 </div>

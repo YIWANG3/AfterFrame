@@ -22,6 +22,10 @@ source = Path(__file__).parent / "test-images" / "001-red.jpg"
 palette = db.execute("""SELECT rank, hex, share, l, a, b FROM asset_colors
                         JOIN assets USING (asset_id) WHERE assets.stem = '001-red'""").fetchall()
 assert palette, "fixture catalog lost 001-red's colours"
+# And its look-alike hash (asset_visual), or launch starts that catch-up job too.
+visual = db.execute("""SELECT phash, hash_version, embedding, embedding_model FROM asset_visual
+                       JOIN assets USING (asset_id) WHERE assets.stem = '001-red'""").fetchone()
+assert visual, "fixture catalog lost 001-red's look-alike hash"
 image_dir = catalog / "navigation-images"
 image_dir.mkdir()
 for i in range(400):
@@ -52,6 +56,8 @@ for i in range(400):
                    (asset_id, asset_id, preview["relative_path"], preview["width"], preview["height"]))
     db.executemany("INSERT INTO asset_colors (asset_id, rank, hex, share, l, a, b) VALUES (?, ?, ?, ?, ?, ?, ?)",
                    [(asset_id, *tuple(c)) for c in palette])
+    db.execute("INSERT INTO asset_visual (asset_id, phash, hash_version, embedding, embedding_model) VALUES (?, ?, ?, ?, ?)",
+               (asset_id, *tuple(visual)))
 db.execute("INSERT INTO resource_sets (set_id, primary_asset_id) VALUES ('navigation-set', 'navigation-0000')")
 db.executemany("""INSERT INTO resource_set_items (set_id, asset_id, role, sort_order)
                   VALUES ('navigation-set', ?, ?, ?)""",

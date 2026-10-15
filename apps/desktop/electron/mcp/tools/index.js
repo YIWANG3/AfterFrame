@@ -26,6 +26,7 @@ const GROUPS = [
   require("./library"),
   require("./jobs"),
   require("./people"),
+  require("./visual"),
   require("./render"),
 ];
 

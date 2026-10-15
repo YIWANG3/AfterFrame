@@ -6,7 +6,9 @@
     "all": "All Assets",
     "recent": "Recently Added",
     "rated": "Rated",
-    "matched": "With Raw"
+    "matched": "With Raw",
+    "lookalikes": "Look-alikes",
+    "similar": "Similar Photos"
   },
   "toolbar": {
     "search": "Search",
@@ -296,6 +298,7 @@
       "generate_previews_hd": "Generate HD Previews",
       "enrich_raw": "Enrich RAW Metadata",
       "analyze_colors": "Analyze Colors",
+      "analyze_visual": "Find Look-alikes",
       "annotate": "Annotate with AI",
       "people_index": "Analyze People",
       "people_cluster": "Build People Candidates",
@@ -311,6 +314,7 @@
       "ai_repaint": "AI Repaint",
       "people_index": "People Recognition",
       "colors": "Colour analysis",
+      "visual": "Look-alikes",
       "orientation": "Photo orientation"
     }
   },
@@ -335,6 +339,7 @@
     "menu": {
       "edit": "Edit…",
       "showInAllAssets": "Show in All Assets",
+      "findSimilar": "Find Similar",
       "compare": "Compare",
       "collage": "Collage",
       "addToFolder": "Add to Folder",

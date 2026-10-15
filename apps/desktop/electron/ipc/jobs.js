@@ -13,6 +13,7 @@ function register({
   startEnrichmentTask,
   startPreviewTask,
   startColorsTask,
+  startVisualTask,
   startOrientationTask,
   listActiveJobsFormatted,
   resumeJob,
@@ -39,6 +40,16 @@ function register({
     } catch { return formatJobStatus(null); }
   }));
   ipcMain.handle("workspace:colors-start", (_event, options) => startColorsTask(options || {}));
+
+  // The look-alike index: the latest job plus how many photos have their
+  // hash and how many still need one.
+  ipcMain.handle("workspace:visual-status", guarded(() => formatJobStatus(null), async () => {
+    try {
+      const [job, counts] = await Promise.all([latestJobStatus("visual"), commands.visualStatus().catch(() => null)]);
+      return { ...job, hashed: counts?.hashed || 0, embedded: counts?.embedded || 0, missing: counts?.missing || 0 };
+    } catch { return formatJobStatus(null); }
+  }));
+  ipcMain.handle("workspace:visual-start", (_event, options) => startVisualTask(options || {}));
 
   // Reading the shape of older thumbnails (portrait / landscape).
   ipcMain.handle("workspace:orientation-status", status("orientation"));

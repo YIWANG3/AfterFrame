@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images, Flag, FlagOff } from "lucide-react";
+import { Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images, Flag, FlagOff, ScanSearch } from "lucide-react";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO, displaySize } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
@@ -75,7 +75,10 @@ function formatGPS(lat, lon) {
   return `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lon).toFixed(4)}° ${lonDir}`;
 }
 
-function ThumbnailStrip({ items, icon: Icon, onSelect, testId }) {
+// `idAttribute`: the Similar strip names its asset under another attribute,
+// since it shows for most photos and a bare [data-asset-id=…] (the gallery's
+// cards, which tests and the agent bridge look up) must stay one element.
+function ThumbnailStrip({ items, icon: Icon, onSelect, testId, idAttribute = "data-asset-id" }) {
   if (!items?.length) return null;
   return (
     <div className="mt-1.5 flex flex-wrap gap-1">
@@ -84,7 +87,7 @@ function ThumbnailStrip({ items, icon: Icon, onSelect, testId }) {
           key={item.asset_id}
           type="button"
           data-testid={testId}
-          data-asset-id={item.asset_id}
+          {...{ [idAttribute]: item.asset_id }}
           className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-black transition-all hover:ring-2 hover:ring-accent/50"
           onClick={() => onSelect?.(item.asset_id)}
           title={item.stem}
@@ -126,6 +129,30 @@ function PaletteStrip({ colors, onPick }) {
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// The photos that look most like the shown one (the look-alike index): a
+// strip of up to eight, nearest first. Nothing while the index has not seen
+// the photo yet (it fills in after the visual job runs).
+function SimilarStrip({ assetId, onSelect }) {
+  const { t } = useTranslation("inspector");
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    let live = true;
+    setItems([]);
+    if (!assetId || !api.has("findSimilar")) return undefined;
+    api.findSimilar({ assetId, limit: 8 })
+      .then((result) => { if (live) setItems(result?.similar || []); })
+      .catch(() => { if (live) setItems([]); });
+    return () => { live = false; };
+  }, [assetId]);
+  if (!items.length) return null;
+  return (
+    <div className="mt-2" data-testid="inspector-similar">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{t("sections.similar")}</div>
+      <ThumbnailStrip items={items} icon={ScanSearch} onSelect={onSelect} testId="similar-asset" idAttribute="data-similar-asset-id" />
     </div>
   );
 }
@@ -315,6 +342,8 @@ export default function Inspector({ detail, onRatingChange, onFlagChange, onDesc
               <ThumbnailStrip items={detail.version_siblings} onSelect={onSelectAsset} testId="version-sibling" />
             </div>
           ) : null}
+
+          <SimilarStrip assetId={detail.asset_id} onSelect={onSelectAsset} />
 
           {detail.people?.has_face ? (
             <Section title={t("sections.people")}>

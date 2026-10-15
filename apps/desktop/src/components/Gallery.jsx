@@ -50,6 +50,8 @@ export default function Gallery({
   onAddTags,
   // Only passed when the grid shows less than the whole library.
   onShowInAllAssets,
+  // Only passed where the look-alike index can answer (the desktop app).
+  onFindSimilar,
 }) {
   const { t } = useTranslation("nav");
   const containerRef = useRef(null);
@@ -537,6 +539,7 @@ export default function Gallery({
           onRefreshFromDisk={refreshFromDisk}
           onReveal={(path) => api.revealPath(path)}
           onShowInAllAssets={onShowInAllAssets}
+          onFindSimilar={onFindSimilar}
           editors={editors}
           onOpenWith={(appPath) => onOpenWith?.(contextMenu.assetIds || [contextMenu.item.asset_id], appPath)}
           onEdit={onEdit}

@@ -166,6 +166,10 @@ def _status_clause(status: str) -> str:
         return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND assets.created_at >= datetime('now', '-7 days')"
     if status == "all":
         return "registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation')"
+    if status == "lookalikes":
+        from .visual import LOOKALIKES_CLAUSE
+
+        return f"registry.match_status IN ('auto_bound', 'manual_confirmed', 'unmatched', 'pending_confirmation') AND {LOOKALIKES_CLAUSE}"
     raise ValueError(f"unsupported status: {status}")
 
 
@@ -209,8 +213,21 @@ def list_image_assets(
     sort: str | None = None,
     filters: dict | None = None,
     base: dict | None = None,
+    similar_to: str | None = None,
 ) -> list[sqlite3.Row]:
+    """`similar_to`: the view "photos like this one" — that photo first, then
+    the look-alike index's nearest (db/visual.py), in that order rather than
+    the sort; the status, search and filters still narrow it."""
     where, params = _view_where(status, search, filters, base)
+    order = _browse_order_clause(sort)
+    if similar_to:
+        from .visual import SIMILAR_VIEW_MAX, find_similar
+
+        ranked = [similar_to, *(entry["asset_id"] for entry in find_similar(connection, similar_to, limit=SIMILAR_VIEW_MAX))]
+        where += f" AND assets.asset_id IN ({','.join('?' * len(ranked))})"
+        params.extend(ranked)
+        order = "CASE assets.asset_id " + " ".join(f"WHEN ? THEN {rank}" for rank in range(len(ranked))) + " END"
+        params.extend(ranked)
     params.extend([limit, offset])
 
     return connection.execute(
@@ -222,7 +239,7 @@ def list_image_assets(
             ON assets.asset_id = registry.image_asset_id
 {_BROWSE_SHARED_JOINS}
         WHERE {where}
-        ORDER BY {_browse_order_clause(sort)}
+        ORDER BY {order}
         LIMIT ? OFFSET ?
         """,
         params,
