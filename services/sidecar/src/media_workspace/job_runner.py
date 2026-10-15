@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -934,9 +933,10 @@ def _run_single_phase_job(
 
 def _lower_priority() -> None:
     """Background work: the resident sidecar and the app come first."""
-    if sys.platform != "win32":  # Windows has no nice(); a check mypy follows on every platform
+    nice = getattr(os, "nice", None)  # Windows has none
+    if nice is not None:
         try:
-            os.nice(5)
+            nice(5)
         except OSError:
             pass
 
