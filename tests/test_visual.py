@@ -161,10 +161,16 @@ class VisualJobTest(unittest.TestCase):
         self.connection.commit()
 
     def fake_helper(self) -> Path:
-        path = self.root / "image-features"
-        path.write_text(FAKE_HELPER.format(python=sys.executable))
-        path.chmod(path.stat().st_mode | stat.S_IEXEC)
-        return path
+        script = self.root / "image-features.py"
+        script.write_text(FAKE_HELPER.format(python=sys.executable), encoding="utf-8")
+        if os.name == "nt":
+            # Windows runs programs, not scripts with a #! line: wrap it in a
+            # .cmd that hands it to this Python (as test_people_job does).
+            helper = self.root / "image-features.cmd"
+            helper.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+            return helper
+        script.chmod(script.stat().st_mode | stat.S_IEXEC)
+        return script
 
     def test_previews_bring_their_hash_and_group_the_re_encode(self):
         self.render_previews()
