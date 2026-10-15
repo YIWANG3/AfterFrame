@@ -20,7 +20,7 @@ import { Checkbox, SliderRow, Z } from "../../ui";
 import cx from "../../ui/cx";
 import { fileName } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
-import { bool, numberIn, oneOf, readPref, text, writePref } from "../../utils/prefs";
+import { bool, numberIn, oneOf, text } from "../../utils/prefs";
 
 /* ── Provider type templates (not instances) ── */
 
@@ -296,7 +296,8 @@ export default function AiRepaintPanel({
   const [activeProviderId, setActiveProviderId] = useState(null);
   const [providerConfigs, setProviderConfigs] = useState({});
   const [styles, setStyles] = useState(null);
-  const [selectedStyleId, setSelectedStyleId] = useState(null);
+  // Remembered; a style that no longer exists falls back once the list loads.
+  const [selectedStyleId, setSelectedStyleId] = usePref(STYLE_PREF, null, text(200));
   const [providerModalState, setProviderModalState] = useState(null); // null | { mode: "new" } | { mode: "edit", instanceId: string }
   const [editingStyleId, setEditingStyleId] = useState(null);
   const [styleDraft, setStyleDraft] = useState({ name: "", prompt: "" });
@@ -437,12 +438,9 @@ export default function AiRepaintPanel({
     // Apply styles immediately (before any migration)
     if (Array.isArray(savedStyles) && savedStyles.length) {
       setStyles(savedStyles);
-      setSelectedStyleId((current) => {
-        if (current && savedStyles.some((s) => s.id === current)) return current;
-        const remembered = readPref(STYLE_PREF, null, text(200));
-        if (remembered && savedStyles.some((s) => s.id === remembered)) return remembered;
-        return savedStyles[0]?.id ?? null;
-      });
+      setSelectedStyleId((current) => (
+        current && savedStyles.some((s) => s.id === current) ? current : savedStyles[0]?.id ?? null
+      ));
     } else {
       setStyles(INITIAL_STYLES);
       setSelectedStyleId(INITIAL_STYLES[0]?.id ?? null);
@@ -511,7 +509,6 @@ export default function AiRepaintPanel({
 
   function chooseStyle(styleId) {
     setSelectedStyleId(styleId);
-    writePref(STYLE_PREF, styleId);
   }
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { localFileUrl } from "../utils/format";
 import { activeFilterCount, isEmptyValue } from "../hooks/workspaceLogic";
+import { usePref } from "../hooks/usePref";
 import FaceCrop from "./FaceCrop";
 import InlineEdit from "./InlineEdit";
 
@@ -861,17 +862,10 @@ const FACET_SLOTS = [
   { id: "rating", keys: ["rating_min", "rating_max"] },
   { id: "flag", keys: ["flag"] },
 ];
-const HIDDEN_FACETS_KEY = "afterframe.filterBar.hidden";
+const HIDDEN_FACETS_PREF = "filterBar.hidden";
 const SLOT_IDS = new Set(FACET_SLOTS.map((slot) => slot.id));
-
-function readHiddenFacets() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(HIDDEN_FACETS_KEY) || "[]");
-    return Array.isArray(stored) ? stored.filter((id) => SLOT_IDS.has(id)) : [];
-  } catch {
-    return [];
-  }
-}
+// A facet that no longer exists is dropped (utils/prefs.js).
+const checkHiddenFacets = (value) => (Array.isArray(value) ? value.filter((id) => SLOT_IDS.has(id)) : undefined);
 
 function FacetChooser({ hidden, onToggle, slotLabel, label, onAddGroups }) {
   const { t } = useTranslation("nav");
@@ -960,12 +954,14 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
   const activeCount = activeFilterCount(f);
 
   const slotActive = (id) => FACET_SLOTS.find((slot) => slot.id === id).keys.some((key) => !isEmptyValue(f[key]));
-  const [hidden, setHidden] = useState(() => (embedded ? FACET_SLOTS.map((slot) => slot.id).filter((id) => !slotActive(id)) : readHiddenFacets()));
+  // The main bar's hidden facets are remembered; a group's dialog (embedded)
+  // starts with every idle facet hidden and keeps its own choice for the dialog.
+  const [rememberedHidden, setRememberedHidden] = usePref(HIDDEN_FACETS_PREF, [], checkHiddenFacets);
+  const [dialogHidden, setDialogHidden] = useState(() => (embedded ? FACET_SLOTS.map((slot) => slot.id).filter((id) => !slotActive(id)) : []));
+  const hidden = embedded ? dialogHidden : rememberedHidden;
   const toggleFacet = (id) => {
     const next = hidden.includes(id) ? hidden.filter((h) => h !== id) : [...hidden, id];
-    setHidden(next);
-    if (embedded) return;
-    try { localStorage.setItem(HIDDEN_FACETS_KEY, JSON.stringify(next)); } catch { /* preference only */ }
+    (embedded ? setDialogHidden : setRememberedHidden)(next);
   };
   // A group in the dialog must not change which person the main bar shows.
   const [ownPerson, setOwnPerson] = useState(null);

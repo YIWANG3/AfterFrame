@@ -54,6 +54,7 @@ import { usePref } from "../hooks/usePref";
 import { Z } from "../ui";
 import { bool, text } from "../utils/prefs";
 import { matchShortcut } from "../shortcuts/store";
+import { shouldIgnoreKey } from "./editor/keys";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
@@ -113,14 +114,6 @@ function createInitialSnapshot(viewportSize, transformedPreview) {
   };
 }
 
-
-// Editor shortcuts must not steal keys from text inputs / the layer editor.
-function shouldIgnoreKey(event) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return false;
-  const tagName = target.tagName;
-  return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
-}
 
 export default function EditorOverlay({
   open, item, catalogKey = null, collections, sourceCollectionId, onAddToCollection, onClose, onSaveComplete, pushToast,
@@ -472,7 +465,7 @@ export default function EditorOverlay({
 
     composite.naturalWidth = sw;
     composite.naturalHeight = sh;
-    promoteBakedSource(composite, "Text applied");
+    promoteBakedSource(composite, t("overlay.textApplied"));
     layerResetHard();
   }
 
@@ -876,7 +869,7 @@ export default function EditorOverlay({
 
     // The crop cut out of the full-resolution source becomes the working picture.
     const cropped = bakeCrop(sourceImage, { cropRect, imageRect, discreteRotationDeg, flipX, flipY, freeAngle });
-    promoteBakedSource(cropped, "Applied");
+    promoteBakedSource(cropped, t("overlay.applied"));
     applyLayers(bakedLayers); // history was just wiped; initial-snapshot effect will record it
   }
 

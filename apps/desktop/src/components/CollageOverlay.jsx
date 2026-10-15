@@ -18,6 +18,7 @@ import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref }
 import { EXPORT_WIDTHS } from "./collage/PanelControls";
 import { Checkbox, Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
+import { parentDir } from "./editor/pathParts";
 
 const PANEL_WIDTH = 300;
 const PAGE_SIZE = 48;
@@ -58,11 +59,6 @@ async function rememberedExportDir() {
   if (!dir || !api.has?.("statDirs")) return null;
   const found = await api.statDirs([dir]).catch(() => []);
   return found?.includes(dir) ? dir : null;
-}
-
-function parentDir(filePath) {
-  const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
-  return slash > 0 ? filePath.slice(0, slash) : null;
 }
 
 function builtInSources(summary) {

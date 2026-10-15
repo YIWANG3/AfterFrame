@@ -26,7 +26,7 @@ import { dedupeModels } from "../../ai/providers";
 import { matteHandwriting, colorizeHandwriting, loadHandwritingImage } from "../render/handwritingMatte";
 import { localFileUrl as mediaUrlFor } from "../../../utils/format";
 import { usePref } from "../../../hooks/usePref";
-import { fields, hexColor, intIn, numberIn, oneOf, readPref, recordOf, text as textOf, writePref } from "../../../utils/prefs";
+import { fields, hexColor, intIn, numberIn, oneOf, recordOf, text as textOf } from "../../../utils/prefs";
 
 const FIELD =
   "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";
@@ -54,10 +54,9 @@ const checkFill = (value) => {
   if (!fill) return undefined;
   return { ...DEFAULT_FILL, ...fill, gradient: { ...DEFAULT_FILL.gradient, ...checkGradient(value.gradient) } };
 };
-const rememberedStyle = () => {
-  const id = readPref(STYLE_PREF, null, textOf(64));
-  return HANDWRITING_STYLES.find((s) => s.id === id) || HANDWRITING_STYLES[0];
-};
+const checkStyle = oneOf(HANDWRITING_STYLES.map((s) => s.id));
+const styleById = (id) => HANDWRITING_STYLES.find((s) => s.id === id) || HANDWRITING_STYLES[0];
+const checkModels = recordOf(textOf(200));
 
 async function waitForTextImageJob(startStatus, isAlive = () => true) {
   // Cache hits come back already succeeded (jobId null); live jobs are polled
@@ -81,19 +80,23 @@ async function waitForTextImageJob(startStatus, isAlive = () => true) {
 export default function HandwritingModal({ onAdd, onClose }) {
   const { t } = useTranslation("editor");
   const [providers, setProviders] = useState([]);
-  const [providerId, setProviderId] = useState("");
+  // Remembered: the one from last time until the list loads, then one of it.
+  const [providerId, setProviderId] = usePref(PROVIDER_PREF, "", textOf(200));
+  const rememberedProviderRef = useRef(providerId);
   const [providerConfigured, setProviderConfigured] = useState(null);
   const [modelsByProvider, setModelsByProvider] = useState({});
   const [model, setModel] = useState("");
   const [text, setText] = useState("");
-  const [styleId, setStyleId] = useState(() => rememberedStyle().id);
+  const [styleId, setStyleId] = usePref(STYLE_PREF, HANDWRITING_STYLES[0].id, checkStyle);
   const [presetsExpanded, setPresetsExpanded] = useState(false);
   const [refPath, setRefPath] = useState(null);
   // The prompt textarea is the single source of truth for what gets sent:
   // preset clicks and reference selection FILL it (with a literal {text}
   // placeholder so the text field stays live), and the user can edit it
   // freely or paste a full shared prompt (口令).
-  const [promptText, setPromptText] = useState(() => promptForPreset(rememberedStyle()));
+  const [promptText, setPromptText] = useState(() => promptForPreset(styleById(styleId)));
+  // The model last used with each provider.
+  const [modelByProvider, setModelByProvider] = usePref(MODELS_PREF, {}, checkModels);
   // Fill for the matted glyphs — solid or linear gradient, applied locally
   // (colorizeHandwriting), so switching is instant and free.
   const [fill, setFill] = usePref("handwriting.fill", DEFAULT_FILL, checkFill);
@@ -154,13 +157,12 @@ export default function HandwritingModal({ onAdd, onClose }) {
       const capable = (prefs.providers || []).filter((p) => TEXT_IMAGE_CAPABLE_TYPES.has(p.type));
       setProviders(capable);
       setModelsByProvider(prefs.modelsCache || {});
-      const remembered = readPref(PROVIDER_PREF, null, textOf(200));
-      const initial = capable.find((p) => p.id === remembered)
+      const initial = capable.find((p) => p.id === rememberedProviderRef.current)
         || capable.find((p) => p.id === prefs.activeProvider)
         || capable[0];
       if (initial) setProviderId(initial.id);
     })();
-  }, []);
+  }, [setProviderId]); // stable (usePref): runs once
 
   // Advisory precheck only (drives the settings hint) — it never blocks the
   // button: dev builds can't read the packaged app's keychain tokens yet may
@@ -189,7 +191,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
   // also reset the model — the old provider's model id may not exist there.
   // The model last used with this provider comes back, if it still lists it.
   const modelForProvider = useEffectEvent(() => {
-    const remembered = readPref(MODELS_PREF, {}, recordOf(textOf(200)))[providerId];
+    const remembered = modelByProvider[providerId];
     const listed = remembered && (modelsByProvider[providerId] || []).some((m) => m.id === remembered);
     return listed ? remembered : TEXT_IMAGE_DEFAULT_MODELS[providerType] || "";
   });
@@ -199,12 +201,11 @@ export default function HandwritingModal({ onAdd, onClose }) {
 
   function chooseProvider(id) {
     setProviderId(id);
-    writePref(PROVIDER_PREF, id);
   }
 
   function chooseModel(id) {
     setModel(id);
-    writePref(MODELS_PREF, { ...readPref(MODELS_PREF, {}, recordOf(textOf(200))), [providerId]: id });
+    setModelByProvider((current) => ({ ...current, [providerId]: id }));
   }
 
   const modelOptions = useMemo(() => {
@@ -378,7 +379,6 @@ export default function HandwritingModal({ onAdd, onClose }) {
                 type="button"
                 onClick={() => {
                   setStyleId(s.id);
-                  writePref(STYLE_PREF, s.id);
                   // Explicit user action — always load this preset's recipe.
                   setPromptText(promptForPreset(s));
                 }}

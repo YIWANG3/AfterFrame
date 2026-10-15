@@ -195,4 +195,15 @@ test.describe("Golden: crop + transform", () => {
   // (Phase 2b) — asserting saved output dimensions + a layer's pixel position in
   // the padded canvas, which is far more robust than reading getState rects
   // (null under headless viewport-measurement timing).
+
+  // Last: it closes the editor the other tests share. A slider takes no
+  // text, so Esc pressed with the zoom slider focused still closes the
+  // editor (it used to leave the slider showing its focus ring).
+  test("Esc closes the editor while the zoom slider has focus", async () => {
+    const slider = window.getByRole("slider", { name: /image scale/i });
+    await slider.focus();
+    await expect(slider).toBeFocused();
+    await window.keyboard.press("Escape");
+    await expect.poll(() => window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
+  });
 });

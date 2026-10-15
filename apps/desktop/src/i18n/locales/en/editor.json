@@ -20,6 +20,8 @@
     "aspectOriginal": "Original",
     "reset": "Reset",
     "apply": "Apply",
+    "applied": "Applied",
+    "textApplied": "Text applied",
     "flipH": "Flip H",
     "flipV": "Flip V",
     "rotateLeft": "90° L",
