@@ -53,6 +53,9 @@ test.afterAll(async () => {
 test("AfterFrame › Settings… opens the settings overlay", async () => {
   await clickMenu("AfterFrame", "Settings…");
   await expect(ctx.window.getByText("Appearance")).toBeVisible({ timeout: 5_000 });
+  // Settings owns the keyboard once it has taken focus; send Escape to it,
+  // not to whatever held focus a frame earlier.
+  await ctx.window.waitForFunction(() => document.querySelector("[data-settings-overlay]")?.contains(document.activeElement));
   await ctx.window.keyboard.press("Escape");
   await expect(ctx.window.getByText("Appearance")).toHaveCount(0);
 });

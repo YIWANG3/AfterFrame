@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound, Keyboard } from "lucide-react";
 import api from "../api";
@@ -61,11 +61,15 @@ export default function SettingsOverlay({
 
   useEffect(() => { if (open) setTab(initialTab || rememberedTab()); }, [open, initialTab]);
 
+  // Both run as layout effects: a key pressed in the same frame Settings
+  // appears (an e2e sees "Appearance" and sends Escape; a busy renderer can
+  // leave passive effects for later) must already find the focus moved and
+  // the listener attached, or Settings stays open.
   // Settings opens over whatever view is up (editor, collage, lightbox) and
   // owns the keyboard while it is: focus moves in, and keys stop at its root
   // (utils/topLayer.js), so Escape closes Settings alone and nothing typed
   // here reaches a canvas below.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open && !rootRef.current?.contains(document.activeElement)) rootRef.current?.focus({ preventScroll: true });
   }, [open]);
   // Focus can still be outside: back on <body> (a field blurred on Enter, a
@@ -73,7 +77,7 @@ export default function SettingsOverlay({
   // took it back before the focus above landed (seen on a slow CI runner:
   // Escape went to the gallery and Settings stayed open). Settings is modal,
   // so a key aimed anywhere outside it is Settings' too.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return undefined;
     function onKey(e) {
       if (rootRef.current?.contains(e.target)) return;
