@@ -11,7 +11,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { formatDayRange, localFileUrl } from "../utils/format";
+import { formatDayRange, localFileUrl, pad2 } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 
 // Fallback when the catalog has no located photos at all (no GPS, no AI
@@ -24,8 +24,6 @@ const SLICE_LIMIT = 400;
 // 回忆 only while it is recent, and in 地点 for good.
 const MEMORY_LIMIT = 12;
 const PLACE_MIN_PHOTOS = 5;
-
-const pad2 = (n) => String(n).padStart(2, "0");
 
 // ── Page data cache ──
 // The view is unmounted on every switch away, so without this each visit
