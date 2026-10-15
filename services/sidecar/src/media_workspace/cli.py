@@ -7,16 +7,13 @@ import re
 import sys
 from pathlib import Path
 
-from .ai_repaint import (
-    list_provider_models,
-)
+from .ai_repaint import list_provider_models, provider_api_key, provider_token_key
 from .catalog import ensure_catalog
 from .db import (
     add_collection_items,
+    asset_detail,
     assign_faces_to_group,
-    attach_asset_to_resource_set,
     browse_collection,
-    cleanup_orphan_image_assets,
     confirm_match,
     connect,
     create_collection,
@@ -24,38 +21,35 @@ from .db import (
     dedupe_preview_entries,
     delete_collection,
     delete_image_asset_from_catalog,
-    find_image_asset_ids_by_stem,
+    description_fields,
     get_app_setting,
-    get_asset_colors,
-    get_duplicate_assets,
-    get_image_asset_detail,
-    get_image_asset_detail_by_path,
+    get_asset_location,
     get_job,
     get_latest_job,
     get_person_group_detail,
     init_db,
-    list_assets_for_preview,
     list_catalog_roots,
     list_collections,
     list_image_assets,
-    list_image_assets_missing_resource_set,
     list_map_points,
     list_pending,
     list_person_groups,
     list_similar_person_groups,
-    list_singleton_primary_resource_sets,
     locate_image_asset,
     merge_person_groups,
-    reassign_asset_to_resource_set,
     relink_asset,
     remove_collection_items,
     remove_faces_from_group,
     remove_raw_from_resource_sets,
     reorder_collections,
+    repair_resource_sets,
     request_job_pause,
     request_job_resume,
+    resolve_ai_locations,
+    row_tags,
     set_asset_description,
     set_asset_flag,
+    set_asset_location,
     set_asset_rating,
     set_catalog_path,
     set_person_group_cover,
@@ -80,40 +74,12 @@ from .job_runner import (
 )
 from .metadata import extract_image_candidate, iso_mtime
 from .preview_service import PreviewService
-from .reverse_lookup import iter_image_files, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
+from .watched import changed_media, refresh_paths, scan_new_media
 
 # run-import-job, run-preview-job, … : the detached background job runners.
 JOB_RUNNER_COMMAND = re.compile(r"^run-[a-z-]+-job$")
 JOB_BUSY_TIMEOUT_MS = 60_000
-
-
-def _provider_token_key(provider: str) -> str:
-    return f"ai_provider_token:{provider}"
-
-
-def _infer_origin_stem(stem: str) -> tuple[str | None, str]:
-    inferred_kind = "import"
-    current = stem
-    changed = False
-    while True:
-        next_value = current
-        if "_ai-repaint" in current:
-            next_value = current.split("_ai-repaint", 1)[0]
-            inferred_kind = "ai_repaint"
-        elif "_edited" in current:
-            next_value = current.split("_edited", 1)[0]
-            if inferred_kind == "import":
-                inferred_kind = "crop"
-        elif "_crop" in current:
-            next_value = current.split("_crop", 1)[0]
-            if inferred_kind == "import":
-                inferred_kind = "crop"
-        if next_value == current:
-            break
-        current = next_value
-        changed = True
-    return (current if changed and current else None, inferred_kind)
 
 
 def _serve_loop(args) -> int:
@@ -164,39 +130,6 @@ def _serve_loop(args) -> int:
     return 0
 
 
-def _row_tags(row) -> list[str]:
-    """The photo's tags from a browse/detail row (asset_tags, both sources)."""
-    try:
-        return [tag for tag in json.loads(row["asset_tags_json"] or "[]") if tag]
-    except (IndexError, KeyError, ValueError):
-        return []
-
-
-def _row_description(row) -> tuple[str | None, str | None]:
-    """The photo's description as shown, and whose: the user's if they wrote
-    one, else the AI's caption. (None, None) when there is neither."""
-    try:
-        user = row["user_description"]
-        ai = (row["ai_caption"] or "").strip()
-    except (IndexError, KeyError):
-        return None, None
-    if user is not None:
-        return (user.strip() or None), "user"  # an empty one is theirs too
-    if ai:
-        return ai, "ai"
-    return None, None
-
-
-def _description_fields(row) -> dict:
-    text, source = _row_description(row)
-    try:
-        ai = (row["ai_caption"] or "").strip() or None
-    except (IndexError, KeyError):
-        ai = None
-    # ai_caption: what shows again if the user clears theirs.
-    return {"description": text, "description_source": source, "ai_caption": ai}
-
-
 def _annotation_from_row(row) -> dict | None:
     """Inline annotation payload for browse rows (same shape as get-annotation).
 
@@ -213,7 +146,7 @@ def _annotation_from_row(row) -> dict | None:
         "schema_version": row["anno_schema_version"],
         "caption": row["anno_caption"],
         # The photo's tags (hand-added and AI alike); ai_tags is what the run proposed.
-        "tags": _row_tags(row),
+        "tags": row_tags(row),
         "ai_tags": json.loads(row["anno_tags_json"] or "[]"),
         "location": effective_location(row["image_metadata_json"], json.loads(row["anno_location_json"]) if row["anno_location_json"] else None),
         "detected_text": row["anno_detected_text"],
@@ -457,7 +390,6 @@ def build_parser() -> argparse.ArgumentParser:
     delete_image = subparsers.add_parser("delete-image-assets", parents=[common])
     delete_image.add_argument("--asset-id", action="append", required=True)
 
-    subparsers.add_parser("cleanup-orphan-images", parents=[common])
 
     verify_assets_p = subparsers.add_parser("verify-assets", parents=[common])
     verify_assets_p.add_argument("--scope", choices=["all", "image", "raw"], default="all")
@@ -777,6 +709,84 @@ def _video_tool(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_decode_raw(args) -> int:
+    from .raw_decode import decode
+    decode(args.source, args.target, args.size, full=args.full)
+    return 0
+
+
+def _cmd_render_raw_full(args) -> int:
+    from PIL import Image
+
+    from .preview_service import render_raw_full
+    renderer = render_raw_full(args.source, args.target)
+    with Image.open(args.target) as image:
+        width, height = image.size
+    print(json.dumps({"path": str(args.target), "width": width, "height": height, "renderer": renderer}))
+    return 0
+
+
+def _cmd_annotation_test_connection(args) -> int:
+    from . import annotation as _annotation
+    result = _annotation.test_connection(provider=args.provider, api_key=args.api_key, base_url=args.base_url)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
+def _cmd_annotation_list_models(args) -> int:
+    from . import annotation as _annotation
+    try:
+        models = _annotation.list_models(provider=args.provider, api_key=args.api_key, base_url=args.base_url)
+        print(json.dumps({"ok": True, "models": models}, ensure_ascii=False))
+    except Exception as e:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_transcode_image(args) -> int:
+    from .preview_service import transcode_to_jpeg
+    transcode_to_jpeg(args.source, args.output)
+    print(json.dumps({"output": str(args.output)}))
+    return 0
+
+
+def _cmd_read_image_metadata(args) -> int:
+    meta = extract_image_candidate(args.path)
+    print(json.dumps({
+        "capture_time": meta.capture_time,
+        "camera_make": meta.camera_make,
+        "camera_model": meta.camera_model,
+        "lens_model": meta.lens_model,
+        "lens_make": meta.lens_make,
+        "software": meta.software,
+        "iso": meta.iso,
+        "aperture": meta.aperture,
+        "shutter_speed": meta.shutter_speed,
+        "focal_length": meta.focal_length,
+        "flash": meta.flash,
+        "white_balance": meta.white_balance,
+        "color_space": meta.color_space,
+        "gps_latitude": meta.gps_latitude,
+        "gps_longitude": meta.gps_longitude,
+    }, ensure_ascii=False))
+    return 0
+
+
+# The commands that need no catalog (no DB connection): they run before
+# ensure_catalog(), so providers can be configured and files decoded with
+# no catalog open. Everything else goes through COMMAND_HANDLERS.
+CATALOG_FREE_HANDLERS = {
+    "serve": _serve_loop,
+    "decode-raw": _cmd_decode_raw,
+    "render-raw-full": _cmd_render_raw_full,
+    "video-tool": _video_tool,
+    "annotation-test-connection": _cmd_annotation_test_connection,
+    "annotation-list-models": _cmd_annotation_list_models,
+    "transcode-image": _cmd_transcode_image,
+    "read-image-metadata": _cmd_read_image_metadata,
+}
+
+
 def _get_parser() -> argparse.ArgumentParser:
     """Built once per process. The resident sidecar runs main() for every
     request, and building this parser was most of a small request's cost
@@ -802,78 +812,9 @@ def main(argv: list[str] | None = None) -> int:
         if env_key and hasattr(args, "api_key"):
             args.api_key = env_key
 
-    if args.command == "serve":
-        return _serve_loop(args)
-
-    # Catalog-free commands (no DB connection required) — must run before
-    # ensure_catalog() so users can configure providers without a catalog open.
-    if args.command == "decode-raw":
-        from .raw_decode import decode
-        decode(args.source, args.target, args.size, full=args.full)
-        return 0
-
-    if args.command == "render-raw-full":
-        from PIL import Image
-
-        from .preview_service import render_raw_full
-        renderer = render_raw_full(args.source, args.target)
-        with Image.open(args.target) as image:
-            width, height = image.size
-        print(json.dumps({"path": str(args.target), "width": width, "height": height, "renderer": renderer}))
-        return 0
-
-    if args.command == "video-tool":
-        return _video_tool(args)
-
-    if args.command == "annotation-test-connection":
-        from . import annotation as _annotation
-        result = _annotation.test_connection(
-            provider=args.provider,
-            api_key=args.api_key,
-            base_url=args.base_url,
-        )
-        print(json.dumps(result, ensure_ascii=False))
-        return 0
-
-    if args.command == "annotation-list-models":
-        from . import annotation as _annotation
-        try:
-            models = _annotation.list_models(
-                provider=args.provider,
-                api_key=args.api_key,
-                base_url=args.base_url,
-            )
-            print(json.dumps({"ok": True, "models": models}, ensure_ascii=False))
-        except Exception as e:  # noqa: BLE001
-            print(json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
-        return 0
-
-    if args.command == "transcode-image":
-        from .preview_service import transcode_to_jpeg
-        transcode_to_jpeg(args.source, args.output)
-        print(json.dumps({"output": str(args.output)}))
-        return 0
-
-    if args.command == "read-image-metadata":
-        meta = extract_image_candidate(args.path)
-        print(json.dumps({
-            "capture_time": meta.capture_time,
-            "camera_make": meta.camera_make,
-            "camera_model": meta.camera_model,
-            "lens_model": meta.lens_model,
-            "lens_make": meta.lens_make,
-            "software": meta.software,
-            "iso": meta.iso,
-            "aperture": meta.aperture,
-            "shutter_speed": meta.shutter_speed,
-            "focal_length": meta.focal_length,
-            "flash": meta.flash,
-            "white_balance": meta.white_balance,
-            "color_space": meta.color_space,
-            "gps_latitude": meta.gps_latitude,
-            "gps_longitude": meta.gps_longitude,
-        }, ensure_ascii=False))
-        return 0
+    catalog_free = CATALOG_FREE_HANDLERS.get(args.command)
+    if catalog_free is not None:
+        return catalog_free(args)
 
     catalog = ensure_catalog(args.catalog)
     fresh_db = not catalog.db_path.exists()
@@ -896,88 +837,13 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_get_provider_token(args, connection, catalog, parser):
-    payload = get_app_setting(connection, _provider_token_key(args.provider))
+    payload = get_app_setting(connection, provider_token_key(args.provider))
     print(json.dumps(payload or {}, indent=2))
     return 0
 
 
 def _cmd_repair_resource_sets(args, connection, catalog, parser):
-
-    # Phase 0: Split assets sharing the same asset_id (old format without path)
-    shared_split_count = split_shared_asset_ids(connection)
-    raw_removed = remove_raw_from_resource_sets(connection)
-
-    # Phase 1: Split incorrectly merged sets (different-directory independent exports)
-    from .db import split_incorrectly_merged_sets
-    split_count = split_incorrectly_merged_sets(connection)
-
-    # Phase 2: Attach assets missing a resource set
-    repaired = 0
-    primaries_created = 0
-    versions_attached = 0
-    missing = list_image_assets_missing_resource_set(connection)
-    for row in missing:
-        asset_id = str(row["asset_id"])
-        stem = str(row["stem"])
-        origin_stem, version_kind = _infer_origin_stem(stem)
-        origin_asset_id = None
-        if origin_stem:
-            candidate_ids = [candidate for candidate in find_image_asset_ids_by_stem(connection, origin_stem) if candidate != asset_id]
-            if candidate_ids:
-                origin_asset_id = candidate_ids[0]
-        if origin_asset_id:
-            attach_asset_to_resource_set(
-                connection,
-                asset_id,
-                origin_asset_id=origin_asset_id,
-                version_kind=version_kind,
-                commit=False,
-            )
-            versions_attached += 1
-        else:
-            attach_asset_to_resource_set(
-                connection,
-                asset_id,
-                origin_asset_id=None,
-                version_kind="import",
-                commit=False,
-            )
-            primaries_created += 1
-        repaired += 1
-
-    # Phase 3: Reassign singleton derived sets
-    repaired_singletons = 0
-    suspect_sets = list_singleton_primary_resource_sets(connection)
-    for row in suspect_sets:
-        stem = str(row["stem"])
-        origin_stem, version_kind = _infer_origin_stem(stem)
-        if not origin_stem:
-            continue
-        candidate_ids = [candidate for candidate in find_image_asset_ids_by_stem(connection, origin_stem) if candidate != row["primary_asset_id"]]
-        if not candidate_ids:
-            continue
-        origin_asset_id = candidate_ids[0]
-        reassign_asset_to_resource_set(
-            connection,
-            str(row["primary_asset_id"]),
-            origin_asset_id=origin_asset_id,
-            version_kind=version_kind,
-            commit=False,
-        )
-        repaired_singletons += 1
-        versions_attached += 1
-        repaired += 1
-    connection.commit()
-    print(json.dumps({
-        "ok": True,
-        "shared_assets_split": shared_split_count,
-        "raw_removed_from_sets": raw_removed,
-        "split_merged_sets": split_count,
-        "repaired": repaired,
-        "primaries_created": primaries_created,
-        "versions_attached": versions_attached,
-        "singleton_versions_reassigned": repaired_singletons,
-    }, indent=2))
+    print(json.dumps({"ok": True, **repair_resource_sets(connection)}, indent=2))
     return 0
 
 
@@ -1000,11 +866,7 @@ _MODEL_LIST_ENV_KEYS = {
 
 
 def _cmd_list_ai_models(args, connection, catalog, parser):
-    effective_key = args.api_key
-    if not effective_key:
-        provider_key = f"ai_provider_token:{args.provider}"
-        config = get_app_setting(connection, provider_key)
-        effective_key = config.get("token") if isinstance(config, dict) else None
+    effective_key = provider_api_key(connection, args.provider, args.api_key)
     if not effective_key:
         # Same dev-mode env fallback as the generation paths (keychain tokens
         # are unreadable from the dev binary).
@@ -1015,7 +877,7 @@ def _cmd_list_ai_models(args, connection, catalog, parser):
     if not effective_key and args.provider != "jimeng":
         print(json.dumps({"error": f"No API key for {args.provider}"}))
         return 1
-    models = list_provider_models(args.provider, effective_key, base_url=getattr(args, "base_url", None))
+    models = list_provider_models(args.provider, effective_key or "", base_url=getattr(args, "base_url", None))
     print(json.dumps(models, indent=2))
     return 0
 
@@ -1458,53 +1320,7 @@ def _cmd_generate_previews(args, connection, catalog, parser):
 
 
 def _cmd_refresh_assets(args, connection, catalog, parser):
-    paths = list(dict.fromkeys(path.resolve() for path in args.paths))
-    resolve_result = resolve_image_batch(
-        connection,
-        paths,
-        refresh=True,
-        validate_sources=True,
-        persist_roots=False,
-    )
-    service = PreviewService(catalog)
-    preview_result = service.generate_batch(
-        connection,
-        kind="preview",
-        force=True,
-        paths=paths,
-    )
-
-    # Respect the HD preference indirectly: refresh HD only where an entry
-    # already exists. A manual disk refresh must not create HD previews for a
-    # library that has HD generation disabled.
-    hd_paths = [
-        Path(row["canonical_path"])
-        for row in list_assets_for_preview(connection, kind="preview-hd", paths=paths)
-        if row["existing_relative_path"] and row["existing_status"] == "ready"
-    ]
-    preview_hd_result = (
-        service.generate_batch(
-            connection,
-            kind="preview-hd",
-            force=True,
-            paths=hd_paths,
-        )
-        if hd_paths
-        else {"generated": 0, "skipped": 0, "failed": 0, "deferred": 0, "total": 0}
-    )
-    payload = {
-        "requested": len(paths),
-        "refreshed": int(resolve_result.get("processed", 0)) - int(resolve_result.get("deferred_files", 0)),
-        "deferred": max(
-            int(resolve_result.get("deferred_files", 0)),
-            int(preview_result.get("deferred", 0)),
-            int(preview_hd_result.get("deferred", 0)),
-        ),
-        "failed": int(preview_result.get("failed", 0)) + int(preview_hd_result.get("failed", 0)),
-        "preview": preview_result,
-        "preview_hd": preview_hd_result,
-    }
-    print(json.dumps(payload, indent=2))
+    print(json.dumps(refresh_paths(connection, catalog, list(args.paths)), indent=2))
     return 0
 
 
@@ -1585,8 +1401,8 @@ def _browse_row_payload(row, catalog) -> dict:
         "app_rating": row["app_rating"],
         "app_flag": row["app_flag"],
         "display_shape": row["display_shape"] or None,
-        "tags": _row_tags(row),
-        **_description_fields(row),
+        "tags": row_tags(row),
+        **description_fields(row),
         "exists_on_disk": present,
         "source_changed": source_changed,
         "imported_at": row["imported_at"],
@@ -1633,38 +1449,19 @@ def _cmd_clear_ai_location(args, connection, catalog, parser):
 
 
 def _cmd_get_asset_location(args, connection, catalog, parser):
-    from .db.locations import get_asset_location
     row = get_asset_location(connection, args.asset_id)
     print(json.dumps(dict(row) if row else None, ensure_ascii=False))
     return 0
 
 
 def _cmd_set_asset_location(args, connection, catalog, parser):
-    from .db.locations import (
-        delete_asset_location,
-        get_asset_location,
-        set_manual_asset_location,
-        upsert_asset_location_from_metadata,
-    )
-
-    row = connection.execute(
-        "SELECT metadata_json FROM assets WHERE asset_id = ?", (args.asset_id,)
-    ).fetchone()
-    if row is None:
+    if not args.clear and (args.lat is None or args.lng is None):
+        parser.error("--lat and --lng are required unless --clear is given")
+    try:
+        effective = set_asset_location(connection, args.asset_id, latitude=args.lat, longitude=args.lng, clear=args.clear)
+    except LookupError:
         print(json.dumps({"error": f"unknown asset {args.asset_id}"}))
         return 1
-    if args.clear:
-        delete_asset_location(connection, args.asset_id)
-        # A cleared manual/AI pin falls back to the file's own GPS when present.
-        upsert_asset_location_from_metadata(
-            connection, args.asset_id, json.loads(row["metadata_json"] or "{}")
-        )
-    else:
-        if args.lat is None or args.lng is None:
-            parser.error("--lat and --lng are required unless --clear is given")
-        set_manual_asset_location(connection, args.asset_id, args.lat, args.lng)
-    connection.commit()
-    effective = get_asset_location(connection, args.asset_id)
     print(json.dumps(dict(effective) if effective else None, ensure_ascii=False))
     return 0
 
@@ -1691,45 +1488,7 @@ def _cmd_discover_collections(args, connection, catalog, parser):
 
 
 def _cmd_resolve_ai_locations(args, connection, catalog, parser):
-    from .db.locations import delete_asset_location, upsert_ai_asset_location
-    from .geo_resolver import RESOLVER_VERSION, load_gazetteer, resolve_location
-
-    if load_gazetteer() is None:
-        print(json.dumps({"error": "gazetteer data file missing", "scanned": 0}))
-        return 0
-
-    stats = {"scanned": 0, "resolved": 0, "kept_gps_or_manual": 0, "unresolved": 0, "cleared_stale": 0}
-    rows = connection.execute(
-        "SELECT asset_id, location_json FROM asset_ai_annotations "
-        "WHERE location_json IS NOT NULL AND location_json != 'null'"
-    ).fetchall()
-    for row in rows:
-        stats["scanned"] += 1
-        try:
-            location = json.loads(row["location_json"])
-        except ValueError:
-            location = None
-        resolved = resolve_location(location)
-        asset_id = str(row["asset_id"])
-        if resolved is not None:
-            if upsert_ai_asset_location(
-                connection, asset_id, resolved,
-                location=location, resolver_version=RESOLVER_VERSION,
-            ):
-                stats["resolved"] += 1
-            else:
-                stats["kept_gps_or_manual"] += 1
-        else:
-            existing = connection.execute(
-                "SELECT source FROM asset_locations WHERE asset_id = ?", (asset_id,)
-            ).fetchone()
-            if existing is not None and str(existing["source"]) == "ai":
-                delete_asset_location(connection, asset_id)
-                stats["cleared_stale"] += 1
-            else:
-                stats["unresolved"] += 1
-    connection.commit()
-    print(json.dumps(stats))
+    print(json.dumps(resolve_ai_locations(connection)))
     return 0
 
 
@@ -1770,114 +1529,13 @@ def _cmd_browse_map_points(args, connection, catalog, parser):
 
 def _cmd_asset_detail(args, connection, catalog, parser):
     if args.image_path:
-        row = get_image_asset_detail_by_path(connection, str(args.image_path.resolve()))
+        payload = asset_detail(connection, catalog.root, image_path=str(args.image_path.resolve()))
         identifier = str(args.image_path)
     else:
-        row = get_image_asset_detail(connection, args.asset_id)
+        payload = asset_detail(connection, catalog.root, asset_id=args.asset_id)
         identifier = args.asset_id
-    if row is None:
+    if payload is None:
         raise SystemExit(f"unknown export asset: {identifier}")
-    duplicates = get_duplicate_assets(connection, row["asset_id"])
-    # Read-only live stat (see _cmd_browse_images) — no write-back on this path.
-    present = os.path.exists(row["image_path"]) if row["image_path"] else True
-    payload = {
-        "asset_id": row["asset_id"],
-        "asset_type": row["asset_type"],
-        "stem": row["stem"],
-        "image_path": row["image_path"],
-        "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
-        "app_rating": row["app_rating"],
-        "app_flag": row["app_flag"],
-        "display_shape": row["display_shape"] or None,
-        "tags": _row_tags(row),
-        **_description_fields(row),
-        "exists_on_disk": present,
-        "imported_at": row["imported_at"],
-        "match_status": row["match_status"],
-        "score": row["score"],
-        "raw_asset_id": row["raw_asset_id"],
-        "raw_path": row["raw_path"],
-        "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
-        "feature_vector": json.loads(row["feature_vector_json"] or "{}"),
-        "candidates": json.loads(row["candidate_json"] or "[]"),
-        "colors": get_asset_colors(connection, row["asset_id"]),
-        "image_preview_path": str((catalog.root / row["image_preview_relative_path"]).resolve())
-        if row["image_preview_relative_path"]
-        else None,
-        "raw_preview_path": str((catalog.root / row["raw_preview_relative_path"]).resolve())
-        if row["raw_preview_relative_path"]
-        else None,
-        "image_preview_hd_path": str((catalog.root / row["image_preview_hd_relative_path"]).resolve())
-        if row["image_preview_hd_relative_path"]
-        else None,
-        "resource_set_id": row["resource_set_id"],
-        "resource_role": row["resource_role"],
-        "version_kind": row["version_kind"],
-        "resource_sort_order": row["resource_sort_order"],
-        "set_primary_asset_id": row["set_primary_asset_id"],
-        "set_raw_asset_id": row["set_raw_asset_id"],
-        "primary_stem": row["primary_stem"],
-        "set_item_count": row["set_item_count"],
-        "duplicates": [
-            {"asset_id": d["asset_id"], "image_path": d["image_path"], "stem": d["stem"]}
-            for d in duplicates
-        ],
-    }
-    from .db import get_asset_people
-    payload["people"] = get_asset_people(connection, asset_id=row["asset_id"])
-    # A RAW imported as a photo is in the gallery; a RAW source folder's RAWs
-    # are not. Only the first can be opened from its export's Inspector.
-    payload["raw_in_library"] = bool(row["raw_asset_id"]) and connection.execute(
-        "SELECT 1 FROM image_lookup_registry WHERE image_asset_id = ? LIMIT 1",
-        (row["raw_asset_id"],),
-    ).fetchone() is not None
-
-    # Add version siblings from resource set
-    asset_id = row["asset_id"]
-    set_id = row["resource_set_id"]
-    if set_id:
-        from .db import list_version_siblings
-        siblings = list_version_siblings(connection, set_id, asset_id)
-        payload["version_siblings"] = [
-            {
-                "asset_id": s["asset_id"],
-                "role": s["role"],
-                "version_kind": s["version_kind"],
-                "stem": s["stem"],
-                "image_path": s["image_path"],
-                "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
-                if s["preview_relative_path"] else None,
-            }
-            for s in siblings
-        ]
-    else:
-        payload["version_siblings"] = []
-
-    # Add collage relationships
-    from .db import list_collage_sources, list_collages_using_asset
-    collage_sources = list_collage_sources(connection, asset_id)
-    payload["collage_sources"] = [
-        {
-            "asset_id": s["source_asset_id"],
-            "stem": s["stem"],
-            "image_path": s["image_path"],
-            "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
-            if s["preview_relative_path"] else None,
-        }
-        for s in collage_sources
-    ]
-
-    used_in_collages = list_collages_using_asset(connection, asset_id)
-    payload["used_in_collages"] = [
-        {
-            "asset_id": s["collage_asset_id"],
-            "stem": s["stem"],
-            "image_path": s["image_path"],
-            "preview_path": str((catalog.root / s["preview_relative_path"]).resolve())
-            if s["preview_relative_path"] else None,
-        }
-        for s in used_in_collages
-    ]
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -1978,12 +1636,6 @@ def _cmd_export_assets(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_cleanup_orphan_images(args, connection, catalog, parser):
-    payload = cleanup_orphan_image_assets(connection)
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
 def _cmd_verify_assets(args, connection, catalog, parser):
     payload = verify_assets(connection, scope=args.scope)
     print(json.dumps(payload, indent=2))
@@ -2047,83 +1699,12 @@ def _cmd_summary(args, connection, catalog, parser):
 
 
 def _cmd_scan_new_media(args, connection, catalog, parser):
-    # Cheap watched-dir catch-up check: which media files under these dirs are not
-    # yet in the catalog (and not user-deleted)? Pure directory walk + indexed
-    # lookups — no EXIF read, no RAW matching. The caller imports only the new
-    # files, so a normal startup over an unchanged library does ~nothing visible.
-    known = {row["path"] for row in connection.execute("SELECT path FROM asset_files")}
-    tombstoned = {row["path"] for row in connection.execute("SELECT path FROM deleted_files")}
-    new_files: list[str] = []
-    seen: set[str] = set()  # nested watched dirs (a dir inside another) yield dupes
-    scanned = known_hit = tombstoned_hit = 0
-    for path in iter_image_files([Path(d) for d in args.image_dir]):
-        scanned += 1
-        key = str(path)
-        if key in tombstoned:
-            tombstoned_hit += 1
-        elif key in known:
-            known_hit += 1
-        elif key not in seen:
-            seen.add(key)
-            new_files.append(key)
-    print(json.dumps({
-        "new_files": new_files,
-        "scanned": scanned,
-        "known": known_hit,
-        "tombstoned": tombstoned_hit,
-    }))
+    print(json.dumps(scan_new_media(connection, [Path(d) for d in args.image_dir])))
     return 0
 
 
 def _cmd_changed_media(args, connection, catalog, parser):
-    # Which of these files, reported by a watched folder, would an import change?
-    # The folder reports more than new and rewritten files: AirDrop, a Finder tag
-    # or opening the photo in another app only writes its extended attributes.
-    # Dropped: a file the catalog holds as it is on disk (present, same size and
-    # mtime: what the importer itself compares), and one the user removed that
-    # hasn't been rewritten since (the auto import skips it the same way). The
-    # rest, unreadable paths included, are the import's to decide.
-    # `present_asset_ids` are the dropped files the catalog holds. Browsing
-    # stats files live and leaves exists_on_disk alone, so a photo moved out
-    # and put back unchanged reads here as never gone, while a card browsed in
-    # between still shows it missing: the app re-checks those.
-    changed: list[str] = []
-    unchanged = 0
-    present_asset_ids: list[str] = []
-    for given in args.paths:
-        try:
-            path = Path(given).resolve()
-            stat = path.stat()
-        except OSError:
-            changed.append(given)
-            continue
-        known = connection.execute(
-            """
-            SELECT assets.asset_id, assets.file_size, assets.modified_time, assets.exists_on_disk
-            FROM asset_files
-            JOIN assets ON assets.asset_id = asset_files.asset_id
-            WHERE asset_files.path = ?
-            LIMIT 1
-            """,
-            (str(path),),
-        ).fetchone()
-        removed = connection.execute(
-            "SELECT file_size, mtime FROM deleted_files WHERE path = ?", (str(path),)
-        ).fetchone()
-        if known is not None and (
-            int(known["exists_on_disk"]) == 1
-            and int(stat.st_size) == int(known["file_size"] or 0)
-            and iso_mtime(path, stat) == str(known["modified_time"] or "")
-        ):
-            unchanged += 1
-            present_asset_ids.append(str(known["asset_id"]))
-        elif known is None and removed is not None and (
-            int(stat.st_size) == int(removed["file_size"]) and abs(stat.st_mtime - float(removed["mtime"])) < 2
-        ):
-            unchanged += 1
-        else:
-            changed.append(given)
-    print(json.dumps({"changed": changed, "unchanged": unchanged, "present_asset_ids": present_asset_ids}))
+    print(json.dumps(changed_media(connection, list(args.paths))))
     return 0
 
 
@@ -2291,7 +1872,6 @@ COMMAND_HANDLERS = {
     "create-derived": _cmd_create_derived,
     "add-text": _cmd_add_text,
     "export-assets": _cmd_export_assets,
-    "cleanup-orphan-images": _cmd_cleanup_orphan_images,
     "verify-assets": _cmd_verify_assets,
     "relink-asset": _cmd_relink_asset,
     "delete-image-assets": _cmd_delete_image_assets,

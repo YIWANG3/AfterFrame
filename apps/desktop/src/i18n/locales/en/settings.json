@@ -445,7 +445,7 @@
       "deleteLayer": "Delete Layer",
       "apply": "Apply",
       "pan": "Hold to Pan",
-      "copyPaste": "Copy / Paste / Cut",
+      "copyPaste": "Copy (Photos as Files, or Text) / Paste / Cut",
       "quit": "Quit"
     }
   }

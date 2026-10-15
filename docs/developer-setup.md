@@ -168,7 +168,7 @@ How the builds differ:
 - **Checking every build.** After packaging, `scripts/after-pack.cjs` runs `check-macos-minimum.mjs`
   over the whole app, with that build's minimum macOS and architecture.
 
-On Windows and Linux, `dist:win` / `dist:linux` run `build:sidecar`, which uses the Python on your
+On Windows, `dist:win` runs `build:sidecar`, which uses the Python on your
 PATH (the spec and `entry.py` are in the repo; PyInstaller doesn't cross-compile):
 
 ```bash

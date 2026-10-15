@@ -202,7 +202,13 @@ function createAppShell({
           { label: t("menu.redo"), role: "redo" },
           { type: "separator" },
           { label: t("menu.cut"), role: "cut" },
-          { label: t("menu.copy"), role: "copy" },
+          // ⌘C is routed to the renderer like ⌘A: in a text field it copies the
+          // text, in the gallery it puts the selected photos on the clipboard as
+          // files (Finder's Copy). Not role:"copy", which only knows text. The
+          // editor keeps its own ⌘C (copy layers): its keydown preventDefaults,
+          // which stops the accelerator. Fixed keys, so not from `keys`; dropped
+          // with the rest while Settings records a shortcut.
+          { label: t("menu.copy"), accelerator: acceleratorsOn ? "CmdOrCtrl+C" : undefined, click: () => sendMenuAction("edit:copy") },
           { label: t("menu.paste"), role: "paste" },
           { label: t("menu.pasteMatchStyle"), role: "pasteAndMatchStyle" },
           { type: "separator" },

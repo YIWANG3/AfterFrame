@@ -11,6 +11,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .db import get_app_setting
+
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 OPENAI_API_BASE = "https://api.openai.com/v1"
 ARK_API_BASE = "https://ark.cn-beijing.volces.com/api/v3"
@@ -73,6 +75,31 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
     results = list(by_name.values())
     return results if results else ARK_MODELS
 
+def provider_token_key(provider: str) -> str:
+    """The app_settings key a provider's token is kept under."""
+    return f"ai_provider_token:{provider}"
+
+
+def provider_api_key(connection, provider: str, explicit: str | None = None) -> str | None:
+    """The key to call `provider` with: the one passed in, else the stored token."""
+    if explicit:
+        return explicit
+    config = get_app_setting(connection, provider_token_key(provider))
+    token = config.get("token") if isinstance(config, dict) else None
+    return token or None
+
+
+def jimeng_credentials(token: str | None) -> tuple[str | None, str | None]:
+    """Jimeng's token field holds an ak/sk pair as JSON; (None, None) when it does not parse."""
+    try:
+        creds = json.loads(token or "")
+    except (json.JSONDecodeError, TypeError):
+        return None, None
+    if not isinstance(creds, dict):
+        return None, None
+    return creds.get("access_key_id"), creds.get("secret_access_key")
+
+
 JIMENG_MODELS = [
     {"id": "jimeng_t2i_v40", "name": "即梦 图片生成 4.0"},
     {"id": "jimeng_seedream46_cvtob", "name": "即梦 图片生成 4.6"},
@@ -132,24 +159,25 @@ def list_gemini_models(api_key: str) -> list[dict[str, str]]:
     return results if results else GEMINI_FALLBACK_MODELS
 
 
+def fetch_openai_model_ids(api_key: str | None, base_url: str | None = None, *, timeout: float = 15) -> list[str]:
+    """The model ids an OpenAI-style endpoint exposes (GET {base}/models with
+    a Bearer token), in the endpoint's order. Raises what urlopen raises."""
+    headers = {"User-Agent": "Framebase/1.0"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = Request(url=(base_url or OPENAI_API_BASE).rstrip("/") + "/models", headers=headers, method="GET")
+    with urlopen(request, timeout=timeout) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    return [str(entry["id"]) for entry in body.get("data") or [] if entry.get("id")]
+
+
 def list_openai_models(api_key: str, base_url: str = OPENAI_API_BASE) -> list[dict[str, str]]:
     """Fetch OpenAI models that are image-related."""
-    request = Request(
-        url=f"{base_url}/models",
-        headers={"Authorization": f"Bearer {api_key}", "User-Agent": "Framebase/1.0"},
-        method="GET",
-    )
     try:
-        with urlopen(request, timeout=15) as response:
-            body = json.loads(response.read().decode("utf-8"))
+        ids = fetch_openai_model_ids(api_key, base_url)
     except (OSError, ValueError):
         return OPENAI_FALLBACK_MODELS
-
-    results: list[dict[str, str]] = []
-    for m in body.get("data", []):
-        mid = m.get("id", "")
-        if "image" in mid or "dall-e" in mid:
-            results.append({"id": mid, "name": mid})
+    results = [{"id": mid, "name": mid} for mid in ids if "image" in mid or "dall-e" in mid]
     return results if results else OPENAI_FALLBACK_MODELS
 
 
@@ -377,6 +405,40 @@ def run_nanobanana_repaint(
     )
 
 
+def _openai_images_call(
+    url: str,
+    *,
+    api_key: str,
+    content_type: str,
+    data: bytes,
+    output_path: Path,
+    model: str,
+    prompt: str,
+) -> RepaintResult:
+    """POST to an OpenAI images endpoint (edits or generations), write the
+    image it returns and describe the result."""
+    payload = _post_image_api(
+        "OpenAI",
+        url,
+        data=data,
+        headers={
+            "Content-Type": content_type,
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "Framebase/1.0",
+        },
+    )
+    output_bytes, output_mime = _extract_data_image(payload, "OpenAI")
+    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
+    return RepaintResult(
+        provider=OPENAI_PROVIDER,
+        model=model,
+        output_path=str(written_path),
+        mime_type=output_mime,
+        prompt=prompt,
+        notes=[],
+    )
+
+
 def _openai_size_from_resolution(aspect_ratio: str | None) -> str:
     """Map the aspect_ratio hint to an OpenAI image size string."""
     if aspect_ratio == "1:1":
@@ -435,27 +497,14 @@ def run_openai_repaint(
     _add_field("size", size)
 
     body = b"".join(parts) + f"--{boundary}--\r\n".encode()
-
-    payload = _post_image_api(
-        "OpenAI",
+    return _openai_images_call(
         f"{base_url}/images/edits",
+        api_key=effective_key,
+        content_type=f"multipart/form-data; boundary={boundary}",
         data=body,
-        headers={
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-            "Authorization": f"Bearer {effective_key}",
-            "User-Agent": "Framebase/1.0",
-        },
-    )
-    output_bytes, output_mime = _extract_data_image(payload, "OpenAI")
-
-    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
-    return RepaintResult(
-        provider=OPENAI_PROVIDER,
+        output_path=output_path,
         model=model,
-        output_path=str(written_path),
-        mime_type=output_mime,
         prompt=prompt,
-        notes=[],
     )
 
 
@@ -793,26 +842,14 @@ def run_openai_text_image(
     if quality:
         body["quality"] = quality
 
-    payload = _post_image_api(
-        "OpenAI",
+    return _openai_images_call(
         f"{base_url}/images/generations",
+        api_key=effective_key,
+        content_type="application/json",
         data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {effective_key}",
-            "User-Agent": "Framebase/1.0",
-        },
-    )
-    output_bytes, output_mime = _extract_data_image(payload, "OpenAI")
-
-    written_path = _write_output_bytes(output_path, output_bytes, output_mime)
-    return RepaintResult(
-        provider=OPENAI_PROVIDER,
+        output_path=output_path,
         model=model,
-        output_path=str(written_path),
-        mime_type=output_mime,
         prompt=prompt,
-        notes=[],
     )
 
 

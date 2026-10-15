@@ -8,7 +8,6 @@ from pathlib import Path
 
 from media_workspace.catalog import ensure_catalog
 from media_workspace.db import (
-    cleanup_orphan_image_assets,
     connect,
     get_registry,
     init_db,
@@ -16,7 +15,6 @@ from media_workspace.db import (
     set_catalog_path,
     summary,
     upsert_image_asset,
-    upsert_preview_entry,
 )
 from media_workspace.metadata import extract_image_candidate
 from media_workspace.reverse_lookup import resolve_image, resolve_image_batch
@@ -238,74 +236,6 @@ class ReverseLookupTest(unittest.TestCase):
             self.assertEqual(reused_asset_id, asset_id)
             self.assertEqual(summary(connection)["image_assets"], 1)
             connection.close()
-
-    def test_cleanup_orphan_image_assets_migrates_preview(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            catalog = ensure_catalog(root / "demo.afcatalog")
-            export_dir = root / "exports"
-            export_dir.mkdir()
-
-            export_file = export_dir / "B0023524-2.jpg"
-            export_file.write_bytes(
-                b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
-                b"\xff\xc0\x00\x11\x08\x03\x00\x04\x00\x03\x01\x22\x00\x02\x11\x01\x03\x11\x01"
-            )
-
-            connection = connect(catalog.db_path)
-            init_db(connection)
-            set_catalog_path(connection, catalog.root)
-
-            export = extract_image_candidate(export_file)
-            active_asset_id = upsert_image_asset(connection, export)
-
-            orphan_asset_id = f"export_{sha1(b'orphan').hexdigest()[:24]}"
-            connection.execute(
-                """
-                INSERT INTO assets (
-                    asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,
-                    fingerprint, file_size, modified_time, metadata_json
-                ) VALUES (?, 'image', ?, ?, ?, ?, ?, ?, ?, ?, '{}')
-                """,
-                (
-                    orphan_asset_id,
-                    str(export.path),
-                    export.stem,
-                    export.normalized_stem,
-                    export.stem_key,
-                    export.extension,
-                    export.fingerprint,
-                    export.file_size,
-                    export.modified_time,
-                ),
-            )
-            upsert_preview_entry(
-                connection,
-                orphan_asset_id,
-                kind="preview",
-                relative_path="previews/orphan.jpg",
-                width=120,
-                height=80,
-                status="ready",
-            )
-
-            payload = cleanup_orphan_image_assets(connection)
-
-            self.assertEqual(payload["found"], 1)
-            self.assertEqual(payload["deleted"], 1)
-            self.assertEqual(payload["previews_migrated"], 1)
-            self.assertEqual(summary(connection)["image_assets"], 1)
-            self.assertIsNone(
-                connection.execute("SELECT 1 FROM assets WHERE asset_id = ?", (orphan_asset_id,)).fetchone()
-            )
-            preview_row = connection.execute(
-                "SELECT relative_path FROM preview_entries WHERE asset_id = ? AND kind = 'preview'",
-                (active_asset_id,),
-            ).fetchone()
-            self.assertIsNotNone(preview_row)
-            self.assertEqual(preview_row["relative_path"], "previews/orphan.jpg")
-            connection.close()
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -242,7 +242,7 @@ class RawPreviewOrderTest(unittest.TestCase):
             patch.object(raw_decode, "embedded_preview", return_value=embedded),
             patch.object(raw_decode, "decode_in_child", side_effect=decode),
             patch.object(raw_decode, "available", return_value=True),
-            patch("media_workspace.preview_service.shutil.which", return_value="/usr/bin/sips" if sips else None),
+            patch("media_workspace.preview_service.has_image_io", return_value=sips),
             patch.object(service, "_render_with_quicklook", side_effect=image_io("quicklook")),
             patch.object(service, "_render_raw_fullres", side_effect=image_io("sips")),
         ):
@@ -376,7 +376,7 @@ class FullSizeRenderTest(unittest.TestCase):
         from media_workspace.preview_service import render_raw_full
 
         target = self.root / "cache" / "full.jpg"
-        with patch("media_workspace.preview_service.shutil.which", return_value=None):
+        with patch("media_workspace.preview_service.has_image_io", return_value=False):
             self.assertEqual(render_raw_full(self.dng, target), "libraw")
         with Image.open(target) as image:
             self.assertEqual(image.size, (64, 48))
@@ -391,7 +391,7 @@ class FullSizeRenderTest(unittest.TestCase):
 
         target = self.root / "full.jpg"
         with (
-            patch("media_workspace.preview_service.shutil.which", return_value="/usr/bin/sips"),
+            patch("media_workspace.preview_service.has_image_io", return_value=True),
             patch("media_workspace.preview_service.subprocess.run", side_effect=black_sips),
             patch.object(raw_decode, "decode_in_child", side_effect=lambda source, out, edge, full=False: raw_decode.decode(source, out, edge, full=full)),
         ):

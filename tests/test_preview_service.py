@@ -293,7 +293,7 @@ class PillowPreviewTest(unittest.TestCase):
             with Image.open(catalog.root / result.relative_path) as preview:
                 self.assertEqual(preview.size, (2000, 1333))
 
-    @patch("media_workspace.preview_service.shutil.which", return_value="/usr/bin/sips")
+    @patch("media_workspace.preview_service.has_image_io", return_value=True)
     @patch("media_workspace.preview_service.subprocess.run")
     def test_a_file_pillow_cannot_read_falls_back_to_sips_where_it_exists(self, run_mock, _which) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -311,7 +311,7 @@ class PillowPreviewTest(unittest.TestCase):
             self.assertEqual(rendered.read_bytes(), b"jpg-from-sips")
             self.assertEqual(run_mock.call_args.args[0][0], "sips")
 
-    @patch("media_workspace.preview_service.shutil.which", return_value=None)
+    @patch("media_workspace.preview_service.has_image_io", return_value=False)
     def test_without_sips_an_unreadable_file_fails_without_leftovers(self, _which) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             catalog = ensure_catalog(Path(temp_dir) / "demo.afcatalog")

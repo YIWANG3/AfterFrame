@@ -8,10 +8,9 @@ import os
 import sqlite3
 from pathlib import Path
 
-from .assets import upsert_preview_entry
 from .browse import count_image_assets
 from .locations import delete_asset_location
-from .resource_sets import _link_id, get_resource_set_for_asset
+from .resource_sets import get_resource_set_for_asset
 
 
 def verify_assets(
@@ -154,121 +153,6 @@ def relink_asset(
         "new_path": new_str,
         "forced": actual_fp != expected_fp,
     }
-
-def cleanup_orphan_image_assets(connection: sqlite3.Connection, commit: bool = True) -> dict[str, int]:
-    orphan_rows = connection.execute(
-        """
-        SELECT orphan.asset_id AS orphan_asset_id, active.asset_id AS active_asset_id
-        FROM assets AS orphan
-        JOIN assets AS active
-            ON active.asset_type = 'image'
-           AND active.canonical_path = orphan.canonical_path
-        JOIN asset_files AS active_files
-            ON active_files.asset_id = active.asset_id
-           AND active_files.path = active.canonical_path
-        LEFT JOIN asset_files AS orphan_files
-            ON orphan_files.asset_id = orphan.asset_id
-        WHERE orphan.asset_type = 'image'
-          AND orphan.asset_id != active.asset_id
-          AND orphan_files.asset_id IS NULL
-        ORDER BY orphan.canonical_path, orphan.asset_id
-        """
-    ).fetchall()
-    metrics = {
-        "found": len(orphan_rows),
-        "deleted": 0,
-        "previews_migrated": 0,
-        "registry_relinked": 0,
-        "links_relinked": 0,
-    }
-
-    for row in orphan_rows:
-        orphan_asset_id = str(row["orphan_asset_id"])
-        active_asset_id = str(row["active_asset_id"])
-
-        preview_rows = connection.execute(
-            """
-            SELECT kind, relative_path, width, height, status
-            FROM preview_entries
-            WHERE asset_id = ?
-            """,
-            (orphan_asset_id,),
-        ).fetchall()
-        for preview in preview_rows:
-            upsert_preview_entry(
-                connection,
-                active_asset_id,
-                kind=str(preview["kind"]),
-                relative_path=str(preview["relative_path"]),
-                width=preview["width"],
-                height=preview["height"],
-                status=str(preview["status"]),
-                commit=False,
-            )
-            metrics["previews_migrated"] += 1
-        connection.execute("DELETE FROM preview_entries WHERE asset_id = ?", (orphan_asset_id,))
-
-        metrics["registry_relinked"] += connection.execute(
-            """
-            UPDATE image_lookup_registry
-            SET image_asset_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE image_asset_id = ?
-            """,
-            (active_asset_id, orphan_asset_id),
-        ).rowcount
-
-        link_rows = connection.execute(
-            """
-            SELECT link_id, parent_asset_id, child_asset_id, relation_type, recipe_json,
-                   confidence, confirmed_by, confirmed_at
-            FROM asset_links
-            WHERE parent_asset_id = ? OR child_asset_id = ?
-            """,
-            (orphan_asset_id, orphan_asset_id),
-        ).fetchall()
-        for link in link_rows:
-            parent_asset_id = active_asset_id if link["parent_asset_id"] == orphan_asset_id else str(link["parent_asset_id"])
-            child_asset_id = active_asset_id if link["child_asset_id"] == orphan_asset_id else str(link["child_asset_id"])
-            if parent_asset_id == child_asset_id:
-                continue
-            connection.execute(
-                """
-                INSERT INTO asset_links (
-                    link_id, parent_asset_id, child_asset_id, relation_type, recipe_json,
-                    confidence, confirmed_by, confirmed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(parent_asset_id, child_asset_id, relation_type) DO UPDATE SET
-                    recipe_json = excluded.recipe_json,
-                    confidence = excluded.confidence,
-                    confirmed_by = excluded.confirmed_by,
-                    confirmed_at = COALESCE(asset_links.confirmed_at, excluded.confirmed_at)
-                """,
-                (
-                    _link_id(parent_asset_id, child_asset_id, str(link["relation_type"])),
-                    parent_asset_id,
-                    child_asset_id,
-                    str(link["relation_type"]),
-                    str(link["recipe_json"]),
-                    float(link["confidence"]),
-                    link["confirmed_by"],
-                    link["confirmed_at"],
-                ),
-            )
-            metrics["links_relinked"] += 1
-        connection.execute(
-            "DELETE FROM asset_links WHERE parent_asset_id = ? OR child_asset_id = ?",
-            (orphan_asset_id, orphan_asset_id),
-        )
-
-        # The FK cascade would clear asset_locations but not its R*Tree row.
-        delete_asset_location(connection, orphan_asset_id)
-        connection.execute("DELETE FROM assets WHERE asset_id = ?", (orphan_asset_id,))
-        metrics["deleted"] += 1
-
-    if commit:
-        connection.commit()
-    return metrics
-
 
 def _record_tombstone(connection: sqlite3.Connection, paths: list[str]) -> None:
     """Remember files removed from the catalog while still on disk, so a watched

@@ -6,8 +6,11 @@ transaction — no triggers. One effective location per asset; source priority
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 
+from ..geo_resolver import RESOLVER_VERSION as GEO_RESOLVER_VERSION
+from ..geo_resolver import load_gazetteer, resolve_location
 from .browse import _base_clause, _search_clause, _status_clause
 from .facets import _GEO_PRECISION_RANK, _facet_clauses
 
@@ -478,3 +481,65 @@ def list_map_points(
         """,
         params,
     ).fetchall()
+
+
+def set_asset_location(
+    connection: sqlite3.Connection,
+    asset_id: str,
+    *,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    clear: bool = False,
+) -> sqlite3.Row | None:
+    """Pin a photo where the user put it, or clear the pin (a cleared
+    manual/AI pin falls back to the file's own GPS when it has one). Commits.
+    Returns the effective location row afterwards (None when the photo has
+    none); raises LookupError for an asset the catalog does not have."""
+    row = connection.execute("SELECT metadata_json FROM assets WHERE asset_id = ?", (asset_id,)).fetchone()
+    if row is None:
+        raise LookupError(f"unknown asset {asset_id}")
+    if clear:
+        delete_asset_location(connection, asset_id)
+        upsert_asset_location_from_metadata(connection, asset_id, json.loads(row["metadata_json"] or "{}"))
+    else:
+        if latitude is None or longitude is None:
+            raise ValueError("latitude and longitude are required unless clearing")
+        set_manual_asset_location(connection, asset_id, latitude, longitude)
+    connection.commit()
+    return get_asset_location(connection, asset_id)
+
+
+def resolve_ai_locations(connection: sqlite3.Connection) -> dict[str, int | str]:
+    """Place every AI annotation's location (a place name) on the map through
+    the gazetteer; a GPS or manual location wins over it, and an AI pin whose
+    place no longer resolves is removed. Commits. Returns the counts, or
+    {"error", "scanned": 0} without the gazetteer file."""
+    if load_gazetteer() is None:
+        return {"error": "gazetteer data file missing", "scanned": 0}
+    stats: dict[str, int | str] = {"scanned": 0, "resolved": 0, "kept_gps_or_manual": 0, "unresolved": 0, "cleared_stale": 0}
+    rows = connection.execute(
+        "SELECT asset_id, location_json FROM asset_ai_annotations "
+        "WHERE location_json IS NOT NULL AND location_json != 'null'"
+    ).fetchall()
+    for row in rows:
+        stats["scanned"] = int(stats["scanned"]) + 1
+        try:
+            location = json.loads(row["location_json"])
+        except ValueError:
+            location = None
+        resolved = resolve_location(location)
+        asset_id = str(row["asset_id"])
+        if resolved is not None:
+            if upsert_ai_asset_location(connection, asset_id, resolved, location=location, resolver_version=GEO_RESOLVER_VERSION):
+                stats["resolved"] = int(stats["resolved"]) + 1
+            else:
+                stats["kept_gps_or_manual"] = int(stats["kept_gps_or_manual"]) + 1
+        else:
+            existing = connection.execute("SELECT source FROM asset_locations WHERE asset_id = ?", (asset_id,)).fetchone()
+            if existing is not None and str(existing["source"]) == "ai":
+                delete_asset_location(connection, asset_id)
+                stats["cleared_stale"] = int(stats["cleared_stale"]) + 1
+            else:
+                stats["unresolved"] = int(stats["unresolved"]) + 1
+    connection.commit()
+    return stats
