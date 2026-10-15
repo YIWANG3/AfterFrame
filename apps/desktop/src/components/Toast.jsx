@@ -72,7 +72,9 @@ function ToastItem({ toast, onDismiss }) {
             <div className={`text-[12px] font-medium ${toast.tone === "error" ? "text-error" : "text-text"}`}>{toast.title}</div>
           )}
           {toast.message && (
-            <div className="mt-0.5 truncate text-[11px] text-muted" title={toast.message}>
+            // Up to three lines: a message is often the one sentence that says
+            // what happened or what to do, cut off mid-way on a single line.
+            <div className="mt-0.5 line-clamp-3 break-words text-[11px] text-muted" title={toast.message}>
               {toast.message}
             </div>
           )}

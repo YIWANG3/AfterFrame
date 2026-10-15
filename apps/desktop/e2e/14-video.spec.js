@@ -93,6 +93,18 @@ test.describe("Video assets", () => {
       };
     });
 
+    if (proxied) {
+      // While the proxy is made, the original (no picture) stays still and
+      // silent: no sound, no scrubber running toward its end.
+      await expect(window.getByText("Preparing video…", { exact: true })).toBeVisible({ timeout: 15_000 });
+      await window.waitForTimeout(2_000);
+      const waiting = await window.evaluate(() => {
+        const v = document.querySelector("[data-video-engine] video");
+        return { paused: v.paused, muted: v.muted, time: v.currentTime, width: v.videoWidth };
+      });
+      if (waiting.width === 0) expect(waiting).toMatchObject({ paused: true, muted: true, time: 0 });
+    }
+
     // Decoded, at its real size (the proxy's), and playing on its own (autoplay).
     await expect.poll(async () => {
       const now = await state();

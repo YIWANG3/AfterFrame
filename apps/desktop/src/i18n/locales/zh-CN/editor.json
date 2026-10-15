@@ -16,6 +16,8 @@
     "scale": "缩放",
     "imageScale": "图像缩放",
     "aspectRatio": "长宽比",
+    "aspectFree": "自由",
+    "aspectOriginal": "原始比例",
     "reset": "重置",
     "apply": "应用",
     "flipH": "水平翻转",

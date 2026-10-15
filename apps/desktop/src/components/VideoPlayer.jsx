@@ -27,14 +27,17 @@ export default function VideoPlayer({ src, nativePath, onError }) {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  // The clip loaded with no picture (see onLoadedMetadata): it stays paused
+  // and silent while the caller makes a proxy to play instead.
+  const [noPicture, setNoPicture] = useState(false);
 
   const togglePlay = useCallback(() => {
     if (nativeEnabled) { nativeTogglePlay(); return; }
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || noPicture) return;
     if (v.paused) v.play().catch(() => {});
     else v.pause();
-  }, [nativeEnabled, nativeTogglePlay]);
+  }, [nativeEnabled, nativeTogglePlay, noPicture]);
 
   const seek = useCallback((value) => {
     if (nativeEnabled) { nativeSeek(value); return; }
@@ -100,8 +103,16 @@ export default function VideoPlayer({ src, nativePath, onError }) {
             setMuted(e.currentTarget.muted);
             // Chromium on Windows has no HEVC decoder of its own: such a clip
             // "plays", sound and time running, with no picture and no error.
-            // That is an error too, for which the caller has a proxy.
-            if (!e.currentTarget.videoWidth) onError?.(e);
+            // That is an error too, for which the caller has a proxy. Until
+            // the proxy is ready, the clip is held still and silent: autoplay
+            // would otherwise run its sound and the scrubber with nothing to
+            // see, for as long as the proxy takes.
+            if (!e.currentTarget.videoWidth) {
+              e.currentTarget.muted = true;
+              e.currentTarget.pause();
+              setNoPicture(true);
+              onError?.(e);
+            }
           }}
         />}
       </div>
