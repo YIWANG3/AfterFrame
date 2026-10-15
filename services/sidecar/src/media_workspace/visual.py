@@ -41,10 +41,12 @@ DUPLICATE_MAX_DISTANCE = 0.4
 
 # A burst: frames from one camera this close in time whose pictures are of
 # one scene — by feature print (two shots of a scene: 0.8; unrelated: over
-# 1.1), or, with no print on one side, loosely by hash.
+# 1.1), or, with no print on one side, loosely by hash (a reframing moves
+# the hash 6 bits per 40 px of a 2400 px frame; unrelated pictures sit 26
+# and more apart). Its look-alikes are the same frame and are not counted.
 BURST_MAX_SECONDS = 2
 BURST_MAX_DISTANCE = 0.9
-BURST_MAX_HAMMING = 16
+BURST_MAX_HAMMING = 22
 
 
 def _dct_matrix(n: int) -> np.ndarray:

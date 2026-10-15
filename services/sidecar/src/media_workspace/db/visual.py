@@ -286,7 +286,7 @@ class VisualAnalyzer:
         if group:
             self.grouped += 1
         index.add(asset_id, phash, vector, group)
-        if assign_burst_group(self.connection, asset_id, asset_type, phash, vector, self.embedding_model):
+        if assign_burst_group(self.connection, asset_id, asset_type, phash, vector, self.embedding_model, dup_group=group):
             self.bursts += 1
         return True
 
@@ -385,13 +385,15 @@ def _parse_capture_time(value: str | None):
 
 def assign_burst_group(
     connection: sqlite3.Connection, asset_id: str, asset_type: str, phash: int, embedding: np.ndarray | None, embedding_model: str | None, *,
-    commit: bool = False,
+    dup_group: str | None = None, commit: bool = False,
 ) -> str | None:
     """Put a just-analysed photo in the burst of the frames shot with it:
     the same camera's photos within BURST_MAX_SECONDS whose pictures are of
     the same scene. Frames join the group of the ones they match (groups
-    they bridge are merged), so a long burst chains frame by frame. Returns
-    the group, or None when the photo stands alone."""
+    they bridge are merged), so a long burst chains frame by frame. Its
+    look-alikes (`dup_group`: a re-download, a second export) are the same
+    frame, not another one, and stay out. Returns the group, or None when
+    the photo stands alone."""
     own = connection.execute("SELECT meta_capture_time, meta_camera_model FROM assets WHERE asset_id = ?", (asset_id,)).fetchone()
     taken = _parse_capture_time(own["meta_capture_time"]) if own else None
     if taken is None:
@@ -409,9 +411,9 @@ def assign_burst_group(
         FROM assets JOIN asset_visual v ON v.asset_id = assets.asset_id
         WHERE assets.asset_type = ? AND assets.asset_id != ? AND assets.exists_on_disk = 1
           AND assets.meta_camera_model IS ? AND assets.meta_capture_time BETWEEN ? AND ?
-          AND v.phash IS NOT NULL
+          AND v.phash IS NOT NULL AND (v.dup_group IS NULL OR v.dup_group IS NOT ?)
         """,
-        (asset_type, asset_id, own["meta_camera_model"], low, high),
+        (asset_type, asset_id, own["meta_camera_model"], low, high, dup_group),
     ).fetchall()
     matched: list[sqlite3.Row] = []
     for row in neighbours:

@@ -15,8 +15,10 @@ from PIL import Image
 
 ORIGINAL = "image_771e6f50a43a51f6ae68ba70"  # 0Y1A6707-9, Canon EOS R6m2
 # Twelve seconds after the original (17:34:08), which so stays out of the burst.
-FRAMES = [("burst-frame-1", "2025-10-04T17:34:20", 0), ("burst-frame-2", "2025-10-04T17:34:21", 16),
-          ("burst-frame-3", "2025-10-04T17:34:22", 32), ("burst-later", "2025-10-04T17:35:30", 8)]
+# Each frame reframed by 120 px of 2400 from the one before: not a
+# look-alike of it (that would be the same frame), but the same scene.
+FRAMES = [("burst-frame-1", "2025-10-04T17:34:20", 0), ("burst-frame-2", "2025-10-04T17:34:21", 120),
+          ("burst-frame-3", "2025-10-04T17:34:22", 240), ("burst-later", "2025-10-04T17:35:30", 8)]
 
 catalog = Path(sys.argv[1])
 assert catalog.parent.name.startswith("afterframe-e2e-")

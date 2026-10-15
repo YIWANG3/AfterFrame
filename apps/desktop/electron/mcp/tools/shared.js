@@ -76,6 +76,7 @@ const FACET_ARG_KEYS = [
   "focal_min", "focal_max", "date_from", "date_to", "date_within_days", "rating_min", "rating_max", "flag", "orientation", "tag", "tag_match",
   "asset_type", "extension", "shutter_min", "shutter_max", "people", "annotated",
   "location_source", "country", "city", "color", "color_tolerance", "caption_contains", "ocr_contains", "path_contains",
+  "burst_group",
 ];
 // The conditions an agent may flip with `exclude`, by the names it sends them
 // under → the sidecar's facet names (db/facets.py).

@@ -282,6 +282,16 @@ def _person_group(filters: dict) -> list[Clause]:
     )]
 
 
+def _burst_group(filters: dict) -> list[Clause]:
+    # The frames of a burst (db/visual.py), for "show me this burst" and the
+    # agent's search_assets burst_group.
+    values = _values(filters.get("burst_group"))
+    if not values:
+        return []
+    cond, params = _in("burst_group", values)
+    return [(f"assets.asset_id IN (SELECT asset_id FROM asset_visual WHERE {cond})", params)]
+
+
 def _in_collection(filters: dict) -> list[Clause]:
     # Membership of a folder as a condition, so a smart collection can be saved
     # from inside one ("the five-star photos of this trip").
@@ -407,6 +417,7 @@ FACETS: tuple[Facet, ...] = (
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),
     Facet("geo", ("geo",), _geo),
     Facet("in_collection", ("in_collection",), _in_collection),
+    Facet("burst_group", ("burst_group",), _burst_group),
 )
 
 FACET_NAMES = frozenset(facet.name for facet in FACETS)

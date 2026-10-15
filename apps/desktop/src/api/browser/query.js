@@ -60,6 +60,7 @@ export const FACET_OWN_KEYS = {
   people: ["people"], annotated: ["annotated"], person_group: ["person_group"], location_source: ["location_source"],
   country: ["country"], city: ["city"], color: ["color", "color_tolerance"], caption_contains: ["caption_contains"],
   ocr_contains: ["ocr_contains"], path_contains: ["path_contains"], geo: ["geo"], in_collection: ["in_collection"],
+  burst_group: ["burst_group"],
 };
 const FILTER_MODIFIERS = new Set(["tag_match", "color_tolerance", "exclude"]);
 const holdsCondition = (filters) => Object.entries(filters).some(([key, value]) => key !== "any_of" && !FILTER_MODIFIERS.has(key) && facetValues(value).length > 0);
@@ -130,6 +131,7 @@ function matchesFacetConditions(asset, filters) {
     if (!sources.includes(source)) return false;
   }
   if (facetValues(filters.color).length) return false; // no colours in the browser
+  if (facetValues(filters.burst_group).length) return false; // no look-alike index in the browser
   // No gazetteer in the browser, so no photo has a country or a city: the
   // chips never show (no options), and a rule naming one matches nothing.
   if (facetValues(filters.country).length || facetValues(filters.city).length) return false;

@@ -201,7 +201,7 @@ class VisualJobTest(unittest.TestCase):
 
         result = run_visual_job(self.connection, self.catalog.root, "job-1", helper_path=None)
 
-        self.assertEqual(result, {"analyzed": 4, "embedded": 0, "grouped": 1, "bursts": 1, "failed": 0, "total": 4})
+        self.assertEqual(result, {"analyzed": 4, "embedded": 0, "grouped": 1, "bursts": 0, "failed": 0, "total": 4})
         self.assertEqual(self.connection.execute("SELECT status FROM jobs WHERE job_id = 'job-1'").fetchone()[0], "succeeded")
         self.assertEqual(visual_status(self.connection), {"hashed": 4, "embedded": 0, "missing": 0, "duplicate_groups": 1})
         groups = list_duplicate_groups(self.connection)
@@ -268,13 +268,19 @@ class BurstTest(unittest.TestCase):
 
     # stem: (seed, capture time, camera, crop)
     FRAMES = {
+        # Reframed enough from one frame to the next not to be look-alikes
+        # (a crop of 72 px moves the hash 18 bits), yet of one scene.
         "burst_a": (7, "2026-03-01T10:00:00", "X-T5", 0),
-        "burst_b": (7, "2026-03-01T10:00:01", "X-T5", 12),
-        "burst_c": (7, "2026-03-01T10:00:02", "X-T5", 24),
+        "burst_b": (7, "2026-03-01T10:00:01", "X-T5", 72),
+        "burst_c": (7, "2026-03-01T10:00:02", "X-T5", 120),
         "later": (7, "2026-03-01T10:00:09", "X-T5", 6),  # the same scene, seven seconds on
         "other_camera": (7, "2026-03-01T10:00:01", "A7", 6),
         "elsewhere": (8, "2026-03-01T10:00:01", "X-T5", 0),  # another picture at the same moment
+        "elsewhere_copy": (8, "2026-03-01T10:00:01", "X-T5", 0),  # …and its re-export: look-alikes, not a burst of two
         "undated": (7, None, "X-T5", 6),
+        # The first frame again (a re-export): not a burst with its twin, but
+        # it joins the burst through the frame next to it, as the twin does.
+        "burst_a_copy": (7, "2026-03-01T10:00:00", "X-T5", 0),
     }
 
     def setUp(self):
@@ -305,11 +311,13 @@ class BurstTest(unittest.TestCase):
 
     def test_frames_chain_into_one_burst_and_the_rest_stand_alone(self):
         PreviewService(self.catalog).generate_batch(self.connection, kind="preview", asset_type="image")
-        self.assertEqual(burst_frames(self.connection, "image_burst_b"), ["image_burst_a", "image_burst_b", "image_burst_c"])
-        for lone in ("later", "other_camera", "elsewhere", "undated"):
+        self.assertEqual(
+            burst_frames(self.connection, "image_burst_b"), ["image_burst_a", "image_burst_a_copy", "image_burst_b", "image_burst_c"]
+        )
+        for lone in ("later", "other_camera", "elsewhere", "elsewhere_copy", "undated"):
             self.assertEqual(burst_frames(self.connection, f"image_{lone}"), [], lone)
         rows = {row["stem"]: row for row in list_image_assets(self.connection, "all")}
-        self.assertEqual(rows["burst_a"]["burst_size"], 3)
+        self.assertEqual(rows["burst_a"]["burst_size"], 4)
         self.assertEqual(rows["burst_a"]["burst_group"], rows["burst_c"]["burst_group"])
         self.assertIsNone(rows["later"]["burst_group"])
         self.assertEqual(rows["elsewhere"]["burst_size"], 0)
