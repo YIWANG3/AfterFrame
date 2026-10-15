@@ -265,10 +265,6 @@ function createMcpServer(deps) {
     return next;
   }
 
-  async function getJob(jobId) {
-    return await commands.getJob(jobId);
-  }
-
   // ---- Tool definitions ----------------------------------------------------
 
   const tools = [
@@ -745,7 +741,7 @@ function createMcpServer(deps) {
         const deadline = Date.now() + IMPORT_WAIT_MS;
         while (status.running && status.jobId && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
-          status = formatJobStatus(await getJob(status.jobId));
+          status = formatJobStatus(await commands.getJob(status.jobId));
         }
         return {
           done: !status.running,
@@ -908,16 +904,14 @@ function createMcpServer(deps) {
       },
       async handler(args) {
         requireCatalog();
-        if (!deps.startAiRepaintTask || !deps.readAppSettings) throw new Error("Repaint bridge unavailable.");
+        if (!deps.startAiRepaintTask || !deps.activeRepaintProvider) throw new Error("Repaint bridge unavailable.");
         const detail = await commands.assetDetail({ assetId: String(args.asset_id) });
         if (!detail?.image_path) throw new Error(`No file path for asset ${args.asset_id}.`);
-        const prefs = deps.readAppSettings()?.aiPreferences || {};
-        const providers = Array.isArray(prefs.providers) ? prefs.providers : [];
-        const active = providers.find((p) => p.id === prefs.activeProvider) || providers[0];
-        if (!active) throw new Error("No AI repaint provider configured. Open Settings → AI to add one.");
+        const configured = deps.activeRepaintProvider();
+        if (!configured) throw new Error("No AI repaint provider configured. Open Settings → AI to add one.");
         // Model precedence: explicit arg > the user's pick in the app UI
         // (selectedModels) > sidecar's per-provider default.
-        const uiModel = prefs.selectedModels?.[active.id] || "";
+        const { provider: active, model: uiModel } = configured;
         const status = await deps.startAiRepaintTask({
           sourcePath: detail.image_path,
           prompt: String(args.prompt),
@@ -967,7 +961,7 @@ function createMcpServer(deps) {
       },
       async handler(args) {
         requireCatalog();
-        return formatJobStatus(await getJob(args.job_id));
+        return formatJobStatus(await commands.getJob(args.job_id));
       },
     },
     {
@@ -977,14 +971,8 @@ function createMcpServer(deps) {
       async handler() {
         const { currentCatalogPath, catalogHasDb } = getCatalogState();
         if (!currentCatalogPath || !catalogHasDb()) return { jobs: [] };
-        const jobs = await commands.listActiveJobs();
-        return {
-          jobs: jobs.map((job) => ({
-            ...formatJobStatus(job),
-            jobType: job.job_type,
-            cancel_requested: !!job.cancel_requested,
-          })),
-        };
+        if (!deps.listActiveJobsFormatted) throw new Error("Jobs bridge unavailable.");
+        return { jobs: await deps.listActiveJobsFormatted() };
       },
     },
     {
@@ -1027,16 +1015,9 @@ function createMcpServer(deps) {
       },
       async handler(args) {
         requireCatalog();
-        const jobId = String(args.job_id);
-        // people_index needs its worker process relaunched, not just a status
-        // flip — same routing as the app's Activity Center resume button.
-        const job = await getJob(jobId);
-        let result;
-        if (job?.job_type === "people_index" && deps.resumePeopleIndexJob) {
-          result = await deps.resumePeopleIndexJob(jobId);
-        } else {
-          result = await commands.resumeJob(jobId);
-        }
+        // Same routing as the app's Activity Center resume button (tasks.resumeJob).
+        if (!deps.resumeJob) throw new Error("Jobs bridge unavailable.");
+        const result = await deps.resumeJob(String(args.job_id));
         deps.broadcastCatalogChanged?.("jobs");
         return result;
       },

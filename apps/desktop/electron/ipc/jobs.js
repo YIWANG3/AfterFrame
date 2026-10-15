@@ -14,8 +14,9 @@ function register({
   startPreviewTask,
   startColorsTask,
   startOrientationTask,
+  listActiveJobsFormatted,
+  resumeJob,
   commands,
-  resumePeopleIndexJob,
 }) {
   const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
   const status = (jobType) => jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, jobType);
@@ -49,14 +50,7 @@ function register({
   // an empty list as "everything finished" and would fire finish side effects
   // for jobs that are still running, then stop polling. Let it reject so the
   // caller can tell "query failed" apart from "nothing is active".
-  ipcMain.handle("workspace:active-jobs", guarded([], async () => {
-    const jobs = await commands.listActiveJobs();
-    return jobs.map((job) => ({
-      ...formatJobStatus(job),
-      jobType: job.job_type,
-      cancel_requested: !!job.cancel_requested,
-    }));
-  }));
+  ipcMain.handle("workspace:active-jobs", guarded([], () => listActiveJobsFormatted()));
 
   // Cooperative cancel: flags the job; the runner notices at its next
   // progress checkpoint and exits with status='cancelled'.
@@ -67,15 +61,7 @@ function register({
   // handlers keep the Activity Center future-proof for other resumable jobs.
   ipcMain.handle("workspace:pause-job", guarded(null, (_event, jobId) => (jobId ? commands.pauseJob(jobId) : null)));
 
-  ipcMain.handle("workspace:resume-job", guarded(null, async (_event, jobId) => {
-    if (!jobId) return null;
-    const job = await commands.getJob(jobId);
-    if (job?.job_type === "people_index" && resumePeopleIndexJob) {
-      const resumed = await resumePeopleIndexJob(jobId);
-      if (resumed != null) return resumed;
-    }
-    return await commands.resumeJob(jobId);
-  }));
+  ipcMain.handle("workspace:resume-job", guarded(null, (_event, jobId) => (jobId ? resumeJob(jobId) : null)));
 }
 
 module.exports = { register };

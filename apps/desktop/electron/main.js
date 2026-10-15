@@ -303,7 +303,7 @@ const { writeImageWithSourceMetadata } = createImageMetadataWriter({
   readSourceMetadata: (sourcePath) => sidecarCommands.readImageMetadata(sourcePath),
 });
 const {
-  formatJobStatus, latestJobStatus, createJob,
+  formatJobStatus, latestJobStatus, createJob, listActiveJobsFormatted, resumeJob, activeRepaintProvider,
   startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask, startOrientationTask,
   startAiRepaintTask, startTextImageTask,
 } = createTaskStarters({
@@ -313,6 +313,8 @@ const {
   launchSidecarJob,
   addAllowedMediaDir,
   providerCredentials,
+  // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
+  resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
 });
 
 async function registerRoots(rootType, paths) {
@@ -502,8 +504,8 @@ jobsIpc.register({
   getCatalogState: catalog.state,
   formatJobStatus, latestJobStatus,
   startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask, startOrientationTask,
+  listActiveJobsFormatted, resumeJob,
   commands: sidecarCommands,
-  resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
 });
 
 aiIpc.register({
@@ -815,14 +817,15 @@ app.whenReady().then(async () => {
     broadcastCatalogChanged,
     startAnnotationTask: annotationApi.startAnnotationTask,
     startAiRepaintTask,
-    readAppSettings,
+    activeRepaintProvider,
+    listActiveJobsFormatted,
+    resumeJob,
     sharp,
     processAndSave: saveFileApi.processAndSave,
     watcher: watcherApi,
     askRenderer: createAgentRenderBridge({ BrowserWindow, ipcMain }).askRenderer,
     // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
     startPeopleIndex: (options) => peopleApi?.startPeopleIndex(options),
-    resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
     // Dev and packaged builds get DIFFERENT default ports so running both at
     // once never collides — and agents deterministically reach the instance
     // they were configured for (repo .mcp.json → dev :41707; user-scope

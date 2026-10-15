@@ -10,6 +10,12 @@
 //                                    argv comes from sidecar/jobArgv.js only)
 //   addAllowedMediaDir               media:// allowlist for repaint outputs
 //   providerCredentials   provider tokens (keychain-backed) → { apiKey, baseUrl }
+//   resumePeopleIndexJob             ipc/people.js: a paused people job needs
+//                                    its worker relaunched, not a status flip
+// The job-list projection, the resume routing and the default repaint
+// provider live here too (review 2026-10-14 §D): the IPC handlers and the
+// MCP tools used to carry a copy each, and a people_index resume that only
+// one side knew about would have left the other unable to resume.
 
 const path = require("node:path");
 const fs = require("node:fs");
@@ -23,6 +29,7 @@ function createTaskStarters({
   launchSidecarJob,
   addAllowedMediaDir,
   providerCredentials,
+  resumePeopleIndexJob,
 }) {
   function formatJobStatus(job) {
     if (!job) {
@@ -86,6 +93,40 @@ function createTaskStarters({
 
   async function createJob(jobType, payload, options) {
     return await commands.createJob(jobType, payload, options);
+  }
+
+  // Every queued / running / paused job, as the renderer's JobDock and the
+  // MCP list_active_jobs tool read it.
+  async function listActiveJobsFormatted() {
+    const jobs = await commands.listActiveJobs();
+    return jobs.map((job) => ({
+      ...formatJobStatus(job),
+      jobType: job.job_type,
+      cancel_requested: !!job.cancel_requested,
+    }));
+  }
+
+  // people_index needs its worker process relaunched, not just a status
+  // flip; every other type resumes in the sidecar. One routing for the
+  // Activity Center button and the MCP resume_job tool.
+  async function resumeJob(jobId) {
+    const job = await commands.getJob(jobId);
+    if (job?.job_type === "people_index" && resumePeopleIndexJob) {
+      const resumed = await resumePeopleIndexJob(jobId);
+      if (resumed != null) return resumed;
+    }
+    return await commands.resumeJob(jobId);
+  }
+
+  // The repaint provider the app would use (Settings → AI): the active one,
+  // else the first, with the model the user picked for it in the editor
+  // (selectedModels). Null when none is configured.
+  function activeRepaintProvider() {
+    const prefs = readAppSettings()?.aiPreferences || {};
+    const providers = Array.isArray(prefs.providers) ? prefs.providers : [];
+    const active = providers.find((p) => p.id === prefs.activeProvider) || providers[0];
+    if (!active) return null;
+    return { provider: active, model: prefs.selectedModels?.[active.id] || "" };
   }
 
   async function startEnrichmentTask() {
@@ -397,6 +438,9 @@ function createTaskStarters({
     formatJobStatus,
     latestJobStatus,
     createJob,
+    listActiveJobsFormatted,
+    resumeJob,
+    activeRepaintProvider,
     startEnrichmentTask,
     startImportTask,
     startPreviewTask,
