@@ -7,9 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from .ai_repaint import (
-    list_provider_models,
-)
+from .ai_repaint import list_provider_models, provider_api_key, provider_token_key
 from .catalog import ensure_catalog
 from .db import (
     add_collection_items,
@@ -86,10 +84,6 @@ from .scanner import enrich_raw_assets, scan_raw_directory
 # run-import-job, run-preview-job, … : the detached background job runners.
 JOB_RUNNER_COMMAND = re.compile(r"^run-[a-z-]+-job$")
 JOB_BUSY_TIMEOUT_MS = 60_000
-
-
-def _provider_token_key(provider: str) -> str:
-    return f"ai_provider_token:{provider}"
 
 
 def _infer_origin_stem(stem: str) -> tuple[str | None, str]:
@@ -896,7 +890,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_get_provider_token(args, connection, catalog, parser):
-    payload = get_app_setting(connection, _provider_token_key(args.provider))
+    payload = get_app_setting(connection, provider_token_key(args.provider))
     print(json.dumps(payload or {}, indent=2))
     return 0
 
@@ -1000,11 +994,7 @@ _MODEL_LIST_ENV_KEYS = {
 
 
 def _cmd_list_ai_models(args, connection, catalog, parser):
-    effective_key = args.api_key
-    if not effective_key:
-        provider_key = f"ai_provider_token:{args.provider}"
-        config = get_app_setting(connection, provider_key)
-        effective_key = config.get("token") if isinstance(config, dict) else None
+    effective_key = provider_api_key(connection, args.provider, args.api_key)
     if not effective_key:
         # Same dev-mode env fallback as the generation paths (keychain tokens
         # are unreadable from the dev binary).
@@ -1015,7 +1005,7 @@ def _cmd_list_ai_models(args, connection, catalog, parser):
     if not effective_key and args.provider != "jimeng":
         print(json.dumps({"error": f"No API key for {args.provider}"}))
         return 1
-    models = list_provider_models(args.provider, effective_key, base_url=getattr(args, "base_url", None))
+    models = list_provider_models(args.provider, effective_key or "", base_url=getattr(args, "base_url", None))
     print(json.dumps(models, indent=2))
     return 0
 

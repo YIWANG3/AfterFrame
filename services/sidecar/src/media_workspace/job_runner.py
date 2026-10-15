@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from .ai_repaint import (
     JIMENG_PROVIDER,
     OPENAI_COMPATIBLE_PROVIDER,
     OPENAI_PROVIDER,
+    jimeng_credentials,
+    provider_api_key,
     run_ark_repaint,
     run_ark_text_image,
     run_gemini_text_image,
@@ -33,7 +36,6 @@ from .config import Thresholds
 from .db import (
     add_collection_items,
     attach_asset_to_resource_set,
-    get_app_setting,
     get_job,
     is_cancel_requested,
     is_pause_requested,
@@ -229,7 +231,8 @@ def run_people_index_job(
         error_text=None,
     )
 
-    if not candidates:
+    def cluster_and_finish(resume_cursor: dict[str, int]) -> dict[str, Any]:
+        """Phase 2: group the faces into candidates, then mark the job done."""
         clustering_payload = {
             **payload,
             "phase": "people_cluster",
@@ -265,14 +268,33 @@ def run_people_index_job(
             payload={**clustering_payload, "phase": None, "phase_label": None},
             result=final,
             progress=1.0,
-            resume_cursor={"offset": 0, "total": 0},
+            resume_cursor=resume_cursor,
             error_text=None,
         )
         return final
 
+    if not candidates:
+        return cluster_and_finish({"offset": 0, "total": 0})
+
     worker: subprocess.Popen[str] | None = None
     active_cursor = {"offset": offset, "total": len(candidates)}
     analyzed_since_cluster = 0
+
+    def advance_cursor(position: int) -> None:
+        """Asset `position` is done (committed or skipped): move the resume point past it."""
+        nonlocal active_cursor
+        active_cursor = {"offset": position + 1, "total": len(candidates)}
+        stats["processed"] = position + 1
+        update_job(
+            connection,
+            job_id,
+            payload=payload,
+            result={**stats, "current_phase": {"status": "running"}},
+            progress=_fraction(position + 1, len(candidates)),
+            resume_cursor=active_cursor,
+            error_text=None,
+        )
+
     try:
         worker = subprocess.Popen(
             [str(resolved_worker), "--model", str(model_path), "--serve"],
@@ -309,17 +331,7 @@ def run_people_index_job(
                 and abs(float(str(candidate["file_mtime"])) - file_stat.st_mtime) < 1e-6
             ):
                 stats["skipped"] = int(stats["skipped"]) + 1
-                active_cursor = {"offset": position + 1, "total": len(candidates)}
-                stats["processed"] = position + 1
-                update_job(
-                    connection,
-                    job_id,
-                    payload=payload,
-                    result={**stats, "current_phase": {"status": "running"}},
-                    progress=_fraction(position + 1, len(candidates)),
-                    resume_cursor=active_cursor,
-                    error_text=None,
-                )
+                advance_cursor(position)
                 continue
             request = {
                 "id": str(candidate["asset_id"]),
@@ -400,57 +412,9 @@ def run_people_index_job(
                     commit=True,
                 )
                 stats["failed"] = int(stats["failed"]) + 1
-            active_cursor = {"offset": position + 1, "total": len(candidates)}
-            stats["processed"] = position + 1
-            update_job(
-                connection,
-                job_id,
-                payload=payload,
-                result={**stats, "current_phase": {"status": "running"}},
-                progress=_fraction(position + 1, len(candidates)),
-                resume_cursor=active_cursor,
-                error_text=None,
-            )
+            advance_cursor(position)
 
-        clustering_payload = {
-            **payload,
-            "phase": "people_cluster",
-            "phase_label": "Build People Candidates",
-            "phase_index": 2,
-            "phase_count": 2,
-        }
-        update_job(
-            connection,
-            job_id,
-            payload=clustering_payload,
-            result={**stats, "current_phase": {"status": "running"}},
-            progress=0.92,
-        )
-        grouping = rebuild_candidate_groups(
-            connection,
-            model_id=model_id,
-            model_version=model_version,
-            checkpoint=checkpoint,
-            commit=False,
-        )
-        connection.commit()
-        final = {
-            **stats,
-            "groups": grouping["groups"],
-            "group_members": grouping["members"],
-            "current_phase": None,
-        }
-        update_job(
-            connection,
-            job_id,
-            status="succeeded",
-            payload={**clustering_payload, "phase": None, "phase_label": None},
-            result=final,
-            progress=1.0,
-            resume_cursor=active_cursor,
-            error_text=None,
-        )
-        return final
+        return cluster_and_finish(active_cursor)
     except JobPaused:
         return _mark_people_paused(
             connection,
@@ -904,38 +868,51 @@ def run_import_job(
         raise
 
 
-def run_enrichment_job(
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+def _run_single_phase_job(
     connection,
     job_id: str,
-    raw_dirs: list[Path] | None = None,
+    *,
+    phase_key: str,
+    phase_label: str,
+    work: Callable[[ProgressCallback], dict[str, Any]],
+    payload_extra: dict[str, Any] | None = None,
+    commit_on_cancel: bool = False,
 ) -> dict[str, Any]:
+    """The skeleton every one-phase job shares.
+
+    `work` gets a progress callback that checks the cancel flag and records
+    `{processed, total}`-shaped updates on the job row; its return value is
+    the job result. A JobCancelled raised from the callback marks the job
+    cancelled (after committing the work so far when `commit_on_cancel`, for
+    jobs that batch their own writes); any other error marks it failed and
+    re-raises.
+    """
+    phase = {"key": phase_key, "label": phase_label}
     payload = {
-        "raw_dirs": [str(path.resolve()) for path in raw_dirs] if raw_dirs else [],
-        "phase": "enrich_raw",
-        "phase_label": "Enrich RAW Metadata",
+        **(payload_extra or {}),
+        "phase": phase_key,
+        "phase_label": phase_label,
         "phase_index": 1,
         "phase_count": 1,
     }
     update_job(connection, job_id, status="running", payload=payload, progress=0.0)
-    try:
-        def enrich_progress(update: dict[str, int | str]) -> None:
-            _check_cancel(connection, job_id)
-            update_job(
-                connection,
-                job_id,
-                payload=payload,
-                result={"current_phase": _phase_result({"key": "enrich_raw", "label": "Enrich RAW Metadata"}, update)},
-                progress=_fraction(int(update.get("processed", 0)), int(update.get("total", 0))),
-                commit=True,
-            )
 
-        result = enrich_raw_assets(
+    def progress(update: dict[str, Any]) -> None:
+        _check_cancel(connection, job_id)
+        update_job(
             connection,
-            raw_dirs=raw_dirs or [],
-            workers=8,
-            fingerprint_mode="head-only",
-            progress_callback=enrich_progress,
+            job_id,
+            payload=payload,
+            result={"current_phase": _phase_result(phase, update)},
+            progress=_fraction(int(update.get("processed", 0)), int(update.get("total", 0))),
+            commit=True,
         )
+
+    try:
+        result = work(progress)
         update_job(
             connection,
             job_id,
@@ -947,18 +924,41 @@ def run_enrichment_job(
         )
         return result
     except JobCancelled:
+        if commit_on_cancel:
+            connection.commit()
         return _mark_cancelled(connection, job_id, payload)
     except Exception as error:
-        update_job(
-            connection,
-            job_id,
-            status="failed",
-            payload=payload,
-            result={},
-            progress=0.0,
-            error_text=str(error),
-        )
+        update_job(connection, job_id, status="failed", payload=payload, result={}, progress=0.0, error_text=str(error))
         raise
+
+
+def _lower_priority() -> None:
+    """Background work: the resident sidecar and the app come first."""
+    if sys.platform != "win32":  # Windows has no nice(); a check mypy follows on every platform
+        try:
+            os.nice(5)
+        except OSError:
+            pass
+
+
+def run_enrichment_job(
+    connection,
+    job_id: str,
+    raw_dirs: list[Path] | None = None,
+) -> dict[str, Any]:
+    def work(progress: ProgressCallback) -> dict[str, Any]:
+        return enrich_raw_assets(
+            connection,
+            raw_dirs=raw_dirs or [],
+            workers=8,
+            fingerprint_mode="head-only",
+            progress_callback=progress,
+        )
+
+    return _run_single_phase_job(
+        connection, job_id, phase_key="enrich_raw", phase_label="Enrich RAW Metadata", work=work,
+        payload_extra={"raw_dirs": [str(path.resolve()) for path in raw_dirs] if raw_dirs else []},
+    )
 
 
 def run_preview_job(
@@ -972,61 +972,21 @@ def run_preview_job(
     force: bool = False,
     analyze_colors: bool = True,
 ) -> dict[str, Any]:
-    payload = {
-        "kind": kind,
-        "asset_type": asset_type,
-        "limit": limit,
-        "force": force,
-        "phase": "generate_previews",
-        "phase_label": "Generate Previews",
-        "phase_index": 1,
-        "phase_count": 1,
-    }
-    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
-    try:
-        def preview_progress(update: dict[str, int | str]) -> None:
-            _check_cancel(connection, job_id)
-            update_job(
-                connection,
-                job_id,
-                payload=payload,
-                result={"current_phase": _phase_result({"key": "generate_previews", "label": "Generate Previews"}, update)},
-                progress=_fraction(int(update.get("processed", 0)), int(update.get("total", 0))),
-                commit=True,
-            )
-
-        result = PreviewService(ensure_catalog(catalog_path)).generate_batch(
+    def work(progress: ProgressCallback) -> dict[str, Any]:
+        return PreviewService(ensure_catalog(catalog_path)).generate_batch(
             connection,
             kind=kind,
             asset_type=asset_type,
             limit=limit,
             force=force,
-            progress_callback=preview_progress,
+            progress_callback=progress,
             analyze_colors=analyze_colors,
         )
-        update_job(
-            connection,
-            job_id,
-            status="succeeded",
-            payload={**payload, "phase": None, "phase_label": None},
-            result={**result, "current_phase": None},
-            progress=1.0,
-            error_text=None,
-        )
-        return result
-    except JobCancelled:
-        return _mark_cancelled(connection, job_id, payload)
-    except Exception as error:
-        update_job(
-            connection,
-            job_id,
-            status="failed",
-            payload=payload,
-            result={},
-            progress=0.0,
-            error_text=str(error),
-        )
-        raise
+
+    return _run_single_phase_job(
+        connection, job_id, phase_key="generate_previews", phase_label="Generate Previews", work=work,
+        payload_extra={"kind": kind, "asset_type": asset_type, "limit": limit, "force": force},
+    )
 
 
 def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | None = None, force: bool = False) -> dict[str, Any]:
@@ -1037,14 +997,9 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
 
     catalog = ensure_catalog(catalog_path)
     force = force or colors_stale(connection)  # an older extraction: redo them all
-    if sys.platform != "win32":  # Windows has no nice(); a check mypy follows on every platform
-        try:
-            os.nice(5)  # background work: the resident sidecar and the app come first
-        except OSError:
-            pass
-    payload = {"limit": limit, "force": force, "phase": "analyze_colors", "phase_label": "Analyze Colors", "phase_index": 1, "phase_count": 1}
-    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
-    try:
+    _lower_priority()
+
+    def work(progress: ProgressCallback) -> dict[str, Any]:
         rows = list_assets_missing_colors(connection, limit=limit, force=force)
         total = len(rows)
         analyzed = failed = 0
@@ -1059,26 +1014,14 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
                 failed += 1
             if index == total or time.monotonic() - reported_at >= 1.0:
                 reported_at = time.monotonic()
-                _check_cancel(connection, job_id)
-                update_job(
-                    connection, job_id, payload=payload,
-                    result={"current_phase": _phase_result({"key": "analyze_colors", "label": "Analyze Colors"}, {"processed": index, "total": total})},
-                    progress=_fraction(index, total), commit=True,
-                )
+                progress({"processed": index, "total": total})
         mark_colors_current(connection)
-        result = {"analyzed": analyzed, "failed": failed, "total": total}
-        update_job(
-            connection, job_id, status="succeeded",
-            payload={**payload, "phase": None, "phase_label": None},
-            result={**result, "current_phase": None}, progress=1.0, error_text=None,
-        )
-        return result
-    except JobCancelled:
-        connection.commit()
-        return _mark_cancelled(connection, job_id, payload)
-    except Exception as error:
-        update_job(connection, job_id, status="failed", payload=payload, result={}, progress=0.0, error_text=str(error))
-        raise
+        return {"analyzed": analyzed, "failed": failed, "total": total}
+
+    return _run_single_phase_job(
+        connection, job_id, phase_key="analyze_colors", phase_label="Analyze Colors", work=work,
+        payload_extra={"limit": limit, "force": force}, commit_on_cancel=True,
+    )
 
 
 def run_orientation_job(connection, catalog_path: Path, job_id: str) -> dict[str, Any]:
@@ -1089,15 +1032,9 @@ def run_orientation_job(connection, catalog_path: Path, job_id: str) -> dict[str
     from .preview_service import preview_shape
 
     catalog = ensure_catalog(catalog_path)
-    if sys.platform != "win32":
-        try:
-            os.nice(5)  # background work: the resident sidecar and the app come first
-        except OSError:
-            pass
-    phase = {"key": "read_orientation", "label": "Read Orientation"}
-    payload = {"phase": phase["key"], "phase_label": phase["label"], "phase_index": 1, "phase_count": 1}
-    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
-    try:
+    _lower_priority()
+
+    def work(progress: ProgressCallback) -> dict[str, Any]:
         rows = list_assets_missing_display_shape(connection)
         total = len(rows)
         read = unreadable = 0
@@ -1114,26 +1051,14 @@ def run_orientation_job(connection, catalog_path: Path, job_id: str) -> dict[str
             if index % 200 == 0 or index == total or time.monotonic() - reported_at >= 1.0:
                 connection.commit()
                 reported_at = time.monotonic()
-                _check_cancel(connection, job_id)
-                update_job(
-                    connection, job_id, payload=payload,
-                    result={"current_phase": _phase_result(phase, {"processed": index, "total": total})},
-                    progress=_fraction(index, total), commit=True,
-                )
+                progress({"processed": index, "total": total})
         connection.commit()
-        result = {"read": read, "unreadable": unreadable, "total": total}
-        update_job(
-            connection, job_id, status="succeeded",
-            payload={**payload, "phase": None, "phase_label": None},
-            result={**result, "current_phase": None}, progress=1.0, error_text=None,
-        )
-        return result
-    except JobCancelled:
-        connection.commit()
-        return _mark_cancelled(connection, job_id, payload)
-    except Exception as error:
-        update_job(connection, job_id, status="failed", payload=payload, result={}, progress=0.0, error_text=str(error))
-        raise
+        return {"read": read, "unreadable": unreadable, "total": total}
+
+    return _run_single_phase_job(
+        connection, job_id, phase_key="read_orientation", phase_label="Read Orientation", work=work,
+        commit_on_cancel=True,
+    )
 
 
 def run_annotation_job(
@@ -1161,18 +1086,8 @@ def run_annotation_job(
     from .db import list_assets_for_annotation
 
     catalog = ensure_catalog(catalog_path)
-    payload = {
-        "kind": "annotation",
-        "provider": provider,
-        "model": model,
-        "only_missing": only_missing,
-        "phase": "annotate",
-        "phase_label": "Annotate with AI",
-        "phase_index": 0,
-        "phase_count": 1,
-    }
-    update_job(connection, job_id, status="running", payload=payload, progress=0.0)
-    try:
+
+    def work(progress: ProgressCallback) -> dict[str, Any]:
         assets = list_assets_for_annotation(
             connection,
             asset_type=asset_type,
@@ -1181,19 +1096,7 @@ def run_annotation_job(
             collection_id=collection_id,
             limit=limit,
         )
-
-        def annotation_progress(update: dict[str, int]) -> None:
-            _check_cancel(connection, job_id)
-            update_job(
-                connection,
-                job_id,
-                payload=payload,
-                result={"current_phase": _phase_result({"key": "annotate", "label": "Annotate with AI"}, update)},
-                progress=_fraction(int(update.get("processed", 0)), int(update.get("total", 0))),
-                commit=True,
-            )
-
-        result = _annotation.annotate_batch(
+        return _annotation.annotate_batch(
             connection,
             catalog.root,
             assets,
@@ -1206,32 +1109,14 @@ def run_annotation_job(
             max_caption_chars=max_caption_chars,
             custom_instructions=custom_instructions,
             video_frame_interval=video_frame_interval,
-            progress_callback=annotation_progress,
+            progress_callback=progress,
             max_workers=max_workers,
         )
-        update_job(
-            connection,
-            job_id,
-            status="succeeded",
-            payload={**payload, "phase": None, "phase_label": None},
-            result={**result, "current_phase": None},
-            progress=1.0,
-            error_text=None,
-        )
-        return result
-    except JobCancelled:
-        return _mark_cancelled(connection, job_id, payload)
-    except Exception as error:
-        update_job(
-            connection,
-            job_id,
-            status="failed",
-            payload=payload,
-            result={},
-            progress=0.0,
-            error_text=str(error),
-        )
-        raise
+
+    return _run_single_phase_job(
+        connection, job_id, phase_key="annotate", phase_label="Annotate with AI", work=work,
+        payload_extra={"kind": "annotation", "provider": provider, "model": model, "only_missing": only_missing},
+    )
 
 
 def _join_folder(connection, collection_id: str | None, asset_id: str) -> str | None:
@@ -1295,22 +1180,11 @@ def run_ai_repaint_job(
                 prompt=prompt,
             )
         else:
-            effective_api_key = api_key
-            if not effective_api_key:
-                provider_key = f"ai_provider_token:{provider}"
-                config = get_app_setting(connection, provider_key)
-                effective_api_key = config.get("token") if isinstance(config, dict) else None
+            effective_api_key = provider_api_key(connection, provider, api_key)
             if not effective_api_key:
                 raise ValueError(f"No API token configured for provider '{provider}'.")
             if provider == JIMENG_PROVIDER:
-                # Jimeng uses ak/sk pair stored as JSON in the token field
-                ak, sk = None, None
-                if effective_api_key:
-                    try:
-                        creds = json.loads(effective_api_key or "")
-                        ak, sk = creds.get("access_key_id"), creds.get("secret_access_key")
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+                ak, sk = jimeng_credentials(effective_api_key)
                 result = run_jimeng_repaint(
                     input_path=input_path,
                     output_path=output_path,
@@ -1456,22 +1330,13 @@ def run_text_image_job(
         if provider == "mock":
             result = run_mock_text_image(output_path=output_path, prompt=prompt)
         else:
-            effective_api_key = api_key
-            if not effective_api_key:
-                provider_key = f"ai_provider_token:{provider}"
-                config = get_app_setting(connection, provider_key)
-                effective_api_key = config.get("token") if isinstance(config, dict) else None
+            effective_api_key = provider_api_key(connection, provider, api_key)
             # No hard key requirement here (unlike repaint): the provider
             # implementations fall back to env vars (GEMINI_API_KEY /
             # OPENAI_API_KEY / VOLC_*) — the dev-mode path — and raise their
             # own clear errors when neither source has a key.
             if provider == JIMENG_PROVIDER:
-                ak, sk = None, None
-                try:
-                    creds = json.loads(effective_api_key or "")
-                    ak, sk = creds.get("access_key_id"), creds.get("secret_access_key")
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                ak, sk = jimeng_credentials(effective_api_key)
                 result = run_jimeng_text_image(
                     output_path=output_path,
                     prompt=prompt,

@@ -11,6 +11,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .db import get_app_setting
+
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 OPENAI_API_BASE = "https://api.openai.com/v1"
 ARK_API_BASE = "https://ark.cn-beijing.volces.com/api/v3"
@@ -72,6 +74,31 @@ def list_ark_models(api_key: str) -> list[dict[str, str]]:
             by_name[pretty] = {"id": model_id, "name": pretty}
     results = list(by_name.values())
     return results if results else ARK_MODELS
+
+def provider_token_key(provider: str) -> str:
+    """The app_settings key a provider's token is kept under."""
+    return f"ai_provider_token:{provider}"
+
+
+def provider_api_key(connection, provider: str, explicit: str | None = None) -> str | None:
+    """The key to call `provider` with: the one passed in, else the stored token."""
+    if explicit:
+        return explicit
+    config = get_app_setting(connection, provider_token_key(provider))
+    token = config.get("token") if isinstance(config, dict) else None
+    return token or None
+
+
+def jimeng_credentials(token: str | None) -> tuple[str | None, str | None]:
+    """Jimeng's token field holds an ak/sk pair as JSON; (None, None) when it does not parse."""
+    try:
+        creds = json.loads(token or "")
+    except (json.JSONDecodeError, TypeError):
+        return None, None
+    if not isinstance(creds, dict):
+        return None, None
+    return creds.get("access_key_id"), creds.get("secret_access_key")
+
 
 JIMENG_MODELS = [
     {"id": "jimeng_t2i_v40", "name": "即梦 图片生成 4.0"},
