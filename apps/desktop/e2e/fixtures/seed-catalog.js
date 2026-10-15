@@ -1,8 +1,14 @@
 // Seeds a small E2E catalog at apps/desktop/e2e/fixtures/test-catalog.afcatalog/
 // with 10 generated images plus 3 real photographs (see make-real-images.js).
 // Run once with:
-//   node e2e/fixtures/seed-catalog.js
-// Re-run anytime to regenerate from scratch (deletes existing fixture).
+//   AFTERFRAME_PYTHON=~/.venvs/afterframe-sidecar/bin/python node e2e/fixtures/seed-catalog.js
+// (plain python3 does when it is a 3.12 with the sidecar deps). Re-run anytime
+// to regenerate from scratch (deletes existing fixture) — but a re-seed is not
+// a small diff: every asset gets a fresh random id, so every preview file name
+// and the whole DB change, and the committed DB has been migrated in place
+// since it was seeded (colours #100, display_shape #198) while this script
+// computes no colours (run the colors job after). docs/developer-setup.md,
+// "E2E fixtures", lists what each fixture needs.
 //
 // The seeded catalog — DB (catalog.sqlite3) + previews — is committed to git so
 // a fresh clone / CI runs the catalog-backed specs without re-seeding. The DB
@@ -23,6 +29,9 @@ const REPO_ROOT = path.resolve(FIXTURES_DIR, "..", "..", "..", "..");
 // Run the sidecar from SOURCE, not the packaged dist binary — the binary is
 // only rebuilt at release time and silently goes stale in between.
 const SIDECAR_SRC = path.join(REPO_ROOT, "services", "sidecar", "src");
+// The sidecar needs Python 3.12+ (the app ships one; dev runs use
+// AFTERFRAME_PYTHON, e.g. ~/.venvs/afterframe-sidecar/bin/python).
+const PYTHON = process.env.AFTERFRAME_PYTHON || "python3";
 
 const IMAGES = [
   { name: "001-red.jpg",    rgb: [180,  60,  60] },
@@ -61,7 +70,7 @@ const VIDEO_TOOL_BIN = path.join(REPO_ROOT, "apps", "desktop", "native", "bin", 
 const VIDEOS_DIR = path.join(FIXTURES_DIR, "test-videos");
 
 function runSidecar(args) {
-  return execFileSync("python3", ["-m", "media_workspace", ...args], {
+  return execFileSync(PYTHON, ["-m", "media_workspace", ...args], {
     encoding: "utf-8",
     env: { ...process.env, PYTHONPATH: SIDECAR_SRC, VIDEO_TOOL_PATH: VIDEO_TOOL_BIN },
   });
@@ -167,7 +176,7 @@ async function main() {
   //     lightbox zoom). The video imports last, and whether it lands in the
   //     same wall-clock second as the images (stem tiebreak → image first) or
   //     one second later (video first) was pure timing luck. Pin it behind them.
-  execFileSync("python3", ["-c", `
+  execFileSync(PYTHON, ["-c", `
 import sqlite3
 conn = sqlite3.connect(${JSON.stringify(path.join(CATALOG_DIR, "catalog.sqlite3"))})
 conn.execute("UPDATE assets SET created_at = datetime(created_at, '-60 seconds') WHERE asset_type = 'video'")
@@ -180,7 +189,7 @@ conn.close()
   //    narrow down (see e2e/23-map.spec.js). Injected at the catalog level —
   //    generating real GPS EXIF would drag in another image-metadata dep.
   console.log("Injecting GPS for 001-red (Paris) and 002-orange (Tokyo)…");
-  execFileSync("python3", ["-c", `
+  execFileSync(PYTHON, ["-c", `
 import json, sys
 from pathlib import Path
 sys.path.insert(0, ${JSON.stringify(SIDECAR_SRC)})
@@ -207,7 +216,7 @@ print("GPS injected")
   //    independent), then run the offline gazetteer backfill so the fixture
   //    carries a source='ai' location row (see e2e/23-map.spec.js).
   console.log("Injecting AI location annotation for 004-green (Sydney)…");
-  execFileSync("python3", ["-c", `
+  execFileSync(PYTHON, ["-c", `
 import json, sqlite3
 conn = sqlite3.connect(${JSON.stringify(path.join(CATALOG_DIR, "catalog.sqlite3"))})
 location = {"country": "Australia", "admin1": "New South Wales", "locality": "Sydney",
