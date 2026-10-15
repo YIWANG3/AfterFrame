@@ -129,17 +129,29 @@ export function Select({ value, onChange, options, className = "" }) {
   );
 }
 
-export function Chip({ on, onClick, children }) {
+// A choice among a few (a size, a mode). `pill` (default) is the accent
+// pill; `option` is the tool panels' flat rounded-md chip, lit with the
+// selection colour (the collage panel's ratios, export widths, grouping).
+const CHIP_VARIANTS = {
+  pill: {
+    base: "inline-flex h-7 items-center rounded-full px-3 text-[11px] transition-colors",
+    on: "bg-accent text-accentInk",
+    off: "bg-[var(--fill-2)] text-muted hover:bg-[var(--fill-3)] hover:text-text",
+  },
+  option: {
+    base: "rounded-md px-2.5 py-1 text-[11px] transition-colors",
+    on: "bg-selected text-text",
+    off: "bg-app text-muted hover:bg-hover hover:text-text",
+  },
+};
+
+export function Chip({ on, onClick, variant = "pill", children }) {
+  const v = CHIP_VARIANTS[variant];
   return (
     <button
       type="button"
       onClick={onClick}
-      className={[
-        "inline-flex h-7 items-center rounded-full px-3 text-[11px] transition-colors",
-        on
-          ? "bg-accent text-accentInk"
-          : "bg-[var(--fill-2)] text-muted hover:bg-[var(--fill-3)] hover:text-text",
-      ].join(" ")}
+      className={[v.base, on ? v.on : v.off].join(" ")}
     >
       {children}
     </button>

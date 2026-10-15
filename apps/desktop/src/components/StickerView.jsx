@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
+import { Z } from "../ui";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Star, Trash2, FolderOpen, Cannabis, Eye } from "lucide-react";
@@ -153,8 +154,8 @@ function StickerContextMenu({ x, y, onReveal, onDelete, onClose }) {
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
-      style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+      className="fixed min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
+      style={{ left: `${pos.x}px`, top: `${pos.y}px`, zIndex: Z.popover }}
     >
       <MenuItem icon={Eye} label={t("reveal")} onClick={() => { onReveal?.(); onClose(); }} />
       <div className="my-1 border-t border-border/40" />

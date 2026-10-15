@@ -1,23 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Chip } from "../../ui";
 import { getTemplatesForCount } from "./collageTemplates";
 import { GROUP_SIZE_OPTIONS, MAX_TEMPLATE_COUNT } from "./collageBatch";
 import { Section, TemplateGrid, CanvasSection, ExportWidthChips, ImagesSection } from "./PanelControls";
-
-function Chip({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      className={[
-        "rounded-md px-2.5 py-1 text-[11px] transition-colors",
-        active ? "bg-selected text-text" : "bg-app text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
 
 export default function BatchPanel({
   imageCount,
@@ -82,7 +68,8 @@ export default function BatchPanel({
               {GROUP_SIZE_OPTIONS.map((n) => (
                 <Chip
                   key={n}
-                  active={groupSize === n}
+                  variant="option"
+                  on={groupSize === n}
                   onClick={() => { onGroupSizeChange(n); setCustomSize(""); }}
                 >
                   {t("nImages", { n })}
@@ -113,7 +100,7 @@ export default function BatchPanel({
                 { id: "captureTime", label: t("orderCaptureTime") },
                 { id: "filename", label: t("orderFilename") },
               ].map((opt) => (
-                <Chip key={opt.id} active={orderBy === opt.id} onClick={() => onOrderByChange(opt.id)}>
+                <Chip key={opt.id} variant="option" on={orderBy === opt.id} onClick={() => onOrderByChange(opt.id)}>
                   {opt.label}
                 </Chip>
               ))}
@@ -129,7 +116,7 @@ export default function BatchPanel({
                   { id: "merge", label: t("remainderMerge") },
                   { id: "drop", label: t("remainderDrop") },
                 ].map((opt) => (
-                  <Chip key={opt.id} active={remainderMode === opt.id} onClick={() => onRemainderModeChange(opt.id)}>
+                  <Chip key={opt.id} variant="option" on={remainderMode === opt.id} onClick={() => onRemainderModeChange(opt.id)}>
                     {opt.label}
                   </Chip>
                 ))}

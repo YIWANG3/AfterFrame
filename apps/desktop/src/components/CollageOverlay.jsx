@@ -16,7 +16,7 @@ import { useAddToFolder } from "../hooks/useAddToFolder";
 import { usePref } from "../hooks/usePref";
 import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
 import { EXPORT_WIDTHS } from "./collage/PanelControls";
-import { Checkbox } from "../ui";
+import { Checkbox, Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
 
 const PANEL_WIDTH = 300;
@@ -291,7 +291,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
   const showingTotalLabel = sourceTotal > 0 ? sourceTotal : hasMore ? `${sourceItems.length}+` : sourceItems.length;
 
   return (
-    <div className="fixed inset-0 z-[10210] flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/35 backdrop-blur-[2px]" style={{ zIndex: Z.overlayTop }}>
       <div className="flex h-[70vh] w-full max-w-[500px] flex-col overflow-hidden rounded-xl border border-border/60 bg-panel text-text shadow-overlay">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3">
@@ -942,7 +942,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[10200] flex flex-col bg-app text-text">
+    <div className="fixed inset-0 flex flex-col bg-app text-text" style={{ zIndex: Z.overlay }}>
       {/* Header */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-chrome px-4">
         <div className="flex items-center gap-3.5">
@@ -1104,8 +1104,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             {/* Drag ghost: thumbnail of the picked-up image following the cursor */}
             {cellDrag?.moved && (
               <div
-                className="pointer-events-none fixed z-[10250] h-16 w-16 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md shadow-overlay ring-2 ring-[rgb(var(--accent-color))]"
-                style={{ left: cellDrag.x, top: cellDrag.y }}
+                className="pointer-events-none fixed h-16 w-16 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md shadow-overlay ring-2 ring-[rgb(var(--accent-color))]"
+                style={{ left: cellDrag.x, top: cellDrag.y, zIndex: Z.overlayDrag }}
               >
                 {(() => {
                   const src = cellDrag.item?.preview_path || cellDrag.item?.image_preview_path || cellDrag.item?.image_path;

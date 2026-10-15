@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Columns2, Rows2, X } from "lucide-react";
+import { Z } from "../../ui";
 import { localFileUrl } from "../../utils/format";
 import { oneOf, readPref, writePref } from "../../utils/prefs";
 
@@ -138,7 +139,7 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout: layo
   const cellProps = { zoom, pan, originPct, onWheel, onPointerDown, onPointerMove, onPointerUp };
 
   return (
-    <div className="fixed inset-0 z-[10200] flex flex-col bg-[rgb(8,8,8)]">
+    <div className="fixed inset-0 flex flex-col bg-[rgb(8,8,8)]" style={{ zIndex: Z.overlay }}>
       {/* Header */}
       <div
         className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-[rgb(14,14,14)] px-4"

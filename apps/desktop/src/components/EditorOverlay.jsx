@@ -51,6 +51,7 @@ import { useDepthModel } from "./editor/state/useDepthModel";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
 import { useAddToFolder } from "../hooks/useAddToFolder";
 import { usePref } from "../hooks/usePref";
+import { Z } from "../ui";
 import { bool, text } from "../utils/prefs";
 import { matchShortcut } from "../shortcuts/store";
 import {
@@ -986,13 +987,15 @@ export default function EditorOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[10100] flex flex-col bg-app text-text"
+      className="fixed inset-0 flex flex-col bg-app text-text"
+      style={{ zIndex: Z.editor }}
       onDragOver={handleLogoDragOver}
       onDragLeave={handleLogoDragLeave}
       onDrop={handleLogoDrop}
     >
+      {/* The drop hint sits over the stage and the ruler: zIndex 60 inside the editor's own stacking context. */}
       {logoDropActive && (
-        <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-app/60" data-logo-drop-hint="true">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-app/60" style={{ zIndex: 60 }} data-logo-drop-hint="true">
           <div className="rounded-xl border border-dashed border-border bg-chrome px-6 py-4 text-[13px] text-text shadow-overlay">
             {t("border.dropLogo")}
           </div>

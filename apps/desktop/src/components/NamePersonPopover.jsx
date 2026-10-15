@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
+import { Z } from "../ui";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { GitMerge, ScanFace } from "lucide-react";
@@ -103,8 +104,8 @@ export default function NamePersonPopover({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[12000] rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay"
-      style={{ left: pos.left, top: pos.top, width: PANEL_WIDTH }}
+      className="fixed rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay"
+      style={{ left: pos.left, top: pos.top, width: PANEL_WIDTH, zIndex: Z.popover }}
     >
       {mergeTarget ? (
         <div>

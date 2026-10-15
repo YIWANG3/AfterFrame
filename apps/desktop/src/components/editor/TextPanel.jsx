@@ -14,7 +14,7 @@ import HandwritingModal from "./handwriting/HandwritingModal";
 import { handwritingAlphaFromUrl, colorizeHandwriting } from "./render/handwritingMatte";
 import { localFileUrl as mediaUrlFor } from "../../utils/format";
 
-import { SliderRow, NumberDragInput as NumInput } from "../../ui";
+import { SliderRow, NumberDragInput as NumInput, Toggle } from "../../ui";
 import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
 import FooterButton from "./components/FooterButton";
@@ -583,7 +583,7 @@ export default function TextPanel({
             </Section>
 
             {/* Stroke */}
-            <Section label={t("text.stroke")} right={<Switch on={current.strokeEnabled} onToggle={() => update(current.id, { strokeEnabled: !current.strokeEnabled })} />}>
+            <Section label={t("text.stroke")} right={<Toggle on={current.strokeEnabled} onChange={() => update(current.id, { strokeEnabled: !current.strokeEnabled })} />}>
               {current.strokeEnabled && (
                 <StrokeFieldRow
                   paint={paintFromFields(current, "stroke")}
@@ -597,7 +597,7 @@ export default function TextPanel({
             </Section>
 
             {/* Background */}
-            <Section label={t("text.background")} right={<Switch on={current.bgMode !== "none"} onToggle={() => update(current.id, { bgMode: current.bgMode !== "none" ? "none" : "solid" })} />}>
+            <Section label={t("text.background")} right={<Toggle on={current.bgMode !== "none"} onChange={() => update(current.id, { bgMode: current.bgMode !== "none" ? "none" : "solid" })} />}>
               {current.bgMode !== "none" && (
                 <>
                   <PaintRow
@@ -650,7 +650,7 @@ export default function TextPanel({
             </Section>
 
             {/* Shadow */}
-            <Section label={t("text.shadow")} right={<Switch on={current.shadow} onToggle={() => update(current.id, { shadow: !current.shadow })} />}>
+            <Section label={t("text.shadow")} right={<Toggle on={current.shadow} onChange={() => update(current.id, { shadow: !current.shadow })} />}>
               {current.shadow && (
                 <ShadowFieldRow layer={current} onChange={(patch) => update(current.id, patch)} />
               )}
@@ -881,20 +881,6 @@ function SegGroup({ options, className }) {
     </div>
   );
 }
-
-function Switch({ on, onToggle }) {
-  return (
-    <button
-      type="button"
-      className={["relative h-[18px] w-8 rounded-full transition-colors", on ? "bg-[rgb(var(--accent-color))]" : "bg-border"].join(" ")}
-      onClick={onToggle}
-    >
-      <span className={["absolute top-[2px] left-[2px] h-[14px] w-[14px] rounded-full bg-white transition-transform", on ? "translate-x-[14px]" : ""].join(" ")} />
-    </button>
-  );
-}
-
-
 
 function StackedField({ label, value, onChange, min, max }) {
   return (
@@ -1596,7 +1582,7 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
 
       {/* Outline — same shape as text Stroke (StrokeFieldRow handles both) */}
       <Section label={t("text.outline")} right={
-        <Switch on={hasOutline} onToggle={() => update(layer.id, { outlineWidth: hasOutline ? 0 : 8 })} />
+        <Toggle on={hasOutline} onChange={() => update(layer.id, { outlineWidth: hasOutline ? 0 : 8 })} />
       }>
         {hasOutline && (
           <StrokeFieldRow
@@ -1621,7 +1607,7 @@ function StickerLayerInspector({ layer, update, hasSceneDepth }) {
       </Section>
 
       <Section label={t("text.shadow")} right={
-        <Switch on={layer.shadow} onToggle={() => update(layer.id, { shadow: !layer.shadow })} />
+        <Toggle on={layer.shadow} onChange={() => update(layer.id, { shadow: !layer.shadow })} />
       }>
         {layer.shadow && (
           <ShadowFieldRow layer={layer} onChange={(patch) => update(layer.id, patch)} />
@@ -1640,7 +1626,7 @@ function GlowSection({ layer, update }) {
   const { t } = useTranslation("editor");
   return (
     <Section label={t("text.glow")} right={
-      <Switch on={layer.glow} onToggle={() => update(layer.id, { glow: !layer.glow })} />
+      <Toggle on={layer.glow} onChange={() => update(layer.id, { glow: !layer.glow })} />
     }>
       {layer.glow && (
         <>

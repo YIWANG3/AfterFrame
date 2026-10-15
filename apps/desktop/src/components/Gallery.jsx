@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import useDismiss from "../ui/useDismiss";
+import { Z } from "../ui";
 import api from "../api";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw, Flag, FlagOff, Tag, X, Copy } from "lucide-react";
@@ -229,8 +230,8 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
   return createPortal(
     <div
       ref={(el) => { ref.current = el; menuRef.current = el; }}
-      className="fixed z-[12000] min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
-      style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+      className="fixed min-w-[200px] rounded-md border border-border/60 bg-chrome p-1 shadow-menu"
+      style={{ left: `${pos.x}px`, top: `${pos.y}px`, zIndex: Z.popover }}
     >
       <MenuItem icon={Pencil} label={t("gallery.menu.edit")} shortcut={shortcutLabel("photo.edit")} onClick={() => { onEdit?.(item.image_path); onClose(); }} />
       {onFlag && (

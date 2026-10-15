@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Z } from "../ui";
 import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 import { TOP_LAYER_ATTR } from "../utils/topLayer";
@@ -39,7 +40,8 @@ export default function ConfirmDialog({
   return createPortal(
     <div
       {...{ [TOP_LAYER_ATTR]: "true" }}
-      className="fixed inset-0 z-[13000] flex items-center justify-center bg-app/70 backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center bg-app/70 backdrop-blur-sm"
+      style={{ zIndex: Z.confirm }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel?.(); }}
     >
       <div className="w-[320px] max-w-[90vw] rounded-xl border border-border bg-chrome p-5 shadow-overlay">

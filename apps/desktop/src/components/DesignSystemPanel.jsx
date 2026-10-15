@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Z } from "../ui";
 import { Palette, X, Search, Check, Star, Sparkles, Play, FolderPlus } from "lucide-react";
 
 /* ── Proposed design‑token reference ────────────────────────── */
@@ -56,7 +57,7 @@ function Panel({ onClose }) {
   const [sliderVal, setSliderVal] = useState(50);
 
   return (
-    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 flex items-center justify-center bg-black/60" style={{ zIndex: Z.designSystem }} onClick={onClose}>
       <div
         className="relative flex max-h-[85vh] w-[680px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-panel shadow-overlay"
         onClick={(e) => e.stopPropagation()}
@@ -403,7 +404,8 @@ export default function DesignSystemPanel() {
           Settings entry so the two don't overlap (dev-only panel). */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-16 left-4 z-[8999] flex h-8 w-8 items-center justify-center rounded-lg border border-border/50 bg-panel text-muted shadow-lg transition-colors hover:bg-hover hover:text-accent"
+        className="fixed bottom-16 left-4 flex h-8 w-8 items-center justify-center rounded-lg border border-border/50 bg-panel text-muted shadow-lg transition-colors hover:bg-hover hover:text-accent"
+        style={{ zIndex: Z.designSystem - 1 }}
         title="Design System"
       >
         <Palette size={14} />

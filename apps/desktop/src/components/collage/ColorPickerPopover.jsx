@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { gradientColorAt, gradientStops, gradientWithStops, hexToRgba } from "../editor/render/canvasHelpers";
 import usePointerScrub from "../../ui/usePointerScrub";
+import { Z } from "../../ui";
 
 // ── Color math ────────────────────────────────────────────
 
@@ -422,8 +423,8 @@ export default function ColorPickerPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[10300] rounded-lg border border-border bg-panel p-3 shadow-overlay"
-      style={{ top: pos.top, left: pos.left, width: 240 }}
+      className="fixed rounded-lg border border-border bg-panel p-3 shadow-overlay"
+      style={{ top: pos.top, left: pos.left, width: 240, zIndex: Z.overlayPopover }}
     >
       <div className="space-y-3">
         {showTabs && (

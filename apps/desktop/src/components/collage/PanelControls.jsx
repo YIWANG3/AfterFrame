@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, RotateCcw, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
+import { Chip } from "../../ui";
 import { fileName, localFileUrl } from "../../utils/format";
 
 // Shared building blocks for CollagePanel (single mode) and BatchPanel
@@ -213,19 +214,14 @@ export function CanvasSection({ canvas, exportWidth }) {
           <div className="text-[11px] text-muted">{t("aspectRatio")}</div>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {ASPECT_OPTIONS.map((opt) => (
-              <button
+              <Chip
                 key={opt.label}
-                type="button"
-                className={[
-                  "rounded-md px-2.5 py-1 text-[11px] transition-colors",
-                  Math.abs(canvasRatio - opt.value) < 0.01
-                    ? "bg-selected text-text"
-                    : "bg-app text-muted hover:bg-hover hover:text-text",
-                ].join(" ")}
+                variant="option"
+                on={Math.abs(canvasRatio - opt.value) < 0.01}
                 onClick={() => { onCanvasRatioChange(opt.value); setCustomRatioW(""); setCustomRatioH(""); }}
               >
                 {opt.label}
-              </button>
+              </Chip>
             ))}
           </div>
           <div className="mt-1.5 flex items-center gap-1.5">
@@ -321,19 +317,9 @@ export function ExportWidthChips({ exportWidth, onExportWidthChange }) {
   return (
     <div className="flex flex-wrap gap-1">
       {EXPORT_WIDTHS.map((w) => (
-        <button
-          key={w}
-          type="button"
-          className={[
-            "rounded-md px-2.5 py-1 text-[11px] transition-colors",
-            exportWidth === w
-              ? "bg-selected text-text"
-              : "bg-app text-muted hover:bg-hover hover:text-text",
-          ].join(" ")}
-          onClick={() => onExportWidthChange(w)}
-        >
+        <Chip key={w} variant="option" on={exportWidth === w} onClick={() => onExportWidthChange(w)}>
           {w}px
-        </button>
+        </Chip>
       ))}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
+import { Z } from "../ui";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
@@ -80,8 +81,8 @@ function Popover({ label, active, summary, children, width = 220, excluded = fal
         <div
           ref={panelRef}
           data-popover-panel="true"
-          className="fixed z-[12000] rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay"
-          style={{ left: pos.left, top: pos.top, width: width === "auto" ? undefined : width }}
+          className="fixed rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay"
+          style={{ left: pos.left, top: pos.top, width: width === "auto" ? undefined : width, zIndex: Z.popover }}
         >
           {children}
         </div>,
