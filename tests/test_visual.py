@@ -192,7 +192,8 @@ class VisualJobTest(unittest.TestCase):
         from media_workspace import visual
 
         helper = self.fake_helper()
-        with patch.object(visual, "SLOW_PRINT_SECONDS", 0.0), patch.dict(os.environ, {"IMAGE_FEATURES_PATH": str(helper)}):
+        # Below zero: a clock whose tick is longer than a print (Windows, 15 ms) reads 0.
+        with patch.object(visual, "SLOW_PRINT_SECONDS", -1.0), patch.dict(os.environ, {"IMAGE_FEATURES_PATH": str(helper)}):
             self.render_previews()
         self.assertEqual(visual_status(self.connection), {"hashed": 4, "embedded": 0, "missing": 0, "duplicate_groups": 1})
 
@@ -261,10 +262,19 @@ class VisualJobTest(unittest.TestCase):
         self.assertEqual(similar[0]["asset_id"], "image_one_again")
         self.assertLess(similar[0]["distance"], similar[1]["distance"])
         self.assertEqual(len(similar), 3)
+        # A photo with a hash but no print (added on a machine without the
+        # engine to a library that has them) is still found: by hash, first
+        # when it is a near-duplicate, after the printed ones otherwise.
+        self.connection.execute("UPDATE asset_visual SET embedding = NULL, embedding_model = NULL WHERE asset_id IN ('image_one_again', 'image_three')")
+        self.connection.commit()
+        mixed = find_similar(self.connection, "image_one", limit=3)
+        self.assertEqual([entry["asset_id"] for entry in mixed], ["image_one_again", "image_two", "image_three"])
+        self.assertIsNone(mixed[0]["distance"])
+        self.assertIsNotNone(mixed[1]["distance"])
         # With a helper, a photo that only has a hash still counts as missing.
         self.connection.execute("UPDATE asset_visual SET embedding = NULL, embedding_model = NULL WHERE asset_id = 'image_two'")
         self.connection.commit()
-        self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1")["missing"], 1)
+        self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1")["missing"], 3)
         self.assertEqual(visual_status(self.connection)["missing"], 0)
 
     def test_a_helper_that_cannot_read_a_file_does_not_stop_the_hashes(self):
