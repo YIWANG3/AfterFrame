@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { getProviderType, ProviderModal } from "../ai/providers";
-import { Checkbox, Modal, SliderRow } from "../../ui";
+import { Button, Checkbox, Modal, SliderRow } from "../../ui";
 import cx from "../../ui/cx";
 import { fileName } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
@@ -91,10 +91,6 @@ const INITIAL_STYLES = [
 
 const TOOLBAR_FIELD =
   "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";
-const TOOLBAR_BUTTON =
-  "inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-app px-3 py-0 text-[12px] font-medium text-text transition-colors hover:border-border hover:bg-hover";
-const ACCENT_BUTTON =
-  "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-accentInk transition-colors hover:brightness-110";
 
 function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
@@ -249,13 +245,9 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
         <div className="px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <PanelLabel>{title}</PanelLabel>
-            <button
-              type="button"
-              className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
-              onClick={onClose}
-            >
+            <Button variant="icon" size="xs" className="text-muted2" onClick={onClose}>
               <X className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
           <input
             value={draft.name}
@@ -272,8 +264,8 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
           />
         </div>
         <div className="flex items-center gap-2 border-t border-border/60 px-4 py-3">
-          <button type="button" className={ACCENT_BUTTON} onClick={onSave}>{t("repaint.saveStyle")}</button>
-          <button type="button" className={TOOLBAR_BUTTON} onClick={onClose}>{t("repaint.cancel")}</button>
+          <Button variant="primary" onClick={onSave}>{t("repaint.saveStyle")}</Button>
+          <Button variant="secondary" onClick={onClose}>{t("repaint.cancel")}</Button>
         </div>
       </div>
     </Modal>

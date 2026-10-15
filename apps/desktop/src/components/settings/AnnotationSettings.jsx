@@ -504,13 +504,9 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">
             {mode === "add" ? t("annotation.newProvider") : t("annotation.editProvider")}
           </div>
-          <button
-            type="button"
-            className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
-            onClick={onCancel}
-          >
+          <Button variant="icon" size="xs" className="text-muted2" onClick={onCancel}>
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
 
       <FieldRow label={t("annotation.displayName")} hint={t("annotation.displayNameHint")}>

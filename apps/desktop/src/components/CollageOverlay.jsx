@@ -16,7 +16,7 @@ import { useAddToFolder } from "../hooks/useAddToFolder";
 import { usePref } from "../hooks/usePref";
 import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
 import { EXPORT_WIDTHS } from "./collage/PanelControls";
-import { Checkbox, Z } from "../ui";
+import { Button, Checkbox, Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { parentDir } from "./editor/pathParts";
 
@@ -297,13 +297,9 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
               <span className="ml-2 text-muted2">{loading ? "…" : countLabel}</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="rounded-md p-1 text-muted2 hover:bg-hover hover:text-text"
-            onClick={onClose}
-          >
+          <Button variant="icon" size="xs" className="text-muted2" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
 
         {/* Source / sort / search controls */}
@@ -977,9 +973,9 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               testId="collage-add-to-folder"
             />
           )}
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color)/0.12)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgb(var(--accent-color)/0.18)]"
+          <Button
+            variant="tint"
+            size="sm"
             onClick={mode === "batch" ? handleBatchExport : handleExport}
             disabled={exporting || (mode === "batch" ? groups.length === 0 : images.length < 2)}
           >
@@ -987,15 +983,10 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             {exporting
               ? (exportProgress ? t("exportingProgress", exportProgress) : t("exporting"))
               : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("export"))}
-          </button>
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
-            onClick={onClose}
-            title={t("close")}
-          >
+          </Button>
+          <Button variant="icon" size="sm" className="text-muted2" onClick={onClose} title={t("close")}>
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
 

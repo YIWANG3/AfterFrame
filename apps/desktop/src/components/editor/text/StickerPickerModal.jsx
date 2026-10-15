@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import api from "../../../api";
 import { localFileUrl as mediaUrlFor } from "../../../utils/format";
+import { Button } from "../../../ui";
 
 export default function StickerPickerModal({ onPick, onClose }) {
   const { t } = useTranslation("editor");
@@ -48,14 +49,9 @@ export default function StickerPickerModal({ onPick, onClose }) {
       <div className="px-3 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("text.pickSticker")}</div>
-          <button
-            type="button"
-            className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
-            onClick={onClose}
-            title={t("text.done")}
-          >
+          <Button variant="icon" size="xs" className="text-muted2" onClick={onClose} title={t("text.done")}>
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
         <input
           value={query}

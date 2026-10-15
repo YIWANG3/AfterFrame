@@ -15,7 +15,7 @@ import PeopleSettings from "./settings/PeopleSettings";
 import WatermarkSettings from "./settings/WatermarkSettings";
 import ShortcutsSettings from "./settings/ShortcutsSettings";
 import { matchShortcut } from "../shortcuts/store";
-import { Modal } from "../ui";
+import { Button, Modal } from "../ui";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -110,14 +110,9 @@ export default function SettingsOverlay({
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-5">
         <span className="text-[14px] font-semibold text-text">{t("title")}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
-          title={t("close")}
-        >
+        <Button variant="icon" size="xs" className="text-muted2" onClick={onClose} title={t("close")}>
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1">

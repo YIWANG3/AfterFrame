@@ -21,14 +21,9 @@ function DialogShell({ title, onClose, children, footer }) {
     <Modal onClose={onClose} z="overlayTop" size="w-full max-w-[420px]">
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="text-[13px] font-semibold text-text">{title}</div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="rounded-md p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
-        >
+        <Button variant="icon" size="xs" className="text-muted2" onClick={onClose} aria-label="Close">
           <X className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
       <div className="px-4 py-3">{children}</div>
       <div className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-3">{footer}</div>
@@ -338,12 +333,12 @@ export default function SettingsTransfer({ theme }) {
   return (
     <Group title={t("transfer.title")} subtitle={t("transfer.subtitle")}>
       <FieldRow label={t("transfer.exportLabel")} hint={t("transfer.exportHint")}>
-        <Button variant="secondary" className="h-7 text-[11px]" onClick={() => setExporting(true)}>
+        <Button variant="secondary" size="sm" onClick={() => setExporting(true)}>
           {t("transfer.exportButton")}
         </Button>
       </FieldRow>
       <FieldRow label={t("transfer.importLabel")} hint={t("transfer.importHint")}>
-        <Button variant="secondary" className="h-7 text-[11px]" onClick={startImport}>
+        <Button variant="secondary" size="sm" onClick={startImport}>
           {t("transfer.importButton")}
         </Button>
       </FieldRow>

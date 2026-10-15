@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Z } from "../ui";
+import { Button, cx, Z } from "../ui";
 import {
   Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Palette, Pause, Play,
   CheckCircle2, XCircle, CircleSlash, RectangleVertical,

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
 import { COLLECTION_SORTS, LIBRARY_SORTS } from "../hooks/workspaceLogic";
-import { Z } from "../ui";
+import { Button, cx, Z } from "../ui";
 import {
   ChevronDown,
   Plus,

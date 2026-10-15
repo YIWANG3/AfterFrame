@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderPlus, ImageUp, Images, LoaderCircle, Pencil, ScanFace, Trash2, UserRoundPen, UserRoundX, UsersRound, X } from "lucide-react";
+import { Button } from "../ui";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
@@ -302,14 +303,15 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
             <UserRoundX className="h-3.5 w-3.5" />
             {t("peoplePanel.removeShort")}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="icon"
+            size="sm"
+            className="text-muted2"
             title={t("peoplePanel.clearSelection")}
             onClick={() => setSelectedFaces(new Set())}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition hover:bg-hover hover:text-text"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       )}
 

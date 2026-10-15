@@ -13,7 +13,7 @@ import {
 } from "../splitMath";
 import { AspectButton } from "./CropPanel";
 import api from "../../../api";
-import { Checkbox } from "../../../ui";
+import { Button, Checkbox } from "../../../ui";
 
 // Long paths keep their head and tail (the folder name is what matters).
 function middleEllipsis(text, max = 40) {
@@ -225,15 +225,15 @@ export default function SplitPanel({
                 >
                   {middleEllipsis(outputDir, 36) || "–"}
                 </div>
-                <button
-                  type="button"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-app text-muted transition-colors hover:bg-hover hover:text-text"
+                <Button
+                  variant="icon"
+                  className="shrink-0 bg-app"
                   onClick={onChooseFolder}
                   title={t("split.chooseFolder")}
                   aria-label={t("split.chooseFolder")}
                 >
                   <FolderOpen className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
               {onUseOriginalFolder ? (
                 <button
