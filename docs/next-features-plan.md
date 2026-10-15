@@ -73,7 +73,7 @@
 2. `PeopleSettings.jsx`：索引分组里加一个开关，模型不可用时禁用。
 3. `App.jsx:555`：标注判断之后，读人物设置；开关打开且模型可用时 `api.startPeopleIndex({priority: 1})`（低于手动触发的 5），再派发 `people-index:started`。包在 try/catch 里，前置条件不满足时不弹任何提示。用 `api.can("people")` 守卫。
 4. i18n：标题「导入后自动分析人物」；说明「默认关闭。导入完成后在后台分析新照片，需要已安装模型，可在任务栏暂停。」
-5. 测试：沿用 `e2e/18-people-flows.spec.js` 的配方（`catalogFixture: "people"`）。测「没装模型时开关禁用」和「没装模型时导入不报错」；开关打开的路径用 people.js 的单测覆盖。
+5. 测试：沿用 `e2e/72-people-flows.spec.js` 的配方（`catalogFixture: "people"`）。测「没装模型时开关禁用」和「没装模型时导入不报错」；开关打开的路径用 people.js 的单测覆盖。
 
 **不要承诺的事**：设计文档明确说过，编辑或导出时自动降速、空闲恢复、低电量感知都还没做。开关的说明文字不能写「不会拖慢你的 Mac」。
 

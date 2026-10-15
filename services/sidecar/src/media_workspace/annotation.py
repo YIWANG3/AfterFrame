@@ -66,8 +66,13 @@ DEFAULT_MAX_CAPTION_CHARS = 200
 # The offline geo resolver reads both shapes.
 ANNOTATION_SCHEMA_VERSION = 2
 
+# The system prompt's text is data, shared with the web build (which has no
+# sidecar): apps/desktop/src/api/browser/llm.js reads the same file through a
+# Vite alias, so a wording change lands on both sides at once.
+_PROMPT_PATH = Path(__file__).parent / "data" / "annotation_prompt.json"
+_PROMPT: dict[str, Any] = json.loads(_PROMPT_PATH.read_text(encoding="utf-8"))
 # How many existing tags to inject into the prompt as "prefer these"
-TAG_REUSE_HINT_LIMIT = 200
+TAG_REUSE_HINT_LIMIT = int(_PROMPT["tag_reuse_hint_limit"])
 
 
 # ── Result type ──────────────────────────────────────────────────────────────
@@ -140,33 +145,31 @@ def build_system_prompt(
     existing_tags: list[str],
     custom_instructions: str | None,
 ) -> str:
-    lang_clause = (
-        "Generate tags in BOTH English and 中文 (each tag in only one language, never mixed)."
-        if "en" in languages and "zh" in languages
-        else "Generate tags in English." if "en" in languages
-        else "Generate tags in 中文 (Simplified Chinese)."
+    """The annotation system prompt: data/annotation_prompt.json filled in.
+
+    Mirrored line for line by buildAnnotationSystemPrompt in the web build's
+    llm.js — keep the two in step when the interpolation changes.
+    """
+    want_en = "en" in languages
+    want_zh = "zh" in languages
+    lang_clause = _PROMPT["lang_clause"]["en+zh" if want_en and want_zh else "en" if want_en else "zh"]
+
+    prompt = (
+        str(_PROMPT["template"])
+        .replace("{max_caption_chars}", str(max_caption_chars))
+        .replace("{max_tags}", str(max_tags))
+        .replace("{lang_clause}", lang_clause)
     )
 
-    tag_pool = ""
     if existing_tags:
         sample = filter_tags_by_language(existing_tags, languages)[:TAG_REUSE_HINT_LIMIT]
         if sample:
-            tag_pool = (
-                "\n\nThis library already uses these tags. PREFER reusing them when "
-                "they fit; only invent a new tag if no existing one matches:\n"
-                + ", ".join(sample)
-            )
+            prompt += _PROMPT["tag_pool_intro"] + ", ".join(sample)
 
-    extra = f"\n\nAdditional instructions from the user:\n{custom_instructions.strip()}" if custom_instructions else ""
+    if custom_instructions:
+        prompt += _PROMPT["custom_instructions_intro"] + custom_instructions.strip()
 
-    return f"""You are an image annotator for a photo management app. Look at the image and produce a JSON object with:
-
-- "caption": one or two sentences describing the photo. Max {max_caption_chars} characters.
-- "tags": an array of up to {max_tags} short tags. {lang_clause} Lowercase. No leading hashes.
-- "location": an object {{"country": str|null, "admin1": str|null, "locality": str|null, "landmark": str|null, "confidence": 0..100}} guessing where the photo was taken. "country" is the English country name; "admin1" is the first-level division (state/province/canton, e.g. "California", "Île-de-France"); "locality" is the city/town (e.g. "San Francisco", "Grindelwald"); "landmark" is a single specific place or building if clearly identifiable (e.g. "Eiffel Tower") — one name only, no descriptions like "X skyline", no combined "A / B". Use null for any field you are not reasonably sure about. Confidence is your overall confidence in the guess.
-- "detected_text": any prominent text visible in the image (signs, labels, captions), or null.
-
-Respond with ONLY the JSON object, no commentary.{tag_pool}{extra}"""
+    return prompt
 
 
 # ── Anthropic adapter ────────────────────────────────────────────────────────

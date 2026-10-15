@@ -6,7 +6,7 @@ name: E2E (full, nightly)
 # retry per spec; the coverage build; and the web build's suite below.
 # The specs that skip themselves under CI (test.skip(process.env.CI, …)) skip
 # here as well — GitHub sets CI on every runner — so 17-watched-dirs, the
-# watched-folder describe of 60-file-lifecycle, 23-map and
+# watched-folder describe of 76-file-lifecycle, 23-map and
 # 60-map-cluster-covers run on a developer's Mac only, and 70-native-video
 # needs a local ProRes clip (AFTERFRAME_TEST_PRORES) nobody has on CI.
 # Informational: it is not a merge gate.

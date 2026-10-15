@@ -40,7 +40,7 @@ test("tools/list exposes the full tool surface", async () => {
     "raw_pairing", "add_text", "list_tags", "generate_previews",
     // Phase 2 render-bridge additions (coverage in 28-mcp-render.spec.js)
     "get_editor_capabilities", "render_collage", "edit_asset", "apply_frame",
-    // Look-alikes (coverage in 71-lookalikes.spec.js)
+    // Look-alikes (coverage in 78-lookalikes.spec.js)
     "find_similar", "list_lookalikes", "index_lookalikes",
   ]) {
     expect(names).toContain(expected);

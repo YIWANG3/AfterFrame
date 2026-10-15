@@ -7,13 +7,17 @@
 // locally once, so the committed DB contains genuine faces, embeddings and
 // person groups; CI and specs never need the Core ML model.
 //
-// Layout produced (asserted by 18-people-flows.spec.js):
+// Layout produced (asserted by 72-people-flows.spec.js):
 //   - "Lin Xi": NAMED person (portrait + 3 solos + 1 group-photo face)
 //   - one unnamed candidate (Chen Mo: portrait + 2 solos + 1 group-photo face)
 //
-// Requirements to (re)seed: python3 env for the sidecar, native people-worker
-// built (npm run build:native), an installed ArcFace model under
-// ~/Library/Application Support/AfterFrame/people-models/.
+// Requirements to (re)seed: macOS, a Python 3.12 with the sidecar deps
+// (AFTERFRAME_PYTHON, else python3), the native people-worker built
+// (npm run build:native) and an installed ArcFace model under
+// ~/Library/Application Support/AfterFrame/people-models/ — in practice the
+// author's Mac. The sources under marketing/demo-people/ are needed only when
+// a file under people-images/ is missing. Every run gives the assets, faces
+// and groups fresh ids, so the committed DB changes wholesale.
 // Run once with:  node e2e/fixtures/seed-people-catalog.js
 
 const path = require("node:path");
@@ -27,6 +31,7 @@ const CATALOG_DIR = path.join(FIXTURES_DIR, "people-catalog.afcatalog");
 const IMAGES_DIR = path.join(FIXTURES_DIR, "people-images");
 const REPO_ROOT = path.resolve(FIXTURES_DIR, "..", "..", "..", "..");
 const SIDECAR_SRC = path.join(REPO_ROOT, "services", "sidecar", "src");
+const PYTHON = process.env.AFTERFRAME_PYTHON || "python3";
 const WORKER_BIN = path.join(REPO_ROOT, "apps", "desktop", "native", "bin", "people-worker");
 const DEMO_OUTPUT = path.join(REPO_ROOT, "marketing", "demo-people", "output");
 const MODEL_STORE = path.join(os.homedir(), "Library", "Application Support", "AfterFrame", "people-models");
@@ -47,7 +52,7 @@ const SOURCES = {
 const NAMED_PERSON = { marker: "linxi_portrait", name: "Lin Xi" };
 
 function runSidecar(args) {
-  return execFileSync("python3", ["-m", "media_workspace", ...args], {
+  return execFileSync(PYTHON, ["-m", "media_workspace", ...args], {
     encoding: "utf-8",
     env: { ...process.env, PYTHONPATH: SIDECAR_SRC, PEOPLE_WORKER_PATH: WORKER_BIN },
   });
@@ -87,7 +92,7 @@ async function main() {
   fs.mkdirSync(CATALOG_DIR, { recursive: true });
 
   console.log("Initializing catalog at", CATALOG_DIR);
-  runSidecar(["--catalog", CATALOG_DIR, "init-catalog"]);
+  runSidecar(["--catalog", CATALOG_DIR, "summary"]); // any command creates a missing catalog
   runSidecar(["--catalog", CATALOG_DIR, "register-roots", "--root-type", "image", "--path", IMAGES_DIR]);
   for (const name of Object.keys(SOURCES)) {
     console.log("Registering", name);

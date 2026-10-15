@@ -24,8 +24,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy
 sys.path.insert(0, os.path.join(SPECPATH, "src"))
 
 hiddenimports = collect_submodules("media_workspace")
-# media_workspace/data: the offline gazetteer, country borders and names, and
-# the simplified/traditional Chinese table.
+# media_workspace/data: the offline gazetteer, country borders and names, the
+# simplified/traditional Chinese table, and the annotation system prompt.
 datas = collect_data_files("media_workspace")
 if not datas:
     raise SystemExit("media-workspace.spec: no media_workspace/data files found")
