@@ -347,6 +347,7 @@
       "reveal": "Reveal in Finder",
       "refreshFromDisk_one": "Refresh from Disk",
       "refreshFromDisk_other": "Refresh {{count}} from Disk",
+      "copy": "Copy",
       "copyPath": "Copy File Path",
       "copyName": "Copy Name",
       "openWith": "Open With",

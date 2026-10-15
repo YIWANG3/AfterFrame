@@ -111,6 +111,12 @@ export function matchShortcut(event, scopes) {
   return matchBinding(eventBinding(event, platform), scopes, overrides, platform);
 }
 
+// Whether a keydown is `binding` (a fixed key such as "Mod+KeyC", which no
+// action can take: shared/shortcuts.mjs FIXED_SHORTCUTS).
+export function isBinding(event, binding) {
+  return eventBinding(event, platform) === binding;
+}
+
 export function formatKeys(binding) {
   return formatBinding(binding, platform, { Space: i18n.t("settings:shortcuts.keys.space") });
 }

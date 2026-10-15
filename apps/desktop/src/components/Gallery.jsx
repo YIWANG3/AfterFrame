@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import useDismiss from "../ui/useDismiss";
 import api from "../api";
 import { createPortal } from "react-dom";
-import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw, Flag, FlagOff, Tag, X } from "lucide-react";
+import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw, Flag, FlagOff, Tag, X, Copy } from "lucide-react";
 
 // mm:ss (or h:mm:ss) for the video duration badge.
 function formatDuration(seconds) {
@@ -19,7 +19,7 @@ import { fileName, galleryInfoLabel, buildJustifiedLayout, displaySize, localFil
 import PreviewImage from "./PreviewImage";
 import { awaitingThumbnail, staleSourceRepairs, thumbnailNeeds } from "./galleryRepair";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
-import { shortcutLabel } from "../shortcuts/store";
+import { formatKeys, shortcutLabel } from "../shortcuts/store";
 
 const GAP = 12;
 const TILE_GAP = 2;
@@ -206,7 +206,7 @@ function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
   );
 }
 
-function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
+function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useDismiss(ref, onClose);
@@ -290,6 +290,8 @@ function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, ed
         locked={!api.can("fileSystem")}
         onClick={() => { void onRefreshFromDisk?.(assetIds || [item.asset_id]); onClose(); }}
       />
+      {/* The photos as files, like Finder's Copy: ⌘V in Finder makes copies, a chat app gets the file. */}
+      <MenuItem icon={Copy} label={t("gallery.menu.copy")} shortcut={formatKeys("Mod+KeyC")} locked={!api.can("fileSystem")} onClick={() => { onCopy?.(); onClose(); }} />
       <MenuItem icon={Link2} label={t("gallery.menu.copyPath")} locked={!api.can("fileSystem")} onClick={() => { onCopyPath?.(); onClose(); }} />
       <MenuItem icon={Type} label={t("gallery.menu.copyName")} onClick={() => { onCopyName?.(); onClose(); }} />
       <MenuItem icon={Trash2} label={t("gallery.menu.delete")} shortcut={shortcutLabel("photo.delete")} onClick={() => { onDeleteFromCatalog?.(); onClose(); }} />
@@ -580,6 +582,7 @@ export default function Gallery({
   onRemoveFromCollection,
   onDeleteFromCatalog,
   onDeleteFromDisk,
+  onCopy,
   onCopyPath,
   onCopyName,
   onRefreshFromDisk,
@@ -1126,6 +1129,7 @@ export default function Gallery({
           onRemoveFrom={() => onRemoveFromCollection?.(activeCollectionId, contextMenu.assetIds || [contextMenu.item.asset_id])}
           onDeleteFromCatalog={() => onDeleteFromCatalog?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onDeleteFromDisk={() => onDeleteFromDisk?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
+          onCopy={() => onCopy?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyPath={() => onCopyPath?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onCopyName={() => onCopyName?.(contextMenu.assetIds || [contextMenu.item.asset_id])}
           onRefreshFromDisk={refreshFromDisk}

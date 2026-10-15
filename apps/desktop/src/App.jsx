@@ -44,7 +44,7 @@ import ToastStack, { useToasts } from "./components/Toast";
 import DevStaleNotice from "./components/DevStaleNotice";
 import { ConfirmHost, confirm, choose } from "./components/confirm";
 import TagBatchDialog from "./components/TagBatchDialog";
-import { loadShortcuts, matchShortcut, shortcutLabel } from "./shortcuts/store";
+import { isBinding, loadShortcuts, matchShortcut, shortcutLabel } from "./shortcuts/store";
 import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
 import { invalidateTags } from "./components/annotation/tagStore";
@@ -548,6 +548,40 @@ export default function App() {
     });
   };
 
+  // What ⌘C / Edit › Copy copies: in the lightbox the photo on screen, else
+  // the selection. (A RAW pair is one item; its image_path is the file the
+  // user sees.)
+  const copyTargetIds = () => (lightboxOpen && workspace.selectedAssetId ? [workspace.selectedAssetId] : targetAssetIds());
+
+  // The photos as files on the clipboard — what Finder's Copy does: ⌘V in
+  // Finder makes copies, WeChat / Notes get the file. Files the catalog knows
+  // are gone (exists_on_disk false) are left out and said so in the toast.
+  const copyAssets = async (ids) => {
+    if (!api.can("fileSystem")) return;
+    const items = [...new Set((ids || []).filter(Boolean))].map((id) => itemById.get(id)).filter(Boolean);
+    if (!items.length) return;
+    const gone = items.filter((item) => item.exists_on_disk === false).length;
+    const paths = items.filter((item) => item.exists_on_disk !== false).map((item) => item.image_path).filter(Boolean);
+    let result = { copied: [], missing: [] };
+    try {
+      if (paths.length) result = (await api.copyFiles(paths)) || result;
+    } catch (error) {
+      pushToast?.({ title: t("copyFilesFailed"), message: String(error?.message || error), tone: "error", ttl: 5000 });
+      return;
+    }
+    const copied = result.copied?.length || 0;
+    const skipped = gone + (result.missing?.length || 0);
+    if (!copied) {
+      pushToast?.({ title: t("copyFilesNone", { count: skipped || items.length }), tone: "error", ttl: 4000 });
+      return;
+    }
+    pushToast?.({
+      title: t("copiedFiles", { count: copied }),
+      message: skipped ? t("copiedFilesMissing", { count: skipped }) : undefined,
+      ttl: skipped ? 4000 : 2000,
+    });
+  };
+
   // Thumbnails the gallery is missing, made in the background where missing,
   // THUMBNAIL_PASS at a time from the top of the grid down. After each pass
   // the grid is asked again, so they show as they come. Something skipped as
@@ -625,6 +659,25 @@ export default function App() {
     } else if (action === "edit:delete-rejected") {
       if (editorItem) return;
       void deleteRejected();
+    } else if (action === "edit:copy") {
+      // Edit › Copy (the menu item, or ⌘C the renderer left to it). The
+      // editor's own ⌘C never reaches here: its keydown preventDefaults.
+      if (editorItem) return;
+      // Text first, as role:"copy" would: a text field's selection, or text
+      // selected anywhere on the page. (The field's own ⌘C copy on macOS is
+      // the Edit menu's doing, so this stands in for it.)
+      const pageSelection = () => String(window.getSelection?.()?.toString() || "");
+      if (editable) {
+        const text = typeof el.selectionStart === "number" && el.selectionEnd > el.selectionStart
+          ? String(el.value).slice(el.selectionStart, el.selectionEnd)
+          : el.isContentEditable ? pageSelection() : "";
+        if (text) void api.copyText(text);
+        return;
+      }
+      const text = pageSelection();
+      if (text) { void api.copyText(text); return; }
+      if (viewMode !== "assets") return;
+      void copyAssets(copyTargetIds());
     } else if (action === "edit:copy-path") {
       void copyAssetField(targetAssetIds(), "path");
     } else if (action === "edit:copy-name") {
@@ -1304,6 +1357,17 @@ export default function App() {
       if (runLibraryShortcut(hit.id, hit.advance)) event.preventDefault();
       return;
     }
+    // ⌘C with photos selected copies them as files. Handled here, like ⌘A,
+    // and prevented so the Edit menu's accelerator (the same action) does not
+    // fire a second time; with nothing to copy the key is left to the menu,
+    // which copies selected text. The web build has no file clipboard.
+    if (isBinding(event, "Mod+KeyC")) {
+      const ids = copyTargetIds();
+      if (!ids.length || !api.can("fileSystem")) return;
+      event.preventDefault();
+      void copyAssets(ids);
+      return;
+    }
 
     // The fixed keys: Esc leaves proof, then the lightbox; the arrows move.
     if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -1606,6 +1670,7 @@ export default function App() {
                   onRemoveFromCollection={workspace.removeFromCollection}
                   onDeleteFromCatalog={deleteAssets}
                   onDeleteFromDisk={deleteFromDisk}
+                  onCopy={copyAssets}
                   onCopyPath={(ids) => copyAssetField(ids, "path")}
                   onCopyName={(ids) => copyAssetField(ids, "name")}
                   onRefreshFromDisk={refreshAssetsFromDisk}
