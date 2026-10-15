@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images, Flag, FlagOff } from "lucide-react";
+import { Star, Copy, AlertTriangle, Link2, UserRoundX, UserRoundPen, Images, Flag, FlagOff } from "lucide-react";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { fileName, escapePathLabel, formatBytes, formatTimestamp, localFileUrl, formatShutterSpeed, formatAperture, formatFocalLength, formatISO, displaySize } from "../utils/format";
 import AnnotationsSection from "./AnnotationsSection";
@@ -11,6 +11,7 @@ import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
 import NamePersonPopover from "./NamePersonPopover";
 import PersonPickerPopover from "./PersonPickerPopover";
+import { DetailRow, Section } from "./inspector/InspectorPrimitives";
 
 function StarRating({ value = 0, onChange }) {
   const [hover, setHover] = useState(0);
@@ -63,32 +64,6 @@ function FlagControl({ value, onChange }) {
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function DetailRow({ label, children }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-[3px] text-[12px] leading-[1.4]">
-      <div className="shrink-0 text-muted">{label}</div>
-      <div className="min-w-0 break-words text-right text-text">{children}</div>
-    </div>
-  );
-}
-
-function Section({ title, defaultOpen = true, children }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="mt-4 border-t border-border/40 pt-3">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">{title}</span>
-        <ChevronRight className={`h-3 w-3 text-muted2 transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
-      {open ? <div className="mt-1">{children}</div> : null}
     </div>
   );
 }

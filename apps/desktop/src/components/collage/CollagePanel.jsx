@@ -9,17 +9,7 @@ export default function CollagePanel({
   onImagesChange,
   template,
   onTemplateChange,
-  canvasRatio,
-  onCanvasRatioChange,
-  gap,
-  onGapChange,
-  padding,
-  onPaddingChange,
-  borderRadius,
-  onBorderRadiusChange,
-  bgColor,
-  onBgColorChange,
-  onResetCanvas,
+  canvas,
   exportWidth,
   onExportWidthChange,
   onAddImages,
@@ -122,25 +112,12 @@ export default function CollagePanel({
         <TemplateGrid
           templates={templates}
           activeId={template?.id}
-          ratio={canvasRatio || 1}
+          ratio={canvas.ratio || 1}
           onSelect={onTemplateChange}
         />
       </Section>
 
-      <CanvasSection
-        canvasRatio={canvasRatio}
-        onCanvasRatioChange={onCanvasRatioChange}
-        gap={gap}
-        onGapChange={onGapChange}
-        padding={padding}
-        onPaddingChange={onPaddingChange}
-        borderRadius={borderRadius}
-        onBorderRadiusChange={onBorderRadiusChange}
-        bgColor={bgColor}
-        onBgColorChange={onBgColorChange}
-        onReset={onResetCanvas}
-        exportWidth={exportWidth}
-      />
+      <CanvasSection canvas={canvas} exportWidth={exportWidth} />
 
       <Section label={t("export")}>
         <ExportWidthChips exportWidth={exportWidth} onExportWidthChange={onExportWidthChange} />

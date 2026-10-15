@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
+import { Z } from "../ui";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ScanFace } from "lucide-react";
@@ -29,7 +30,7 @@ export default function PersonPickerPopover({ anchorRect, excludeGroupId, onPick
   const shown = (groups || []).filter((group) =>
     !query.trim() || group.name.toLowerCase().includes(query.trim().toLowerCase()));
   return createPortal(
-    <div ref={ref} className="fixed z-[12000] w-[240px] rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay" style={{ left, top }}>
+    <div ref={ref} className="fixed w-[240px] rounded-lg border border-border/60 bg-chrome p-2 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
       <input
         autoFocus
         value={query}

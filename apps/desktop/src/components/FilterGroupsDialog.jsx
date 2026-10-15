@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Z } from "../ui";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Split, X } from "lucide-react";
@@ -56,7 +57,8 @@ export default function FilterGroupsDialog({ groups, folders, onApply, onClose }
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[11500] flex items-center justify-center bg-app/70 backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center bg-app/70 backdrop-blur-sm"
+      style={{ zIndex: Z.dialog }}
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div

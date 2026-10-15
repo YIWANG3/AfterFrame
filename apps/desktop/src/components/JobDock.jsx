@@ -6,6 +6,7 @@
 import { useTranslation } from "react-i18next";
 import { JOB_META, jobLine } from "./ActivityCenter";
 import { Activity, Pause, Play } from "lucide-react";
+import { Z } from "../ui";
 
 // `inline` skips the fixed positioning so the dock can live inside a shared
 // bottom-corner container (alongside the ToastStack) without overlapping it.
@@ -14,10 +15,10 @@ export default function JobDock({ jobs, queuedNote, onCancel, onPause, onResume,
   const list = jobs || [];
   if (!list.length) return null;
   return (
-    <div className={[
-      "flex w-[340px] flex-col gap-2",
-      inline ? "" : "fixed bottom-4 right-4 z-[11000]",
-    ].join(" ")}>
+    <div
+      className={["flex w-[340px] flex-col gap-2", inline ? "" : "fixed bottom-4 right-4"].join(" ")}
+      style={inline ? undefined : { zIndex: Z.dock }}
+    >
       {list.map((job) => {
         const meta = JOB_META[job.jobType] || { label: job.jobType, icon: Activity };
         const Icon = meta.icon;

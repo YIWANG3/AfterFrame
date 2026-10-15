@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, RotateCcw, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
+import { Chip } from "../../ui";
 import { fileName, localFileUrl } from "../../utils/format";
 
 // Shared building blocks for CollagePanel (single mode) and BatchPanel
@@ -172,22 +173,19 @@ function SliderField({ label, value, max, onChange }) {
 
 /**
  * The "Canvas" section: aspect ratio, gap, padding, border radius, background.
- * Identical between single and batch modes.
+ * Identical between single and batch modes. `canvas` is the overlay's canvas
+ * settings object: { ratio, gap, padding, radius, bg, setRatio, setGap,
+ * setPadding, setRadius, setBg, onReset } (onReset null: nothing to reset).
  */
-export function CanvasSection({
-  canvasRatio,
-  onCanvasRatioChange,
-  gap,
-  onGapChange,
-  padding,
-  onPaddingChange,
-  borderRadius,
-  onBorderRadiusChange,
-  bgColor,
-  onBgColorChange,
-  onReset = null,
-  exportWidth,
-}) {
+export function CanvasSection({ canvas, exportWidth }) {
+  const {
+    ratio: canvasRatio, setRatio: onCanvasRatioChange,
+    gap, setGap: onGapChange,
+    padding, setPadding: onPaddingChange,
+    radius: borderRadius, setRadius: onBorderRadiusChange,
+    bg: bgColor, setBg: onBgColorChange,
+    onReset,
+  } = canvas;
   const { t } = useTranslation("collage");
   const [customRatioW, setCustomRatioW] = useState(() => ratioParts(canvasRatio)[0]);
   const [customRatioH, setCustomRatioH] = useState(() => ratioParts(canvasRatio)[1]);
@@ -216,19 +214,14 @@ export function CanvasSection({
           <div className="text-[11px] text-muted">{t("aspectRatio")}</div>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {ASPECT_OPTIONS.map((opt) => (
-              <button
+              <Chip
                 key={opt.label}
-                type="button"
-                className={[
-                  "rounded-md px-2.5 py-1 text-[11px] transition-colors",
-                  Math.abs(canvasRatio - opt.value) < 0.01
-                    ? "bg-selected text-text"
-                    : "bg-app text-muted hover:bg-hover hover:text-text",
-                ].join(" ")}
+                variant="option"
+                on={Math.abs(canvasRatio - opt.value) < 0.01}
                 onClick={() => { onCanvasRatioChange(opt.value); setCustomRatioW(""); setCustomRatioH(""); }}
               >
                 {opt.label}
-              </button>
+              </Chip>
             ))}
           </div>
           <div className="mt-1.5 flex items-center gap-1.5">
@@ -324,19 +317,9 @@ export function ExportWidthChips({ exportWidth, onExportWidthChange }) {
   return (
     <div className="flex flex-wrap gap-1">
       {EXPORT_WIDTHS.map((w) => (
-        <button
-          key={w}
-          type="button"
-          className={[
-            "rounded-md px-2.5 py-1 text-[11px] transition-colors",
-            exportWidth === w
-              ? "bg-selected text-text"
-              : "bg-app text-muted hover:bg-hover hover:text-text",
-          ].join(" ")}
-          onClick={() => onExportWidthChange(w)}
-        >
+        <Chip key={w} variant="option" on={exportWidth === w} onClick={() => onExportWidthChange(w)}>
           {w}px
-        </button>
+        </Chip>
       ))}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Z } from "../ui";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
@@ -35,10 +36,10 @@ export function useToasts() {
 export default function ToastStack({ toasts, onDismiss, inline = false }) {
   if (!toasts?.length) return null;
   return (
-    <div className={[
-      "pointer-events-none flex flex-col-reverse gap-2",
-      inline ? "" : "fixed bottom-4 right-4 z-[20000]",
-    ].join(" ")}>
+    <div
+      className={["pointer-events-none flex flex-col-reverse gap-2", inline ? "" : "fixed bottom-4 right-4"].join(" ")}
+      style={inline ? undefined : { zIndex: Z.toast }}
+    >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={() => onDismiss(t.id)} />
       ))}
