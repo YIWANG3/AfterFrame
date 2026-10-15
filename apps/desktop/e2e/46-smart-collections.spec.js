@@ -106,8 +106,11 @@ test("saving the current filter creates a sidebar entry with the matching count"
   await expect(window.getByTestId("gallery-title")).toHaveText("Five stars");
   await expect(actions()).toHaveCount(0);
   // Clicking it right away used to empty the grid (same conditions, no reload).
+  // The click's own browse, if it made one, has been answered once a browse
+  // sent after it has (the sidecar answers in order), and painted a frame later.
   await smartRow("Five stars").click();
-  await window.waitForTimeout(600);
+  await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1 }));
+  await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(cards()).toHaveCount(expected);
 });
 

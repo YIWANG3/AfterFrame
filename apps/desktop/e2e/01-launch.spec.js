@@ -8,9 +8,11 @@ const { launchApp, closeApp } = require("./helpers/app");
 
 test.describe("App launch", () => {
   let app, window, userDataDir;
+  const errors = [];
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "launch" }));
+    window.on("pageerror", (e) => errors.push(e.message));
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);
@@ -26,10 +28,9 @@ test.describe("App launch", () => {
   });
 
   test("no fatal console errors during startup", async () => {
-    const errors = [];
-    window.on("pageerror", (e) => errors.push(e.message));
-    // Brief settle window for any async errors after first-window
-    await window.waitForTimeout(1500);
+    // Startup is over once the seeded catalog is on screen: the sidecar
+    // answered the first browse and the gallery painted it.
+    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
     expect(errors).toEqual([]);
   });
 

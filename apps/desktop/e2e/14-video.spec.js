@@ -124,7 +124,7 @@ test.describe("Video assets", () => {
     await playPause.click();
     await expect.poll(async () => (await state()).paused).toBe(true);
     const held = (await state()).time;
-    await window.waitForTimeout(500);
+    await window.waitForTimeout(500); // a fixed window: time must NOT move during it
     expect((await state()).time).toBeCloseTo(held, 2);
 
     // Seek with the scrubber: the frame there is decoded, and the readout follows.

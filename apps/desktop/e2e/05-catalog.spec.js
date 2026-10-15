@@ -51,20 +51,25 @@ test.describe("Catalog browse", () => {
     });
     const uniqueWidths = (widths) => new Set(widths.map((width) => width.toFixed(2)));
 
+    // The grid's scroller has the new window's width once the resize is laid
+    // out; the grid reacts to it a frame later (ResizeObserver, then render).
+    const gridWidth = () => window.evaluate(() => document.querySelector("[data-testid='gallery-scroll']").clientWidth);
+    const resizeTo = async (width, height) => {
+      const before = await gridWidth();
+      await app.evaluate(({ BrowserWindow }, size) => { BrowserWindow.getAllWindows()[0]?.setSize(...size); }, [width, height]);
+      await expect.poll(() => window.evaluate(() => window.innerWidth)).toBe(width);
+      await expect.poll(gridWidth).not.toBe(before);
+      await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    };
+
     const defaultWidths = await sampleCardWidths();
     expect([...uniqueWidths(defaultWidths)]).toHaveLength(1);
 
-    await app.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000);
-    });
-    await window.waitForTimeout(250);
+    await resizeTo(1600, 1000);
     const largerWidths = await sampleCardWidths();
     expect([...uniqueWidths(largerWidths)]).toHaveLength(1);
 
-    await app.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(1440, 920);
-    });
-    await window.waitForTimeout(250);
+    await resizeTo(1440, 920);
   });
 
   test("single-click selects a card; selection ring appears on inner box", async () => {

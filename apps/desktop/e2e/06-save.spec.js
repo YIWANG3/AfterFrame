@@ -166,8 +166,8 @@ test.describe("Save pipeline", () => {
     // Rotating before the preview finishes decoding is silently ignored
     await waitForEditor(window, { preview: true });
     await window.getByRole("button", { name: /90° L/ }).click();
-    // commitTransform is React state — give it a beat before saving
-    await window.waitForTimeout(500);
+    // commitTransform is React state: save once the turn is in it.
+    await expect.poll(() => window.evaluate(() => window.__afterframeTest.getState().quarterTurns)).not.toBe(0);
     const out = path.join(tmpDir, "rotated-save.jpg");
     await saveTo(window, out);
 

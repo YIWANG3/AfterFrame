@@ -39,7 +39,7 @@ test("ProRes plays at original resolution without a proxy; controls and native v
     // The button shows what was asked for, not a state read already on its way.
     await expect(transport.getByRole("button").first().locator("svg")).toHaveClass(/lucide-play/);
     const held = (await state()).time;
-    await w.waitForTimeout(300);
+    await w.waitForTimeout(300); // a fixed window: time must NOT move during it
     expect((await state()).time).toBeCloseTo(held, 2);
     const seekTime = Math.min(4, first.duration / 2);
     await w.getByLabel("Seek").fill(String(seekTime));

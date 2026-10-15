@@ -89,8 +89,7 @@ test.describe("Golden: crop + transform", () => {
 
   test("rotate 90° L → dims swap + quarterTurns state; undo/redo reverts", async () => {
     await window.getByRole("button", { name: /90° L/ }).click();
-    await window.waitForTimeout(400);
-    expect((await state(window)).quarterTurns).not.toBe(0);
+    await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
 
     await save(window, out("rot.jpg"));
     const m = await sharp(out("rot.jpg")).metadata();
@@ -99,22 +98,19 @@ test.describe("Golden: crop + transform", () => {
 
     // transform history (Cmd+Z path)
     await window.evaluate(() => window.__afterframeTest.undo());
-    await window.waitForTimeout(300);
-    expect((await state(window)).quarterTurns).toBe(0);
+    await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
     await save(window, out("rot-undo.jpg"));
     const undone = await sharp(out("rot-undo.jpg")).metadata();
     expect([undone.width, undone.height]).toEqual([srcW, srcH]);
     await window.evaluate(() => window.__afterframeTest.redo());
-    await window.waitForTimeout(300);
-    expect((await state(window)).quarterTurns).not.toBe(0);
+    await expect.poll(async () => (await state(window)).quarterTurns).not.toBe(0);
     await save(window, out("rot-redo.jpg"));
     const redone = await sharp(out("rot-redo.jpg")).metadata();
     expect([redone.width, redone.height]).toEqual([srcH, srcW]);
 
     // leave clean for the next test
     await window.evaluate(() => window.__afterframeTest.undo());
-    await window.waitForTimeout(300);
-    expect((await state(window)).quarterTurns).toBe(0);
+    await expect.poll(async () => (await state(window)).quarterTurns).toBe(0);
   });
 
   test("resizing the window after rotation preserves the full photo", async () => {
@@ -166,8 +162,7 @@ test.describe("Golden: crop + transform", () => {
   test("flip H → flipX toggles, dimensions unchanged", async () => {
     const before = (await state(window)).flipX;
     await window.getByRole("button", { name: /Flip H/i }).click();
-    await window.waitForTimeout(300);
-    expect((await state(window)).flipX).toBe(!before);
+    await expect.poll(async () => (await state(window)).flipX).toBe(!before);
 
     await save(window, out("flip.jpg"));
     const m = await sharp(out("flip.jpg")).metadata();
@@ -175,14 +170,12 @@ test.describe("Golden: crop + transform", () => {
     expect(m.height).toBe(srcH);
 
     await window.getByRole("button", { name: /Flip H/i }).click(); // restore
-    await window.waitForTimeout(200);
-    expect((await state(window)).flipX).toBe(before);
+    await expect.poll(async () => (await state(window)).flipX).toBe(before);
   });
 
   test("aspect 1:1 → cropped output is square", async () => {
     await window.evaluate(() => window.__afterframeTest.setAspect("1:1"));
-    await window.waitForTimeout(400);
-    expect((await state(window)).aspectKey).toBe("1:1");
+    await expect.poll(async () => (await state(window)).aspectKey).toBe("1:1");
 
     await save(window, out("square.jpg"));
     const m = await sharp(out("square.jpg")).metadata();
