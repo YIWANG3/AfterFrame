@@ -10,11 +10,38 @@ import json
 import math
 import sqlite3
 import struct
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from typing import Any
 from uuid import uuid4
 
 from .core import _json
+
+
+@contextmanager
+def _write_scope(connection: sqlite3.Connection, savepoint: str, commit: bool) -> Iterator[None]:
+    """One atomic write: a SAVEPOINT when the caller already holds a
+    transaction (released on the way out, so the caller's commit decides),
+    else a transaction of its own, committed when `commit`. Any error rolls
+    back to the start of the scope and propagates."""
+    nested = connection.in_transaction
+    if nested:
+        connection.execute(f"SAVEPOINT {savepoint}")
+    else:
+        connection.execute("BEGIN")
+    try:
+        yield
+        if nested:
+            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+        elif commit:
+            connection.commit()
+    except Exception:
+        if nested:
+            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            connection.rollback()
+        raise
 
 # numpy is imported by the two functions that use it. Every sidecar process
 # imports this module (through db), and numpy was half of its start-up time.
@@ -137,12 +164,7 @@ def replace_asset_faces(
     """
     prepared = [_validate_face(face) for face in faces]
     savepoint = "people_replace_faces"
-    nested = connection.in_transaction
-    if nested:
-        connection.execute(f"SAVEPOINT {savepoint}")
-    else:
-        connection.execute("BEGIN")
-    try:
+    with _write_scope(connection, savepoint, commit):
         connection.execute(
             """
             DELETE FROM asset_faces
@@ -201,18 +223,7 @@ def replace_asset_faces(
             file_mtime=file_mtime,
             commit=False,
         )
-        if nested:
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        elif commit:
-            connection.commit()
         return inserted
-    except Exception:
-        if nested:
-            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        else:
-            connection.rollback()
-        raise
 
 
 def list_asset_faces(
@@ -329,12 +340,7 @@ def rebuild_candidate_groups(
         raise ValueError("max_neighbors must be positive")
     checkpoint = checkpoint or (lambda: None)
     savepoint = "people_rebuild_candidates"
-    nested = connection.in_transaction
-    if nested:
-        connection.execute(f"SAVEPOINT {savepoint}")
-    else:
-        connection.execute("BEGIN")
-    try:
+    with _write_scope(connection, savepoint, commit):
         checkpoint()
         # Explicit membership delete first: relying on the FK cascade would
         # leave orphan rows on any connection without PRAGMA foreign_keys, and
@@ -405,10 +411,6 @@ def rebuild_candidate_groups(
             (model_id, model_version),
         ).fetchall()
         if len(rows) < 2:
-            if nested:
-                connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-            elif commit:
-                connection.commit()
             return {"faces": len(rows), "groups": 0, "members": 0}
 
         vectors = np.vstack([
@@ -516,18 +518,7 @@ def rebuild_candidate_groups(
             )
             groups += 1
             members_total += len(members)
-        if nested:
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        elif commit:
-            connection.commit()
         return {"faces": len(rows), "groups": groups, "members": members_total}
-    except Exception:
-        if nested:
-            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        else:
-            connection.rollback()
-        raise
 
 
 def list_person_groups(
@@ -850,29 +841,13 @@ def set_person_groups_state(
     if missing:
         raise ValueError(f"unknown person groups: {', '.join(missing)}")
 
-    nested = connection.in_transaction
     savepoint = "people_set_groups_state"
-    if nested:
-        connection.execute(f"SAVEPOINT {savepoint}")
-    else:
-        connection.execute("BEGIN")
-    try:
+    with _write_scope(connection, savepoint, commit):
         connection.execute(
             f"UPDATE person_groups SET state = ?, updated_at = CURRENT_TIMESTAMP "
             f"WHERE group_id IN ({placeholders})",
             [state, *ids],
         )
-        if nested:
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        elif commit:
-            connection.commit()
-    except Exception:
-        if nested:
-            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        else:
-            connection.rollback()
-        raise
     return {"group_ids": ids, "state": state, "updated": len(ids)}
 
 
@@ -1003,27 +978,11 @@ def _run_batch_correction(
     just ones whose connection happens to be discarded afterwards."""
     if not face_ids:
         raise ValueError("face_ids must not be empty")
-    nested = connection.in_transaction
-    if nested:
-        connection.execute(f"SAVEPOINT {savepoint}")
-    else:
-        connection.execute("BEGIN")
-    try:
+    with _write_scope(connection, savepoint, commit):
         result: dict[str, object] = {}
         for face_id in face_ids:
             result = apply_one(face_id)
-        if nested:
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        elif commit:
-            connection.commit()
         return result
-    except Exception:
-        if nested:
-            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        else:
-            connection.rollback()
-        raise
 
 
 def remove_faces_from_group(
@@ -1081,12 +1040,7 @@ def merge_person_groups(
     if (source["model_id"], source["model_version"]) != (target["model_id"], target["model_version"]):
         raise ValueError("person groups from different model versions cannot be merged")
     savepoint = "people_merge_groups"
-    nested = connection.in_transaction
-    if nested:
-        connection.execute(f"SAVEPOINT {savepoint}")
-    else:
-        connection.execute("BEGIN")
-    try:
+    with _write_scope(connection, savepoint, commit):
         connection.execute(
             """
             UPDATE person_group_faces
@@ -1100,17 +1054,6 @@ def merge_person_groups(
             "UPDATE person_groups SET updated_at = CURRENT_TIMESTAMP WHERE group_id = ?",
             (target_group_id,),
         )
-        if nested:
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        elif commit:
-            connection.commit()
-    except Exception:
-        if nested:
-            connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-            connection.execute(f"RELEASE SAVEPOINT {savepoint}")
-        else:
-            connection.rollback()
-        raise
     return _person_group_row(connection, target_group_id)
 
 

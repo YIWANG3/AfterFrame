@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,6 +19,7 @@ from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, set_display_shape, upsert_preview_entry
 from .db.colors import analyze_asset_colors
 from .imaging import register_heif
+from .platform_tools import has_image_io
 from .processes import no_window
 from .progress import ProgressCallback, report_progress
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
@@ -224,7 +224,7 @@ def render_raw_full(source: Path, target: Path) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(f".{target.stem}.{os.getpid()}.partial.jpg")
     try:
-        if shutil.which("sips") is not None:
+        if has_image_io():
             try:
                 subprocess.run(
                     ["sips", "-s", "format", "jpeg", "-s", "formatOptions", "95", "--out", str(partial), str(source)],
@@ -361,8 +361,10 @@ class PreviewService:
             validate_source_unchanged(source_path, source_marker)
 
         if video.is_video(source_path):
-            # Videos: a poster frame via the AVFoundation helper (sips can't do
-            # video); fall back to QuickLook if the tool is unavailable.
+            # Videos: a poster frame via the video tool (AVFoundation on the
+            # Mac, FFmpeg on Windows). Where there is Quick Look it is the
+            # fallback; elsewhere the tool's own error is the one to report,
+            # not "qlmanage not found".
             def _poster(tmp: Path) -> None:
                 if not video.poster(source_path, tmp, max_edge=KIND_SIZES[kind]):
                     raise RuntimeError("video poster unavailable")
@@ -371,6 +373,8 @@ class PreviewService:
             except SourceNotReadyError:
                 raise
             except Exception:
+                if not has_image_io():
+                    raise
                 rendered = self._render_with_quicklook(
                     source_path, output_path, KIND_SIZES[kind], validate=validate
                 )
@@ -517,7 +521,7 @@ class PreviewService:
         except SourceNotReadyError:
             raise
         except Exception:
-            if shutil.which("sips") is None:
+            if not has_image_io():
                 raise
             return self._render_with_sips(source_path, output_path, size, validate=validate)
 
@@ -584,7 +588,7 @@ class PreviewService:
 
         if embedded and max(embedded.width, embedded.height) >= _RAW_EMBEDDED_MIN_EDGE[kind]:
             return self._atomic(output_path, from_embedded, validate=validate)
-        if shutil.which("sips") is not None:
+        if has_image_io():
             try:
                 if not hd:
                     return self._render_with_quicklook(source_path, output_path, KIND_SIZES[kind], validate=validate)

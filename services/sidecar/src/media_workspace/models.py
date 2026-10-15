@@ -5,7 +5,10 @@ from pathlib import Path
 
 
 @dataclass(slots=True)
-class RawMetadata:
+class _FileMetadata:
+    """What a RAW and a photo share: identity, file stats and the EXIF read
+    off the file. Both are built with `**metadata` keyword arguments."""
+
     asset_id: str
     path: Path
     stem: str
@@ -33,11 +36,9 @@ class RawMetadata:
     gps_longitude: float | None
     width: int | None
     height: int | None
-    metadata_level: str
-    fingerprint_level: str
-    enrichment_status: str
-    # Last, with a default: older constructors do not pass it.
-    lens_make: str | None = None
+    # Keyword-only with a default: older constructors do not pass it, and a
+    # subclass can still add required fields after it.
+    lens_make: str | None = field(default=None, kw_only=True)
 
     @property
     def aspect_ratio(self) -> float | None:
@@ -47,42 +48,15 @@ class RawMetadata:
 
 
 @dataclass(slots=True)
-class ImageCandidate:
-    asset_id: str
-    path: Path
-    stem: str
-    normalized_stem: str
-    stem_key: str
-    extension: str
-    fingerprint: str
-    file_size: int
-    modified_time: str
-    capture_time: str | None
-    rating: int | None
-    camera_make: str | None
-    camera_model: str | None
-    lens_model: str | None
-    software: str | None
-    iso: int | None
-    aperture: float | None
-    shutter_speed: float | None
-    focal_length: float | None
-    flash: int | None
-    white_balance: int | None
-    color_space: str | int | None
-    lens_specification: list[float] | None
-    gps_latitude: float | None
-    gps_longitude: float | None
-    width: int | None
-    height: int | None
-    # Last, with a default: older constructors do not pass it.
-    lens_make: str | None = None
+class RawMetadata(_FileMetadata):
+    metadata_level: str
+    fingerprint_level: str
+    enrichment_status: str
 
-    @property
-    def aspect_ratio(self) -> float | None:
-        if not self.width or not self.height:
-            return None
-        return self.width / self.height
+
+@dataclass(slots=True)
+class ImageCandidate(_FileMetadata):
+    pass
 
 
 @dataclass(slots=True)

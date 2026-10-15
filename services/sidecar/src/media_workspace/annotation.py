@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from . import video
+from .ai_repaint import fetch_openai_model_ids
 from .annotation_location import asset_gps_location, effective_location
 
 try:
@@ -804,14 +805,7 @@ def test_connection(*, provider: str, api_key: str | None, base_url: str | None 
                 resp.read()
             return {"ok": True, "info": "Reachable, key accepted."}
         elif provider in ("openai", "openai_compatible"):
-            url = (base_url or "https://api.openai.com/v1").rstrip("/") + "/models"
-            headers = {}
-            if api_key:
-                headers["authorization"] = f"Bearer {api_key}"
-            req = urllib.request.Request(url, headers=headers, method="GET")
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-            count = len(payload.get("data") or [])
+            count = len(fetch_openai_model_ids(api_key, base_url))
             return {"ok": True, "info": f"Reachable. Endpoint exposes {count} models."}
         else:
             return {"ok": False, "error": f"Unsupported provider: {provider}"}
@@ -831,20 +825,6 @@ def list_models(*, provider: str, api_key: str | None, base_url: str | None = No
         return [{"id": m, "label": m} for m in ANTHROPIC_MODELS]
 
     if provider in ("openai", "openai_compatible"):
-        url = (base_url or "https://api.openai.com/v1").rstrip("/") + "/models"
-        headers = {}
-        if api_key:
-            headers["authorization"] = f"Bearer {api_key}"
-        req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-        out: list[dict[str, str]] = []
-        for entry in payload.get("data") or []:
-            mid = entry.get("id")
-            if not mid:
-                continue
-            out.append({"id": mid, "label": mid})
-        out.sort(key=lambda m: m["id"])
-        return out
+        return [{"id": mid, "label": mid} for mid in sorted(fetch_openai_model_ids(api_key, base_url, timeout=20))]
 
     raise RuntimeError(f"Unsupported provider for list_models: {provider}")

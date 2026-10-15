@@ -24,6 +24,7 @@ from typing import Any
 
 from PIL import Image
 
+from .platform_tools import is_frozen
 from .processes import no_window
 
 # LibRaw's `flip` as the EXIF orientation the previews carry.
@@ -143,7 +144,7 @@ def decode(path: Path, target: Path, long_edge: int, full: bool = False) -> None
 
 def _sidecar_command() -> list[str]:
     # The frozen sidecar is its own executable; in development it's a module.
-    return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "media_workspace"]
+    return [sys.executable] if is_frozen() else [sys.executable, "-m", "media_workspace"]
 
 
 def decode_in_child(path: Path, target: Path, long_edge: int, timeout: float = DECODE_TIMEOUT_SECONDS, full: bool = False) -> None:

@@ -23,7 +23,6 @@ import os
 import queue
 import shutil
 import subprocess
-import sys
 import threading
 import time
 from collections import deque
@@ -32,6 +31,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from .platform_tools import IS_MAC, IS_WINDOWS, is_frozen
 from .processes import end_with_this_process, no_window
 
 # The tags metadata.py maps, with `#` for numbers instead of their printed
@@ -89,7 +89,7 @@ def _bundled_dir() -> Path | None:
     configured = os.environ.get("EXIFTOOL_PATH")
     if configured:
         return Path(configured)
-    if getattr(sys, "frozen", False):
+    if is_frozen():
         return None
     # Development: where fetch-exiftool.mjs puts it in the checkout.
     return Path(__file__).resolve().parents[4] / "apps" / "desktop" / "native" / "exiftool"
@@ -102,7 +102,7 @@ def find_command() -> list[str] | None:
         if (folder / "exiftool.exe").is_file():
             return [str(folder / "exiftool.exe")]
         script = folder / "exiftool"
-        perl = "/usr/bin/perl" if sys.platform == "darwin" else shutil.which("perl")
+        perl = "/usr/bin/perl" if IS_MAC else shutil.which("perl")
         if script.is_file() and perl and Path(perl).exists():
             return [perl, str(script)]
     installed = shutil.which("exiftool")
@@ -122,7 +122,7 @@ _WATCHDOG = Path(__file__).with_name("data") / "exiftool_watchdog.config"
 class _Process:
     def __init__(self, command: list[str]) -> None:
         # -config has to come first.
-        watchdog = ["-config", str(_WATCHDOG)] if sys.platform != "win32" else []
+        watchdog = [] if IS_WINDOWS else ["-config", str(_WATCHDOG)]
         try:
             self._process = subprocess.Popen(
                 [*command, *watchdog, "-stay_open", "True", "-@", "-", "-common_args", *_COMMON_ARGS],

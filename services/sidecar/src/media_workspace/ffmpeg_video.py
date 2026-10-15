@@ -37,6 +37,7 @@ from typing import Any
 
 from PIL import Image
 
+from .platform_tools import IS_WINDOWS
 from .processes import end_with_this_process, no_window
 
 POSTER_EDGE = 1024
@@ -69,7 +70,7 @@ class VideoToolError(RuntimeError):
 
 def find_tools() -> tuple[str, str] | None:
     """(ffmpeg, ffprobe), or None when there is no FFmpeg."""
-    suffix = ".exe" if sys.platform == "win32" else ""
+    suffix = ".exe" if IS_WINDOWS else ""
     folder = os.environ.get("FFMPEG_PATH")
     if folder:
         ffmpeg, ffprobe = Path(folder) / f"ffmpeg{suffix}", Path(folder) / f"ffprobe{suffix}"
