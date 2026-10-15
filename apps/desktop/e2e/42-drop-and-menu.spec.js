@@ -85,12 +85,14 @@ test("Edit › Copy and ⌘C put the selected photos on the clipboard as files, 
   await expect(copiedToast()).toHaveCount(0, { timeout: 5_000 });
 
   // ⌘C in the grid is the renderer's (then prevented, so the menu's
-  // accelerator cannot copy a second time): one toast, one file.
+  // accelerator cannot copy a second time): one toast, one file. The toast
+  // is counted before the clipboard is read: the toast lives 2 s, and the
+  // read-back spawns a process (on a slow Windows box, longer than that).
   await first.click();
   await ctx.window.keyboard.press("ControlOrMeta+c");
   await expect(ctx.window.getByText("Copied 1 photo", { exact: true })).toBeVisible({ timeout: 5_000 });
-  expect(readClipboardFiles()).toEqual([paths[0]]);
   await expect(copiedToast()).toHaveCount(1);
+  expect(readClipboardFiles()).toEqual([paths[0]]);
   await expect(copiedToast()).toHaveCount(0, { timeout: 5_000 });
 
   clearClipboard();
