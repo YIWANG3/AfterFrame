@@ -163,8 +163,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("init-catalog", parents=[common])
-
     scan_raw = subparsers.add_parser("scan-raw", parents=[common])
     scan_raw.add_argument("--raw-dir", type=Path, action="append", required=True)
     scan_raw.add_argument("--force", action="store_true")
@@ -1056,12 +1054,6 @@ def _cmd_list_tags(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_init_catalog(args, connection, catalog, parser):
-    set_catalog_path(connection, catalog.root)
-    print(f"initialized {catalog.root}")
-    return 0
-
-
 def _cmd_scan_raw(args, connection, catalog, parser):
     aggregate = {"indexed": 0, "skipped": 0, "unchanged": 0, "forced": int(args.force)}
     for raw_dir in args.raw_dir:
@@ -1822,7 +1814,6 @@ COMMAND_HANDLERS = {
     "get-asset-tags": _cmd_get_asset_tags,
     "remove-asset-tag": _cmd_remove_asset_tag,
     "list-tags": _cmd_list_tags,
-    "init-catalog": _cmd_init_catalog,
     "scan-raw": _cmd_scan_raw,
     "enrich-raw": _cmd_enrich_raw,
     "create-job": _cmd_create_job,

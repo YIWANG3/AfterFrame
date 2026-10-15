@@ -89,9 +89,11 @@ async function main() {
     await generateImage(path.join(IMAGES_DIR, name), rgb);
   }
 
-  // 2. Initialize empty catalog (creates sqlite DB + dirs)
+  // 2. Create the empty catalog: any command opens a missing DB, runs the
+  //    schema and records the catalog path (cli.py main), so the cheapest
+  //    read-only one does.
   console.log("Initializing catalog at", CATALOG_DIR);
-  runSidecar(["--catalog", CATALOG_DIR, "init-catalog"]);
+  runSidecar(["--catalog", CATALOG_DIR, "summary"]);
 
   // 3. Register the fixture images dir as an export root
   console.log("Registering export root:", IMAGES_DIR);

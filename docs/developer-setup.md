@@ -144,8 +144,8 @@ PYTHONPATH=services/sidecar/src python3 -m media_workspace --catalog data/defaul
 Common commands:
 
 ```bash
-# Initialize a new catalog
-python3 -m media_workspace init-catalog --catalog data/new.afcatalog
+# Any command creates a missing catalog (schema + catalog path); summary is the cheapest
+python3 -m media_workspace summary --catalog data/new.afcatalog
 
 # Scan RAW files
 python3 -m media_workspace scan-raw --catalog data/default.afcatalog --raw-dir /path/to/raws

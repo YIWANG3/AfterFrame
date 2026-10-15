@@ -92,7 +92,7 @@ async function main() {
   fs.mkdirSync(CATALOG_DIR, { recursive: true });
 
   console.log("Initializing catalog at", CATALOG_DIR);
-  runSidecar(["--catalog", CATALOG_DIR, "init-catalog"]);
+  runSidecar(["--catalog", CATALOG_DIR, "summary"]); // any command creates a missing catalog
   runSidecar(["--catalog", CATALOG_DIR, "register-roots", "--root-type", "image", "--path", IMAGES_DIR]);
   for (const name of Object.keys(SOURCES)) {
     console.log("Registering", name);
