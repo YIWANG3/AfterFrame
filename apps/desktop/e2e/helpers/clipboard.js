@@ -32,9 +32,13 @@ const JXA_READ = 'ObjC.import("AppKit"); const pb = $.NSPasteboard.generalPasteb
   + ' for (let i = 0; i < urls.count; i++) out.push(urls.objectAtIndex(i).path.js); JSON.stringify(out)';
 const JXA_CLEAR = 'ObjC.import("AppKit"); $.NSPasteboard.generalPasteboard.clearContents; "ok"';
 
-// PowerShell 5.1's FileDropList items are FileInfo / DirectoryInfo; a plain
-// string is kept as is. -InputObject @(…) serialises one item as an array too.
-const PS_READ = "$files = @(Get-Clipboard -Format FileDropList | ForEach-Object { if ($_.FullName) { $_.FullName } else { [string]$_ } })\n"
+// PowerShell 5.1's Get-Clipboard writes the FileDropList as one List object
+// (empty when the clipboard holds no files; measured), not item by item, so
+// it is enumerated here: foreach walks a List, an array, or one item alike.
+// The items are FileInfo / DirectoryInfo; a plain string is kept as is.
+// -InputObject keeps a one-element array an array in the JSON.
+const PS_READ = "$list = Get-Clipboard -Format FileDropList\n"
+  + "$files = @(); foreach ($f in $list) { if ($f.FullName) { $files += [string]$f.FullName } else { $files += [string]$f } }\n"
   + "[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -Compress -InputObject $files)))";
 const PS_CLEAR = "Add-Type -AssemblyName System.Windows.Forms; [Windows.Forms.Clipboard]::Clear(); 'ok'";
 
@@ -61,6 +65,7 @@ function readClipboardFiles() {
   } else {
     return null;
   }
+  if (paths == null) return [];
   return (Array.isArray(paths) ? paths : [paths]).map(comparablePath);
 }
 
