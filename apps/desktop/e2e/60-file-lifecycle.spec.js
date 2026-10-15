@@ -364,7 +364,7 @@ test.describe("removed from the library, deleted from disk, changed while the ap
 // only. The startup scan above is what CI checks.
 test.describe("a watched folder while the app runs", () => {
   test.describe.configure({ mode: "serial" });
-  test.skip(!!process.env.CI, "fs-watch delivery on the GitHub macOS runner is too slow and uneven to assert on (quality.yml lists this file; this describe runs locally only)");
+  test.skip(!!process.env.CI, "fs-watch delivery on the GitHub macOS runner is too slow and uneven to assert on (the rest of this file runs on CI; this describe runs locally only)");
   const ctx = {};
   const h = harness(ctx);
   let dirs, first, assetId, folderId;
