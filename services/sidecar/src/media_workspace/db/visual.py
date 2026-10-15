@@ -185,31 +185,34 @@ class VisualIndex:
         return self._embeddings[self._embedded_at[index]]
 
     def similar(self, asset_id: str, limit: int) -> list[dict]:
-        """The photos most like `asset_id`, nearest first, by feature print;
-        by hash when there is none. Each: {asset_id, distance, hamming}."""
+        """The photos most like `asset_id`, nearest first. Its near-duplicates
+        by hash come first (a hash is what every photo has, with or without a
+        print — a library holds both when a machine without the engine adds
+        to one that had it); then, by feature print, the photos that have one;
+        then the rest by hash. Each: {asset_id, distance, hamming}."""
         index = self.position(asset_id)
         if index is None:
             return []
         hamming = hamming_to_all(self.hashes, int(self._hashes[index]))
         vector = self.embedding_of(asset_id)
+        distances = np.full(self._n, np.inf, dtype=np.float32)
         if vector is not None:
             embedded_positions = np.nonzero(self._embedded_at[: self._n] >= 0)[0]
-            distances = distances_to_all(self._embeddings[self._embedded_at[embedded_positions]], vector)
-            order = np.argsort(distances, kind="stable")
-            results = []
-            for rank in order:
-                row = int(embedded_positions[rank])
-                if row == index:
-                    continue
-                results.append({"asset_id": self.ids[row], "distance": round(float(distances[rank]), 4), "hamming": int(hamming[row])})
-                if len(results) >= limit:
-                    break
-            return results
-        order = np.argsort(hamming, kind="stable")
-        return [
-            {"asset_id": self.ids[row], "distance": None, "hamming": int(hamming[row])}
-            for row in order if row != index
-        ][:limit]
+            distances[embedded_positions] = distances_to_all(self._embeddings[self._embedded_at[embedded_positions]], vector)
+        # Three tiers, each nearest first: hash duplicates, then by print, then by hash.
+        tier = np.where(hamming <= DUPLICATE_MAX_HAMMING, 0, np.where(np.isfinite(distances), 1, 2))
+        within = np.where(tier == 1, distances, hamming.astype(np.float32))
+        order = np.lexsort((within, tier))
+        results = []
+        for row in order:
+            row = int(row)
+            if row == index:
+                continue
+            distance = round(float(distances[row]), 4) if np.isfinite(distances[row]) else None
+            results.append({"asset_id": self.ids[row], "distance": distance, "hamming": int(hamming[row])})
+            if len(results) >= limit:
+                break
+        return results
 
     def duplicates_of(self, phash: int, embedding: np.ndarray | None) -> list[int]:
         """Positions of the photos that look the same as one with this hash
