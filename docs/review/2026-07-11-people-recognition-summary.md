@@ -73,8 +73,8 @@
 
 ### 测试
 - `tests/test_people.py`：12 个测试。聚类（防链式桥接、同照片 cannot-link、确定性、ignored 不崩溃不回流、封面回退与修复）、写接口（命名/合并审计、忽略、纠错 reject/reassign 审计与跨重建持久、相似度排序不按大小）
-- `apps/desktop/e2e/12-people-view.spec.js`：文案与标题更新（空状态）
-- **`apps/desktop/e2e/18-people-flows.spec.js`（新增，5 测试）**：头像墙渲染（命名+候选、封面为真实脸裁剪非占位图）、命名流程（相似建议出现 → 输入命名 → 原位更新）、查看照片筛选（5/8 张 → 清除恢复）、图库常驻人物下拉筛选、批量移出（多选 2 → 批量栏 → 计数 4→2）
+- `apps/desktop/e2e/71-people-view.spec.js`：文案与标题更新（空状态）
+- **`apps/desktop/e2e/72-people-flows.spec.js`（新增，5 测试）**：头像墙渲染（命名+候选、封面为真实脸裁剪非占位图）、命名流程（相似建议出现 → 输入命名 → 原位更新）、查看照片筛选（5/8 张 → 清除恢复）、图库常驻人物下拉筛选、批量移出（多选 2 → 批量栏 → 计数 4→2）
 - **新 fixture `e2e/fixtures/people-catalog.afcatalog`**（提交入库，2.9MB + 528KB 图）：8 张 AI 生成虚构人像（无肖像权风险），由 `seed-people-catalog.js` 离线用真实 worker+ArcFace 预扫描——DB 内含真实 embedding 与人物组，**CI 无需 Core ML 模型**。布局：Lin Xi 已命名 ×5 脸、未命名候选 ×4 脸、1 张三人合照含一个无组单例脸。`launchApp` 新增 `catalogFixture: "people"` 选项
 
 ## C. 验证情况

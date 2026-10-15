@@ -7,7 +7,7 @@
 // locally once, so the committed DB contains genuine faces, embeddings and
 // person groups; CI and specs never need the Core ML model.
 //
-// Layout produced (asserted by 18-people-flows.spec.js):
+// Layout produced (asserted by 72-people-flows.spec.js):
 //   - "Lin Xi": NAMED person (portrait + 3 solos + 1 group-photo face)
 //   - one unnamed candidate (Chen Mo: portrait + 2 solos + 1 group-photo face)
 //

@@ -79,7 +79,7 @@ jobs:
       # The whole suite, e2e/*.spec.js: a new spec is in CI the moment it is
       # added. A spec that cannot run on the GitHub macOS VM skips itself with
       # test.skip(process.env.CI, reason) and runs locally only — today
-      # 17-watched-dirs and the watched-folder describe of 60-file-lifecycle
+      # 17-watched-dirs and the watched-folder describe of 76-file-lifecycle
       # (fs-watch delivery is too slow and uneven to assert on), 23-map and
       # 60-map-cluster-covers (no GPU/WebGL: MapLibre never renders, #163).
       # 62-people-real-model needs the face model only the nightly fetches,
