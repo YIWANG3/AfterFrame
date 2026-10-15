@@ -668,6 +668,12 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
     resetBorderRadius();
     resetBgColor();
   }
+  // The canvas settings as one object for the panels (CanvasSection).
+  const canvasSettings = {
+    ratio: canvasRatio, gap, padding, radius: borderRadius, bg: bgColor,
+    setRatio: setCanvasRatio, setGap, setPadding, setRadius: setBorderRadius, setBg: setBgColor,
+    onReset: canvasChanged ? resetCanvas : null,
+  };
 
   function templateForPage(pageIdx, group) {
     const pool = getTemplatesForCount(group.length);
@@ -1172,17 +1178,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               onRemainderModeChange={setRemainderMode}
               templateId={batchTemplateId}
               onTemplateIdChange={applyLayoutToAllPages}
-              canvasRatio={canvasRatio}
-              onCanvasRatioChange={setCanvasRatio}
-              gap={gap}
-              onGapChange={setGap}
-              padding={padding}
-              onPaddingChange={setPadding}
-              borderRadius={borderRadius}
-              onBorderRadiusChange={setBorderRadius}
-              bgColor={bgColor}
-              onBgColorChange={setBgColor}
-              onResetCanvas={canvasChanged ? resetCanvas : null}
+              canvas={canvasSettings}
               exportWidth={exportWidth}
               onExportWidthChange={setExportWidth}
               namePrefix={namePrefix}
@@ -1197,17 +1193,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             onImagesChange={setImages}
             template={template}
             onTemplateChange={chooseTemplate}
-            canvasRatio={canvasRatio}
-            onCanvasRatioChange={setCanvasRatio}
-            gap={gap}
-            onGapChange={setGap}
-            padding={padding}
-            onPaddingChange={setPadding}
-            borderRadius={borderRadius}
-            onBorderRadiusChange={setBorderRadius}
-            bgColor={bgColor}
-            onBgColorChange={setBgColor}
-            onResetCanvas={canvasChanged ? resetCanvas : null}
+            canvas={canvasSettings}
             exportWidth={exportWidth}
             onExportWidthChange={setExportWidth}
             onAddImages={() => setShowPicker(true)}

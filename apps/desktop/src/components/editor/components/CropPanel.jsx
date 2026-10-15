@@ -10,26 +10,7 @@ import {
 } from "lucide-react";
 import { ASPECT_PRESETS, getAspectRatio } from "../cropMath";
 import { MAX_IMAGE_ZOOM } from "../imageMath";
-
-function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "inline-flex h-8 items-center rounded-md text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-35",
-        label ? "gap-1.5 px-3" : "w-8 justify-center",
-        primary
-          ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
-          : "text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-    >
-      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-      {label ? <span>{label}</span> : null}
-    </button>
-  );
-}
+import FooterButton from "./FooterButton";
 
 function getAspectPreviewBox(aspectKey) {
   const aspect = getAspectRatio(aspectKey, 1);

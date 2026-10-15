@@ -30,17 +30,7 @@ export default function BatchPanel({
   onRemainderModeChange,
   templateId,
   onTemplateIdChange,
-  canvasRatio,
-  onCanvasRatioChange,
-  gap,
-  onGapChange,
-  padding,
-  onPaddingChange,
-  borderRadius,
-  onBorderRadiusChange,
-  bgColor,
-  onBgColorChange,
-  onResetCanvas,
+  canvas,
   exportWidth,
   onExportWidthChange,
   namePrefix,
@@ -78,7 +68,7 @@ export default function BatchPanel({
         <TemplateGrid
           templates={templates}
           activeId={templateId}
-          ratio={canvasRatio || 1}
+          ratio={canvas.ratio || 1}
           onSelect={(tmpl) => onTemplateIdChange(tmpl.id)}
         />
       </Section>
@@ -149,20 +139,7 @@ export default function BatchPanel({
         </div>
       </Section>
 
-      <CanvasSection
-        canvasRatio={canvasRatio}
-        onCanvasRatioChange={onCanvasRatioChange}
-        gap={gap}
-        onGapChange={onGapChange}
-        padding={padding}
-        onPaddingChange={onPaddingChange}
-        borderRadius={borderRadius}
-        onBorderRadiusChange={onBorderRadiusChange}
-        bgColor={bgColor}
-        onBgColorChange={onBgColorChange}
-        onReset={onResetCanvas}
-        exportWidth={exportWidth}
-      />
+      <CanvasSection canvas={canvas} exportWidth={exportWidth} />
 
       <Section label={t("export")}>
         <div className="space-y-3">

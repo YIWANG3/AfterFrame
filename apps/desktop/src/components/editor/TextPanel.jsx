@@ -17,6 +17,7 @@ import { localFileUrl as mediaUrlFor } from "../../utils/format";
 import { SliderRow, NumberDragInput as NumInput } from "../../ui";
 import { gradientToCss, hexToRgba, normalizeScrim, OVERLAY_EDGES } from "./render/canvasHelpers";
 import BorderControls from "./components/BorderControls";
+import FooterButton from "./components/FooterButton";
 import MyLogosRow from "./components/MyLogosRow";
 import CameraLogosBlock from "./components/CameraLogosBlock";
 import { isTextLayer, isStickerLayer, isOverlayLayer, isFrameLayer, layerLabel } from "./layerStack";
@@ -676,9 +677,9 @@ export default function TextPanel({
 
       {/* Footer */}
       <div className="flex items-center gap-1 border-t border-border/60 px-3 py-2">
-        <FooterBtn icon={RotateCcw} label={t("text.reset")} onClick={onReset} />
-        <FooterBtn icon={Undo2} onClick={onUndo} disabled={!canUndo} />
-        <FooterBtn icon={Redo2} onClick={onRedo} disabled={!canRedo} />
+        <FooterButton icon={RotateCcw} label={t("text.reset")} onClick={onReset} />
+        <FooterButton icon={Undo2} onClick={onUndo} disabled={!canUndo} />
+        <FooterButton icon={Redo2} onClick={onRedo} disabled={!canRedo} />
         <button
           type="button"
           className="ml-auto flex h-[30px] items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-4 text-[11px] font-semibold text-accentInk transition-all hover:brightness-110"
@@ -1358,20 +1359,6 @@ function ShadowFieldRow({ layer, onChange }) {
       <StackedField label="Y" value={layer.shadowY} min={-50} max={50} onChange={(v) => onChange({ shadowY: v })} />
       <StackedField label={t("text.blur")} value={layer.shadowBlur} min={0} max={100} onChange={(v) => onChange({ shadowBlur: v })} />
     </div>
-  );
-}
-
-function FooterBtn({ icon: Icon, label, onClick, disabled }) {
-  return (
-    <button
-      type="button"
-      className="flex h-[30px] items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-40 disabled:pointer-events-none"
-      onClick={onClick}
-      disabled={disabled}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label && <span>{label}</span>}
-    </button>
   );
 }
 

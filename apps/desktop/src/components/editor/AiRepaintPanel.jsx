@@ -216,6 +216,31 @@ function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
   );
 }
 
+// The pair of compare buttons a result and a history entry carry: side by
+// side, one above the other. The one whose layout is showing is lit and
+// closes the compare; the other opens it (or switches the layout).
+function CompareButtons({ afterPath, compareState, onCompareChange, t }) {
+  const comparing = compareState?.afterPath === afterPath;
+  const layouts = [
+    { layout: "side", icon: Columns2, on: comparing && compareState?.layout !== "stack", title: t("repaint.compareSide") },
+    { layout: "stack", icon: Rows2, on: comparing && compareState?.layout === "stack", title: t("repaint.compareTopBottom") },
+  ];
+  return layouts.map(({ layout, icon: Icon, on, title }) => (
+    <button
+      key={layout}
+      type="button"
+      className={cx(
+        "flex h-5 w-5 items-center justify-center rounded transition-colors",
+        on ? "text-[rgb(var(--accent-color))]" : "text-muted2 opacity-0 group-hover:opacity-100 hover:text-text",
+      )}
+      onClick={() => onCompareChange?.(on ? null : { afterPath, layout })}
+      title={on ? t("repaint.exitCompare") : title}
+    >
+      <Icon className="h-3 w-3" />
+    </button>
+  ));
+}
+
 function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
   const { t } = useTranslation("editor");
   return (
@@ -912,44 +937,7 @@ export default function AiRepaintPanel({
                     )}
                   >
                     <span className="min-w-0 flex-1 truncate" title={r.path}>{name}</span>
-                    <button
-                      type="button"
-                      className={cx(
-                        "flex h-5 w-5 items-center justify-center rounded transition-colors",
-                        isComparing
-                          ? "text-[rgb(var(--accent-color))]"
-                          : "text-muted2 opacity-0 group-hover:opacity-100 hover:text-text",
-                      )}
-                      onClick={() => {
-                        if (isComparing) {
-                          onCompareChange?.(null);
-                        } else {
-                          onCompareChange?.({ afterPath: r.path, layout: compareState?.layout || "side" });
-                        }
-                      }}
-                      title={isComparing ? t("repaint.exitCompare") : t("repaint.compareSide")}
-                    >
-                      <Columns2 className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      className={cx(
-                        "flex h-5 w-5 items-center justify-center rounded transition-colors",
-                        isComparing && compareState?.layout === "stack"
-                          ? "text-[rgb(var(--accent-color))]"
-                          : "text-muted2 opacity-0 group-hover:opacity-100 hover:text-text",
-                      )}
-                      onClick={() => {
-                        if (isComparing && compareState?.layout === "stack") {
-                          onCompareChange?.(null);
-                        } else {
-                          onCompareChange?.({ afterPath: r.path, layout: "stack" });
-                        }
-                      }}
-                      title={t("repaint.compareTopBottom")}
-                    >
-                      <Rows2 className="h-3 w-3" />
-                    </button>
+                    <CompareButtons afterPath={r.path} compareState={compareState} onCompareChange={onCompareChange} t={t} />
                   </div>
                 );
               })}
@@ -980,44 +968,7 @@ export default function AiRepaintPanel({
                         <ChevronDown className={cx("h-3 w-3 transition-transform", !isExpanded && "-rotate-90")} />
                       </button>
                       <span className="min-w-0 flex-1 truncate" title={h.output_path}>{name}</span>
-                      <button
-                        type="button"
-                        className={cx(
-                          "flex h-5 w-5 items-center justify-center rounded transition-colors",
-                          isComparing && compareState?.layout !== "stack"
-                            ? "text-[rgb(var(--accent-color))]"
-                            : "text-muted2 opacity-0 group-hover:opacity-100 hover:text-text",
-                        )}
-                        onClick={() => {
-                          if (isComparing && compareState?.layout !== "stack") {
-                            onCompareChange?.(null);
-                          } else {
-                            onCompareChange?.({ afterPath: h.output_path, layout: "side" });
-                          }
-                        }}
-                        title={t("repaint.compareSide")}
-                      >
-                        <Columns2 className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        className={cx(
-                          "flex h-5 w-5 items-center justify-center rounded transition-colors",
-                          isComparing && compareState?.layout === "stack"
-                            ? "text-[rgb(var(--accent-color))]"
-                            : "text-muted2 opacity-0 group-hover:opacity-100 hover:text-text",
-                        )}
-                        onClick={() => {
-                          if (isComparing && compareState?.layout === "stack") {
-                            onCompareChange?.(null);
-                          } else {
-                            onCompareChange?.({ afterPath: h.output_path, layout: "stack" });
-                          }
-                        }}
-                        title={t("repaint.compareTopBottom")}
-                      >
-                        <Rows2 className="h-3 w-3" />
-                      </button>
+                      <CompareButtons afterPath={h.output_path} compareState={compareState} onCompareChange={onCompareChange} t={t} />
                     </div>
                     {isExpanded && (
                       <div className="ml-6 mt-1 mb-1.5 space-y-1 rounded-md bg-app px-2.5 py-2 text-[11px] leading-5 text-muted">

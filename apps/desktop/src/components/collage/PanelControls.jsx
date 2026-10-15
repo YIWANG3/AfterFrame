@@ -172,22 +172,19 @@ function SliderField({ label, value, max, onChange }) {
 
 /**
  * The "Canvas" section: aspect ratio, gap, padding, border radius, background.
- * Identical between single and batch modes.
+ * Identical between single and batch modes. `canvas` is the overlay's canvas
+ * settings object: { ratio, gap, padding, radius, bg, setRatio, setGap,
+ * setPadding, setRadius, setBg, onReset } (onReset null: nothing to reset).
  */
-export function CanvasSection({
-  canvasRatio,
-  onCanvasRatioChange,
-  gap,
-  onGapChange,
-  padding,
-  onPaddingChange,
-  borderRadius,
-  onBorderRadiusChange,
-  bgColor,
-  onBgColorChange,
-  onReset = null,
-  exportWidth,
-}) {
+export function CanvasSection({ canvas, exportWidth }) {
+  const {
+    ratio: canvasRatio, setRatio: onCanvasRatioChange,
+    gap, setGap: onGapChange,
+    padding, setPadding: onPaddingChange,
+    radius: borderRadius, setRadius: onBorderRadiusChange,
+    bg: bgColor, setBg: onBgColorChange,
+    onReset,
+  } = canvas;
   const { t } = useTranslation("collage");
   const [customRatioW, setCustomRatioW] = useState(() => ratioParts(canvasRatio)[0]);
   const [customRatioH, setCustomRatioH] = useState(() => ratioParts(canvasRatio)[1]);
