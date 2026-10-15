@@ -8,6 +8,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { requireCatalogPath } = require("../ipc/guard");
 
 const DEFAULT_PORT = 41706;
 const SERVER_INFO = { name: "afterframe", version: "0.1.0" };
@@ -210,12 +211,7 @@ function createMcpServer(deps) {
     port = DEFAULT_PORT,
   } = deps;
 
-  function requireCatalog() {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath) throw new Error("No catalog is open in AfterFrame.");
-    if (!catalogHasDb()) throw new Error(`Catalog at ${currentCatalogPath} is empty (no database yet). Import something first.`);
-    return currentCatalogPath;
-  }
+  const requireCatalog = () => requireCatalogPath(getCatalogState);
 
   async function resolvePreviewPaths(assetId) {
     const cached = previewPathCache.get(assetId);

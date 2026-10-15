@@ -1,6 +1,8 @@
 // Asset-level IPC: quick-register (after a save), delete-image-assets, and the
 // cross-platform "reveal in Finder/Explorer".
 
+const { withCatalog } = require("./guard");
+
 function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedMediaDir, getCatalogState, getUserDataPath, t }) {
   const fs = require("node:fs");
   const path = require("node:path");
@@ -18,11 +20,7 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
   });
 
   // Full-library missing-file sweep (File ▸ Verify Files menu action).
-  ipcMain.handle("workspace:verify-assets", async (_event, options) => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return null;
-    return await commands.verifyAssets(options || {});
-  });
+  ipcMain.handle("workspace:verify-assets", withCatalog(getCatalogState, null, (_event, options) => commands.verifyAssets(options || {})));
 
   // Relink a missing asset to a new on-disk location. With no newPath we open a
   // native file picker. Returns the sidecar result verbatim, including the

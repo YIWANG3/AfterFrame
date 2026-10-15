@@ -386,29 +386,6 @@ ipcMain.handle("window:popup-app-menu", (event, x, y) =>
 ipcMain.handle("window:set-titlebar-theme", (event, theme) =>
   appShell.setTitleBarTheme(BrowserWindow.fromWebContents(event.sender), theme));
 
-ipcMain.handle("workspace:summary", async () => {
-  console.log("[ipc:summary] catalogPath:", catalog.path(), "hasDb:", catalog.hasDb());
-  if (!catalog.path() || !catalog.hasDb()) {
-    return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
-  }
-  try {
-    return await sidecarCommands.summary() || { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
-  } catch (err) {
-    console.warn("[workspace:summary] sidecar error:", err.message);
-    return { total_images: 0, total_raws: 0, matched: 0, unmatched: 0, pending: 0 };
-  }
-});
-
-ipcMain.handle("workspace:roots", async () => {
-  if (!catalog.path() || !catalog.hasDb()) return [];
-  try {
-    return await sidecarCommands.catalogRoots();
-  } catch (err) {
-    console.warn("[workspace:roots] sidecar error:", err.message);
-    return [];
-  }
-});
-
 // Windows and Linux make a dialog modal to the window that asked for it, so it
 // can't slip behind the window and leave it clickable; macOS keeps its
 // free-standing panels.

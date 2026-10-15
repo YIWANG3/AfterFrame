@@ -3,6 +3,7 @@
 // namespace) so users only ever have one place to think about keys.
 
 const jobArgv = require("../sidecar/jobArgv");
+const { withCatalog, catalogRequired, jobStatusHandler } = require("./guard");
 
 function register({
   ipcMain,
@@ -19,6 +20,8 @@ function register({
   latestJobStatus,
   formatJobStatus,
 }) {
+  const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
+
   // Resolve the active annotation provider + its API key from saved settings.
   // Mirrors the single-asset resolution in AnnotationsSection: anthropic stays
   // anthropic; every other type routes through the openai_compatible adapter.
@@ -69,10 +72,7 @@ function register({
   });
 
   // ── Annotation actions ───────────────────────────────────────────────────
-  ipcMain.handle("workspace:annotate-asset", async (_event, options) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) throw new Error("Open a catalog before annotating assets.");
-
+  ipcMain.handle("workspace:annotate-asset", guarded(catalogRequired("Open a catalog before annotating assets."), async (_event, options) => {
     const opts = options || {};
     if (!opts.assetId) throw new Error("assetId is required");
     if (!opts.imagePath) throw new Error("imagePath is required");
@@ -98,7 +98,7 @@ function register({
       customInstructions: opts.customInstructions,
       hint: opts.hint,
     });
-  });
+  }));
 
   // ── Batch annotation job ──────────────────────────────────────────────────
   // scope: "all" | "selection" | "collection"
@@ -107,10 +107,7 @@ function register({
   // onlyMissing (default true) skips already-annotated assets; pass false to
   // re-annotate. Reads provider + annotation options from saved settings.
   // Shared by the IPC handler below and the MCP annotate_assets tool.
-  async function startAnnotationTask(options) {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) throw new Error("Open a catalog before annotating assets.");
-
+  const startAnnotationTask = guarded(catalogRequired("Open a catalog before annotating assets."), async (options) => {
     const current = await latestJobStatus("annotation");
     if (current.running) return current;
 
@@ -142,33 +139,23 @@ function register({
       settings,
     }));
     return formatJobStatus(job);
-  }
+  });
 
   ipcMain.handle("workspace:annotation-start", (_event, options) => startAnnotationTask(options));
 
-  ipcMain.handle("workspace:annotation-status", async () => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
-    try { return await latestJobStatus("annotation"); } catch { return formatJobStatus(null); }
-  });
+  ipcMain.handle("workspace:annotation-status", jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, "annotation"));
 
-  ipcMain.handle("workspace:annotation-count", async (_event, options) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) return { count: 0 };
+  ipcMain.handle("workspace:annotation-count", guarded({ count: 0 }, (_event, options) => {
     const opts = options || {};
-    return await commands.annotationCount({
+    return commands.annotationCount({
       onlyMissing: opts.onlyMissing,
       assetIds: opts.assetIds,
       collectionId: opts.collectionId,
     });
-  });
+  }));
 
-  ipcMain.handle("workspace:add-asset-tag", async (_event, assetId, tag) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) throw new Error("Open a catalog first.");
-    if (!assetId || !tag) return null;
-    return await commands.addAssetTag(assetId, tag);
-  });
+  ipcMain.handle("workspace:add-asset-tag", guarded(catalogRequired(), (_event, assetId, tag) =>
+    (assetId && tag ? commands.addAssetTag(assetId, tag) : null)));
 
   // A photo's tags, hand-added and AI alike: { asset_id, tags }.
   ipcMain.handle("workspace:get-asset-tags", async (_event, assetId) => {
@@ -178,37 +165,23 @@ function register({
   });
 
   // Several photos, several tags, one write (the gallery's "Add Tags…").
-  ipcMain.handle("workspace:add-asset-tags", async (_event, assetIds, tags) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) throw new Error("Open a catalog first.");
+  ipcMain.handle("workspace:add-asset-tags", guarded(catalogRequired(), (_event, assetIds, tags) => {
     const ids = [...new Set((assetIds || []).filter(Boolean))];
     const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
     if (!ids.length || !clean.length) return null;
-    return await commands.addAssetTags(ids, clean);
-  });
+    return commands.addAssetTags(ids, clean);
+  }));
 
-  ipcMain.handle("workspace:remove-asset-tag", async (_event, assetId, tag) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) throw new Error("Open a catalog first.");
-    if (!assetId || !tag) return null;
-    return await commands.removeAssetTag(assetId, tag);
-  });
+  ipcMain.handle("workspace:remove-asset-tag", guarded(catalogRequired(), (_event, assetId, tag) =>
+    (assetId && tag ? commands.removeAssetTag(assetId, tag) : null)));
 
   // User veto of a wrong AI location guess — nulls the annotation's
   // location and drops the resolved map point in one step.
-  ipcMain.handle("workspace:clear-ai-location", async (_event, assetId) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) return null;
-    if (!assetId) return null;
-    return await commands.clearAiLocation(assetId);
-  });
+  ipcMain.handle("workspace:clear-ai-location", guarded(null, (_event, assetId) =>
+    (assetId ? commands.clearAiLocation(assetId) : null)));
 
-  ipcMain.handle("workspace:get-annotation", async (_event, assetId) => {
-    const { catalogHasDb } = getCatalogState();
-    if (!catalogHasDb()) return null;
-    if (!assetId) return null;
-    return await commands.getAnnotation(assetId);
-  });
+  ipcMain.handle("workspace:get-annotation", guarded(null, (_event, assetId) =>
+    (assetId ? commands.getAnnotation(assetId) : null)));
 
   // Catalog-independent — works even when no catalog is open. Used by the
   // Settings panel for "Test connection" and "Fetch models" buttons.
