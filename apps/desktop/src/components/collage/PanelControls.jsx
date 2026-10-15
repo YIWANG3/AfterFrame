@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, RotateCcw, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
-import { Chip } from "../../ui";
+import { Checkbox, Chip, cx } from "../../ui";
 import { fileName, localFileUrl } from "../../utils/format";
 
 // Shared building blocks for CollagePanel (single mode) and BatchPanel
@@ -342,6 +342,29 @@ export function CanvasSection({ canvas, exportWidth }) {
         </div>
       </div>
     </Section>
+  );
+}
+
+/**
+ * The coverage check in the Export section: a box that highlights the parts
+ * of a cell its photo does not reach, and while it is on, how many cells
+ * are short. `coverage` is { show, setShow, gapCells }.
+ */
+export function CoverageCheck({ coverage }) {
+  const { t } = useTranslation("collage");
+  const { show, setShow, gapCells } = coverage;
+  return (
+    <div>
+      <Checkbox label={t("showGaps")} checked={show} onChange={setShow} testId="collage-show-gaps" />
+      {show && (
+        <div
+          data-testid="collage-gap-count"
+          className={cx("mt-1 pl-5 text-[10px]", gapCells > 0 ? "text-warn" : "text-muted2")}
+        >
+          {gapCells > 0 ? t("gapCells", { count: gapCells }) : t("allCovered")}
+        </div>
+      )}
+    </div>
   );
 }
 

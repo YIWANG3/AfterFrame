@@ -532,7 +532,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const [exportWidth, setExportWidth] = usePref("collage.exportWidth", 4096, oneOf(EXPORT_WIDTHS));
   // Highlight the parts of a cell its photo does not reach (a zoomed-out or
   // panned photo exports with background showing there). The canvases report
-  // how many cells are short either way; the count shows while the box is on.
+  // how many cells are short either way; the panel's Export section has the
+  // box and shows the count while it is on.
   const [showGaps, setShowGaps] = usePref("collage.showGaps", false, bool);
   const [singleGapCells, setSingleGapCells] = useState(0);
   const [batchGapCells, setBatchGapCells] = useState({}); // page index -> count
@@ -672,6 +673,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const gapCells = mode === "batch"
     ? groups.reduce((sum, _group, gi) => sum + (batchGapCells[gi] || 0), 0)
     : singleGapCells;
+  const coverage = { show: showGaps, setShow: setShowGaps, gapCells };
   // The canvas settings as one object for the panels (CanvasSection).
   const canvasSettings = {
     ratio: canvasRatio, gap, padding, radius: borderRadius, bg: bgColor,
@@ -976,20 +978,6 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Checkbox
-            label={t("showGaps")}
-            checked={showGaps}
-            onChange={setShowGaps}
-            testId="collage-show-gaps"
-          />
-          {showGaps && (
-            <span
-              data-testid="collage-gap-count"
-              className={cx("whitespace-nowrap text-[11px]", gapCells > 0 ? "text-warn" : "text-muted2")}
-            >
-              {gapCells > 0 ? t("gapCells", { count: gapCells }) : t("allCovered")}
-            </span>
-          )}
           {canAddToFolder && (
             <Checkbox
               className="max-w-[260px]"
@@ -1196,6 +1184,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               templateId={batchTemplateId}
               onTemplateIdChange={applyLayoutToAllPages}
               canvas={canvasSettings}
+              coverage={coverage}
               exportWidth={exportWidth}
               onExportWidthChange={setExportWidth}
               namePrefix={namePrefix}
@@ -1211,6 +1200,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             template={template}
             onTemplateChange={chooseTemplate}
             canvas={canvasSettings}
+            coverage={coverage}
             exportWidth={exportWidth}
             onExportWidthChange={setExportWidth}
             onAddImages={() => setShowPicker(true)}
