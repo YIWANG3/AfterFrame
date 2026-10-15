@@ -14,7 +14,6 @@ from .db import (
     asset_detail,
     assign_faces_to_group,
     browse_collection,
-    cleanup_orphan_image_assets,
     confirm_match,
     connect,
     create_collection,
@@ -391,7 +390,6 @@ def build_parser() -> argparse.ArgumentParser:
     delete_image = subparsers.add_parser("delete-image-assets", parents=[common])
     delete_image.add_argument("--asset-id", action="append", required=True)
 
-    subparsers.add_parser("cleanup-orphan-images", parents=[common])
 
     verify_assets_p = subparsers.add_parser("verify-assets", parents=[common])
     verify_assets_p.add_argument("--scope", choices=["all", "image", "raw"], default="all")
@@ -1638,12 +1636,6 @@ def _cmd_export_assets(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_cleanup_orphan_images(args, connection, catalog, parser):
-    payload = cleanup_orphan_image_assets(connection)
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
 def _cmd_verify_assets(args, connection, catalog, parser):
     payload = verify_assets(connection, scope=args.scope)
     print(json.dumps(payload, indent=2))
@@ -1880,7 +1872,6 @@ COMMAND_HANDLERS = {
     "create-derived": _cmd_create_derived,
     "add-text": _cmd_add_text,
     "export-assets": _cmd_export_assets,
-    "cleanup-orphan-images": _cmd_cleanup_orphan_images,
     "verify-assets": _cmd_verify_assets,
     "relink-asset": _cmd_relink_asset,
     "delete-image-assets": _cmd_delete_image_assets,

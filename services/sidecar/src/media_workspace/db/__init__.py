@@ -84,7 +84,7 @@ from .locations import (
     upsert_ai_asset_location,
     upsert_asset_location_from_metadata,
 )
-from .maintenance import cleanup_orphan_image_assets, delete_image_asset_from_catalog, relink_asset, summary, verify_assets
+from .maintenance import delete_image_asset_from_catalog, relink_asset, summary, verify_assets
 from .people import (
     assign_face_to_group,
     assign_faces_to_group,

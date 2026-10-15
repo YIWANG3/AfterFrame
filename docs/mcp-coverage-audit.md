@@ -24,7 +24,7 @@
 | **视频** | 🟡 | 导入随普通链路自动进；`app:video-proxy` / `app:video-keyframes`（Swift）只在主进程；`browse-images` 返回 `asset_type` 但 `compactAsset` 把它丢了 → agent 分不清图片和视频，也没有时长/编码字段，没有视频过滤 |
 | **文字层（headless）** | 🟡 | sidecar `add-text` → `create_derived_text`（Pillow，CJK 字体链，`--output` 预览）已实现，按早先决定不暴露；App 自己也没用它 |
 | **AI 手写字贴纸** | 🟡→🔴 | 生图 job `run-text-image-job` 是无头的（provider: nanobanana/openai/ark/jimeng/mock）；但"亮度抠图 → 贴纸层 → 合成"在渲染进程（`handwritingMatte.js` + canvas），MCP 只能"生成一张手写字图片"，不能贴到照片上 |
-| 图库维护 | 🟡 | `refresh-assets` `verify-assets` `relink-asset` `cleanup-orphan-images` `scan-new-media`、监听目录 IPC 全部无头，都没暴露；`compactAsset` 丢了 `exists_on_disk` / `source_changed`（agent 看不到"缺失原图"） |
+| 图库维护 | 🟡 | `refresh-assets` `verify-assets` `relink-asset` `scan-new-media`、监听目录 IPC 全部无头，都没暴露；`compactAsset` 丢了 `exists_on_disk` / `source_changed`（agent 看不到"缺失原图"） |
 | RAW 手动配对 | 🟡 | `list-pending` / `confirm-match` 存在，MCP 只做了 `register-roots + import` |
 | 预览生成 / HD 预览 | 🟡 | `generate-previews --kind preview-hd`、`run-preview-job` 无头；未暴露 |
 | 重绘历史 / AI 风格预设 / 模型列表 | 🟡 | `list-repaint-history` `list-ai-models`、`get/save-ai-styles`（settingsStore）；未暴露 |
