@@ -324,7 +324,7 @@ function register({
   });
 
   ipcMain.handle("workspace:pick-people-model", async () => {
-    if (process.platform !== "darwin") throw new Error("People recognition currently requires macOS.");
+    if (platform !== "darwin") throw new Error("People recognition currently requires macOS.");
     if (!fs.existsSync(workerPath)) throw new Error("People Worker is missing. Reinstall AfterFrame and try again.");
     const result = await dialog.showOpenDialog({
       title: "Select face model bundle or Core ML model",

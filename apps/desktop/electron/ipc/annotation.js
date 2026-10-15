@@ -21,6 +21,15 @@ function register({
   formatJobStatus,
 }) {
   const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
+  // Where a provider's key is stored: the repaint token store, under the
+  // annotation namespace keyed by the provider instance (its id), falling
+  // back to the provider type for single-config callers.
+  const tokenNamespace = (providerKey) => `annotation:${providerKey || ""}`;
+  // The stored key for a request's provider instance (providerId), or type.
+  async function storedToken(opts) {
+    const stored = await getStoredProviderConfigWithMigration(tokenNamespace(opts.providerId || opts.provider)) || {};
+    return stored.token;
+  }
 
   // Resolve the active annotation provider + its API key from saved settings.
   // Mirrors the single-asset resolution in AnnotationsSection: anthropic stays
@@ -32,7 +41,7 @@ function register({
     if (!active) throw new Error("No AI provider configured. Open Settings → AI to add one.");
 
     const sidecarProvider = active.type === "anthropic" ? "anthropic" : "openai_compatible";
-    const ns = `annotation:${active.id || active.type}`;
+    const ns = tokenNamespace(active.id || active.type);
     // The provider's own baseUrl from settings applies where the stored
     // openai_compatible token carries no base_url of its own.
     const { apiKey, baseUrl } = await providerCredentials(ns, sidecarProvider, { fallbackBaseUrl: active.baseUrl });
@@ -56,18 +65,15 @@ function register({
 
   // ── Provider key (namespaced; reuses repaint token store) ────────────────
   ipcMain.handle("workspace:get-annotation-key", async (_event, providerKey) => {
-    const ns = `annotation:${providerKey || ""}`;
-    return await getStoredProviderConfigWithMigration(ns) || {};
+    return await getStoredProviderConfigWithMigration(tokenNamespace(providerKey)) || {};
   });
 
   ipcMain.handle("workspace:set-annotation-key", async (_event, providerKey, token) => {
-    const ns = `annotation:${providerKey || ""}`;
-    return await setStoredProviderConfig(ns, { token: String(token || "") }) || {};
+    return await setStoredProviderConfig(tokenNamespace(providerKey), { token: String(token || "") }) || {};
   });
 
   ipcMain.handle("workspace:delete-annotation-key", async (_event, providerKey) => {
-    const ns = `annotation:${providerKey || ""}`;
-    await deleteStoredProviderConfig(ns);
+    await deleteStoredProviderConfig(tokenNamespace(providerKey));
     return { configured: false };
   });
 
@@ -79,11 +85,7 @@ function register({
     if (!opts.provider) throw new Error("provider is required");
     if (!opts.model) throw new Error("model is required");
 
-    // providerId is the multi-config namespace key. Falls back to provider type
-    // so single-config callers (older code path) keep working.
-    const ns = `annotation:${opts.providerId || opts.provider}`;
-    const stored = await getStoredProviderConfigWithMigration(ns) || {};
-    const apiKey = opts.apiKey || stored.token || null;
+    const apiKey = opts.apiKey || await storedToken(opts) || null;
 
     return await commands.annotateAsset({
       assetId: opts.assetId,
@@ -189,9 +191,7 @@ function register({
     const opts = options || {};
     if (!opts.provider) return { ok: false, error: "provider is required" };
 
-    const ns = `annotation:${opts.providerId || opts.provider}`;
-    const stored = await getStoredProviderConfigWithMigration(ns) || {};
-    const apiKey = opts.apiKey || stored.token || "";
+    const apiKey = opts.apiKey || await storedToken(opts) || "";
 
     try {
       return await commands.annotationTestConnection({ provider: opts.provider, apiKey, baseUrl: opts.baseUrl });
@@ -204,9 +204,7 @@ function register({
     const opts = options || {};
     if (!opts.provider) return { ok: false, error: "provider is required", models: [] };
 
-    const ns = `annotation:${opts.providerId || opts.provider}`;
-    const stored = await getStoredProviderConfigWithMigration(ns) || {};
-    const apiKey = opts.apiKey || stored.token || "";
+    const apiKey = opts.apiKey || await storedToken(opts) || "";
 
     try {
       const result = await commands.annotationListModels({ provider: opts.provider, apiKey, baseUrl: opts.baseUrl });
