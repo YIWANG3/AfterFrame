@@ -1,7 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net, safeStorage, clipboard, nativeImage, nativeTheme, screen } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
-const { sampleOriginalNames, copySampleOriginals, repairLegacySamplePreviews } = require("./sampleCatalog");
 
 // stdout/stderr are usually a pipe, and the reader can go away while we keep
 // running: Playwright tearing down a test app, `npm run dev`'s concurrently
@@ -17,7 +16,6 @@ for (const stream of [process.stdout, process.stderr]) {
 }
 
 const os = require("node:os");
-const crypto = require("node:crypto");
 const sharp = require("sharp");
 
 const { makeT } = require("./i18n");
@@ -36,15 +34,21 @@ const frameTemplatesIpc = require("./ipc/frameTemplates");
 const lutsIpc = require("./ipc/luts");
 const editorsIpc = require("./ipc/editors");
 const settingsTransferIpc = require("./ipc/settingsTransfer");
-const { createAgentRenderBridge } = require("./agentRender");
+const dialogsIpc = require("./ipc/dialogs");
+const appSettingsIpc = require("./ipc/appSettings");
+const systemFontsIpc = require("./ipc/systemFonts");
+const videoIpc = require("./ipc/video");
+const nativeDragIpc = require("./ipc/nativeDrag");
+const nativeVideoIpc = require("./ipc/nativeVideo");
+const { createAgentBridge } = require("./agentBridge");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
 const { createSidecarCommands } = require("./sidecar/commands");
 const { createSidecarTransport } = require("./sidecar/transport");
 const { createSettingsStore } = require("./settingsStore");
 const { createCatalogState } = require("./catalog");
+const { createSampleCatalog } = require("./sampleCatalog");
 const { IPC_METHODS } = require("../shared/ipcChannels.mjs");
-const { sanitizeOverrides: sanitizeShortcutOverrides } = require("../shared/shortcuts.mjs");
 const { createImageMetadataWriter } = require("./imageMetadata");
 const { createTaskStarters } = require("./tasks");
 const { createTokenStore } = require("./tokens");
@@ -54,11 +58,8 @@ const { createMediaHttpServer } = require("./media/httpServer");
 const { createAppShell } = require("./appShell");
 const { desktopCapabilities } = require("./capabilities");
 const { claimSingleInstance, launchPaths } = require("./singleInstance");
-const { importDialogOptions } = require("./importDialog");
-const { catalogDialogOptions } = require("./catalogDialog");
-const videoIpc = require("./ipc/video");
-const nativeDragIpc = require("./ipc/nativeDrag");
-const nativeVideoIpc = require("./ipc/nativeVideo");
+const { createLocale } = require("./locale");
+const { loadDevEnv } = require("./devEnv");
 const clipboardIpc = require("./ipc/clipboard");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
@@ -99,25 +100,8 @@ const configuredCatalogPath = process.env.MEDIA_WORKSPACE_CATALOG;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const isPackaged = app.isPackaged;
 
-// Dev convenience: keychain-encrypted provider tokens saved by the PACKAGED
-// app are unreadable from the dev binary (different Safe Storage keychain
-// item), so in dev also load API keys from the repo-root .env — the sidecar
-// providers already fall back to these env vars when no --api-key is passed.
-// Never runs in the packaged app, and never overrides existing env.
-if (!isPackaged) {
-  try {
-    const envFile = path.join(__dirname, "..", "..", "..", ".env");
-    for (const line of fs.readFileSync(envFile, "utf-8").split("\n")) {
-      const match = line.match(/^([A-Z_]+)=(.*)$/);
-      if (match && !process.env[match[1]]) process.env[match[1]] = match[2].trim();
-    }
-    // Sidecar's Jimeng fallback reads the Volcengine names.
-    if (!process.env.VOLC_ACCESSKEY && process.env.JIMENG_API_KEY) process.env.VOLC_ACCESSKEY = process.env.JIMENG_API_KEY;
-    if (!process.env.VOLC_SECRETKEY && process.env.JIMENG_API_SECRET) process.env.VOLC_SECRETKEY = process.env.JIMENG_API_SECRET;
-    // Ark (Seedream) — accept either name for the same key.
-    if (!process.env.ARK_API_KEY && process.env.SEEDREAM_API_KEY) process.env.ARK_API_KEY = process.env.SEEDREAM_API_KEY;
-  } catch { /* no .env — fine */ }
-}
+// Dev: provider API keys from the repo-root .env — see ./devEnv.js.
+if (!isPackaged) loadDevEnv(path.join(__dirname, "..", "..", "..", ".env"));
 
 const rootCandidates = [
   path.resolve(__dirname, "..", "..", ".."),
@@ -136,25 +120,19 @@ function pickRootDir() {
 }
 
 const rootDir = pickRootDir();
-
-// In packaged mode, sidecar source is in extraResources; in dev, it's in the monorepo
-const sidecarSrc = isPackaged
-  ? path.join(process.resourcesPath, "sidecar", "src")
-  : path.join(rootDir, "services", "sidecar", "src");
+// Bundled helpers and data: in extraResources when packaged, in the repo in dev.
+const resourceDir = (...parts) => (isPackaged ? path.join(process.resourcesPath, ...parts) : null);
+const sidecarSrc = resourceDir("sidecar", "src") || path.join(rootDir, "services", "sidecar", "src");
+const nativeBin = resourceDir("native", "bin") || path.join(rootDir, "apps", "desktop", "native", "bin");
+const samplePhotosSource = resourceDir("sample-photos") || path.join(__dirname, "..", "sample-photos");
 
 function getAppSettingsPath() {
   return path.join(app.getPath("userData"), "afterframe", "settings.json");
 }
 
 const settingsStore = createSettingsStore({ getAppSettingsPath });
-
-function readAppSettings() {
-  return settingsStore.readAppSettings();
-}
-
-function updateAppSettings(mutateFn) {
-  return settingsStore.updateAppSettings(mutateFn);
-}
+const readAppSettings = () => settingsStore.readAppSettings();
+const updateAppSettings = (mutateFn) => settingsStore.updateAppSettings(mutateFn);
 
 // The one mutable "which catalog is open" value, plus the path rules around
 // it — see ./catalog.js. Read it through catalog.path() / catalog.state();
@@ -169,23 +147,12 @@ const catalog = createCatalogState({
 });
 const { scratchCatalogPath } = catalog;
 
-// Locale: the main process owns it (persisted in settings.json) so the menu and
-// the renderer never disagree. The renderer reads it synchronously at startup
-// via the preload bridge (app:get-locale).
-const SUPPORTED_LOCALES = ["en", "zh-CN"];
-function getLocale() {
-  const l = readAppSettings().locale;
-  return SUPPORTED_LOCALES.includes(l) ? l : "en";
-}
-let currentLocale = getLocale();
+// The UI language — see ./locale.js. Setting it rebuilds the menu.
+const locale = createLocale({ ipcMain, readAppSettings, updateAppSettings, onChange: () => appShell.installMenu() });
+const t = () => makeT(locale.current());
 
-function readCatalogSettings(catalogPath = catalog.path()) {
-  return settingsStore.readCatalogSettings(catalogPath);
-}
-
-function updateCatalogSettings(mutateFn, catalogPath = catalog.path()) {
-  return settingsStore.updateCatalogSettings(catalogPath, mutateFn);
-}
+const readCatalogSettings = (catalogPath = catalog.path()) => settingsStore.readCatalogSettings(catalogPath);
+const updateCatalogSettings = (mutateFn, catalogPath = catalog.path()) => settingsStore.updateCatalogSettings(catalogPath, mutateFn);
 
 // Provider tokens at rest (keychain via safeStorage, legacy migrations) —
 // see ./tokens.js. The sidecar verb layer is defined further down; the
@@ -210,72 +177,8 @@ const { addAllowedMediaDir, addBaselineMediaDir, resetMediaAllowlist } = media;
 // Localhost range server for <video> (media:// stays image-only).
 const mediaHttp = createMediaHttpServer({ allowlist: media });
 
-async function prepareCatalogPath() {
-  console.log("[prepareCatalogPath] catalog:", catalog.path());
-  if (!catalog.path()) return;
-  fs.mkdirSync(catalog.path(), { recursive: true });
-  if (!catalog.hasDb()) {
-    console.log("[prepareCatalogPath] empty catalog, skipping sidecar migration");
-    return;
-  }
-  try { await sidecarCommands.splitSharedAssets(); } catch (_) { /* best-effort */ }
-  try { await sidecarCommands.repairResourceSets(); } catch (_) { /* best-effort */ }
-  if (catalog.isSample()) {
-    const repaired = await repairLegacySamplePreviews({
-      catalogPath: catalog.path(), source: samplePhotosSource,
-      transport: sidecarTransport, commands: sidecarCommands,
-      getCatalogPath: catalog.path,
-    });
-    if (repaired) {
-      const originals = sampleOriginalNames(samplePhotosSource)
-        .map((name) => path.join(catalog.samplePath(), "photos", name)).filter((file) => fs.existsSync(file));
-      if (originals.length) {
-        // Resume an interrupted sample import without resurrecting originals
-        // the user deliberately removed from this catalog.
-        await startImportTask({ mode: "processed_only", imageDirs: originals, auto: true });
-      }
-    }
-  }
-}
-
-// ── Sample catalog ──────────────────────────────────────────────────────────
-// Bundled demo library for first-run exploration. Created on the user's first
-// click (never silently on install, so demo photos are never mistaken for the
-// user's own data) and reopened directly afterwards. It lives under userData —
-// app-owned, apart from real catalogs — and the bundled photos are copied
-// INSIDE the catalog folder, so resetting is one folder delete and the media
-// allowlist covers them without extra roots.
-const samplePhotosSource = isPackaged
-  ? path.join(process.resourcesPath, "sample-photos")
-  : path.join(__dirname, "..", "sample-photos");
-
-async function openSampleCatalog({ reset = false } = {}) {
-  const samplePath = catalog.samplePath();
-  if (reset && fs.existsSync(samplePath)) {
-    await sidecarTransport.withCatalogPaused(samplePath, () =>
-      fs.promises.rm(samplePath, { recursive: true, force: true }));
-  }
-  // No DB yet means the catalog was never populated (or was reset / deleted
-  // externally) — copy the bundled photos and import them. Both steps are
-  // idempotent, so an interrupted first open self-heals on the next one.
-  const fresh = !catalog.hasDbAt(samplePath);
-  const photosDir = path.join(samplePath, "photos");
-  let originals = [];
-  if (fresh) {
-    fs.mkdirSync(samplePath, { recursive: true });
-    originals = copySampleOriginals(samplePhotosSource, photosDir);
-  }
-  await switchCatalogTo(samplePath);
-  if (fresh) {
-    await registerRoots("image", [photosDir]);
-    await startImportTask({ mode: "processed_only", imageDirs: originals });
-  }
-  return { path: samplePath, fresh };
-}
-
 // Sidecar transport lives in ./sidecar/transport.js — resident process,
-// one-shot fallback, secret handoff, detached jobs. Aliased here so the
-// hundreds of existing call sites stay unchanged.
+// one-shot fallback, secret handoff, detached jobs.
 const sidecarTransport = createSidecarTransport({
   rootDir,
   sidecarSrc,
@@ -287,18 +190,16 @@ const sidecarTransport = createSidecarTransport({
 // below — nothing in main.js or the ipc/mcp modules assembles sidecar argv by
 // hand any more (that invariant is what keeps the three call surfaces from
 // drifting apart again).
-const callSidecarJsonAsync = sidecarTransport.callJsonAsync;
 const launchSidecarJob = sidecarTransport.launchJob;
 const stopResidentSidecar = sidecarTransport.stopResident;
 
 // Domain-verb command layer — the only place argv is assembled. IPC handlers
 // and MCP tools both receive this instead of building commands by hand.
-const sidecarCommands = createSidecarCommands(callSidecarJsonAsync, sidecarTransport.callJsonOneShot);
+const sidecarCommands = createSidecarCommands(sidecarTransport.callJsonAsync, sidecarTransport.callJsonOneShot);
 
 // Image write-back with the original's EXIF/XMP, and the background-task
-// starters — both lived here until review 2026-09-16 §2. See ./imageMetadata.js
-// and ./tasks.js; the module-level names below are what the ipc/mcp modules
-// receive through their register() deps.
+// starters — see ./imageMetadata.js and ./tasks.js; the module-level names
+// below are what the ipc/mcp modules receive through their register() deps.
 const { writeImageWithSourceMetadata } = createImageMetadataWriter({
   readSourceMetadata: (sourcePath) => sidecarCommands.readImageMetadata(sourcePath),
 });
@@ -326,60 +227,23 @@ async function registerRoots(rootType, paths) {
   return await sidecarCommands.registerRoots(rootType, uniquePaths);
 }
 
-// UI → Agent bridge: the renderer reports every selection change so the MCP
-// get_selection tool can answer "these photos" without a round trip.
-let currentSelection = { assets: [], updatedAt: null };
+// Agent ↔ app window: the selection mirror, catalog-changed broadcasts, reveal
+// and in-renderer rendering — see ./agentBridge.js.
+const agentBridge = createAgentBridge({ BrowserWindow, ipcMain });
 let mcpServerApi = null;
-ipcMain.on("workspace:selection-changed", (_event, assets) => {
-  currentSelection = { assets: Array.isArray(assets) ? assets : [], updatedAt: new Date().toISOString() };
-});
-
-// Agent write tools call this after mutating the catalog so the UI refreshes
-// immediately instead of waiting for a manual reload. See docs/agent-native-mcp.md.
-function broadcastCatalogChanged(scope, detail = {}) {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send("workspace:catalog-changed", { scope, reason: "agent", ...detail });
-  }
-}
-
-// Agent → UI bridge: bring the window forward and ask the renderer to select
-// and scroll to the given assets. Resolves with the renderer's ack ({found,
-// missing}) or a timeout fallback so MCP tool calls never hang on the UI.
-function revealAssetsInApp(assetIds) {
-  return new Promise((resolve) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (!win || win.isDestroyed()) {
-      resolve({ shown: false, error: "App window is not available." });
-      return;
-    }
-    const requestId = crypto.randomUUID();
-    const channel = `workspace:agent-reveal-result:${requestId}`;
-    const timer = setTimeout(() => {
-      ipcMain.removeAllListeners(channel);
-      resolve({ shown: true, acknowledged: false, requested: assetIds });
-    }, 8000);
-    ipcMain.once(channel, (_event, result) => {
-      clearTimeout(timer);
-      resolve({ shown: true, acknowledged: true, ...result });
-    });
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-    win.webContents.send("workspace:agent-reveal-assets", { requestId, assetIds });
-  });
-}
 
 // Window, application menu, fullscreen and the open-file queue — see
 // ./appShell.js. The menu re-renders from getLocale on every install.
 const appShell = createAppShell({
   BrowserWindow, Menu, makeT,
-  getLocale: () => currentLocale,
+  getLocale: locale.current,
   devServerUrl,
   preloadPath: path.join(__dirname, "preload.js"),
   indexHtml: path.join(__dirname, "..", "dist", "index.html"),
   screen, nativeTheme,
   getShortcuts: () => readAppSettings()?.shortcuts || {},
 });
+const getMainWindow = () => BrowserWindow.getAllWindows()[0] || null;
 
 // Windows title strip (WindowTitleBar.jsx): its menu button, and the caption
 // buttons' colour following the app theme. No-ops on macOS.
@@ -388,67 +252,12 @@ ipcMain.handle("window:popup-app-menu", (event, x, y) =>
 ipcMain.handle("window:set-titlebar-theme", (event, theme) =>
   appShell.setTitleBarTheme(BrowserWindow.fromWebContents(event.sender), theme));
 
-// Windows and Linux make a dialog modal to the window that asked for it, so it
-// can't slip behind the window and leave it clickable; macOS keeps its
-// free-standing panels.
-const dialogParent = (event) => (process.platform === "darwin" ? null : BrowserWindow.fromWebContents(event.sender));
-
-function showOpenDialogFor(event, options) {
-  const parent = dialogParent(event);
-  return parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options);
-}
-
-function showSaveDialogFor(event, options) {
-  const parent = dialogParent(event);
-  return parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options);
-}
-
-// pick: "files" | "folders" from Import Files… / Import Folder… on Windows and
-// Linux, whose dialogs can't take both (./importDialog.js).
-ipcMain.handle("workspace:pick-directories", async (event, kind, pick) => {
-  const options = importDialogOptions({ platform: process.platform, kind, pick, t: makeT(currentLocale) });
-  const result = await showOpenDialogFor(event, options);
-  return result.canceled ? [] : result.filePaths;
-});
-
-ipcMain.handle("workspace:register-roots", (_event, rootType, paths) => {
-  return registerRoots(rootType, paths);
-});
-
-// Handwriting reference image (style-transfer source). The chosen file is fed
-// to the text-image job as --ref-image; allow it through media:// so the modal
-// can show a thumbnail.
-ipcMain.handle("workspace:pick-handwriting-ref", async (event) => {
-  const result = await showOpenDialogFor(event, {
-    title: "Choose reference image",
-    properties: ["openFile"],
-    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
-  });
-  if (result.canceled || !result.filePaths[0]) return null;
-  const filePath = result.filePaths[0];
-  addAllowedMediaDir(path.dirname(filePath));
-  return filePath;
-});
-
-ipcMain.handle("workspace:pick-catalog", async (event) => {
-  const defaultDir = isPackaged
-    ? app.getPath("documents")
-    : path.join(rootDir, "data");
-  const options = catalogDialogOptions({ action: "open", defaultDir, t: makeT(currentLocale) });
-  const result = await showOpenDialogFor(event, options);
-  return result.canceled ? null : result.filePaths[0];
-});
-
-ipcMain.handle("workspace:create-catalog", async (event) => {
-  const defaultDir = isPackaged
-    ? path.join(app.getPath("documents"), "AfterFrame")
-    : path.join(rootDir, "data");
-  const options = catalogDialogOptions({ action: "create", defaultDir, t: makeT(currentLocale) });
-  const result = await showSaveDialogFor(event, options);
-  if (result.canceled || !result.filePath) {
-    return null;
-  }
-  return catalog.createAt(result.filePath);
+// The sample catalog and the open-time self-repair every catalog gets — see
+// ./sampleCatalog.js. switchCatalogTo stays here (./catalog.js header).
+const sample = createSampleCatalog({
+  catalog, source: samplePhotosSource,
+  transport: sidecarTransport, commands: sidecarCommands,
+  startImportTask, switchCatalogTo, registerRoots,
 });
 
 async function switchCatalogTo(nextCatalogPath) {
@@ -467,11 +276,11 @@ async function switchCatalogTo(nextCatalogPath) {
   // Per-catalog caches must not leak across libraries: media allowlist roots,
   // the agent-facing selection mirror, and the MCP preview-path cache.
   resetMediaAllowlist();
-  currentSelection = { assets: [], updatedAt: null };
+  agentBridge.clearSelection();
   // Not `?.clearPreviewCache?.()` — the second optional chain silently no-ops
   // when the method goes missing, which is exactly how this leak survived.
   mcpServerApi?.clearPreviewCache();
-  await prepareCatalogPath();
+  await sample.prepareCatalogPath();
   void peopleApi?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch
   if (catalog.path()) {
@@ -481,16 +290,26 @@ async function switchCatalogTo(nextCatalogPath) {
 }
 
 ipcMain.handle("workspace:switch-catalog", (_event, nextCatalogPath) => switchCatalogTo(nextCatalogPath));
+ipcMain.handle("workspace:open-sample-catalog", () => sample.openSampleCatalog());
+ipcMain.handle("workspace:reset-sample-catalog", () => sample.openSampleCatalog({ reset: true }));
+ipcMain.handle("workspace:register-roots", (_event, rootType, paths) => registerRoots(rootType, paths));
 
-ipcMain.handle("workspace:open-sample-catalog", () => openSampleCatalog());
-
-ipcMain.handle("workspace:reset-sample-catalog", () => openSampleCatalog({ reset: true }));
+const dialogs = dialogsIpc.createDialogs({ dialog, BrowserWindow });
+dialogsIpc.register({
+  ipcMain, dialogs, t,
+  defaultCatalogDir: (action) => {
+    if (!isPackaged) return path.join(rootDir, "data");
+    return action === "create" ? path.join(app.getPath("documents"), "AfterFrame") : app.getPath("documents");
+  },
+  createCatalogAt: (targetPath) => catalog.createAt(targetPath),
+  addAllowedMediaDir,
+});
 
 editorsIpc.register({ ipcMain });
 
 const watcherApi = watcherModule.register({
   ipcMain,
-  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  getMainWindow,
   getCatalogPath: catalog.path,
   readCatalogSettings,
   updateCatalogSettings,
@@ -547,78 +366,30 @@ assetsIpc.register({
   commands: sidecarCommands, addAllowedMediaDir,
   getCatalogState: catalog.state,
   getUserDataPath: () => app.getPath("userData"),
-  t: () => makeT(currentLocale),
+  t,
 });
 
-// Locale: synchronous read for renderer startup; setter persists + rebuilds the
-// (main-process) menu so it flips language together with the UI.
-ipcMain.on("app:get-locale", (event) => {
-  event.returnValue = currentLocale;
-});
 ipcMain.on("app:get-media-port", (event) => {
   event.returnValue = mediaHttp.port();
 });
-async function applyLocale(lng) {
-  if (!SUPPORTED_LOCALES.includes(lng)) return currentLocale;
-  await updateAppSettings((s) => ({ ...s, locale: lng }));
-  currentLocale = lng;
-  appShell.installMenu();
-  return currentLocale;
-}
-ipcMain.handle("app:set-locale", (_event, lng) => applyLocale(lng));
 
 settingsTransferIpc.register({
   app, ipcMain, dialog,
-  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  getMainWindow,
   getAppSettingsPath, readAppSettings, updateAppSettings,
   decryptToken, setStoredProviderConfig,
   isEncryptionAvailable: tokens.isEncryptionAvailable,
-  applyLocale,
+  applyLocale: locale.applyLocale,
 });
 
-// Open an app cache directory in Finder (for manual cleanup). These live under
-// userData, independent of any catalog.
-ipcMain.handle("app:open-cache-dir", (_event, kind) => {
-  const dirs = {
-    depth: path.join(app.getPath("userData"), "depth-cache"),
-    stickers: path.join(app.getPath("userData"), "stickers"),
-    videoProxies: path.join(app.getPath("userData"), "video-proxies"),
-    luts: path.join(app.getPath("userData"), "afterframe", "luts"),
-  };
-  const dir = dirs[kind];
-  if (!dir) return false;
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    void shell.openPath(dir);
-    return true;
-  } catch {
-    return false;
-  }
-});
-
-// Preview settings (e.g. HD generation toggle). Stored under settings.previews.
-ipcMain.handle("app:get-preview-settings", () => readAppSettings()?.previews ?? {});
-ipcMain.handle("app:save-preview-settings", async (_event, next) => {
-  const persisted = await updateAppSettings((s) => ({
-    ...s,
-    previews: { ...(s?.previews || {}), ...(next || {}) },
-  }));
-  return persisted.previews ?? {};
-});
-
-// Keyboard shortcuts the user rebound (Settings → Keyboard Shortcuts), stored
-// as overrides of shared/shortcuts.mjs's defaults under settings.shortcuts.
-// Saving reinstalls the menu so its accelerators follow.
-ipcMain.handle("app:get-shortcuts", () => sanitizeShortcutOverrides(readAppSettings()?.shortcuts, process.platform));
-ipcMain.handle("app:save-shortcuts", async (_event, next) => {
-  const clean = sanitizeShortcutOverrides(next, process.platform);
-  const persisted = await updateAppSettings((s) => ({ ...s, shortcuts: clean }));
-  appShell.installMenu();
-  return persisted.shortcuts ?? {};
-});
-ipcMain.handle("app:set-menu-accelerators", (_event, on) => {
-  appShell.setMenuAccelerators(on !== false);
-  return true;
+// Cache folders, preview settings, shortcuts, menu accelerators — see
+// ./ipc/appSettings.js.
+appSettingsIpc.register({
+  ipcMain, shell,
+  getUserDataPath: () => app.getPath("userData"),
+  readAppSettings, updateAppSettings,
+  installMenu: appShell.installMenu,
+  setMenuAccelerators: appShell.setMenuAccelerators,
 });
 
 // macOS plays originals with AVPlayer, and the player's fullscreen button
@@ -626,16 +397,12 @@ ipcMain.handle("app:set-menu-accelerators", (_event, on) => {
 nativeVideoIpc.register({
   ipcMain, BrowserWindow, app, allowlist: media,
   toggleFullscreen: appShell.toggleAppFullscreen,
-  addonPath: isPackaged
-    ? path.join(process.resourcesPath, "native", "bin", "video-player.node")
-    : path.join(rootDir, "apps", "desktop", "native", "bin", "video-player.node"),
+  addonPath: path.join(nativeBin, "video-player.node"),
 });
 // Playback proxy + keyframe filmstrip — see ./ipc/video.js.
 videoIpc.register({
   ipcMain, app, allowlist: media,
-  videoToolPath: isPackaged
-    ? path.join(process.resourcesPath, "native", "bin", "video-tool")
-    : path.join(rootDir, "apps", "desktop", "native", "bin", "video-tool"),
+  videoToolPath: path.join(nativeBin, "video-tool"),
   // No video-tool off macOS: the sidecar runs its commands with FFmpeg, in a
   // process of its own, as the resident one is serial.
   runVideoTool: process.platform === "darwin"
@@ -656,9 +423,6 @@ require("./devStaleness").register({
 
 // What this platform can do (api.can in the renderer); read once by preload.
 ipcMain.on("app:capabilities", (event) => {
-  const nativeBin = isPackaged
-    ? path.join(process.resourcesPath, "native", "bin")
-    : path.join(rootDir, "apps", "desktop", "native", "bin");
   event.returnValue = desktopCapabilities(process.platform, { hasHelper: (name) => fs.existsSync(path.join(nativeBin, name)) });
 });
 
@@ -670,7 +434,7 @@ clipboardIpc.register({ ipcMain, clipboard, allowlist: media });
 ipcMain.handle("app:mcp-status", () => mcpServerApi?.getStatus() ?? { status: "starting" });
 
 const saveFileApi = saveFileIpc.register({
-  ipcMain, dialog, dialogParent,
+  ipcMain, dialogs,
   rootDir,
   writeImageWithSourceMetadata,
   addAllowedMediaDir,
@@ -679,11 +443,11 @@ const saveFileApi = saveFileIpc.register({
 frameLogosIpc.register({ ipcMain });
 frameTemplatesIpc.register({
   app, ipcMain, dialog, sharp, readAppSettings, updateAppSettings,
-  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  getMainWindow,
 });
 lutsIpc.register({
   app, ipcMain, dialog, shell, readAppSettings, updateAppSettings,
-  getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+  getMainWindow,
 });
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.
@@ -710,8 +474,6 @@ ipcMain.handle("workspace:set-theme", (_event, theme) => {
   return nativeTheme.themeSource;
 });
 
-// --- Collections ---
-
 collectionsIpc.register({
   ipcMain,
   commands: sidecarCommands,
@@ -721,33 +483,7 @@ collectionsIpc.register({
 // Native OS drag-out — see ./ipc/nativeDrag.js.
 nativeDragIpc.register({ ipcMain, nativeImage });
 
-ipcMain.handle("workspace:list-system-fonts", async () => {
-  try {
-    const { exec } = require("child_process");
-    const { promisify } = require("util");
-    const run = promisify(exec);
-    if (process.platform === "darwin") {
-      // Use JXA (JavaScript for Automation) via osascript — more reliable than swift CLI
-      const { stdout } = await run(
-        `osascript -l JavaScript -e 'ObjC.import("AppKit"); const mgr = $.NSFontManager.sharedFontManager; const arr = mgr.availableFontFamilies; const r = []; for (let i = 0; i < arr.count; i++) r.push(arr.objectAtIndex(i).js); r.sort().join("\\n")'`,
-        { maxBuffer: 10 * 1024 * 1024, timeout: 10000 }
-      );
-      return stdout.trim().split("\n").filter(Boolean);
-    } else if (process.platform === "win32") {
-      const { stdout } = await run(
-        'powershell -Command "[System.Reflection.Assembly]::LoadWithPartialName(\'System.Drawing\') | Out-Null; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }"',
-        // Without it a terminal window flashes up while PowerShell runs.
-        { maxBuffer: 10 * 1024 * 1024, windowsHide: true }
-      );
-      return stdout.trim().split("\r\n").filter(Boolean);
-    }
-    return [];
-  } catch {
-    return [];
-  }
-});
-
-// ---- IPC modules: depth + stickers --------------------------------------
+systemFontsIpc.register({ ipcMain });
 
 depthIpc.register({
   app, ipcMain, dialog,
@@ -782,7 +518,7 @@ app.whenReady().then(async () => {
     convertHeic: process.platform === "darwin" ? undefined : (src, out) => sidecarCommands.transcodeImage(src, out),
   });
 
-  const catalogPreparation = prepareCatalogPath().finally(() => {
+  const catalogPreparation = sample.prepareCatalogPath().finally(() => {
     // A paused task remains paused; only queued durable people tasks are
     // resumed after an app restart. The runner uses its cursor and model path
     // stored in the task payload, so it cannot silently switch model spaces.
@@ -811,10 +547,11 @@ app.whenReady().then(async () => {
     startImportTask,
     formatJobStatus,
     registerRoots,
-    revealAssetsInApp,
-    getCurrentSelection: () => currentSelection,
+    revealAssetsInApp: agentBridge.revealAssetsInApp,
+    getCurrentSelection: agentBridge.getCurrentSelection,
+    broadcastCatalogChanged: agentBridge.broadcastCatalogChanged,
+    askRenderer: agentBridge.askRenderer,
     commands: sidecarCommands,
-    broadcastCatalogChanged,
     startAnnotationTask: annotationApi.startAnnotationTask,
     startAiRepaintTask,
     activeRepaintProvider,
@@ -823,7 +560,6 @@ app.whenReady().then(async () => {
     sharp,
     processAndSave: saveFileApi.processAndSave,
     watcher: watcherApi,
-    askRenderer: createAgentRenderBridge({ BrowserWindow, ipcMain }).askRenderer,
     // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
     startPeopleIndex: (options) => peopleApi?.startPeopleIndex(options),
     // Dev and packaged builds get DIFFERENT default ports so running both at

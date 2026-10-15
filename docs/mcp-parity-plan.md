@@ -1,6 +1,6 @@
 # MCP 对等计划：人能做的操作，agent 也能做
 
-> 状态：Phase 1 已实现（2026-08-16，feat/mcp-parity-phase1，17→30 tools；e2e：e2e/26-mcp-parity.spec.js）。裁剪：search_assets 的 collection_id 归 manage_collections browse；missing_original 以 compact 字段呈现（verify_assets 做全量盘点）；search_facet 并入 get_catalog_info/list_tags 不单独立 tool。Phase 2 已实现（2026-08-16 同分支，30→34 tools）：渲染桥 electron/agentRender.js + src/agent/renderBridge.js（复用 collageRender/saveEditedImage/renderFrame，像素与 UI 导出一致）；render_collage（单页+per_page 批量）、edit_asset（几何+边距+文字/贴纸层配方）、apply_frame（EXIF 水印模板）、get_editor_capabilities；show_in_app 增 view=editor/collage/people/stickers。裁剪：贴纸库 CRUD、深度层、渲染桥 job 化（>N 页）留 Phase 3；e2e：28-mcp-render.spec.js（9 条，真实像素断言）+ 27 增拼图 agent 任务。gotcha：media:// 图入 canvas 必须 crossOrigin=anonymous（Electron 43 canvas 污染）；渲染桥在 React 挂载后才可用（MCP server 先起，agent 需容忍启动头几秒 bridge 不可用）。Phase 3-4 未开始。前置盘点见 `docs/mcp-coverage-audit.md`；MCP 设计与现有 17 个 tool 见 `docs/agent-native-mcp.md`。
+> 状态：Phase 1 已实现（2026-08-16，feat/mcp-parity-phase1，17→30 tools；e2e：e2e/26-mcp-parity.spec.js）。裁剪：search_assets 的 collection_id 归 manage_collections browse；missing_original 以 compact 字段呈现（verify_assets 做全量盘点）；search_facet 并入 get_catalog_info/list_tags 不单独立 tool。Phase 2 已实现（2026-08-16 同分支，30→34 tools）：渲染桥 electron/agentBridge.js + src/agent/renderBridge.js（复用 collageRender/saveEditedImage/renderFrame，像素与 UI 导出一致）；render_collage（单页+per_page 批量）、edit_asset（几何+边距+文字/贴纸层配方）、apply_frame（EXIF 水印模板）、get_editor_capabilities；show_in_app 增 view=editor/collage/people/stickers。裁剪：贴纸库 CRUD、深度层、渲染桥 job 化（>N 页）留 Phase 3；e2e：28-mcp-render.spec.js（9 条，真实像素断言）+ 27 增拼图 agent 任务。gotcha：media:// 图入 canvas 必须 crossOrigin=anonymous（Electron 43 canvas 污染）；渲染桥在 React 挂载后才可用（MCP server 先起，agent 需容忍启动头几秒 bridge 不可用）。Phase 3-4 未开始。前置盘点见 `docs/mcp-coverage-audit.md`；MCP 设计与现有 17 个 tool 见 `docs/agent-native-mcp.md`。
 
 ## 0. 目标与原则
 
@@ -37,7 +37,7 @@ MCP tool ──▶ main: askRenderer(kind, payload, {timeoutMs})
   - `collage`：`computeGroups`/`orderImages`（`collageBatch.js`）+ 把 `CollageCanvas` 的绘制核心抽成 `renderCollagePage({images, template, options}) → canvas`（现在 `exportToBlob` 依赖组件 ref，需要抽出无组件版本）。
   - `edit`：复用 `saveEditedImage(ctx)`——需要把 `EditorOverlay` 里"从状态构造 ctx"的逻辑抽成 `buildSaveContext(state)`，状态由 agent 传 JSON（见 §3 编辑配方）。`drawLayersToCtx` / `frameRender` / `handwritingMatte` 都在这里被复用，零重复实现。
   - `frame`：`edit` 的子集（只有一个 frame 层）。
-- **主进程侧**：`electron/agentRender.js` 提供 `askRenderer()`；窗口不存在时返回明确错误（MCP 本来就要求 App 运行；隐藏 BrowserWindow 兜底作为后续可选项）。
+- **主进程侧**：`electron/agentBridge.js` 提供 `askRenderer()`；窗口不存在时返回明确错误（MCP 本来就要求 App 运行；隐藏 BrowserWindow 兜底作为后续可选项）。
 - **并发**：渲染桥请求串行化（一个队列），避免 canvas 内存尖峰；长任务（批量拼图 >N 页）走 job（`create-job` 类型 `agent_render`），出现在 JobDock，可取消。
 - **像素一致性**：和 UI 导出走同一函数 → agent 出图与人点导出按钮完全一致；这也是不用 sharp 重写的原因。
 
@@ -93,7 +93,7 @@ MCP tool ──▶ main: askRenderer(kind, payload, {timeoutMs})
 ### Phase 2 — 渲染桥 + 合成类 tool（3～5 天）
 
 1. 抽纯函数：`renderCollagePage()`（从 `CollageCanvas.jsx`）、`buildSaveContext()`（从 `EditorOverlay`/`useEditorSave`），保证 UI 路径改用同一函数（防分叉）。
-2. `electron/agentRender.js` + `src/agent/renderBridge.js`（§2）。
+2. `electron/agentBridge.js` + `src/agent/renderBridge.js`（§2）。
 3. tools：
 
 | tool | 说明 |
