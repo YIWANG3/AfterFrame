@@ -1,39 +1,42 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { collapseRootPaths, mergeRoots, determineImportMode, fileName } from "../utils/format";
 import { invalidateAnnotations, seedAnnotations } from "../components/annotation/annotationStore";
 import { invalidateTags, seedTags } from "../components/annotation/tagStore";
 import api from "../api";
 import useJobs from "./useJobs";
-import { oneOf, readPref, writePref } from "../utils/prefs";
+import useCollections from "./useCollections";
+import useAssetMutations from "./useAssetMutations";
+import useImportPipeline from "./useImportPipeline";
+import { usePref } from "./usePref";
+import { adoptLegacyPref, intIn, oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
   DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
-  rulesFromScope, scopeFromRules, scopeKeyOf, scopeSelectsByRating, scopeSelectsByFlag, scopeSelectsByTag, rejectedFilters, sortOutsideFolder,
+  rulesFromScope, scopeFromRules, scopeKeyOf, rejectedFilters, sortOutsideFolder,
   shouldResetScopeForReveal,
 } from "./workspaceLogic";
 
 const PAGE_SIZE = 180;
-const LIVE_IMPORT_REFRESH_MS = 4000;
-const NO_QUEUED_IMPORT = { rawDirs: [], imageDirs: [], auto: false };
-const THEME_STORAGE_KEY = "afterframe-theme";
-const SIDEBAR_WIDTH_STORAGE_KEY = "afterframe-sidebar-width";
-const INSPECTOR_WIDTH_STORAGE_KEY = "afterframe-inspector-width";
 
 // The library sort is remembered (utils/prefs.js): the app opens, and a
 // catalog switch lands, on All Assets in the order last picked.
 const SORT_PREF = "gallery.sort";
 const startScope = () => ({ ...DEFAULT_SCOPE, sort: readPref(SORT_PREF, DEFAULT_SCOPE.sort, oneOf(LIBRARY_SORTS)) });
 
-// What a flag is stored as (sidecar db/assets.py FLAG_VALUES).
-const FLAG_VALUES = { pick: 1, reject: -1, none: 0 };
+// The theme and the pane widths are remembered too. Earlier versions kept
+// them under bare localStorage keys; those move under the pref keys once.
+export const THEMES = ["dark", "light", "system"];
+// The ranges usePaneResize drags within (App.jsx).
+export const SIDEBAR_WIDTH_RANGE = [200, 360];
+export const INSPECTOR_WIDTH_RANGE = [240, 420];
+adoptLegacyPref("afterframe-theme", "theme");
+adoptLegacyPref("afterframe-sidebar-width", "sidebarWidth", Number);
+adoptLegacyPref("afterframe-inspector-width", "inspectorWidth", Number);
 
 export default function useWorkspace({ pushToast } = {}) {
   const { t } = useTranslation("app");
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "dark");
-  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) || 240));
-  const [inspectorWidth, setInspectorWidth] = useState(() =>
-    Number(localStorage.getItem(INSPECTOR_WIDTH_STORAGE_KEY) || 300),
-  );
+  const [theme, setTheme] = usePref("theme", "dark", oneOf(THEMES));
+  const [sidebarWidth, setSidebarWidth] = usePref("sidebarWidth", 240, intIn(...SIDEBAR_WIDTH_RANGE));
+  const [inspectorWidth, setInspectorWidth] = usePref("inspectorWidth", 300, intIn(...INSPECTOR_WIDTH_RANGE));
   const [info, setInfo] = useState(null);
   const [summary, setSummary] = useState(null);
   const [roots, setRoots] = useState([]);
@@ -88,25 +91,6 @@ export default function useWorkspace({ pushToast } = {}) {
   const [browserLoadingMore, setBrowserLoadingMore] = useState(false);
   const [browserHasMore, setBrowserHasMore] = useState(true);
   const [browserOffset, setBrowserOffset] = useState(0);
-  const [importTask, setImportTask] = useState(null);
-  const [previewTask, setPreviewTask] = useState(null);
-  const [enrichmentTask, setEnrichmentTask] = useState(null);
-  const [pendingImport, setPendingImport] = useState(NO_QUEUED_IMPORT);
-  // Dirs asked for while an import runs, replayed when it ends. Requests and
-  // the finish handler go through the ref, never a render's copy, so a request
-  // lands either before the handler takes the queue or after it, and then finds
-  // no import running and starts its own. The state only feeds the dock's
-  // "Queued changes" note.
-  const pendingImportRef = useRef(NO_QUEUED_IMPORT);
-  const setImportQueue = (queue) => {
-    pendingImportRef.current = queue;
-    setPendingImport(queue);
-  };
-  const queueImport = ({ rawDirs: raw = [], imageDirs: image = [], auto = false }) => {
-    const queue = pendingImportRef.current;
-    setImportQueue({ rawDirs: mergeRoots(queue.rawDirs, raw), imageDirs: mergeRoots(queue.imageDirs, image), auto: queue.auto || auto });
-  };
-  const [collections, setCollections] = useState([]);
   // Monotonic catalog-content revision: bumped on every refreshAll, every
   // catalog-changed event (imports, metadata refresh, agent writes) AND every
   // in-UI mutation below (deletes, collection membership, ratings) — those
@@ -139,19 +123,26 @@ export default function useWorkspace({ pushToast } = {}) {
   // Unified job polling lives in useJobs; domain reactions flow through this
   // bridge ref (reassigned every render → the timer never sees stale closures).
   const jobsBridgeRef = useRef({});
+  const { activeJobs, lastFinishedJob, pokeJobs, importRunning, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
+
+  // The three domain hooks below read this hook's state through the same
+  // kind of ref: assigned after the state they need exists, before anything
+  // can call them (the first calls come from effects and events).
+  const importBridgeRef = useRef({});
+  const importPipeline = useImportPipeline(importBridgeRef, lastFinishedJob);
+  const { importTask, mirrorTask, startIncrementalImport } = importPipeline;
+  const collectionsBridgeRef = useRef({});
+  const collectionsApi = useCollections(collectionsBridgeRef);
+  const { collections, setCollections, hasSmartCollections, loadCollections } = collectionsApi;
+  const mutationsBridgeRef = useRef({});
+  const assetMutations = useAssetMutations(mutationsBridgeRef);
+  const { dropLoadedItems } = assetMutations;
+
   jobsBridgeRef.current = {
     refreshAll: (opts) => refreshAll(opts),
-    startIncrementalImport: (opts) => startIncrementalImport(opts),
-    consumeQueuedImport: () => {
-      const queued = pendingImportRef.current;
-      setImportQueue(NO_QUEUED_IMPORT);
-      return queued;
-    },
-    mirrorTask: (type, task) => {
-      if (type === "import") setImportTask(task);
-      else if (type === "preview") setPreviewTask(task);
-      else if (type === "enrichment") setEnrichmentTask(task);
-    },
+    startIncrementalImport,
+    consumeQueuedImport: importPipeline.consumeQueuedImport,
+    mirrorTask,
     // Colours changed nothing about which photos are in the grid or their
     // order: only the Colour chip (options exist now) and the open photo's
     // palette. A full refresh would re-browse and lose a scrolled position.
@@ -165,7 +156,27 @@ export default function useWorkspace({ pushToast } = {}) {
       }
     },
   };
-  const { activeJobs, lastFinishedJob, pokeJobs, importRunning, cancelJob, pauseJob, resumeJob, resetJobs } = useJobs(jobsBridgeRef);
+  importBridgeRef.current = {
+    t, pushToast, info, summary, rawDirs, imageDirs, setRoots, pokeJobs, importRunning,
+    refreshAll: (opts) => refreshAll(opts),
+    refreshBrowse: () => refreshBrowse(),
+    setSummary,
+  };
+  collectionsBridgeRef.current = {
+    t, pushToast, scopeRef, updateScope,
+    goTo: (next) => goTo(next),
+    openSmartCollection: (collection) => openSmartCollection(collection),
+    bumpCatalogRevision,
+    refreshBrowse: () => refreshBrowse(),
+    dropLoadedItems,
+  };
+  mutationsBridgeRef.current = {
+    t, pushToast, itemsRef, detailRef, setItems, setDetail, scopeRef, revealRef,
+    refreshBrowse: () => refreshBrowse(),
+    loadCollections, hasSmartCollections,
+    loadFacetValues: () => loadFacetValues(),
+    bumpCatalogRevision, selectedAssetIdRef, setSelectedAssetId, setBrowserOffset,
+  };
 
   // Settings starts people indexing outside the import/annotation hooks. Wake
   // the shared job poller so the Activity Center and dock appear immediately.
@@ -190,7 +201,6 @@ export default function useWorkspace({ pushToast } = {}) {
   // OS color scheme live; explicit values pin it. The applied value lands on
   // documentElement.dataset.theme (the only thing the CSS keys off).
   useEffect(() => {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
       const effective = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
@@ -206,12 +216,10 @@ export default function useWorkspace({ pushToast } = {}) {
 
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
-    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--inspector-width", `${inspectorWidth}px`);
-    localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
   }, [inspectorWidth]);
 
   // Backend handles sorting; the client only narrows the PREVIOUS page locally
@@ -270,14 +278,6 @@ export default function useWorkspace({ pushToast } = {}) {
     if (!browserReady) return;
     loadFacetValues();
   }, [browserReady, summary?.browse_assets, summary?.image_assets, scopeKey, loadFacetValues]);
-
-  // Queued-changes note for the import card in the unified JobDock.
-  const queuedImportNote = useMemo(() => {
-    const queuedRawCount = pendingImport.rawDirs.length;
-    const queuedExportCount = pendingImport.imageDirs.length;
-    if (!queuedRawCount && !queuedExportCount) return null;
-    return `Queued changes: ${queuedExportCount} media · ${queuedRawCount} sources`;
-  }, [pendingImport]);
 
   // Re-read the photo the Inspector shows (which need not be the selected
   // card: a version sibling opened there is shown without being in the grid)
@@ -393,7 +393,7 @@ export default function useWorkspace({ pushToast } = {}) {
       // A silent failure here leaves the gallery showing stale items while
       // every chip/sort control claims a different view — always say so.
       console.error("[browse] FAILED", error?.message || error);
-      pushToast?.({ title: "Browse failed", message: error?.message || String(error), ttl: 6000, tone: "error" });
+      pushToast?.({ title: t("browseFailed"), message: error?.message || String(error), ttl: 6000, tone: "error" });
     } finally {
       if (browserRequestIdRef.current === requestId) {
         if (append) setBrowserLoadingMore(false);
@@ -630,330 +630,6 @@ export default function useWorkspace({ pushToast } = {}) {
     await loadBrowser({ scope: scopeRef.current, append: true });
   }
 
-  async function loadCollections() {
-    try {
-      const list = await api.listCollections();
-      setCollections(list || []);
-      return list || [];
-    } catch {
-      setCollections([]);
-      return [];
-    }
-  }
-
-  async function createCollection(name) {
-    const col = await api.createCollection(name, "manual");
-    await loadCollections();
-    return col;
-  }
-
-  // Save the current view as a smart collection: where the user is plus the
-  // refinement (workspaceLogic.rulesFromScope). The new collection then becomes
-  // the place, which also empties the filter bar: what was a refinement is now
-  // its rules.
-  async function saveSmartCollection(name) {
-    const rules = rulesFromScope(scopeRef.current);
-    if (!rules) return null;
-    const col = await api.createCollection(name, "smart", rules);
-    const saved = (await loadCollections()).find((c) => c.collection_id === col.collection_id);
-    // Never leave a smart collection that lost its conditions on the way in:
-    // it would sit in the sidebar at 0 photos, forever, under a "saved" toast.
-    // (Seen in dev with a main process older than the renderer, which dropped
-    // the rules argument.)
-    if (!saved?.rules) {
-      await api.deleteCollection(col.collection_id).catch(() => {});
-      await loadCollections();
-      throw new Error(t("smartCollectionRulesLost"));
-    }
-    openSmartCollection(saved);
-    return col;
-  }
-
-  // Rewrite a smart collection's rules from the current view, then show it:
-  //   viewing + a refinement → "narrow this collection to what I see" (the
-  //                            refinement nests on its old rules)
-  //   editing                → the bar's conditions replace its top layer
-  async function updateSmartCollectionRules(collectionId) {
-    const rules = rulesFromScope(scopeRef.current);
-    if (!rules) return;
-    await api.updateCollection(collectionId, { rules });
-    const saved = (await loadCollections()).find((c) => c.collection_id === collectionId);
-    if (saved) openSmartCollection(saved);
-  }
-
-  // Freeze what a smart collection shows right now into an ordinary folder.
-  async function snapshotSmartCollection(collection, name) {
-    const rules = collection?.rules;
-    if (!rules) return null;
-    const ids = [];
-    for (let offset = 0; ; offset += 500) {
-      const page = await api.browseImages({ status: "all", base: rules, limit: 500, offset });
-      ids.push(...(page || []).map((row) => row.asset_id));
-      if (!page || page.length < 500) break;
-    }
-    const folder = await api.createCollection(name, "manual");
-    if (ids.length) await api.collectionAddItems(folder.collection_id, ids);
-    await loadCollections();
-    return { ...folder, count: ids.length };
-  }
-
-  const reorderingCollectionsRef = useRef(false);
-  const [reorderingCollections, setReorderingCollections] = useState(false);
-  async function reorderCollections(collectionIds) {
-    if (reorderingCollectionsRef.current) return;
-    reorderingCollectionsRef.current = true;
-    setReorderingCollections(true);
-    const byId = new Map(collections.map((c) => [c.collection_id, c]));
-    setCollections([
-      ...collectionIds.map((id, sort_order) => ({ ...byId.get(id), sort_order })),
-      ...collections.filter((c) => c.kind !== "manual"),
-    ]);
-    try {
-      await api.reorderCollections(collectionIds);
-    } catch (error) {
-      pushToast?.({ title: t("folderOrderFailed"), message: String(error?.message || error), tone: "error" });
-    } finally {
-      await loadCollections();
-      reorderingCollectionsRef.current = false;
-      setReorderingCollections(false);
-    }
-  }
-
-  async function renameCollection(collectionId, name) {
-    await api.updateCollection(collectionId, { name });
-    await loadCollections();
-  }
-
-  async function deleteCollection(collectionId) {
-    await api.deleteCollection(collectionId);
-    bumpCatalogRevision();
-    if (scopeRef.current.collectionId === collectionId) updateScope({ collectionId: null });
-    if (scopeRef.current.smartCollectionId === collectionId) goTo({});
-    await loadCollections();
-  }
-
-  async function addToCollection(collectionId, assetIds) {
-    await api.collectionAddItems(collectionId, assetIds);
-    bumpCatalogRevision();
-    await loadCollections();
-    if (scopeRef.current.collectionId === collectionId) {
-      await refreshBrowse();
-    }
-  }
-
-  // The rows just left the list the server pages through (deleted, or taken
-  // out of the folder on screen). Paging is by offset, so the offset falls by
-  // every one of them that was loaded; otherwise the next page starts that
-  // many rows late and skips them. Ids past the loaded range never counted.
-  function dropLoadedItems(assetIds) {
-    const loadedIds = new Set(itemsRef.current.map((item) => item.asset_id));
-    const loaded = assetIds.filter((id) => loadedIds.has(id)).length;
-    const dropped = new Set(assetIds);
-    setItems((current) => current.filter((item) => !dropped.has(item.asset_id)));
-    // Not inside the setItems updater: StrictMode runs updaters twice.
-    if (loaded) setBrowserOffset((offset) => Math.max(0, offset - loaded));
-  }
-
-  async function removeFromCollection(collectionId, assetIds) {
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    if (!targetIds.length) return;
-    await api.collectionRemoveItems(collectionId, targetIds);
-    bumpCatalogRevision();
-    await loadCollections();
-    if (scopeRef.current.collectionId === collectionId) dropLoadedItems(targetIds);
-  }
-
-  async function deleteImageAssets(assetIds) {
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    if (!targetIds.length) return;
-    await api.deleteImageAssets(targetIds);
-    bumpCatalogRevision();
-    const deletedSet = new Set(targetIds);
-    dropLoadedItems(targetIds);
-    if (selectedAssetId && deletedSet.has(selectedAssetId)) {
-      setSelectedAssetId(null);
-      setDetail(null);
-    }
-  }
-
-  // Delete from disk: trash the originals AND drop the catalog records. Main
-  // trashes the files first, so no tombstone is written (a trashed file can't
-  // reappear in a watched dir). Paths are resolved by the caller (it has them).
-  async function deleteImageAssetsFromDisk(assetIds, paths) {
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    if (!targetIds.length) return null;
-    const result = await api.deleteImageAssetsFromDisk(targetIds, paths || []);
-    bumpCatalogRevision();
-    const deletedSet = new Set(targetIds);
-    dropLoadedItems(targetIds);
-    if (selectedAssetId && deletedSet.has(selectedAssetId)) {
-      setSelectedAssetId(null);
-      setDetail(null);
-    }
-    return result;
-  }
-
-  async function setAssetRating(assetIds, rating) {
-    // 0 is a rating of its own (cleared), as the catalog stores it.
-    const nextRating = Number(rating) || 0;
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    if (!targetIds.length) return;
-    const targetSet = new Set(targetIds);
-
-    // Snapshot what each tile showed so a failed write can be undone. Without
-    // this the stars stay on the new value while the catalog still holds the
-    // old one, until some unrelated browse reload happens to correct it.
-    const previousRatings = new Map();
-    for (const item of items) {
-      if (targetSet.has(item.asset_id)) previousRatings.set(item.asset_id, item.app_rating ?? null);
-    }
-    if (detail && targetSet.has(detail.asset_id) && !previousRatings.has(detail.asset_id)) {
-      previousRatings.set(detail.asset_id, detail.app_rating ?? null);
-    }
-
-    const applyRating = (resolve) => {
-      setItems((current) =>
-        current.map((item) => (targetSet.has(item.asset_id)
-          ? { ...item, app_rating: resolve(item.asset_id, item.app_rating) }
-          : item)),
-      );
-      setDetail((current) => (current && targetSet.has(current.asset_id)
-        ? { ...current, app_rating: resolve(current.asset_id, current.app_rating) }
-        : current));
-    };
-
-    applyRating(() => nextRating);
-
-    try {
-      await api.setAssetRating(targetIds, nextRating);
-      // A detail asked for just before the key press (click, then a number
-      // at once) answers after the change was shown, with the old rating:
-      // the sidecar takes requests in order. Show the change again.
-      applyRating(() => nextRating);
-      // A rating is the most common smart-collection condition.
-      if (collections.some((c) => c.kind === "smart")) void loadCollections();
-      // In a view that selects by rating, a photo that no longer qualifies
-      // leaves the grid now, as it already left the sidebar count — and the
-      // selection with it, like a delete, so nothing else gets rated by
-      // the next key press.
-      if (scopeSelectsByRating(scopeRef.current) && !revealRef.current) void refreshBrowse();
-    } catch (error) {
-      applyRating((assetId, current) => (previousRatings.has(assetId) ? previousRatings.get(assetId) : current));
-      pushToast?.({
-        title: t("ratingFailed"),
-        message: String(error?.message || error),
-        tone: "error",
-        ttl: 6000,
-      });
-      // Handled in full here (rolled back + surfaced); the only caller invokes
-      // this as `void setAssetRating(...)`, so rethrowing would just produce an
-      // unhandled rejection.
-      return;
-    }
-    // Ratings order cluster covers on the map — invalidate its point cache.
-    bumpCatalogRevision();
-  }
-
-  // Pick / reject / none, as Lightroom's P / X / U. Optimistic, like the
-  // rating: the tiles change at once and go back if the write fails.
-  async function setAssetFlag(assetIds, flag) {
-    const value = FLAG_VALUES[flag];
-    if (value === undefined) return;
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    if (!targetIds.length) return;
-    const targetSet = new Set(targetIds);
-    const previousFlags = new Map();
-    for (const item of items) {
-      if (targetSet.has(item.asset_id)) previousFlags.set(item.asset_id, item.app_flag ?? null);
-    }
-    if (detail && targetSet.has(detail.asset_id) && !previousFlags.has(detail.asset_id)) {
-      previousFlags.set(detail.asset_id, detail.app_flag ?? null);
-    }
-    const applyFlag = (resolve) => {
-      setItems((current) =>
-        current.map((item) => (targetSet.has(item.asset_id)
-          ? { ...item, app_flag: resolve(item.asset_id, item.app_flag) }
-          : item)),
-      );
-      setDetail((current) => (current && targetSet.has(current.asset_id)
-        ? { ...current, app_flag: resolve(current.asset_id, current.app_flag) }
-        : current));
-    };
-    applyFlag(() => value);
-    try {
-      await api.setAssetFlag(targetIds, flag);
-      // As for the rating: a detail asked for just before is answered first.
-      applyFlag(() => value);
-      if (collections.some((c) => c.kind === "smart")) void loadCollections();
-      // In a view that picks by flag ("rejected" while culling), a photo that
-      // no longer qualifies leaves the grid now.
-      if (scopeSelectsByFlag(scopeRef.current) && !revealRef.current) void refreshBrowse();
-    } catch (error) {
-      applyFlag((assetId, current) => (previousFlags.has(assetId) ? previousFlags.get(assetId) : current));
-      pushToast?.({
-        title: t("flagFailed"),
-        message: String(error?.message || error),
-        tone: "error",
-        ttl: 6000,
-      });
-      return;
-    }
-    bumpCatalogRevision();
-  }
-
-  // The description the user writes (Inspector), shown at once. "" leaves
-  // it empty (their choice); null hands it back to the AI's caption.
-  async function setAssetDescription(assetIds, text) {
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    if (!targetIds.length) return false;
-    const targetSet = new Set(targetIds);
-    const value = text === null ? null : String(text || "").trim();
-    const shown = (record) => {
-      const ai = (record.ai_caption || record.annotation?.caption || "").trim();
-      return value !== null
-        ? { description: value || null, description_source: "user" }
-        : { description: ai || null, description_source: ai ? "ai" : null };
-    };
-    const previous = new Map();
-    for (const item of items) if (targetSet.has(item.asset_id)) previous.set(item.asset_id, { description: item.description ?? null, description_source: item.description_source ?? null });
-    if (detail && targetSet.has(detail.asset_id) && !previous.has(detail.asset_id)) {
-      previous.set(detail.asset_id, { description: detail.description ?? null, description_source: detail.description_source ?? null });
-    }
-    const apply = (resolve) => {
-      setItems((current) => current.map((item) => (targetSet.has(item.asset_id) ? { ...item, ...resolve(item) } : item)));
-      setDetail((current) => (current && targetSet.has(current.asset_id) ? { ...current, ...resolve(current) } : current));
-    };
-    apply(shown);
-    try {
-      await api.setAssetDescription(targetIds, value);
-    } catch (error) {
-      apply((record) => previous.get(record.asset_id) || {});
-      pushToast?.({ title: t("descriptionFailed"), message: String(error?.message || error), tone: "error", ttl: 6000 });
-      return false;
-    }
-    if (scopeRef.current.query?.trim() || scopeRef.current.filters?.caption_contains) {
-      if (!revealRef.current) void refreshBrowse();
-    }
-    bumpCatalogRevision();
-    return true;
-  }
-
-  // The gallery's "Add Tags…": every tag onto every photo, in one write. The
-  // Inspector's tags, the tag filter's options and a view that selects by
-  // tag all follow.
-  async function addTagsToAssets(assetIds, tags) {
-    const targetIds = [...new Set((assetIds || []).filter(Boolean))];
-    const clean = [...new Set((tags || []).map((tag) => String(tag || "").trim()).filter(Boolean))];
-    if (!targetIds.length || !clean.length) return null;
-    const result = await api.addAssetTags(targetIds, clean);
-    invalidateTags(targetIds);
-    loadFacetValues();
-    if (collections.some((c) => c.kind === "smart")) void loadCollections();
-    if (scopeSelectsByTag(scopeRef.current) && !revealRef.current) void refreshBrowse();
-    bumpCatalogRevision();
-    return result;
-  }
-
   // The rejected photos of the view on screen (its folder, search and
   // filters; the flag condition becomes "rejected"), every page of them —
   // what "Delete Rejected Photos…" acts on. Only ids and paths.
@@ -1076,155 +752,14 @@ export default function useWorkspace({ pushToast } = {}) {
     setInfo(nextInfo);
     setSummary(nextSummary);
     setRoots(nextRoots);
-    setImportTask(nextImportTask);
-    setPreviewTask(nextPreviewTask);
-    setEnrichmentTask(nextEnrichmentTask);
+    mirrorTask("import", nextImportTask);
+    mirrorTask("preview", nextPreviewTask);
+    mirrorTask("enrichment", nextEnrichmentTask);
     await Promise.all([loadCollections(), browsing]);
     setCatalogRevision((revision) => revision + 1);
     // Refresh facet options too (camera/lens/tag lists, ranges) so the filter
     // bar stays in sync after imports/annotation without a full reload.
     loadFacetValues();
-  }
-
-  async function startIncrementalImport({ rawDirs: nextRawDirs = [], imageDirs: nextImageDirs = [], fullCatalog = false, auto = false }) {
-    let resolvedRawDirs = collapseRootPaths(nextRawDirs);
-    let resolvedImageDirs = collapseRootPaths(nextImageDirs);
-
-    if (fullCatalog) {
-      resolvedRawDirs = collapseRootPaths(rawDirs);
-      resolvedImageDirs = collapseRootPaths(imageDirs);
-    }
-    if (!resolvedRawDirs.length && !resolvedImageDirs.length) return;
-
-    let mode = determineImportMode(summary, { rawDirs: resolvedRawDirs, imageDirs: resolvedImageDirs });
-    if (mode === "source_with_media" && !resolvedImageDirs.length) {
-      resolvedImageDirs = collapseRootPaths(imageDirs);
-    }
-    if (mode === "processed_with_sources" && resolvedRawDirs.length) {
-      resolvedRawDirs = [];
-    }
-    mode = determineImportMode(summary, { rawDirs: resolvedRawDirs, imageDirs: resolvedImageDirs });
-
-    const modeNeedsSources = mode === "source_only" || mode === "source_with_media" || mode === "combined";
-    const modeNeedsProcessed = mode === "processed_only" || mode === "processed_with_sources" || mode === "combined";
-    if (modeNeedsSources && !resolvedRawDirs.length) return;
-    if (modeNeedsProcessed && !resolvedImageDirs.length) return;
-
-    let task;
-    try {
-      task = await api.startImport({
-        rawDirs: resolvedRawDirs,
-        imageDirs: resolvedImageDirs,
-        mode,
-        auto,
-      });
-    } catch (error) {
-      pushToast?.({ title: String(error?.message || error), tone: "error", ttl: 6000 });
-      return;
-    }
-    setImportTask(task);
-    pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "import" } : undefined);
-    // An import this window hadn't seen yet was running (an agent's, or one
-    // started a moment ago): main left these dirs out, so they wait behind it
-    // like any request made while an import runs.
-    if (task?.busy) queueImport({ rawDirs: resolvedRawDirs, imageDirs: resolvedImageDirs, auto });
-  }
-
-  // Importing needs a catalog. In packaged first-run there is none open, so
-  // guard every import entry (toolbar, drop, Finder open-with) with a clear
-  // toast instead of a silent sidecar failure against a null catalog.
-  function requireCatalog() {
-    if (info?.catalogPath || api.capabilities.web) return true;
-    pushToast?.({ title: t("noCatalogTitle"), message: t("noCatalogMsg"), tone: "error", ttl: 5000 });
-    return false;
-  }
-
-  // pick: "files" | "folders" from Import Files… / Import Folder… (Windows and
-  // Linux, whose dialogs can't take both); macOS passes none and gets both.
-  async function addImages(pick) {
-    if (!requireCatalog()) return;
-    const selected = await api.pickDirectories("image", pick);
-    await addImagesFromPaths(selected);
-  }
-
-  // When a folder is imported, offer to watch it (auto-import future drops).
-  // No-ops for file imports and for folders already watched — so it stays quiet
-  // for live watched-dir imports and drag-dropped individual files.
-  async function maybePromptWatch(selected) {
-    if (!api.has?.("statDirs")) return;
-    try {
-      const dirs = (await api.statDirs(selected)) || [];
-      if (!dirs.length) return;
-      const watched = (await api.getWatchedDirs?.()) || [];
-      const fresh = dirs.filter((d) => !watched.includes(d));
-      if (!fresh.length) return;
-      pushToast?.({
-        title: t("watchPromptTitle"),
-        message: fresh.length === 1
-          ? t("watchPromptMsg", { dir: fileName(fresh[0]) || fresh[0] })
-          : t("watchPromptMsgN", { count: fresh.length }),
-        ttl: 12000,
-        actions: [{ label: t("watchAdd"), primary: true, onClick: () => fresh.forEach((d) => api.addWatchedDir?.(d)) }],
-      });
-    } catch { /* best-effort */ }
-  }
-
-  // `auto` marks background imports (watched dirs live + catch-up). They honor
-  // delete-tombstones so a removed-but-on-disk file isn't resurrected; manual
-  // imports (default) clear tombstones instead — see startIncrementalImport.
-  async function addImagesFromPaths(selected, { auto = false } = {}) {
-    if (!selected || !selected.length) return;
-    if (!requireCatalog()) return;
-    if (!auto) void maybePromptWatch(selected);
-    await api.registerRoots("image", selected);
-    const nextRoots = mergeRoots(imageDirs, selected);
-    setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "image", path }))]);
-    // Asked now, not read from this render's importTask: that is from before
-    // the awaits (a picker can stay open for as long as the user likes), and
-    // queueing behind an import that has ended since would leave these dirs
-    // waiting for nothing.
-    if (importRunning()) {
-      queueImport({ imageDirs: selected, auto });
-      return;
-    }
-    await startIncrementalImport({ imageDirs: nextRoots.length ? selected : [], auto });
-    await refreshAll();
-  }
-
-  async function addSources() {
-    if (!requireCatalog()) return;
-    const selected = await api.pickDirectories("raw");
-    if (!selected.length) return;
-    await api.registerRoots("raw", selected);
-    setRoots((current) => [...current, ...selected.map((path) => ({ root_type: "raw", path }))]);
-    // As in addImagesFromPaths: decided after the picker and the awaits.
-    if (importRunning()) {
-      queueImport({ rawDirs: selected });
-      return;
-    }
-    await startIncrementalImport({ rawDirs: selected, imageDirs });
-    await refreshAll();
-  }
-
-  async function runImportPipeline() {
-    if (!requireCatalog()) return;
-    if (importTask?.running) return;
-    await startIncrementalImport({ fullCatalog: true });
-    await refreshAll();
-  }
-
-  async function runEnrichment() {
-    if (importTask?.running || enrichmentTask?.running) return;
-    const task = await api.startEnrichment();
-    setEnrichmentTask(task);
-    pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "enrichment" } : undefined);
-  }
-
-  async function runPreviewGeneration(kind = "preview") {
-    if (importTask?.running || previewTask?.running) return;
-    const task = await api.startPreviewGeneration(kind);
-    setPreviewTask(task);
-    pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "preview", kind } : undefined);
   }
 
   // `switched`: main already made it the current catalog (the sample library
@@ -1243,10 +778,7 @@ export default function useWorkspace({ pushToast } = {}) {
     setBrowserLoading(false);
     setBrowserOffset(0);
     setBrowserHasMore(true);
-    setImportTask(null);
-    setPreviewTask(null);
-    setEnrichmentTask(null);
-    setImportQueue(NO_QUEUED_IMPORT);
+    importPipeline.resetImportPipeline();
     setCollections([]);
     resetJobs();
     await refreshAll({ scope: fresh });
@@ -1268,60 +800,6 @@ export default function useWorkspace({ pushToast } = {}) {
     void loadDetail(selectedAssetId);
   }, [selectedAssetId]);
 
-  // Show what an import has added while it runs. The importer commits each
-  // photo as it indexes it, but the grid used to reload only when the whole
-  // job ended: on a drive, hours of an empty library while the dock counted
-  // thousands of indexed files (#130). A light refresh every few seconds,
-  // keeping the scroll position; skipped while the window is hidden or the
-  // previous one is still loading.
-  const liveImportRefreshRef = useRef(false);
-  const refreshDuringImport = useEffectEvent(async () => {
-    if (liveImportRefreshRef.current || document.hidden) return;
-    liveImportRefreshRef.current = true;
-    try {
-      await Promise.all([
-        loadBrowser({ scope: scopeRef.current, preserveView: true }),
-        api.getSummary().then(setSummary).catch(() => {}),
-      ]);
-    } finally {
-      liveImportRefreshRef.current = false;
-    }
-  });
-  useEffect(() => {
-    if (!importTask?.running) return undefined;
-    const timer = setInterval(() => void refreshDuringImport(), LIVE_IMPORT_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [importTask?.running, importTask?.jobId]);
-
-  // Re-import reminder: when an import finishes, tell the user how many of the
-  // selected files were already in the catalog (re-importing the same folder).
-  const lastImportToastRef = useRef(null);
-  useEffect(() => {
-    if (!lastFinishedJob || lastFinishedJob.jobType !== "import") return;
-    if (lastFinishedJob.status === "cancelled") return;
-    if (lastImportToastRef.current === lastFinishedJob.finishedAtMs) return;
-    lastImportToastRef.current = lastFinishedJob.finishedAtMs;
-    // The resolve phase key varies by mode, so find it by its payload shape.
-    const resolve = (lastFinishedJob.phaseResults || []).find(
-      (p) => p?.result && typeof p.result.already_in_catalog === "number",
-    );
-    const already = resolve?.result?.already_in_catalog || 0;
-    const added = resolve?.result?.newly_added || 0;
-    if (already > 0) {
-      pushToast?.({
-        title: added > 0
-          ? t("importMixed", { added, already })
-          : t("importAllExisting", { already }),
-        message: added > 0
-          ? t("importMixedMsg", { count: already })
-          : t("importAllExistingMsg"),
-        ttl: 6000,
-      });
-    }
-    // One toast per finished import; pushToast/t only format it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastFinishedJob]);
-
   // Menu actions: registered ONCE, dispatched through a ref so the handler
   // always sees fresh closures. The old deps-array registration both leaked
   // listeners (no cleanup) and ran stale closures when status/collection
@@ -1337,19 +815,19 @@ export default function useWorkspace({ pushToast } = {}) {
       } else if (action === "catalog:scratch") {
         await switchCatalog(null);
       } else if (action === "import:pick-export") {
-        await addImages();
+        await importPipeline.addImages();
       } else if (action === "import:pick-export-files") {
-        await addImages("files");
+        await importPipeline.addImages("files");
       } else if (action === "import:pick-export-folders") {
-        await addImages("folders");
+        await importPipeline.addImages("folders");
       } else if (action === "import:pick-source") {
-        await addSources();
+        await importPipeline.addSources();
       } else if (action === "import:start") {
-        await runImportPipeline();
+        await importPipeline.runImportPipeline();
       } else if (action === "import:enrich") {
-        await runEnrichment();
+        await importPipeline.runEnrichment();
       } else if (action === "import:previews") {
-        await runPreviewGeneration();
+        await importPipeline.runPreviewGeneration();
       } else if (action === "library:verify") {
         const result = await api.verifyAssets();
         if (result) {
@@ -1443,14 +921,14 @@ export default function useWorkspace({ pushToast } = {}) {
     revealAssets,
     lastAgentChange,
     refreshAll,
-    queuedImportNote,
-    addImages,
-    addImagesFromPaths,
-    addSources,
+    queuedImportNote: importPipeline.queuedImportNote,
+    addImages: importPipeline.addImages,
+    addImagesFromPaths: importPipeline.addImagesFromPaths,
+    addSources: importPipeline.addSources,
     switchCatalog,
-    runImportPipeline,
-    runEnrichment,
-    runPreviewGeneration,
+    runImportPipeline: importPipeline.runImportPipeline,
+    runEnrichment: importPipeline.runEnrichment,
+    runPreviewGeneration: importPipeline.runPreviewGeneration,
     importTask,
     jobs: activeJobs,
     lastFinishedJob,
@@ -1466,24 +944,24 @@ export default function useWorkspace({ pushToast } = {}) {
     filterByPerson,
     browseTo,
     setStatusFilter,
-    createCollection,
-    saveSmartCollection,
-    updateSmartCollectionRules,
-    snapshotSmartCollection,
+    createCollection: collectionsApi.createCollection,
+    saveSmartCollection: collectionsApi.saveSmartCollection,
+    updateSmartCollectionRules: collectionsApi.updateSmartCollectionRules,
+    snapshotSmartCollection: collectionsApi.snapshotSmartCollection,
     openSmartCollection,
     editSmartCollection,
-    reorderCollections,
-    reorderingCollections,
-    renameCollection,
-    deleteCollection,
-    addToCollection,
-    removeFromCollection,
-    deleteImageAssets,
-    deleteImageAssetsFromDisk,
-    setAssetRating,
-    setAssetFlag,
-    setAssetDescription,
-    addTagsToAssets,
+    reorderCollections: collectionsApi.reorderCollections,
+    reorderingCollections: collectionsApi.reorderingCollections,
+    renameCollection: collectionsApi.renameCollection,
+    deleteCollection: collectionsApi.deleteCollection,
+    addToCollection: collectionsApi.addToCollection,
+    removeFromCollection: collectionsApi.removeFromCollection,
+    deleteImageAssets: assetMutations.deleteImageAssets,
+    deleteImageAssetsFromDisk: assetMutations.deleteImageAssetsFromDisk,
+    setAssetRating: assetMutations.setAssetRating,
+    setAssetFlag: assetMutations.setAssetFlag,
+    setAssetDescription: assetMutations.setAssetDescription,
+    addTagsToAssets: assetMutations.addTagsToAssets,
     collectRejected,
   };
 }

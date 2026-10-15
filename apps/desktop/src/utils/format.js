@@ -29,7 +29,7 @@ export function httpMediaUrl(filePath) {
   return `http://127.0.0.1:${_mediaPort}/media?path=${encodeURIComponent(filePath)}`;
 }
 
-export { clamp } from "./math";
+export { clamp, pad2 } from "./math";
 
 // Display label for a sticker — user-given name first, then source filename,
 // then internal filename. Used by all sticker UI surfaces so they stay in sync.

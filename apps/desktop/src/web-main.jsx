@@ -4,9 +4,9 @@ import { installBridge } from "./api/client";
 import { browserBridge } from "./api/browser/bridge";
 
 // Install the browser bridge BEFORE app modules load: i18n reads the locale
-// at import time. It goes on window.mediaWorkspace too, where the facade's
-// hand-written subscriptions (onWatchedImport / onWatchedPresent) and the
-// e2e-web specs look for it.
+// at import time. Every component reaches it through api.* (ESLint forbids
+// window.mediaWorkspace outside src/api); it goes on window.mediaWorkspace
+// too for the e2e-web specs, which drive the bridge directly.
 installBridge(browserBridge);
 window.mediaWorkspace = browserBridge;
 

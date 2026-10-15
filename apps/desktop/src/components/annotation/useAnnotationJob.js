@@ -7,6 +7,7 @@
 // all/un-annotated", auto-on-import) funnel through the single `annotate()`.
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   startAnnotationJob,
   countAnnotationTargets,
@@ -15,6 +16,7 @@ import {
 } from "./annotationStore";
 
 export default function useAnnotationJob(pushToast, pokeJobs) {
+  const { t } = useTranslation("annotation");
   const annotate = useCallback(async (assetIds, opts = {}) => {
     const ids = Array.isArray(assetIds) ? assetIds.filter(Boolean) : [];
     const scope = opts.scope || (opts.collectionId ? "collection" : ids.length ? "selection" : "all");
@@ -29,7 +31,7 @@ export default function useAnnotationJob(pushToast, pokeJobs) {
     // Provider must be configured.
     await refreshProviders();
     if (getHasProvider() === false) {
-      pushToast?.({ title: "No AI provider", message: "Add a provider in Settings → AI first.", ttl: 6000, tone: "error" });
+      pushToast?.({ title: t("job.noProviderTitle"), message: t("job.noProviderMsg"), ttl: 6000, tone: "error" });
       return;
     }
 
@@ -40,8 +42,8 @@ export default function useAnnotationJob(pushToast, pokeJobs) {
     } catch { /* fall through; the job itself will no-op */ }
     if (count === 0) {
       pushToast?.({
-        title: "Nothing to annotate",
-        message: onlyMissing ? "All targets are already annotated." : "No eligible images.",
+        title: t("job.nothingTitle"),
+        message: t(onlyMissing ? "job.allAnnotated" : "job.noEligible"),
         ttl: 4000,
       });
       return;
@@ -53,9 +55,9 @@ export default function useAnnotationJob(pushToast, pokeJobs) {
       // a duplicate notification would just stack on top of it.
       pokeJobs?.(status?.jobId ? { jobId: status.jobId, jobType: "annotation" } : undefined);
     } catch (e) {
-      pushToast?.({ title: "Couldn't start annotation", message: e?.message || "Failed to start.", ttl: 6000, tone: "error" });
+      pushToast?.({ title: t("job.startFailed"), message: e?.message || t("job.startFailedMsg"), ttl: 6000, tone: "error" });
     }
-  }, [pushToast, pokeJobs]);
+  }, [pushToast, pokeJobs, t]);
 
   return { annotate };
 }

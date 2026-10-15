@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, FolderInput, FolderPlus, Trash2, Palette } from "lucide-react";
 import api from "../../api";
-import { fileName } from "../../utils/format";
+import { baseName, fileName } from "../../utils/format";
 import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
 import LutLibraryGroup from "./LutLibraryGroup";
 
@@ -48,10 +48,6 @@ function catalogName(p) {
   if (!p) return null;
   const base = fileName(p) || p;
   return base.replace(/\.(afcatalog|mwcatalog)$/i, "");
-}
-
-function baseName(p) {
-  return fileName(p) || String(p);
 }
 
 function FinderButton({ onClick, label }) {
