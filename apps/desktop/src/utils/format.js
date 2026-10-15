@@ -29,9 +29,7 @@ export function httpMediaUrl(filePath) {
   return `http://127.0.0.1:${_mediaPort}/media?path=${encodeURIComponent(filePath)}`;
 }
 
-export function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
+export { clamp } from "./math";
 
 // Display label for a sticker — user-given name first, then source filename,
 // then internal filename. Used by all sticker UI surfaces so they stay in sync.
@@ -53,7 +51,7 @@ export function baseName(value) {
   return fileName(value) || String(value || "");
 }
 
-export function normalizePath(value) {
+function normalizePath(value) {
   return String(value || "").replaceAll("\\", "/").replace(/\/+$/, "");
 }
 
@@ -182,11 +180,11 @@ export function filterTitle(status) {
   return "All Assets";
 }
 
-export function hasIndexedSources(summary) {
+function hasIndexedSources(summary) {
   return Number(summary?.raw_assets ?? 0) > 0;
 }
 
-export function hasIndexedImages(summary) {
+function hasIndexedImages(summary) {
   return Number(summary?.image_assets ?? 0) > 0;
 }
 

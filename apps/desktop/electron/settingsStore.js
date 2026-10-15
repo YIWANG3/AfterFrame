@@ -110,6 +110,5 @@ function createSettingsStore({ getAppSettingsPath, logger = console }) {
 
 module.exports = {
   createSettingsStore,
-  readJsonObject,
   writeJsonAtomic,
 };

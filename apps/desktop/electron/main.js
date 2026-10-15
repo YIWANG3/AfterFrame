@@ -195,7 +195,7 @@ const tokens = createTokenStore({
   updateAppSettings,
   fetchLegacyToken: (provider) => sidecarCommands.getProviderToken(provider),
 });
-const { decryptToken, setStoredProviderConfig, deleteStoredProviderConfig, getStoredProviderConfigWithMigration } = tokens;
+const { decryptToken, setStoredProviderConfig, deleteStoredProviderConfig, getStoredProviderConfigWithMigration, providerCredentials } = tokens;
 
 // media:// allowlist — see ./media/allowlist.js. Created before the task
 // starters and ipc modules that take addAllowedMediaDir; catalog roots load
@@ -311,7 +311,7 @@ const {
   commands: sidecarCommands,
   launchSidecarJob,
   addAllowedMediaDir,
-  getStoredProviderConfigWithMigration,
+  providerCredentials,
 });
 
 async function registerRoots(rootType, paths) {
@@ -533,7 +533,7 @@ aiIpc.register({
   commands: sidecarCommands,
   getCatalogState: catalog.state,
   readAppSettings, updateAppSettings,
-  getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
+  getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig,
   startAiRepaintTask, startTextImageTask, latestJobStatus, formatJobStatus,
 });
 
@@ -542,7 +542,7 @@ const annotationApi = annotationIpc.register({
   commands: sidecarCommands,
   getCatalogState: catalog.state,
   readAppSettings, updateAppSettings,
-  getStoredProviderConfigWithMigration, setStoredProviderConfig, deleteStoredProviderConfig,
+  getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig,
   createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
 });
 
@@ -660,11 +660,9 @@ videoIpc.register({
   // process of its own, as the resident one is serial.
   runVideoTool: process.platform === "darwin"
     ? null
-    : (args, timeoutMs) => sidecarTransport.callJsonOneShot(["video-tool", ...args], timeoutMs),
+    : (args, timeoutMs) => sidecarCommands.videoTool(args, timeoutMs),
 });
 
-// Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
-// main process so it works regardless of renderer focus / gesture state.
 // Dev only: tells the renderer when electron/, shared/ or the sidecar's
 // sources are newer than this process (see electron/devStaleness.js). Off in a
 // packaged app, and under e2e (AFTERFRAME_USER_DATA), where a file saved while
@@ -684,6 +682,8 @@ ipcMain.on("app:capabilities", (event) => {
   event.returnValue = desktopCapabilities(process.platform, { hasHelper: (name) => fs.existsSync(path.join(nativeBin, name)) });
 });
 
+// Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
+// main process so it works regardless of renderer focus / gesture state.
 ipcMain.handle("app:copy-text", (_event, text) => {
   clipboard.writeText(String(text ?? ""));
   return true;
@@ -717,9 +717,6 @@ if (devServerUrl) {
     return img.toDataURL();
   });
 }
-
-// quick-register / delete-image-assets are in ipc/assets.js
-// (registered above), so the inline handlers for those are removed here.
 
 ipcMain.on("workspace:is-packaged", (event) => { event.returnValue = isPackaged; });
 // The preload is sandboxed and cannot require shared/ipcChannels.mjs itself;

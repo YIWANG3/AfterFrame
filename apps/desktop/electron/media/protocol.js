@@ -72,4 +72,4 @@ function registerMediaProtocol({ protocol, net, allowlist, heicCacheDir, convert
   });
 }
 
-module.exports = { registerMediaProtocol, createHeicTranscoder, HEIC_RE };
+module.exports = { registerMediaProtocol, createHeicTranscoder };

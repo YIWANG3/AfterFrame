@@ -476,9 +476,6 @@ export default function useWorkspace({ pushToast } = {}) {
   // Locate using the same scope/order as browse, then fetch only the missing
   // prefix needed by the virtual layout. Do not scan pages or stat the entire
   // library just to discover the target's position.
-  function revealRelatedAsset(assetId) {
-    return revealAsset(assetId);
-  }
 
   // "Show in All Assets": a photo found by a search, a filter, a folder or
   // another view, shown among its neighbours in the whole library — in the
@@ -1061,8 +1058,8 @@ export default function useWorkspace({ pushToast } = {}) {
 
   // Status/summary/roots/tasks/collections, then the gallery. `scope` is
   // explicit when the caller has just changed it (switchCatalog) — the
-  // rendered value would still be the old one. `force` is accepted for the
-  // callers that pass it; every browse supersedes the one before it now.
+  // rendered value would still be the old one. Every browse supersedes the
+  // one before it, so there is no "force": a refresh always refetches.
   async function refreshAll({ preserveView = false, browse = true, scope: explicitScope = null } = {}) {
     const target = explicitScope || scopeRef.current;
     // Issue the browse first: it is the answer the user is waiting for, and
@@ -1226,7 +1223,7 @@ export default function useWorkspace({ pushToast } = {}) {
   async function runPreviewGeneration(kind = "preview") {
     if (importTask?.running || previewTask?.running) return;
     const task = await api.startPreviewGeneration(kind);
-    setPreviewTask({ ...task, _kind: kind });
+    setPreviewTask(task);
     pokeJobs(task?.jobId ? { jobId: task.jobId, jobType: "preview", kind } : undefined);
   }
 
@@ -1401,20 +1398,17 @@ export default function useWorkspace({ pushToast } = {}) {
     setInspectorWidth,
     info,
     summary,
-    items,
     filteredItems,
     detail,
     reloadDetail: () => loadDetail(selectedAssetId),
     selectedAssetId,
     setSelectedAssetId,
-    setRelatedAssetId,
-    revealRelatedAsset,
+    revealAsset,
     revealInAllAssets,
     revealAssetRequest,
     // The scope, exposed field by field for the toolbar/sidebar/filter bar,
     // with setters that each write one field of it.
     status: scope.status,
-    setStatus: (status) => updateScope({ status }),
     sort: scope.sort,
     setSort: (sort) => {
       updateScope({ sort });
@@ -1425,7 +1419,6 @@ export default function useWorkspace({ pushToast } = {}) {
     setQuery: setTypedQuery,
     filters: scope.filters,
     setFilters: applyFilters,
-    applyFilters,
     activeCollectionId: scope.collectionId,
     facetScope: facetScopeOf(scope),
     activeSmartCollectionId: scope.smartCollectionId,
@@ -1446,7 +1439,6 @@ export default function useWorkspace({ pushToast } = {}) {
     browserReady,
     browserLoadingMore,
     browserHasMore,
-    browserOffset,
     loadMoreBrowser,
     revealAssets,
     lastAgentChange,

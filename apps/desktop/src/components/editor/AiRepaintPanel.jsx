@@ -17,6 +17,7 @@ import {
 
 import { getProviderType, ProviderModal } from "../ai/providers";
 import { Checkbox, SliderRow } from "../../ui";
+import cx from "../../ui/cx";
 import { fileName } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
 import { bool, numberIn, oneOf, readPref, text, writePref } from "../../utils/prefs";
@@ -87,10 +88,6 @@ const INITIAL_STYLES = [
   { id: "art-deco", name: "Art Deco", prompt: "Transform this photo into an Art Deco style. Strictly preserve the main subject and composition. Emphasize geometric silhouettes, elegant and luxurious color orchestration, streamlined but restrained decorative linework, poster-like compositional order, and urban sophistication. The final image should feel glamorous, modern, and refined. Avoid childish hand-drawn aesthetics and rough painterly treatment." },
   { id: "art-nouveau", name: "Art Nouveau", prompt: "Transform this photo into an Art Nouveau style. Preserve the original subject structure and composition. Emphasize organic curves, ornamental patterning, elegant contours, soft vintage color palettes, and decorative pictorial rhythm. The final image should feel refined, lyrical, and rich in poster-art elegance. Avoid modern cyber elements and overly aggressive geometric fragmentation." },
 ];
-
-function cx(...values) {
-  return values.filter(Boolean).join(" ");
-}
 
 const TOOLBAR_FIELD =
   "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";

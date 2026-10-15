@@ -278,10 +278,8 @@ export default function useSelection({
     setAnchorId,
     selectedIdSet,
     selectedIndex,
-    commitSelection,
     selectSingle,
     selectRelatedAsset,
-    toggleSelection,
     selectRange,
     handleItemSelect,
     handleContextSelect,
@@ -289,7 +287,6 @@ export default function useSelection({
     clearSelection,
     prepareDragSelection,
     selectByIndex,
-    moveSelection,
     selectByDirection,
   };
 }

@@ -5,6 +5,7 @@
 
 const path = require("path");
 const fs = require("fs");
+const { writeJsonAtomic } = require("../settingsStore");
 
 function register({
   app,
@@ -14,6 +15,7 @@ function register({
   readAppSettings,
   updateAppSettings,
   getStoredProviderConfigWithMigration,
+  providerCredentials,
   setStoredProviderConfig,
   deleteStoredProviderConfig,
   startAiRepaintTask,
@@ -31,11 +33,7 @@ function register({
       return null;
     }
   }
-  async function writeAiStyles(styles) {
-    const p = aiStylesPath();
-    await fs.promises.mkdir(path.dirname(p), { recursive: true });
-    await fs.promises.writeFile(p, JSON.stringify(styles, null, 2) + "\n", "utf-8");
-  }
+  const writeAiStyles = (styles) => writeJsonAtomic(aiStylesPath(), styles);
 
   ipcMain.handle("workspace:ai-repaint-status", async () => {
     const { currentCatalogPath, catalogHasDb } = getCatalogState();
@@ -69,16 +67,7 @@ function register({
   ipcMain.handle("workspace:list-ai-models", async (_event, providerId, providerType) => {
     const instanceId = String(providerId || "");
     const typeKey = String(providerType || "nanobanana");
-    const providerConfig = await getStoredProviderConfigWithMigration(instanceId);
-    let apiKey = providerConfig?.token || null;
-    let baseUrl = null;
-    if (typeKey === "openai_compatible" && apiKey) {
-      try {
-        const parsed = JSON.parse(apiKey);
-        apiKey = parsed.token || null;
-        baseUrl = parsed.base_url || null;
-      } catch (_) { /* plain string token */ }
-    }
+    const { apiKey, baseUrl } = await providerCredentials(instanceId, typeKey);
     if (!apiKey) return [];
     try {
       return await commands.listAiModels({ providerType: typeKey, apiKey, baseUrl });

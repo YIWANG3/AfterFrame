@@ -69,5 +69,5 @@ export function useEditorSave({
     await executeSave(quickSavePathRef.current);
   }
 
-  return { saving, executeSave, executeSaveRef, handleExport, handleQuickSave };
+  return { saving, executeSaveRef, handleExport, handleQuickSave };
 }

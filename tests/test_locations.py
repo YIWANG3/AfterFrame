@@ -1,21 +1,11 @@
-"""Unit tests for the map location layer (schema v8).
-
-Run with:  python -m unittest discover -s tests  (from services/sidecar,
-with src on PYTHONPATH — tests/__init__ is not required, unittest discovery
-handles the path via this file's sys.path bootstrap).
-"""
+"""Unit tests for the map location layer (schema v8)."""
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 from uuid import uuid4
 
-SRC = Path(__file__).resolve().parents[1] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from media_workspace.db import (  # noqa: E402
+from media_workspace.db import (
     connect,
     delete_asset_location,
     delete_image_asset_from_catalog,
@@ -26,12 +16,12 @@ from media_workspace.db import (  # noqa: E402
     upsert_raw_asset,
     upsert_registry,
 )
-from media_workspace.db.browse import _facet_clauses  # noqa: E402
-from media_workspace.db.locations import upsert_ai_asset_location  # noqa: E402
-from media_workspace.db.migrations import migrate  # noqa: E402
-from media_workspace.geo_resolver import ResolvedLocation  # noqa: E402
-from media_workspace.models import ImageCandidate, MatchDecision, RawMetadata  # noqa: E402
-from media_workspace.schema import SCHEMA_VERSION  # noqa: E402
+from media_workspace.db.browse import _facet_clauses
+from media_workspace.db.locations import upsert_ai_asset_location
+from media_workspace.db.migrations import migrate
+from media_workspace.geo_resolver import ResolvedLocation
+from media_workspace.models import ImageCandidate, MatchDecision, RawMetadata
+from media_workspace.schema import SCHEMA_VERSION
 
 
 def _image_candidate(asset_id: str, path: str, lat: float | None, lon: float | None) -> ImageCandidate:
@@ -275,7 +265,7 @@ class LocationTestCase(unittest.TestCase):
         upsert_ai_asset_location(self.connection, sf, ResolvedLocation(
             latitude=37.775, longitude=-122.4194,
             min_latitude=37.625, max_latitude=37.925, min_longitude=-122.569, max_longitude=-122.269,
-            precision_level="locality", place_id="wd:Q62", matched_label="San Francisco",
+            precision_level="locality", place_id="wd:Q62",
             country_code="US", confidence=0.9,
         ), resolver_version="test", commit=True)
         mill_valley = {"mode": "bounds", "west": -122.65, "south": 37.88, "east": -122.50, "north": 37.98}

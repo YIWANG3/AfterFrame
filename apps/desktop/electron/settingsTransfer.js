@@ -334,7 +334,6 @@ function mergeBundle({ settings: localSettings = {}, styles: localStyles = null,
 }
 
 module.exports = {
-  FORMAT,
   VERSION,
   SECTIONS,
   MIN_PASSPHRASE_LENGTH,

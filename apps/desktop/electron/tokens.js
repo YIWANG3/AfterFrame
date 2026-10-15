@@ -95,13 +95,32 @@ function createTokenStore({ safeStorage, readAppSettings, updateAppSettings, fet
     return existing || null;
   }
 
+  // The stored token for `provider`, as the sidecar wants it: { apiKey, baseUrl }.
+  // openai_compatible packs both into one JSON token ({ token, base_url }); every
+  // other type stores the key as-is. fallbackBaseUrl (the provider's own setting)
+  // applies when the token carries no base_url, or is a plain string.
+  async function providerCredentials(provider, providerType, { fallbackBaseUrl = null } = {}) {
+    const config = await getStoredProviderConfigWithMigration(provider);
+    let apiKey = config?.token || null;
+    let baseUrl = fallbackBaseUrl || null;
+    if (providerType === "openai_compatible" && apiKey) {
+      let parsed = null;
+      try { parsed = JSON.parse(apiKey); } catch { /* plain string token */ }
+      if (parsed && typeof parsed === "object") {
+        apiKey = parsed.token || null;
+        baseUrl = parsed.base_url || baseUrl;
+      }
+    }
+    return { apiKey, baseUrl };
+  }
+
   return {
-    encryptToken,
     decryptToken,
     getStoredProviderConfig,
     setStoredProviderConfig,
     deleteStoredProviderConfig,
     getStoredProviderConfigWithMigration,
+    providerCredentials,
     isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
   };
 }

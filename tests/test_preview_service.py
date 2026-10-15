@@ -13,10 +13,10 @@ from PIL import Image, ImageCms
 
 from media_workspace import cli
 from media_workspace.catalog import ensure_catalog
+from media_workspace.imaging import register_heif
 from media_workspace.preview_service import (
     PreviewService,
     SourceNotReadyError,
-    _register_heif,
     render_pillow_preview,
     transcode_to_jpeg,
 )
@@ -238,7 +238,7 @@ class PillowPreviewTest(unittest.TestCase):
 
     def test_heic_transcodes_to_a_full_size_jpeg(self) -> None:
         """What media:// serves in place of a HEIC original where there is no sips."""
-        _register_heif()
+        register_heif()
         with Image.open(HEIC_FIXTURE) as original:
             full_size = original.size
         with tempfile.TemporaryDirectory() as temp_dir:

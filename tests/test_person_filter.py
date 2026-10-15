@@ -1,11 +1,8 @@
 """Person facet correctness and bounded query work on a large gallery."""
 import sqlite3
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from media_workspace.db.browse import _facet_clauses  # noqa: E402
+from media_workspace.db.browse import _facet_clauses
 
 
 class PersonFilterTests(unittest.TestCase):

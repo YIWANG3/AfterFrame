@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useDismiss from "../ui/useDismiss";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ScanFace } from "lucide-react";
@@ -22,13 +23,7 @@ export default function PersonPickerPopover({ anchorRect, excludeGroupId, onPick
     })();
     return () => { cancelled = true; };
   }, [excludeGroupId]);
-  useEffect(() => {
-    function down(e) { if (!ref.current?.contains(e.target)) onClose(); }
-    function key(e) { if (e.key === "Escape") onClose(); }
-    document.addEventListener("pointerdown", down);
-    document.addEventListener("keydown", key);
-    return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
-  }, [onClose]);
+  useDismiss(ref, onClose);
   const left = Math.min(anchorRect.left, window.innerWidth - 248);
   const top = Math.min(anchorRect.bottom + 6, window.innerHeight - 280);
   const shown = (groups || []).filter((group) =>

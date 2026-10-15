@@ -73,7 +73,6 @@ class ResolvedLocation:
     max_longitude: float
     precision_level: str  # 'exact' (landmark) | 'locality' | 'admin1' | 'country'
     place_id: str  # "wd:Q..."
-    matched_label: str
     country_code: str | None
     confidence: float | None
 
@@ -272,7 +271,6 @@ def _resolved(item: dict, precision: str, gazetteer: Gazetteer, confidence: floa
         max_longitude=min(180.0, longitude + half),
         precision_level=precision,
         place_id=f"wd:{item['q']}",
-        matched_label=item.get("en") or item.get("zh") or item["q"],
         country_code=iso,
         confidence=confidence,
     )

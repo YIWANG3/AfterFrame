@@ -38,7 +38,7 @@ export function getHasProvider() {
 
 // Set the flag directly (no IPC). Used when Settings already knows the answer
 // and hands it to us via the change event — avoids racing the settings write.
-export function setHasProvider(next) {
+function setHasProvider(next) {
   const val = !!next;
   if (val !== cachedHasProvider) {
     cachedHasProvider = val;

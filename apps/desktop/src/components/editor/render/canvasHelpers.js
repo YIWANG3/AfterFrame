@@ -141,12 +141,12 @@ export function bgToCss(bg) {
 //                        // from `edge`; 1 = the whole photo
 export const OVERLAY_EDGES = ["bottom", "top", "left", "right"];
 // A template edge scrim's stops run inner (from) → the edge it hugs (to).
-export const OVERLAY_EDGE_ANGLE = { bottom: 180, top: 0, left: 270, right: 90 };
-export const OVERLAY_GRADIENT_DEFAULTS = {
+const OVERLAY_EDGE_ANGLE = { bottom: 180, top: 0, left: 270, right: 90 };
+const OVERLAY_GRADIENT_DEFAULTS = {
   fromDefault: "#000000", toDefault: "#000000", fromOpacityDefault: 0, toOpacityDefault: 0.7,
 };
 
-export function isLegacyEdgeScrim(scrim) {
+function isLegacyEdgeScrim(scrim) {
   if (!scrim) return false;
   if (scrim.kind === "edge") return true;
   if (scrim.kind === "fill" || scrim.mode != null || scrim.coverage != null) return false;

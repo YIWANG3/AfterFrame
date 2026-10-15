@@ -30,7 +30,7 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
-export function subscribeShortcuts(listener) {
+function subscribeShortcuts(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

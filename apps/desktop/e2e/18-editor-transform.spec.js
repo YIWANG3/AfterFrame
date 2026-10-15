@@ -33,7 +33,6 @@ test.describe("Golden: crop + transform", () => {
     const m = await sharp(fixturePath).metadata();
     srcW = m.width; srcH = m.height;
     ({ app, window, userDataDir } = await launchApp({ testName: "golden-tf" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     // Deterministically exercise the CI ordering: image decoding completes
     // before the editor receives its first viewport measurement.
     await window.evaluate(() => {

@@ -23,7 +23,6 @@ test.describe("Demo (slow walkthrough)", () => {
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "demo" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);

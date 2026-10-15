@@ -17,7 +17,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { writeJsonAtomic } = require("./settingsStore");
-const { readCubeHeader, LUT_MAX_SIZE } = require("../shared/cubeLut.mjs");
+const { readCubeHeader } = require("../shared/cubeLut.mjs");
 const { guessLogInput } = require("../shared/lutLogGuess.mjs");
 
 const INDEX_VERSION = 1;
@@ -437,4 +437,4 @@ function createLutLibrary({ libraryDir, indexPath, readFolders, writeFolders, lo
   };
 }
 
-module.exports = { createLutLibrary, lutId, LUT_MAX_SIZE };
+module.exports = { createLutLibrary, lutId };

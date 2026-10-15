@@ -70,4 +70,4 @@ function pruneCache(dir, keep = CACHE_KEEP) {
   return stale.map(({ file }) => file);
 }
 
-module.exports = { CACHE_KEEP, cacheName, fullRenderNeeded, pruneCache, readRenderer, writeRenderer };
+module.exports = { cacheName, fullRenderNeeded, pruneCache, readRenderer, writeRenderer };

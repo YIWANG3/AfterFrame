@@ -46,7 +46,6 @@ test.describe("Seamless split", () => {
   test.beforeAll(async () => {
     await writeFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "split" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     // Register the fixture as a catalog asset so the panels can join its
     // version stack (the editor itself opens by path).
     await window.evaluate((p) => window.mediaWorkspace.quickRegister(p, null), fixturePath);

@@ -6,7 +6,7 @@
 
 | 层 | 测什么 | 在哪 | 何时跑 | 确定性 |
 |---|---|---|---|---|
-| 1. 单元 | sidecar CLI / db 层、纯函数 | `services/sidecar/tests/`、`electron/*.test.js` | 每次（`npm run test:unit`） | 完全 |
+| 1. 单元 | sidecar CLI / db 层、纯函数 | `tests/`（根目录）、`electron/*.test.js` | 每次（`npm run test:unit`） | 完全 |
 | 2. 协议集成 | HTTP → JSON-RPC → tool handler → sidecar → SQLite 全链，**每个 tool ≥1 条真实调用** | `e2e/08-mcp-http.spec.js`（面 + 老 tool）、`e2e/26-mcp-parity.spec.js`（Phase 1 新 tool） | 每次（`npm run e2e`），**合并门槛** | 完全 |
 | 3. agent 冒烟 | 真实 LLM 从自然语言出发能否**发现并正确调用** tool——测的是 tool 命名/描述/schema 的"agent 可用性" | `e2e/27-agent-mcp.spec.js` + `e2e/helpers/agent.js` | 手动/发版前：`npm run e2e:agent`（需本机 `claude` 已登录）；默认 skip，**不进 CI 门槛** | 不确定（真模型） |
 

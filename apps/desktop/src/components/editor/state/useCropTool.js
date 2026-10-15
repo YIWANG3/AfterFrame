@@ -18,8 +18,7 @@ import { buildTransformedCanvas } from "../render/canvasHelpers";
 import { cloneState, stateEquals } from "./editorStateModel";
 import { useViewportWheel } from "./useViewportWheel";
 import { rebaseViewport } from "./rebaseViewport";
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+import { clamp } from "../../../utils/math";
 
 export function useCropTool({
   open, previewSource, transformedPreview, viewportSize, placement, imageRect,

@@ -15,14 +15,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, importThroughToolbar } = require("./helpers/app");
+const { TINY_JPEG } = require("./helpers/images");
 
 const RAW_FIXTURE = path.resolve(__dirname, "fixtures", "raw", "luna-morning.dng");
-const TINY_JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
-  "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" +
-  "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
-  "base64",
-);
 // Files per background import: long enough for several of the gallery's
 // refreshes (tiny files import at about 2 ms each locally, 5 ms on CI).
 const BULK = 6000;

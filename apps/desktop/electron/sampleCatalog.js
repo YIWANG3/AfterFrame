@@ -45,7 +45,7 @@ async function repairLegacySamplePreviews({ catalogPath, source, transport, comm
   // the interrupted job terminal so a clean originals-only import can restart.
   for (const job of activeJobs.filter((job) => ["queued", "running"].includes(job.status))) {
     assertCatalog();
-    await transport.callJsonAsync(["fail-job", "--job-id", job.job_id, "--error", "Stopped for sample preview cleanup"]);
+    await commands.failJob(job.job_id, "Stopped for sample preview cleanup");
   }
   // Exact app-owned paths only: never delete by filename, dimensions, or
   // visual similarity in a user's normal library. Query AFTER draining writers.

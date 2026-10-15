@@ -3,7 +3,8 @@
 // button, plus the most recent finished job for context. Driven entirely by
 // the workspace's unified job poller (workspace.jobs / lastFinishedJob).
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import {
@@ -25,7 +26,7 @@ export const JOB_META = {
 // The sidecar names a job's phase in English ("Match with RAW"); its key is
 // what gets translated, with that name as the fallback for a phase this
 // build doesn't know yet.
-export function phaseName(job, t) {
+function phaseName(job, t) {
   if (!job.phaseLabel && !job.phase) return null;
   return job.phase ? t(`activity.phases.${job.phase}`, { defaultValue: job.phaseLabel || job.phase }) : job.phaseLabel;
 }
@@ -67,17 +68,7 @@ export default function ActivityCenter({ jobs, lastFinishedJob, onCancel, onPaus
   const panelRef = useRef(null);
   const count = jobs?.length || 0;
 
-  useEffect(() => {
-    if (!open) return undefined;
-    function down(e) {
-      if (btnRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
-      setOpen(false);
-    }
-    function key(e) { if (e.key === "Escape") setOpen(false); }
-    document.addEventListener("pointerdown", down);
-    document.addEventListener("keydown", key);
-    return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
-  }, [open]);
+  useDismiss([btnRef, panelRef], () => setOpen(false), { enabled: open });
 
   const rect = open ? btnRef.current?.getBoundingClientRect() : null;
 

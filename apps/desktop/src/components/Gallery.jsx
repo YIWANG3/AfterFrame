@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import useDismiss from "../ui/useDismiss";
 import api from "../api";
 import { createPortal } from "react-dom";
 import { LoaderCircle, Images, FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Unlink, Link2, Type, Play, ExternalLink, ScanFace, RefreshCw, Flag, FlagOff, Tag, X } from "lucide-react";
@@ -208,26 +209,7 @@ function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
 function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
-  useEffect(() => {
-    function handlePointerDown(e) {
-      if (e.button !== 0) return;
-      if (ref.current && !ref.current.contains(e.target)) onClose();
-    }
-    function handleContextMenu(e) {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
-    }
-    function handleKey(e) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("contextmenu", handleContextMenu);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("contextmenu", handleContextMenu);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [onClose]);
+  useDismiss(ref, onClose);
 
   // Clamp menu position to viewport
   const menuRef = useRef(null);

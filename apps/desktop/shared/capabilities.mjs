@@ -14,7 +14,7 @@
 // list honest: every name checked is a feature here, every feature here is
 // checked somewhere, and both bridges declare only these.
 
-export const FEATURES = {
+const FEATURES = {
   annotation: "AI annotation (bring your own key)",
   aiRepaint: "AI Repaint",
   aiRepaintMultiProvider: "AI Repaint providers other than Gemini (their APIs need the sidecar)",

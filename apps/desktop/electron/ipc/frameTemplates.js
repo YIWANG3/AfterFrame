@@ -14,6 +14,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { processLogo, LogoError } = require("../personalLogos");
+const { writeJsonAtomic } = require("../settingsStore");
 
 const AUTHOR_MAX = 80;
 const TEMPLATES_MAX = 200;
@@ -89,12 +90,6 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
   const logosDir = () => path.join(app.getPath("userData"), "afterframe", "personal-logos");
   const logosManifest = () => path.join(app.getPath("userData"), "afterframe", "personal-logos.json");
 
-  async function writeJson(file, value) {
-    await fs.promises.mkdir(path.dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    await fs.promises.writeFile(tmp, JSON.stringify(value, null, 2) + "\n", "utf-8");
-    await fs.promises.rename(tmp, file);
-  }
   function readLogos() {
     try {
       const list = JSON.parse(fs.readFileSync(logosManifest(), "utf-8"))?.logos;
@@ -108,7 +103,7 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
     ...logoKind(logo, cleanProfile(readAppSettings()?.watermarkProfile).brandLogos),
     path: path.join(logosDir(), path.basename(logo.file)),
   });
-  const saveLogos = (logos) => writeJson(logosManifest(), { version: 1, logos });
+  const saveLogos = (logos) => writeJsonAtomic(logosManifest(), { version: 1, logos });
 
   ipcMain.handle("app:watermark-profile", () => cleanProfile(readAppSettings()?.watermarkProfile));
 
@@ -171,7 +166,7 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
     const next = cleanTemplates(templates);
     // Write-then-rename: a crash mid-write must not leave half a file that
     // reads as "no templates" and is then saved over.
-    await writeJson(templatesPath(), { version: 1, templates: next });
+    await writeJsonAtomic(templatesPath(), { version: 1, templates: next });
     return next;
   });
 
@@ -272,4 +267,4 @@ function register({ app, ipcMain, dialog, getMainWindow, sharp, readAppSettings,
   });
 }
 
-module.exports = { register, cleanProfile, cleanTemplates };
+module.exports = { register };

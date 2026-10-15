@@ -30,6 +30,10 @@ const NATIVE_BIN = process.env.AFTERFRAME_E2E_EXECUTABLE
 const lacks = (feature) =>
   desktopCapabilities(process.platform, { hasHelper: (name) => fs.existsSync(path.join(NATIVE_BIN, name)) })[feature] === false;
 
+// macOS 14 (Darwin 23) is where Vision's subject lifting starts: the sticker
+// specs skip their real extract-sticker runs below it.
+const onMacOS14 = () => process.platform === "darwin" && Number(os.release().split(".")[0]) >= 23;
+
 // Selects the cards (and anything else) carrying this file's path. In a CSS
 // string a backslash starts an escape, so Windows paths need theirs doubled.
 const byImagePath = (file) => `[data-image-path='${file.replace(/[\\']/g, "\\$&")}']`;
@@ -72,6 +76,9 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
  * @param {string} [opts.testName] - used to prefix the temp dir for debugging
  * @param {boolean} [opts.withCatalog=true] - load the seeded e2e catalog
  *   (10 gradient images). Set false for tests that want a blank-state app.
+ * @param {boolean} [opts.noCatalog=false] - a packaged first run: no seeded
+ *   catalog and AFTERFRAME_NO_DEFAULT_CATALOG set, so the app shows the
+ *   no-catalog welcome state instead of creating dev's scratch catalog.
  * @param {"default"|"people"} [opts.catalogFixture="default"] - which seeded
  *   catalog to copy in; "people" loads people-catalog.afcatalog.
  * @param {(catalogDir: string) => void} [opts.prepareCatalog] - runs against
@@ -80,6 +87,13 @@ const SEEDED_PEOPLE_CATALOG = path.resolve(__dirname, "..", "fixtures", "people-
  *   is exercised).
  * @param {string} [opts.reuseUserDataDir] - reuse an isolated E2E directory to
  *   exercise app restart and saved-catalog migrations; use withCatalog: false.
+ * @param {boolean} [opts.keepCatalog=false] - with reuseUserDataDir: keep the
+ *   working catalog the previous launch wrote instead of copying the seeded
+ *   fixture in again, for a relaunch that must see what the first run saved.
+ * @param {"none"|"stub"|"real"} [opts.peopleModel="none"] - the bundled face
+ *   model the app sees, independent of whether this checkout fetched it:
+ *   "none" = a build without it, "stub" = an empty package that satisfies the
+ *   UI but can't run a scan, "real" = native/FaceEmbedding.mlpackage as fetched.
  * @param {object} [opts.env] - extra environment for the app, e.g. { TZ }.
  * @returns {Promise<{ app: import('playwright').ElectronApplication, window: import('playwright').Page, userDataDir: string }>}
  */
@@ -321,6 +335,43 @@ async function mcpCall(port, method, params) {
   return body.result;
 }
 
+/**
+ * tools/call the way most MCP specs use it: the tool's JSON text payload, or
+ * a throw naming the tool when it reports isError.
+ * @param {number} port - from launchApp().mcpPort
+ * @param {string} name - the tool, e.g. "search_assets"
+ * @param {object} [args]
+ */
+async function callTool(port, name, args) {
+  const result = await mcpCall(port, "tools/call", { name, arguments: args || {} });
+  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
+  return JSON.parse(result.content[0].text);
+}
+
+/**
+ * The MCP server listens a moment after the window exists: retry initialize
+ * until it answers. Returns the initialize result (serverInfo, instructions…).
+ * @param {number} port - from launchApp().mcpPort
+ * @param {number} [timeoutMs=15000]
+ */
+async function waitForMcp(port, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      return await mcpCall(port, "initialize", {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "e2e", version: "0" },
+      });
+    } catch (error) {
+      lastError = error;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  throw lastError || new Error("MCP server never came up");
+}
+
 async function closeApp(app, userDataDir) {
   await collectCoverage(app);
   try {
@@ -354,6 +405,5 @@ async function waitForEditor(window, { preview = false, timeout = 15_000, previe
 }
 
 module.exports = {
-  launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, relocateFixturePaths, lacks, byImagePath, importThroughToolbar,
-  REPO_DESKTOP_DIR,
+  launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, callTool, waitForMcp, lacks, onMacOS14, byImagePath, importThroughToolbar,
 };

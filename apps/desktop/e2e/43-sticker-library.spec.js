@@ -11,11 +11,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
-
-// macOS 14 is Darwin 23. The extract-sticker tool itself comes from
-// `npm run build:native`; a missing build fails here rather than skipping.
-const onMacOS14 = () => process.platform === "darwin" && Number(os.release().split(".")[0]) >= 23;
+const { launchApp, closeApp, waitForEditor, onMacOS14 } = require("./helpers/app");
 
 let ctx;
 let subjectPath;
@@ -29,6 +25,8 @@ const manifest = () => {
 const state = () => ctx.window.evaluate(() => window.__afterframeTest.getState());
 
 test.beforeAll(async () => {
+  // The extract-sticker tool itself comes from `npm run build:native`; a
+  // missing build fails here rather than skipping.
   test.skip(!onMacOS14(), "sticker extraction needs macOS 14+");
   const sharp = require("sharp");
   subjectPath = path.join(os.tmpdir(), `af-sticker-lib-${Date.now()}.png`);
@@ -36,7 +34,6 @@ test.beforeAll(async () => {
     `<svg width="600" height="600"><rect width="600" height="600" fill="#f4f4f4"/><circle cx="300" cy="300" r="150" fill="#c0392b"/></svg>`,
   )).png().toFile(subjectPath);
   ctx = await launchApp({ testName: "sticker-library" });
-  await ctx.window.waitForFunction(() => !!window.__afterframeTest?.openEditor, null, { timeout: 15_000 });
   await ctx.window.evaluate((p) => window.__afterframeTest.openEditor(p), subjectPath);
   await expect(ctx.window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(ctx.window);

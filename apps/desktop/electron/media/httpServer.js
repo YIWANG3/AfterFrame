@@ -52,4 +52,4 @@ function createMediaHttpServer({ allowlist }) {
   return { port: () => port, server };
 }
 
-module.exports = { createMediaHttpServer, VIDEO_MIME };
+module.exports = { createMediaHttpServer };

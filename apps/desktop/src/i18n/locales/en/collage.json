@@ -63,6 +63,8 @@
   "namingPreview": "{{example}} …, {{count}} files",
   "exportBatch": "Export {{n}} to folder",
   "exportingProgress": "Exporting {{done}}/{{total}}…",
+  "exportFail": "Export failed",
+  "exportPartialFail": "{{failed}} of {{total}} pages failed to export",
   "replaceImageTitle": "Replace Image",
   "addAction": "Add"
 }

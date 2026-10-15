@@ -24,7 +24,7 @@ export function buildLogoRegistry(manifest) {
  *  first needle found wins (logos.json lists the specific ones first: "redmi"
  *  before "xiaomi", "pentax" before "ricoh"); a needle mapped to null names no
  *  brand ("fujitsu" before "fuji"). */
-export function brandIdForMake(make, registry) {
+function brandIdForMake(make, registry) {
   if (!make) return null;
   const m = normalizeMake(make);
   for (const [needle, id] of Object.entries(registry.match || {})) {

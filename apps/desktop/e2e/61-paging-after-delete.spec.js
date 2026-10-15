@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
 const { cloneAssets } = require("./helpers/clone-assets");
 
 // The gallery pages by server offset. Deleting photos, or taking them out of
@@ -16,11 +16,7 @@ const cards = () => ctx.window.locator("[data-gallery-item='true']");
 const selected = () => ctx.window.locator("[data-gallery-item='true'][data-selected='true']");
 const scrollHeight = () => scroller().evaluate((el) => el.scrollHeight);
 
-async function callTool(name, args) {
-  const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
-  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
-  return JSON.parse(result.content[0].text);
-}
+const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
 // The opening page and any preload it triggers.
 async function settle() {

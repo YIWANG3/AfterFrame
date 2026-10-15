@@ -1,5 +1,6 @@
 // Where there is no video-tool (Windows), the playback proxy and the hover
-// filmstrip come from the sidecar running the same commands with FFmpeg.
+// filmstrip come from the sidecar running the same commands with FFmpeg. With
+// one (macOS), a tool that hangs is killed at the timeout.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -8,7 +9,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { register } = require("./video");
 
-function setup(runVideoTool) {
+function setup(runVideoTool, { videoToolPath = null, timeouts } = {}) {
   const handlers = new Map();
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-video-ipc-"));
   const clip = path.join(userData, "clip.mp4");
@@ -17,8 +18,9 @@ function setup(runVideoTool) {
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     app: { getPath: () => userData },
     allowlist: { isAllowedMediaPathLoaded: async () => true, addAllowedMediaDir: () => {} },
-    videoToolPath: path.join(userData, "no-video-tool"),
+    videoToolPath: videoToolPath || path.join(userData, "no-video-tool"),
     runVideoTool,
+    timeouts,
   });
   const ask = (channel, ...args) => handlers.get(channel)(null, ...args);
   return { ask, userData, clip };
@@ -60,4 +62,24 @@ test("the filmstrip is the sidecar's frames, in order", async () => {
   const frames = await ask("app:video-keyframes", clip, 12);
   assert.deepEqual(frames.map((frame) => path.basename(frame)), ["frame_0.jpg", "frame_2.jpg", "frame_10.jpg"]);
   assert.deepEqual(calls[0].slice(3), ["--count", "12", "--max-edge", "320"]);
+});
+
+test("a video-tool that hangs is killed at the timeout and gives no proxy", async (t) => {
+  // The "video-tool" is node itself, made to stall before it reads its argv
+  // (a --require'd script that waits longer than the timeout).
+  const stallDir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-video-stall-"));
+  const stall = path.join(stallDir, "stall.cjs");
+  fs.writeFileSync(stall, "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30_000);\n");
+  const previous = process.env.NODE_OPTIONS;
+  process.env.NODE_OPTIONS = `--require "${stall}"`;
+  t.after(() => {
+    if (previous === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = previous;
+    fs.rmSync(stallDir, { recursive: true, force: true });
+  });
+  const { ask, userData, clip } = setup(null, { videoToolPath: process.execPath, timeouts: { transcode: 500 } });
+  const started = Date.now();
+  assert.equal(await ask("app:video-proxy", clip), null);
+  assert.ok(Date.now() - started < 20_000, "resolved by the timeout, not by the tool finishing");
+  assert.deepEqual(fs.readdirSync(path.join(userData, "video-proxies")), []);
 });

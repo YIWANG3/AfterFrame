@@ -10,7 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 
-// Keep in step with RESTART_CODE in scripts/dev-electron.mjs.
+// scripts/dev-electron.mjs imports this and restarts Electron on it.
 const DEV_RESTART_EXIT_CODE = 75;
 
 const WATCHED_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".json", ".py"]);

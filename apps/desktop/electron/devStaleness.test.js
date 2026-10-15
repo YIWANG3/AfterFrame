@@ -50,9 +50,3 @@ test("a missing root is not an error, and the list is capped", (t) => {
   assert.equal(result.count, 8);
   assert.equal(result.files.length, 3);
 });
-
-test("the restart exit code matches the dev wrapper's", () => {
-  const wrapper = fs.readFileSync(path.join(__dirname, "..", "scripts", "dev-electron.mjs"), "utf8");
-  const declared = Number(/RESTART_CODE = (\d+)/.exec(wrapper)[1]);
-  assert.equal(require("./devStaleness").DEV_RESTART_EXIT_CODE, declared);
-});

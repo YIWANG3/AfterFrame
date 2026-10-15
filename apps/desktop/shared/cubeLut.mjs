@@ -10,7 +10,7 @@
 // levels), and a row count that must be exactly N³. Rows are red-fastest.
 // 1D LUTs and 1D+3D shaper files are refused for now.
 
-export const LUT_MIN_SIZE = 2;
+const LUT_MIN_SIZE = 2;
 export const LUT_MAX_SIZE = 65;
 
 // `code` is what callers branch on and the UI translates; `detail` carries

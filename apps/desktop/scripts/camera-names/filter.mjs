@@ -181,7 +181,7 @@ function brandPrefixes(makeKey) {
 }
 
 /** Text without the brand words it starts with, normalized ("Panasonic Lumix DMC-GH4" -> "dmc-gh4"). */
-export function withoutBrand(makeKey, text) {
+function withoutBrand(makeKey, text) {
   let s = normKey(text);
   const prefixes = brandPrefixes(makeKey);
   for (let i = 0; i < 2; i++) {
@@ -207,7 +207,7 @@ export function addsInformation(makeKey, model, name) {
  * "Canon EOS 5D" for "Canon EOS 5D Mark II". The name is a family, or the
  * wrong camera.
  */
-export function lessSpecific(makeKey, model, name) {
+function lessSpecific(makeKey, model, name) {
   const n = core(makeKey, name);
   const m = core(makeKey, model);
   return m.length > n.length && m.startsWith(n) && /^(?:\d|mark|mk)/.test(m.slice(n.length));
@@ -223,7 +223,7 @@ const isCode = (s) => !/\s/.test(s) && /^[a-z]*-?\d[a-z\d-]*$/.test(s) && (s.mat
  * Commons files "DJI Mini 3 Pro" under "DJI FC3582". Drone makes only: for
  * other makes a code-like name is usually the product's ("Honor 100").
  */
-export function codeForName(makeKey, model, name) {
+function codeForName(makeKey, model, name) {
   if (!DRONE_MAKES.has(normKey(makeKey))) return false;
   const n = withoutBrand(makeKey, name);
   const m = withoutBrand(makeKey, unwrap(normKey(model)));
@@ -236,7 +236,7 @@ export function codeForName(makeKey, model, name) {
  * 6C / Enjoy 6S / Nova Smart") for an EXIF model that is one: the others are
  * siblings or other markets' names.
  */
-export function listsModels(model, name) {
+function listsModels(model, name) {
   const alternatives = /\s\/\s|\/(?=[a-z]{0,4}-?\d)/i;
   return alternatives.test(String(name ?? "")) && !/[,/&]|\sand\s/i.test(String(model ?? ""));
 }
@@ -288,7 +288,7 @@ const PANASONIC_CODE = /(?:^|[\s-])(?:dmc|dc)-?([a-z]+)(\d+)/;
  * a model number that is the name's plus a generation digit is the same
  * camera ("DC-FZ1000 II" for "DC-FZ10002").
  */
-export function otherModelNumber(makeKey, model, name) {
+function otherModelNumber(makeKey, model, name) {
   const brand = brandOfMake(makeKey);
   if (!NUMBERED_SERIES_BRANDS.has(brand)) return false;
   const m = withoutBrand(makeKey, unwrap(normKey(model)));
@@ -438,7 +438,7 @@ export function isSoftwareMake(make) {
  * catmapping rows -> candidate names, and the rows left out.
  * @returns {{ candidates: object[], dropped: { reason: string, make: string, model: string, name?: string }[] }}
  */
-export function catmappingCandidates(rows) {
+function catmappingCandidates(rows) {
   const candidates = [];
   const dropped = [];
   for (const { make, model, category } of rows) {

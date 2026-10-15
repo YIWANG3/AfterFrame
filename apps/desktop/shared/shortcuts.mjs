@@ -10,7 +10,7 @@
 // code is the physical key, so a binding works the same whatever Shift or an
 // input method does to the character.
 
-export const MODIFIER_ORDER = ["Mod", "Ctrl", "Alt", "Shift"];
+const MODIFIER_ORDER = ["Mod", "Ctrl", "Alt", "Shift"];
 
 // Where an action listens. Two actions conflict when their keys are the same
 // and their scopes can be live at once (SCOPE_OVERLAP).
@@ -26,7 +26,7 @@ const SCOPE_OVERLAP = {
   lightbox: ["global", "library", "lightbox"],
   editor: ["global", "editor"],
 };
-export function scopesOverlap(a, b) {
+function scopesOverlap(a, b) {
   return (SCOPE_OVERLAP[a] || []).includes(b);
 }
 
@@ -79,7 +79,7 @@ export const SHORTCUT_ACTIONS = [
 ];
 
 const ACTION_BY_ID = new Map(SHORTCUT_ACTIONS.map((action) => [action.id, action]));
-export function shortcutAction(id) {
+function shortcutAction(id) {
   return ACTION_BY_ID.get(id) || null;
 }
 
@@ -148,7 +148,7 @@ export function defaultBindings(actionOrId, platform) {
 
 // ── binding strings ──────────────────────────────────────────────────────
 
-export function parseBinding(binding) {
+function parseBinding(binding) {
   if (typeof binding !== "string" || !binding) return null;
   const parts = binding.split("+");
   const code = parts.pop();
@@ -329,7 +329,7 @@ export function findConflicts(binding, actionId, overrides, platform) {
 }
 
 // "KeyP" → "Shift+KeyP"; null when the binding already holds Shift.
-export function shiftedBinding(binding) {
+function shiftedBinding(binding) {
   const parsed = parseBinding(binding);
   if (!parsed?.code || parsed.modifiers.includes("Shift")) return null;
   return normalizeBinding([...parsed.modifiers, "Shift", parsed.code].join("+"));

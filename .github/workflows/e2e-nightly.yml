@@ -1,17 +1,22 @@
 name: E2E (full, nightly)
 
 # quality.yml runs the CI-stable subset of the Electron suite on every PR.
-# The other half — map (WebGL), lightbox zoom, video (AVFoundation), watched
-# dirs (fs-watch timing), save/people flows (slow I/O) — only ran when someone
-# remembered `npm run e2e:only` locally. This runs ALL of it once a night and
-# on demand, so a regression in the excluded half surfaces within a day
-# instead of at the next release. Informational: it is not a merge gate.
+# The rest — map (WebGL), watched dirs (fs-watch timing), the real-model
+# people scan (62), native video (70) and whatever a new spec forgot to list
+# there — only ran when someone remembered `npm run e2e:only` locally. This
+# runs ALL of it once a night and on demand, so a regression in the excluded
+# part surfaces within a day instead of at the next release. Informational:
+# it is not a merge gate.
 #
 # It is also the coverage run: the three unit suites run first, then the
 # renderer as an istanbul build with the main process and the Python sidecar
 # collecting on the side (scripts/e2e-coverage.mjs,
 # docs/review/2026-09-17-E2E覆盖率.md). The report covers e2e alone and the
 # whole suite, and is uploaded on every run — pass or fail.
+#
+# The web build's own Playwright suite (e2e-web/) runs here too, in a job of
+# its own: deploy-pages.yml publishes that build on every push to main and no
+# other workflow runs its specs.
 
 on:
   schedule:
@@ -57,6 +62,18 @@ jobs:
         run: npm ci --prefix apps/desktop
       - name: Build native tools
         run: npm run build:native --prefix apps/desktop
+      # The bundled face model (scripts/fetch-people-model.mjs): without it
+      # 62-people-real-model skips itself, and until 2026-10-14 nothing here
+      # fetched it, so its three tests had never run on CI. The ~300 MB
+      # archive is cached by the pinned constants in electron/peopleModel.js
+      # (URL, SHA-256, manifest hash) — a model bump is a new key.
+      - name: Cache the people model archive
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/native/.cache/FaceEmbedding.mlpackage.tar.gz
+          key: people-model-${{ hashFiles('apps/desktop/electron/peopleModel.js') }}
+      - name: Fetch the people model
+        run: npm run fetch:people-model --prefix apps/desktop
       - name: Run the unit suites and the full Electron E2E suite with coverage
         # Builds the instrumented renderer itself; reports even when a spec fails.
         run: npm run coverage --prefix apps/desktop -- --retries=1
@@ -73,5 +90,37 @@ jobs:
         with:
           name: electron-e2e-nightly-failure
           path: apps/desktop/e2e/.artifacts/
+          include-hidden-files: true
+          retention-days: 14
+
+  web-e2e:
+    # The browser build's three specs (e2e-web/, playwright.web.config.js):
+    # web.html in a real Chromium against the vite dev server, so a Linux
+    # runner is enough and the Electron binary is never needed. Its result is
+    # independent of the Electron job's above.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Install Chromium for Playwright
+        working-directory: apps/desktop
+        run: npx playwright install --with-deps chromium
+      - name: Run the web E2E suite
+        run: npm run e2e:web --prefix apps/desktop
+      - name: Upload web E2E failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-nightly-failure
+          path: apps/desktop/e2e-web/.artifacts/
           include-hidden-files: true
           retention-days: 14

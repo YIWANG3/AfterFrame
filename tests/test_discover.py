@@ -1,15 +1,9 @@
 """Unit tests for the Discover page collections (places + memories)."""
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from media_workspace.discover import ReverseGeocoder, build_discover_collections  # noqa: E402
+from media_workspace.discover import ReverseGeocoder, build_discover_collections
 
 GAZETTEER = {
     "countries": [{"q": "Q30", "en": "United States", "zh": "美国", "lat": 39.8, "lon": -98.6}],

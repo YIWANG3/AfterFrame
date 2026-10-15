@@ -5,9 +5,8 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
   const fs = require("node:fs");
   const path = require("node:path");
   const { cacheName, fullRenderNeeded, pruneCache, readRenderer, writeRenderer } = require("../rawEditSource");
-  // t() returns a translator bound to the current locale; fall back to identity
-  // (English literals) if i18n wasn't wired (e.g. older callers/tests).
-  const tr = () => (typeof t === "function" ? t() : (key) => key);
+  // t() returns a translator bound to the current locale.
+  const tr = () => t();
 
   ipcMain.handle("workspace:reveal", (_event, targetPath) => {
     if (!targetPath) return false;
@@ -20,8 +19,8 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
 
   // Full-library missing-file sweep (File ▸ Verify Files menu action).
   ipcMain.handle("workspace:verify-assets", async (_event, options) => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState?.() || {};
-    if (!currentCatalogPath || !catalogHasDb?.()) return null;
+    const { currentCatalogPath, catalogHasDb } = getCatalogState();
+    if (!currentCatalogPath || !catalogHasDb()) return null;
     return await commands.verifyAssets(options || {});
   });
 
@@ -46,7 +45,7 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
     const outcome = await commands.relinkAsset({ assetId: opts.assetId, newPath, force: !!opts.force });
     // Let media:// load the relinked original right away.
     if (outcome?.status === "relinked" && outcome.new_path) {
-      addAllowedMediaDir?.(path.dirname(outcome.new_path));
+      addAllowedMediaDir(path.dirname(outcome.new_path));
     }
     return outcome;
   });
@@ -93,7 +92,7 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
       }
       pruneCache(dir);
     }
-    addAllowedMediaDir?.(dir);
+    addAllowedMediaDir(dir);
     return { path: target, full: true, renderer };
   });
 
@@ -108,7 +107,7 @@ function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedM
   ipcMain.handle("workspace:quick-register", async (_event, imagePath, originPath, collageSourceIds) => {
     if (!imagePath) return null;
     // The renderer will media:// this file right after registering it.
-    addAllowedMediaDir?.(require("node:path").dirname(imagePath));
+    addAllowedMediaDir(path.dirname(imagePath));
     return await commands.quickRegister({ imagePath, originPath, collageSourceIds });
   });
 

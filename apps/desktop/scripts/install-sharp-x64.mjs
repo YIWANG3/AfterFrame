@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Add sharp's macOS x64 binaries for the Intel build (electron-builder.intel.cjs).
+// Add sharp's macOS x64 binaries for the Intel build (electron-builder.mac.cjs).
 //
 // npm installs only the current Mac's binaries, so on Apple silicon the Intel
 // build would ship without sharp, and main.js requires it at the top: the app

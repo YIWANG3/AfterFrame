@@ -20,6 +20,7 @@ from typing import Any
 from PIL import Image
 
 from . import exiftool, raw_decode
+from .imaging import register_heif
 from .models import ImageCandidate, RawMetadata
 
 log = logging.getLogger(__name__)
@@ -333,19 +334,10 @@ def _from_exiftool(tags: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _register_heif() -> None:
-    try:
-        from pillow_heif import register_heif_opener
-
-        register_heif_opener()
-    except ImportError:
-        pass
-
-
 def _from_pillow(path: Path) -> dict[str, Any]:
     """The EXIF Pillow reads, for when ExifTool can't run: an image's camera,
     exposure, capture time and GPS (no maker notes, no XMP)."""
-    _register_heif()
+    register_heif()
     try:
         with Image.open(path) as image:
             width, height = image.size
@@ -457,7 +449,7 @@ def extract_image_candidate(path: Path, fingerprint_mode: str = "head-tail") -> 
 
 
 def _pillow_size(path: Path) -> tuple[int | None, int | None]:
-    _register_heif()
+    register_heif()
     try:
         with Image.open(path) as image:
             return image.size

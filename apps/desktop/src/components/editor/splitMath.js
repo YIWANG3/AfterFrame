@@ -11,13 +11,12 @@
 import { getAspectRatio, resizeCropRect } from "./cropMath";
 import { cropExtentForAngle } from "./imageMath";
 import { panelBoundaries } from "../../../shared/splitGeometry.mjs";
+import { clamp } from "../../utils/math";
 
 export const SPLIT_ASPECT_KEYS = ["1:1", "3:4", "2:3", "9:16", "4:5"];
-export const DEFAULT_SPLIT_ASPECT_KEY = "3:4";
+const DEFAULT_SPLIT_ASPECT_KEY = "3:4";
 export const MIN_SPLIT_COUNT = 2;
 export const MAX_SPLIT_COUNT = 10;
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export const CUSTOM_SPLIT_ASPECT_KEY = "custom";
 export const MIN_CUSTOM_ASPECT_SIDE = 1;

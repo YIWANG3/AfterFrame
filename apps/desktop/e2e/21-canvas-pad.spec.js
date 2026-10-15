@@ -31,7 +31,6 @@ test.describe("Canvas margin (pad) save", () => {
   test.beforeAll(async () => {
     await makeFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "canvas-pad" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), FIX);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await waitForEditor(window, { preview: true });

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import useDismiss from "../ui/useDismiss";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
@@ -58,17 +59,7 @@ function Popover({ label, active, summary, children, width = 220, excluded = fal
     return () => observer?.disconnect();
   }, [open, width]);
 
-  useEffect(() => {
-    if (!open) return;
-    function down(e) {
-      if (btnRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
-      setOpen(false);
-    }
-    function key(e) { if (e.key === "Escape") setOpen(false); }
-    document.addEventListener("pointerdown", down);
-    document.addEventListener("keydown", key);
-    return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
-  }, [open]);
+  useDismiss([btnRef, panelRef], () => setOpen(false), { enabled: open });
 
   return (
     <>
@@ -847,7 +838,7 @@ function ColorPopover({ filters, onChange }) {
 // shows up for everyone. A hidden facet that is filtering (a smart
 // collection's rule, a person picked from the wall) still shows: what is
 // narrowing the grid must always be on the bar.
-export const FACET_SLOTS = [
+const FACET_SLOTS = [
   { id: "camera", keys: ["camera"] },
   { id: "lens", keys: ["lens"] },
   { id: "tag", keys: ["tag", "tag_match"] },
@@ -869,7 +860,7 @@ export const FACET_SLOTS = [
   { id: "rating", keys: ["rating_min", "rating_max"] },
   { id: "flag", keys: ["flag"] },
 ];
-export const HIDDEN_FACETS_KEY = "afterframe.filterBar.hidden";
+const HIDDEN_FACETS_KEY = "afterframe.filterBar.hidden";
 const SLOT_IDS = new Set(FACET_SLOTS.map((slot) => slot.id));
 
 function readHiddenFacets() {

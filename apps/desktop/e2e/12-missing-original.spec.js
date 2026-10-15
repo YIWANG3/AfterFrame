@@ -21,7 +21,6 @@ test.describe("Missing original handling", () => {
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "missing" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
 
     // Find the framed-portrait asset (B0016108) and its on-disk original.

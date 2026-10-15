@@ -546,6 +546,19 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     resumeJob(jobId) {
       return callJson(["resume-job", "--job-id", String(jobId)]);
     },
+
+    // Mark a queued/running job terminal when its process is known to be gone
+    // (the sidecar refuses to touch rows that already finished).
+    failJob(jobId, errorText) {
+      return callJson(["fail-job", "--job-id", String(jobId), "--error", String(errorText)]);
+    },
+
+    // ── Video (where there is no native video-tool) ──────────────────────
+    // The sidecar runs video-tool's transcode / frames commands with FFmpeg,
+    // in a process of its own: a long clip must not hold up the resident one.
+    videoTool(args, timeoutMs) {
+      return callJsonOneShot(["video-tool", ...args], timeoutMs);
+    },
   };
 }
 

@@ -864,7 +864,6 @@ export const browserBridge = {
     rootDir: "/",
     catalogPath: assets.length ? "/web.afcatalog" : null,
     scratchCatalogPath: null,
-    reviewCatalogPath: null,
     sidecarSrc: null,
     isSampleCatalog: false,
   });

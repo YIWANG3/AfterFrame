@@ -35,4 +35,4 @@ if (require.main === module) {
   ensureFixture().then((p) => console.log("Wrote", p));
 }
 
-module.exports = { ensureFixture, OUT_PATH };
+module.exports = { ensureFixture };

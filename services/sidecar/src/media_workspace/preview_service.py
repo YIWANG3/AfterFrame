@@ -19,7 +19,9 @@ from .color_profiles import adobe_rgb_icc
 from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, set_display_shape, upsert_preview_entry
 from .db.colors import analyze_asset_colors
+from .imaging import register_heif
 from .processes import no_window
+from .progress import ProgressCallback, report_progress
 from .source_readiness import SourceNotReadyError, validate_source_ready, validate_source_unchanged
 
 _MAX_WORKERS = max((os.cpu_count() or 4) // 2, 2)
@@ -47,23 +49,6 @@ _ORIENTATION_TAG = 0x0112
 # stitched panorama is a photo, not a decompression bomb (Pillow refuses past
 # ~179 MP by default, before draft() could shrink the decode).
 Image.MAX_IMAGE_PIXELS = max(Image.MAX_IMAGE_PIXELS or 0, 1_000_000_000)
-
-_heif_registered = False
-
-
-def _register_heif() -> None:
-    """HEIC/HEIF (iPhone) through pillow-heif, once per process."""
-    global _heif_registered
-    if _heif_registered:
-        return
-    try:
-        import pillow_heif
-
-        pillow_heif.register_heif_opener()
-    except ImportError:  # no wheel for this platform: HEIC then fails to open
-        pass
-    _heif_registered = True
-
 
 def _profile_space(icc_profile: bytes) -> str | None:
     """The colour space an ICC profile describes ('RGB ', 'CMYK', 'GRAY'…)."""
@@ -110,7 +95,7 @@ def render_pillow_preview(
     space when the source doesn't say (a RAW's Adobe RGB JPEG), and `exif`
     replaces the orientation-only EXIF (it must carry the orientation).
     """
-    _register_heif()
+    register_heif()
     with Image.open(source) as image:
         orientation = orientation or image.getexif().get(_ORIENTATION_TAG)
         icc_profile = image.info.get("icc_profile") or icc_profile
@@ -412,7 +397,7 @@ class PreviewService:
         asset_type: str | None = None,
         limit: int | None = None,
         force: bool = False,
-        progress_callback=None,
+        progress_callback: ProgressCallback | None = None,
         paths: list[Path] | None = None,
         force_paths: list[Path] | None = None,
         analyze_colors: bool = True,
@@ -641,9 +626,3 @@ class PreviewService:
             _reject_black(tmp)
 
         return self._atomic(output_path, render, validate=validate)
-
-
-def report_progress(progress_callback, **payload) -> None:
-    if progress_callback is None:
-        return
-    progress_callback(payload)

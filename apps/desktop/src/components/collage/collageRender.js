@@ -3,7 +3,7 @@
 // draw with EXACTLY the same code — the UI's export and an agent's export of
 // the same inputs are pixel-identical.
 
-export function getDrawSize(img, cellW, cellH, zoom) {
+function getDrawSize(img, cellW, cellH, zoom) {
   const imgAspect = img.naturalWidth / img.naturalHeight;
   const cellAspect = cellW / cellH;
   let drawW, drawH;

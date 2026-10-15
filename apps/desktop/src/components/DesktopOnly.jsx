@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { MonitorDown } from "lucide-react";
 import api from "../api";
 
-export const DESKTOP_SITE_URL = "https://yiwang3.github.io/AfterFrame/";
+const DESKTOP_SITE_URL = "https://yiwang3.github.io/AfterFrame/";
 
 // The hint on a locked feature. The web build points at the desktop app; the
 // desktop app only locks what is macOS-only for now (Windows) or what needs
@@ -16,7 +16,7 @@ export const DESKTOP_SITE_URL = "https://yiwang3.github.io/AfterFrame/";
 const DESKTOP_LOCKED_HINT_KEY = api.platform === "darwin" ? "desktop.needsMacOS14" : "desktop.macOnly";
 export const LOCKED_HINT_KEY = api.capabilities.web ? "desktop.hint" : DESKTOP_LOCKED_HINT_KEY;
 
-export function openDesktopSite() {
+function openDesktopSite() {
   if (api.has("openExternal")) api.openExternal(DESKTOP_SITE_URL);
   else window.open(DESKTOP_SITE_URL, "_blank", "noopener");
 }

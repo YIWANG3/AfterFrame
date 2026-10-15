@@ -275,7 +275,7 @@ function createAppShell({
   }
 
   return {
-    createWindow, buildAppMenu, installMenu, setMenuAccelerators, sendMenuAction, toggleAppFullscreen, queueExternalImport, flushExternalImports,
+    createWindow, buildAppMenu, installMenu, setMenuAccelerators, toggleAppFullscreen, queueExternalImport,
     popupAppMenu, setTitleBarTheme,
   };
 }

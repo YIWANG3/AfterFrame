@@ -17,6 +17,7 @@ import { usePref } from "../hooks/usePref";
 import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
 import { EXPORT_WIDTHS } from "./collage/PanelControls";
 import { Checkbox } from "../ui";
+import useDismiss from "../ui/useDismiss";
 
 const PANEL_WIDTH = 300;
 const PAGE_SIZE = 48;
@@ -202,20 +203,9 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
     return () => observer.disconnect();
   }, []);
 
-  // Close dropdowns on outside click
-  useEffect(() => {
-    if (!showDropdown && !showSortDropdown) return;
-    function handleClick(e) {
-      if (showDropdown && dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowDropdown(false);
-      }
-      if (showSortDropdown && sortDropdownRef.current && !sortDropdownRef.current.contains(e.target)) {
-        setShowSortDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showDropdown, showSortDropdown]);
+  // Close dropdowns on outside click (Escape is the overlay's own).
+  useDismiss(dropdownRef, () => setShowDropdown(false), { enabled: showDropdown, escape: false });
+  useDismiss(sortDropdownRef, () => setShowSortDropdown(false), { enabled: showSortDropdown, escape: false });
 
   // Items already on the canvas stay VISIBLE but disabled (grayed + check) —
   // hiding them read as "photos missing" rather than "already added".
@@ -537,7 +527,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
   );
 }
 
-export default function CollageOverlay({ open, items, catalogKey = null, collections, summary, sourceCollectionId, onAddToCollection, onClose, onExportComplete }) {
+export default function CollageOverlay({ open, items, catalogKey = null, collections, summary, sourceCollectionId, onAddToCollection, onClose, onExportComplete, pushToast }) {
   const { t } = useTranslation("collage");
   const canvasRef = useRef(null);
   const [images, setImages] = useState([]);
@@ -802,6 +792,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
       onExportComplete?.(savePath);
     } catch (err) {
       console.error("[Collage] export failed:", err);
+      pushToast?.({ title: t("exportFail"), message: String(err?.message || err), tone: "error", ttl: 7000 });
     } finally {
       setExporting(false);
     }
@@ -913,7 +904,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
           const blob = await batchPageRefs.current[i]?.exportToBlob?.(exportWidth);
           if (!blob) { failed += 1; continue; }
           const name = `${prefix}_${String(i + 1).padStart(2, "0")}.jpg`;
-          const savePath = `${dir}/${name}`;
+          const savePath = `${dir}${pathSeparator(dir)}${name}`;
           const buffer = await blob.arrayBuffer();
           const firstSrc = group[0]?.image_path || null;
           const sourceAssetIds = group.map((g) => g.asset_id).filter(Boolean);
@@ -927,7 +918,10 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
         }
         setExportProgress({ done: i + 1, total: groups.length });
       }
-      if (failed > 0) console.warn(`[Collage] batch export: ${failed}/${groups.length} pages failed`);
+      if (failed > 0) {
+        console.warn(`[Collage] batch export: ${failed}/${groups.length} pages failed`);
+        pushToast?.({ title: t("exportPartialFail", { failed, total: groups.length }), tone: "error", ttl: 7000 });
+      }
       await joinSourceFolder(exportedIds);
       if (exportedAny) onExportComplete?.(dir);
     } finally {

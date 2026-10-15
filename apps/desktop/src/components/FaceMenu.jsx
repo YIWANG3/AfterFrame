@@ -1,16 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import useDismiss from "../ui/useDismiss";
 import { createPortal } from "react-dom";
 
 // Context menu for people/face actions.
 export default function FaceMenu({ position, items, onClose }) {
   const ref = useRef(null);
-  useEffect(() => {
-    function down(e) { if (!ref.current?.contains(e.target)) onClose(); }
-    function key(e) { if (e.key === "Escape") onClose(); }
-    document.addEventListener("pointerdown", down);
-    document.addEventListener("keydown", key);
-    return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
-  }, [onClose]);
+  useDismiss(ref, onClose);
   const left = Math.min(position.x, window.innerWidth - 228);
   const top = Math.min(position.y, window.innerHeight - items.length * 30 - 16);
   return createPortal(

@@ -33,7 +33,7 @@ export const BASE_STATE = {
   lut: null,
 };
 
-export function lutEquals(a, b) {
+function lutEquals(a, b) {
   if (!a || !b) return (a ?? null) === (b ?? null);
   return a.id === b.id && a.strength === b.strength;
 }
@@ -81,7 +81,7 @@ function scrimEquals(a, b) {
     gradientEquals(a.gradient ?? null, b.gradient ?? null);
 }
 
-export function canvasEquals(a, b) {
+function canvasEquals(a, b) {
   if (!a || !b) return a === b;
   return bgEquals(a.bg ?? null, b.bg ?? null) && padEquals(a.pad, b.pad) &&
     scrimEquals(a.scrim ?? null, b.scrim ?? null);
@@ -110,7 +110,7 @@ function cloneSplit(split) {
   };
 }
 
-export function splitEquals(a, b) {
+function splitEquals(a, b) {
   const sa = a || BASE_STATE.split;
   const sb = b || BASE_STATE.split;
   const ca = sa.custom || BASE_STATE.split.custom;

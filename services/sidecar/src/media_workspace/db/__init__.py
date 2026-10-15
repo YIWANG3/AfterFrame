@@ -1,5 +1,6 @@
-"""Domain-split data layer. Import surface is unchanged: every symbol
-previously on media_workspace.db is re-exported here."""
+"""Domain-split data layer. The names re-exported here are the ones callers
+import from the package; module-private helpers and functions only used
+through their own submodule (db.colors, db.core, …) are not re-exported."""
 
 from ..schema import SCHEMA_VERSION
 from .assets import (
@@ -36,8 +37,6 @@ from .assets import (
     upsert_video_asset,
 )
 from .browse import (
-    _browse_order_clause,
-    _facet_clauses,
     browse_collection,
     camera_makes,
     get_facet_values,
@@ -49,7 +48,6 @@ from .browse import (
     search_facet_values,
 )
 from .collections import (
-    _collection_id,
     add_collection_items,
     create_collection,
     delete_collection,
@@ -58,20 +56,9 @@ from .collections import (
     reorder_collections,
     update_collection,
 )
-from .colors import (
-    analyze_asset_colors,
-    color_status,
-    colors_stale,
-    get_asset_colors,
-    list_assets_missing_colors,
-    mark_colors_current,
-    replace_asset_colors,
-)
-from .core import RESOLVER_VERSION, _ensure_column, _file_id, _json, connect, init_db, set_catalog_path
+from .colors import get_asset_colors
+from .core import connect, init_db, set_catalog_path
 from .jobs import (
-    _UNSET,  # sentinel shared with update_job callers
-    _decode_job_row,
-    _job_id,
     create_job,
     get_job,
     get_latest_job,
@@ -116,17 +103,10 @@ from .people import (
     upsert_people_asset_index,
 )
 from .resource_sets import (
-    _link_id,
-    _next_resource_sort_order,
-    _resource_set_id,
-    add_asset_to_resource_set,
     attach_asset_to_resource_set,
-    create_resource_set,
     find_image_asset_ids_by_stem,
     get_resource_set_for_asset,
-    link_assets,
     list_image_assets_missing_resource_set,
-    list_incorrectly_merged_resource_sets,
     list_singleton_primary_resource_sets,
     reassign_asset_to_resource_set,
     remove_raw_from_resource_sets,

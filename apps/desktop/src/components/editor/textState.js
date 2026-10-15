@@ -339,7 +339,3 @@ export function getBgPadding(layer) {
 export function applyPreset(layer, preset) {
   return { ...layer, ...preset.style, preset: preset.name };
 }
-
-export function cloneLayers(layers) {
-  return layers.map((l) => ({ ...l }));
-}

@@ -11,7 +11,6 @@ from .ai_repaint import (
     list_provider_models,
 )
 from .catalog import ensure_catalog
-from .config import Thresholds
 from .db import (
     add_collection_items,
     assign_faces_to_group,
@@ -81,7 +80,7 @@ from .job_runner import (
 )
 from .metadata import extract_image_candidate, iso_mtime
 from .preview_service import PreviewService
-from .reverse_lookup import iter_image_files, resolve_image, resolve_image_batch
+from .reverse_lookup import iter_image_files, resolve_image_batch
 from .scanner import enrich_raw_assets, scan_raw_directory
 
 # run-import-job, run-preview-job, … : the detached background job runners.
@@ -245,18 +244,6 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_raw.add_argument("--limit", type=int)
     enrich_raw.add_argument("--workers", type=int)
     enrich_raw.add_argument("--fingerprint-mode", choices=["head-only"], default="head-only")
-
-    resolve = subparsers.add_parser("resolve-image", parents=[common])
-    resolve.add_argument("--path", type=Path, required=True)
-    resolve.add_argument("--auto-threshold", type=float, default=0.85)
-    resolve.add_argument("--manual-threshold", type=float, default=0.7)
-    resolve.add_argument("--refresh", action="store_true")
-
-    resolve_batch = subparsers.add_parser("resolve-export-batch", parents=[common])
-    resolve_batch.add_argument("--image-dir", type=Path, action="append", required=True)
-    resolve_batch.add_argument("--auto-threshold", type=float, default=0.85)
-    resolve_batch.add_argument("--manual-threshold", type=float, default=0.7)
-    resolve_batch.add_argument("--refresh", action="store_true")
 
     previews = subparsers.add_parser("generate-previews", parents=[common])
     previews.add_argument("--kind", choices=["preview", "preview-hd"], default="preview")
@@ -1455,30 +1442,6 @@ def _cmd_run_people_index_job(args, connection, catalog, parser):
     return 0
 
 
-def _cmd_resolve_image(args, connection, catalog, parser):
-    thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-    decision = resolve_image(connection, args.path, thresholds=thresholds, refresh=args.refresh)
-    print(
-        json.dumps(
-            {
-                "status": decision.status,
-                "score": decision.score,
-                "raw_asset_id": decision.raw_asset_id,
-                "top_candidates": decision.ranked_candidates,
-            },
-            indent=2,
-        )
-    )
-    return 0
-
-
-def _cmd_resolve_image_batch(args, connection, catalog, parser):
-    thresholds = Thresholds(auto_bind=args.auto_threshold, manual_review=args.manual_threshold)
-    payload = resolve_image_batch(connection, args.image_dir, thresholds=thresholds, refresh=args.refresh)
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
 def _cmd_generate_previews(args, connection, catalog, parser):
     service = PreviewService(catalog)
     paths = [Path(p) for p in (getattr(args, "paths", None) or [])] or None
@@ -1602,6 +1565,52 @@ def _cmd_locate_image_asset(args, connection, catalog, parser):
     return 0
 
 
+def _browse_row_payload(row, catalog) -> dict:
+    """One gallery row as browse-images / browse-collection print it. Both
+    commands share this so the folder view carries every field the All
+    Assets view does (has_face drives the face badge in Gallery.jsx)."""
+    preview_path = None
+    if row["preview_relative_path"]:
+        preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
+    preview_hd_path = None
+    if row["preview_hd_relative_path"]:
+        preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
+    present, source_changed = _live_source_state(row)
+    return {
+        "asset_id": row["asset_id"],
+        "asset_type": row["asset_type"],
+        "stem": row["stem"],
+        "image_path": row["image_path"],
+        "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
+        "app_rating": row["app_rating"],
+        "app_flag": row["app_flag"],
+        "display_shape": row["display_shape"] or None,
+        "tags": _row_tags(row),
+        **_description_fields(row),
+        "exists_on_disk": present,
+        "source_changed": source_changed,
+        "imported_at": row["imported_at"],
+        "modified_time": row["modified_time"],
+        "match_status": row["match_status"],
+        "score": row["score"],
+        "raw_asset_id": row["raw_asset_id"],
+        "raw_path": row["raw_path"],
+        "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
+        "preview_path": preview_path,
+        "preview_hd_path": preview_hd_path,
+        "resource_set_id": row["resource_set_id"],
+        "resource_role": row["resource_role"],
+        "version_kind": row["version_kind"],
+        "resource_sort_order": row["resource_sort_order"],
+        "set_primary_asset_id": row["set_primary_asset_id"],
+        "set_raw_asset_id": row["set_raw_asset_id"],
+        "primary_stem": row["primary_stem"],
+        "set_item_count": row["set_item_count"],
+        "has_face": bool(row["has_face"]),
+        "annotation": _annotation_from_row(row),
+    }
+
+
 def _cmd_browse_images(args, connection, catalog, parser):
     facet_filters = json.loads(args.filters) if args.filters else None
     payload = []
@@ -1611,48 +1620,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
     # explicit verify-assets sweep. The live `present` value below is what the
     # UI badges/blocks read; the DB flag only gates preview/export batches.
     for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=json.loads(args.base) if args.base else None):
-        preview_path = None
-        if row["preview_relative_path"]:
-            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
-        preview_hd_path = None
-        if row["preview_hd_relative_path"]:
-            preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
-        present, source_changed = _live_source_state(row)
-        payload.append(
-            {
-                "asset_id": row["asset_id"],
-                "asset_type": row["asset_type"],
-                "stem": row["stem"],
-                "image_path": row["image_path"],
-                "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
-                "app_rating": row["app_rating"],
-                "app_flag": row["app_flag"],
-                "display_shape": row["display_shape"] or None,
-                "tags": _row_tags(row),
-                **_description_fields(row),
-                "exists_on_disk": present,
-                "source_changed": source_changed,
-                "imported_at": row["imported_at"],
-                "modified_time": row["modified_time"],
-                "match_status": row["match_status"],
-                "score": row["score"],
-                "raw_asset_id": row["raw_asset_id"],
-                "raw_path": row["raw_path"],
-                "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
-                "preview_path": preview_path,
-                "preview_hd_path": preview_hd_path,
-                "resource_set_id": row["resource_set_id"],
-                "resource_role": row["resource_role"],
-                "version_kind": row["version_kind"],
-                "resource_sort_order": row["resource_sort_order"],
-                "set_primary_asset_id": row["set_primary_asset_id"],
-                "set_raw_asset_id": row["set_raw_asset_id"],
-                "primary_stem": row["primary_stem"],
-                "set_item_count": row["set_item_count"],
-                "has_face": bool(row["has_face"]),
-                "annotation": _annotation_from_row(row),
-            }
-        )
+        payload.append(_browse_row_payload(row, catalog))
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -2252,47 +2220,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
         search=args.search, filters=json.loads(args.filters) if args.filters else None, sort=args.sort,
     )
     for row in rows:
-        preview_path = None
-        if row["preview_relative_path"]:
-            preview_path = str((catalog.root / row["preview_relative_path"]).resolve())
-        preview_hd_path = None
-        if row["preview_hd_relative_path"]:
-            preview_hd_path = str((catalog.root / row["preview_hd_relative_path"]).resolve())
-        present, source_changed = _live_source_state(row)
-        payload.append(
-            {
-                "asset_id": row["asset_id"],
-                "asset_type": row["asset_type"],
-                "stem": row["stem"],
-                "image_path": row["image_path"],
-                "image_metadata": json.loads(row["image_metadata_json"] or "{}"),
-                "app_rating": row["app_rating"],
-                "app_flag": row["app_flag"],
-                "display_shape": row["display_shape"] or None,
-                "tags": _row_tags(row),
-                **_description_fields(row),
-                "exists_on_disk": present,
-                "source_changed": source_changed,
-                "imported_at": row["imported_at"],
-                "modified_time": row["modified_time"],
-                "match_status": row["match_status"],
-                "score": row["score"],
-                "raw_asset_id": row["raw_asset_id"],
-                "raw_path": row["raw_path"],
-                "raw_metadata": json.loads(row["raw_metadata_json"] or "{}") if row["raw_metadata_json"] else {},
-                "preview_path": preview_path,
-                "preview_hd_path": preview_hd_path,
-                "resource_set_id": row["resource_set_id"],
-                "resource_role": row["resource_role"],
-                "version_kind": row["version_kind"],
-                "resource_sort_order": row["resource_sort_order"],
-                "set_primary_asset_id": row["set_primary_asset_id"],
-                "set_raw_asset_id": row["set_raw_asset_id"],
-                "primary_stem": row["primary_stem"],
-                "set_item_count": row["set_item_count"],
-                "annotation": _annotation_from_row(row),
-            }
-        )
+        payload.append(_browse_row_payload(row, catalog))
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -2342,8 +2270,6 @@ COMMAND_HANDLERS = {
     "orientation-status": _cmd_orientation_status,
     "color-status": _cmd_color_status,
     "run-people-index-job": _cmd_run_people_index_job,
-    "resolve-image": _cmd_resolve_image,
-    "resolve-export-batch": _cmd_resolve_image_batch,
     "generate-previews": _cmd_generate_previews,
     "refresh-assets": _cmd_refresh_assets,
     "facet-values": _cmd_facet_values,

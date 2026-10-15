@@ -377,8 +377,8 @@ def run_nanobanana_repaint(
     )
 
 
-def _openai_size_from_resolution(resolution: str | None, aspect_ratio: str | None) -> str:
-    """Map resolution + aspect_ratio hints to an OpenAI image size string."""
+def _openai_size_from_resolution(aspect_ratio: str | None) -> str:
+    """Map the aspect_ratio hint to an OpenAI image size string."""
     if aspect_ratio == "1:1":
         return "1024x1024"
     if aspect_ratio in ("9:16", "3:4"):
@@ -431,7 +431,7 @@ def run_openai_repaint(
     _add_field("prompt", prompt)
     _add_file("image[]", input_path.name, image_bytes, mime_type)
 
-    size = _openai_size_from_resolution(image_size, aspect_ratio)
+    size = _openai_size_from_resolution(aspect_ratio)
     _add_field("size", size)
 
     body = b"".join(parts) + f"--{boundary}--\r\n".encode()

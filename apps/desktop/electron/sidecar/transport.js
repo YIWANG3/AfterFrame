@@ -4,7 +4,6 @@
 // catalog through getCatalogPath() at call time.
 
 const { spawn } = require("node:child_process");
-const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
@@ -334,7 +333,6 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
       throw new Error("No catalog is open");
     }
     if (sidecarBin) {
-      console.log("[sidecarCommand] using binary:", sidecarBin, "exists:", fs.existsSync(sidecarBin));
       return {
         cmd: sidecarBin,
         args: ["--catalog", getCatalogPath(), ...command],

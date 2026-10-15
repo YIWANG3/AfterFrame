@@ -29,4 +29,4 @@ function macBuild(name) {
   return { name, ...found, macos14Features: found.minimum === LATEST };
 }
 
-module.exports = { BUILDS, macBuild };
+module.exports = { macBuild };

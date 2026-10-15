@@ -1,7 +1,7 @@
 import api from "../api";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fileName } from "../utils/format";
+import { clamp, fileName } from "../utils/format";
 import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import useRawEditSource, { useNeutralRawRender } from "../hooks/useRawEditSource";
 import { MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
@@ -77,10 +77,6 @@ import {
   isStickerLayer,
   isOverlayLayer,
 } from "./editor/layerStack";
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
 
 function padEquals(a, b) {
   const pa = { top: 0, right: 0, bottom: 0, left: 0, ...(a || {}) };
@@ -1231,7 +1227,6 @@ export default function EditorOverlay({
     // the last session's preview and snapshot until its picture is decided
     // (a RAW's HD, seconds on an Intel Mac), and an edit made then is wiped.
     getEditReady: () => resetItemRef.current === itemKey && previewReadyRef.current && !!baseSnapshotRef.current,
-    getSaving: () => saving,
     sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
       const source = sourceImageRef.current;
       const { width, height } = getSourceDimensions(source);
@@ -1345,11 +1340,6 @@ export default function EditorOverlay({
       const next = await lutTool.refresh();
       return next?.luts?.length ?? 0;
     },
-    setLut: (id, strength = 1) => {
-      const s = editorStateRef.current;
-      const entry = lutTool.library?.luts?.find((l) => l.id === id);
-      recordState({ ...s, lut: id ? { id, name: entry?.name || id, strength } : null });
-    },
     // The preview as drawn (graded at the current strength), 0..1 coords.
     sampleDisplayPixel: (fx = 0.5, fy = 0.5) => {
       const canvas = imageCanvasRef.current;
@@ -1370,10 +1360,6 @@ export default function EditorOverlay({
         exporting: splitExportingRef.current,
       };
     },
-    setSplitAspect: (key, custom) => splitToolRef.current.commitAspect(key, custom),
-    setSplitSubfolder: (on) => setSplitSubfolder(!!on),
-    setSplitCount: (n) => splitToolRef.current.commitCount(n),
-    resetSplitRegion: () => splitToolRef.current.resetRegion(),
     exportSplit: (dir, subfolder) => splitExportRef.current?.(
       dir ?? splitDestRef.current.outputDir, subfolder ?? splitDestRef.current.subfolder,
     ),
