@@ -155,7 +155,9 @@ macOS 14+ and for macOS 12+:
 | Intel, macOS 12+ | `npm run dist:mac:macos12-intel` | `release/macos12-intel/AfterFrame-<version>-macOS12-Intel.dmg` |
 
 All four are built on one Apple Silicon Mac. The Intel sidecars use an x86_64 CPython run through
-Rosetta, so that Mac needs Rosetta. `scripts/release.sh` builds, notarizes and publishes all four.
+Rosetta, so that Mac needs Rosetta. Releases ship three of them: not the Intel build for macOS 14+,
+because macOS 26 is the last macOS for Intel Macs, so an Intel Mac takes the macOS 12+ build.
+`scripts/release.sh` builds, notarizes and publishes those three.
 
 How the builds differ:
 - **macOS 12 builds.** People, sticker cut-outs and depth need macOS 14 (Core ML models, Vision's
