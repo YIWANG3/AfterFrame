@@ -246,67 +246,42 @@ class VisualAnalyzer:
     in its look-alike group. The preview pass uses one for a batch, the
     visual job for its catch-up; both commit themselves.
 
-    Measuring (`measure`) is safe from several threads at once — each gets
+    Measuring (`measure`) is safe from several threads at once — each uses
     its own helper process, so the preview pass takes the prints alongside
     its renders — and storing (`store`) is for the thread that owns the
     connection."""
 
     def __init__(self, connection: sqlite3.Connection, helper_path: Path | None) -> None:
-        import threading
-
-        from ..visual import FeatureHelper, FeatureHelperError
+        from ..visual import HELPERS
 
         self.connection = connection
+        # The helpers are the process's (visual.HELPERS): a thread's is
+        # started on first use and lives on for the next batch.
         self.helper_path = helper_path
-        self._helpers: list[FeatureHelper] = []
-        self._local = threading.local()
-        self._lock = threading.Lock()
-        self.embedding_model: str | None = None
-        if helper_path:
-            try:
-                self._local.helper = FeatureHelper(helper_path)
-                self._helpers.append(self._local.helper)
-                self.embedding_model = self._local.helper.model
-            except FeatureHelperError:
-                self.helper_path = None  # hashes alone, as on a machine without it
+        self.embedding_model = HELPERS.model(helper_path) if helper_path else None
+        if self.embedding_model is None:
+            self.helper_path = None  # hashes alone, as on a machine without it
         self._indexes: dict[str, VisualIndex] = {}
         self.embedded = 0
         self.grouped = 0
         self.bursts = 0
 
-    @property
-    def helper(self):
-        """This thread's helper, started on first use; None without one."""
-        from ..visual import FeatureHelper, FeatureHelperError
-
-        if not self.helper_path:
-            return None
-        helper = getattr(self._local, "helper", None)
-        if helper is None:
-            try:
-                helper = FeatureHelper(self.helper_path)
-            except FeatureHelperError:
-                return None
-            self._local.helper = helper
-            with self._lock:
-                self._helpers.append(helper)
-        return helper
-
     def measure(self, asset_id: str, preview_path: Path) -> tuple[int | None, np.ndarray | None]:
         """The hash and (with a helper) the feature print of a preview; the
         hash is None when the preview can't be read."""
-        from ..visual import FeatureHelperError, perceptual_hash
+        from ..visual import HELPERS, FeatureHelperError, perceptual_hash
 
         phash = perceptual_hash(preview_path)
         if phash is None:
             return None, None
         vector = None
-        helper = self.helper
-        if helper is not None:
-            try:
-                _, vector = helper.embed(asset_id, preview_path)
-            except FeatureHelperError:
-                vector = None
+        if self.helper_path:
+            with HELPERS.borrow(self.helper_path) as helper:
+                if helper is not None:
+                    try:
+                        _, vector = helper.embed(asset_id, preview_path)
+                    except FeatureHelperError:
+                        vector = None
         return phash, vector
 
     def analyze(self, asset_id: str, asset_type: str, preview_path: Path) -> bool:
@@ -335,10 +310,8 @@ class VisualAnalyzer:
         return True
 
     def close(self) -> None:
-        with self._lock:
-            helpers, self._helpers = self._helpers, []
-        for helper in helpers:
-            helper.close()
+        """Nothing to let go of: the helpers stay with the process for the
+        next batch (visual.HELPERS closes them at exit)."""
         self.helper_path = None
 
 

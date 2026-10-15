@@ -18,6 +18,8 @@ import json
 import math
 import os
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -194,3 +196,75 @@ class FeatureHelper:
 
     def __exit__(self, *_exc) -> None:
         self.close()
+
+
+class HelperPool:
+    """The image-features helpers of this process, kept for its lifetime
+    and lent to one thread at a time. Starting one costs a probe and the
+    model's first load — a tenth of a second here, seconds on a machine
+    without the neural engine — and an import renders its previews in
+    dozens of batches on fresh threads, so the batches share them. As many
+    run as threads measure at once. Closed at exit."""
+
+    def __init__(self) -> None:
+        import atexit
+        import threading
+
+        self._lock = threading.Lock()
+        self._idle: dict[Path, list[FeatureHelper]] = {}
+        self._all: list[FeatureHelper] = []
+        self._models: dict[Path, str | None] = {}
+        atexit.register(self.close_all)
+
+    def model(self, helper_path: Path) -> str | None:
+        """The model name a helper makes, probed once per process; None
+        when it can't start (hashes alone then)."""
+        with self._lock:
+            if helper_path in self._models:
+                return self._models[helper_path]
+        try:
+            helper: FeatureHelper | None = FeatureHelper(helper_path)
+            model: str | None = helper.model if helper else None
+        except FeatureHelperError:
+            helper, model = None, None
+        with self._lock:
+            self._models[helper_path] = model
+            if helper is not None:  # the probe's process serves as the first helper
+                self._all.append(helper)
+                self._idle.setdefault(helper_path, []).append(helper)
+        return model
+
+    @contextmanager
+    def borrow(self, helper_path: Path) -> Iterator[FeatureHelper | None]:
+        """A helper for this thread's use, idle one first; None when none
+        can start."""
+        if self.model(helper_path) is None:
+            yield None
+            return
+        with self._lock:
+            idle = self._idle.setdefault(helper_path, [])
+            helper = idle.pop() if idle else None
+        if helper is not None and helper._process.poll() is not None:
+            helper = None  # it died: start another
+        if helper is None:
+            try:
+                helper = FeatureHelper(helper_path)
+            except FeatureHelperError:
+                yield None
+                return
+            with self._lock:
+                self._all.append(helper)
+        try:
+            yield helper
+        finally:
+            with self._lock:
+                self._idle.setdefault(helper_path, []).append(helper)
+
+    def close_all(self) -> None:
+        with self._lock:
+            helpers, self._all, self._idle = self._all, [], {}
+        for helper in helpers:
+            helper.close()
+
+
+HELPERS = HelperPool()
