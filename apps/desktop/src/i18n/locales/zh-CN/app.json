@@ -46,6 +46,7 @@
   "annotationKept": "已保留此前已标注的结果。",
   "annotationFailed": "标注失败",
   "jobFailed": "任务失败。",
+  "jobTypeFailed": "{{job}}失败",
   "missingTitle": "原文件缺失",
   "missingMsg": "在检视器中重新连接原文件,以进行全质量编辑。",
   "saved": "已保存",

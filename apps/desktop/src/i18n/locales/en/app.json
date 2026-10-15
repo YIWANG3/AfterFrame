@@ -46,6 +46,7 @@
   "annotationKept": "Already-annotated results were kept.",
   "annotationFailed": "Annotation failed",
   "jobFailed": "Job failed.",
+  "jobTypeFailed": "{{job}} failed",
   "missingTitle": "Original file missing",
   "missingMsg": "Relink the original from the inspector to edit at full quality.",
   "saved": "Saved",
