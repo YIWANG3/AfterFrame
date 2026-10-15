@@ -9,9 +9,9 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, galleryCards } = require("./helpers/app");
+const { hasFileClipboard, comparablePath, readClipboardFiles, clearClipboard } = require("./helpers/clipboard");
 const { TINY_JPEG } = require("./helpers/images");
 
 let ctx;
@@ -31,14 +31,6 @@ async function clickMenu(menuLabel, itemLabel) {
 
 const bridge = (fn) => ctx.window.evaluate(fn);
 
-// The file URLs on the macOS pasteboard, as Finder would read them.
-function pasteboardFiles() {
-  const script = 'ObjC.import("AppKit"); const pb = $.NSPasteboard.generalPasteboard;'
-    + ' const urls = pb.readObjectsForClassesOptions($([$.NSURL.class]), $()); const out = [];'
-    + ' for (let i = 0; i < urls.count; i++) out.push(urls.objectAtIndex(i).path.js); JSON.stringify(out)';
-  const { stdout } = spawnSync("osascript", ["-l", "JavaScript", "-e", script], { encoding: "utf8" });
-  return JSON.parse(stdout.trim() || "[]").map((p) => fs.realpathSync(p));
-}
 const copiedToast = () => ctx.window.locator("[data-testid='toast-card']").filter({ hasText: /^Copied \d+ photos?/ });
 
 test.beforeAll(async () => {
@@ -76,33 +68,35 @@ test("Edit › Select All, Copy Name, Copy File Path, Delete act on the gallery 
   await expect(ctx.window.getByText("Remove from catalog")).toHaveCount(0);
 });
 
-// These write the real system clipboard (the general pasteboard is the one
-// Finder reads), so each ends by clearing it.
+// This writes the real system clipboard (the one Finder / Explorer read), so
+// it ends by clearing it. Read back through helpers/clipboard: macOS and Windows.
 test("Edit › Copy and ⌘C put the selected photos on the clipboard as files, like Finder", async () => {
-  test.skip(process.platform !== "darwin", "the file clipboard is read back through the macOS pasteboard");
+  test.skip(!hasFileClipboard, "the file clipboard is read back through the macOS pasteboard or Windows' FileDropList");
   const first = cards().nth(0);
   const second = cards().nth(1);
-  const paths = [await first.getAttribute("data-image-path"), await second.getAttribute("data-image-path")].map((p) => fs.realpathSync(p));
+  const paths = [await first.getAttribute("data-image-path"), await second.getAttribute("data-image-path")].map(comparablePath);
   await first.click();
   await second.click({ modifiers: ["Shift"] });
   await expect(ctx.window.locator("[data-gallery-item='true'][data-selected='true']")).toHaveCount(2);
 
   await clickMenu("Edit", "Copy");
   await expect(ctx.window.getByText("Copied 2 photos", { exact: true })).toBeVisible({ timeout: 5_000 });
-  expect(pasteboardFiles().sort()).toEqual([...paths].sort());
+  expect(readClipboardFiles().sort()).toEqual([...paths].sort());
   await expect(copiedToast()).toHaveCount(0, { timeout: 5_000 });
 
   // ⌘C in the grid is the renderer's (then prevented, so the menu's
-  // accelerator cannot copy a second time): one toast, one file.
+  // accelerator cannot copy a second time): one toast, one file. The toast
+  // is counted before the clipboard is read: the toast lives 2 s, and the
+  // read-back spawns a process (on a slow Windows box, longer than that).
   await first.click();
   await ctx.window.keyboard.press("ControlOrMeta+c");
   await expect(ctx.window.getByText("Copied 1 photo", { exact: true })).toBeVisible({ timeout: 5_000 });
-  expect(pasteboardFiles()).toEqual([paths[0]]);
   await expect(copiedToast()).toHaveCount(1);
+  expect(readClipboardFiles()).toEqual([paths[0]]);
   await expect(copiedToast()).toHaveCount(0, { timeout: 5_000 });
 
-  await ctx.app.evaluate(({ clipboard }) => clipboard.clear());
-  expect(pasteboardFiles()).toEqual([]);
+  clearClipboard();
+  expect(readClipboardFiles()).toEqual([]);
 });
 
 test("⌘C in a text field still copies the text, not the selected photos", async () => {
