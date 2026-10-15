@@ -3,7 +3,7 @@
 
 import { assets, collections, emitCatalogChanged, jobStatus, normalizeTag, persistTokens, sessionTokens, showDescription } from "./state";
 import { aggregateTags } from "./query";
-import { encodeImageForLlm, parseLlmJson } from "./llm";
+import { buildAnnotationSystemPrompt, encodeImageForLlm, parseLlmJson } from "./llm";
 
 const ANNOTATION_SETTINGS_KEY = "afterframe.annotationSettings";
 let annotationJob = null; // batch job singleton
@@ -16,22 +16,6 @@ async function setAssetAnnotation(assetId, annotation) {
   const a = assets.find((x) => x.asset_id === assetId);
   if (a) a.annotation = annotation;
   return annotation;
-}
-
-// Sidecar build_system_prompt, condensed to the same contract.
-function buildAnnotationSystemPrompt({ languages = ["en", "zh"], maxTags = 10, maxCaptionChars = 200, customInstructions = null, existingTags = [] }) {
-  const names = { en: "English", zh: "Chinese" };
-  const wanted = (languages.length ? languages : ["en"]).map((l) => names[l] || l).join(" and ");
-  let p = "You are a photo annotation assistant. Analyze the image and respond with ONLY a JSON object of this exact shape:\n"
-    + `{"caption": "1-2 sentences, at most ${maxCaptionChars} characters", `
-    + `"tags": ["up to ${maxTags} lowercase tags, no # symbols"], `
-    + `"location": {"country": "", "admin1": "", "locality": "", "landmark": "", "confidence": 0-100} or null when unsure, `
-    + `"detected_text": "verbatim text visible in the image" or null}\n`
-    + `Write the caption and tags in ${wanted}.`;
-  if (existingTags.length) p += `\nPREFER reusing these existing tags when they apply: ${existingTags.slice(0, 200).join(", ")}`;
-  if (customInstructions) p += `\nAdditional instructions: ${customInstructions}`;
-  p += "\nRespond with ONLY the JSON object.";
-  return p;
 }
 
 async function callAnnotationProvider({ provider, model, baseUrl, apiKey, systemPrompt, promptText, imageB64 }) {
