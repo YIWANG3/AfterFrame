@@ -161,7 +161,6 @@ const tokens = createTokenStore({
   safeStorage,
   readAppSettings,
   updateAppSettings,
-  fetchLegacyToken: (provider) => sidecarCommands.getProviderToken(provider),
 });
 const { decryptToken, setStoredProviderConfig, deleteStoredProviderConfig, getStoredProviderConfigWithMigration, providerCredentials } = tokens;
 
