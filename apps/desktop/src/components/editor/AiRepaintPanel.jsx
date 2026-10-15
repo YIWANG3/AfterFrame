@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { getProviderType, ProviderModal } from "../ai/providers";
-import { Checkbox, SliderRow, Z } from "../../ui";
+import { Checkbox, Modal, SliderRow } from "../../ui";
 import cx from "../../ui/cx";
 import { fileName } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
@@ -244,8 +244,8 @@ function CompareButtons({ afterPath, compareState, onCompareChange, t }) {
 function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
   const { t } = useTranslation("editor");
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/45 px-5 backdrop-blur-[2px]" style={{ zIndex: Z.overlayTop }}>
-      <div className="w-full max-w-[360px] overflow-hidden rounded-xl border border-border/60 bg-chrome shadow-overlay">
+    <Modal onClose={onClose} z="overlayTop" size="w-full max-w-[360px]">
+      <div>
         <div className="px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <PanelLabel>{title}</PanelLabel>
@@ -276,7 +276,7 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
           <button type="button" className={TOOLBAR_BUTTON} onClick={onClose}>{t("repaint.cancel")}</button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

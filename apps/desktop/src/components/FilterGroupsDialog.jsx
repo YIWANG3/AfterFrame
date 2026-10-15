@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Z } from "../ui";
-import { createPortal } from "react-dom";
+import { Modal } from "../ui";
 import { useTranslation } from "react-i18next";
 import { Plus, Split, X } from "lucide-react";
 import api from "../api";
@@ -55,93 +54,90 @@ export default function FilterGroupsDialog({ groups, folders, onApply, onClose }
   // is left out rather than making the whole "or" true.
   const apply = () => onApply(draft.map((group) => group.filters).filter((filters) => activeFilterCount(filters) > 0));
 
-  return createPortal(
-    <div
-      className="fixed inset-0 flex items-center justify-center bg-app/70 backdrop-blur-sm"
-      style={{ zIndex: Z.dialog }}
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+  return (
+    <Modal
+      z="dialog"
+      backdrop="app"
+      escape={false}
+      portal
+      onClose={onClose}
+      size="w-[640px] max-w-[92vw]"
+      className="flex max-h-[80vh] flex-col"
+      cardProps={{ role: "dialog", "aria-label": t("filter.groups.title"), "data-filter-groups-dialog": "true" }}
     >
-      <div
-        role="dialog"
-        aria-label={t("filter.groups.title")}
-        data-filter-groups-dialog="true"
-        className="flex max-h-[80vh] w-[640px] max-w-[92vw] flex-col rounded-xl border border-border bg-chrome shadow-overlay"
-      >
-        <div className="border-b border-border/60 px-4 py-3">
-          <h2 className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
-            <Split className="h-3.5 w-3.5 text-muted" />
-            {t("filter.groups.title")}
-          </h2>
-          <p className="mt-1 text-[11.5px] leading-snug text-muted">{t("filter.groups.hint")}</p>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          {draft.map((group, index) => (
-            <div key={group.key}>
-              {index > 0 && (
-                <div className="my-2 flex items-center gap-2 text-[10.5px] text-muted2">
-                  <span className="h-px flex-1 bg-border/60" />
-                  {t("filter.groups.or")}
-                  <span className="h-px flex-1 bg-border/60" />
-                </div>
+      <div className="border-b border-border/60 px-4 py-3">
+        <h2 className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+          <Split className="h-3.5 w-3.5 text-muted" />
+          {t("filter.groups.title")}
+        </h2>
+        <p className="mt-1 text-[11.5px] leading-snug text-muted">{t("filter.groups.hint")}</p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {draft.map((group, index) => (
+          <div key={group.key}>
+            {index > 0 && (
+              <div className="my-2 flex items-center gap-2 text-[10.5px] text-muted2">
+                <span className="h-px flex-1 bg-border/60" />
+                {t("filter.groups.or")}
+                <span className="h-px flex-1 bg-border/60" />
+              </div>
+            )}
+            <section data-filter-group-index={index} className="rounded-lg border border-border/60 bg-app/40 p-2.5">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted">{t("filter.groups.group", { n: index + 1 })}</span>
+                <button
+                  type="button"
+                  title={t("filter.groups.removeGroup")}
+                  aria-label={t("filter.groups.removeGroup")}
+                  onClick={() => remove(group.key)}
+                  className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <FilterBar
+                embedded
+                facetValues={facetValues}
+                facetsReady={facetValues != null}
+                filters={group.filters}
+                onChange={(filters) => update(group.key, filters)}
+                folders={folders}
+              />
+              {activeFilterCount(group.filters) === 0 && (
+                <p className="mt-1.5 text-[10.5px] text-muted2">{t("filter.groups.needsCondition")}</p>
               )}
-              <section data-filter-group-index={index} className="rounded-lg border border-border/60 bg-app/40 p-2.5">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-muted">{t("filter.groups.group", { n: index + 1 })}</span>
-                  <button
-                    type="button"
-                    title={t("filter.groups.removeGroup")}
-                    aria-label={t("filter.groups.removeGroup")}
-                    onClick={() => remove(group.key)}
-                    className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <FilterBar
-                  embedded
-                  facetValues={facetValues}
-                  facetsReady={facetValues != null}
-                  filters={group.filters}
-                  onChange={(filters) => update(group.key, filters)}
-                  folders={folders}
-                />
-                {activeFilterCount(group.filters) === 0 && (
-                  <p className="mt-1.5 text-[10.5px] text-muted2">{t("filter.groups.needsCondition")}</p>
-                )}
-              </section>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
+            </section>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
+        <button
+          type="button"
+          onClick={add}
+          data-filter-groups-add="true"
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] text-muted transition-colors hover:bg-hover hover:text-text"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t("filter.groups.addGroup")}
+        </button>
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={add}
-            data-filter-groups-add="true"
-            className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] text-muted transition-colors hover:bg-hover hover:text-text"
+            onClick={onClose}
+            className="rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-text transition-colors hover:bg-hover"
           >
-            <Plus className="h-3.5 w-3.5" />
-            {t("filter.groups.addGroup")}
+            {t("filter.groups.cancel")}
           </button>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-text transition-colors hover:bg-hover"
-            >
-              {t("filter.groups.cancel")}
-            </button>
-            <button
-              type="button"
-              data-filter-groups-apply="true"
-              onClick={apply}
-              className="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-medium text-accentInk transition-opacity hover:opacity-90"
-            >
-              {t("filter.groups.apply")}
-            </button>
-          </div>
+          <button
+            type="button"
+            data-filter-groups-apply="true"
+            onClick={apply}
+            className="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-medium text-accentInk transition-opacity hover:opacity-90"
+          >
+            {t("filter.groups.apply")}
+          </button>
         </div>
       </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

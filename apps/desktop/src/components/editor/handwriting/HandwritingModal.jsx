@@ -330,7 +330,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
   }
 
   return (
-    <Modal onClose={onClose} className="max-w-[460px]">
+    <Modal onClose={onClose} size="w-full max-w-[460px]">
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">
           {t("handwriting.title")}

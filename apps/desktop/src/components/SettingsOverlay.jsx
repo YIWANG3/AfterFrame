@@ -15,7 +15,7 @@ import PeopleSettings from "./settings/PeopleSettings";
 import WatermarkSettings from "./settings/WatermarkSettings";
 import ShortcutsSettings from "./settings/ShortcutsSettings";
 import { matchShortcut } from "../shortcuts/store";
-import { Z } from "../ui";
+import { Modal } from "../ui";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -57,7 +57,6 @@ export default function SettingsOverlay({
 }) {
   const [tab, setTab] = useState(() => initialTab || rememberedTab());
   const { t } = useTranslation("settings");
-  const modalRef = useRef(null);
   const rootRef = useRef(null);
 
   useEffect(() => { if (open) setTab(initialTab || rememberedTab()); }, [open, initialTab]);
@@ -87,86 +86,87 @@ export default function SettingsOverlay({
 
   if (!open) return null;
 
+  // Escape is handled here, not by the shell: the close key is rebindable
+  // and an inline rename may have claimed it first.
   return (
-    <div
+    <Modal
       ref={rootRef}
       tabIndex={-1}
       {...{ [TOP_LAYER_ATTR]: "true" }}
       data-settings-overlay=""
-      className="fixed inset-0 flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
-      style={{ zIndex: Z.settings }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      z="settings"
+      backdrop="app"
+      escape={false}
+      rootClassName="outline-none"
+      onClose={onClose}
       onKeyDown={(e) => {
         e.stopPropagation();
         // An inline rename handles its own Escape (and marks it handled).
         if (isCloseKey(e) && !e.defaultPrevented) { e.preventDefault(); onClose?.(); }
       }}
       onKeyUp={(e) => e.stopPropagation()}
+      size="w-[880px] max-w-[95vw] h-[680px] max-h-[88vh]"
+      className="flex flex-col"
     >
-      <div
-        ref={modalRef}
-        className="flex w-[880px] max-w-[95vw] h-[680px] max-h-[88vh] flex-col overflow-hidden rounded-xl border border-border bg-chrome shadow-overlay"
-      >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-5">
-          <span className="text-[14px] font-semibold text-text">{t("title")}</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
-            title={t("close")}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-5">
+        <span className="text-[14px] font-semibold text-text">{t("title")}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded p-1 text-muted2 transition-colors hover:bg-hover hover:text-text"
+          title={t("close")}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
 
-        <div className="flex min-h-0 flex-1">
-          {/* aria-label distinguishes this tab list from the sidebar navigation
-              (both are <nav>; "People" exists in each). */}
-          <nav aria-label={t("title")} className="w-40 shrink-0 border-r border-border px-2 py-2">
-            {TABS.map((entry) => {
-              const Icon = entry.icon;
-              const active = tab === entry.id;
-              const locked = !api.can(entry.cap);
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => { setTab(entry.id); writePref(TAB_PREF, entry.id); }}
-                  title={locked ? t(LOCKED_HINT_KEY, { ns: "common" }) : undefined}
-                  className={[
-                    "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",
-                    active ? "bg-accent/10 text-accent" : locked ? "text-muted2 hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
-                  ].join(" ")}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{t(`tabs.${entry.key}`)}</span>
-                </button>
-              );
-            })}
-          </nav>
-          <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
-            {(() => {
-              const pane = (
-                <>
-                  {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
-                  {tab === "shortcuts" && <ShortcutsSettings />}
-                  {tab === "ai" && <AnnotationSettings />}
-                  {tab === "repaint" && <RepaintSettings />}
-                  {tab === "people" && <PeopleSettings />}
-                  {tab === "watermark" && <WatermarkSettings />}
-                  {tab === "library" && (
-                    <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
-                  )}
-                  {tab === "integrations" && <IntegrationsSettings />}
-                  {tab === "about" && <AboutSettings />}
-                </>
-              );
-              const entry = TABS.find((x) => x.id === tab);
-              return api.can(entry?.cap) ? pane : <DesktopOnlyPane>{pane}</DesktopOnlyPane>;
-            })()}
-          </div>
+      <div className="flex min-h-0 flex-1">
+        {/* aria-label distinguishes this tab list from the sidebar navigation
+            (both are <nav>; "People" exists in each). */}
+        <nav aria-label={t("title")} className="w-40 shrink-0 border-r border-border px-2 py-2">
+          {TABS.map((entry) => {
+            const Icon = entry.icon;
+            const active = tab === entry.id;
+            const locked = !api.can(entry.cap);
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => { setTab(entry.id); writePref(TAB_PREF, entry.id); }}
+                title={locked ? t(LOCKED_HINT_KEY, { ns: "common" }) : undefined}
+                className={[
+                  "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",
+                  active ? "bg-accent/10 text-accent" : locked ? "text-muted2 hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
+                ].join(" ")}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{t(`tabs.${entry.key}`)}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-chrome px-7 py-6">
+          {(() => {
+            const pane = (
+              <>
+                {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
+                {tab === "shortcuts" && <ShortcutsSettings />}
+                {tab === "ai" && <AnnotationSettings />}
+                {tab === "repaint" && <RepaintSettings />}
+                {tab === "people" && <PeopleSettings />}
+                {tab === "watermark" && <WatermarkSettings />}
+                {tab === "library" && (
+                  <LibrarySettings info={info} summary={summary} onSwitchCatalog={onSwitchCatalog} onClose={onClose} />
+                )}
+                {tab === "integrations" && <IntegrationsSettings />}
+                {tab === "about" && <AboutSettings />}
+              </>
+            );
+            const entry = TABS.find((x) => x.id === tab);
+            return api.can(entry?.cap) ? pane : <DesktopOnlyPane>{pane}</DesktopOnlyPane>;
+          })()}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

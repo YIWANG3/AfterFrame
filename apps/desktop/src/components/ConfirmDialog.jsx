@@ -1,7 +1,5 @@
-import { useEffect } from "react";
-import { Z } from "../ui";
-import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
+import { Modal } from "../ui";
 import { TOP_LAYER_ATTR } from "../utils/topLayer";
 
 /* ─── ConfirmDialog ───────────────────────────────────────────
@@ -26,72 +24,66 @@ export default function ConfirmDialog({
   onChoose,
   onCancel,
 }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    function onKey(e) {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel?.(); }
-    }
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [open, onCancel]);
-
   if (!open) return null;
 
-  return createPortal(
-    <div
+  // Escape is taken in the capture phase, before the view below (the editor,
+  // the lightbox) can read it as its own.
+  return (
+    <Modal
       {...{ [TOP_LAYER_ATTR]: "true" }}
-      className="fixed inset-0 flex items-center justify-center bg-app/70 backdrop-blur-sm"
-      style={{ zIndex: Z.confirm }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel?.(); }}
+      z="confirm"
+      backdrop="app"
+      escape="capture"
+      portal
+      onClose={onCancel}
+      size="w-[320px] max-w-[90vw]"
+      className="p-5"
     >
-      <div className="w-[320px] max-w-[90vw] rounded-xl border border-border bg-chrome p-5 shadow-overlay">
-        <div className="flex flex-col items-center text-center">
-          <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-full ${danger ? "bg-red-500/15 text-red-400" : "bg-accent/15 text-accent"}`}>
-            <AlertTriangle className="h-[18px] w-[18px]" />
-          </div>
-          <h2 className="text-[13.5px] font-semibold text-text">{title}</h2>
-          {message && <p className="mt-1.5 text-[12.5px] leading-snug text-muted">{message}</p>}
-          {detail && <p className="mt-1 text-[11.5px] leading-relaxed text-muted2">{detail}</p>}
+      <div className="flex flex-col items-center text-center">
+        <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-full ${danger ? "bg-red-500/15 text-red-400" : "bg-accent/15 text-accent"}`}>
+          <AlertTriangle className="h-[18px] w-[18px]" />
         </div>
-        {choices?.length ? (
-          <div className="mt-4 flex flex-col gap-2">
-            {choices.map((choice) => (
-              <button
-                key={choice.id}
-                type="button"
-                data-choice={choice.id}
-                onClick={() => onChoose?.(choice.id)}
-                className={`rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors focus:outline-none ${choice.danger ? "bg-red-600 text-white hover:bg-red-500" : "border border-border bg-transparent text-text hover:bg-hover"}`}
-              >
-                {choice.label}
-              </button>
-            ))}
+        <h2 className="text-[13.5px] font-semibold text-text">{title}</h2>
+        {message && <p className="mt-1.5 text-[12.5px] leading-snug text-muted">{message}</p>}
+        {detail && <p className="mt-1 text-[11.5px] leading-relaxed text-muted2">{detail}</p>}
+      </div>
+      {choices?.length ? (
+        <div className="mt-4 flex flex-col gap-2">
+          {choices.map((choice) => (
             <button
+              key={choice.id}
               type="button"
-              onClick={onCancel}
-              className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:bg-hover hover:text-text focus:outline-none"
+              data-choice={choice.id}
+              onClick={() => onChoose?.(choice.id)}
+              className={`rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors focus:outline-none ${choice.danger ? "bg-red-600 text-white hover:bg-red-500" : "border border-border bg-transparent text-text hover:bg-hover"}`}
             >
-              {cancelLabel}
+              {choice.label}
             </button>
-          </div>
-        ) : <div className="mt-4 flex gap-2">
+          ))}
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[12.5px] font-medium text-text transition-colors hover:bg-hover focus:outline-none"
+            className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted transition-colors hover:bg-hover hover:text-text focus:outline-none"
           >
             {cancelLabel}
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors focus:outline-none ${danger ? "bg-red-600 hover:bg-red-500" : "bg-accent hover:bg-accent/90"}`}
-          >
-            {confirmLabel}
-          </button>
-        </div>}
-      </div>
-    </div>,
-    document.body,
+        </div>
+      ) : <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[12.5px] font-medium text-text transition-colors hover:bg-hover focus:outline-none"
+        >
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors focus:outline-none ${danger ? "bg-red-600 hover:bg-red-500" : "bg-accent hover:bg-accent/90"}`}
+        >
+          {confirmLabel}
+        </button>
+      </div>}
+    </Modal>
   );
 }

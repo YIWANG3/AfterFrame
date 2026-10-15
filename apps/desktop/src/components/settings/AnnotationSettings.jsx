@@ -498,7 +498,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
   const providerLabel = PROVIDER_TYPE_LABEL[draft.type] || draft.type;
 
   return (
-    <Modal onClose={onCancel} z="overlayTop" className="max-w-[560px]">
+    <Modal onClose={onCancel} z="overlayTop" size="w-full max-w-[560px]">
       <div className="max-h-[80vh] overflow-y-auto px-4 py-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">

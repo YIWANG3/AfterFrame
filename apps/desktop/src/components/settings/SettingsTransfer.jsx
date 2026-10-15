@@ -18,7 +18,7 @@ const FIELD =
 
 function DialogShell({ title, onClose, children, footer }) {
   return (
-    <Modal onClose={onClose} z="overlayTop" className="max-w-[420px]">
+    <Modal onClose={onClose} z="overlayTop" size="w-full max-w-[420px]">
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="text-[13px] font-semibold text-text">{title}</div>
         <button
