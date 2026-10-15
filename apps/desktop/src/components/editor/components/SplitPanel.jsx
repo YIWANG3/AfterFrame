@@ -13,7 +13,7 @@ import {
 } from "../splitMath";
 import { AspectButton } from "./CropPanel";
 import api from "../../../api";
-import { Button, Checkbox } from "../../../ui";
+import { Button, Checkbox, cx } from "../../../ui";
 
 // Long paths keep their head and tail (the folder name is what matters).
 function middleEllipsis(text, max = 40) {
@@ -60,10 +60,10 @@ function CustomAspectTile({ t, active, custom, onCommit }) {
   );
   return (
     <div
-      className={[
+      className={cx(
         "flex items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors",
         active ? "bg-selected text-accent" : "text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
+      )}
       data-testid="split-aspect-custom"
       title={t("split.custom")}
     >
@@ -181,10 +181,10 @@ export default function SplitPanel({
             </div>
             <button
               type="button"
-              className={[
+              className={cx(
                 "rounded-md px-2 py-1 text-[11px] transition-colors",
                 isAutoCount ? "bg-selected text-accent" : "text-muted hover:bg-hover hover:text-text",
-              ].join(" ")}
+              )}
               onClick={() => onCommitCount(null)}
             >
               {t("split.auto")}

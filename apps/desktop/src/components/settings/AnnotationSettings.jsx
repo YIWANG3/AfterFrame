@@ -12,7 +12,7 @@ import api from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, X } from "lucide-react";
-import { Button, Modal } from "../../ui";
+import { Button, Modal, cx } from "../../ui";
 import {
   Group, FieldRow, Toggle, TextInput, NumberInput, Select,
   Chip, SecondaryButton, Callout, ActiveRadio, IconActionButton,
@@ -332,10 +332,10 @@ function ProviderRow({ provider, active, onActivate, onEdit, onDelete }) {
   const { t } = useTranslation("settings");
   return (
     <div
-      className={[
+      className={cx(
         "mb-1.5 flex items-center gap-3 rounded-[8px] px-3 py-2.5 transition-colors last:mb-0 bg-[var(--sub-card)]",
         active ? "shadow-[inset_0_0_0_1.5px_rgb(var(--accent-color))]" : "",
-      ].join(" ")}
+      )}
     >
       <ActiveRadio
         active={active}

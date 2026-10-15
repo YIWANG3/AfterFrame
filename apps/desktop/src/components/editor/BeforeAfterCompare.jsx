@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Columns2, Rows2, X } from "lucide-react";
-import { Modal } from "../../ui";
+import { Modal, cx } from "../../ui";
 import { localFileUrl } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
 import { oneOf } from "../../utils/prefs";
@@ -16,10 +16,10 @@ function ToolbarBtn({ active, icon: Icon, label, onClick }) {
   return (
     <button
       type="button"
-      className={[
+      className={cx(
         "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
         active ? "bg-white/12 text-white" : "text-white/40 hover:bg-white/8 hover:text-white/70",
-      ].join(" ")}
+      )}
       onClick={onClick}
       title={label}
     >

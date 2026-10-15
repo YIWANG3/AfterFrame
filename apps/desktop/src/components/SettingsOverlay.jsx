@@ -15,7 +15,7 @@ import PeopleSettings from "./settings/PeopleSettings";
 import WatermarkSettings from "./settings/WatermarkSettings";
 import ShortcutsSettings from "./settings/ShortcutsSettings";
 import { matchShortcut } from "../shortcuts/store";
-import { Button, Modal } from "../ui";
+import { Button, Modal, cx } from "../ui";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -129,10 +129,10 @@ export default function SettingsOverlay({
                 type="button"
                 onClick={() => { setTab(entry.id); writePref(TAB_PREF, entry.id); }}
                 title={locked ? t(LOCKED_HINT_KEY, { ns: "common" }) : undefined}
-                className={[
+                className={cx(
                   "mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors",
                   active ? "bg-accent/10 text-accent" : locked ? "text-muted2 hover:bg-hover" : "text-muted hover:bg-hover hover:text-text",
-                ].join(" ")}
+                )}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate">{t(`tabs.${entry.key}`)}</span>
