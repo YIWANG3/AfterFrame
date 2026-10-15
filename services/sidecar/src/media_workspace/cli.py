@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from .ai_repaint import list_provider_models, provider_api_key, provider_token_key
+from .ai_repaint import list_provider_models
 from .catalog import ensure_catalog
 from .db import (
     add_collection_items,
@@ -22,7 +22,6 @@ from .db import (
     delete_collection,
     delete_image_asset_from_catalog,
     description_fields,
-    get_app_setting,
     get_asset_location,
     get_job,
     get_latest_job,
@@ -520,9 +519,6 @@ def build_parser() -> argparse.ArgumentParser:
     run_people_index_parser.add_argument("--asset-id", action="append")
     run_people_index_parser.add_argument("--limit", type=int)
 
-    get_provider_token = subparsers.add_parser("get-provider-token", parents=[common])
-    get_provider_token.add_argument("--provider", required=True)
-
     subparsers.add_parser("repair-resource-sets", parents=[common])
     subparsers.add_parser("split-shared-assets", parents=[common])
 
@@ -834,12 +830,6 @@ def main(argv: list[str] | None = None) -> int:
         connection.close()
 
 
-def _cmd_get_provider_token(args, connection, catalog, parser):
-    payload = get_app_setting(connection, provider_token_key(args.provider))
-    print(json.dumps(payload or {}, indent=2))
-    return 0
-
-
 def _cmd_repair_resource_sets(args, connection, catalog, parser):
     print(json.dumps({"ok": True, **repair_resource_sets(connection)}, indent=2))
     return 0
@@ -864,7 +854,7 @@ _MODEL_LIST_ENV_KEYS = {
 
 
 def _cmd_list_ai_models(args, connection, catalog, parser):
-    effective_key = provider_api_key(connection, args.provider, args.api_key)
+    effective_key = args.api_key
     if not effective_key:
         # Same dev-mode env fallback as the generation paths (keychain tokens
         # are unreadable from the dev binary).
@@ -1799,7 +1789,6 @@ def _cmd_browse_collection(args, connection, catalog, parser):
 
 # Command registry — adding a CLI verb is one function + one entry here.
 COMMAND_HANDLERS = {
-    "get-provider-token": _cmd_get_provider_token,
     "repair-resource-sets": _cmd_repair_resource_sets,
     "split-shared-assets": _cmd_split_shared_assets,
     "list-ai-models": _cmd_list_ai_models,

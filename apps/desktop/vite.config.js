@@ -1,6 +1,13 @@
-const { defineConfig } = require("vite");
+const { defineConfig, searchForWorkspaceRoot } = require("vite");
 const react = require("@vitejs/plugin-react");
 const esbuild = require("esbuild");
+const { resolve } = require("path");
+
+// The annotation system prompt is the sidecar's file, read by src/api/browser/
+// llm.js as @sidecar-data/annotation_prompt.json (one text, both sides). Only
+// the web build bundles it, but the web e2e suite and vitest run on this
+// config, so the alias lives here too.
+const SIDECAR_DATA = resolve(__dirname, "../../services/sidecar/src/media_workspace/data");
 
 // AFTERFRAME_COVERAGE=1 (npm run e2e:coverage) builds an istanbul-instrumented
 // renderer: every src/ module reports hit counts into window.__coverage__,
@@ -70,9 +77,11 @@ function maplibreClassicWorker() {
 module.exports = defineConfig(async () => ({
   base: "./",
   plugins: [react(), maplibreClassicWorker(), ...(await coveragePlugins())],
+  resolve: { alias: { "@sidecar-data": SIDECAR_DATA } },
   server: {
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    fs: { allow: [searchForWorkspaceRoot(__dirname), SIDECAR_DATA] },
   },
 }));

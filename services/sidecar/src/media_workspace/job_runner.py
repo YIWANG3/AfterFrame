@@ -20,7 +20,6 @@ from .ai_repaint import (
     OPENAI_COMPATIBLE_PROVIDER,
     OPENAI_PROVIDER,
     jimeng_credentials,
-    provider_api_key,
     run_ark_repaint,
     run_ark_text_image,
     run_gemini_text_image,
@@ -1199,11 +1198,12 @@ def run_ai_repaint_job(
                 prompt=prompt,
             )
         else:
-            effective_api_key = provider_api_key(connection, provider, api_key)
-            if not effective_api_key:
+            # The key arrives on argv (the app resolves it from the keychain
+            # before launching the job); there is no stored copy to fall back to.
+            if not api_key:
                 raise ValueError(f"No API token configured for provider '{provider}'.")
             if provider == JIMENG_PROVIDER:
-                ak, sk = jimeng_credentials(effective_api_key)
+                ak, sk = jimeng_credentials(api_key)
                 result = run_jimeng_repaint(
                     input_path=input_path,
                     output_path=output_path,
@@ -1220,7 +1220,7 @@ def run_ai_repaint_job(
                     input_path=input_path,
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_ARK_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
@@ -1230,7 +1230,7 @@ def run_ai_repaint_job(
                     input_path=input_path,
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_OPENAI_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
@@ -1240,7 +1240,7 @@ def run_ai_repaint_job(
                     input_path=input_path,
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_OPENAI_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
@@ -1251,7 +1251,7 @@ def run_ai_repaint_job(
                     input_path=input_path,
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_GEMINI_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
@@ -1349,13 +1349,12 @@ def run_text_image_job(
         if provider == "mock":
             result = run_mock_text_image(output_path=output_path, prompt=prompt)
         else:
-            effective_api_key = provider_api_key(connection, provider, api_key)
             # No hard key requirement here (unlike repaint): the provider
             # implementations fall back to env vars (GEMINI_API_KEY /
             # OPENAI_API_KEY / VOLC_*) — the dev-mode path — and raise their
             # own clear errors when neither source has a key.
             if provider == JIMENG_PROVIDER:
-                ak, sk = jimeng_credentials(effective_api_key)
+                ak, sk = jimeng_credentials(api_key)
                 result = run_jimeng_text_image(
                     output_path=output_path,
                     prompt=prompt,
@@ -1370,7 +1369,7 @@ def run_text_image_job(
                 result = run_ark_text_image(
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_ARK_MODEL,
                     aspect_ratio=aspect_ratio,
                     ref_image_path=ref_image_path,
@@ -1379,7 +1378,7 @@ def run_text_image_job(
                 result = run_openai_text_image(
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_OPENAI_MODEL,
                     aspect_ratio=aspect_ratio,
                     quality=quality,
@@ -1390,7 +1389,7 @@ def run_text_image_job(
                 result = run_gemini_text_image(
                     output_path=output_path,
                     prompt=prompt,
-                    api_key=effective_api_key,
+                    api_key=api_key,
                     model=model or DEFAULT_GEMINI_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
