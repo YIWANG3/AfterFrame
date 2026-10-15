@@ -212,8 +212,12 @@ test.describe("Canvas margin (pad) save", () => {
       .poll(() => window.evaluate(() => window.__afterframeTest.getState().historyLength), { timeout: 5_000 })
       .toBe(len0 + 1);
     await window.evaluate(() => window.__afterframeTest.setPad({ bottom: 0.25 })); // identical
-    await window.waitForTimeout(300);
-    expect(await window.evaluate(() => window.__afterframeTest.getState().historyLength)).toBe(len0 + 1);
+    // History is appended in order: a different pad lands as the next entry,
+    // one past the first, and the identical one in between left no entry.
+    await window.evaluate(() => window.__afterframeTest.setPad({ bottom: 0.3 }));
+    await expect
+      .poll(() => window.evaluate(() => window.__afterframeTest.getState().historyLength), { timeout: 5_000 })
+      .toBe(len0 + 2);
     await window.evaluate(() => window.__afterframeTest.setPad({})); // restore
   });
 

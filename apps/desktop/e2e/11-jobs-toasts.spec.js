@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const sharp = require("sharp");
-const { launchApp, closeApp, importThroughToolbar, callTool: mcpTool, waitForMcp } = require("./helpers/app");
+const { launchApp, closeApp, importThroughToolbar, callTool: mcpTool, waitForMcp, galleryCards } = require("./helpers/app");
 const { TINY_JPEG, makeImportDir } = require("./helpers/images");
 
 let ctx;
@@ -19,7 +19,7 @@ const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "jobs" });
   await waitForMcp(ctx.mcpPort);
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -67,7 +67,7 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
     // Real agent notification uses exactly the same surface as progress.
     // Read the id once the gallery shows the import (newest first): an older
     // first card ends up thousands of photos down, past what a reveal scans.
-    const firstCard = ctx.window.locator("[data-gallery-item='true']").first();
+    const firstCard = galleryCards(ctx.window).first();
     await expect(firstCard).toHaveAttribute("data-image-path", /dock_\d+\.jpg$/, { timeout: 15_000 });
     const assetId = await firstCard.getAttribute("data-asset-id");
     await callTool("show_in_app", { asset_ids: [assetId] });

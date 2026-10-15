@@ -1,7 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 const { captureElement } = require("./helpers/screenshot");
 
 test.describe("GPS priority and collage menu", () => {
@@ -42,7 +42,7 @@ test.describe("GPS priority and collage menu", () => {
   });
 
   test("Replace hover stays clipped inside the rounded menu", async ({}, testInfo) => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     await cards.nth(0).click();
     await cards.nth(3).click({ modifiers: ["Shift"] });
     await cards.nth(0).click({ button: "right" });

@@ -76,110 +76,22 @@ jobs:
         run: npm run build:native --prefix apps/desktop
       - name: Build renderer
         run: npm run build --prefix apps/desktop
-      # CI subset. Everything else runs nightly (e2e-nightly.yml). Left out
-      # and why (2026-09-17, #58):
-      #   23-map, 60-map-cluster-covers   no GPU/WebGL on the macOS VM (#163)
-      #   17-watched-dirs                 fs-watch timing
-      # All three also skip themselves under CI (test.skip(process.env.CI)),
-      # so the nightly's own result stays meaningful: a red nightly is
-      # something new, not one of those again. 60-file-lifecycle is listed
-      # below, but its "a watched folder while the app runs" describe carries
-      # the same CI skip: the fs-watch half of that spec runs locally only.
-      # 14-video and 22-lightbox-zoom were left out with them for "GPU/WebGL,
-      # AVFoundation" (2026-07); the nightlies of 2026-10-09 and 2026-10-14
-      # passed both on the macOS runner without a retry, and 22 is an <img>
-      # with a CSS transform, no WebGL, so they are back (2026-10-14).
-      # The save / people suites were once excluded as "slow I/O"; the real
-      # cause was the seeded catalog's absolute paths (fixed in #57), so they
-      # are back. 02-navigation was excluded for the "Rated" race; the cause
-      # was refreshAll browsing the scope it was called with after six status
-      # IPC awaits, so an older click (or a job-finished refresh) could land
-      # last and win (#68, with 44's identical failure), so it is back too.
-      # 05-catalog was excluded for its thumbnail-regeneration test; the cause
-      # was a real repair bug (one budget shared by the two repair triggers),
-      # so it is back as well. 12-missing-original's UNIQUE(asset_files.path)
-      # was the startup metadata repair landing after the test's relink on the
-      # slow VM and registering the original path anew (relink now reports
-      # path_in_use; the spec waits for the repair); 25-collage-batch assumed
-      # three page cards per row (#80). Both are back. Opt-in suites
-      # (27-agent, demo) skip themselves.
-      # A new spec belongs in this list unless it is left out above: 66–69
-      # were missed, and 68 then failed every nightly for days (CI's 1024-px
-      # display) without a PR ever running it.
-      - name: Run Electron E2E (CI subset)
-        run: >
-          npm run e2e:only --prefix apps/desktop --
-          e2e/01-launch.spec.js
-          e2e/02-navigation.spec.js
-          e2e/03-editor.spec.js
-          e2e/04-sticker.spec.js
-          e2e/05-catalog.spec.js
-          e2e/06-save.spec.js
-          e2e/07-depth.spec.js
-          e2e/08-mcp-http.spec.js
-          e2e/09-agent-bridge.spec.js
-          e2e/10-settings.spec.js
-          e2e/11-jobs-toasts.spec.js
-          e2e/12-missing-original.spec.js
-          e2e/12-people-view.spec.js
-          e2e/13-i18n.spec.js
-          e2e/14-video.spec.js
-          e2e/15-welcome.spec.js
-          e2e/16-open-with.spec.js
-          e2e/18-editor-transform.spec.js
-          e2e/18-people-flows.spec.js
-          e2e/19-editor-layers.spec.js
-          e2e/20-frame.spec.js
-          e2e/21-canvas-pad.spec.js
-          e2e/22-lightbox-zoom.spec.js
-          e2e/24-handwriting.spec.js
-          e2e/25-collage-batch.spec.js
-          e2e/26-mcp-parity.spec.js
-          e2e/28-mcp-render.spec.js
-          e2e/29-folder-order.spec.js
-          e2e/29-tahoe-shell.spec.js
-          e2e/30-sidebar-scroll.spec.js
-          e2e/31-ui-regressions.spec.js
-          e2e/31-version-navigation.spec.js
-          e2e/32-gps-location-menu.spec.js
-          e2e/33-split.spec.js
-          e2e/34-settings-transfer.spec.js
-          e2e/35-raw-import.spec.js
-          e2e/36-mcp-jobs-tools.spec.js
-          e2e/37-heic-import.spec.js
-          e2e/38-legacy-catalog.spec.js
-          e2e/39-context-menu-selection.spec.js
-          e2e/40-crop-mouse.spec.js
-          e2e/41-text-layer-panel.spec.js
-          e2e/42-drop-and-menu.spec.js
-          e2e/43-sticker-library.spec.js
-          e2e/44-discover.spec.js
-          e2e/45-collage-single.spec.js
-          e2e/46-smart-collections.spec.js
-          e2e/47-folder-filters.spec.js
-          e2e/48-filter-multiselect.spec.js
-          e2e/49-location-and-text-filters.spec.js
-          e2e/50-country-city-filters.spec.js
-          e2e/51-custom-filter-bar.spec.js
-          e2e/52-color-filter.spec.js
-          e2e/53-smart-collections-v2.spec.js
-          e2e/54-frame-user-templates.spec.js
-          e2e/55-personal-logos.spec.js
-          e2e/56-brand-logos.spec.js
-          e2e/57-idle-animations.spec.js
-          e2e/58-edit-add-to-folder.spec.js
-          e2e/59-paging-drift.spec.js
-          e2e/59-scroll-edge-blur.spec.js
-          e2e/60-file-lifecycle.spec.js
-          e2e/61-dates-and-places.spec.js
-          e2e/61-paging-after-delete.spec.js
-          e2e/63-save-dialog.spec.js
-          e2e/64-import-self-repair.spec.js
-          e2e/65-search-during-import.spec.js
-          e2e/66-show-in-all-assets.spec.js
-          e2e/67-lut.spec.js
-          e2e/68-remembered-choices.spec.js
-          e2e/69-flags-tags-shortcuts.spec.js
+      # The whole suite, e2e/*.spec.js: a new spec is in CI the moment it is
+      # added. A spec that cannot run on the GitHub macOS VM skips itself with
+      # test.skip(process.env.CI, reason) and runs locally only — today
+      # 17-watched-dirs and the watched-folder describe of 60-file-lifecycle
+      # (fs-watch delivery is too slow and uneven to assert on), 23-map and
+      # 60-map-cluster-covers (no GPU/WebGL: MapLibre never renders, #163).
+      # 62-people-real-model needs the face model only the nightly fetches,
+      # 70-native-video a local ProRes clip, and the opt-in suites skip
+      # without their flag (27-agent-mcp: AGENT_E2E=1, demo: DEMO=1).
+      # Until 2026-10-14 this step carried a hand-written list of 71 paths,
+      # edited 35 times: 66–69 were missed when they were added, and 68 then
+      # failed every nightly for days (CI's 1024-px display) without a PR
+      # ever running it. The nightly (e2e-nightly.yml) runs the same suite
+      # with coverage and the people model.
+      - name: Run Electron E2E
+        run: npm run e2e:only --prefix apps/desktop
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

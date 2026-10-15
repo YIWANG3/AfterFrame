@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 test.describe("Lightbox progressive zoom", () => {
   let app, window, userDataDir;
@@ -13,7 +13,7 @@ test.describe("Lightbox progressive zoom", () => {
   });
 
   test("uses the 512px preview for zoom but keeps detail visible while panning", async () => {
-    const card = window.locator("[data-gallery-item='true']").first();
+    const card = galleryCards(window).first();
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.dblclick();
 

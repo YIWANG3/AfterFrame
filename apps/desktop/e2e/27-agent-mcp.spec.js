@@ -12,16 +12,10 @@
 // assert on the agent's prose.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, callToolOk, galleryCards } = require("./helpers/app");
 const { runAgentTask, calledTool, claudeAvailable } = require("./helpers/agent");
 
 const ENABLED = process.env.AGENT_E2E === "1";
-
-async function callTool(port, name, args) {
-  const result = await mcpCall(port, "tools/call", { name, arguments: args || {} });
-  expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
-  return JSON.parse(result.content.find((c) => c.type === "text").text);
-}
 
 test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
   test.skip(!ENABLED, "set AGENT_E2E=1 to run the agent-in-the-loop suite");
@@ -48,7 +42,7 @@ test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
 
   test("rating task → agent finds the photo and writes the rating", async () => {
     test.setTimeout(240_000);
-    const before = await callTool(ctx.mcpPort, "search_assets", { query: "001-red", limit: 1 });
+    const before = await callToolOk(ctx.mcpPort, "search_assets", { query: "001-red", limit: 1 });
     expect(before.count).toBe(1);
     expect(before.assets[0].rating).not.toBe(5);
 
@@ -58,13 +52,13 @@ test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
     });
     expect(calledTool(run.toolCalls, "update_assets"), JSON.stringify(run.toolCalls)).toBe(true);
 
-    const after = await callTool(ctx.mcpPort, "search_assets", { query: "001-red", limit: 1 });
+    const after = await callToolOk(ctx.mcpPort, "search_assets", { query: "001-red", limit: 1 });
     expect(after.assets[0].rating).toBe(5);
   });
 
   test("crop task → agent produces a 1:1 derived version in the stack", async () => {
     test.setTimeout(240_000);
-    const before = await callTool(ctx.mcpPort, "search_assets", { query: "002", limit: 1 });
+    const before = await callToolOk(ctx.mcpPort, "search_assets", { query: "002", limit: 1 });
     expect(before.count).toBe(1);
     const src = before.assets[0];
 
@@ -76,7 +70,7 @@ test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
 
     // Outcome: a derived sibling now lives in the source's version stack
     // (same resource_set_id, version_kind "derived", square dimensions).
-    const after = await callTool(ctx.mcpPort, "search_assets", { limit: 100 });
+    const after = await callToolOk(ctx.mcpPort, "search_assets", { limit: 100 });
     const derived = after.assets.filter(
       (a) => a.resource_set_id === src.resource_set_id && a.version_kind === "derived",
     );
@@ -87,8 +81,8 @@ test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
   test("collage task → agent renders a 2x2 grid page into the catalog", async () => {
     test.setTimeout(240_000);
     // Bridge-backed tools need the React app mounted, not just the MCP server.
-    await ctx.window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15000 });
-    const { assets } = await callTool(ctx.mcpPort, "search_assets", { asset_type: "image", sort: "name-asc", limit: 4 });
+    await galleryCards(ctx.window).first().waitFor({ timeout: 15000 });
+    const { assets } = await callToolOk(ctx.mcpPort, "search_assets", { asset_type: "image", sort: "name-asc", limit: 4 });
     const ids = assets.map((a) => a.asset_id);
     expect(ids.length).toBe(4);
 
@@ -99,7 +93,7 @@ test.describe("Agent → MCP smoke (opt-in: AGENT_E2E=1)", () => {
     expect(calledTool(run.toolCalls, "render_collage"), JSON.stringify(run.toolCalls)).toBe(true);
 
     // Outcome: a new collage asset exists on disk and in the catalog.
-    const after = await callTool(ctx.mcpPort, "search_assets", { query: "collage_", limit: 20 });
+    const after = await callToolOk(ctx.mcpPort, "search_assets", { query: "collage_", limit: 20 });
     expect(after.count).toBeGreaterThan(0);
     const fs = require("node:fs");
     expect(fs.existsSync(after.assets[0].image_path)).toBe(true);

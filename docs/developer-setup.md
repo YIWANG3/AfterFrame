@@ -53,7 +53,12 @@ npm run test:e2e:coverage   # same suite, with line coverage for renderer / main
 npm run test:coverage       # unit suites + e2e, reported side by side
 ```
 
-The root commands set the sidecar `PYTHONPATH` automatically. ESLint has no
+The root commands set the sidecar `PYTHONPATH` automatically. Every PR runs the
+whole Electron suite (`.github/workflows/quality.yml`): a new `e2e/*.spec.js`
+is in CI as soon as it exists. A spec that cannot run on the GitHub macOS VM
+(no GPU/WebGL, fs-watch timing) opts out in the file itself with
+`test.skip(!!process.env.CI, "why")` and runs locally only; the nightly
+(`e2e-nightly.yml`) adds the face model, one retry and coverage. ESLint has no
 suppression file any more (the last entry went in #54): every `no-unused-vars`
 and `react-hooks/exhaustive-deps` finding is a hard error locally and in CI.
 

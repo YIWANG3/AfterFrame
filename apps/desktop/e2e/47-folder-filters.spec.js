@@ -4,11 +4,11 @@
 // library's counts (a camera reading "1794" inside a folder of 40 photos).
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 let ctx;
 let members;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const cardIds = () => cards().evaluateAll((els) => els.map((el) => el.dataset.assetId).sort());
 
 test.beforeAll(async () => {

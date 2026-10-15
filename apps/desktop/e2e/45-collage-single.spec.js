@@ -10,10 +10,10 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const imageRows = () => ctx.window.getByTestId("collage-image-list").locator("> *");
 const canvas = () => ctx.window.getByTestId("collage-canvas");
 // The toast fires after saveImage + quickRegister, naming the file. Earlier
@@ -81,7 +81,7 @@ for (const pickerMode of ["add", "replace"]) {
     // Choose a height between the grid's heights with and without a classic
     // scrollbar. Previously each ResizeObserver update toggled the scrollbar,
     // resizing every tile again on the next frame.
-    await scroller.evaluate((element) => {
+    const height = await scroller.evaluate((element) => {
       const css = getComputedStyle(element);
       const paddingX = parseFloat(css.paddingLeft) + parseFloat(css.paddingRight);
       const paddingY = parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
@@ -89,8 +89,12 @@ for (const pickerMode of ["add", "replace"]) {
       const tileSize = (element.getBoundingClientRect().width - paddingX - 3 * 4) / 4;
       element.style.flex = "none";
       element.style.height = `${rows * tileSize + (rows - 1) * 4 + paddingY - 3}px`;
+      return parseFloat(element.style.height);
     });
-    await ctx.window.waitForTimeout(250);
+    // The new height is laid out and the grid has had a frame to react to it
+    // (its ResizeObserver, then the render) before the samples start.
+    await expect.poll(() => scroller.evaluate((element) => element.getBoundingClientRect().height)).toBeCloseTo(height, 0);
+    await ctx.window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const widths = await scroller.evaluate(async (element) => {
       const samples = [];
       for (let frame = 0; frame < 60; frame++) {
@@ -199,7 +203,9 @@ test("Export writes the JPEG at the chosen path and registers it as a version", 
     await ctx.app.evaluate(({ dialog }, filePath) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, out);
-    await ctx.window.waitForTimeout(500); // let the cell previews settle
+    // The export waits for the HD previews it draws from itself
+    // (CollageOverlay.waitForHdPreviews, CollageCanvas.exportToBlob).
+    await expect(ctx.window.getByRole("button", { name: "Export", exact: true })).toBeEnabled();
     await ctx.window.getByRole("button", { name: "Export", exact: true }).click();
     // The toast fires after saveImage + quickRegister — only then is the file
     // complete (reading earlier caught a half-written JPEG).
@@ -229,7 +235,7 @@ test("Export as PNG is a lossless render", async () => {
     await ctx.app.evaluate(({ dialog }, filePath) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, out);
-    await ctx.window.waitForTimeout(500);
+    await expect(ctx.window.getByRole("button", { name: "Export", exact: true })).toBeEnabled();
     await ctx.window.getByRole("button", { name: "Export", exact: true }).click();
     await expect(exportedToast(out)).toBeVisible({ timeout: 30_000 });
 
@@ -287,7 +293,7 @@ test("a collage made inside a folder joins that folder while the box is ticked",
     await ctx.app.evaluate(({ dialog }, filePath) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, out);
-    await ctx.window.waitForTimeout(500);
+    await expect(ctx.window.getByRole("button", { name: "Export", exact: true })).toBeEnabled();
     await ctx.window.getByRole("button", { name: "Export", exact: true }).click();
     await expect(exportedToast(out)).toBeVisible({ timeout: 30_000 });
     return out;

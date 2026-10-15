@@ -20,7 +20,7 @@ const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launchApp, closeApp, collectCoverage, byImagePath, importThroughToolbar } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, byImagePath, importThroughToolbar, galleryCards } = require("./helpers/app");
 const { writeUniqueJpeg } = require("./helpers/images");
 
 function makeDirs(prefix, ...names) {
@@ -84,7 +84,7 @@ test.describe("a selected photo whose original moves, is trashed and comes back"
     original = path.join(dirs.A, "Lifecycle_external.jpg");
     await writeUniqueJpeg(original);
     Object.assign(ctx, await launchApp({ testName: "file-lifecycle" }));
-    await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 
     await h.importThroughPicker([original]);
     await expect(h.card(original)).toBeVisible({ timeout: 30_000 });
@@ -238,7 +238,7 @@ test.describe("removed from the library, deleted from disk, changed while the ap
     };
     for (const file of Object.values(files)) await writeUniqueJpeg(file);
     Object.assign(ctx, await launchApp({ testName: "file-lifecycle-watch" }));
-    await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 
     await ctx.window.evaluate((dir) => window.mediaWorkspace.addWatchedDir(dir), path.dirname(dirs["W/A"]));
     for (const file of Object.values(files)) await expect(h.card(file)).toBeVisible({ timeout: 30_000 });
@@ -364,7 +364,7 @@ test.describe("removed from the library, deleted from disk, changed while the ap
 // only. The startup scan above is what CI checks.
 test.describe("a watched folder while the app runs", () => {
   test.describe.configure({ mode: "serial" });
-  test.skip(!!process.env.CI, "fs-watch delivery on the GitHub macOS runner is too slow and uneven to assert on (quality.yml lists this file; this describe runs locally only)");
+  test.skip(!!process.env.CI, "fs-watch delivery on the GitHub macOS runner is too slow and uneven to assert on (the rest of this file runs on CI; this describe runs locally only)");
   const ctx = {};
   const h = harness(ctx);
   let dirs, first, assetId, folderId;
@@ -375,7 +375,7 @@ test.describe("a watched folder while the app runs", () => {
     first = path.join(dirs["W/A"], "Lifecycle_live.jpg");
     await writeUniqueJpeg(first);
     Object.assign(ctx, await launchApp({ testName: "file-lifecycle-live" }));
-    await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
     await ctx.window.evaluate((dir) => window.mediaWorkspace.addWatchedDir(dir), path.dirname(dirs["W/A"]));
     await expect(h.card(first)).toBeVisible({ timeout: 30_000 });
     await h.waitForImportIdle();

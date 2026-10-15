@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 const { cloneAssets } = require("./helpers/clone-assets");
 
 // The gallery pages by server offset. Deleting photos, or taking them out of
@@ -12,7 +12,7 @@ const SORT = "imported-desc"; // the gallery's default order
 
 let ctx;
 const scroller = () => ctx.window.locator("[data-testid='gallery-scroll']");
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const selected = () => ctx.window.locator("[data-gallery-item='true'][data-selected='true']");
 const scrollHeight = () => scroller().evaluate((el) => el.scrollHeight);
 

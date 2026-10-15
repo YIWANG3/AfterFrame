@@ -10,7 +10,7 @@
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 const { devPython } = require("../electron/sidecar/transport");
 
 const SHOTS = 4;
@@ -57,7 +57,7 @@ test.describe("Show in All Assets", () => {
     await expect(sortButton()).toHaveText("Captured ↑");
 
     // Nothing narrows All Assets, so there is nothing to show it in.
-    const first = window.locator("[data-gallery-item='true']").first();
+    const first = galleryCards(window).first();
     await expect(first).toBeVisible();
     await first.click({ button: "right" });
     await expect(window.getByRole("button", { name: "Copy Name", exact: true })).toBeVisible();
@@ -66,7 +66,7 @@ test.describe("Show in All Assets", () => {
 
     const target = "burst-080-1";
     await search().fill(stemOf(80, 1));
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1);
+    await expect(galleryCards(window)).toHaveCount(1);
     await card(target).click({ button: "right" });
     await menuItem().click();
 

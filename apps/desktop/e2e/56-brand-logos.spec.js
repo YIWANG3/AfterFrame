@@ -14,7 +14,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
-const { launchApp, closeApp, waitForEditor, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, openEditorOn, closeEditor, mcpCall, galleryCards } = require("./helpers/app");
 
 test.describe.configure({ mode: "serial" });
 
@@ -55,16 +55,10 @@ const camera = () => window.locator("[data-camera-logos]");
 const brandRow = () => camera().locator('[data-camera-level="brand"]');
 const modelRow = () => camera().locator('[data-camera-level="model"]');
 const customRow = () => window.locator("[data-my-logos]");
-async function openEditorOn(stem, preset) {
-  await window.evaluate((item) => window.__afterframeTest.openEditor(item), await rowFor(stem));
-  await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-  await waitForEditor(window, { preview: true });
-  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
+// The frame tool on the photo `stem`, with a frame preset applied if given.
+async function openFrameToolOn(stem, preset) {
+  await openEditorOn(window, await rowFor(stem), "frame");
   if (preset) await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), preset);
-}
-async function closeEditor() {
-  await window.evaluate(() => window.__afterframeTest.closeEditor());
-  await expect(window.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
 }
 // A chooser (a popover in the editor, inline in Settings): a logo, or null
 // for Default; picking closes it.
@@ -99,7 +93,7 @@ test.beforeAll(async () => {
       `]);
     },
   }));
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
   // Camera logos, each its brand's (as a chooser's upload makes them).
   round = await importLogo({ filePath: svgFile("Round.svg", 'viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#1d4ed8"/>'), kind: "camera", brand: "canon" });
   wide = await importLogo({ filePath: svgFile("Wide.svg", 'viewBox="0 0 400 100"><rect width="180" height="100" fill="#fff"/><rect x="220" width="180" height="100" fill="#fff"/>'), kind: "camera", brand: "canon" });
@@ -114,7 +108,7 @@ test.afterAll(async () => {
 });
 
 test("Canon's brand logo becomes mine, holding its end of the bar; Default brings Canon's back", async () => {
-  await openEditorOn(CANON, "bar-id");
+  await openFrameToolOn(CANON, "bar-id");
   await expect.poll(cameraLogoLayer).not.toBeNull();
   const canon = await cameraLogoLayer();
   expect(aspectOf(canon)).toBeGreaterThan(3); // the wordmark
@@ -157,14 +151,14 @@ test("Canon's brand logo becomes mine, holding its end of the bar; Default bring
 
   await brandRow().locator('[data-change-camera-logo="brand"]').click();
   await choose(camera(), round.id); // mine again, for what follows
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("every Canon photo gets the brand's logo, in the editor and through an agent's apply_frame", async () => {
-  await openEditorOn(OTHER_CANON, "bar-id");
+  await openFrameToolOn(OTHER_CANON, "bar-id");
   await expect.poll(async () => (await cameraLogoLayer()) && aspectOf(await cameraLogoLayer())).toBeCloseTo(1, 1);
   const placed = await cameraLogoLayer();
-  await closeEditor();
+  await closeEditor(window);
 
   const row = await rowFor(OTHER_CANON);
   const tool = async (name, args) => JSON.parse((await mcpCall(mcpPort, "tools/call", { name, arguments: args })).content[0].text);
@@ -176,7 +170,7 @@ test("every Canon photo gets the brand's logo, in the editor and through an agen
 });
 
 test("a model logo is that model's alone; a mark placed from the brand row stays the brand's", async () => {
-  await openEditorOn(CANON, "bar-id"); // the R6m2
+  await openFrameToolOn(CANON, "bar-id"); // the R6m2
   await modelRow().locator('[data-set-camera-logo="model"]').click();
   // A model's Default is the brand's.
   await expect(camera().locator("[data-logo-picker] [data-pick-default]")).toBeVisible();
@@ -190,19 +184,19 @@ test("a model logo is that model's alone; a mark placed from the brand row stays
   const fromBrandRow = (await cameraLogoLayers())[1];
   expect(fromBrandRow.logoRef.scope).toBe("brand");
   expect(aspectOf(fromBrandRow)).toBeCloseTo(1, 1); // the brand's (round), not the model's
-  await closeEditor();
+  await closeEditor(window);
 
-  await openEditorOn(OTHER_CANON, "bar-id"); // the 6D: no model logo, the brand's
+  await openFrameToolOn(OTHER_CANON, "bar-id"); // the 6D: no model logo, the brand's
   await expect.poll(async () => (await cameraLogoLayer()) && aspectOf(await cameraLogoLayer())).toBeCloseTo(1, 1);
   await expect(modelRow()).toHaveAttribute("data-camera-logo-choice", "");
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("models named the same are one camera: they share a model logo, and frame text uses the name", async () => {
   await window.evaluate(([a, b]) => Promise.all([
     window.mediaWorkspace.setCameraName(a, "Twin"), window.mediaWorkspace.setCameraName(b, "Twin"),
   ]), [R6_KEY, SIXD_KEY]);
-  await openEditorOn(OTHER_CANON, "bar-id"); // the 6D, now named like the R6m2
+  await openFrameToolOn(OTHER_CANON, "bar-id"); // the 6D, now named like the R6m2
   await expect(modelRow().locator('[data-change-camera-logo="model"]')).toContainText("Twin");
   await expect.poll(async () => (await cameraLogoLayer()) && aspectOf(await cameraLogoLayer())).toBeCloseTo(4, 0); // the R6m2's
   await expect(modelRow()).toHaveAttribute("data-camera-logo-choice", wide.id);
@@ -211,7 +205,7 @@ test("models named the same are one camera: they share a model logo, and frame t
   await modelRow().locator('[data-change-camera-logo="model"]').click();
   await choose(camera(), null);
   await expect.poll(async () => (await profile()).brandLogos).toEqual({ canon: round.id });
-  await closeEditor();
+  await closeEditor(window);
   await window.evaluate(([a, b]) => Promise.all([
     window.mediaWorkspace.setCameraName(a, null), window.mediaWorkspace.setCameraName(b, null),
   ]), [R6_KEY, SIXD_KEY]);
@@ -220,27 +214,27 @@ test("models named the same are one camera: they share a model logo, and frame t
 
 test("a drone's two cameras, one to the name table: frame text names the drone, one model logo serves both", async () => {
   const lens = await importLogo({ filePath: svgFile("Air.svg", 'viewBox="0 0 200 100"><rect width="90" height="100" fill="#fff"/><rect x="110" width="90" height="100" fill="#fff"/>'), kind: "camera", brand: "dji" });
-  await openEditorOn(AIR_WIDE, "bar-id");
+  await openFrameToolOn(AIR_WIDE, "bar-id");
   await expect(modelRow().locator('[data-change-camera-logo="model"]')).toContainText("DJI Air 3S");
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("DJI Air 3S");
   await modelRow().locator('[data-set-camera-logo="model"]').click();
   await choose(camera(), lens.id);
   await expect.poll(async () => aspectOf(await cameraLogoLayer())).toBeCloseTo(2, 0);
   expect((await profile()).brandLogos).toMatchObject({ "dji#fc9113": lens.id }); // kept on the one it was chosen on
-  await closeEditor();
+  await closeEditor(window);
 
-  await openEditorOn(AIR_TELE, "bar-id"); // the other camera
+  await openFrameToolOn(AIR_TELE, "bar-id"); // the other camera
   await expect(modelRow()).toHaveAttribute("data-camera-logo-choice", lens.id);
   await expect.poll(async () => (await cameraLogoLayer()) && aspectOf(await cameraLogoLayer())).toBeCloseTo(2, 0);
   // Default here takes it off the drone.
   await modelRow().locator('[data-change-camera-logo="model"]').click();
   await choose(camera(), null);
   await expect.poll(async () => Object.keys((await profile()).brandLogos).filter((key) => key.startsWith("dji"))).toEqual([]);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("a camera with no built-in logo is given one of its own; Canon's are not offered", async () => {
-  await openEditorOn(UNKNOWN, "bar-id");
+  await openFrameToolOn(UNKNOWN, "bar-id");
   await expect.poll(async () => (await editorState()).layers.length).toBeGreaterThan(0);
   expect(await cameraLogoLayer()).toBeNull();
   await expect(brandRow().locator('[data-change-camera-logo="brand"]')).toContainText("Acme Optics"); // its make, as written
@@ -256,14 +250,14 @@ test("a camera with no built-in logo is given one of its own; Canon's are not of
   await expect.poll(cameraLogoLayer).toBeNull();
   await brandRow().locator('[data-set-camera-logo="brand"]').click();
   await choose(camera(), drone.id);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("custom logos: uploaded from their row, several at once, for every photo, never a camera's", async () => {
   const sig = svgFile("Signature.svg", 'viewBox="0 0 300 100"><path d="M20 70 C60 10 90 90 130 40 S200 80 280 30" stroke="#111" stroke-width="8" fill="none"/>');
   await stubDialog([sig]);
   const before = (await profile()).brandLogos;
-  await openEditorOn(CANON);
+  await openFrameToolOn(CANON);
   await customRow().locator("[data-import-my-logo]").click();
   await expect.poll(async () => (await editorState()).layers.filter((l) => l.logoRef?.source === "personal").length).toBe(1); // placed
   signature = (await window.evaluate(() => window.mediaWorkspace.listPersonalLogos())).logos.find((l) => l.name === "Signature");
@@ -281,11 +275,11 @@ test("custom logos: uploaded from their row, several at once, for every photo, n
   // Two SVGs through sharp: 4 s on a quick runner, past 15 s on a slow one.
   await expect(customRow().locator("[data-my-logo]")).toHaveCount(3, { timeout: 30_000 });
   expect((await editorState()).layers.filter((l) => l.logoRef?.source === "personal")).toHaveLength(1);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("a brand with two marks shows both; either goes into the frame", async () => {
-  await openEditorOn(HASSELBLAD);
+  await openFrameToolOn(HASSELBLAD);
   await expect(brandRow().locator("[data-place-camera-logo]")).toHaveCount(2);
   await brandRow().locator('[data-place-camera-logo][data-mark="symbol"]').click();
   await expect.poll(async () => (await cameraLogoLayer())?.logoRef?.variant).toBe("symbol");
@@ -297,18 +291,18 @@ test("a brand with two marks shows both; either goes into the frame", async () =
   await brandRow().locator('[data-change-camera-logo="brand"]').click();
   await expect(camera().locator("[data-pick-default] [data-logo-shape]")).toHaveCount(2); // Default: both
   await window.keyboard.press("Escape");
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("a choice changed where nothing announced it (a settings import) shows on the next visit to the tool", async () => {
-  await openEditorOn(OTHER_CANON);
+  await openFrameToolOn(OTHER_CANON);
   await expect(brandRow()).toHaveAttribute("data-camera-logo-choice", round.id);
   await window.evaluate(() => window.mediaWorkspace.setBrandLogo("canon", null));
   await window.evaluate(() => window.__afterframeTest.setTool("text"));
   await window.evaluate(() => window.__afterframeTest.setTool("frame"));
   await expect(brandRow()).toHaveAttribute("data-camera-logo-choice", "");
   await window.evaluate((id) => window.mediaWorkspace.setBrandLogo("canon", id), round.id);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("Settings › Watermark: brands with their models, renamed and reset there; custom logos apart", async () => {
@@ -379,10 +373,10 @@ test("a brand with four marks: every one gets a cell, wrapping; previews show tw
   }, { manifest, svgs });
   // The registry is read once per session: start a fresh one.
   await window.reload();
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
   await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
 
-  await openEditorOn(HASSELBLAD);
+  await openFrameToolOn(HASSELBLAD);
   const cells = brandRow().locator("[data-place-camera-logo]");
   await expect(cells).toHaveCount(4);
   const boxes = await Promise.all([0, 1, 2, 3].map((i) => cells.nth(i).boundingBox()));
@@ -391,7 +385,7 @@ test("a brand with four marks: every one gets a cell, wrapping; previews show tw
   await brandRow().locator('[data-change-camera-logo="brand"]').click();
   await expect(camera().locator('[data-pick-default] [data-more-marks="2"]')).toBeVisible();
   await window.keyboard.press("Escape");
-  await closeEditor();
+  await closeEditor(window);
 
   await openWatermarkSettings();
   await expect(window.locator('[data-brand-logo-row="hasselblad"] [data-more-marks="2"]')).toBeVisible();

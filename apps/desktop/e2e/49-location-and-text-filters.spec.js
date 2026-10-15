@@ -2,10 +2,10 @@
 // filters, through the real filter bar. Expected numbers come from the catalog.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, galleryCards } = require("./helpers/app");
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const bar = () => ctx.window.locator("[data-filter-bar]");
 const browseLength = (filters) => ctx.window.evaluate(
   (f) => window.mediaWorkspace.browseImages({ status: "all", filters: f, limit: 1000 }).then((rows) => rows.length),

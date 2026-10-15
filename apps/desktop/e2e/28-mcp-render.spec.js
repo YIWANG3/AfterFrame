@@ -4,16 +4,7 @@
 
 const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall, waitForMcp } = require("./helpers/app");
-
-function toolResult(result) {
-  expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
-  return JSON.parse(result.content.find((c) => c.type === "text").text);
-}
-
-async function callTool(port, name, args) {
-  return toolResult(await mcpCall(port, "tools/call", { name, arguments: args || {} }));
-}
+const { launchApp, closeApp, mcpCall, callToolOk, waitForMcp, galleryCards } = require("./helpers/app");
 
 // Decode saved output with the repo's own sharp to verify real pixels landed.
 async function imageMeta(filePath) {
@@ -30,8 +21,8 @@ test.describe("MCP render bridge tools", () => {
     await waitForMcp(ctx.mcpPort);
     // The render bridge registers when the React app mounts — later than the
     // MCP server. Wait for the gallery so bridge-backed tools are reachable.
-    await ctx.window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15000 });
-    const { assets } = await callTool(ctx.mcpPort, "search_assets", { asset_type: "image", sort: "name-asc", limit: 12 });
+    await galleryCards(ctx.window).first().waitFor({ timeout: 15000 });
+    const { assets } = await callToolOk(ctx.mcpPort, "search_assets", { asset_type: "image", sort: "name-asc", limit: 12 });
     photoIds = assets.map((a) => a.asset_id);
     expect(photoIds.length).toBeGreaterThanOrEqual(6);
   });
@@ -40,7 +31,7 @@ test.describe("MCP render bridge tools", () => {
   });
 
   test("get_editor_capabilities enumerates frames, fonts, collage layouts", async () => {
-    const caps = await callTool(ctx.mcpPort, "get_editor_capabilities", {});
+    const caps = await callToolOk(ctx.mcpPort, "get_editor_capabilities", {});
     expect(caps.frame_templates.length).toBeGreaterThan(3);
     expect(caps.frame_templates[0]).toHaveProperty("id");
     expect(caps.fonts).toContain("Plus Jakarta Sans");
@@ -50,7 +41,7 @@ test.describe("MCP render bridge tools", () => {
 
   test("render_collage single page: 2x2 grid with real pixels and source links", async () => {
     const ids = photoIds.slice(0, 4);
-    const out = await callTool(ctx.mcpPort, "render_collage", {
+    const out = await callToolOk(ctx.mcpPort, "render_collage", {
       asset_ids: ids,
       template_id: "4-grid",
       export_width: 1200,
@@ -67,13 +58,13 @@ test.describe("MCP render bridge tools", () => {
     expect(meta.height).toBe(1200); // default ratio 1
 
     // Registered in the catalog and traceable to its sources (collage links).
-    const detail = await callTool(ctx.mcpPort, "get_asset", { asset_id: page.new_asset_id });
+    const detail = await callToolOk(ctx.mcpPort, "get_asset", { asset_id: page.new_asset_id });
     expect(detail.asset_id).toBe(page.new_asset_id);
   });
 
   test("render_collage batch mode: per_page chunks into multiple pages", async () => {
     const ids = photoIds.slice(0, 6);
-    const out = await callTool(ctx.mcpPort, "render_collage", {
+    const out = await callToolOk(ctx.mcpPort, "render_collage", {
       asset_ids: ids,
       per_page: 4,
       export_width: 800,
@@ -99,10 +90,10 @@ test.describe("MCP render bridge tools", () => {
 
   test("edit_asset: crop + margins + text layer lands as a derived version", async () => {
     const srcId = photoIds[0];
-    const before = await callTool(ctx.mcpPort, "search_assets", { limit: 200 });
+    const before = await callToolOk(ctx.mcpPort, "search_assets", { limit: 200 });
     const src = before.assets.find((a) => a.asset_id === srcId);
 
-    const out = await callTool(ctx.mcpPort, "edit_asset", {
+    const out = await callToolOk(ctx.mcpPort, "edit_asset", {
       asset_id: srcId,
       geometry: { crop: { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } },
       canvas: { pad: { top: 0.05, right: 0.05, bottom: 0.18, left: 0.05 }, bg: "#ffffff" },
@@ -119,20 +110,20 @@ test.describe("MCP render bridge tools", () => {
     // And the crop shrank the photo relative to the original.
     expect(meta.width).toBeLessThan(src.width);
 
-    const after = await callTool(ctx.mcpPort, "search_assets", { limit: 200 });
+    const after = await callToolOk(ctx.mcpPort, "search_assets", { limit: 200 });
     const derived = after.assets.find((a) => a.asset_id === out.new_asset_id);
     expect(derived.resource_set_id).toBe(src.resource_set_id);
     expect(derived.version_kind).toBe("derived");
   });
 
   test("apply_frame: EXIF watermark template renders with margins and registers", async () => {
-    const caps = await callTool(ctx.mcpPort, "get_editor_capabilities", {});
+    const caps = await callToolOk(ctx.mcpPort, "get_editor_capabilities", {});
     const template = caps.frame_templates[0].id;
     const srcId = photoIds[1];
-    const srcDetail = await callTool(ctx.mcpPort, "get_asset", { asset_id: srcId });
+    const srcDetail = await callToolOk(ctx.mcpPort, "get_asset", { asset_id: srcId });
     const srcMeta = await imageMeta(srcDetail.image_path);
 
-    const out = await callTool(ctx.mcpPort, "apply_frame", { asset_ids: [srcId], template });
+    const out = await callToolOk(ctx.mcpPort, "apply_frame", { asset_ids: [srcId], template });
     const result = out.results[0];
     expect(result.error, JSON.stringify(out)).toBeUndefined();
     expect(result.new_asset_id).toBeTruthy();
@@ -143,18 +134,18 @@ test.describe("MCP render bridge tools", () => {
     const meta = await imageMeta(result.path);
     expect(meta.width).toBeGreaterThanOrEqual(Math.min(srcMeta.width, 100));
 
-    const after = await callTool(ctx.mcpPort, "search_assets", { limit: 200 });
+    const after = await callToolOk(ctx.mcpPort, "search_assets", { limit: 200 });
     const derived = after.assets.find((a) => a.asset_id === result.new_asset_id);
     expect(derived.version_kind).toBe("derived");
   });
 
   test("apply_frame rejects an unknown template with the valid ids", async () => {
-    const out = await callTool(ctx.mcpPort, "apply_frame", { asset_ids: [photoIds[0]], template: "nope" });
+    const out = await callToolOk(ctx.mcpPort, "apply_frame", { asset_ids: [photoIds[0]], template: "nope" });
     expect(out.results[0].error).toContain("unknown frame template");
   });
 
   test("show_in_app view=collage opens the collage composer", async () => {
-    const res = await callTool(ctx.mcpPort, "show_in_app", { asset_ids: photoIds.slice(0, 3), view: "collage" });
+    const res = await callToolOk(ctx.mcpPort, "show_in_app", { asset_ids: photoIds.slice(0, 3), view: "collage" });
     expect(res.opened).toBe("collage");
     expect(res.count).toBe(3);
     // The overlay is really up in the UI.
@@ -167,7 +158,7 @@ test.describe("MCP render bridge tools", () => {
   });
 
   test("show_in_app view=editor opens the editor on the asset", async () => {
-    const res = await callTool(ctx.mcpPort, "show_in_app", { asset_ids: [photoIds[0]], view: "editor" });
+    const res = await callToolOk(ctx.mcpPort, "show_in_app", { asset_ids: [photoIds[0]], view: "editor" });
     expect(res.opened).toBe("editor");
     expect(res.asset_id).toBe(photoIds[0]);
   });

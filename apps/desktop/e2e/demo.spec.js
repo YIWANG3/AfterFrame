@@ -9,7 +9,7 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 const BEAT = 1200; // ms between visible steps
 
@@ -30,8 +30,8 @@ test.describe("Demo (slow walkthrough)", () => {
   });
 
   test("01 — app launches and gallery shows 10 seeded images", async () => {
-    await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
-    const count = await window.locator("[data-gallery-item='true']").count();
+    await galleryCards(window).first().waitFor({ timeout: 15_000 });
+    const count = await galleryCards(window).count();
     expect(count).toBe(10);
     await window.waitForTimeout(BEAT);
   });
@@ -44,7 +44,7 @@ test.describe("Demo (slow walkthrough)", () => {
   });
 
   test("03 — select first card (you should see the accent ring)", async () => {
-    const firstCard = window.locator("[data-gallery-item='true']").first();
+    const firstCard = galleryCards(window).first();
     await firstCard.click();
     await expect(firstCard).toHaveAttribute("data-selected", "true");
     await window.waitForTimeout(BEAT);

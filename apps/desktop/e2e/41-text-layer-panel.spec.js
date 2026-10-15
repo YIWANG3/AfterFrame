@@ -125,7 +125,8 @@ test("the layer list selects, reorders by drag and deletes", async () => {
   await src.dispatchEvent("dragstart", { dataTransfer: dt });
   for (let i = 0; i < 2; i += 1) {
     await dst.dispatchEvent("dragover", { dataTransfer: dt, clientX: dstBox.x + 30, clientY: dstBox.y + dstBox.height - 3 });
-    await ctx.window.waitForTimeout(40);
+    // The drop target's state from this dragover is rendered before the next one.
+    await ctx.window.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
   }
   await dst.dispatchEvent("drop", { dataTransfer: dt, clientX: dstBox.x + 30, clientY: dstBox.y + dstBox.height - 3 });
   await src.dispatchEvent("dragend", { dataTransfer: dt });

@@ -2,7 +2,7 @@
 // is filtering still shows; the choice survives a relaunch.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall, collectCoverage } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, collectCoverage, galleryCards } = require("./helpers/app");
 
 let ctx;
 const bar = () => ctx.window.locator("[data-filter-bar]");
@@ -12,7 +12,7 @@ const openChooser = () => bar().getByRole("button", { name: "Add filter", exact:
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "custom-filter-bar" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
   await ctx.window.getByRole("button", { name: "Filters" }).click();
 });
 
@@ -58,7 +58,7 @@ test("the choice survives a relaunch", async () => {
   await collectCoverage(ctx.app); // the restart path bypasses closeApp
   await ctx.app.close();
   ctx = { ...ctx, ...(await launchApp({ testName: "custom-filter-bar", reuseUserDataDir: ctx.userDataDir, keepCatalog: true })) };
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
   await ctx.window.getByRole("button", { name: "Filters" }).click();
   await expect(chip("Camera")).toBeVisible();
   await expect(chip("Format")).toHaveCount(0);

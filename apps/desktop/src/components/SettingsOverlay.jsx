@@ -68,12 +68,15 @@ export default function SettingsOverlay({
   useEffect(() => {
     if (open && !rootRef.current?.contains(document.activeElement)) rootRef.current?.focus({ preventScroll: true });
   }, [open]);
-  // Focus can still fall back to <body> (a field blurred on Enter, a dialog
-  // closed): keys aimed at nothing in particular are Settings' too.
+  // Focus can still be outside: back on <body> (a field blurred on Enter, a
+  // dialog closed), or on whatever held it when Settings opened over it and
+  // took it back before the focus above landed (seen on a slow CI runner:
+  // Escape went to the gallery and Settings stayed open). Settings is modal,
+  // so a key aimed anywhere outside it is Settings' too.
   useEffect(() => {
     if (!open) return undefined;
     function onKey(e) {
-      if (e.target !== document.body && e.target !== document.documentElement) return;
+      if (rootRef.current?.contains(e.target)) return;
       e.stopPropagation();
       if (isCloseKey(e)) { e.preventDefault(); onClose?.(); }
     }

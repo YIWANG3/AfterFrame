@@ -4,7 +4,7 @@
 // and a Settings tab; the second run, on the same userData, finds them.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, collectCoverage, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, openEditorOn, closeEditor: closeEditorOverlay, galleryCards } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
 
 test.describe.configure({ mode: "serial" });
@@ -12,22 +12,18 @@ test.describe.configure({ mode: "serial" });
 let ctx;
 let fixturePath;
 let firstByName;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const editorState = () => ctx.window.evaluate(() => window.__afterframeTest.getState());
 const splitAspect = async () => (await ctx.window.evaluate(() => window.__afterframeTest.getSplitState()))?.aspectKey;
 const addTextButton = () => ctx.window.getByTitle("Add text layer", { exact: true });
 const canvasSlider = (label) => ctx.window.getByText(label, { exact: true }).locator("xpath=../..").locator("input[type=range]");
 const settingsTabs = () => ctx.window.getByRole("navigation", { name: "Settings" });
 
-async function openEditorOn(tool) {
-  await ctx.window.waitForFunction(() => !!window.__afterframeTest?.openEditor, null, { timeout: 10_000 });
-  await ctx.window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
-  await waitForEditor(ctx.window, { preview: true });
-  await ctx.window.evaluate((t) => window.__afterframeTest.setTool(t), tool);
-}
+const openToolOn = (tool) => openEditorOn(ctx.window, fixturePath, tool);
 
+// Back to the gallery, whose layout controls the tests below use.
 async function closeEditor() {
-  await ctx.window.evaluate(() => window.__afterframeTest.closeEditor());
+  await closeEditorOverlay(ctx.window);
   await expect(cards().first()).toBeVisible();
 }
 
@@ -81,7 +77,7 @@ test.afterAll(async () => {
 });
 
 test("the next text starts with the look of the last one styled", async () => {
-  await openEditorOn("text");
+  await openToolOn("text");
   const first = await addTextWithButton();
   expect(first.fontFamily).toBe("Plus Jakarta Sans");
   expect(first.shadow).toBe(false);
@@ -118,7 +114,7 @@ test("the collage keeps its canvas and export width", async () => {
 });
 
 test("the split keeps its panel ratio, the gallery its layout, Settings its tab", async () => {
-  await openEditorOn("split");
+  await openToolOn("split");
   await expect.poll(splitAspect).toBe("3:4");
   await ctx.window.getByRole("button", { name: "1:1" }).click();
   await expect.poll(splitAspect).toBe("1:1");
@@ -158,7 +154,7 @@ test("after a restart, everything comes back", async () => {
   await ctx.window.keyboard.press("Escape");
   await expect(settingsTabs()).toHaveCount(0);
 
-  await openEditorOn("text");
+  await openToolOn("text");
   const text = await addTextWithButton();
   expect(text.fontFamily).toBe("Space Mono");
   expect(text.italic).toBe(true);

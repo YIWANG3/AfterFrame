@@ -6,7 +6,7 @@
 // browse so the test does not hard-code what the seeded fixture contains.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, collectCoverage, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, mcpCall, galleryCards } = require("./helpers/app");
 
 let app, window, userDataDir, mcpPort;
 
@@ -20,14 +20,14 @@ const holds = async (name) => {
   const { rules } = await collectionNamed(name);
   return window.evaluate((base) => window.mediaWorkspace.browseImages({ status: "all", base, limit: 1000 }).then((rows) => rows.length), rules);
 };
-const cards = () => window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(window);
 const actions = () => window.locator("[data-filter-actions]");
 const smartRow = (name) => window.locator("[data-smart-collection]").filter({ hasText: name });
 const rowCount = async (name) => Number((await smartRow(name).locator("span.tabular-nums").innerText()).trim());
 
 test.beforeAll(async () => {
   ({ app, window, userDataDir, mcpPort } = await launchApp({ testName: "smart-collections" }));
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -87,7 +87,7 @@ test("Clear and the smart collection actions stay put while the facets scroll", 
 
 test("saving the current filter creates a sidebar entry with the matching count", async () => {
   // Make sure at least one photo qualifies, whatever the fixture ships with.
-  await window.locator("[data-gallery-item='true']").first().click();
+  await galleryCards(window).first().click();
   await window.keyboard.press("5");
   await window.getByTitle("Rating ≥ 5").click();
   await window.getByRole("button", { name: "Save as smart collection" }).click();
@@ -106,8 +106,11 @@ test("saving the current filter creates a sidebar entry with the matching count"
   await expect(window.getByTestId("gallery-title")).toHaveText("Five stars");
   await expect(actions()).toHaveCount(0);
   // Clicking it right away used to empty the grid (same conditions, no reload).
+  // The click's own browse, if it made one, has been answered once a browse
+  // sent after it has (the sidecar answers in order), and painted a frame later.
   await smartRow("Five stars").click();
-  await window.waitForTimeout(600);
+  await window.evaluate(() => window.mediaWorkspace.browseImages({ status: "all", limit: 1 }));
+  await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(cards()).toHaveCount(expected);
 });
 

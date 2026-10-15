@@ -7,7 +7,7 @@ const crypto = require("node:crypto");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 test.describe("Catalog browse", () => {
   let app, window, userDataDir, catalogDir;
@@ -23,8 +23,8 @@ test.describe("Catalog browse", () => {
     // Wait for any gallery item to render — uses the data attribute set on
     // each card. If sidecar / browse-images / Gallery rendering is broken,
     // this fails fast.
-    await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
-    const count = await window.locator("[data-gallery-item='true']").count();
+    await galleryCards(window).first().waitFor({ timeout: 15_000 });
+    const count = await galleryCards(window).count();
     // 10 synthetic gradients + 3 real photographs + 1 sample video (seed-catalog.js).
     expect(count).toBe(14);
   });
@@ -51,31 +51,36 @@ test.describe("Catalog browse", () => {
     });
     const uniqueWidths = (widths) => new Set(widths.map((width) => width.toFixed(2)));
 
+    // The grid's scroller has the new window's width once the resize is laid
+    // out; the grid reacts to it a frame later (ResizeObserver, then render).
+    const gridWidth = () => window.evaluate(() => document.querySelector("[data-testid='gallery-scroll']").clientWidth);
+    const resizeTo = async (width, height) => {
+      const before = await gridWidth();
+      await app.evaluate(({ BrowserWindow }, size) => { BrowserWindow.getAllWindows()[0]?.setSize(...size); }, [width, height]);
+      await expect.poll(() => window.evaluate(() => window.innerWidth)).toBe(width);
+      await expect.poll(gridWidth).not.toBe(before);
+      await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    };
+
     const defaultWidths = await sampleCardWidths();
     expect([...uniqueWidths(defaultWidths)]).toHaveLength(1);
 
-    await app.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000);
-    });
-    await window.waitForTimeout(250);
+    await resizeTo(1600, 1000);
     const largerWidths = await sampleCardWidths();
     expect([...uniqueWidths(largerWidths)]).toHaveLength(1);
 
-    await app.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.setSize(1440, 920);
-    });
-    await window.waitForTimeout(250);
+    await resizeTo(1440, 920);
   });
 
   test("single-click selects a card; selection ring appears on inner box", async () => {
-    const firstCard = window.locator("[data-gallery-item='true']").first();
+    const firstCard = galleryCards(window).first();
     await firstCard.click();
     // The selection ring is on an inner div (not the button itself).
     await expect(firstCard).toHaveAttribute("data-selected", "true");
   });
 
   test("context menu copies the file path and name to the clipboard", async () => {
-    const firstCard = window.locator("[data-gallery-item='true']").first();
+    const firstCard = galleryCards(window).first();
     await firstCard.click({ button: "right" });
     await window.getByText("Copy File Path", { exact: true }).click();
     const fullPath = await app.evaluate(({ clipboard }) => clipboard.readText());
@@ -90,7 +95,7 @@ test.describe("Catalog browse", () => {
   });
 
   test("context menu refreshes one asset or the current multi-selection from disk", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     const first = cards.nth(0);
     const second = cards.nth(1);
 
@@ -109,9 +114,9 @@ test.describe("Catalog browse", () => {
 
   test("Cmd+A selects every card in the gallery", async () => {
     // Click a card first so focus is in the gallery (not a text field).
-    await window.locator("[data-gallery-item='true']").first().click();
+    await galleryCards(window).first().click();
     await window.keyboard.press("ControlOrMeta+a");
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     const count = await cards.count();
     expect(count).toBe(14);
     for (let i = 0; i < count; i += 1) {
@@ -132,14 +137,14 @@ test.describe("Catalog browse", () => {
     await expect.poll(() => {
       try { return fs.statSync(previewFile).size; } catch { return 0; }
     }, { timeout: 10_000 }).toBeGreaterThan(0);
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(14);
+    await expect(galleryCards(window)).toHaveCount(14);
   });
 
   // A valid-but-wrong preview (the decoder filled an early Lightroom export
   // with gray) does not emit <img onError>. Live source stat drift and missing
   // metadata must therefore self-heal as soon as the page is browsed.
   test("stale source state self-heals valid previews and missing metadata", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     const firstPath = await cards.nth(0).getAttribute("data-image-path");
     const secondPath = await cards.nth(1).getAttribute("data-image-path");
     const [firstDetail, secondDetail] = await Promise.all([
@@ -180,12 +185,12 @@ test.describe("Catalog browse", () => {
       const second = rows.find((row) => row.asset_id === secondDetail.asset_id);
       return second?.image_metadata?.width || null;
     }, { timeout: 10_000 }).toBeGreaterThan(0);
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(14);
+    await expect(galleryCards(window)).toHaveCount(14);
   });
 
   // Keep this last: it mutates the (temp-copied) catalog.
   test("Delete opens the in-app confirm dialog and removes on confirm", async () => {
-    await window.locator("[data-gallery-item='true']").first().click();
+    await galleryCards(window).first().click();
     await window.keyboard.press("Delete");
     // App-styled dialog, not the native one.
     await expect(window.getByText("Remove from catalog")).toBeVisible();
@@ -193,12 +198,12 @@ test.describe("Catalog browse", () => {
     // Cancel leaves the catalog untouched.
     await window.getByRole("button", { name: "Cancel" }).click();
     await expect(window.getByText("Remove from catalog")).toHaveCount(0);
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(14);
+    await expect(galleryCards(window)).toHaveCount(14);
 
     // Confirm removes exactly the selected asset.
-    await window.locator("[data-gallery-item='true']").first().click();
+    await galleryCards(window).first().click();
     await window.keyboard.press("Delete");
     await window.getByRole("button", { name: "Remove" }).click();
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(13);
+    await expect(galleryCards(window)).toHaveCount(13);
   });
 });

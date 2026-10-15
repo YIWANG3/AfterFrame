@@ -9,7 +9,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp, waitForEditor, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, openEditorOn, closeEditor, mcpCall, galleryCards } = require("./helpers/app");
 
 // Each test builds on the one before (the imported logo, the saved template).
 test.describe.configure({ mode: "serial" });
@@ -29,16 +29,7 @@ const rowFor = (stem) => window.evaluate(
 );
 const editorState = () => window.evaluate(() => window.__afterframeTest.getState());
 const templates = () => window.evaluate(() => window.mediaWorkspace.listFrameTemplates());
-async function openEditorOn(stem) {
-  await window.evaluate((item) => window.__afterframeTest.openEditor(item), await rowFor(stem));
-  await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-  await waitForEditor(window, { preview: true });
-  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
-}
-async function closeEditor() {
-  await window.evaluate(() => window.__afterframeTest.closeEditor());
-  await expect(window.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
-}
+const openFrameToolOn = async (stem) => openEditorOn(window, await rowFor(stem), "frame");
 async function openWatermarkSettings() {
   await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "Watermark" }).click();
@@ -62,7 +53,7 @@ test.beforeAll(async () => {
     .png().toFile(PNG);
   fs.writeFileSync(BAD, "not an image");
   ({ app, window, userDataDir, mcpPort } = await launchApp({ testName: "personal-logos" }));
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -87,7 +78,7 @@ test("an SVG and a PNG import; one colour can be recoloured, two cannot; junk is
 test("clicked in the Border section, it goes into the frame, beside what is there, in a colour that suits it", async () => {
   const tile = () => window.locator(`[data-my-logo="${svgLogo.id}"] > button`).first();
   const placed = async () => personalLayers(await editorState())[0];
-  await openEditorOn(LANDSCAPE);
+  await openFrameToolOn(LANDSCAPE);
 
   // No frame: the photo's bottom-right corner, coloured for the photo there.
   await tile().click();
@@ -124,11 +115,11 @@ test("clicked in the Border section, it goes into the frame, beside what is ther
   const [tpl] = await templates();
   expect(tpl.layers.find((l) => l.logoRef?.source === "personal")).toMatchObject({ logoRef: { id: svgLogo.id, color: "#141414" } });
   expect(JSON.stringify(tpl)).not.toContain("data:");
-  await closeEditor();
+  await closeEditor(window);
 
   // Another photo, another shape: the logo is in its bar, black, where the
   // template pinned it.
-  await openEditorOn(PORTRAIT);
+  await openFrameToolOn(PORTRAIT);
   await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
   await expect.poll(async () => personalLayers(await editorState()).length).toBe(1);
   const onPortrait = personalLayers(await editorState())[0];
@@ -137,7 +128,7 @@ test("clicked in the Border section, it goes into the frame, beside what is ther
   const out = path.join(tmp, "portrait-with-logo.jpg");
   await window.evaluate(async (p) => { await window.__afterframeTest.saveAs(p); }, out);
   expect(await darkAt(out, logoAt)).toBe(true);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("an agent's apply_frame renders the template with the logo", async () => {
@@ -159,9 +150,9 @@ test("deleting the logo leaves the template working without it", async () => {
   await window.keyboard.press("Escape");
 
   const [tpl] = await templates();
-  await openEditorOn(LANDSCAPE);
+  await openFrameToolOn(LANDSCAPE);
   await window.evaluate((id) => window.__afterframeTest.applyFramePreset(id), tpl.id);
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6 Mark II");
   expect(personalLayers(await editorState())).toHaveLength(0);
-  await closeEditor();
+  await closeEditor(window);
 });

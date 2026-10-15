@@ -7,10 +7,10 @@
 // hidden. Every tile opens a filtered gallery through App.openDiscoverTarget.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const sectionNav = () => ctx.window.getByRole("navigation", { name: "Discover sections" });
 
 async function openDiscover() {

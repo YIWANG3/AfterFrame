@@ -1,12 +1,12 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, lacks } = require("./helpers/app");
+const { launchApp, closeApp, lacks, galleryCards } = require("./helpers/app");
 
 test.describe("UI regression guards", () => {
   let ctx;
 
   test.beforeAll(async () => {
     ctx = await launchApp({ testName: "ui-regressions" });
-    await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test.afterAll(async () => {
@@ -36,7 +36,7 @@ test.describe("UI regression guards", () => {
   test("compare layout controls stay centered while Close stays at the right edge", async () => {
     const page = ctx.window;
     await page.getByRole("button", { name: /All Assets/ }).first().click();
-    const cards = page.locator("[data-gallery-item='true']");
+    const cards = galleryCards(page);
     await cards.nth(0).click();
     await cards.nth(1).click({ modifiers: ["Meta"] });
     await cards.nth(1).click({ button: "right" });

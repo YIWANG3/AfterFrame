@@ -144,8 +144,7 @@ test.describe("Golden: text layers", () => {
   test("select a layer → getState reflects selection", async () => {
     const id = (await state(window)).layers[0].id;
     await window.evaluate((x) => window.__afterframeTest.selectLayers([x]), id);
-    await window.waitForTimeout(150);
-    expect((await state(window)).selectedIds).toContain(id);
+    await expect.poll(async () => (await state(window)).selectedIds).toContain(id);
   });
 });
 
