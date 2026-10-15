@@ -4,7 +4,7 @@
 // most refactor breakage).
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 test.describe("App launch", () => {
   let app, window, userDataDir;
@@ -30,7 +30,7 @@ test.describe("App launch", () => {
   test("no fatal console errors during startup", async () => {
     // Startup is over once the seeded catalog is on screen: the sidecar
     // answered the first browse and the gallery painted it.
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
     expect(errors).toEqual([]);
   });
 

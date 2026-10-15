@@ -11,14 +11,14 @@ const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
 const exifr = require("exifr");
-const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor, galleryCards } = require("./helpers/app");
 const { REAL_IMAGE_PATHS } = require("./fixtures/make-real-images");
 
 async function openEditorOnFirstAsset(window) {
   // Wait for gallery, single-click to select, press E to open editor (the
   // app's keyboard shortcut). Double-click would open the lightbox instead.
-  await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
-  await window.locator("[data-gallery-item='true']").first().click();
+  await galleryCards(window).first().waitFor({ timeout: 15_000 });
+  await galleryCards(window).first().click();
   await window.keyboard.press("e");
   await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(window);
@@ -128,10 +128,10 @@ test.describe("Save pipeline", () => {
     const versionName = path.basename(newDetail.image_path);
     // Move off the original first so selecting it after the search performs a
     // fresh detail load (the editor-save test intentionally left it selected).
-    await window.locator("[data-gallery-item='true']").nth(1).click();
+    await galleryCards(window).nth(1).click();
     await window.getByPlaceholder("Search").fill(originName);
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1);
-    await window.locator("[data-gallery-item='true']").first().click();
+    await expect(galleryCards(window)).toHaveCount(1);
+    await galleryCards(window).first().click();
 
     const linkedVersion = window.getByRole("button", { name: newDetail.stem, exact: true });
     await expect(linkedVersion).toBeVisible();

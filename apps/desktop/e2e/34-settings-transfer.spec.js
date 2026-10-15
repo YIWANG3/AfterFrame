@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 const PASSWORD = "transfer-pass-1";
 let exportFile;
@@ -20,7 +20,7 @@ test.afterAll(() => {
 });
 
 async function openGeneralSettings(window) {
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
   await window.keyboard.press("ControlOrMeta+,");
   await window.getByRole("navigation", { name: "Settings" }).getByRole("button", { name: "General" }).click();
   await expect(window.getByText("Backup & transfer")).toBeVisible();

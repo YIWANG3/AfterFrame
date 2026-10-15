@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 // Real catalogs have HD previews off by default; the collage generates them
 // lazily and patches them into the open canvases. The fixture ships with HD
@@ -51,7 +51,7 @@ test.describe("Batch collage", () => {
   });
 
   test("selection within the single-template limit opens in single mode", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     await cards.first().waitFor({ timeout: 15_000 });
 
     // 4 images ≤ 12 (single-canvas template max) → single mode
@@ -67,7 +67,7 @@ test.describe("Batch collage", () => {
   });
 
   test("selection beyond the single-template limit opens in batch mode", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     // All 14 seeded assets > 12 → batch mode by default: 14 ÷ 4 = 3 pages + 2 leftover
     await cards.nth(0).click();
     await cards.nth(13).click({ modifiers: ["Shift"] });

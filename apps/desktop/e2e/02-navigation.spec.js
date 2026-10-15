@@ -4,7 +4,7 @@
 
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, lacks } = require("./helpers/app");
+const { launchApp, closeApp, lacks, galleryCards } = require("./helpers/app");
 
 test.describe("Sidebar navigation", () => {
   let app, window, userDataDir;
@@ -32,7 +32,7 @@ test.describe("Sidebar navigation", () => {
     await expect(allAssetsBtn).toBeVisible();
     await allAssetsBtn.click();
     // Back in the asset gallery: seeded cards are visible again
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 5_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("Recently Added and Rated filters load real data", async () => {
@@ -45,7 +45,7 @@ test.describe("Sidebar navigation", () => {
     // moment after the click. Changing place now clears the grid at once.)
     await expect(window.getByTestId("gallery-title")).toHaveText("Recently Added");
     await expect(window.getByText("No assets in this view")).toBeVisible({ timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(0);
+    await expect(galleryCards(window)).toHaveCount(0);
 
     // Four rated assets exist, so the Rated entry renders (gated on
     // rated_count > 0) and filters down to exactly them: two synthetic
@@ -59,8 +59,8 @@ test.describe("Sidebar navigation", () => {
     // seconds, and a bare toHaveCount raced an empty (0-item) intermediate
     // state. Anchor on "at least one item visible" first, then assert exactly
     // the four rated assets.
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(4, { timeout: 10_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 10_000 });
+    await expect(galleryCards(window)).toHaveCount(4, { timeout: 10_000 });
 
     // restore
     await window.getByRole("button", { name: /All Assets/i }).first().click();
@@ -75,7 +75,7 @@ test.describe("Sidebar navigation", () => {
   // on the resident sidecar, which answers in order, so they are still out
   // when the second click comes, however fast the machine.
   test.describe("changing place and straight back", () => {
-    const cards = () => window.locator("[data-gallery-item='true']");
+    const cards = () => galleryCards(window);
     const title = () => window.getByTestId("gallery-title");
     const holdSidecar = () => window.evaluate((dir) => {
       for (let i = 0; i < 3; i += 1) void window.mediaWorkspace.scanNewMedia([dir]);
@@ -135,7 +135,7 @@ test.describe("Sidebar navigation", () => {
   // the way to Discover or People, left the folder's photos on screen under
   // the All Assets title afterwards.
   test.describe("leaving a folder", () => {
-    const cards = () => window.locator("[data-gallery-item='true']");
+    const cards = () => galleryCards(window);
     const cardIds = () => cards().evaluateAll((els) => els.map((el) => el.dataset.assetId).sort());
     let library; // every asset in the seeded catalog
     let members; // the two put in the folder

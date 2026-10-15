@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 const { cloneAssets } = require("./helpers/clone-assets");
 
 // The gallery pages by offset. When the view gains photos between two pages
@@ -26,7 +26,7 @@ test.describe("Gallery paging", () => {
 
   test("photos landing ahead of the loaded pages don't repeat cards", async () => {
     const scroller = window.locator("[data-testid='gallery-scroll']");
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
 
     // Let the opening page (and any preload it triggers) settle.
     const scrollHeight = () => scroller.evaluate((el) => el.scrollHeight);

@@ -12,7 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, waitForEditor, galleryCards } = require("./helpers/app");
 const { writeSyntheticDng } = require("./helpers/images");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -29,8 +29,8 @@ let ctx;
 let work;
 
 async function openEditorOnFirstAsset(window) {
-  await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
-  await window.locator("[data-gallery-item='true']").first().click();
+  await galleryCards(window).first().waitFor({ timeout: 15_000 });
+  await galleryCards(window).first().click();
   await window.keyboard.press("e");
   await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(window, { preview: true });

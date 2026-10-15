@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 const SRC_IMAGE = path.resolve(__dirname, "fixtures", "test-image.jpg");
 
@@ -24,7 +24,7 @@ test.describe("Watched directories", () => {
   test.beforeAll(async () => {
     watchDir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-watch-"));
     ({ app, window, userDataDir, catalogDir } = await launchApp({ testName: "watched" }));
-    await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
+    await galleryCards(window).first().waitFor({ timeout: 15_000 });
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);
@@ -64,12 +64,12 @@ test.describe("Watched directories", () => {
   });
 
   test("a new file in the watched dir auto-imports into the gallery", async () => {
-    const before = await window.locator("[data-gallery-item='true']").count();
+    const before = await galleryCards(window).count();
     // Drop a (catalog-new) image into the watched folder.
     fs.copyFileSync(SRC_IMAGE, path.join(watchDir, "watched-drop.jpg"));
     // chokidar awaitWriteFinish (~1.5s) + debounce (1s) + import job — be patient.
     await expect
-      .poll(() => window.locator("[data-gallery-item='true']").count(), { timeout: 25_000, intervals: [500] })
+      .poll(() => galleryCards(window).count(), { timeout: 25_000, intervals: [500] })
       .toBeGreaterThan(before);
   });
 

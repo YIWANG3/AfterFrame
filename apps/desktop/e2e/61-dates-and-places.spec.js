@@ -12,14 +12,14 @@ const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launchApp, closeApp, byImagePath, importThroughToolbar } = require("./helpers/app");
+const { launchApp, closeApp, byImagePath, importThroughToolbar, galleryCards } = require("./helpers/app");
 const { tagPhotos, writeUniqueJpeg } = require("./helpers/images");
 
 const ZONE = "America/Los_Angeles";
 const HONOLULU = [21.3069, -157.8583];
 
 let ctx, dir, files;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 // The Inspector's own format, computed in the renderer so it uses the app's
 // locale data and zone.
 const shown = (epochMs) => ctx.window.evaluate((ms) => new Date(ms).toLocaleString([], {

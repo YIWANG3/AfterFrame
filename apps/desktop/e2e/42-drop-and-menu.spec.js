@@ -11,11 +11,11 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 const { TINY_JPEG } = require("./helpers/images");
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 
 async function clickMenu(menuLabel, itemLabel) {
   const found = await ctx.app.evaluate(({ Menu, BrowserWindow }, labels) => {

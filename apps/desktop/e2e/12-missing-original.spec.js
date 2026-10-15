@@ -10,7 +10,7 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 test.describe("Missing original handling", () => {
   let app, window, userDataDir;
@@ -21,7 +21,7 @@ test.describe("Missing original handling", () => {
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "missing" }));
-    await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
+    await galleryCards(window).first().waitFor({ timeout: 15_000 });
 
     // Find the framed-portrait asset (B0016108) and its on-disk original.
     const info = await window.evaluate(async () => {

@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 
 const HEIC_FIXTURE = path.resolve(__dirname, "fixtures", "heic", "iphone-style.heic");
 const HEIC_CACHE = path.join(os.tmpdir(), "afterframe-heic-cache");
@@ -23,7 +23,7 @@ test.beforeAll(async () => {
   importDir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-heic-"));
   fs.copyFileSync(HEIC_FIXTURE, path.join(importDir, "IMG_4021.HEIC"));
   ctx = await launchApp({ testName: "heic" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {

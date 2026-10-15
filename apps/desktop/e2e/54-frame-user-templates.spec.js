@@ -8,7 +8,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const sharp = require("sharp");
-const { launchApp, closeApp, collectCoverage, waitForEditor, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, openEditorOn, closeEditor, mcpCall, galleryCards } = require("./helpers/app");
 
 let app, window, userDataDir, mcpPort;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-user-frame-"));
@@ -23,22 +23,16 @@ const rowFor = (stem) => window.evaluate(
 const editorState = () => window.evaluate(() => window.__afterframeTest.getState());
 const templates = () => window.evaluate(() => window.mediaWorkspace.listFrameTemplates());
 
-async function openEditorOn(stem) {
+// The frame tool on the photo `stem`; its browse row comes back.
+async function openFrameToolOn(stem) {
   const row = await rowFor(stem);
-  await window.evaluate((item) => window.__afterframeTest.openEditor(item), row);
-  await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
-  await waitForEditor(window, { preview: true });
-  await window.evaluate(() => window.__afterframeTest.setTool("frame"));
+  await openEditorOn(window, row, "frame");
   return row;
-}
-async function closeEditor() {
-  await window.evaluate(() => window.__afterframeTest.closeEditor());
-  await expect(window.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
 }
 
 test.beforeAll(async () => {
   ({ app, window, userDataDir, mcpPort } = await launchApp({ testName: "frame-user-templates" }));
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -55,7 +49,7 @@ test("the author set in Settings is what the Frame tool's Photo info › Author 
   await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getWatermarkProfile())).toEqual({ author: AUTHOR, brandLogos: {}, cameraNames: {} });
   await window.keyboard.press("Escape");
 
-  await openEditorOn(LANDSCAPE);
+  await openFrameToolOn(LANDSCAPE);
   await window.evaluate(() => window.__afterframeTest.applyFramePreset("bar-id"));
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("Canon EOS R6 Mark II");
   await window.locator("[data-token='author']").click();
@@ -84,11 +78,11 @@ test("a preset plus your own text saves as a template that keeps where each part
   expect(JSON.stringify(saved)).not.toContain("On the photo");
   // It is first in the panel, named.
   await expect(window.locator(`[data-frame-template="${saved.id}"]`).first()).toContainText("My bar");
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("the Frame and Text tools each list their own layers; the frame changes, the photo's text stays", async () => {
-  await openEditorOn(LANDSCAPE);
+  await openFrameToolOn(LANDSCAPE);
   await window.evaluate(() => window.__afterframeTest.setTool("text"));
   await window.evaluate(() => window.__afterframeTest.addTextLayer("On the photo"));
   await window.evaluate(() => window.__afterframeTest.setTool("frame"));
@@ -107,7 +101,7 @@ test("the Frame and Text tools each list their own layers; the frame changes, th
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toContain("On the photo");
   await window.evaluate(() => window.__afterframeTest.clearFramePreset());
   await expect.poll(async () => (await editorState()).layers.map((l) => l.text)).toEqual(["On the photo"]);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("after a restart the template is still there, and renaming keeps its id", async () => {
@@ -115,10 +109,10 @@ test("after a restart the template is still there, and renaming keeps its id", a
   await collectCoverage(app); // the restart path bypasses closeApp
   await app.close();
   ({ app, window, mcpPort } = await launchApp({ testName: "frame-user-templates", reuseUserDataDir: userDataDir, keepCatalog: true }));
-  await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
   expect((await templates()).map((t) => t.id)).toEqual([before.id]);
 
-  await openEditorOn(PORTRAIT);
+  await openFrameToolOn(PORTRAIT);
   const cell = window.locator(`[data-frame-template="${before.id}"]`).first();
   await cell.hover();
   await cell.getByTitle("Rename").click();
@@ -147,7 +141,7 @@ test("on a portrait photo from another camera the template is re-resolved and sa
   const { data, info } = await sharp(outPath).raw().toBuffer({ resolveWithObject: true });
   const idx = ((info.height - 6) * info.width + Math.floor(info.width / 2)) * info.channels;
   expect(data[idx]).toBeGreaterThan(230);
-  await closeEditor();
+  await closeEditor(window);
 });
 
 test("an agent sees the user template and can apply it", async () => {

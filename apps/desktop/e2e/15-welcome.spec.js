@@ -5,7 +5,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, galleryCards } = require("./helpers/app");
 const sampleManifest = require("../sample-photos/manifest.json");
 const sampleNames = Object.keys(sampleManifest).sort();
 
@@ -62,7 +62,7 @@ test.describe("First run (no catalog)", () => {
   });
 
   test("no gallery cards render without a catalog", async () => {
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(0);
+    await expect(galleryCards(window)).toHaveCount(0);
   });
 
   test("sample library: one click creates it, opens it, and shows the banner", async () => {
@@ -72,7 +72,7 @@ test.describe("First run (no catalog)", () => {
     await expect(window.getByRole("button", { name: "Create My Library" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Reset Sample Library" })).toBeVisible();
     // The bundled photos import in the background and land in the gallery.
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 120_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 120_000 });
     await expectSampleOriginals(window, userDataDir);
   });
 
@@ -104,7 +104,7 @@ test.describe("First run (no catalog)", () => {
     expect(rebuiltJob.jobId).not.toBe(previousJob.jobId);
     // Still inside the sample catalog; the demo photos re-import.
     await expect(window.getByText(/browsing the sample library/i)).toBeVisible({ timeout: 30_000 });
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 120_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 120_000 });
     expect(mainLogs.slice(logStart).join("")).not.toContain("Error occurred in handler for 'workspace:reset-sample-catalog'");
     await expectSampleOriginals(window, userDataDir);
   });

@@ -12,7 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const sharp = require("sharp");
-const { launchApp, closeApp, importThroughToolbar } = require("./helpers/app");
+const { launchApp, closeApp, importThroughToolbar, galleryCards } = require("./helpers/app");
 
 const RAW_FIXTURE = path.resolve(__dirname, "fixtures", "raw", "luna-morning.dng");
 
@@ -29,7 +29,7 @@ test.beforeAll(async () => {
       if (line.includes("[sidecar:async]")) ownProcess.push({ at: Date.now(), line });
     }
   });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {

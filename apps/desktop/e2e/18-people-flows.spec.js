@@ -7,7 +7,7 @@
 // no group.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, lacks } = require("./helpers/app");
+const { launchApp, closeApp, lacks, galleryCards } = require("./helpers/app");
 
 test.skip(lacks("people"), "people recognition is macOS-only for now (electron/capabilities.js)");
 
@@ -15,7 +15,7 @@ let ctx;
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "people-flows", catalogFixture: "people" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -78,11 +78,11 @@ test("view photos filters the gallery to that person", async () => {
   // Toolbar title + person chip active, and the gallery shrinks to her photos
   // (portrait + 3 solos + 1 group photo = 5 of the 8 fixture images).
   await expect(ctx.window.getByText("Lin Xi").first()).toBeVisible();
-  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(5, { timeout: 10_000 });
+  await expect(galleryCards(ctx.window)).toHaveCount(5, { timeout: 10_000 });
 
   // Clearing the chip restores the full gallery.
   await ctx.window.getByRole("button", { name: /Clear 1/ }).click();
-  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(8, { timeout: 10_000 });
+  await expect(galleryCards(ctx.window)).toHaveCount(8, { timeout: 10_000 });
 
   // The sidebar reset is a separate route. Its slower summary refresh must
   // not later overwrite the gallery with the stale person query.
@@ -90,9 +90,9 @@ test("view photos filters the gallery to that person", async () => {
   // The people wall intentionally preserves its prior selection when revisited,
   // so Lin Xi's inspector is already open here.
   await ctx.window.getByRole("button", { name: "View photos" }).click();
-  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(5, { timeout: 10_000 });
+  await expect(galleryCards(ctx.window)).toHaveCount(5, { timeout: 10_000 });
   await ctx.window.getByRole("navigation").getByRole("button", { name: "All Assets" }).click();
-  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(8, { timeout: 10_000 });
+  await expect(galleryCards(ctx.window)).toHaveCount(8, { timeout: 10_000 });
 });
 
 test("the resident person filter in the gallery filter bar works", async () => {
@@ -104,7 +104,7 @@ test("the resident person filter in the gallery filter bar works", async () => {
   // Still in the assets view from the previous test, filter bar visible.
   await ctx.window.locator("div.flex-wrap").getByRole("button", { name: /^Person$/ }).click();
   await ctx.window.locator("div.fixed").getByRole("button", { name: /Chen Mo/ }).click();
-  await expect(ctx.window.locator("[data-gallery-item='true']")).toHaveCount(4, { timeout: 10_000 });
+  await expect(galleryCards(ctx.window)).toHaveCount(4, { timeout: 10_000 });
   ctx.window.off("console", recordBrowse);
   // The immediate UI action and the filter effect used to queue the same
   // person query twice, doubling the wait on the single resident sidecar.

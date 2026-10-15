@@ -6,7 +6,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
-const { _electron: electron } = require("@playwright/test");
+const { _electron: electron, expect } = require("@playwright/test");
 const { devPython } = require("../../electron/sidecar/transport");
 const { desktopCapabilities } = require("../../electron/capabilities");
 const { splitsImport } = require("../../electron/importDialog");
@@ -37,6 +37,10 @@ const onMacOS14 = () => process.platform === "darwin" && Number(os.release().spl
 // Selects the cards (and anything else) carrying this file's path. In a CSS
 // string a backslash starts an escape, so Windows paths need theirs doubled.
 const byImagePath = (file) => `[data-image-path='${file.replace(/[\\']/g, "\\$&")}']`;
+
+// The gallery's cards, every photo and video in the grid. A card with a
+// particular asset is narrowed from it: galleryCards(window).and(window.locator(byImagePath(file))).
+const galleryCards = (window) => window.locator("[data-gallery-item='true']");
 
 // Toolbar + › Import, the native picker answering with `paths`: an import the
 // way a user starts one. Windows and Linux split the entry into Import Files…
@@ -349,6 +353,20 @@ async function callTool(port, name, args) {
 }
 
 /**
+ * tools/call for the parity specs, where a tool reporting isError is a
+ * failed assertion naming the tool's content, not a thrown error: the
+ * tool's JSON text payload.
+ * @param {number} port - from launchApp().mcpPort
+ * @param {string} name - the tool, e.g. "search_assets"
+ * @param {object} [args]
+ */
+async function callToolOk(port, name, args) {
+  const result = await mcpCall(port, "tools/call", { name, arguments: args || {} });
+  expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
+  return JSON.parse(result.content.find((c) => c.type === "text").text);
+}
+
+/**
  * The MCP server listens a moment after the window exists: retry initialize
  * until it answers. Returns the initialize result (serverInfo, instructions…).
  * @param {number} port - from launchApp().mcpPort
@@ -404,6 +422,22 @@ async function waitForEditor(window, { preview = false, timeout = 15_000, previe
   );
 }
 
+// Opens the editor on `item` (a browse row, or a file path) through the test
+// backdoor, waits until it can be edited (preview decoded, first snapshot
+// taken) and selects `tool`. closeEditor is the way back: the editor is
+// gone once its Save button is.
+async function openEditorOn(window, item, tool) {
+  await window.evaluate((it) => window.__afterframeTest.openEditor(it), item);
+  await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
+  await waitForEditor(window, { preview: true });
+  if (tool) await window.evaluate((t) => window.__afterframeTest.setTool(t), tool);
+}
+async function closeEditor(window) {
+  await window.evaluate(() => window.__afterframeTest.closeEditor());
+  await expect(window.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
+}
+
 module.exports = {
-  launchApp, closeApp, collectCoverage, waitForEditor, mcpCall, callTool, waitForMcp, lacks, onMacOS14, byImagePath, importThroughToolbar,
+  launchApp, closeApp, collectCoverage, waitForEditor, openEditorOn, closeEditor, mcpCall, callTool, callToolOk, waitForMcp, lacks, onMacOS14,
+  byImagePath, galleryCards, importThroughToolbar,
 };

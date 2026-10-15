@@ -6,7 +6,7 @@
 // (MCP) surface with its poster + dimensions.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, galleryCards } = require("./helpers/app");
 
 const VIDEO_FILE = "z-sample-video.mp4";
 const NATIVE = process.platform === "darwin";
@@ -17,7 +17,7 @@ test.describe("Video assets", () => {
   test.beforeAll(async () => {
     ({ app, window, userDataDir, mcpPort } = await launchApp({ testName: "video" }));
     // Wait for the initial gallery query to settle.
-    await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
+    await galleryCards(window).first().waitFor({ timeout: 15_000 });
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);

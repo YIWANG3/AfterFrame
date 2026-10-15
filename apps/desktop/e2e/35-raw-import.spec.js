@@ -22,7 +22,7 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, waitForEditor, galleryCards } = require("./helpers/app");
 const { writeSyntheticDng } = require("./helpers/images");
 
 const RAW_FIXTURES = path.resolve(__dirname, "fixtures", "raw");
@@ -86,7 +86,7 @@ test.beforeAll(async () => {
   work = { root, rawDir, jpgDir, browseDir };
 
   ctx = await launchApp({ testName: "raw-import" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {

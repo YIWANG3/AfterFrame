@@ -10,10 +10,10 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const imageRows = () => ctx.window.getByTestId("collage-image-list").locator("> *");
 const canvas = () => ctx.window.getByTestId("collage-canvas");
 // The toast fires after saveImage + quickRegister, naming the file. Earlier

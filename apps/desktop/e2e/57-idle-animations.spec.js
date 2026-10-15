@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 // An infinite CSS animation anywhere on screen makes Chromium composite every
 // frame for as long as the window is visible. The loading pulse under each
@@ -17,7 +17,7 @@ test.describe("Idle app", () => {
   });
 
   test("a loaded gallery runs no endless animations on screen", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     await expect(cards.first()).toBeVisible({ timeout: 10_000 });
     // Only the thumbnails in view. Cards up to 600 px below the fold already
     // have their <img>, but it is loading="lazy" and won't load until scrolled

@@ -3,7 +3,7 @@
 const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const path = require("node:path");
-const { launchApp, closeApp, importThroughToolbar, byImagePath } = require("./helpers/app");
+const { launchApp, closeApp, importThroughToolbar, byImagePath, galleryCards } = require("./helpers/app");
 
 const original = process.env.AFTERFRAME_TEST_PRORES;
 const SAMPLE_VIDEO = "z-sample-video.mp4"; // the seeded catalog's own clip
@@ -13,7 +13,7 @@ test("ProRes plays at original resolution without a proxy; controls and native v
   const ctx = await launchApp({ testName: "native-prores" });
   const w = ctx.window;
   try {
-    await expect(w.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(w).first()).toBeVisible({ timeout: 15_000 });
     // The seeded photos, by the file name the lightbox's filmstrip shows.
     const photos = await w.locator("[data-gallery-item='true'][data-asset-type='image']")
       .evaluateAll((cards) => cards.map((card) => card.dataset.imagePath.split(/[\\/]/).pop()));
