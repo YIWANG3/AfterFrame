@@ -660,12 +660,11 @@ export default function App() {
       if (editorItem) return;
       void deleteRejected();
     } else if (action === "edit:copy") {
-      // Edit › Copy (the menu item, or ⌘C the renderer left to it). The
-      // editor's own ⌘C never reaches here: its keydown preventDefaults.
-      if (editorItem) return;
-      // Text first, as role:"copy" would: a text field's selection, or text
-      // selected anywhere on the page. (The field's own ⌘C copy on macOS is
-      // the Edit menu's doing, so this stands in for it.)
+      // Edit › Copy (the menu item, or ⌘C the renderer left to it).
+      // Text first, as role:"copy" would: a text field's selection — also
+      // inside the editor's panels, whose ⌘C the editor leaves alone — or
+      // text selected anywhere on the page. (The field's own ⌘C copy on
+      // macOS is the Edit menu's doing, so this stands in for it.)
       const pageSelection = () => String(window.getSelection?.()?.toString() || "");
       if (editable) {
         const text = typeof el.selectionStart === "number" && el.selectionEnd > el.selectionStart
@@ -674,6 +673,10 @@ export default function App() {
         if (text) void api.copyText(text);
         return;
       }
+      // The editor's own ⌘C (copy layers) never reaches here: its keydown
+      // preventDefaults. A mouse click on the menu item while it is open
+      // copies nothing rather than the photo behind it.
+      if (editorItem) return;
       const text = pageSelection();
       if (text) { void api.copyText(text); return; }
       if (viewMode !== "assets") return;

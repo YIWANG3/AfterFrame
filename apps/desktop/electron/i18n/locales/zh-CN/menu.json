@@ -12,7 +12,7 @@
   "undo": "撤销",
   "redo": "重做",
   "cut": "剪切",
-  "copy": "复制",
+  "copy": "拷贝",
   "paste": "粘贴",
   "pasteMatchStyle": "粘贴并匹配样式",
   "copyPath": "复制文件路径",
