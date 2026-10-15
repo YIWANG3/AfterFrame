@@ -1,3 +1,5 @@
+import { clamp } from "../../utils/math";
+
 const MIN_CROP_SIZE = 48;
 
 export const ASPECT_PRESETS = [
@@ -14,10 +16,6 @@ export const ASPECT_PRESETS = [
   { key: "9:16", label: "9:16", aspect: 9 / 16 },
   { key: "2.35:1", label: "2.35:1", aspect: 2.35 },
 ];
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
 
 function minDimensionsForAspect(aspect) {
   if (!aspect) {

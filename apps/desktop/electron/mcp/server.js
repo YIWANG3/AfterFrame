@@ -1814,4 +1814,4 @@ function createMcpServer(deps) {
   return { start, getStatus, server, port, clearPreviewCache: () => previewPathCache.clear() };
 }
 
-module.exports = { createMcpServer, DEFAULT_PORT };
+module.exports = { createMcpServer };

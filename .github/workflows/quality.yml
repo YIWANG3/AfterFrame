@@ -43,8 +43,8 @@ jobs:
         run: npm audit --omit=dev --prefix apps/desktop
 
   electron-e2e:
-    # macOS 15+: the Swift helpers use current AVFoundation APIs (the product
-    # is macOS-only and does not carry old-SDK compatibility branches).
+    # macOS 15+: the Swift helpers use current AVFoundation APIs and carry no
+    # old-SDK compatibility branches. The Windows build has its own job below.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -78,13 +78,17 @@ jobs:
         run: npm run build --prefix apps/desktop
       # CI subset. Everything else runs nightly (e2e-nightly.yml). Left out
       # and why (2026-09-17, #58):
-      #   22-lightbox-zoom, 23-map   no GPU/WebGL on the macOS VM
-      #   60-map-cluster-covers      the same (#163)
-      #   14-video                   no reliable AVFoundation playback
-      #   17-watched-dirs            fs-watch timing
-      # 23, 60 and 17 also skip themselves under CI (test.skip(process.env.CI)),
+      #   23-map, 60-map-cluster-covers   no GPU/WebGL on the macOS VM (#163)
+      #   17-watched-dirs                 fs-watch timing
+      # All three also skip themselves under CI (test.skip(process.env.CI)),
       # so the nightly's own result stays meaningful: a red nightly is
-      # something new, not one of those again.
+      # something new, not one of those again. 60-file-lifecycle is listed
+      # below, but its "a watched folder while the app runs" describe carries
+      # the same CI skip: the fs-watch half of that spec runs locally only.
+      # 14-video and 22-lightbox-zoom were left out with them for "GPU/WebGL,
+      # AVFoundation" (2026-07); the nightlies of 2026-10-09 and 2026-10-14
+      # passed both on the macOS runner without a retry, and 22 is an <img>
+      # with a CSS transform, no WebGL, so they are back (2026-10-14).
       # The save / people suites were once excluded as "slow I/O"; the real
       # cause was the seeded catalog's absolute paths (fixed in #57), so they
       # are back. 02-navigation was excluded for the "Rated" race; the cause
@@ -119,6 +123,7 @@ jobs:
           e2e/12-missing-original.spec.js
           e2e/12-people-view.spec.js
           e2e/13-i18n.spec.js
+          e2e/14-video.spec.js
           e2e/15-welcome.spec.js
           e2e/16-open-with.spec.js
           e2e/18-editor-transform.spec.js
@@ -126,6 +131,7 @@ jobs:
           e2e/19-editor-layers.spec.js
           e2e/20-frame.spec.js
           e2e/21-canvas-pad.spec.js
+          e2e/22-lightbox-zoom.spec.js
           e2e/24-handwriting.spec.js
           e2e/25-collage-batch.spec.js
           e2e/26-mcp-parity.spec.js
@@ -187,8 +193,9 @@ jobs:
     # The unit suites, lint and the build on Windows (docs/windows-support-plan.md).
     # Informational for now: it reports and doesn't gate merges. Each check
     # runs even when one before it failed, so one red suite doesn't hide the
-    # others. No Electron E2E here: it needs Windows engines for the
-    # macOS-only helpers first.
+    # others. No Electron E2E here yet: the specs run on Windows since #208
+    # (`npm run e2e` on a Windows checkout), a Windows runner round for them
+    # is a decision still to take, not a capability gap.
     runs-on: windows-latest
     continue-on-error: true
     timeout-minutes: 30
@@ -255,11 +262,6 @@ jobs:
       - name: Electron main tests
         if: ${{ !cancelled() }}
         run: npm run test:electron --prefix apps/desktop
-      - name: Sidecar tests
-        if: ${{ !cancelled() }}
-        env:
-          PYTHONPATH: services/sidecar/src
-        run: python -m unittest discover -s services/sidecar/tests
       - name: Repository Python tests
         if: ${{ !cancelled() }}
         env:

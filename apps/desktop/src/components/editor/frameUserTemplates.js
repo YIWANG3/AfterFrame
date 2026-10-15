@@ -20,7 +20,7 @@ import { drawLayersOnCanvas } from "./render/drawLayers";
 import { angledLinearGradient } from "./render/canvasHelpers";
 
 export const USER_TEMPLATE_PREFIX = "user:";
-export const USER_TEMPLATE_VERSION = 1;
+const USER_TEMPLATE_VERSION = 1;
 export const isUserTemplate = (tpl) => tpl?.kind === "layers";
 
 // Size fields relative to the layer basis width (imageMath rescaleLayerSize);

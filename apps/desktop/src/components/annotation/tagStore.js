@@ -24,7 +24,7 @@ function subscribe(listener) {
 
 const getVersion = () => version;
 
-export function getCachedTags(assetId) {
+function getCachedTags(assetId) {
   return assetId ? cache.get(assetId) : undefined;
 }
 
@@ -58,7 +58,7 @@ export function invalidateTags(assetIds) {
   notify();
 }
 
-export function fetchTags(assetId) {
+function fetchTags(assetId) {
   if (!assetId) return Promise.resolve([]);
   if (!inflight.has(assetId)) {
     inflight.set(assetId, Promise.resolve(api.getAssetTags(assetId))

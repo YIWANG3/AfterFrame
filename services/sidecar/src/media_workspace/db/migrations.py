@@ -1,4 +1,16 @@
-"""Ordered, transactional catalog schema migrations."""
+"""Ordered, transactional catalog schema migrations.
+
+The DDL inside each `_migrate_to_N` is the shape the schema had at version N,
+spelled out in full on purpose. It must not be replaced by imports from
+schema.py / core.py: those describe the *current* shape, and a migration
+that borrowed them would, after the next schema change, build a new-shape
+table in a catalog whose version number still says N — the chain of later
+migrations then runs against columns they did not expect. The same goes for
+`_FACET_COLUMNS` below, which deliberately duplicates `core._FACET_COLUMNS`.
+`tests/test_schema_migrations.py` upgrades real catalogs through the whole
+chain to keep this honest. Duplication here is a feature; do not "deduplicate"
+it.
+"""
 from __future__ import annotations
 
 import sqlite3

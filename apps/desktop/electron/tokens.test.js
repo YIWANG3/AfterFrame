@@ -70,3 +70,39 @@ test("migration pulls a token the sidecar used to hold, once", async () => {
   await store.deleteStoredProviderConfig("p");
   assert.equal(store.getStoredProviderConfig("p"), null);
 });
+
+test("providerCredentials unpacks an openai_compatible JSON token into key + base URL", async () => {
+  const h = settingsHarness();
+  const store = createTokenStore({ safeStorage: fakeSafeStorage(), ...h, fetchLegacyToken: async () => null });
+  await store.setStoredProviderConfig("oc", { token: JSON.stringify({ token: "sk-oc", base_url: "https://llm.example/v1" }) });
+  assert.deepEqual(await store.providerCredentials("oc", "openai_compatible"), { apiKey: "sk-oc", baseUrl: "https://llm.example/v1" });
+  // The token's own base_url wins over the provider setting.
+  assert.deepEqual(
+    await store.providerCredentials("oc", "openai_compatible", { fallbackBaseUrl: "https://other.example" }),
+    { apiKey: "sk-oc", baseUrl: "https://llm.example/v1" },
+  );
+});
+
+test("providerCredentials falls back to the provider's base URL when the token carries none", async () => {
+  const h = settingsHarness();
+  const store = createTokenStore({ safeStorage: fakeSafeStorage(), ...h, fetchLegacyToken: async () => null });
+  await store.setStoredProviderConfig("oc", { token: JSON.stringify({ token: "sk-oc" }) });
+  assert.deepEqual(
+    await store.providerCredentials("oc", "openai_compatible", { fallbackBaseUrl: "https://other.example" }),
+    { apiKey: "sk-oc", baseUrl: "https://other.example" },
+  );
+  assert.deepEqual(await store.providerCredentials("oc", "openai_compatible"), { apiKey: "sk-oc", baseUrl: null });
+});
+
+test("providerCredentials passes a plain token through, for every provider type", async () => {
+  const h = settingsHarness();
+  const store = createTokenStore({ safeStorage: fakeSafeStorage(), ...h, fetchLegacyToken: async () => null });
+  await store.setStoredProviderConfig("oc", { token: "sk-plain" });
+  await store.setStoredProviderConfig("g", { token: JSON.stringify({ token: "not-unpacked" }) });
+  assert.deepEqual(
+    await store.providerCredentials("oc", "openai_compatible", { fallbackBaseUrl: "https://other.example" }),
+    { apiKey: "sk-plain", baseUrl: "https://other.example" },
+  );
+  assert.deepEqual(await store.providerCredentials("g", "gemini"), { apiKey: JSON.stringify({ token: "not-unpacked" }), baseUrl: null });
+  assert.deepEqual(await store.providerCredentials("missing", "openai_compatible"), { apiKey: null, baseUrl: null });
+});

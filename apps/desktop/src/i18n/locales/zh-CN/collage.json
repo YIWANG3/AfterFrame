@@ -63,6 +63,8 @@
   "namingPreview": "{{example}} 起，共 {{count}} 个文件",
   "exportBatch": "导出 {{n}} 张到文件夹",
   "exportingProgress": "导出中 {{done}}/{{total}}…",
+  "exportFail": "导出失败",
+  "exportPartialFail": "{{total}} 张中有 {{failed}} 张导出失败",
   "replaceImageTitle": "替换图片",
   "addAction": "添加"
 }

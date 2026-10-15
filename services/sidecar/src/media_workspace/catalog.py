@@ -25,14 +25,6 @@ class CatalogPaths:
         return self.root / "derived"
 
     @property
-    def jobs_dir(self) -> Path:
-        return self.root / "jobs"
-
-    @property
-    def logs_dir(self) -> Path:
-        return self.root / "logs"
-
-    @property
     def settings_path(self) -> Path:
         return self.root / "settings.json"
 
@@ -53,8 +45,6 @@ def ensure_catalog(catalog_path: Path) -> CatalogPaths:
         catalog.previews_dir,
         catalog.previews_hd_dir,
         catalog.derived_dir,
-        catalog.jobs_dir,
-        catalog.logs_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
     if not catalog.settings_path.exists():

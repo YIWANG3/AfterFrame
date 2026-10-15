@@ -96,7 +96,6 @@ function createMediaAllowlist({ getCatalogPath, catalogHasDb, loadCatalogRoots, 
   }
 
   return {
-    canonicalize,
     addAllowedMediaDir,
     addBaselineMediaDir,
     resetMediaAllowlist,

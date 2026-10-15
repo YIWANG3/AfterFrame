@@ -5,37 +5,15 @@
 // that they all act on the same seeded 10-image catalog.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, waitForMcp } = require("./helpers/app");
 
 let ctx;
 
-async function callTool(name, args) {
-  const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
-  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
-  return JSON.parse(result.content[0].text);
-}
-
-async function waitForMcp(timeoutMs = 15000) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      return await mcpCall(ctx.mcpPort, "initialize", {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "e2e", version: "0" },
-      });
-    } catch (error) {
-      lastError = error;
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  }
-  throw lastError;
-}
+const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "bridge" });
-  await waitForMcp();
+  await waitForMcp(ctx.mcpPort);
   await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
 });
 

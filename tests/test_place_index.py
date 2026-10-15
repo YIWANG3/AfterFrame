@@ -6,18 +6,13 @@ import gzip
 import hashlib
 import json
 import random
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from media_workspace import place_index  # noqa: E402
-from media_workspace.discover import ReverseGeocoder  # noqa: E402
-from media_workspace.geo_resolver import GAZETTEER_PATH  # noqa: E402
+from media_workspace import place_index
+from media_workspace.discover import ReverseGeocoder
+from media_workspace.geo_resolver import GAZETTEER_PATH
 
 
 class PlaceIndexTests(unittest.TestCase):

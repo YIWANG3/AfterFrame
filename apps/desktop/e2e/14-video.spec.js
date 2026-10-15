@@ -17,7 +17,6 @@ test.describe("Video assets", () => {
   test.beforeAll(async () => {
     ({ app, window, userDataDir, mcpPort } = await launchApp({ testName: "video" }));
     // Wait for the initial gallery query to settle.
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
   });
   test.afterAll(async () => {

@@ -10,24 +10,14 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
-
-const TINY_JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
-  "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" +
-  "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
-  "base64",
-);
+const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { TINY_JPEG } = require("./helpers/images");
 
 let ctx;
 const cards = () => ctx.window.locator("[data-gallery-item='true']");
 const selected = () => ctx.window.locator("[data-gallery-item='true'][data-selected='true']");
 
-async function callTool(name, args) {
-  const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
-  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
-  return JSON.parse(result.content[0].text);
-}
+const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
 async function ratingOf(assetId) {
   return ctx.window.evaluate(async (id) => {

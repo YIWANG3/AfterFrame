@@ -14,8 +14,6 @@ test.describe("Catalog browse", () => {
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir, catalogDir } = await launchApp({ testName: "catalog" }));
-    // Wait for the initial gallery query to settle
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);

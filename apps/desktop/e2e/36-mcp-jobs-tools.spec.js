@@ -9,34 +9,15 @@
 // generation has real work to do instead of reporting "skipped".
 
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
-
-const TINY_JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
-  "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" +
-  "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
-  "base64",
-);
+const { launchApp, closeApp, mcpCall, callTool: mcpTool } = require("./helpers/app");
+const { TINY_JPEG, makeImportDir } = require("./helpers/images");
 
 let ctx;
 
-async function callTool(name, args) {
-  const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
-  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
-  return JSON.parse(result.content[0].text);
-}
-
-function makeImportDir(prefix, count) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${prefix}-`));
-  for (let i = 0; i < count; i += 1) {
-    fs.writeFileSync(path.join(dir, `${prefix}_${String(i).padStart(3, "0")}.jpg`), TINY_JPEG);
-  }
-  return dir;
-}
+const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
 async function imageAssets() {
   const { assets } = await callTool("search_assets", { asset_type: "image", limit: 50, sort: "name-asc" });

@@ -2,15 +2,13 @@
 // where the image rect lives, how to fit it to the stage, how to clamp
 // pan/zoom so the crop frame stays fully covered.
 
+import { clamp } from "../../utils/math";
+
 export const PANEL_WIDTH = 320;
 export const PANEL_GAP = 24;
 export const CANVAS_SIDE_PADDING = 48;
 export const MIN_IMAGE_ZOOM = 0.72;
 export const MAX_IMAGE_ZOOM = 20;
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
 
 export function getStageBounds(viewportSize) {
   return {
@@ -253,7 +251,7 @@ function rescaleLayerSize(layer, k) {
 // goes through full-photo-fraction space and size fields are rescaled by the
 // basis-width ratio. Handles pad changes AND crop changes (both move the basis
 // once a margin is active). No-op when the basis is unchanged.
-export function convertLayersBasis(layers, transformedPreview, from, to) {
+function convertLayersBasis(layers, transformedPreview, from, to) {
   if (!transformedPreview || !layers?.length) return layers;
   const fromW = basisWidth(transformedPreview, from.crop, from.pad || {});
   const toW = basisWidth(transformedPreview, to.crop, to.pad || {});

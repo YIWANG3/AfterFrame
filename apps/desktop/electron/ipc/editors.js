@@ -180,4 +180,4 @@ function register({ ipcMain }) {
   });
 }
 
-module.exports = { register, detectEditors, commandLineBatches, openOnWindows, startMenuDirs };
+module.exports = { register, detectEditors, commandLineBatches, openOnWindows };

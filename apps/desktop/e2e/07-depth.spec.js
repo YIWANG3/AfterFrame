@@ -20,7 +20,6 @@ test.describe("Scene depth", () => {
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "depth" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     // Open a real photograph via the backdoor so depth inference runs on an
     // image with actual scene structure rather than a flat gradient.
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), DEPTH_FIXTURE);

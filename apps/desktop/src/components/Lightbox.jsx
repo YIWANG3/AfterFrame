@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Flag, FlagOff, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fileName, localFileUrl, httpMediaUrl } from "../utils/format";
+import { clamp, fileName, localFileUrl, httpMediaUrl } from "../utils/format";
 import { buildLightboxSources, resolveLightboxLogicalSize } from "./lightboxView";
 import { useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import VideoPlayer from "./VideoPlayer";
@@ -12,10 +12,6 @@ const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
 const WHEEL_ZOOM_SENSITIVITY = 0.014;
 const DETAIL_SETTLE_DELAY_MS = 180;
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
 
 function OverlayButton({ children, className = "", ...props }) {
   return (

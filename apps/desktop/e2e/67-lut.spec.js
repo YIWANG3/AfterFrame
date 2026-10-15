@@ -50,7 +50,6 @@ test.describe("LUT tool (macOS)", () => {
 
   test.beforeAll(async () => {
     ctx = await launchApp({ testName: "lut" });
-    await ctx.window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     work = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-lut-")));
     const pack = path.join(work, "Test Pack", "STANDARD");
     fs.mkdirSync(pack, { recursive: true });

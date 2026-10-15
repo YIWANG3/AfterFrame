@@ -3,6 +3,7 @@
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
@@ -14,6 +15,25 @@ const EXIFTOOL_DIR = path.resolve(__dirname, "..", "..", "native", "exiftool");
 const EXIFTOOL = process.platform === "win32"
   ? [path.join(EXIFTOOL_DIR, "exiftool.exe")]
   : ["perl", path.join(EXIFTOOL_DIR, "exiftool")];
+
+// The smallest valid JPEG (1×1, grey): for specs that need many files on
+// disk fast and never look at the pixels, such as a 3000-file import.
+const TINY_JPEG = Buffer.from(
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
+  "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" +
+  "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
+  "base64",
+);
+
+// A temp folder of `count` TINY_JPEG copies named <prefix>_000.jpg…, the
+// cheapest import an MCP or job spec can start.
+function makeImportDir(prefix, count) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${prefix}-`));
+  for (let i = 0; i < count; i += 1) {
+    fs.writeFileSync(path.join(dir, `${prefix}_${String(i).padStart(3, "0")}.jpg`), TINY_JPEG);
+  }
+  return dir;
+}
 
 // A JPEG no other photo shares: random pixels, so neither the content hash nor
 // the duplicate check ties it to anything already in the catalog.
@@ -136,4 +156,4 @@ async function writeSyntheticDng(file, { width = 2048, height = 1152, previewWid
   return file;
 }
 
-module.exports = { writeUniqueJpeg, tagPhotos, writeSyntheticDng };
+module.exports = { TINY_JPEG, makeImportDir, writeUniqueJpeg, tagPhotos, writeSyntheticDng };

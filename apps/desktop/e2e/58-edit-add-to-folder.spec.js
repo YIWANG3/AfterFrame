@@ -57,7 +57,6 @@ test.beforeAll(async () => {
     .jpeg({ quality: 90 }).toFile(photoPath);
   ctx = await launchApp({ testName: "edit-add-to-folder" });
   await expect(cards().first()).toBeVisible({ timeout: 15_000 });
-  await ctx.window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
   // A mock repaint provider: no network, the job copies the photo.
   await ctx.window.evaluate(async () => {
     await window.mediaWorkspace.saveAiPreferences({

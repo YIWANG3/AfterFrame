@@ -66,7 +66,6 @@ function createCatalogState({
   // In dev mode, default catalog paths live in the monorepo data/ dir. In
   // packaged mode there is no default — the user must create or open one.
   const scratchCatalogPath = isPackaged ? null : path.join(rootDir, "data", "ui-import-scratch.afcatalog");
-  const reviewCatalogPath = isPackaged ? null : path.join(rootDir, "data", "review-2026.afcatalog");
 
   let current = resolveInitialCatalogPath({ env, configuredCatalogPath, rootDir, readAppSettings, scratchCatalogPath });
 
@@ -75,22 +74,11 @@ function createCatalogState({
   const samplePath = () => path.join(getUserDataDir(), "afterframe", "sample.afcatalog");
   const isSample = () => !!current && current === samplePath();
 
-  function hasDb() {
-    if (!current) return false;
-    try {
-      const entries = fs.readdirSync(current);
-      const has = entries.some((e) => e.endsWith(".sqlite3") || e === "catalog.db");
-      console.log("[catalogHasDb]", current, "entries:", entries.length, "hasDb:", has);
-      return has;
-    } catch (err) {
-      console.warn("[catalogHasDb] error reading dir:", err.message);
-      return false;
-    }
-  }
+  // Called from every IPC guard, so it stays quiet: no logging here.
+  const hasDb = () => !!current && dirHasCatalogDb(current);
 
   return {
     scratchCatalogPath,
-    reviewCatalogPath,
     path: () => current,
     set(next) {
       current = next || null;
@@ -118,11 +106,10 @@ function createCatalogState({
       rootDir,
       catalogPath: current,
       scratchCatalogPath,
-      reviewCatalogPath,
       sidecarSrc,
       isSampleCatalog: isSample(),
     }),
   };
 }
 
-module.exports = { createCatalogState, normalizeCatalogPath, resolveInitialCatalogPath, dirHasCatalogDb };
+module.exports = { createCatalogState, normalizeCatalogPath, resolveInitialCatalogPath };

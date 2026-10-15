@@ -2,13 +2,13 @@
 // everything down as soon as one of them exits. That rules out app.relaunch()
 // for "restart the main process": the old Electron exits, Vite is killed, and
 // the new window opens onto a dead dev server. So Electron runs under this
-// wrapper instead, and asks for a restart by exiting with RESTART_CODE; the
+// wrapper instead, and asks for a restart by exiting with DEV_RESTART_EXIT_CODE
+// (electron/devStaleness.js); the
 // wrapper starts it again without ever exiting itself. Any other exit code is
 // passed through, so quitting the app still ends the dev session.
 import { spawn } from "node:child_process";
 import electronPath from "electron";
-
-export const RESTART_CODE = 75;
+import { DEV_RESTART_EXIT_CODE as RESTART_CODE } from "../electron/devStaleness.js";
 
 function run() {
   const child = spawn(electronPath, ["."], { stdio: "inherit", env: process.env });

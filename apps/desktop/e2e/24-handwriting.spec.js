@@ -18,8 +18,6 @@ test.describe("AI handwriting sticker (mock provider)", () => {
     const fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "handwriting" }));
 
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
-
     // The modal lists provider instances from aiPreferences; the "mock" type
     // can't be created through the UI, so seed it through the app's own
     // settings IPC (a raw settings.json write races the app's startup writes).

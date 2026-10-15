@@ -45,7 +45,7 @@ export const sortOutsideFolder = (sort) => (COLLECTION_SORTS.includes(sort) ? DE
 
 // Keys that only tune another key (sidecar db/facets.py FACET_MODIFIER_KEYS):
 // never a condition by themselves, so never counted as one.
-export const FILTER_MODIFIER_KEYS = new Set(["tag_match", "color_tolerance", "exclude"]);
+const FILTER_MODIFIER_KEYS = new Set(["tag_match", "color_tolerance", "exclude"]);
 // How many conditions a filter dict holds; a set of "any of" groups is one.
 export const activeFilterCount = (filters) => Object.entries(filters || {})
   .filter(([key, value]) => !FILTER_MODIFIER_KEYS.has(key) && !isEmptyValue(value)).length;
@@ -231,7 +231,7 @@ export function searchableFields(item) {
   ];
 }
 
-export function itemMatchesQuery(item, normalizedQuery) {
+function itemMatchesQuery(item, normalizedQuery) {
   return searchableFields(item).some((field) => String(field ?? "").toLowerCase().includes(normalizedQuery));
 }
 

@@ -11,11 +11,12 @@ from typing import Any
 from .db import load_raw_cache_index, load_raw_enrichment_candidates, upsert_catalog_root, upsert_raw_asset
 from .file_types import in_system_folder, is_source_file
 from .metadata import extract_raw_metadata, iso_mtime
+from .models import RawMetadata
+from .progress import ProgressCallback, report_progress
 
 DEFAULT_SCAN_WORKERS = min(8, max(4, os.cpu_count() or 8))
 DEFAULT_BATCH_SIZE = 250
 INITIAL_COMMIT_BATCH_SIZE = 50
-ProgressCallback = Callable[[dict[str, int | str]], None]
 
 
 def scan_raw_directory(
@@ -46,123 +47,66 @@ def scan_raw_directory(
         fingerprint_mode=fingerprint_mode,
         metadata_profile=metadata_profile,
     )
-    report_progress(
-        progress_callback,
-        phase="scan_raw",
-        processed=processed,
-        total=None,
-        discovered=discovered,
-        indexed=indexed,
-        unchanged=unchanged,
-        skipped=skipped,
-    )
+
+    def report() -> None:
+        report_progress(
+            progress_callback,
+            phase="scan_raw",
+            processed=processed,
+            total=None,
+            discovered=discovered,
+            indexed=indexed,
+            unchanged=unchanged,
+            skipped=skipped,
+        )
+
+    def consider(path: Path) -> bool:
+        """Count the path; True when it still needs its metadata read."""
+        nonlocal skipped, discovered, unchanged, processed
+        if not is_source_file(path):
+            skipped += 1
+            return False
+        discovered += 1
+        stat = path.stat()
+        cache_key = str(path.resolve())
+        cached = cached_index.get(cache_key)
+        if not force and cached == (stat.st_size, iso_mtime(path, stat)):
+            unchanged += 1
+            processed += 1
+            report()
+            return False
+        return True
+
+    def consume(metadata: RawMetadata) -> None:
+        """Store one extracted RawMetadata; the serial and parallel loops
+        differ only in where it comes from."""
+        nonlocal indexed, processed, commits
+        upsert_raw_asset(connection, metadata, commit=False)
+        indexed += 1
+        processed += 1
+        if should_commit(indexed, batch_size):
+            connection.commit()
+            commits += 1
+        report()
+
+    report()
 
     if worker_count == 1:
         for path in iter_candidate_paths(raw_dir):
-            if not is_source_file(path):
-                skipped += 1
-                continue
-            discovered += 1
-            stat = path.stat()
-            cache_key = str(path.resolve())
-            cached = cached_index.get(cache_key)
-            if not force and cached == (stat.st_size, iso_mtime(path, stat)):
-                unchanged += 1
-                processed += 1
-                report_progress(
-                    progress_callback,
-                    phase="scan_raw",
-                    processed=processed,
-                    total=None,
-                    discovered=discovered,
-                    indexed=indexed,
-                    unchanged=unchanged,
-                    skipped=skipped,
-                )
-                continue
-
-            metadata = extract(path)
-            upsert_raw_asset(connection, metadata, commit=False)
-            indexed += 1
-            processed += 1
-            if should_commit(indexed, batch_size):
-                connection.commit()
-                commits += 1
-            report_progress(
-                progress_callback,
-                phase="scan_raw",
-                processed=processed,
-                total=None,
-                discovered=discovered,
-                indexed=indexed,
-                unchanged=unchanged,
-                skipped=skipped,
-            )
+            if consider(path):
+                consume(extract(path))
     else:
         executor = ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="raw-scan")
         in_flight: deque = deque()
         try:
             for path in iter_candidate_paths(raw_dir):
-                if not is_source_file(path):
-                    skipped += 1
+                if not consider(path):
                     continue
-                discovered += 1
-                stat = path.stat()
-                cache_key = str(path.resolve())
-                cached = cached_index.get(cache_key)
-                if not force and cached == (stat.st_size, iso_mtime(path, stat)):
-                    unchanged += 1
-                    processed += 1
-                    report_progress(
-                        progress_callback,
-                        phase="scan_raw",
-                        processed=processed,
-                        total=None,
-                        discovered=discovered,
-                        indexed=indexed,
-                        unchanged=unchanged,
-                        skipped=skipped,
-                    )
-                    continue
-
                 in_flight.append(executor.submit(extract, path))
                 if len(in_flight) >= max_in_flight:
-                    metadata = in_flight.popleft().result()
-                    upsert_raw_asset(connection, metadata, commit=False)
-                    indexed += 1
-                    processed += 1
-                    if should_commit(indexed, batch_size):
-                        connection.commit()
-                        commits += 1
-                    report_progress(
-                        progress_callback,
-                        phase="scan_raw",
-                        processed=processed,
-                        total=None,
-                        discovered=discovered,
-                        indexed=indexed,
-                        unchanged=unchanged,
-                        skipped=skipped,
-                    )
-
+                    consume(in_flight.popleft().result())
             while in_flight:
-                metadata = in_flight.popleft().result()
-                upsert_raw_asset(connection, metadata, commit=False)
-                indexed += 1
-                processed += 1
-                if should_commit(indexed, batch_size):
-                    connection.commit()
-                    commits += 1
-                report_progress(
-                    progress_callback,
-                    phase="scan_raw",
-                    processed=processed,
-                    total=None,
-                    discovered=discovered,
-                    indexed=indexed,
-                    unchanged=unchanged,
-                    skipped=skipped,
-                )
+                consume(in_flight.popleft().result())
         finally:
             executor.shutdown(wait=True)
 
@@ -209,45 +153,41 @@ def enrich_raw_assets(
         fingerprint_mode=fingerprint_mode,
         metadata_profile="full",
     )
-    report_progress(
-        progress_callback,
-        phase="enrich_raw",
-        processed=processed,
-        total=total,
-        enriched=enriched,
-        failed=failed,
-    )
+
+    def report() -> None:
+        report_progress(
+            progress_callback,
+            phase="enrich_raw",
+            processed=processed,
+            total=total,
+            enriched=enriched,
+            failed=failed,
+        )
+
+    def consume(result: Callable[[], RawMetadata]) -> None:
+        """Store one extraction result, counting an unreadable file as failed;
+        the serial and parallel loops differ only in where it comes from."""
+        nonlocal enriched, failed, processed, commits
+        try:
+            metadata = result()
+        except OSError:
+            failed += 1
+            processed += 1
+            report()
+            return
+        upsert_raw_asset(connection, metadata, commit=False)
+        enriched += 1
+        processed += 1
+        if should_commit(enriched, batch_size):
+            connection.commit()
+            commits += 1
+        report()
+
+    report()
 
     if worker_count == 1:
         for row in candidates:
-            try:
-                metadata = extract(Path(str(row["path"])))
-            except OSError:
-                failed += 1
-                processed += 1
-                report_progress(
-                    progress_callback,
-                    phase="enrich_raw",
-                    processed=processed,
-                    total=total,
-                    enriched=enriched,
-                    failed=failed,
-                )
-                continue
-            upsert_raw_asset(connection, metadata, commit=False)
-            enriched += 1
-            processed += 1
-            if should_commit(enriched, batch_size):
-                connection.commit()
-                commits += 1
-            report_progress(
-                progress_callback,
-                phase="enrich_raw",
-                processed=processed,
-                total=total,
-                enriched=enriched,
-                failed=failed,
-            )
+            consume(partial(extract, Path(str(row["path"]))))
     else:
         executor = ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="raw-enrich")
         in_flight: deque = deque()
@@ -256,63 +196,9 @@ def enrich_raw_assets(
             for row in candidates:
                 in_flight.append(executor.submit(extract, Path(str(row["path"]))))
                 if len(in_flight) >= max_in_flight:
-                    try:
-                        metadata = in_flight.popleft().result()
-                    except OSError:
-                        failed += 1
-                        processed += 1
-                        report_progress(
-                            progress_callback,
-                            phase="enrich_raw",
-                            processed=processed,
-                            total=total,
-                            enriched=enriched,
-                            failed=failed,
-                        )
-                        continue
-                    upsert_raw_asset(connection, metadata, commit=False)
-                    enriched += 1
-                    processed += 1
-                    if should_commit(enriched, batch_size):
-                        connection.commit()
-                        commits += 1
-                    report_progress(
-                        progress_callback,
-                        phase="enrich_raw",
-                        processed=processed,
-                        total=total,
-                        enriched=enriched,
-                        failed=failed,
-                    )
+                    consume(in_flight.popleft().result)
             while in_flight:
-                try:
-                    metadata = in_flight.popleft().result()
-                except OSError:
-                    failed += 1
-                    processed += 1
-                    report_progress(
-                        progress_callback,
-                        phase="enrich_raw",
-                        processed=processed,
-                        total=total,
-                        enriched=enriched,
-                        failed=failed,
-                    )
-                    continue
-                upsert_raw_asset(connection, metadata, commit=False)
-                enriched += 1
-                processed += 1
-                if should_commit(enriched, batch_size):
-                    connection.commit()
-                    commits += 1
-                report_progress(
-                    progress_callback,
-                    phase="enrich_raw",
-                    processed=processed,
-                    total=total,
-                    enriched=enriched,
-                    failed=failed,
-                )
+                consume(in_flight.popleft().result)
         finally:
             executor.shutdown(wait=True)
 
@@ -348,9 +234,3 @@ def should_commit(indexed: int, batch_size: int) -> bool:
     if indexed <= batch_size:
         return indexed % min(INITIAL_COMMIT_BATCH_SIZE, batch_size) == 0
     return indexed % batch_size == 0
-
-
-def report_progress(progress_callback: ProgressCallback | None, **payload: Any) -> None:
-    if progress_callback is None:
-        return
-    progress_callback(payload)

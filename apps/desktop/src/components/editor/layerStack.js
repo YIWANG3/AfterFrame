@@ -2,11 +2,15 @@
 // Scene depth is image-level metadata managed separately in EditorOverlay,
 // not a layer.
 
-export const LAYER_TYPES = {
+const LAYER_TYPES = {
   TEXT: "text",
   STICKER: "sticker",
   OVERLAY: "overlay",
 };
+
+export function cloneLayers(layers) {
+  return (layers || []).map((l) => ({ ...l }));
+}
 
 export function isTextLayer(layer) {
   return layer && (!layer.type || layer.type === LAYER_TYPES.TEXT);

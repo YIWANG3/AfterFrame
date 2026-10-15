@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import useDismiss from "../ui/useDismiss";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { GitMerge, ScanFace } from "lucide-react";
@@ -60,21 +61,7 @@ export default function NamePersonPopover({
     inputRef.current?.select();
   }, []);
 
-  useEffect(() => {
-    function down(e) {
-      if (panelRef.current?.contains(e.target)) return;
-      onClose?.();
-    }
-    function key(e) {
-      if (e.key === "Escape") onClose?.();
-    }
-    document.addEventListener("pointerdown", down);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", down);
-      document.removeEventListener("keydown", key);
-    };
-  }, [onClose]);
+  useDismiss(panelRef, onClose);
 
   const cleaned = value.trim();
   const notSelf = (candidate) => candidate.group_id !== group?.group_id && candidate.name;

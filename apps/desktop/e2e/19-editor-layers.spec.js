@@ -27,7 +27,6 @@ test.describe("Depth-mask layer stacking", () => {
       .composite([{ input: await sharp({ create: { width: 32, height: 64, channels: 3, background: "#ffffff" } }).png().toBuffer(), left: 32, top: 0 }])
       .png().toFile(depthPath);
     ({ app, window, userDataDir } = await launchApp({ testName: "depth-stack" }));
-    await window.waitForFunction(() => !!window.__afterframeTest);
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), await ensureFixture());
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible();
     await waitForEditor(window, { preview: true });
@@ -106,7 +105,6 @@ test.describe("Golden: text layers", () => {
   test.beforeAll(async () => {
     const fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "golden-layers" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await waitForEditor(window);
@@ -157,7 +155,6 @@ test.describe("Overlay layers", () => {
   test.beforeAll(async () => {
     const fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "overlay-layers" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await waitForEditor(window);
@@ -203,7 +200,6 @@ test.describe("Overlay coverage + multi-stop gradient", () => {
   test.beforeAll(async () => {
     const fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "overlay-coverage" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await waitForEditor(window, { preview: true });
@@ -306,7 +302,6 @@ test.describe("Unified undo/redo (transform + layers, one timeline)", () => {
   test.beforeAll(async () => {
     const fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "unified-undo" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await waitForEditor(window, { preview: true });

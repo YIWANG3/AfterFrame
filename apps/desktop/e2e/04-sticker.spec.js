@@ -7,11 +7,8 @@ const { test, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
-const { launchApp, closeApp, waitForEditor, lacks } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor, lacks, onMacOS14 } = require("./helpers/app");
 const { ensureFixture } = require("./fixtures/make-fixture");
-
-// macOS 14 (Darwin 23) is where Vision's subject lifting starts.
-const onMacOS14 = () => process.platform === "darwin" && Number(os.release().split(".")[0]) >= 23;
 
 test.describe("Sticker tool", () => {
   test.skip(lacks("stickerExtract"), "the sticker browser and tool are macOS-only for now (electron/capabilities.js)");
@@ -20,7 +17,6 @@ test.describe("Sticker tool", () => {
   test.beforeAll(async () => {
     fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "sticker" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
     await waitForEditor(window);
@@ -87,7 +83,6 @@ test.describe("Sticker detection (real extract-sticker run)", () => {
       );
       await sharp(disc).png().toFile(subjectPath);
 
-      await window.waitForFunction(() => !!window.__afterframeTest?.openEditor, null, { timeout: 15_000 });
       await window.evaluate((p) => window.__afterframeTest.openEditor(p), subjectPath);
       await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
       await waitForEditor(window);

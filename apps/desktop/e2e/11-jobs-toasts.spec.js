@@ -3,57 +3,22 @@
 // cooperative cancel (status → cancelled, observable back through MCP).
 
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const sharp = require("sharp");
-const { launchApp, closeApp, mcpCall, importThroughToolbar } = require("./helpers/app");
+const { launchApp, closeApp, importThroughToolbar, callTool: mcpTool, waitForMcp } = require("./helpers/app");
+const { TINY_JPEG, makeImportDir } = require("./helpers/images");
 
 let ctx;
-
-const TINY_JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
-  "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" +
-  "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
-  "base64",
-);
 
 // Files per import: the job has to outlast the dock's first poll (see below).
 const IMPORT_SIZE = 3000;
 
-function makeImportDir(prefix, count) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `afterframe-e2e-${prefix}-`));
-  for (let i = 0; i < count; i += 1) {
-    fs.writeFileSync(path.join(dir, `${prefix}_${String(i).padStart(3, "0")}.jpg`), TINY_JPEG);
-  }
-  return dir;
-}
-
-async function callTool(name, args) {
-  const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
-  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
-  return JSON.parse(result.content[0].text);
-}
-
-async function waitForMcp(timeoutMs = 15000) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      return await mcpCall(ctx.mcpPort, "initialize", {
-        protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "e2e", version: "0" },
-      });
-    } catch (error) {
-      lastError = error;
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  }
-  throw lastError;
-}
+const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "jobs" });
-  await waitForMcp();
+  await waitForMcp(ctx.mcpPort);
   await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
 });
 

@@ -63,4 +63,4 @@ function windowChromeOptions(platform, { workArea, theme = "dark" } = {}) {
   return size;
 }
 
-module.exports = { windowChromeOptions, WIN_TITLEBAR_HEIGHT, WIN_SYMBOL_COLOR, MIN_SIZE, PREFERRED_SIZE };
+module.exports = { windowChromeOptions, WIN_TITLEBAR_HEIGHT, WIN_SYMBOL_COLOR };

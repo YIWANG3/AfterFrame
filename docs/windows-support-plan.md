@@ -373,7 +373,7 @@ C:\dev\venv\Scripts\python.exe -m unittest discover -s tests
 | ESLint | ✅ 通过 |
 | 前端构建（Vite） | ✅ 通过（33 秒） |
 | 前端单测（vitest） | ✅ 230/230 |
-| sidecar 单测（`services/sidecar/tests`） | ✅ 59/59 |
+| sidecar 单测（根 `tests/`） | ✅ 59/59 |
 | Electron 主进程单测 | ❌ 115 个里 4 个失败 |
 | 仓库根目录的 Python 测试（`tests/`） | ❌ 177 个里 34 个（2 个失败、32 个报错） |
 

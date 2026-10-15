@@ -11,13 +11,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp } = require("./helpers/app");
-
-const TINY_JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
-  "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" +
-  "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
-  "base64",
-);
+const { TINY_JPEG } = require("./helpers/images");
 
 let ctx;
 const cards = () => ctx.window.locator("[data-gallery-item='true']");

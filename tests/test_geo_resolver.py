@@ -7,17 +7,12 @@ descriptive suffixes, compound strings, v1 "region" fields.
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 from uuid import uuid4
 
-SRC = Path(__file__).resolve().parents[1] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from media_workspace import geo_resolver  # noqa: E402
-from media_workspace.db import (  # noqa: E402
+from media_workspace import geo_resolver
+from media_workspace.db import (
     connect,
     init_db,
     list_map_points,
@@ -26,7 +21,7 @@ from media_workspace.db import (  # noqa: E402
     upsert_image_asset,
     upsert_registry,
 )
-from media_workspace.models import ImageCandidate, MatchDecision  # noqa: E402
+from media_workspace.models import ImageCandidate, MatchDecision
 
 FIXTURE = {
     "countries": [

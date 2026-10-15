@@ -89,7 +89,7 @@ function register({
 
   ipcMain.handle("workspace:save-image", async (_event, targetPath, arrayBuffer, sourceMetadataPath) => {
     if (!targetPath) throw new Error("Missing target path");
-    addAllowedMediaDir?.(require("node:path").dirname(targetPath));
+    addAllowedMediaDir?.(path.dirname(targetPath));
     const output = Buffer.from(arrayBuffer);
     // sharp encodes to the target's format to add the metadata; without a
     // quality it would use its default 80. Collages send a lossless PNG, so
@@ -257,7 +257,7 @@ function register({
   ipcMain.handle("workspace:process-and-save", (_event, options) => processAndSave(options));
   ipcMain.handle("workspace:process-and-save-panels", (_event, options) => processAndSavePanels(options));
 
-  return { processAndSave, processAndSavePanels, panelBoundaries };
+  return { processAndSave };
 }
 
 module.exports = { register };

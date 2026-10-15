@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
+import useDismiss from "../ui/useDismiss";
 import api from "../api";
 import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
@@ -95,21 +96,7 @@ function DisplayModeDropdown({ displayMode, setDisplayMode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleDown(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    function handleKey(e) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", handleDown);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("pointerdown", handleDown);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
+  useDismiss(ref, () => setOpen(false), { enabled: open });
 
   const current = DISPLAY_MODES.find((mode) => mode.key === displayMode) || DISPLAY_MODES[0];
   const CurrentIcon = current.icon;
@@ -157,21 +144,7 @@ function SortDropdown({ sort, setSort, inFolder = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleDown(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    function handleKey(e) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", handleDown);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("pointerdown", handleDown);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
+  useDismiss(ref, () => setOpen(false), { enabled: open });
 
   const current = SORT_OPTIONS.includes(sort) ? sort : null;
 
@@ -242,21 +215,7 @@ export default function Toolbar({
   const { t: tc } = useTranslation("common");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onPointerDown = (event) => {
-      if (!menuRef.current?.contains(event.target)) setMenuOpen(false);
-    };
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [menuOpen]);
+  useDismiss(menuRef, () => setMenuOpen(false), { enabled: menuOpen });
   const actionMap = {
     processed: onAddProcessed,
     processedFiles: () => onAddProcessed?.("files"),

@@ -25,7 +25,7 @@ const OUT = fileURLToPath(new URL("../../camera-names/generated.json", import.me
 // camera also what it is part of (P361) and whether that is a drone: an
 // instance or subclass of unmanned aerial vehicle, quadcopter or camera drone
 // model, with its own classes (a model series is not a drone).
-export const SPARQL = `
+const SPARQL = `
 SELECT ?item ?exifMake ?exifModel ?label ?sitelinks ?classes ?drone ?droneLabel ?droneClasses ?droneIsDrone WHERE {
   ?item wdt:P2009 ?exifModel ;
         wikibase:sitelinks ?sitelinks .
@@ -97,7 +97,7 @@ async function loadCatmapping(file) {
 const byCode = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** The file: keys sorted by code point, one name per line (JSON.stringify would put "500" before "1100d"). */
-export function serialize(doc) {
+function serialize(doc) {
   const q = (v) => JSON.stringify(v);
   const head = Object.entries(doc)
     .filter(([k]) => k !== "names")

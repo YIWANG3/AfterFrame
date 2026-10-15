@@ -9,7 +9,7 @@
 //   launchSidecarJob                 transport.launchJob (detached runners;
 //                                    argv comes from sidecar/jobArgv.js only)
 //   addAllowedMediaDir               media:// allowlist for repaint outputs
-//   getStoredProviderConfigWithMigration  provider tokens (keychain-backed)
+//   providerCredentials   provider tokens (keychain-backed) → { apiKey, baseUrl }
 
 const path = require("node:path");
 const fs = require("node:fs");
@@ -22,7 +22,7 @@ function createTaskStarters({
   commands,
   launchSidecarJob,
   addAllowedMediaDir,
-  getStoredProviderConfigWithMigration,
+  providerCredentials,
 }) {
   function formatJobStatus(job) {
     if (!job) {
@@ -270,21 +270,8 @@ function createTaskStarters({
     return formatJobStatus(job);
   }
 
-  // Stored provider token → { apiKey, baseUrl }. openai_compatible packs both
-  // fields into one JSON token; every other type stores the key as-is.
-  async function resolveProviderCredentials(providerId, providerType) {
-    const providerConfig = await getStoredProviderConfigWithMigration(providerId);
-    let apiKey = providerConfig?.token || null;
-    let baseUrl = null;
-    if (providerType === "openai_compatible" && apiKey) {
-      try {
-        const parsed = JSON.parse(apiKey);
-        apiKey = parsed.token || null;
-        baseUrl = parsed.base_url || null;
-      } catch (_) { /* plain string token */ }
-    }
-    return { apiKey, baseUrl };
-  }
+  // Stored provider token → { apiKey, baseUrl } (tokens.js providerCredentials).
+  const resolveProviderCredentials = (providerId, providerType) => providerCredentials(providerId, providerType);
 
   // Text-to-image (handwriting stickers). Output is a sticker source asset, not
   // a photo derivative: it lands in userData/handwriting-cache (already inside

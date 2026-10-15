@@ -47,7 +47,6 @@ async function drag(from, to, steps = 12) {
 test.beforeAll(async () => {
   const fixturePath = await ensureFixture();
   ctx = await launchApp({ testName: "text-layers" });
-  await ctx.window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
   await ctx.window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
   await expect(ctx.window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(ctx.window, { preview: true });

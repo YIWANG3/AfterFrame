@@ -36,7 +36,6 @@ test.describe("Save pipeline", () => {
 
   test.beforeAll(async () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "save" }));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
   });
   test.afterAll(async () => {
     await closeApp(app, userDataDir);

@@ -104,11 +104,11 @@ export function dedupeModels(models) {
   return [...byName.values()];
 }
 
-export function generateInstanceId() {
+function generateInstanceId() {
   return `p_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-export function generateInstanceName(typeKey, existingInstances) {
+function generateInstanceName(typeKey, existingInstances) {
   const tmpl = getProviderType(typeKey);
   const base = tmpl?.label || typeKey;
   const sameType = existingInstances.filter((p) => p.type === typeKey);

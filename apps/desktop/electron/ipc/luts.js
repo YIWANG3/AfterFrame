@@ -85,8 +85,6 @@ function register({ app, ipcMain, dialog, shell, readAppSettings, updateAppSetti
       return { error: "failed", message: String(error?.message || error) };
     }
   });
-
-  return { library };
 }
 
 module.exports = { register };

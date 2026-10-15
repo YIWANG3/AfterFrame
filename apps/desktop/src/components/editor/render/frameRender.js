@@ -213,7 +213,7 @@ export function collectLogoNeeds(template, exif, registry, geom, logoColor) {
 // before while portrait, square and panoramic photos get the same visual weight
 // of logo/text/margins relative to the picture. Sizing by raw width made a
 // 16:9/pano logo ~2× the height-relative size of the same logo on a 4:5.
-export const LAYOUT_REF_PER_SHORT_EDGE = 1.5;
+const LAYOUT_REF_PER_SHORT_EDGE = 1.5;
 export function layoutRef(width, height) {
   return Math.min(width, height) * LAYOUT_REF_PER_SHORT_EDGE;
 }

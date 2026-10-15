@@ -38,6 +38,7 @@ from .metadata import (
     stem_key as compute_stem_key,
 )
 from .models import ImageCandidate, MatchDecision
+from .progress import ProgressCallback, report_progress
 from .source_readiness import SourceNotReadyError, validate_source_ready
 from .video import VIDEO_EXTENSIONS, is_video
 from .video import probe as probe_video
@@ -258,35 +259,28 @@ def resolve_image(
 
     existing = get_registry(connection, export.path)
     preexisting = existing is not None
-    if existing and existing["match_status"] == "manual_confirmed":
+
+    def _decision_from_registry(row: Row) -> MatchDecision:
+        # The registry already holds the answer: hand it back as-is.
         if commit:
             connection.commit()
         return MatchDecision(
-            image_asset_id=existing["image_asset_id"],
+            image_asset_id=row["image_asset_id"],
             image_path=export.path,
-            status=existing["match_status"],
-            score=float(existing["score"]),
-            raw_asset_id=existing["raw_asset_id"],
-            feature_vector=json.loads(existing["feature_vector_json"]),
-            ranked_candidates=json.loads(existing["candidate_json"]),
+            status=row["match_status"],
+            score=float(row["score"]),
+            raw_asset_id=row["raw_asset_id"],
+            feature_vector=json.loads(row["feature_vector_json"]),
+            ranked_candidates=json.loads(row["candidate_json"]),
             preexisting=preexisting,
             content_changed=content_changed,
         )
 
+    if existing and existing["match_status"] == "manual_confirmed":
+        return _decision_from_registry(existing)
+
     if existing and not refresh and existing["match_status"] == "auto_bound":
-        if commit:
-            connection.commit()
-        return MatchDecision(
-            image_asset_id=existing["image_asset_id"],
-            image_path=export.path,
-            status=existing["match_status"],
-            score=float(existing["score"]),
-            raw_asset_id=existing["raw_asset_id"],
-            feature_vector=json.loads(existing["feature_vector_json"]),
-            ranked_candidates=json.loads(existing["candidate_json"]),
-            preexisting=preexisting,
-            content_changed=content_changed,
-        )
+        return _decision_from_registry(existing)
 
     ranked: list[dict[str, Any]] = []
     for row in shortlist_candidates(connection, export):
@@ -370,7 +364,7 @@ def resolve_image_batch(
     image_dirs: list[Path],
     thresholds: Thresholds | None = None,
     refresh: bool = False,
-    progress_callback=None,
+    progress_callback: ProgressCallback | None = None,
     respect_tombstones: bool = False,
     validate_sources: bool = False,
     persist_roots: bool = True,
@@ -590,9 +584,3 @@ def iter_image_files(image_paths: list[Path]):
         for path in sorted(image_path.rglob("*")):
             if not is_ignored_path(path) and path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
                 yield path
-
-
-def report_progress(progress_callback, **payload) -> None:
-    if progress_callback is None:
-        return
-    progress_callback(payload)

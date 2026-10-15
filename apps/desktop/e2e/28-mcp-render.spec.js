@@ -4,25 +4,7 @@
 
 const fs = require("node:fs");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
-
-async function waitForMcp(port, timeoutMs = 15000) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      return await mcpCall(port, "initialize", {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "e2e-render", version: "0" },
-      });
-    } catch (error) {
-      lastError = error;
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  }
-  throw lastError || new Error("MCP server never came up");
-}
+const { launchApp, closeApp, mcpCall, waitForMcp } = require("./helpers/app");
 
 function toolResult(result) {
   expect(result.isError, JSON.stringify(result.content)).toBeFalsy();

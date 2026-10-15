@@ -55,7 +55,7 @@ export default function useJobs(bridgeRef) {
       const hdEnabled = (await api.getPreviewSettings().catch(() => null))?.generateHd === true;
       if (hdEnabled && (meta.kind || "preview") === "preview" && final?.status === "succeeded") {
         const hdTask = await api.startPreviewGeneration("preview-hd");
-        bridge.mirrorTask("preview", { ...hdTask, _kind: "preview-hd" });
+        bridge.mirrorTask("preview", hdTask);
         pokeJobs(hdTask?.jobId ? { jobId: hdTask.jobId, jobType: "preview", kind: "preview-hd" } : undefined);
       } else {
         bridge.mirrorTask("preview", final);
@@ -113,7 +113,7 @@ export default function useJobs(bridgeRef) {
       if (byType.has("import")) bridge.mirrorTask("import", byType.get("import"));
       if (byType.has("preview")) {
         const j = byType.get("preview");
-        bridge.mirrorTask("preview", { ...j, _kind: j.kind || knownActiveRef.current.get(j.jobId)?.kind || "preview" });
+        bridge.mirrorTask("preview", j);
       }
       if (byType.has("enrichment")) bridge.mirrorTask("enrichment", byType.get("enrichment"));
     }

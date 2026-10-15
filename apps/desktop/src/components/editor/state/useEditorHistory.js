@@ -12,10 +12,7 @@
 import { useRef, useState } from "react";
 import { BASE_STATE, cloneState, stateEquals } from "./editorStateModel";
 import { dropEditedSources } from "../frameUserTemplates";
-
-function cloneLayers(layers) {
-  return (layers || []).map((l) => ({ ...l }));
-}
+import { cloneLayers } from "../layerStack";
 
 // Value equality for a layer array. Reference-equal short-circuits (the common
 // case when only the transform changed); otherwise a per-layer compare. Only

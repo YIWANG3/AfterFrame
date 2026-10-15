@@ -18,7 +18,6 @@ test.describe("Editor functional", () => {
     fixturePath = await ensureFixture();
     ({ app, window, userDataDir } = await launchApp({ testName: "editor" }));
     // Open editor on the fixture image
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     await window.evaluate((p) => window.__afterframeTest.openEditor(p), fixturePath);
     // Wait for editor chrome to appear (Save button is a stable marker)
     await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });

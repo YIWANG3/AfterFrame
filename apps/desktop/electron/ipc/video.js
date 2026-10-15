@@ -8,6 +8,7 @@
 //   runVideoTool    where there is no such binary (Windows): (args, timeoutMs)
 //                   => Promise, the sidecar running the same commands with
 //                   FFmpeg; rejects when they fail
+//   timeouts        { transcode, frames } ms overrides (tests: shorter limits)
 
 const path = require("node:path");
 const fs = require("node:fs");
@@ -19,14 +20,22 @@ const { spawnSafely } = require("../spawnSafely");
 const TRANSCODE_TIMEOUT_MS = 30 * 60_000;
 const FRAMES_TIMEOUT_MS = 3 * 60_000;
 
-function register({ ipcMain, app, allowlist, videoToolPath, runVideoTool = null }) {
+function register({ ipcMain, app, allowlist, videoToolPath, runVideoTool = null, timeouts = {} }) {
+  const transcodeTimeoutMs = timeouts.transcode ?? TRANSCODE_TIMEOUT_MS;
+  const framesTimeoutMs = timeouts.frames ?? FRAMES_TIMEOUT_MS;
   const runTool = runVideoTool
     ? (args, timeoutMs) => runVideoTool(args, timeoutMs).then(() => true, () => false)
-    : (args) => new Promise((resolve) => {
+    : (args, timeoutMs) => new Promise((resolve) => {
       let child;
       try { child = spawnSafely(spawn, videoToolPath, args); } catch { resolve(false); return; }
-      child.on("error", () => resolve(false));
-      child.on("close", (code) => resolve(code === 0));
+      // A video-tool that never finishes (a clip FFmpeg stalls on) must not
+      // leave the renderer's request pending forever: kill it, report failure.
+      const timer = setTimeout(() => {
+        try { child.kill("SIGKILL"); } catch { /* already gone */ }
+        resolve(false);
+      }, timeoutMs);
+      child.on("error", () => { clearTimeout(timer); resolve(false); });
+      child.on("close", (code) => { clearTimeout(timer); resolve(code === 0); });
     });
 
   // Transcodes via the bundled video-tool, caches under userData, and returns
@@ -43,7 +52,7 @@ function register({ ipcMain, app, allowlist, videoToolPath, runVideoTool = null 
       allowlist.addAllowedMediaDir(dir);
       const out = path.join(dir, `${key}.mp4`);
       if (!fs.existsSync(out)) {
-        const ok = (await runTool(["transcode", resolved, out], TRANSCODE_TIMEOUT_MS)) && fs.existsSync(out);
+        const ok = (await runTool(["transcode", resolved, out], transcodeTimeoutMs)) && fs.existsSync(out);
         if (!ok) { try { fs.unlinkSync(out); } catch { /* ignore */ } return null; }
       }
       return out;
@@ -66,7 +75,7 @@ function register({ ipcMain, app, allowlist, videoToolPath, runVideoTool = null 
       const dir = path.join(app.getPath("userData"), "video-keyframes", key);
       if (!fs.existsSync(path.join(dir, "manifest.json"))) {
         fs.mkdirSync(dir, { recursive: true });
-        if (!(await runTool(["frames", resolved, dir, "--count", String(n), "--max-edge", "320"], FRAMES_TIMEOUT_MS))) return [];
+        if (!(await runTool(["frames", resolved, dir, "--count", String(n), "--max-edge", "320"], framesTimeoutMs))) return [];
       }
       return fs.readdirSync(dir)
         .filter((f) => /^frame_\d+\.jpg$/.test(f))

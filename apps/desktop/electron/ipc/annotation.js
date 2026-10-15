@@ -11,6 +11,7 @@ function register({
   readAppSettings,
   updateAppSettings,
   getStoredProviderConfigWithMigration,
+  providerCredentials,
   setStoredProviderConfig,
   deleteStoredProviderConfig,
   createJob,
@@ -29,17 +30,9 @@ function register({
 
     const sidecarProvider = active.type === "anthropic" ? "anthropic" : "openai_compatible";
     const ns = `annotation:${active.id || active.type}`;
-    const stored = (await getStoredProviderConfigWithMigration(ns)) || {};
-    let apiKey = stored.token || null;
-    let baseUrl = active.baseUrl || null;
-    // openai_compatible may store the token as JSON {base_url, token}
-    if (sidecarProvider === "openai_compatible" && apiKey) {
-      try {
-        const parsed = JSON.parse(apiKey);
-        apiKey = parsed.token || apiKey;
-        baseUrl = parsed.base_url || baseUrl;
-      } catch (_) { /* plain token */ }
-    }
+    // The provider's own baseUrl from settings applies where the stored
+    // openai_compatible token carries no base_url of its own.
+    const { apiKey, baseUrl } = await providerCredentials(ns, sidecarProvider, { fallbackBaseUrl: active.baseUrl });
     if (sidecarProvider === "anthropic" && !apiKey) {
       throw new Error("No API key configured for the active provider.");
     }

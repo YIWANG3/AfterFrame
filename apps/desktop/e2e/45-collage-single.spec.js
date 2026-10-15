@@ -10,7 +10,7 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
 
 let ctx;
 const cards = () => ctx.window.locator("[data-gallery-item='true']");
@@ -20,11 +20,7 @@ const canvas = () => ctx.window.getByTestId("collage-canvas");
 // exports' toasts last 20 s and can expire mid-wait, so counting them races.
 const exportedToast = (file) => ctx.window.getByTestId("toast-card").filter({ hasText: "Collage exported" }).filter({ hasText: file });
 
-async function callTool(name, args) {
-  const result = await mcpCall(ctx.mcpPort, "tools/call", { name, arguments: args || {} });
-  if (result.isError) throw new Error(`${name} failed: ${result.content?.[0]?.text}`);
-  return JSON.parse(result.content[0].text);
-}
+const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
 async function openSingleCollage() {
   await cards().nth(0).click();

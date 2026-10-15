@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, Fragment } from "react";
+import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
@@ -15,17 +16,7 @@ function FolderSortMenu({ sort, onChange }) {
   const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const handleKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", handleDown);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("pointerdown", handleDown);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
+  useDismiss(ref, () => setOpen(false), { enabled: open });
   return (
     <span ref={ref} className="relative flex">
       <button

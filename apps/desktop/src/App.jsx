@@ -98,8 +98,6 @@ export default function App() {
   // methods EditorOverlay merges into window.__afterframeTest.
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
-  const [showSidebar] = useState(true);
-  const [showInspector] = useState(true);
   // How the gallery shows photos is remembered (utils/prefs.js); what it
   // shows (the view, the filters) starts fresh.
   const [displayMode, setDisplayMode] = usePref("gallery.displayMode", "grid", oneOf(DISPLAY_MODE_KEYS));
@@ -174,7 +172,7 @@ export default function App() {
   const { handleViewportChange, geoOnClose } = useMapViewportFilter({
     enabled: mapExpanded,
     filters: workspace.filters,
-    applyFilters: workspace.applyFilters,
+    applyFilters: workspace.setFilters,
   });
 
   const clearPeopleGroupFilter = () => {
@@ -209,7 +207,7 @@ export default function App() {
     const next = geoOnClose(current?.geo);
     if (next === current?.geo) return;
     const { geo: _geo, ...rest } = current;
-    workspaceRef.current.applyFilters(next ? { ...rest, geo: next } : rest);
+    workspaceRef.current.setFilters(next ? { ...rest, geo: next } : rest);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapExpanded]);
 
@@ -233,7 +231,7 @@ export default function App() {
     const current = workspaceRef.current.filters;
     if (!current?.geo) return;
     const { geo: _geo, ...rest } = current;
-    workspaceRef.current.applyFilters(rest);
+    workspaceRef.current.setFilters(rest);
   }, [workspace.activeCollectionId]);
 
   // One-shot per catalog: when the map first opens, resolve any pre-existing
@@ -372,12 +370,11 @@ export default function App() {
         setEditorItem(item);
       },
       closeEditor() { setEditorItem(null); },
-      getViewMode() { return viewMode; },
       getEditorOpen() { return !!editorItem; },
-      refresh() { return workspaceRef.current.refreshAll({ force: true }); },
+      refresh() { return workspaceRef.current.refreshAll(); },
       async setLocale(lng) { await i18n.changeLanguage(lng); await api.setLocale(lng); },
     });
-  }, [viewMode, editorItem]);
+  }, [editorItem]);
   const stickerView = useStickerView();
 
   // Sticker items, shaped for Lightbox/Inspector consumers.
@@ -426,7 +423,7 @@ export default function App() {
     displayMode,
     primaryId: workspace.selectedAssetId,
     setPrimaryId: workspace.setSelectedAssetId,
-    setRelatedPrimaryId: workspace.revealRelatedAsset,
+    setRelatedPrimaryId: workspace.revealAsset,
   });
   const selectedAssetIds = selectedIds;
 
@@ -576,7 +573,7 @@ export default function App() {
     if (!silent) pushToast?.({ title: t("refreshingAssets", { count: paths.length }), ttl: 2500 });
     try {
       const result = await api.refreshAssets(paths);
-      await workspace.refreshAll({ force: true, preserveView: true });
+      await workspace.refreshAll({ preserveView: true });
       const deferred = Number(result?.deferred || 0);
       const failed = Number(result?.failed || 0);
       const completed = Math.max(0, paths.length - deferred);
@@ -941,9 +938,9 @@ export default function App() {
 
   const layoutStyle = {
     gridTemplateColumns: [
-      showSidebar ? `${workspace.sidebarWidth}px` : "0px",
+      `${workspace.sidebarWidth}px`,
       "minmax(0, 1fr)",
-      showInspector ? `${workspace.inspectorWidth}px` : "0px",
+      `${workspace.inspectorWidth}px`,
     ].join(" "),
     gridTemplateRows: "minmax(0, 1fr)",
   };
@@ -1336,7 +1333,7 @@ export default function App() {
     <div className="noise-overlay h-full overflow-hidden bg-app text-text">
       {api.platform === "win32" ? <WindowTitleBar /> : null}
       <div className="relative grid h-full min-w-0 overflow-hidden" style={layoutStyle}>
-        {showSidebar ? <Sidebar
+        <Sidebar
           info={workspace.info}
           summary={workspace.summary}
           status={workspace.status}
@@ -1398,7 +1395,7 @@ export default function App() {
             setPeopleGroup(null);
             workspace.clearCollection();
           }}
-        /> : <div className="bg-chrome" />}
+        />
 
         <section
           data-testid="gallery-drop-zone"
@@ -1450,7 +1447,6 @@ export default function App() {
           ) : viewMode === "discover" ? (
             <>
               <DiscoverView
-                summary={workspace.summary}
                 collections={workspace.collections}
                 people={peopleGroups.groups}
                 catalogRevision={workspace.catalogRevision}
@@ -1471,7 +1467,7 @@ export default function App() {
                 sort={workspace.sort}
                 inFolder={!!workspace.activeCollectionId}
                 setSort={workspace.setSort}
-                refreshAll={() => workspace.refreshAll({ force: true })}
+                refreshAll={() => workspace.refreshAll()}
                 onAddProcessed={workspace.addImages}
                 onAddSources={workspace.addSources}
                 onRunImport={workspace.runImportPipeline}
@@ -1499,7 +1495,7 @@ export default function App() {
                   facetValues={workspace.facetValues}
                   facetsReady={workspace.facetsReady}
                   filters={workspace.filters}
-                  onChange={workspace.applyFilters}
+                  onChange={workspace.setFilters}
                   personGroup={peopleGroup}
                   onPersonGroup={setPeopleGroup}
                   facetScope={workspace.facetScope}
@@ -1537,7 +1533,7 @@ export default function App() {
                     const next = { ...(workspace.filters || {}) };
                     if (groups.length) next.any_of = groups;
                     else delete next.any_of;
-                    workspace.applyFilters(next);
+                    workspace.setFilters(next);
                   }}
                 />
               )}
@@ -1639,64 +1635,58 @@ export default function App() {
           )}
         </section>
 
-        {showInspector ? (
-          viewMode === "stickers" ? (
-            <StickerInspector
-              sticker={stickerView.selected}
-              onStar={stickerView.handleStar}
-            />
-          ) : viewMode === "people" ? (
-            <PeopleInspector
-              people={peopleGroups}
-              onOpenGroup={openPersonGroup}
-              onCreateAlbum={createAlbumFromPerson}
-              pushToast={pushToast}
-            />
-          ) : (
-            <Inspector
-              detail={workspace.detail}
-              onRatingChange={applyRating}
-              onFlagChange={(flag) => applyFlag(flag)}
-              onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
-              onAnnotated={() => workspace.reloadDetail?.()}
-              onSelectAsset={selectRelatedAsset}
-              onRelinked={() => workspace.refreshAll({ force: true })}
-              onOpenPersonGroup={openPersonGroup}
-              onPeopleChanged={() => workspace.reloadDetail?.()}
-              onJumpToLocation={jumpToAssetLocation}
-              onLocationChanged={() => workspace.bumpCatalogRevision()}
-              pushToast={pushToast}
-              onTagFilter={(tag) => {
-                if (!tag) return;
-                workspace.setFilters({ ...(workspace.filters || {}), tag });
-                setShowFilters(true);
-              }}
-              onColorFilter={(hex) => {
-                if (!hex) return;
-                workspace.setFilters({ ...(workspace.filters || {}), color: hex });
-                setShowFilters(true);
-              }}
-            />
-          )
-        ) : <div className="bg-chrome" />}
-
-        {showSidebar ? (
-          <div
-            data-value={workspace.sidebarWidth}
-            onMouseDown={resizeSidebar}
-            className="pane-resize-handle absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize"
-            style={{ left: `${workspace.sidebarWidth}px` }}
+        {viewMode === "stickers" ? (
+          <StickerInspector
+            sticker={stickerView.selected}
+            onStar={stickerView.handleStar}
           />
-        ) : null}
-
-        {showInspector ? (
-          <div
-            data-value={-workspace.inspectorWidth}
-            onMouseDown={resizeInspector}
-            className="pane-resize-handle absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize"
-            style={{ right: `${workspace.inspectorWidth}px` }}
+        ) : viewMode === "people" ? (
+          <PeopleInspector
+            people={peopleGroups}
+            onOpenGroup={openPersonGroup}
+            onCreateAlbum={createAlbumFromPerson}
+            pushToast={pushToast}
           />
-        ) : null}
+        ) : (
+          <Inspector
+            detail={workspace.detail}
+            onRatingChange={applyRating}
+            onFlagChange={(flag) => applyFlag(flag)}
+            onDescriptionChange={(text) => workspace.setAssetDescription([workspace.detail?.asset_id], text)}
+            onAnnotated={() => workspace.reloadDetail?.()}
+            onSelectAsset={selectRelatedAsset}
+            onRelinked={() => workspace.refreshAll()}
+            onOpenPersonGroup={openPersonGroup}
+            onPeopleChanged={() => workspace.reloadDetail?.()}
+            onJumpToLocation={jumpToAssetLocation}
+            onLocationChanged={() => workspace.bumpCatalogRevision()}
+            pushToast={pushToast}
+            onTagFilter={(tag) => {
+              if (!tag) return;
+              workspace.setFilters({ ...(workspace.filters || {}), tag });
+              setShowFilters(true);
+            }}
+            onColorFilter={(hex) => {
+              if (!hex) return;
+              workspace.setFilters({ ...(workspace.filters || {}), color: hex });
+              setShowFilters(true);
+            }}
+          />
+        )}
+
+        <div
+          data-value={workspace.sidebarWidth}
+          onMouseDown={resizeSidebar}
+          className="pane-resize-handle absolute inset-y-0 z-20 w-3 -translate-x-1/2 cursor-col-resize"
+          style={{ left: `${workspace.sidebarWidth}px` }}
+        />
+
+        <div
+          data-value={-workspace.inspectorWidth}
+          onMouseDown={resizeInspector}
+          className="pane-resize-handle absolute inset-y-0 z-20 w-3 translate-x-1/2 cursor-col-resize"
+          style={{ right: `${workspace.inspectorWidth}px` }}
+        />
       </div>
 
       {/* Single bottom-right surface: running-job cards stacked above
@@ -1757,7 +1747,7 @@ export default function App() {
         onSaveComplete={async (savePath) => {
           // preserveView keeps the user's selection and scroll depth; without it
           // the refresh only refetches page 1 and selection jumps to the first asset.
-          await workspace.refreshAll?.({ force: true, preserveView: true });
+          await workspace.refreshAll?.({ preserveView: true });
           if (savePath) {
             pushToast({
               title: t("saved"),
@@ -1790,6 +1780,7 @@ export default function App() {
         sourceCollectionId={collageSourceId}
         onAddToCollection={workspace.addToCollection}
         onClose={() => setCollageItems(null)}
+        pushToast={pushToast}
         onExportComplete={async (savePath) => {
           await workspace.refreshAll?.();
           if (savePath) {

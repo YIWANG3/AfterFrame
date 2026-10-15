@@ -33,7 +33,6 @@ test.describe("First run (no catalog)", () => {
     ({ app, window, userDataDir } = await launchApp({ testName: "welcome", noCatalog: true }));
     app.process().stdout.on("data", (data) => mainLogs.push(String(data)));
     app.process().stderr.on("data", (data) => mainLogs.push(String(data)));
-    await window.waitForFunction(() => !!window.__afterframeTest, null, { timeout: 10_000 });
     // Reset and migration are standalone scenarios, not continuations of the
     // previous test. A worker restart after failure must not cause a false
     // "No catalog is open" failure in the next test.
