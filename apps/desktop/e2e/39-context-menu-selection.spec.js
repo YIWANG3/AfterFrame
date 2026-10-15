@@ -9,6 +9,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
 const { TINY_JPEG } = require("./helpers/images");
@@ -39,7 +40,7 @@ test("right-click lists the single-asset actions; a pair adds Compare and Collag
   await cards().nth(0).click({ button: "right" });
   // Windows says File Explorer for Finder (src/i18n/platformCopy.js).
   const reveal = process.platform === "win32" ? "Show in File Explorer" : "Reveal in Finder";
-  for (const label of ["Edit…", reveal, "Refresh from Disk", "Copy File Path", "Copy Name", "Delete from Catalog", "Delete from Disk…"]) {
+  for (const label of ["Edit…", reveal, "Refresh from Disk", "Copy", "Copy File Path", "Copy Name", "Delete from Catalog", "Delete from Disk…"]) {
     await expect(ctx.window.getByText(label, { exact: true })).toBeVisible();
   }
   // The Inspector carries the same "Annotate with AI" label; the menu adds a second.
@@ -57,6 +58,22 @@ test("right-click lists the single-asset actions; a pair adds Compare and Collag
   await expect(ctx.window.getByText("Collage", { exact: true })).toBeVisible();
   await expect(ctx.window.getByText("Refresh 2 from Disk", { exact: true })).toBeVisible();
   await ctx.window.keyboard.press("Escape");
+});
+
+test("Copy from the menu puts the photo on the clipboard as a file", async () => {
+  test.skip(process.platform !== "darwin", "the file clipboard is read back through the macOS pasteboard");
+  const card = cards().nth(0);
+  const imagePath = fs.realpathSync(await card.getAttribute("data-image-path"));
+  await card.click();
+  await card.click({ button: "right" });
+  await ctx.window.getByText("Copy", { exact: true }).click();
+  await expect(ctx.window.getByText("Copied 1 photo", { exact: true })).toBeVisible({ timeout: 5_000 });
+  const script = 'ObjC.import("AppKit"); const urls = $.NSPasteboard.generalPasteboard.readObjectsForClassesOptions($([$.NSURL.class]), $());'
+    + ' const out = []; for (let i = 0; i < urls.count; i++) out.push(urls.objectAtIndex(i).path.js); JSON.stringify(out)';
+  const { stdout } = spawnSync("osascript", ["-l", "JavaScript", "-e", script], { encoding: "utf8" });
+  expect(JSON.parse(stdout.trim()).map((p) => fs.realpathSync(p))).toEqual([imagePath]);
+  // This wrote the real system clipboard; leave it empty.
+  await ctx.app.evaluate(({ clipboard }) => clipboard.clear());
 });
 
 test("Compare from the menu opens the before/after view", async () => {

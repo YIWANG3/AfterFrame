@@ -59,6 +59,7 @@ const { catalogDialogOptions } = require("./catalogDialog");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
 const nativeVideoIpc = require("./ipc/nativeVideo");
+const clipboardIpc = require("./ipc/clipboard");
 
 // Test isolation: when AFTERFRAME_USER_DATA is set, redirect userData to that
 // directory so E2E tests get a clean catalog/settings/sticker library per run.
@@ -682,12 +683,9 @@ ipcMain.on("app:capabilities", (event) => {
   event.returnValue = desktopCapabilities(process.platform, { hasHelper: (name) => fs.existsSync(path.join(nativeBin, name)) });
 });
 
-// Copy arbitrary text (asset paths/names) to the system clipboard. Done in the
-// main process so it works regardless of renderer focus / gesture state.
-ipcMain.handle("app:copy-text", (_event, text) => {
-  clipboard.writeText(String(text ?? ""));
-  return true;
-});
+// The clipboard: text (paths, names) and, like Finder, the selected photos as
+// files — see ./ipc/clipboard.js.
+clipboardIpc.register({ ipcMain, clipboard, allowlist: media });
 
 // Settings → Integrations: where agents connect, and whether the server came up.
 ipcMain.handle("app:mcp-status", () => mcpServerApi?.getStatus() ?? { status: "starting" });

@@ -445,7 +445,7 @@
       "deleteLayer": "删除图层",
       "apply": "应用",
       "pan": "按住拖动画面",
-      "copyPaste": "拷贝 / 粘贴 / 剪切",
+      "copyPaste": "拷贝（照片文件或文字）/ 粘贴 / 剪切",
       "quit": "退出"
     }
   }
