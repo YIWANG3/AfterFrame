@@ -15,12 +15,11 @@
 //   node scripts/fetch-exiftool.mjs             # fail if it can't be fetched (release builds)
 //   node scripts/fetch-exiftool.mjs --optional  # warn and carry on (dev)
 
-import crypto from "node:crypto";
 import fs from "node:fs";
-import https from "node:https";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { copyTree, ensureArchive, installFromStaging, runFetch } from "./lib/download.mjs";
 
 const VERSION = "13.59";
 const ARCHIVES = {
@@ -49,62 +48,6 @@ function log(message) {
   console.log(`fetch-exiftool: ${message}`);
 }
 
-async function fileSha256(file) {
-  const hash = crypto.createHash("sha256");
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
-  return hash.digest("hex");
-}
-
-function download(url, destination, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, { headers: { "User-Agent": "AfterFrame/build" } }, (response) => {
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location && redirects < 8) {
-        response.resume();
-        download(new URL(response.headers.location, url).toString(), destination, redirects + 1).then(resolve, reject);
-        return;
-      }
-      if (response.statusCode !== 200) {
-        response.resume();
-        reject(new Error(`HTTP ${response.statusCode} from ${new URL(url).host}`));
-        return;
-      }
-      const output = fs.createWriteStream(destination);
-      response.pipe(output);
-      output.on("finish", resolve);
-      output.on("error", reject);
-      response.on("error", reject);
-    });
-    request.setTimeout(60_000, () => request.destroy(new Error("download stalled for 60 s")));
-    request.on("error", reject);
-  });
-}
-
-async function ensureArchive() {
-  const file = path.join(CACHE_DIR, archive.name);
-  if (fs.existsSync(file) && await fileSha256(file) === archive.sha256) return file;
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-  const partial = `${file}.partial`;
-  log(`downloading ${archive.name}`);
-  await download(downloadUrl(archive.name), partial);
-  const actual = await fileSha256(partial);
-  if (actual !== archive.sha256) {
-    fs.rmSync(partial, { force: true });
-    throw new Error(`${archive.name} SHA-256 is ${actual}, expected ${archive.sha256}`);
-  }
-  fs.renameSync(partial, file);
-  return file;
-}
-
-function copyTree(from, to, keep = () => true) {
-  fs.mkdirSync(to, { recursive: true });
-  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
-    const source = path.join(from, entry.name);
-    const destination = path.join(to, entry.name);
-    if (entry.isDirectory()) copyTree(source, destination, keep);
-    else if (keep(source)) fs.copyFileSync(source, destination);
-  }
-}
-
 // The command the sidecar runs (exiftool.py's find_command, in short).
 function command(folder) {
   if (flavour === "windows") return [path.join(folder, "exiftool.exe"), []];
@@ -113,12 +56,9 @@ function command(folder) {
 }
 
 function unpack(file) {
-  const staging = fs.mkdtempSync(path.join(CACHE_DIR, "unpack-"));
-  const assembled = `${TARGET}.partial`;
-  try {
+  return installFromStaging({ cacheDir: CACHE_DIR, target: TARGET, build: (staging, assembled) => {
     // bsdtar (macOS, Windows 10+) reads zip as well as tar.gz.
     execFileSync("tar", ["-xf", file, "-C", staging]);
-    fs.rmSync(assembled, { recursive: true, force: true });
     if (flavour === "windows") {
       const root = path.join(staging, `exiftool-${VERSION}_64`);
       copyTree(path.join(root, "exiftool_files"), path.join(assembled, "exiftool_files"));
@@ -133,12 +73,7 @@ function unpack(file) {
     const reported = execFileSync(cmd, [...args, "-ver"], { encoding: "utf8" }).trim();
     if (reported !== VERSION) throw new Error(`unpacked ExifTool reports ${reported}, expected ${VERSION}`);
     fs.writeFileSync(path.join(assembled, "AFTERFRAME_VERSION"), `${VERSION} ${flavour}\n`);
-    fs.rmSync(TARGET, { recursive: true, force: true });
-    fs.renameSync(assembled, TARGET);
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
-    fs.rmSync(assembled, { recursive: true, force: true });
-  }
+  } });
 }
 
 async function main() {
@@ -146,15 +81,9 @@ async function main() {
     log(`ExifTool ${VERSION} already in place`);
     return;
   }
-  unpack(await ensureArchive());
+  const file = await ensureArchive({ cacheDir: CACHE_DIR, name: archive.name, url: downloadUrl(archive.name), sha256: archive.sha256, log });
+  await unpack(file);
   log(`ExifTool ${VERSION} (${flavour}) is in native/exiftool`);
 }
 
-main().catch((error) => {
-  if (optional) {
-    log(`skipped: ${error.message}. Photo metadata needs it; run npm run fetch:exiftool.`);
-    return;
-  }
-  console.error(`fetch-exiftool: ${error.message}`);
-  process.exit(1);
-});
+runFetch(main, { name: "fetch-exiftool", optional, consequence: "Photo metadata needs it; run npm run fetch:exiftool." });

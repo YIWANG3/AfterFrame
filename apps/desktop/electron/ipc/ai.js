@@ -6,6 +6,7 @@
 const path = require("path");
 const fs = require("fs");
 const { writeJsonAtomic } = require("../settingsStore");
+const { jobStatusHandler } = require("./guard");
 
 function register({
   app,
@@ -35,19 +36,13 @@ function register({
   }
   const writeAiStyles = (styles) => writeJsonAtomic(aiStylesPath(), styles);
 
-  ipcMain.handle("workspace:ai-repaint-status", async () => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
-    try { return await latestJobStatus("ai_repaint"); } catch { return formatJobStatus(null); }
-  });
+  const status = (jobType) => jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, jobType);
+
+  ipcMain.handle("workspace:ai-repaint-status", status("ai_repaint"));
 
   ipcMain.handle("workspace:ai-repaint-start", (_event, options) => startAiRepaintTask(options));
 
-  ipcMain.handle("workspace:text-image-status", async () => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
-    try { return await latestJobStatus("text_image"); } catch { return formatJobStatus(null); }
-  });
+  ipcMain.handle("workspace:text-image-status", status("text_image"));
 
   ipcMain.handle("workspace:text-image-start", (_event, options) => startTextImageTask(options));
 

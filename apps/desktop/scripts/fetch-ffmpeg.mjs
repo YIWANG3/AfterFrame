@@ -15,12 +15,11 @@
 //   node scripts/fetch-ffmpeg.mjs             # fail if it can't be fetched (release builds)
 //   node scripts/fetch-ffmpeg.mjs --optional  # warn and carry on (dev)
 
-import crypto from "node:crypto";
 import fs from "node:fs";
-import https from "node:https";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { ensureArchive, installFromStaging, runFetch } from "./lib/download.mjs";
 
 const VERSION = "n9.0.2-17-g2a571b6068";
 const RELEASE = "autobuild-2026-09-30-13-08";
@@ -41,59 +40,10 @@ function log(message) {
   console.log(`fetch-ffmpeg: ${message}`);
 }
 
-async function fileSha256(file) {
-  const hash = crypto.createHash("sha256");
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
-  return hash.digest("hex");
-}
-
-function download(url, destination, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, { headers: { "User-Agent": "AfterFrame/build" } }, (response) => {
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location && redirects < 8) {
-        response.resume();
-        download(new URL(response.headers.location, url).toString(), destination, redirects + 1).then(resolve, reject);
-        return;
-      }
-      if (response.statusCode !== 200) {
-        response.resume();
-        reject(new Error(`HTTP ${response.statusCode} from ${new URL(url).host}`));
-        return;
-      }
-      const output = fs.createWriteStream(destination);
-      response.pipe(output);
-      output.on("finish", resolve);
-      output.on("error", reject);
-      response.on("error", reject);
-    });
-    request.setTimeout(60_000, () => request.destroy(new Error("download stalled for 60 s")));
-    request.on("error", reject);
-  });
-}
-
-async function ensureArchive() {
-  const file = path.join(CACHE_DIR, ARCHIVE.name);
-  if (fs.existsSync(file) && await fileSha256(file) === ARCHIVE.sha256) return file;
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-  const partial = `${file}.partial`;
-  log(`downloading ${ARCHIVE.name}`);
-  await download(downloadUrl(ARCHIVE.name), partial);
-  const actual = await fileSha256(partial);
-  if (actual !== ARCHIVE.sha256) {
-    fs.rmSync(partial, { force: true });
-    throw new Error(`${ARCHIVE.name} SHA-256 is ${actual}, expected ${ARCHIVE.sha256}`);
-  }
-  fs.renameSync(partial, file);
-  return file;
-}
-
 function unpack(file) {
-  const staging = fs.mkdtempSync(path.join(CACHE_DIR, "unpack-"));
-  const assembled = `${TARGET}.partial`;
-  try {
+  return installFromStaging({ cacheDir: CACHE_DIR, target: TARGET, build: (staging, assembled) => {
     // bsdtar (Windows 10+) reads zip.
     execFileSync("tar", ["-xf", file, "-C", staging]);
-    fs.rmSync(assembled, { recursive: true, force: true });
     fs.mkdirSync(assembled, { recursive: true });
     const root = path.join(staging, ARCHIVE.name.replace(/\.zip$/, ""));
     for (const name of fs.readdirSync(path.join(root, "bin"))) {
@@ -106,12 +56,7 @@ function unpack(file) {
       throw new Error(`unpacked FFmpeg reports "${reported.split("\n")[0]}", expected ${VERSION}`);
     }
     fs.writeFileSync(path.join(assembled, "AFTERFRAME_VERSION"), `${VERSION}\n`);
-    fs.rmSync(TARGET, { recursive: true, force: true });
-    fs.renameSync(assembled, TARGET);
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
-    fs.rmSync(assembled, { recursive: true, force: true });
-  }
+  } });
 }
 
 async function main() {
@@ -123,15 +68,9 @@ async function main() {
     log(`FFmpeg ${VERSION} already in place`);
     return;
   }
-  unpack(await ensureArchive());
+  const file = await ensureArchive({ cacheDir: CACHE_DIR, name: ARCHIVE.name, url: downloadUrl(ARCHIVE.name), sha256: ARCHIVE.sha256, log });
+  await unpack(file);
   log(`FFmpeg ${VERSION} is in native/ffmpeg`);
 }
 
-main().catch((error) => {
-  if (optional) {
-    log(`skipped: ${error.message}. Video posters and playback on Windows need it; run npm run fetch:ffmpeg.`);
-    return;
-  }
-  console.error(`fetch-ffmpeg: ${error.message}`);
-  process.exit(1);
-});
+runFetch(main, { name: "fetch-ffmpeg", optional, consequence: "Video posters and playback on Windows need it; run npm run fetch:ffmpeg." });

@@ -12,6 +12,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { spawnSafely } = require("../spawnSafely");
 const jobArgv = require("../sidecar/jobArgv");
+const { withCatalog, catalogRequired, jobStatusHandler } = require("./guard");
 const {
   BUNDLED_ARCFACE_R100,
   BUNDLED_MODEL_KEY,
@@ -323,7 +324,7 @@ function register({
   });
 
   ipcMain.handle("workspace:pick-people-model", async () => {
-    if (process.platform !== "darwin") throw new Error("People recognition currently requires macOS.");
+    if (platform !== "darwin") throw new Error("People recognition currently requires macOS.");
     if (!fs.existsSync(workerPath)) throw new Error("People Worker is missing. Reinstall AfterFrame and try again.");
     const result = await dialog.showOpenDialog({
       title: "Select face model bundle or Core ML model",
@@ -369,9 +370,7 @@ function register({
     return state();
   });
 
-  async function startPeopleIndex(options) {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) throw new Error("Open a catalog before recognizing people.");
+  const startPeopleIndex = withCatalog(getCatalogState, catalogRequired("Open a catalog before recognizing people."), async (options) => {
     const active = activeInternalRecord();
     if (!active) throw new Error("Install and select a compatible local face model first.");
     const current = await latestJobStatus("people_index");
@@ -392,7 +391,7 @@ function register({
     }, { priority: Number.isFinite(opts.priority) ? opts.priority : 5 });
     launchPeopleJob(job);
     return formatJobStatus(job);
-  }
+  });
 
   async function resumePeopleIndexJob(jobId) {
     const job = await commands.getJob(jobId);
@@ -403,9 +402,7 @@ function register({
     return formatJobStatus(resumed);
   }
 
-  async function recoverQueuedPeopleJobs() {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return [];
+  const recoverQueuedPeopleJobs = withCatalog(getCatalogState, [], async () => {
     const jobs = await commands.listActiveJobs();
     const recovered = [];
     for (const job of jobs) {
@@ -418,14 +415,10 @@ function register({
       }
     }
     return recovered;
-  }
+  });
 
   ipcMain.handle("workspace:people-index-start", (_event, options) => startPeopleIndex(options));
-  ipcMain.handle("workspace:people-index-status", async () => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return formatJobStatus(null);
-    try { return await latestJobStatus("people_index"); } catch { return formatJobStatus(null); }
-  });
+  ipcMain.handle("workspace:people-index-status", jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, "people_index"));
 
   return { startPeopleIndex, resumePeopleIndexJob, recoverQueuedPeopleJobs };
 }

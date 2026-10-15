@@ -239,12 +239,6 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["repair-resource-sets"]);
     },
 
-    // Legacy token store inside the catalog DB, read once to migrate into the
-    // app's keychain-backed settings.
-    getProviderToken(provider) {
-      return callJson(["get-provider-token", "--provider", String(provider)]);
-    },
-
     // On-demand HD (2000px) preview generation scoped to specific source files.
     // Used by the collage editor so cells render/export from HD instead of the
     // 512px thumbnail when the catalog-wide HD pass hasn't run.

@@ -1,14 +1,14 @@
 // Provider tokens at rest: keychain-encrypted through Electron's safeStorage,
-// with transparent migration of two older shapes (plaintext in settings.json,
-// and tokens the sidecar used to keep). Extracted from main.js (review
-// 2026-09-16 §2). Injected rather than imported so the branches — no keychain,
-// keychain denied, legacy plaintext — can be driven from a test:
+// with transparent migration of plaintext tokens in settings.json. Extracted
+// from main.js (review 2026-09-16 §2). Injected rather than imported so the
+// branches — no keychain, keychain denied, legacy plaintext — can be driven
+// from a test:
 //   safeStorage           { isEncryptionAvailable, encryptString, decryptString }
 //   readAppSettings / updateAppSettings   settings.json (aiProviders.<id>)
-//   fetchLegacyToken      async (provider) => { token, ... } | null — the
-//                         sidecar's old store, consulted once per provider
+// (A second migration, from the token store the sidecar kept in the catalog
+// before 2026-04, was retired 2026-10-15: no user is on a build that old.)
 
-function createTokenStore({ safeStorage, readAppSettings, updateAppSettings, fetchLegacyToken }) {
+function createTokenStore({ safeStorage, readAppSettings, updateAppSettings }) {
   function encryptToken(plaintext) {
     if (!safeStorage.isEncryptionAvailable()) return plaintext;
     return safeStorage.encryptString(plaintext).toString("base64");
@@ -82,15 +82,6 @@ function createTokenStore({ safeStorage, readAppSettings, updateAppSettings, fet
         }
       }
       return existing;
-    }
-    try {
-      const payload = await fetchLegacyToken(provider);
-      if (payload?.token) {
-        const migrated = await setStoredProviderConfig(provider, payload);
-        return migrated;
-      }
-    } catch (error) {
-      console.warn("[ai-provider-token] migration lookup failed:", error);
     }
     return existing || null;
   }

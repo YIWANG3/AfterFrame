@@ -62,3 +62,74 @@ test("legacy cleanup preserves unrelated files and can resume after a failed cat
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// createSampleCatalog: the first open copies the bundled originals, switches,
+// registers the photos root and imports; a later open only switches; reset
+// removes the folder with the sidecar paused. prepareCatalogPath runs the
+// sidecar migrations only for a catalog that has a database.
+function fakeWiring(dir, { hasDb }) {
+  const calls = [];
+  const samplePath = path.join(dir, "sample.afcatalog");
+  const catalog = {
+    path: () => samplePath,
+    hasDb: () => hasDb(),
+    hasDbAt: (p) => p === samplePath && hasDb(),
+    samplePath: () => samplePath,
+    isSample: () => false,
+  };
+  const { createSampleCatalog } = require("./sampleCatalog");
+  const sample = createSampleCatalog({
+    catalog, source,
+    transport: { withCatalogPaused: async (p, action) => { calls.push(["paused", p]); return action(); } },
+    commands: {
+      splitSharedAssets: async () => calls.push(["splitSharedAssets"]),
+      repairResourceSets: async () => { calls.push(["repairResourceSets"]); throw new Error("best effort"); },
+    },
+    startImportTask: async (options) => calls.push(["import", options.mode, options.imageDirs.length]),
+    switchCatalogTo: async (p) => calls.push(["switch", p]),
+    registerRoots: async (type, roots) => calls.push(["roots", type, roots]),
+  });
+  return { sample, samplePath, calls };
+}
+
+test("openSampleCatalog: fresh copy + import on the first open, a plain switch afterwards, folder removal on reset", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-sample-open-"));
+  try {
+    let populated = false;
+    const { sample, samplePath, calls } = fakeWiring(dir, { hasDb: () => populated });
+    assert.deepEqual(await sample.openSampleCatalog(), { path: samplePath, fresh: true });
+    assert.equal(fs.readdirSync(path.join(samplePath, "photos")).length, 14);
+    assert.deepEqual(calls, [
+      ["switch", samplePath],
+      ["roots", "image", [path.join(samplePath, "photos")]],
+      ["import", "processed_only", 14],
+    ]);
+    populated = true;
+    calls.length = 0;
+    assert.deepEqual(await sample.openSampleCatalog(), { path: samplePath, fresh: false });
+    assert.deepEqual(calls, [["switch", samplePath]]);
+    calls.length = 0;
+    populated = false;
+    assert.deepEqual(await sample.openSampleCatalog({ reset: true }), { path: samplePath, fresh: true });
+    assert.equal(calls[0][0], "paused");
+    assert.deepEqual(calls.slice(1).map((c) => c[0]), ["switch", "roots", "import"]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("prepareCatalogPath: creates the folder, and runs the (best-effort) sidecar migrations only with a database", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-sample-prepare-"));
+  try {
+    let populated = false;
+    const { sample, samplePath, calls } = fakeWiring(dir, { hasDb: () => populated });
+    await sample.prepareCatalogPath();
+    assert.ok(fs.existsSync(samplePath));
+    assert.deepEqual(calls, []);
+    populated = true;
+    await sample.prepareCatalogPath();
+    assert.deepEqual(calls, [["splitSharedAssets"], ["repairResourceSets"]], "a failing migration does not stop the open");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
