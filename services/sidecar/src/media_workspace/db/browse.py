@@ -4,6 +4,7 @@ Split from the monolithic db.py (review P3-5); one module per domain.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 
 # The facet filters (what the filter bar sends) live in facets.py: one registry
@@ -672,3 +673,39 @@ def list_version_siblings(connection: sqlite3.Connection, set_id: str, exclude_a
         """,
         (set_id, exclude_asset_id),
     ).fetchall()
+
+
+# ── row → payload ───────────────────────────────────────────────────────────
+# What the browse rows and the detail row say the same way.
+
+def row_tags(row: sqlite3.Row) -> list[str]:
+    """The photo's tags from a browse/detail row (asset_tags, both sources)."""
+    try:
+        return [tag for tag in json.loads(row["asset_tags_json"] or "[]") if tag]
+    except (IndexError, KeyError, ValueError):
+        return []
+
+
+def _row_description(row: sqlite3.Row) -> tuple[str | None, str | None]:
+    """The photo's description as shown, and whose: the user's if they wrote
+    one, else the AI's caption. (None, None) when there is neither."""
+    try:
+        user = row["user_description"]
+        ai = (row["ai_caption"] or "").strip()
+    except (IndexError, KeyError):
+        return None, None
+    if user is not None:
+        return (user.strip() or None), "user"  # an empty one is theirs too
+    if ai:
+        return ai, "ai"
+    return None, None
+
+
+def description_fields(row: sqlite3.Row) -> dict:
+    text, source = _row_description(row)
+    try:
+        ai = (row["ai_caption"] or "").strip() or None
+    except (IndexError, KeyError):
+        ai = None
+    # ai_caption: what shows again if the user clears theirs.
+    return {"description": text, "description_source": source, "ai_caption": ai}

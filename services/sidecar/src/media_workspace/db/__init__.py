@@ -39,12 +39,14 @@ from .assets import (
 from .browse import (
     browse_collection,
     camera_makes,
+    description_fields,
     get_facet_values,
     get_image_asset_detail,
     get_image_asset_detail_by_path,
     list_image_assets,
     list_version_siblings,
     locate_image_asset,
+    row_tags,
     search_facet_values,
 )
 from .collections import (
@@ -58,6 +60,7 @@ from .collections import (
 )
 from .colors import get_asset_colors
 from .core import connect, init_db, set_catalog_path
+from .detail import asset_detail
 from .jobs import (
     create_job,
     get_job,
@@ -75,6 +78,8 @@ from .locations import (
     delete_asset_location,
     get_asset_location,
     list_map_points,
+    resolve_ai_locations,
+    set_asset_location,
     set_manual_asset_location,
     upsert_ai_asset_location,
     upsert_asset_location_from_metadata,
@@ -110,6 +115,7 @@ from .resource_sets import (
     list_singleton_primary_resource_sets,
     reassign_asset_to_resource_set,
     remove_raw_from_resource_sets,
+    repair_resource_sets,
     split_incorrectly_merged_sets,
     split_shared_asset_ids,
 )

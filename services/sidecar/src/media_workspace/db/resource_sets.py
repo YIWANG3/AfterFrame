@@ -509,3 +509,84 @@ def split_incorrectly_merged_sets(connection: sqlite3.Connection, commit: bool =
     if split_count and commit:
         connection.commit()
     return split_count
+
+
+def _infer_origin_stem(stem: str) -> tuple[str | None, str]:
+    """The stem a derived file was made from, and how, read off its name:
+    `IMG_1_edited_crop` came from `IMG_1` as a crop. (None, "import") when
+    the name carries no marker."""
+    inferred_kind = "import"
+    current = stem
+    changed = False
+    while True:
+        next_value = current
+        if "_ai-repaint" in current:
+            next_value = current.split("_ai-repaint", 1)[0]
+            inferred_kind = "ai_repaint"
+        elif "_edited" in current:
+            next_value = current.split("_edited", 1)[0]
+            if inferred_kind == "import":
+                inferred_kind = "crop"
+        elif "_crop" in current:
+            next_value = current.split("_crop", 1)[0]
+            if inferred_kind == "import":
+                inferred_kind = "crop"
+        if next_value == current:
+            break
+        current = next_value
+        changed = True
+    return (current if changed and current else None, inferred_kind)
+
+
+def _origin_for(connection: sqlite3.Connection, stem: str, exclude_asset_id: str) -> tuple[str | None, str]:
+    """(origin asset, version kind) the file's name points at, when that
+    origin is in the catalog."""
+    origin_stem, version_kind = _infer_origin_stem(stem)
+    if not origin_stem:
+        return None, version_kind
+    candidate_ids = [candidate for candidate in find_image_asset_ids_by_stem(connection, origin_stem) if candidate != exclude_asset_id]
+    return (candidate_ids[0] if candidate_ids else None), version_kind
+
+
+def repair_resource_sets(connection: sqlite3.Connection) -> dict[str, int]:
+    """Put every photo in a version stack, in one commit: split assets that
+    share an id (the format before paths), take RAWs out of the stacks,
+    split stacks merged across folders, attach the photos that have none
+    (under the origin their name points at, else as their own primary), and
+    move singleton primaries whose name points at an origin under it."""
+    shared_split_count = split_shared_asset_ids(connection)
+    raw_removed = remove_raw_from_resource_sets(connection)
+    split_count = split_incorrectly_merged_sets(connection)
+
+    repaired = primaries_created = versions_attached = 0
+    for row in list_image_assets_missing_resource_set(connection):
+        asset_id = str(row["asset_id"])
+        origin_asset_id, version_kind = _origin_for(connection, str(row["stem"]), asset_id)
+        if origin_asset_id:
+            attach_asset_to_resource_set(connection, asset_id, origin_asset_id=origin_asset_id, version_kind=version_kind, commit=False)
+            versions_attached += 1
+        else:
+            attach_asset_to_resource_set(connection, asset_id, origin_asset_id=None, version_kind="import", commit=False)
+            primaries_created += 1
+        repaired += 1
+
+    repaired_singletons = 0
+    for row in list_singleton_primary_resource_sets(connection):
+        primary_asset_id = str(row["primary_asset_id"])
+        origin_asset_id, version_kind = _origin_for(connection, str(row["stem"]), primary_asset_id)
+        if not origin_asset_id:
+            continue
+        reassign_asset_to_resource_set(connection, primary_asset_id, origin_asset_id=origin_asset_id, version_kind=version_kind, commit=False)
+        repaired_singletons += 1
+        versions_attached += 1
+        repaired += 1
+    connection.commit()
+    return {
+        "shared_assets_split": shared_split_count,
+        "raw_removed_from_sets": raw_removed,
+        "split_merged_sets": split_count,
+        "repaired": repaired,
+        "primaries_created": primaries_created,
+        "versions_attached": versions_attached,
+        "singleton_versions_reassigned": repaired_singletons,
+    }
