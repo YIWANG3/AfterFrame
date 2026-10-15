@@ -12,13 +12,13 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, collectCoverage, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, mcpCall, galleryCards } = require("./helpers/app");
 const { devPython } = require("../electron/sidecar/transport");
 
 test.describe.configure({ mode: "serial" });
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const card = (id) => ctx.window.locator(`[data-gallery-item='true'][data-asset-id='${id}']`);
 const shortcutRow = (id) => ctx.window.locator(`[data-shortcut-row='${id}']`);
 

@@ -9,6 +9,27 @@ const { spawn } = require("child_process");
 const { spawnSafely } = require("../spawnSafely");
 const { createCompiledModelCache } = require("./compiledModelCache");
 
+// A PNG's pixel size from its header: the 8-byte signature, then the IHDR
+// chunk whose width and height are big-endian at bytes 16–23. Null for
+// anything that is not a PNG (or cannot be read). A cache hit used to answer
+// the bundled model's 518×392 whatever file was there, so a model with
+// another output size reported the right size on the first run only.
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+function pngSize(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, "r");
+    const header = Buffer.alloc(24);
+    if (fs.readSync(fd, header, 0, 24, 0) < 24) return null;
+    if (!header.subarray(0, 8).equals(PNG_SIGNATURE) || header.toString("latin1", 12, 16) !== "IHDR") return null;
+    return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
 function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateAppSettings }) {
   // Precompiled by scripts/build-native.sh (it once ran as a `swift` script,
   // which needs Xcode or the Command Line Tools on the user's Mac).
@@ -69,7 +90,8 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
     const checkOnly = !!options?.checkOnly;
 
     if (!force && fs.existsSync(outputPath)) {
-      return { outputPath, cached: true, width: 518, height: 392 };
+      const size = pngSize(outputPath);
+      return { outputPath, cached: true, width: size?.width ?? null, height: size?.height ?? null };
     }
     if (checkOnly) return null;
 
@@ -152,6 +174,8 @@ function register({ app, ipcMain, dialog, isPackaged, readAppSettings, updateApp
       bundledPath: bundledDepthModelPath,
     };
   });
+
+  return { depthCachePath, resolveDepthModelPath };
 }
 
-module.exports = { register };
+module.exports = { register, pngSize };

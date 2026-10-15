@@ -23,6 +23,15 @@
   "configureHint": "在 设置 → AI 中配置服务商以启用标注。",
   "generatesHint": "生成描述、标签和位置推测。",
   "noProviderError": "未配置服务商。打开 设置 → AI 添加一个。",
+  "job": {
+    "noProviderTitle": "未配置 AI 服务商",
+    "noProviderMsg": "请先在 设置 → AI 中添加服务商。",
+    "nothingTitle": "没有需要标注的照片",
+    "allAnnotated": "所选照片都已标注过。",
+    "noEligible": "没有可标注的图片。",
+    "startFailed": "无法开始标注",
+    "startFailedMsg": "启动失败。"
+  },
   "loadFailed": "加载标注失败",
   "loc": {
     "gpsNearby": "GPS 优先，离线地名仅供参考。",

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, Undo2, Redo2, RotateCcw, FolderOpen } from "lucide-react";
 import { ASPECT_PRESETS } from "../cropMath";
+import FooterButton from "./FooterButton";
 import {
   SPLIT_ASPECT_KEYS, CUSTOM_SPLIT_ASPECT_KEY, MIN_SPLIT_COUNT, MAX_SPLIT_COUNT,
   MIN_CUSTOM_ASPECT_SIDE, MAX_CUSTOM_ASPECT_SIDE, isValidCustomAspect, splitRectToPanels,
@@ -78,27 +79,6 @@ function CustomAspectTile({ t, active, custom, onCommit }) {
         {field("height", t("split.customHeight"))}
       </span>
     </div>
-  );
-}
-
-function FooterButton({ icon: Icon, label, onClick, disabled = false, primary = false, testId }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      data-testid={testId}
-      className={[
-        "inline-flex h-8 items-center rounded-md text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-35",
-        label ? "gap-1.5 px-3" : "w-8 justify-center",
-        primary
-          ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
-          : "text-muted hover:bg-hover hover:text-text",
-      ].join(" ")}
-    >
-      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-      {label ? <span>{label}</span> : null}
-    </button>
   );
 }
 

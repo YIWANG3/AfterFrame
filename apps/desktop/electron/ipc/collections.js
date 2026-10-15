@@ -2,17 +2,19 @@
 // plus per-asset rating (lives with collections because ratings often drive
 // smart-collection rules). All work goes through the Python sidecar.
 
+const { withCatalog } = require("./guard");
+
 function register({ ipcMain, commands, getCatalogState }) {
-  ipcMain.handle("workspace:list-collections", async () => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return [];
+  const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
+
+  ipcMain.handle("workspace:list-collections", guarded([], async () => {
     try {
       return await commands.listCollections();
     } catch (err) {
       console.warn("[workspace:list-collections] sidecar error:", err.message);
       return [];
     }
-  });
+  }));
 
   ipcMain.handle("workspace:reorder-collections", async (_event, collectionIds) => {
     return await commands.reorderCollections(collectionIds);
@@ -55,11 +57,8 @@ function register({ ipcMain, commands, getCatalogState }) {
     return await commands.setAssetFlag(ids, flag);
   });
 
-  ipcMain.handle("workspace:browse-collection", async (_event, collectionId, options) => {
-    const { currentCatalogPath, catalogHasDb } = getCatalogState();
-    if (!currentCatalogPath || !catalogHasDb()) return [];
-    return await commands.browseCollection(collectionId, options || {});
-  });
+  ipcMain.handle("workspace:browse-collection", guarded([], (_event, collectionId, options) =>
+    commands.browseCollection(collectionId, options || {})));
 }
 
 module.exports = { register };

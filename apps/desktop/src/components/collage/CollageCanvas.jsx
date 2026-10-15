@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Z } from "../../ui";
 import { useTranslation } from "react-i18next";
 import { localFileUrl } from "../../utils/format";
 import { computeCellRects, drawCellImage, getPixelAlignedStrokeRect, roundRectPath } from "./collageRender";
@@ -603,8 +604,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       {ctxMenu && (
         <div
           data-testid="collage-cell-menu"
-          className="fixed z-[100] min-w-[120px] overflow-hidden rounded-lg border border-border/60 bg-chrome py-1 shadow-menu"
-          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          className="fixed min-w-[120px] overflow-hidden rounded-lg border border-border/60 bg-chrome py-1 shadow-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y, zIndex: Z.dropdown }}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <button

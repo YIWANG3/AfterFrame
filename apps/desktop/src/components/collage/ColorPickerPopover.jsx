@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { gradientColorAt, gradientStops, gradientWithStops, hexToRgba } from "../editor/render/canvasHelpers";
+import usePointerScrub from "../../ui/usePointerScrub";
+import { Z } from "../../ui";
 
 // ── Color math ────────────────────────────────────────────
 
@@ -69,23 +71,12 @@ function hsvToHex(h, s, v) {
 function SatBrightArea({ hue, sat, val, onChange }) {
   const ref = useRef(null);
 
-  const update = useCallback((e) => {
+  const scrub = usePointerScrub(ref, (e) => {
     const rect = ref.current.getBoundingClientRect();
     const s = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const v = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
     onChange(s, v);
-  }, [onChange]);
-
-  function onDown(e) {
-    e.preventDefault();
-    ref.current.setPointerCapture(e.pointerId);
-    update(e);
-  }
-
-  function onMove(e) {
-    if (!ref.current.hasPointerCapture(e.pointerId)) return;
-    update(e);
-  }
+  });
 
   return (
     <div
@@ -96,8 +87,7 @@ function SatBrightArea({ hue, sat, val, onChange }) {
         height: 200,
         backgroundColor: `hsl(${hue}, 100%, 50%)`,
       }}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
+      {...scrub}
     >
       {/* Saturation: white → transparent */}
       <div className="absolute inset-0 rounded" style={{ background: "linear-gradient(to right, #fff, transparent)" }} />
@@ -121,22 +111,11 @@ function SatBrightArea({ hue, sat, val, onChange }) {
 function HueSlider({ hue, onChange }) {
   const ref = useRef(null);
 
-  const update = useCallback((e) => {
+  const scrub = usePointerScrub(ref, (e) => {
     const rect = ref.current.getBoundingClientRect();
     const h = Math.max(0, Math.min(360, ((e.clientX - rect.left) / rect.width) * 360));
     onChange(h);
-  }, [onChange]);
-
-  function onDown(e) {
-    e.preventDefault();
-    ref.current.setPointerCapture(e.pointerId);
-    update(e);
-  }
-
-  function onMove(e) {
-    if (!ref.current.hasPointerCapture(e.pointerId)) return;
-    update(e);
-  }
+  });
 
   return (
     <div
@@ -147,8 +126,7 @@ function HueSlider({ hue, onChange }) {
         height: 12,
         background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
       }}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
+      {...scrub}
     >
       <div
         className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
@@ -168,22 +146,11 @@ function HueSlider({ hue, onChange }) {
 function OpacitySlider({ hue, sat, val, opacity, onChange }) {
   const ref = useRef(null);
 
-  const update = useCallback((e) => {
+  const scrub = usePointerScrub(ref, (e) => {
     const rect = ref.current.getBoundingClientRect();
     const a = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     onChange(Math.round(a * 100) / 100);
-  }, [onChange]);
-
-  function onDown(e) {
-    e.preventDefault();
-    ref.current.setPointerCapture(e.pointerId);
-    update(e);
-  }
-
-  function onMove(e) {
-    if (!ref.current.hasPointerCapture(e.pointerId)) return;
-    update(e);
-  }
+  });
 
   const { r, g, b } = hsvToRgb(hue, sat, val);
 
@@ -196,8 +163,7 @@ function OpacitySlider({ hue, sat, val, opacity, onChange }) {
         height: 12,
         background: `linear-gradient(to right, rgba(${r},${g},${b},0), rgba(${r},${g},${b},1)), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 8px 8px`,
       }}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
+      {...scrub}
     >
       <div
         className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
@@ -457,8 +423,8 @@ export default function ColorPickerPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[10300] rounded-lg border border-border bg-panel p-3 shadow-overlay"
-      style={{ top: pos.top, left: pos.left, width: 240 }}
+      className="fixed rounded-lg border border-border bg-panel p-3 shadow-overlay"
+      style={{ top: pos.top, left: pos.left, width: 240, zIndex: Z.overlayPopover }}
     >
       <div className="space-y-3">
         {showTabs && (

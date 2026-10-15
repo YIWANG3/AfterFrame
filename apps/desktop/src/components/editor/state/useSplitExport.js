@@ -18,18 +18,14 @@ import {
 } from "../render/canvasHelpers";
 import { panelBoundaries, regionToPixels } from "../splitMath";
 import { pathSeparator } from "../../../utils/format";
+import { parentDir, pathParts } from "../pathParts";
+import { pad2 } from "../../../utils/math";
 
-const pad2 = (n) => String(n).padStart(2, "0");
 
+// The panels take the original's format where the browser can encode it,
+// else JPEG.
 function splitPath(filePath) {
-  const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
-  const dir = slash >= 0 ? filePath.slice(0, slash) : "";
-  let name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
-  // Web bridge assets carry their file name URL-encoded after "#/".
-  try { name = decodeURIComponent(name); } catch { /* keep as-is */ }
-  const dot = name.lastIndexOf(".");
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  const { dir, stem, ext } = pathParts(filePath);
   return { dir, stem, ext: ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg" };
 }
 
@@ -133,7 +129,7 @@ export function useSplitExport({
         catch (e) { console.warn("[split] quickRegister skipped:", e?.message || e); }
       }
       await joinFolder?.(assetIds);
-      const dir = savePaths[0].slice(0, Math.max(savePaths[0].lastIndexOf("/"), savePaths[0].lastIndexOf("\\")));
+      const dir = parentDir(savePaths[0]);
       pushToast?.({
         title: t("split.done", { count: results.length }),
         message: dir,

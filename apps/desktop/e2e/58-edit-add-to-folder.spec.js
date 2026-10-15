@@ -12,7 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor, galleryCards } = require("./helpers/app");
 
 const FOLDER = "Edits home";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "af-edit-folder-"));
@@ -21,7 +21,7 @@ const photoPath = path.join(tmp, "harbour.jpg");
 let ctx;
 let folderId;
 let photoId;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const editorBox = () => ctx.window.getByTestId("editor-add-to-folder");
 
 // By file name: the sidecar stores the resolved path (/private/var/… for a

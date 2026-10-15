@@ -1,12 +1,15 @@
 name: E2E (full, nightly)
 
-# quality.yml runs the CI-stable subset of the Electron suite on every PR.
-# The rest — map (WebGL), watched dirs (fs-watch timing), the real-model
-# people scan (62), native video (70) and whatever a new spec forgot to list
-# there — only ran when someone remembered `npm run e2e:only` locally. This
-# runs ALL of it once a night and on demand, so a regression in the excluded
-# part surfaces within a day instead of at the next release. Informational:
-# it is not a merge gate.
+# quality.yml runs the whole Electron suite on every PR since 2026-10-14
+# (before that a hand-written subset, and the rest only ran here). What this
+# run adds: the face model, so 62-people-real-model's three tests run; one
+# retry per spec; the coverage build; and the web build's suite below.
+# The specs that skip themselves under CI (test.skip(process.env.CI, …)) skip
+# here as well — GitHub sets CI on every runner — so 17-watched-dirs, the
+# watched-folder describe of 60-file-lifecycle, 23-map and
+# 60-map-cluster-covers run on a developer's Mac only, and 70-native-video
+# needs a local ProRes clip (AFTERFRAME_TEST_PRORES) nobody has on CI.
+# Informational: it is not a merge gate.
 #
 # It is also the coverage run: the three unit suites run first, then the
 # renderer as an istanbul build with the main process and the Python sidecar

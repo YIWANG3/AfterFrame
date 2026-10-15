@@ -23,7 +23,7 @@ const { register } = require("./saveFile");
 // directly rather than going through IPC.
 const { processAndSave } = register({
   ipcMain: { handle() {} },
-  dialog: {},
+  dialogs: {},
   rootDir: os.tmpdir(),
   writeImageWithSourceMetadata: async () => {},
   addAllowedMediaDir: () => {},

@@ -12,7 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, waitForEditor, galleryCards } = require("./helpers/app");
 const { writeSyntheticDng } = require("./helpers/images");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -29,8 +29,8 @@ let ctx;
 let work;
 
 async function openEditorOnFirstAsset(window) {
-  await window.locator("[data-gallery-item='true']").first().waitFor({ timeout: 15_000 });
-  await window.locator("[data-gallery-item='true']").first().click();
+  await galleryCards(window).first().waitFor({ timeout: 15_000 });
+  await galleryCards(window).first().click();
   await window.keyboard.press("e");
   await expect(window.getByRole("button", { name: /^Save$/i })).toBeVisible({ timeout: 15_000 });
   await waitForEditor(window, { preview: true });
@@ -217,8 +217,15 @@ test.describe("LUT tool (macOS)", () => {
     await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe("Swap RB");
     await ctx.window.evaluate(() => window.__afterframeTest.undo());
     await expect.poll(async () => (await lutState()).lut, { timeout: 5_000 }).toBe(null);
-    // Closed in the LUT tool, which the RAW test below reopens after.
+    // Closed in the LUT tool, which the RAW test below reopens after — with
+    // a LUT back (redo) and its strength slider focused: a slider takes no
+    // text, so Esc still reaches the editor (bug 6 of the 2026-10-14 review).
+    await ctx.window.evaluate(() => window.__afterframeTest.redo());
+    await expect.poll(async () => (await lutState()).lut?.name, { timeout: 5_000 }).toBe("Swap RB");
     expect(await ctx.window.evaluate(() => window.__afterframeTest.getTool())).toBe("lut");
+    const strength = ctx.window.getByTestId("lut-strength");
+    await strength.focus();
+    await expect(strength).toBeFocused();
     await ctx.window.keyboard.press("Escape");
     await expect.poll(() => ctx.window.evaluate(() => window.__afterframeTest.getEditorOpen()), { timeout: 10_000 }).toBe(false);
   });

@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import useDismiss from "../ui/useDismiss";
+import { Z } from "../ui";
 import { createPortal } from "react-dom";
 
 // Context menu for people/face actions.
@@ -9,7 +10,7 @@ export default function FaceMenu({ position, items, onClose }) {
   const left = Math.min(position.x, window.innerWidth - 228);
   const top = Math.min(position.y, window.innerHeight - items.length * 30 - 16);
   return createPortal(
-    <div ref={ref} className="fixed z-[12000] w-[220px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top }}>
+    <div ref={ref} className="fixed w-[220px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
       {items.map(({ key, icon: Icon, label, onClick, danger = false }) => (
         <button
           key={key}

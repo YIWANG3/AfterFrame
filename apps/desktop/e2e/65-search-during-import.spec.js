@@ -14,7 +14,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, importThroughToolbar } = require("./helpers/app");
+const { launchApp, closeApp, importThroughToolbar, galleryCards } = require("./helpers/app");
 const { TINY_JPEG } = require("./helpers/images");
 
 const RAW_FIXTURE = path.resolve(__dirname, "fixtures", "raw", "luna-morning.dng");
@@ -95,7 +95,7 @@ function duplicates(cards) {
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "search-during-import" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
   const targets = writeTargets();
   await importThroughToolbar(ctx.app, ctx.window, [targets]);
   await expect.poll(() => ctx.window.evaluate(async (prefix) => {
@@ -112,7 +112,7 @@ test.afterAll(async () => {
 
 test("a search, a selection, Select All and the context menu hold while an import runs", async () => {
   test.setTimeout(240_000);
-  const cards = ctx.window.locator("[data-gallery-item='true']");
+  const cards = galleryCards(ctx.window);
   const search = ctx.window.getByPlaceholder("Search");
   const bursts = [2000, 3000, 4000].map((n) => `bulk_${n}_${QUERY}.jpg`);
   await importThroughToolbar(ctx.app, ctx.window, [writeBulk("bulk", Object.fromEntries(bursts.map((name) => [name.slice("bulk_".length), TINY_JPEG])))]);
@@ -162,7 +162,7 @@ test("a search, a selection, Select All and the context menu hold while an impor
 
 test("a filter holds while an import runs", async () => {
   test.setTimeout(240_000);
-  const cards = ctx.window.locator("[data-gallery-item='true']");
+  const cards = galleryCards(ctx.window);
   await ctx.window.getByRole("button", { name: /^All Assets/ }).first().click();
   if (!await ctx.window.locator("[data-filter-bar]").isVisible()) await ctx.window.getByRole("button", { name: "Filters" }).click();
   const raw = Buffer.concat([fs.readFileSync(RAW_FIXTURE), Buffer.alloc(200)]);

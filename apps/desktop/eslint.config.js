@@ -2,6 +2,25 @@ const js = require("@eslint/js");
 const globals = require("globals");
 const reactHooks = require("eslint-plugin-react-hooks");
 
+// Components take their layer from the ladder in src/ui/zIndex.js
+// (style={{ zIndex: Z.x }}), never from a Tailwind `z-[…]` literal: 28 of
+// those, with 17 different numbers, once sat beside a ladder only ui/Modal
+// read. Flags the literal in a string or a template.
+const noZIndexLiteral = {
+  meta: { type: "problem", schema: [] },
+  create(context) {
+    const message = "Use the Z ladder (src/ui/zIndex.js) as style={{ zIndex: Z.x }} instead of a z-[…] class.";
+    return {
+      Literal(node) {
+        if (typeof node.value === "string" && node.value.includes("z-[")) context.report({ node, message });
+      },
+      TemplateElement(node) {
+        if (node.value.raw.includes("z-[")) context.report({ node, message });
+      },
+    };
+  },
+};
+
 const sharedRules = {
   ...js.configs.recommended.rules,
   "no-unused-vars": ["error", {
@@ -59,6 +78,11 @@ module.exports = [
         message: "Use api.* (src/api) instead of window.mediaWorkspace — see api/client.js.",
       }],
     },
+  },
+  {
+    files: ["src/**/*.{js,jsx}"],
+    plugins: { afterframe: { rules: { "no-z-index-literal": noZIndexLiteral } } },
+    rules: { "afterframe/no-z-index-literal": "error" },
   },
   {
     // Node ESM dev scripts.

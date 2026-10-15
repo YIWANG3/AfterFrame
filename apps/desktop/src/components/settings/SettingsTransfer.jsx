@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
 import api from "../../api";
+import { writePref } from "../../utils/prefs";
 import { Modal, Button, cx } from "../../ui";
 import { FieldRow, Group, Toggle } from "./SettingsPrimitives";
 
@@ -11,7 +12,6 @@ import { FieldRow, Group, Toggle } from "./SettingsPrimitives";
 
 const SECTIONS = ["general", "repaint", "annotation", "watermark"];
 const MIN_PASSPHRASE = 8;
-const THEME_STORAGE_KEY = "afterframe-theme";
 
 const FIELD =
   "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50";
@@ -193,7 +193,7 @@ function ImportDialog({ inspected, onClose }) {
 
   function finish() {
     if (result?.theme) {
-      try { localStorage.setItem(THEME_STORAGE_KEY, result.theme); } catch { /* keep current theme */ }
+      writePref("theme", result.theme);
     }
     // Every settings tab and the i18n instance read on mount: reload the
     // renderer rather than threading refreshes through each of them.

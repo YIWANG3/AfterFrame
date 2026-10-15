@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
 import { COLLECTION_SORTS, LIBRARY_SORTS } from "../hooks/workspaceLogic";
+import { Z } from "../ui";
 import {
   ChevronDown,
   Plus,
@@ -114,7 +115,7 @@ function DisplayModeDropdown({ displayMode, setDisplayMode }) {
         <ChevronDown className="h-2.5 w-2.5 text-muted2" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-[101] mt-1.5 min-w-[150px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
+        <div className="absolute right-0 top-full mt-1.5 min-w-[150px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ zIndex: Z.dropdown }}>
           {DISPLAY_MODES.map(({ key, icon: Icon }) => (
             <button
               key={key}
@@ -158,7 +159,7 @@ function SortDropdown({ sort, setSort, inFolder = false }) {
         <span>{current ? t(`toolbar.sort.${current}`) : t("toolbar.sortFallback")}</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-[101] mt-1.5 min-w-[160px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
+        <div className="absolute right-0 top-full mt-1.5 min-w-[160px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ zIndex: Z.dropdown }}>
           {SORT_OPTIONS.map((value) => (
             <button
               key={value}
@@ -236,7 +237,7 @@ export default function Toolbar({
         </IconButton>
         {menuOpen ? (
           <>
-            <div className="absolute top-full z-[101] mt-2.5 w-[248px] rounded-lg border border-border/60 bg-chrome p-1.5 shadow-overlay">
+            <div className="absolute top-full mt-2.5 w-[248px] rounded-lg border border-border/60 bg-chrome p-1.5 shadow-overlay" style={{ zIndex: Z.dropdown }}>
               {MENU_SECTIONS.map((section, sectionIndex) => (
                 <div key={section.key} className={sectionIndex > 0 ? "mt-1 border-t border-border/80 pt-1.5" : ""}>
                   <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted2">

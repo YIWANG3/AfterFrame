@@ -4,7 +4,7 @@
 // they depend on a real Core ML model and face embeddings.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, lacks } = require("./helpers/app");
+const { launchApp, closeApp, lacks, galleryCards } = require("./helpers/app");
 
 test.skip(lacks("people"), "people recognition is macOS-only for now (electron/capabilities.js)");
 
@@ -13,7 +13,7 @@ test.describe("without a face model", () => {
 
   test.beforeAll(async () => {
     ctx = await launchApp({ testName: "people-view" });
-    await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test.afterAll(async () => {
@@ -38,7 +38,7 @@ test.describe("with the built-in face model", () => {
 
   test.beforeAll(async () => {
     ctx = await launchApp({ testName: "people-view-bundled", peopleModel: "stub" });
-    await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test.afterAll(async () => {

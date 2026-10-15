@@ -5,7 +5,7 @@
 // that they all act on the same seeded 10-image catalog.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool, waitForMcp } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, waitForMcp, galleryCards } = require("./helpers/app");
 
 let ctx;
 
@@ -14,7 +14,7 @@ const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "bridge" });
   await waitForMcp(ctx.mcpPort);
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -22,7 +22,7 @@ test.afterAll(async () => {
 });
 
 test("clicking a card in the UI is visible to MCP get_selection", async () => {
-  const card = ctx.window.locator("[data-gallery-item='true']").first();
+  const card = galleryCards(ctx.window).first();
   await card.click();
   await expect(ctx.window.locator("[data-selected='true']").first()).toBeVisible();
 

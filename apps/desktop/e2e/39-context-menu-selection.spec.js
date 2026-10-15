@@ -11,11 +11,11 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 const { TINY_JPEG } = require("./helpers/images");
 
 let ctx;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const selected = () => ctx.window.locator("[data-gallery-item='true'][data-selected='true']");
 
 const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);

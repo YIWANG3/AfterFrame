@@ -20,6 +20,8 @@
     "aspectOriginal": "原始比例",
     "reset": "重置",
     "apply": "应用",
+    "applied": "已应用",
+    "textApplied": "文字已应用",
     "flipH": "水平翻转",
     "flipV": "垂直翻转",
     "rotateLeft": "90° 左",

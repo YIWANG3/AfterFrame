@@ -5,3 +5,6 @@
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
+
+// Two digits, for dates and numbered file names: 7 → "07".
+export const pad2 = (n) => String(n).padStart(2, "0");

@@ -14,7 +14,7 @@ const { test, expect } = require("@playwright/test");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { launchApp, closeApp, collectCoverage } = require("./helpers/app");
+const { launchApp, closeApp, collectCoverage, galleryCards } = require("./helpers/app");
 
 const MODEL = path.resolve(__dirname, "..", "native", "FaceEmbedding.mlpackage", "Manifest.json");
 const PEOPLE_IMAGES = path.resolve(__dirname, "fixtures", "people-images");
@@ -25,7 +25,7 @@ test.describe("people recognition with the bundled face model", () => {
 
   let ctx, dir;
   const groups = {}; // who → { id, photos }
-  const cards = () => ctx.window.locator("[data-gallery-item='true']");
+  const cards = () => galleryCards(ctx.window);
   const nameOf = (file) => path.basename(file);
   const openPeople = async () => {
     await ctx.window.getByRole("navigation").getByRole("button", { name: "People" }).click();

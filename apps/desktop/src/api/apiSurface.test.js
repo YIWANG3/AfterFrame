@@ -3,13 +3,15 @@
 //   electron/preload.js        the table's bindings + hand-written extras
 //   src/api/index.js           the facade: generated from the table + the
 //                              same hand-written extras
-//   src/api/browser/bridge.js  the web build's in-browser implementation
+//   src/api/browser/*.js       the web build's in-browser implementation:
+//                              bridge.js assembles one `<domain>Methods`
+//                              object per module
 // A hand-written method added to one file and forgotten in another fails
-// silently — invoke() returns undefined for an unknown name. The two Electron
-// files are parsed as text on purpose: preload requires electron and the
-// bridge assumes a browser, so neither imports here.
+// silently — invoke() returns undefined for an unknown name (it warns in
+// dev). The two Electron files are parsed as text on purpose: preload
+// requires electron and the bridge assumes a browser, so neither imports here.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { IPC_METHODS, IPC_METHOD_NAMES } from "../../shared/ipcChannels.mjs";
@@ -29,7 +31,8 @@ function keysOfObjectLiteral(source, openMarker) {
   const keys = new Set();
   for (const line of body.split("\n")) {
     if (/^\}[);]/.test(line)) break;                       // end of the top-level literal
-    const m = /^ {2}(?:get |async )?([A-Za-z_$][\w$]*)\s*[:(]/.exec(line);
+    // `name: …`, `name(…)`, `get name()`, and the shorthand `name,`.
+    const m = /^ {2}(?:get |async )?([A-Za-z_$][\w$]*)\s*(?:[:(]|,$)/.exec(line);
     if (m) keys.add(m[1]);
   }
   return keys;
@@ -38,7 +41,23 @@ function keysOfObjectLiteral(source, openMarker) {
 const table = new Set(IPC_METHOD_NAMES);
 const preloadHand = keysOfObjectLiteral(read("../../electron/preload.js"), 'contextBridge.exposeInMainWorld("mediaWorkspace", {');
 const facadeHand = keysOfObjectLiteral(read("./index.js"), "const api = {");
-const bridge = keysOfObjectLiteral(read("./browser/bridge.js"), "export const browserBridge = {");
+// Every method the web bridge ends up with: the assembly's own entries plus
+// each domain module's `<domain>Methods` literal. A method defined in two
+// modules would be silently overridden by the later spread, so that is an
+// error too.
+const BRIDGE_MARKER = /^export const (\w+Methods|browserBridge) = \{$/gm;
+const bridgeModules = new Map(); // method → module file
+for (const file of readdirSync(fileURLToPath(new URL("./browser/", import.meta.url))).sort()) {
+  if (!/\.js$/.test(file) || /\.test\.js$/.test(file)) continue;
+  const text = read(`./browser/${file}`);
+  for (const [marker] of text.matchAll(BRIDGE_MARKER)) {
+    for (const key of keysOfObjectLiteral(text, marker)) {
+      if (bridgeModules.has(key)) throw new Error(`${key} is defined in both ${bridgeModules.get(key)} and ${file}`);
+      bridgeModules.set(key, file);
+    }
+  }
+}
+const bridge = new Set(bridgeModules.keys());
 
 const preload = new Set([...table, ...[...preloadHand].filter((k) => !PRELOAD_META.has(k))]);
 const facadeMethods = new Set([...table, ...[...facadeHand].filter((k) => !FACADE_META.has(k))]);
@@ -52,6 +71,10 @@ describe("API surface parity", () => {
     expect(preloadHand.size).toBeGreaterThan(5);
     expect(facadeHand.size).toBeGreaterThan(5);
     expect(bridgeMethods.size).toBeGreaterThan(50);
+    // The split is real: methods come from several modules, and the assembly
+    // itself still holds some (the subscriptions).
+    expect(new Set(bridgeModules.values()).size).toBeGreaterThan(5);
+    expect(bridgeModules.get("onCatalogChanged")).toBe("bridge.js");
   });
 
   it("the table has no duplicate method or channel, and an arity for every row", () => {

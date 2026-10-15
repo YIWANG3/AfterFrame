@@ -7,6 +7,7 @@ import { useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import VideoPlayer from "./VideoPlayer";
 import api from "../api";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
+import { Z } from "../ui";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
@@ -611,8 +612,9 @@ export default function Lightbox({
 
   return (
     <div
+      style={{ zIndex: Z.lightbox }}
       className={[
-        "fixed inset-0 z-[10050] flex flex-col",
+        "fixed inset-0 flex flex-col",
         proofMode ? "bg-white" : "bg-black/90 backdrop-blur-sm",
       ].join(" ")}
       data-lightbox-proof={proofMode ? "true" : "false"}

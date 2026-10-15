@@ -10,7 +10,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, galleryCards } = require("./helpers/app");
 const { devPython } = require("../electron/sidecar/transport");
 
 let ctx;
@@ -33,7 +33,7 @@ test.afterAll(async () => {
 test("a schema-5 catalog opens, migrates to the current schema and keeps its asset", async () => {
   // The legacy asset's file never existed on this machine: it must still be
   // listed (as missing), with its rating and camera carried across.
-  const card = ctx.window.locator("[data-gallery-item='true']");
+  const card = galleryCards(ctx.window);
   await expect(card).toHaveCount(1, { timeout: 15_000 });
   await expect(ctx.window.getByRole("button", { name: "All Assets 1" })).toBeVisible();
 

@@ -2,13 +2,13 @@
 // renderer UI and the native (main-process) menu, live.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 let ctx;
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "i18n" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {

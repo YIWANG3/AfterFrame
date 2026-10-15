@@ -10,7 +10,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const sharp = require("sharp");
-const { launchApp, closeApp, byImagePath, importThroughToolbar } = require("./helpers/app");
+const { launchApp, closeApp, byImagePath, importThroughToolbar, galleryCards } = require("./helpers/app");
 const { tagPhotos, writeUniqueJpeg } = require("./helpers/images");
 const { captureElement } = require("./helpers/screenshot");
 
@@ -40,7 +40,7 @@ test.describe("Map drawer", () => {
     const pageErrors = [];
     const recordPageError = (error) => pageErrors.push(error.message);
     window.on("pageerror", recordPageError);
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
     // Tag the gallery scroll container so we can prove the same DOM node
     // survives the toggle (items are virtualized, so tiles may re-mount when
     // the gallery height changes — the container must not).
@@ -78,7 +78,7 @@ test.describe("Map drawer", () => {
     // Same gallery instance, not a copy: the sentinel container is still there
     // with tiles inside it.
     await expect(window.locator("[data-testid='gallery-scroll'][data-map-spec-sentinel='1']")).toHaveCount(1);
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible();
+    await expect(galleryCards(window).first()).toBeVisible();
 
     // Two far-apart GPS points → photo markers appear on the world view.
     await expect(window.locator(".photo-map-marker").first()).toBeVisible({ timeout: 15_000 });
@@ -94,15 +94,15 @@ test.describe("Map drawer", () => {
     await window.evaluate(() => window.__afterframeMapTest.jumpTo([2.35, 48.85], 5));
 
     await expect(window.locator("[data-testid='geo-filter-chip']")).toBeVisible({ timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1, { timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']").first()).toHaveAttribute("data-asset-id", /.+/);
+    await expect(galleryCards(window)).toHaveCount(1, { timeout: 10_000 });
+    await expect(galleryCards(window).first()).toHaveAttribute("data-asset-id", /.+/);
   });
 
   test("removing the Location chip restores the gallery but keeps the map open", async () => {
     await window.locator("[data-testid='geo-filter-chip']").click();
     await expect(window.locator("[data-testid='geo-filter-chip']")).toHaveCount(0);
     await expect
-      .poll(async () => window.locator("[data-gallery-item='true']").count(), { timeout: 10_000 })
+      .poll(async () => galleryCards(window).count(), { timeout: 10_000 })
       .toBeGreaterThan(2);
     // Map still expanded.
     const drawer = window.locator("[data-testid='map-drawer']");
@@ -113,7 +113,7 @@ test.describe("Map drawer", () => {
     // Re-engage the viewport filter: Tokyo viewport → only 002-orange remains.
     await window.evaluate(() => window.__afterframeMapTest.jumpTo([139.69, 35.68], 5));
     await expect(window.locator("[data-testid='geo-filter-chip']")).toBeVisible({ timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1, { timeout: 10_000 });
+    await expect(galleryCards(window)).toHaveCount(1, { timeout: 10_000 });
 
     await window.locator("[data-testid='map-toggle']").click();
     const drawer = window.locator("[data-testid='map-drawer']");
@@ -124,7 +124,7 @@ test.describe("Map drawer", () => {
     // the drawer drops it and the full gallery comes back.
     await expect(window.locator("[data-testid='geo-filter-chip']")).toHaveCount(0);
     await expect
-      .poll(async () => window.locator("[data-gallery-item='true']").count(), { timeout: 10_000 })
+      .poll(async () => galleryCards(window).count(), { timeout: 10_000 })
       .toBeGreaterThan(2);
   });
 
@@ -140,8 +140,8 @@ test.describe("Map drawer", () => {
 
     await window.evaluate(() => window.__afterframeMapTest.jumpTo([151.21, -33.87], 5));
     await expect(window.locator("[data-testid='geo-filter-chip']")).toBeVisible({ timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1, { timeout: 10_000 });
-    await expect(window.locator("[data-gallery-item='true']").first()).toContainText("004-green");
+    await expect(galleryCards(window)).toHaveCount(1, { timeout: 10_000 });
+    await expect(galleryCards(window).first()).toContainText("004-green");
     // Clean up for the following tests: drop the geo filter by collapsing.
     await window.locator("[data-testid='map-toggle']").click();
     await expect(window.locator("[data-testid='geo-filter-chip']")).toHaveCount(0, { timeout: 10_000 });
@@ -158,7 +158,7 @@ test.describe("Map drawer", () => {
     // is open.
     await window.locator("[data-testid='display-mode-trigger']").click();
     await window.locator("[data-testid='display-mode-tiles']").click();
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible();
+    await expect(galleryCards(window).first()).toBeVisible();
   });
 });
 
@@ -171,7 +171,7 @@ test.describe("A Discover place on the map", () => {
 
   const HONOLULU = [-157.8583, 21.3069];
   let app, window, userDataDir, dir;
-  const cards = () => window.locator("[data-gallery-item='true']");
+  const cards = () => galleryCards(window);
   const chip = () => window.locator("[data-testid='geo-filter-chip']");
   const drawer = () => window.locator("[data-testid='map-drawer']");
   const mapState = () => window.evaluate(() => window.__afterframeMapTest.getState());
@@ -273,7 +273,7 @@ test.describe("The map's first open, on a Discover place", () => {
     }
     const files = tagPhotos(photos);
     ({ app, window, userDataDir } = await launchApp({ testName: "map-first-open" }));
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
     await importThroughToolbar(app, window, files);
     for (const file of files) await expect(window.locator(byImagePath(file))).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => window.evaluate(() => window.mediaWorkspace.getImportStatus().then((s) => !!s?.running)), { timeout: 30_000 }).toBe(false);

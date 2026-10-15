@@ -15,6 +15,7 @@ import PeopleSettings from "./settings/PeopleSettings";
 import WatermarkSettings from "./settings/WatermarkSettings";
 import ShortcutsSettings from "./settings/ShortcutsSettings";
 import { matchShortcut } from "../shortcuts/store";
+import { Z } from "../ui";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -68,12 +69,15 @@ export default function SettingsOverlay({
   useEffect(() => {
     if (open && !rootRef.current?.contains(document.activeElement)) rootRef.current?.focus({ preventScroll: true });
   }, [open]);
-  // Focus can still fall back to <body> (a field blurred on Enter, a dialog
-  // closed): keys aimed at nothing in particular are Settings' too.
+  // Focus can still be outside: back on <body> (a field blurred on Enter, a
+  // dialog closed), or on whatever held it when Settings opened over it and
+  // took it back before the focus above landed (seen on a slow CI runner:
+  // Escape went to the gallery and Settings stayed open). Settings is modal,
+  // so a key aimed anywhere outside it is Settings' too.
   useEffect(() => {
     if (!open) return undefined;
     function onKey(e) {
-      if (e.target !== document.body && e.target !== document.documentElement) return;
+      if (rootRef.current?.contains(e.target)) return;
       e.stopPropagation();
       if (isCloseKey(e)) { e.preventDefault(); onClose?.(); }
     }
@@ -89,7 +93,8 @@ export default function SettingsOverlay({
       tabIndex={-1}
       {...{ [TOP_LAYER_ATTR]: "true" }}
       data-settings-overlay=""
-      className="fixed inset-0 z-[11200] flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
+      style={{ zIndex: Z.settings }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       onKeyDown={(e) => {
         e.stopPropagation();

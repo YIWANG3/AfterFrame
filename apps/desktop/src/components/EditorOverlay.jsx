@@ -4,28 +4,26 @@ import { useTranslation } from "react-i18next";
 import { clamp, fileName } from "../utils/format";
 import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import useRawEditSource, { useNeutralRawRender } from "../hooks/useRawEditSource";
-import { MIN_FREE_ANGLE, MAX_FREE_ANGLE } from "./editor/cropMath";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
 import StickerPanel from "./editor/StickerPanel";
 import { useFrameTool } from "./editor/state/useFrameTool";
+import { useFramePlacement } from "./editor/state/useFramePlacement";
+import { useEditorTestApi } from "./editor/editorTestApi";
 import {
   getSourceDimensions,
   releaseCanvasImage,
   buildPreviewSource,
   buildDepthMaskCanvas,
-  buildTransformedCanvas, cutRotatedCrop,
+  buildTransformedCanvas,
   bgToCss,
 } from "./editor/render/canvasHelpers";
 import { drawLayersOnCanvas } from "./editor/render/drawLayers";
-import { createDefaultLayer, createOverlayLayer, createStickerLayer, measureTextWidthDOM } from "./editor/textState";
-import { FRAME_FONTS } from "./editor/frameTemplates";
+import { createOverlayLayer } from "./editor/textState";
 import { isFrameLayer } from "./editor/layerStack";
-import { outputGeometry } from "./editor/frameUserTemplates";
-import { backgroundLightness, layerBoxes, placeLogo, placeText, swapLogo } from "./editor/logoPlacement";
-import { invalidatePersonalLogos, isPersonalLogoRef, preparePersonalLogo } from "./editor/render/personalLogos";
+import { bakeCrop } from "./editor/render/bakeCrop";
 import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
 import EditorLoading from "./editor/components/EditorLoading";
@@ -33,11 +31,12 @@ import ToolRail from "./editor/components/ToolRail";
 import PanelChrome from "./editor/components/PanelChrome";
 import CropPanel from "./editor/components/CropPanel";
 import CropOverlay from "./editor/components/CropOverlay";
+import AngleRuler from "./editor/components/AngleRuler";
 import SplitPanel from "./editor/components/SplitPanel";
 import SplitOverlay from "./editor/components/SplitOverlay";
 import LutPanel from "./editor/LutPanel";
 import { useLutTool } from "./editor/state/useLutTool";
-import { fullSizeParallelism, gradeCanvas, lutPoolInfo } from "./editor/lut/lutPool";
+import { fullSizeParallelism, gradeCanvas } from "./editor/lut/lutPool";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
@@ -51,13 +50,15 @@ import { useStickerTool } from "./editor/state/useStickerTool";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
 import { useAddToFolder } from "../hooks/useAddToFolder";
-import { bool, clearPref, readPref, text, writePref } from "../utils/prefs";
+import { usePref } from "../hooks/usePref";
+import { Z } from "../ui";
+import { bool, text } from "../utils/prefs";
 import { matchShortcut } from "../shortcuts/store";
+import { shouldIgnoreKey } from "./editor/keys";
 import {
   PANEL_WIDTH,
   PANEL_GAP,
   CANVAS_SIDE_PADDING,
-  getStageBounds,
   getBasePlacement,
   getMinZoomForCrop,
   getImageRect,
@@ -87,13 +88,12 @@ function padEquals(a, b) {
 const SPLIT_DIR_PREF = "split.outputDir";
 const SPLIT_SUBFOLDER_PREF = "split.subfolder";
 
-// The folder split panels last went to, if it is still there (an unplugged
-// drive, a deleted folder: back to the original's folder).
-async function rememberedSplitDir() {
-  const dir = readPref(SPLIT_DIR_PREF, null, text(4096));
-  if (!dir || !api.has?.("statDirs")) return null;
+// Whether a remembered folder is still there (an unplugged drive, a deleted
+// folder: back to the original's folder).
+async function dirExists(dir) {
+  if (!api.has?.("statDirs")) return false;
   const found = await api.statDirs([dir]).catch(() => []);
-  return found?.includes(dir) ? dir : null;
+  return !!found?.includes(dir);
 }
 
 function createInitialSnapshot(viewportSize, transformedPreview) {
@@ -114,182 +114,6 @@ function createInitialSnapshot(viewportSize, transformedPreview) {
   };
 }
 
-
-// Editor shortcuts must not steal keys from text inputs / the layer editor.
-function shouldIgnoreKey(event) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return false;
-  const tagName = target.tagName;
-  return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
-}
-
-const RULER_W = 600;
-const TICK_RANGE = 45;
-const PX_PER_DEG = RULER_W / (TICK_RANGE * 2);
-
-function AngleRuler({ value, viewportWidth, viewportHeight, centerX, onChangeStart, onChange, onChangeEnd }) {
-  const trackRef = useRef(null);
-  const draggingRef = useRef(false);
-
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return undefined;
-
-    function angleFromX(clientX) {
-      const rect = el.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      return clamp(Math.round(((clientX - cx) / PX_PER_DEG) * 10) / 10, MIN_FREE_ANGLE, MAX_FREE_ANGLE);
-    }
-
-    function onPointerDown(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      draggingRef.current = true;
-      el.setPointerCapture(e.pointerId);
-      onChangeStart?.();
-      onChange(angleFromX(e.clientX));
-    }
-
-    function onPointerMove(e) {
-      if (!draggingRef.current) return;
-      onChange(angleFromX(e.clientX));
-    }
-
-    function onPointerUp(e) {
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-      onChangeEnd?.();
-    }
-
-    function onDblClick(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      onChangeStart?.();
-      onChange(0);
-      onChangeEnd?.();
-    }
-
-    el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("pointermove", onPointerMove);
-    el.addEventListener("pointerup", onPointerUp);
-    el.addEventListener("pointercancel", onPointerUp);
-    el.addEventListener("dblclick", onDblClick);
-    return () => {
-      el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("pointermove", onPointerMove);
-      el.removeEventListener("pointerup", onPointerUp);
-      el.removeEventListener("pointercancel", onPointerUp);
-      el.removeEventListener("dblclick", onDblClick);
-    };
-  }, [onChangeStart, onChange, onChangeEnd]);
-
-  const vw = viewportWidth || 0;
-  const top = viewportHeight - 88;
-  const left = centerX !== undefined ? centerX - RULER_W / 2 : (vw - RULER_W) / 2;
-
-  const ticks = [];
-  for (let deg = -TICK_RANGE; deg <= TICK_RANGE; deg++) {
-    const isMajor = deg % 10 === 0;
-    const isMid = deg % 5 === 0 && !isMajor;
-    const h = isMajor ? 16 : isMid ? 11 : 6;
-    const opacity = isMajor ? 0.6 : isMid ? 0.4 : 0.2;
-    ticks.push(
-      <div
-        key={deg}
-        style={{
-          position: "absolute",
-          left: `${RULER_W / 2 + deg * PX_PER_DEG}px`,
-          top: 0,
-          width: "1px",
-          height: `${h}px`,
-          background: "rgb(var(--text-color))",
-          opacity,
-          transform: "translateX(-0.5px)",
-        }}
-      />,
-    );
-    if (isMajor) {
-      ticks.push(
-        <div
-          key={`l${deg}`}
-          style={{
-            position: "absolute",
-            left: `${RULER_W / 2 + deg * PX_PER_DEG}px`,
-            top: `${h + 6}px`,
-            transform: "translateX(-50%)",
-            fontSize: "10px",
-            color: "rgb(var(--text-color))",
-            opacity: deg === 0 ? 0.6 : 0.3,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {deg}°
-        </div>,
-      );
-    }
-  }
-
-  const indicatorX = RULER_W / 2 + value * PX_PER_DEG;
-
-  return (
-    <div
-      className="pointer-events-auto absolute select-none"
-      style={{ left: `${left}px`, top: `${top}px`, width: `${RULER_W}px`, zIndex: 60 }}
-    >
-      <div
-        ref={trackRef}
-        data-testid="angle-ruler"
-        style={{
-          position: "relative",
-          width: `${RULER_W}px`,
-          height: "32px",
-          cursor: "ew-resize",
-          touchAction: "none",
-        }}
-      >
-        {ticks}
-        <div
-          style={{
-            position: "absolute",
-            left: `${indicatorX}px`,
-            top: 0,
-            width: "2px",
-            height: "14px",
-            background: "rgb(var(--accent-color))",
-            borderRadius: "1px",
-            transform: "translateX(-1px)",
-            opacity: 0.9,
-          }}
-        />
-      </div>
-      <div className="mt-0.5 text-center text-[11px] font-medium tabular-nums text-muted">
-        {value.toFixed(1)}°
-      </div>
-    </div>
-  );
-}
-
-// How light the photo is under a spot (output px): the corner a logo is put in
-// when there is no bar. 0 is black, 1 white.
-function photoLightness(source, geom, spot) {
-  const sample = document.createElement("canvas");
-  sample.width = 8;
-  sample.height = 8;
-  const ctx = sample.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(
-    source,
-    spot.cx - spot.width / 2 - geom.left + geom.cropX, spot.cy - spot.height / 2 - geom.top + geom.cropY, spot.width, spot.height,
-    0, 0, 8, 8,
-  );
-  const { data } = ctx.getImageData(0, 0, 8, 8);
-  let sum = 0;
-  for (let i = 0; i < data.length; i += 4) sum += (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
-  return sum / (data.length / 4);
-}
-
-const isLogoFileDrag = (event) => [...(event.dataTransfer?.items || [])]
-  .some((entry) => entry.kind === "file" && (entry.type === "image/svg+xml" || entry.type === "image/png"));
 
 export default function EditorOverlay({
   open, item, catalogKey = null, collections, sourceCollectionId, onAddToCollection, onClose, onSaveComplete, pushToast,
@@ -327,9 +151,12 @@ export default function EditorOverlay({
   // Split export destination: target folder (null = the original's folder)
   // and whether to create a <stem>_split subfolder inside it. Not part of the
   // undo history — a destination, not an edit. Both are remembered for the
-  // next photo (utils/prefs.js); a remembered folder that is gone is dropped.
-  const [splitOutputDir, setSplitOutputDir] = useState(null);
-  const [splitSubfolder, setSplitSubfolder] = useState(true);
+  // next photo (utils/prefs.js); a remembered folder is used only once it has
+  // been seen on disk for this photo, so one that is gone is dropped.
+  const [splitDirPref, setSplitDirPref, forgetSplitDir] = usePref(SPLIT_DIR_PREF, null, text(4096));
+  const [splitSubfolder, setSplitSubfolder] = usePref(SPLIT_SUBFOLDER_PREF, true, bool);
+  const [splitDirSeen, setSplitDirSeen] = useState(null);
+  const splitOutputDir = splitDirPref && splitDirSeen === splitDirPref ? splitDirPref : null;
   const [compareState, setCompareState] = useState(null); // { afterPath, layout: "side"|"stack" }
   // Text tool — selection + clipboard + layer CRUD (commits into the shared
   // history via commitLayers).
@@ -638,13 +465,22 @@ export default function EditorOverlay({
 
     composite.naturalWidth = sw;
     composite.naturalHeight = sh;
-    const nextPreview = buildPreviewSource(composite);
+    promoteBakedSource(composite, t("overlay.textApplied"));
+    layerResetHard();
+  }
+
+  // A baked canvas (the crop applied, the layers burnt in) becomes the working
+  // picture: later saves start from it (the native fast path is off — the file
+  // on disk no longer matches), the history is wiped and re-seeded by the
+  // initial-snapshot effect, and the LUT, which is not baked, carries over as
+  // the first step after the base.
+  function promoteBakedSource(canvas, message) {
+    const nextPreview = buildPreviewSource(canvas);
     const previousSource = sourceImageRef.current;
-    sourceImageRef.current = composite;
-    setSourceImage(composite);
+    sourceImageRef.current = canvas;
+    setSourceImage(canvas);
     setPreviewSource(nextPreview);
     nativeSaveSourcePathRef.current = null;
-    // The LUT is not baked: it carries over onto the new picture.
     carryLutRef.current = editorStateRef.current.lut;
     setBakedItem(itemKey);
     releaseCanvasImage(previousSource);
@@ -652,9 +488,8 @@ export default function EditorOverlay({
     quickSavePathRef.current = null;
     syncHistory([], -1);
     applyState(BASE_STATE);
-    setViewTransform(IDENTITY_VIEW_TRANSFORM);
-    layerResetHard();
-    setMessage("Text applied");
+    setViewTransform(IDENTITY_VIEW_TRANSFORM); // review F4: drop the old fit
+    setMessage(message);
   }
 
   // Reset editor state for a new source image (the image load itself lives in
@@ -674,9 +509,9 @@ export default function EditorOverlay({
     setTool("crop");
     setMessage("");
     setCompareState(null);
-    setSplitOutputDir(null);
-    setSplitSubfolder(readPref(SPLIT_SUBFOLDER_PREF, true, bool));
-    void rememberedSplitDir().then((dir) => { if (active && dir) setSplitOutputDir(dir); });
+    setSplitDirSeen(null);
+    const splitDir = splitDirPref;
+    if (splitDir) void dirExists(splitDir).then((found) => { if (active && found) setSplitDirSeen(splitDir); });
     setDepthError(null);
     baseSnapshotRef.current = null;
     quickSavePathRef.current = null;
@@ -942,16 +777,8 @@ export default function EditorOverlay({
   async function chooseSplitFolder() {
     const dir = await api.pickDirectory({ defaultPath: resolveSplitOutputDir(saveBasePath, splitOutputDir, false) || undefined });
     if (!dir) return;
-    setSplitOutputDir(dir);
-    writePref(SPLIT_DIR_PREF, dir);
-  }
-  function splitNextToOriginal() {
-    setSplitOutputDir(null);
-    clearPref(SPLIT_DIR_PREF);
-  }
-  function chooseSplitSubfolder(next) {
-    setSplitSubfolder(next);
-    writePref(SPLIT_SUBFOLDER_PREF, next);
+    setSplitDirPref(dir);
+    setSplitDirSeen(dir);
   }
 
   // Frame presets — their own module so EditorOverlay stays the orchestrator.
@@ -1009,374 +836,25 @@ export default function EditorOverlay({
     setCanvasPreset(null);
   }
 
-  // "My logo" into the frame. Where and at what size come from logoPlacement
-  // (a bar's right end, or beside what is already there; the photo's corner
-  // with no bar); a recolourable logo goes black on a light background and
-  // white on a dark one; the others keep their colours.
-  async function placePersonalLogo(logo) {
-    const source = transformedPreview;
-    if (!source || !logo) return;
-    const s = editorStateRef.current;
-    const pad = s.canvas?.pad || {};
-    const fullW = source.width || source.naturalWidth;
-    const fullH = source.height || source.naturalHeight;
-    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
-    const spot = placeLogo({
-      geom, pad, aspect: logo.width / Math.max(1, logo.height),
-      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
-    });
-    let color = null;
-    if (logo.tintable) {
-      const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
-      color = light < 0.55 ? "#ffffff" : "#141414";
-    }
-    const img = await preparePersonalLogo(logo, color);
-    stickerImageCache.set(img.src, img);
-    const layer = createStickerLayer(
-      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: logo.name },
-      {
-        x: (spot.cx - geom.left + geom.cropX) / fullW,
-        y: (spot.cy - geom.top + geom.cropY) / fullH,
-        scale: spot.width / fullW,
-        logoRef: { source: "personal", id: logo.id, color },
-        fromPreset: true, // part of the frame
-      },
-    );
-    commitLayers([...layersRef.current, layer]);
-    setSelectedIds(new Set([layer.id]));
-  }
+  const {
+    placePersonalLogo, placeCameraLogo, chooseCameraLogo, addFrameText, saveFrameTemplate,
+    logoDropActive, handleLogoDrop, handleLogoDragOver, handleLogoDragLeave,
+  } = useFramePlacement({
+    transformedPreview, normalizedCrop, editorStateRef, layersRef, stickerImageCache, frameToolRef,
+    commitLayers, setSelectedIds, setTool, pushToast, t,
+  });
 
-  // One of the camera's logos into the frame: from the brand row (`level`
-  // "brand": Sony's "symbol" α or its "wordmark", or the brand's logo of mine)
-  // or the model row (its own logo), placed like my logos and coloured for
-  // what is behind it. A template finds it again for the next photo's camera.
-  async function placeCameraLogo({ level = "brand", variant } = {}) {
-    const source = transformedPreview;
-    const tool = frameToolRef.current;
-    if (!source || !tool?.cameraLogo) return;
-    const s = editorStateRef.current;
-    const pad = s.canvas?.pad || {};
-    const fullW = source.width || source.naturalWidth;
-    const fullH = source.height || source.naturalHeight;
-    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
-    const ref = { variant: variant || "wordmark", kind: null, strict: false, color: "#141414", ...(level === "brand" ? { scope: "brand" } : {}) };
-    const probe = await tool.brandLogoFor(ref);
-    if (!probe) return;
-    const spot = placeLogo({
-      geom, pad, aspect: probe.naturalWidth / Math.max(1, probe.naturalHeight),
-      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
-    });
-    const light = spot.region === "photo" ? photoLightness(source, geom, spot) : backgroundLightness(s.canvas?.bg);
-    if (light < 0.55) ref.color = "#ffffff";
-    const img = (await tool.brandLogoFor(ref)) || probe;
-    stickerImageCache.set(img.src, img);
-    const layer = createStickerLayer(
-      { stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, sourceLabel: await tool.cameraLogoLabel(level) },
-      {
-        x: (spot.cx - geom.left + geom.cropX) / fullW,
-        y: (spot.cy - geom.top + geom.cropY) / fullH,
-        scale: spot.width / fullW,
-        logoRef: ref,
-        fromPreset: true, // part of the frame
-      },
-    );
-    commitLayers([...layersRef.current, layer]);
-    setSelectedIds(new Set([layer.id]));
-  }
-
-  // Give the camera's brand, or just its model, one of my logos (null: take
-  // that choice back). The
-  // camera logos already in this frame follow, each keeping its end of the
-  // bar and its weight (swapLogo); one with no logo now is taken out. A frame
-  // that had none gets the new logo placed.
-  async function chooseCameraLogo(logo, scope) {
-    const tool = frameToolRef.current;
-    if (!tool) return;
-    const logoId = logo?.id || null;
-    await tool.setCameraLogo(logoId, scope);
-    const source = transformedPreview;
-    if (!source) return;
-    const fullW = source.width || source.naturalWidth;
-    const fullH = source.height || source.naturalHeight;
-    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad: editorStateRef.current.canvas?.pad || {} });
-    const isCameraLogo = (layer) => layer.type === "sticker" && layer.logoRef && !isPersonalLogoRef(layer.logoRef);
-    const layers = layersRef.current;
-    if (!layers.some(isCameraLogo)) {
-      if (logoId) await placeCameraLogo({ level: scope === "model" ? "model" : "brand" });
-      return;
-    }
-    const labels = { brand: await frameToolRef.current.cameraLogoLabel("brand"), any: await frameToolRef.current.cameraLogoLabel() };
-    const next = [];
-    for (const layer of layers) {
-      if (!isCameraLogo(layer)) { next.push(layer); continue; }
-      const img = await frameToolRef.current.brandLogoFor(layer.logoRef);
-      if (!img) continue;
-      stickerImageCache.set(img.src, img);
-      next.push({
-        ...layer,
-        ...swapLogo({ layer, geom, aspect: img.naturalWidth / Math.max(1, img.naturalHeight) }),
-        stickerPath: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
-        sourceLabel: layer.logoRef.scope === "brand" ? labels.brand : labels.any,
-      });
-    }
-    commitLayers(next);
-    setSelectedIds((ids) => new Set([...ids].filter((id) => next.some((l) => l.id === id))));
-  }
-
-  // Photo info or free text into the frame: a bar's left end (then its
-  // centre, its right end), dark on a light background and light on a dark
-  // one; with no bar, the photo's bottom-left corner. Returns whether there
-  // was anything to add (a photo without a lens has no lens line).
-  function addFrameText({ text, tokenSource = null, secondary = false }) {
-    const source = transformedPreview;
-    if (!source || !text) return false;
-    const s = editorStateRef.current;
-    const pad = s.canvas?.pad || {};
-    const fullW = source.width || source.naturalWidth;
-    const fullH = source.height || source.naturalHeight;
-    const geom = outputGeometry({ fullW, fullH, crop: normalizedCrop, pad });
-    const family = FRAME_FONTS.grotesk;
-    const widthAt = (fontPx) => measureTextWidthDOM(text, { fontPx, weight: 400, family });
-    const spot = placeText({
-      geom, pad, widthAt, scale: secondary ? 0.75 : 1,
-      occupied: layerBoxes(layersRef.current, geom, measureTextWidthDOM),
-    });
-    const onPhoto = spot.region === "photo";
-    const light = onPhoto
-      ? photoLightness(source, geom, { cx: spot.cx, cy: spot.cy, width: widthAt(spot.fontPx), height: spot.fontPx * 1.2 })
-      : backgroundLightness(s.canvas?.bg);
-    const layer = createDefaultLayer({
-      text, ...(tokenSource ? { tokenSource } : {}),
-      fontFamily: family, fontWeight: 400, fontSize: (spot.fontPx * 1920) / fullW,
-      fillColor: light < 0.55 ? "#f4f4f4" : "#1a1a1a",
-      shadow: onPhoto, shadowColor: light < 0.55 ? "#000000" : "#ffffff",
-      x: (spot.cx - geom.left + geom.cropX) / fullW,
-      y: (spot.cy - geom.top + geom.cropY) / fullH,
-      fromPreset: true, // part of the frame
-    });
-    commitLayers([...layersRef.current, layer]);
-    setSelectedIds(new Set([layer.id]));
-    return true;
-  }
-
-  // An SVG or PNG dragged in from Finder becomes one of my logos, placed at once.
-  const [logoDropActive, setLogoDropActive] = useState(false);
-  const canImportLogo = api.has("importPersonalLogo");
-  async function handleLogoDrop(event) {
-    setLogoDropActive(false);
-    const files = [...(event.dataTransfer?.files || [])].filter((file) => /\.(svg|png)$/i.test(file.name));
-    if (!canImportLogo || !files.length) return;
-    event.preventDefault();
-    for (const file of files) {
-      const filePath = api.getPathForFile(file) || file.path;
-      if (!filePath) continue;
-      const res = await api.importPersonalLogo(filePath);
-      if (res?.error) {
-        pushToast?.({
-          title: t(`border.logoErrors.${res.error}`, { message: res.message || "", defaultValue: t("border.logoErrors.failed", { message: res.error }) }),
-          tone: "error", ttl: 6000,
-        });
-        continue;
-      }
-      if (!res?.logo) continue;
-      invalidatePersonalLogos();
-      setTool("frame");
-      await placePersonalLogo(res.logo);
-      pushToast?.({ title: t("border.logoImported"), message: res.logo.name, ttl: 3000 });
-    }
-  }
-
-  // "Save as template": the look as it stands (margins, background, every
-  // layer) becomes one of the user's frame templates.
-  async function saveFrameTemplate(name) {
-    const s = editorStateRef.current;
-    try {
-      // Only the frame: what is written on the photo stays with the photo.
-      const res = await frameToolRef.current?.saveTemplate?.(name, {
-        layers: layersRef.current.filter(isFrameLayer), pad: s.canvas?.pad || {}, bg: s.canvas?.bg || null,
-      });
-      if (!res) return;
-      pushToast?.({
-        title: t("border.templateSaved"),
-        message: res.skipped ? t("border.templateSkipped", { count: res.skipped }) : name,
-        ttl: res.skipped ? 7000 : 4000,
-      });
-    } catch (error) {
-      pushToast?.({ title: t("border.templateFailed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
-    }
-  }
-
-  // Test backdoor — let E2E specs drive the editor (save to a known path,
-  // switch tools, read state …) without the native dialogs. The method table
-  // is rebuilt every render so each closure sees the current state, and
-  // installed once per open through the ref: re-installing on every state
-  // change (the old shape) left gaps a polling spec could land in.
-  const testApiRef = useRef(null);
-  testApiRef.current = {
-    // executeSave is itself kept in a ref (see executeSaveRef) so a backdoor
-    // save after rotating never runs an older closure and saves unrotated.
-    saveAs: (path) => executeSaveRef.current?.(path),
-    // Preview decoded. 18-editor-transform polls this while it deliberately
-    // holds back viewport measurements, so it must not imply a measured stage.
-    getPreviewReady: () => previewReadyRef.current,
-    // Ready to EDIT: preview decoded AND the initial snapshot is in history.
-    // waitForEditor({ preview: true }) waits for this — on a slow runner the
-    // viewport measures late, the base snapshot lands after the test's first
-    // edit, and an undo at history index 0 is a no-op (CI 19-editor-layers,
-    // 2026-09-17). And reset for this photo: a reopened editor still holds
-    // the last session's preview and snapshot until its picture is decided
-    // (a RAW's HD, seconds on an Intel Mac), and an edit made then is wiped.
-    getEditReady: () => resetItemRef.current === itemKey && previewReadyRef.current && !!baseSnapshotRef.current,
-    sampleSourcePixel: (fx = 0.5, fy = 0.5) => {
-      const source = sourceImageRef.current;
-      const { width, height } = getSourceDimensions(source);
-      if (!source || !width || !height) return null;
-      const sample = document.createElement("canvas");
-      sample.width = 1;
-      sample.height = 1;
-      const sx = Math.min(width - 1, Math.max(0, Math.round(fx * (width - 1))));
-      const sy = Math.min(height - 1, Math.max(0, Math.round(fy * (height - 1))));
-      sample.getContext("2d").drawImage(source, sx, sy, 1, 1, 0, 0, 1, 1);
-      return [...sample.getContext("2d").getImageData(0, 0, 1, 1).data];
-    },
-    addTextLayer: (text) => addTextLayer(text),
-    setTestLayers: (next) => commitLayers(next),
-    loadTestDepth: (path) => loadDepthFromPath(path),
-    getLayerCount: () => layers.length,
-    getTool: () => tool,
-    setTool: (t) => setTool(t),
-    // Characterization backdoor for the refactor safety-net (Phase 0).
-    getState: () => {
-      const s = editorStateRef.current;
-      return {
-        tool,
-        aspectKey: s.aspectKey,
-        quarterTurns: s.quarterTurns,
-        freeAngle: s.freeAngle,
-        flipX: s.flipX,
-        flipY: s.flipY,
-        imageZoom: s.imageZoom,
-        imageOffsetX: s.imageOffsetX,
-        imageOffsetY: s.imageOffsetY,
-        hasCrop: !!s.cropRect,
-        cropRect: s.cropRect,
-        // The crop as of the latest committed render — what buildSaveArgs
-        // (and therefore a backdoor save) actually exports. `s.cropRect`
-        // above is the ref, updated synchronously by record(); polling it can
-        // pass a frame before the render that the save path reads.
-        cropRectRendered: cropRect,
-        // `layers` is the STORED (full-photo) basis; `displayLayers` is the
-        // derived current-basis position shown on screen.
-        layers: layers.map((l) => ({
-          id: l.id, type: l.type, x: l.x, y: l.y, scale: l.scale,
-          naturalWidth: l.naturalWidth, naturalHeight: l.naturalHeight,
-          // Text styling the panel/gesture specs assert on.
-          text: l.text, fontFamily: l.fontFamily, fontSize: l.fontSize, italic: l.italic, fillColor: l.fillColor, rotation: l.rotation,
-          strokeEnabled: !!l.strokeEnabled, strokeWidth: l.strokeWidth, shadow: !!l.shadow, shadowX: l.shadowX, bgMode: l.bgMode,
-          // Data URLs are megabytes — expose only the kind, not the payload.
-          stickerPathKind: typeof l.stickerPath === "string"
-            ? (l.stickerPath.startsWith("data:") ? "data" : "path")
-            : null,
-          logoRef: l.logoRef || null,
-          handwriting: l.handwriting
-            ? { text: l.handwriting.text, provider: l.handwriting.provider, styleId: l.handwriting.styleId }
-            : null,
-          // Overlay (蒙层) model: paint + where it covers.
-          ...(l.type === "overlay" ? {
-            fromPreset: !!l.fromPreset, mode: l.mode, opacity: l.opacity,
-            edge: l.edge, coverage: l.coverage,
-            gradientStops: l.gradient?.stops?.map((st) => ({ ...st })) || null,
-            gradientAngle: l.gradient?.angle,
-          } : {}),
-        })),
-        displayLayers: displayLayers.map((l) => ({ id: l.id, x: l.x, y: l.y })),
-        selectedIds: [...selectedIds],
-        historyIndex: historyIndexRef.current,
-        historyLength: historyRef.current.length,
-        canvasPad: s.canvas?.pad,
-        imageRect,
-        outputRect: screenOutputRect,
-        outputContentRect: screenOutputView?.contentRect || null,
-        viewTransform,
-        placement,
-        stageBounds: getStageBounds(viewportSize),
-      };
-    },
-    setAspect: (key) => commitAspect(key),
-    setPad: (pad) => {
-      applyCanvasPad({ top: 0, right: 0, bottom: 0, left: 0, ...pad }, { record: true });
-    },
-    clearFramePreset: () => clearFramePreset(),
-    applyFramePreset: (templateId) => {
-      const tpl = frameToolRef.current?.templates?.find((x) => x.id === templateId);
-      return tpl ? applyFramePreset(tpl) : undefined;
-    },
-    deleteLayer: (id) => handleDeleteLayer(id),
-    moveLayer: (id, dir) => handleMoveLayer(id, dir),
-    selectLayers: (ids) => selectLayers(ids),
-    undo: () => handleUndo(),
-    redo: () => handleRedo(),
-    // LUT tool (docs/lut-plan.md).
-    getLutState: () => ({
-      lut: editorStateRef.current.lut,
-      // Graded with the LUT chosen now (a switch shows the previous one
-      // until the new grade lands).
-      gradedReady: !!lutGradedTransformed && lutTool.gradedId === editorStateRef.current.lut?.id,
-      grading: lutTool.grading,
-      base: lutBase,
-      sourcePath,
-      library: lutTool.library
-        ? {
-            ...lutTool.library,
-            luts: lutTool.library.luts.map((l) => ({
-              id: l.id, name: l.name, group: l.group, source: l.source, log: l.log, error: l.error,
-            })),
-          }
-        : null,
-      errors: lutTool.errors,
-      pool: lutPoolInfo(),
-    }),
-    refreshLuts: async () => {
-      const next = await lutTool.refresh();
-      return next?.luts?.length ?? 0;
-    },
-    // The preview as drawn (graded at the current strength), 0..1 coords.
-    sampleDisplayPixel: (fx = 0.5, fy = 0.5) => {
-      const canvas = imageCanvasRef.current;
-      if (!canvas?.width) return null;
-      const x = Math.min(canvas.width - 1, Math.max(0, Math.round(fx * (canvas.width - 1))));
-      const y = Math.min(canvas.height - 1, Math.max(0, Math.round(fy * (canvas.height - 1))));
-      return [...canvas.getContext("2d").getImageData(x, y, 1, 1).data];
-    },
-    // Split tool (read through refs so the values are always current).
-    getSplitState: () => {
-      const st = splitToolRef.current;
-      return {
-        aspectKey: st.aspectKey, count: st.count, isAutoCount: st.isAutoCount,
-        rect: st.rect, rectPx: st.rectPx, splitImageRect: st.splitImageRect,
-        custom: st.custom,
-        outputDir: splitDestRef.current.outputDir, subfolder: splitDestRef.current.subfolder,
-        resolvedOutputDir: resolveSplitOutputDir(saveBasePath, splitDestRef.current.outputDir, splitDestRef.current.subfolder),
-        exporting: splitExportingRef.current,
-      };
-    },
-    exportSplit: (dir, subfolder) => splitExportRef.current?.(
-      dir ?? splitDestRef.current.outputDir, subfolder ?? splitDestRef.current.subfolder,
-    ),
-  };
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const keys = Object.keys(testApiRef.current);
-    const target = (window.__afterframeTest = window.__afterframeTest || {});
-    for (const k of keys) target[k] = (...args) => testApiRef.current[k](...args);
-    return () => {
-      for (const k of keys) delete target[k];
-    };
-  }, [open]);
-
-  const previewReadyRef = useRef(false);
-  previewReadyRef.current = !!previewSource;
+  // e2e backdoor (editorTestApi.js): the handles are passed fresh each render.
+  useEditorTestApi(open, {
+    executeSaveRef, previewReady: !!previewSource, resetItemRef, itemKey, baseSnapshotRef, sourceImageRef,
+    addTextLayer, commitLayers, loadDepthFromPath, layers, tool, setTool,
+    editorStateRef, cropRect, displayLayers, selectedIds, historyIndexRef, historyRef,
+    imageRect, screenOutputRect, screenOutputView, viewTransform, placement, viewportSize,
+    commitAspect, applyCanvasPad, clearFramePreset, applyFramePreset, frameToolRef,
+    deleteLayer: handleDeleteLayer, moveLayer: handleMoveLayer, selectLayers, undo: handleUndo, redo: handleRedo,
+    lutGradedTransformed, lutTool, lutBase, sourcePath, imageCanvasRef,
+    splitToolRef, splitDestRef, splitExportingRef, splitExportRef, saveBasePath,
+  });
 
   function handleApply() {
     flushLayerCommit();
@@ -1389,53 +867,10 @@ export default function EditorOverlay({
     // relative to the crop sub-rect (review F4). Storage has no pad → pad {}.
     const bakedLayers = bakeLayersIntoCrop(currentLayerHead(), transformedPreview, normalized, {});
 
-    // Promote the applied crop into the working source so subsequent saves use the edited base.
-    const { width: sourceWidth, height: sourceHeight } = getSourceDimensions(sourceImage);
-    // Quarter turns + flips give the basis imageRect / cropRect live in; the
-    // free angle turns the photo under the axis-aligned crop box about the
-    // box's centre, which is exactly what the crop UI shows (CSS rotate about
-    // cropCenter). Fractions are taken unclamped: with a free angle the box
-    // may legitimately reach past the unrotated photo's bounding box.
-    const transformed = buildTransformedCanvas(
-      sourceImage,
-      sourceWidth,
-      sourceHeight,
-      discreteRotationDeg,
-      flipX,
-      flipY,
-    );
-    const sx = transformed.width / imageRect.width;
-    const sy = transformed.height / imageRect.height;
-    const cropPx = {
-      x: (cropRect.x - imageRect.x) * sx,
-      y: (cropRect.y - imageRect.y) * sy,
-      width: cropRect.width * sx,
-      height: cropRect.height * sy,
-    };
-    const cropped = cutRotatedCrop(transformed, cropPx, freeAngle);
-    const cw = cropped.width;
-    const ch = cropped.height;
-    cropped.naturalWidth = cw;
-    cropped.naturalHeight = ch;
-
-    const nextPreview = buildPreviewSource(cropped);
-    const previousSource = sourceImageRef.current;
-    sourceImageRef.current = cropped;
-    setSourceImage(cropped);
-    setPreviewSource(nextPreview);
-    nativeSaveSourcePathRef.current = null;
-    // The LUT is not baked: it carries over onto the cropped picture.
-    carryLutRef.current = editorStateRef.current.lut;
-    setBakedItem(itemKey);
-    releaseCanvasImage(previousSource);
-    releaseCanvasImage(transformed);
-    baseSnapshotRef.current = null; // force re-initialization
-    quickSavePathRef.current = null; // reset quick-save path on new apply
-    syncHistory([], -1);
-    applyState(BASE_STATE);
-    setViewTransform(IDENTITY_VIEW_TRANSFORM); // review F4: drop the old fit
+    // The crop cut out of the full-resolution source becomes the working picture.
+    const cropped = bakeCrop(sourceImage, { cropRect, imageRect, discreteRotationDeg, flipX, flipY, freeAngle });
+    promoteBakedSource(cropped, t("overlay.applied"));
     applyLayers(bakedLayers); // history was just wiped; initial-snapshot effect will record it
-    setMessage("Applied");
   }
 
   // Shortcut handlers are effect events: they read whatever state is current
@@ -1545,18 +980,15 @@ export default function EditorOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[10100] flex flex-col bg-app text-text"
-      onDragOver={(event) => {
-        if (!canImportLogo || !isLogoFileDrag(event)) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
-        if (!logoDropActive) setLogoDropActive(true);
-      }}
-      onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setLogoDropActive(false); }}
+      className="fixed inset-0 flex flex-col bg-app text-text"
+      style={{ zIndex: Z.editor }}
+      onDragOver={handleLogoDragOver}
+      onDragLeave={handleLogoDragLeave}
       onDrop={handleLogoDrop}
     >
+      {/* The drop hint sits over the stage and the ruler: zIndex 60 inside the editor's own stacking context. */}
       {logoDropActive && (
-        <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-app/60" data-logo-drop-hint="true">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-app/60" style={{ zIndex: 60 }} data-logo-drop-hint="true">
           <div className="rounded-xl border border-dashed border-border bg-chrome px-6 py-4 text-[13px] text-text shadow-overlay">
             {t("border.dropLogo")}
           </div>
@@ -1865,9 +1297,9 @@ export default function EditorOverlay({
                 onResetRegion={splitTool.resetRegion}
                 outputDir={resolveSplitOutputDir(saveBasePath, splitOutputDir, splitSubfolder)}
                 subfolder={splitSubfolder}
-                onSubfolderChange={chooseSplitSubfolder}
+                onSubfolderChange={setSplitSubfolder}
                 onChooseFolder={chooseSplitFolder}
-                onUseOriginalFolder={splitOutputDir ? splitNextToOriginal : null}
+                onUseOriginalFolder={splitOutputDir ? forgetSplitDir : null}
                 folder={fileSaveFolder}
                 addToFolder={folderJoin.addToFolder}
                 onAddToFolderChange={folderJoin.setAddToFolder}

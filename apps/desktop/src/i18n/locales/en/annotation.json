@@ -23,6 +23,15 @@
   "configureHint": "Configure your provider in Settings → AI to enable annotation.",
   "generatesHint": "Generates a caption, tags, and a location guess.",
   "noProviderError": "No provider configured. Open Settings → AI to add one.",
+  "job": {
+    "noProviderTitle": "No AI provider",
+    "noProviderMsg": "Add a provider in Settings → AI first.",
+    "nothingTitle": "Nothing to annotate",
+    "allAnnotated": "All targets are already annotated.",
+    "noEligible": "No eligible images.",
+    "startFailed": "Couldn't start annotation",
+    "startFailedMsg": "Failed to start."
+  },
   "loadFailed": "Failed to load annotation",
   "loc": {
     "gpsNearby": "GPS takes priority. Place names below are nearby offline matches, not a verified address.",

@@ -12,7 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall, callTool: mcpTool } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, callTool: mcpTool, galleryCards } = require("./helpers/app");
 const { TINY_JPEG, makeImportDir } = require("./helpers/images");
 
 let ctx;
@@ -34,7 +34,7 @@ test.beforeAll(async () => {
       fs.rmSync(path.join(catalogDir, "previews-hd"), { recursive: true, force: true });
     },
   });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {

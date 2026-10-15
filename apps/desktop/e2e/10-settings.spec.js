@@ -3,13 +3,13 @@
 
 const { test, expect } = require("@playwright/test");
 const path = require("node:path");
-const { launchApp, closeApp, waitForEditor } = require("./helpers/app");
+const { launchApp, closeApp, waitForEditor, galleryCards } = require("./helpers/app");
 
 let ctx;
 
 test.beforeAll(async () => {
   ctx = await launchApp({ testName: "settings" });
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+  await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test.afterAll(async () => {
@@ -128,7 +128,7 @@ test("About tab renders the product blurb", async () => {
 test("Escape closes settings and restores the gallery", async () => {
   await ctx.window.keyboard.press("Escape");
   await expect(ctx.window.getByText("Auto-annotation providers")).toHaveCount(0);
-  await expect(ctx.window.locator("[data-gallery-item='true']").first()).toBeVisible();
+  await expect(galleryCards(ctx.window).first()).toBeVisible();
 });
 
 test("Settings opens over the editor and a collage, and keeps its keys to itself", async () => {
@@ -154,7 +154,7 @@ test("Settings opens over the editor and a collage, and keeps its keys to itself
 
   // Over a collage (whose Escape listener hears keys first): Escape closes
   // Settings only; the next one closes the collage.
-  const cards = w.locator("[data-gallery-item='true']");
+  const cards = galleryCards(w);
   await cards.nth(0).click();
   await cards.nth(1).click({ modifiers: ["Shift"] });
   await cards.nth(0).click({ button: "right" });

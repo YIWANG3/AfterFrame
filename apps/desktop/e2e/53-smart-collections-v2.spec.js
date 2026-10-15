@@ -4,11 +4,11 @@
 // group may hold. Every expected number is asked of the catalog.
 
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp, mcpCall } = require("./helpers/app");
+const { launchApp, closeApp, mcpCall, galleryCards } = require("./helpers/app");
 
 let ctx;
 let folderId;
-const cards = () => ctx.window.locator("[data-gallery-item='true']");
+const cards = () => galleryCards(ctx.window);
 const bar = () => ctx.window.locator("[data-filter-bar]");
 const dialog = () => ctx.window.locator("[data-filter-groups-dialog]");
 const option = (value) => ctx.window.locator(`[data-facet-option="${value}"]`);

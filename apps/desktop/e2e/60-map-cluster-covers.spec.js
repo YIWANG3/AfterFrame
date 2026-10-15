@@ -1,7 +1,7 @@
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 // Cluster markers show three cover photos. Every marker refresh (each moveend,
 // each tile a drag loads) used to blank those covers and fetch them again, so
@@ -42,7 +42,7 @@ test.describe("Map cluster covers", () => {
   });
 
   test("dragging the map leaves cluster covers in place", async () => {
-    await expect(window.locator("[data-gallery-item='true']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(galleryCards(window).first()).toBeVisible({ timeout: 15_000 });
     await window.locator("[data-testid='map-toggle']").click();
     await expect(window.locator(".photo-map-stage[data-map-ready='true']")).toBeVisible({ timeout: 30_000 });
 

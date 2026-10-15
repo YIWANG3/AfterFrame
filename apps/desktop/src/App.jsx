@@ -7,7 +7,7 @@ import { importTargets } from "./utils/importTargets";
 // URL fragment) instead of the raw URL in toasts.
 const toastPathLabel = (savePath) =>
   (api.capabilities.web ? decodeURIComponent(fileName(savePath)) : savePath);
-import useWorkspace from "./hooks/useWorkspace";
+import useWorkspace, { INSPECTOR_WIDTH_RANGE, SIDEBAR_WIDTH_RANGE } from "./hooks/useWorkspace";
 import api from "./api";
 import { registerRenderBridge } from "./agent/renderBridge";
 import i18n from "./i18n";
@@ -16,6 +16,10 @@ import { usePref } from "./hooks/usePref";
 import { intIn, oneOf } from "./utils/prefs";
 import useSelection from "./hooks/useSelection";
 import useAgentBridge from "./hooks/useAgentBridge";
+import useAssetActions from "./hooks/useAssetActions";
+import useCatalogCatchUp from "./hooks/useCatalogCatchUp";
+import useMapDrawer, { GALLERY_MIN_HEIGHT, MAP_HANDLE_HEIGHT, MAP_MIN_HEIGHT, defaultMapHeight } from "./hooks/useMapDrawer";
+import useStickerViewKeys from "./hooks/useStickerViewKeys";
 import Sidebar from "./components/Sidebar";
 import Toolbar, { DISPLAY_MODE_KEYS } from "./components/Toolbar";
 import Gallery from "./components/Gallery";
@@ -34,7 +38,6 @@ import FilterGroupsDialog from "./components/FilterGroupsDialog";
 import { activeFilterCount } from "./hooks/workspaceLogic";
 import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
-import useMapViewportFilter from "./components/map/useMapViewportFilter";
 import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
 import PeopleView from "./components/PeopleView";
 import PeopleInspector from "./components/PeopleInspector";
@@ -49,15 +52,8 @@ import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
 import { invalidateTags } from "./components/annotation/tagStore";
 import WindowTitleBar from "./components/WindowTitleBar";
-
-const MAP_EXPANDED_KEY = "afterframe-map-expanded";
-const MAP_HEIGHT_KEY = "afterframe-map-height";
-const MAP_MIN_HEIGHT = 220;
-const GALLERY_MIN_HEIGHT = 200;
-const MAP_HANDLE_HEIGHT = 10;
-// Missing thumbnails made in one background pass: a short wait for the first
-// of them to show, and few enough processes for a long list.
-const THUMBNAIL_PASS = 100;
+import { shouldIgnoreKey } from "./components/editor/keys";
+import { Z } from "./ui";
 
 function hasSelfDragMarkers() {
   return window.__mediaWorkspaceDraggingAssetIds != null
@@ -67,22 +63,6 @@ function hasSelfDragMarkers() {
 function clearSelfDragMarkers() {
   window.__mediaWorkspaceDraggingAssetId = null;
   window.__mediaWorkspaceDraggingAssetIds = null;
-}
-
-function defaultMapHeight() {
-  return Math.max(MAP_MIN_HEIGHT, Math.min(Math.round(window.innerHeight * 0.42), 420));
-}
-
-// Global shortcuts must not steal keys from text fields. Range sliders (e.g.
-// the lightbox zoom slider) take no text, so they don't swallow shortcuts —
-// otherwise Esc with the zoom slider focused never reaches the close-lightbox
-// handler (it just leaves the slider showing its focus ring).
-function shouldIgnoreKey(event) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return false;
-  const tagName = target.tagName;
-  if (tagName === "INPUT" && target.type === "range") return false;
-  return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
 export default function App() {
@@ -126,54 +106,32 @@ export default function App() {
     setCollageSourceId(workspace.activeCollectionId || null);
     setCollageItems(items);
   }
-  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people"
+  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people" | "discover"
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [mapExpanded, setMapExpanded] = useState(() => localStorage.getItem(MAP_EXPANDED_KEY) === "true");
-  const [mapHeight, setMapHeight] = useState(() => {
-    const saved = Number(localStorage.getItem(MAP_HEIGHT_KEY));
-    return Number.isFinite(saved) && saved >= MAP_MIN_HEIGHT ? saved : defaultMapHeight();
-  });
-  const [mapResizing, setMapResizing] = useState(false);
-  // Fly-to request for the map camera; a fresh object per click so repeated
-  // jumps to the same place still re-fire the PhotoMap effect.
-  const [mapFlyTo, setMapFlyTo] = useState(null);
   const workspaceSplitRef = useRef(null);
-
-  // Inspector "click a location" → expand the drawer and fly the camera there.
-  // Works for GPS and AI-resolved locations alike: both live in
-  // asset_locations, fetched RAW-first without the map's precision floor.
-  async function jumpToAssetLocation(assetId) {
-    if (!assetId) return;
-    let loc = null;
-    try { loc = await api.getAssetLocation(assetId); } catch { /* treated as no location */ }
-    const lat = Number(loc?.latitude);
-    const lon = Number(loc?.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      pushToast?.({ title: tNav("map.noLocation"), ttl: 4000 });
-      return;
-    }
-    const zoom = { exact: 14, locality: 10, admin1: 6, country: 4 }[loc.precision_level] ?? 12;
-    setMapExpanded(true);
-    setMapFlyTo({ lat, lon, zoom });
-  }
-
-  useEffect(() => { localStorage.setItem(MAP_EXPANDED_KEY, String(mapExpanded)); }, [mapExpanded]);
-  useEffect(() => { localStorage.setItem(MAP_HEIGHT_KEY, String(mapHeight)); }, [mapHeight]);
-
-  // Gallery keeps at least GALLERY_MIN_HEIGHT: clamp the drawer against the
-  // live workspace height (measured at interaction time, not render time).
-  const clampMapHeight = (height) => {
-    const available = workspaceSplitRef.current?.clientHeight || window.innerHeight;
-    const max = Math.max(MAP_MIN_HEIGHT, available - GALLERY_MIN_HEIGHT - MAP_HANDLE_HEIGHT);
-    return Math.min(max, Math.max(MAP_MIN_HEIGHT, Math.round(height)));
-  };
-
-  const { handleViewportChange, geoOnClose } = useMapViewportFilter({
-    enabled: mapExpanded,
+  const mapDrawer = useMapDrawer({
+    workspaceRef,
     filters: workspace.filters,
-    applyFilters: workspace.setFilters,
+    activeCollectionId: workspace.activeCollectionId,
+    splitRef: workspaceSplitRef,
+    pushToast,
   });
+  const { mapExpanded } = mapDrawer;
+
+  // Back to the gallery from another view (People, Stickers, Discover): the
+  // person a view opened is forgotten with it.
+  function goToGallery() {
+    setViewMode("assets");
+    setPeopleGroup(null);
+  }
+  // One of the other views: a folder is left behind (useWorkspace browses
+  // the library behind the view, so the gallery is right on the way back).
+  function openView(mode) {
+    setViewMode(mode);
+    setPeopleGroup(null);
+    workspace.clearCollection();
+  }
 
   const clearPeopleGroupFilter = () => {
     if (!workspace.filters?.person_group) return workspace.filters || {};
@@ -196,62 +154,16 @@ export default function App() {
     if (hasGeoFilter) setShowFilters(true);
   }, [hasGeoFilter]);
 
-  // Collapsing the map also drops the viewport filter: with the map hidden the
-  // chip is the only trace of it, and a gallery silently pinned to an invisible
-  // viewport reads as "my photos disappeared". A labelled geo filter (a
-  // Discover place/memory) has its own chip and stays put; one the user moved
-  // the map away from comes back (useMapViewportFilter.geoAfterClose).
-  useEffect(() => {
-    if (mapExpanded) return;
-    const current = workspaceRef.current.filters;
-    const next = geoOnClose(current?.geo);
-    if (next === current?.geo) return;
-    const { geo: _geo, ...rest } = current;
-    workspaceRef.current.setFilters(next ? { ...rest, geo: next } : rest);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapExpanded]);
-
-  // Opening the map on a gallery filtered to a place (a Discover place or
-  // memory) frames that place instead of the world view. The map's own move:
-  // the place filter stays until the user moves the map.
-  const placeGeo = workspace.filters?.geo?.label ? workspace.filters.geo : null;
-  const placeKey = placeGeo ? [placeGeo.west, placeGeo.south, placeGeo.east, placeGeo.north].join(",") : "";
-  const [mapFitBounds, setMapFitBounds] = useState(null);
-  useEffect(() => {
-    if (!mapExpanded || !placeKey) return;
-    const [west, south, east, north] = placeKey.split(",").map(Number);
-    setMapFitBounds({ west, south, east, north });
-  }, [mapExpanded, placeKey]);
-
-  // Entering a collection drops it too: the viewport belongs to wherever the
-  // user was looking before, and a folder opened through it would look empty
-  // for no visible reason. Moving the map inside the folder filters it afresh.
-  useEffect(() => {
-    if (!workspace.activeCollectionId) return;
-    const current = workspaceRef.current.filters;
-    if (!current?.geo) return;
-    const { geo: _geo, ...rest } = current;
-    workspaceRef.current.setFilters(rest);
-  }, [workspace.activeCollectionId]);
-
   // One-shot per catalog: when the map first opens, resolve any pre-existing
   // AI annotation locations into map points (offline gazetteer backfill).
   // New annotations resolve inline at save time in the sidecar.
-  const geoBackfillRef = useRef(new Set());
   const activeCatalogPath = workspace.info?.catalogPath || null;
-  useEffect(() => {
-    if (!mapExpanded || !activeCatalogPath) return;
-    if (geoBackfillRef.current.has(activeCatalogPath)) return;
-    geoBackfillRef.current.add(activeCatalogPath);
-    void (async () => {
-      try {
-        const stats = await api.resolveAiLocations();
-        if ((stats?.resolved || 0) + (stats?.cleared_stale || 0) > 0) {
-          workspaceRef.current.bumpCatalogRevision?.();
-        }
-      } catch { /* best-effort */ }
-    })();
-  }, [mapExpanded, activeCatalogPath]);
+  useCatalogCatchUp(mapExpanded ? activeCatalogPath : null, async () => {
+    const stats = await api.resolveAiLocations();
+    if ((stats?.resolved || 0) + (stats?.cleared_stale || 0) > 0) {
+      workspaceRef.current.bumpCatalogRevision?.();
+    }
+  });
 
   const peopleGroups = usePeopleGroups({
     pushToast,
@@ -271,52 +183,33 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [discoverCatalogKey, workspace.catalogRevision, workspace.browserReady]);
 
-  // Once per catalog: photos whose preview predates the colour filter get
-  // their dominant colours in a background job (nothing to do is answered
-  // without one). New previews bring their colours as they are rendered.
-  const colorsCatchUpRef = useRef(new Set());
-  useEffect(() => {
-    if (!discoverCatalogKey || !workspace.browserReady || !api.can("colors")) return;
-    if (colorsCatchUpRef.current.has(discoverCatalogKey)) return;
-    colorsCatchUpRef.current.add(discoverCatalogKey);
-    void (async () => {
-      try {
-        const started = await api.startColorAnalysis({ auto: true });
-        if (started?.jobId && started.running !== false) {
-          workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "colors" });
-        }
-      } catch { /* best-effort */ }
-    })();
-  }, [discoverCatalogKey, workspace.browserReady]);
-
-  // Once per catalog, too: thumbnails made before the photo's shape was
-  // recorded get it read (portrait / landscape, for the orientation filter
-  // and the layouts). A catalog from this version has nothing to do.
-  const orientationCatchUpRef = useRef(new Set());
-  useEffect(() => {
-    if (!discoverCatalogKey || !workspace.browserReady || !api.has("startOrientationScan")) return;
-    if (orientationCatchUpRef.current.has(discoverCatalogKey)) return;
-    orientationCatchUpRef.current.add(discoverCatalogKey);
-    void (async () => {
-      try {
-        const started = await api.startOrientationScan();
-        if (started?.jobId && started.running !== false) {
-          workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType: "orientation" });
-        }
-      } catch { /* best-effort */ }
-    })();
-  }, [discoverCatalogKey, workspace.browserReady]);
+  // Once per catalog, after the grid is up: a background job the sidecar
+  // answers without one when there is nothing to do. The poller follows it.
+  const readyCatalogKey = workspace.browserReady ? discoverCatalogKey : null;
+  const followJob = (jobType) => (started) => {
+    if (started?.jobId && started.running !== false) {
+      workspaceRef.current.pokeJobs?.({ jobId: started.jobId, jobType });
+    }
+  };
+  // Photos whose preview predates the colour filter get their dominant
+  // colours. New previews bring their colours as they are rendered.
+  useCatalogCatchUp(api.can("colors") ? readyCatalogKey : null, async () => {
+    followJob("colors")(await api.startColorAnalysis({ auto: true }));
+  });
+  // Thumbnails made before the photo's shape was recorded get it read
+  // (portrait / landscape, for the orientation filter and the layouts).
+  useCatalogCatchUp(api.has("startOrientationScan") ? readyCatalogKey : null, async () => {
+    followJob("orientation")(await api.startOrientationScan());
+  });
 
   // Discover entries open the gallery as a clean destination: no inherited
   // collection/status/query/facets, filter bar shown when there is something
   // to show, map drawer opened (and flown) only for map-shaped entries.
   const openDiscoverTarget = ({ status = "all", filters = {}, collectionId = null, map = null } = {}) => {
-    setViewMode("assets");
-    setPeopleGroup(null);
+    goToGallery();
     workspace.browseTo({ status, filters, collectionId });
     setShowFilters(Object.keys(filters).length > 0);
-    setMapExpanded(!!map);
-    if (map?.flyTo) setMapFlyTo({ ...map.flyTo, nonce: Date.now() });
+    mapDrawer.showMapFor(map);
   };
 
   const openPersonGroup = (group) => {
@@ -401,8 +294,10 @@ export default function App() {
     if (!stickerView.selected) return 0;
     return Math.max(0, stickerItemsForLightbox.findIndex((it) => it.asset_id === stickerView.selected.id));
   }, [stickerItemsForLightbox, stickerView.selected]);
-  const resizeSidebar = usePaneResize(workspace.setSidebarWidth, 200, 360);
-  const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -420, -240);
+  const handleStickerKey = useStickerViewKeys({ stickerView, items: stickerItemsForLightbox, lightboxOpen, setLightboxOpen });
+  const resizeSidebar = usePaneResize(workspace.setSidebarWidth, ...SIDEBAR_WIDTH_RANGE);
+  // Dragged from the right edge, so the value grows leftwards.
+  const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -INSPECTOR_WIDTH_RANGE[1], -INSPECTOR_WIDTH_RANGE[0]);
   const currentItems = workspace.filteredItems;
   const orderedIds = useMemo(() => currentItems.map((item) => item.asset_id), [currentItems]);
   const itemById = useMemo(
@@ -437,6 +332,7 @@ export default function App() {
 
   const [dropActive, setDropActive] = useState(false);
   const { annotate: runAnnotation } = useAnnotationJob(pushToast, workspace.pokeJobs);
+  const { deleteAssets, deleteFromDisk, copyAssetField, ensureThumbnails, refreshAssetsFromDisk } = useAssetActions({ workspaceRef, itemById, pushToast });
 
   // webContents.startDrag only starts the OS drag; its IPC response is not a
   // drag-finished signal. Keep the self-drag markers alive until an actual
@@ -473,7 +369,7 @@ export default function App() {
     itemById,
     pushToast,
     onBeforeReveal: () => {
-      setViewMode("assets");
+      goToGallery();
       setLightboxOpen(false);
     },
   });
@@ -495,57 +391,6 @@ export default function App() {
     if (!orderedIds.length) return false;
     setSelectedIds(orderedIds);
     return true;
-  };
-
-  const deleteAssets = async (ids) => {
-    const list = [...new Set((ids || []).filter(Boolean))];
-    if (!list.length) return;
-    const ok = await confirm({
-      title: t("deleteTitle"),
-      message: t("deleteMsg", { count: list.length }),
-      detail: t("deleteDetail"),
-      confirmLabel: t("remove"),
-      cancelLabel: t("cancel"),
-      danger: true,
-    });
-    if (!ok) return;
-    await workspaceRef.current.deleteImageAssets(list);
-  };
-
-  const deleteFromDisk = async (ids) => {
-    const list = [...new Set((ids || []).filter(Boolean))];
-    if (!list.length) return;
-    const ok = await confirm({
-      title: t("diskDeleteTitle"),
-      message: t("diskDeleteMsg", { count: list.length }),
-      detail: t("diskDeleteDetail"),
-      confirmLabel: t("diskDeleteConfirm"),
-      cancelLabel: t("cancel"),
-      danger: true,
-    });
-    if (!ok) return;
-    const paths = list.map((id) => itemById.get(id)?.image_path).filter(Boolean);
-    const result = await workspaceRef.current.deleteImageAssetsFromDisk(list, paths);
-    if (result?.failed?.length) {
-      pushToast?.({
-        title: t("diskDeleteFailed", { count: result.failed.length }),
-        tone: "error",
-        ttl: 5000,
-      });
-    }
-  };
-
-  const copyAssetField = async (ids, field) => {
-    const paths = (ids || [])
-      .map((id) => itemById.get(id)?.image_path)
-      .filter(Boolean);
-    if (!paths.length) return;
-    const texts = field === "name" ? paths.map((p) => fileName(p)) : paths;
-    await api.copyText(texts.join("\n"));
-    pushToast?.({
-      title: t(field === "name" ? "copiedName" : "copiedPath", { count: texts.length }),
-      ttl: 2000,
-    });
   };
 
   // What ⌘C / Edit › Copy copies: in the lightbox the photo on screen, else
@@ -580,63 +425,6 @@ export default function App() {
       message: skipped ? t("copiedFilesMissing", { count: skipped }) : undefined,
       ttl: skipped ? 4000 : 2000,
     });
-  };
-
-  // Thumbnails the gallery is missing, made in the background where missing,
-  // THUMBNAIL_PASS at a time from the top of the grid down. After each pass
-  // the grid is asked again, so they show as they come. Something skipped as
-  // ready was made since the grid loaded (by an import, say): that too.
-  const ensureThumbnails = async (ids) => {
-    const paths = [...new Set((ids || []).map((id) => itemById.get(id)?.image_path).filter(Boolean))];
-    for (let start = 0; start < paths.length; start += THUMBNAIL_PASS) {
-      let result;
-      try {
-        result = await api.ensurePreviews(paths.slice(start, start + THUMBNAIL_PASS));
-      } catch {
-        return; // the pass failed: the cards go on saying "No preview"
-      }
-      if (Number(result?.generated || 0) + Number(result?.skipped || 0) > 0) {
-        await workspace.refreshAll({ preserveView: true });
-      }
-    }
-  };
-
-  const refreshAssetsFromDisk = async (ids, { silent = false } = {}) => {
-    const paths = [...new Set((ids || []).map((id) => itemById.get(id)?.image_path).filter(Boolean))];
-    if (!paths.length) return null;
-    if (!silent) pushToast?.({ title: t("refreshingAssets", { count: paths.length }), ttl: 2500 });
-    try {
-      const result = await api.refreshAssets(paths);
-      await workspace.refreshAll({ preserveView: true });
-      const deferred = Number(result?.deferred || 0);
-      const failed = Number(result?.failed || 0);
-      const completed = Math.max(0, paths.length - deferred);
-      if (!silent) {
-        pushToast?.({
-          title: completed
-            ? t("refreshAssetsComplete", { count: completed })
-            : t("refreshAssetsPostponed"),
-          message: deferred
-            ? t("refreshAssetsDeferred", { count: deferred })
-            : failed
-              ? t("refreshAssetsSomeFailed", { count: failed })
-              : t("refreshAssetsCompleteMsg"),
-          tone: failed ? "error" : undefined,
-          ttl: 5000,
-        });
-      }
-      return result;
-    } catch (error) {
-      if (!silent) {
-        pushToast?.({
-          title: t("refreshAssetsFailed"),
-          message: error?.message || String(error),
-          tone: "error",
-          ttl: 6000,
-        });
-      }
-      return null;
-    }
   };
 
   // Fresh-closure handle so the menu subscription below can stay a one-time
@@ -743,10 +531,9 @@ export default function App() {
     } else if (fin.status === "failed" && fin.jobType !== "ai_repaint") {
       // Generic failure surfacing for the other job types (the editor handles
       // ai_repaint errors inline).
-      const labels = { import: "Import", preview: "Preview generation", enrichment: "Enrichment", colors: "Colour analysis" };
       pushToast?.({
-        title: `${labels[fin.jobType] || fin.jobType} failed`,
-        message: fin.error || "Job failed.",
+        title: t("jobTypeFailed", { job: tNav(`activity.jobs.${fin.jobType}`, fin.jobType) }),
+        message: fin.error || t("jobFailed"),
         ttl: 7000,
         tone: "error",
       });
@@ -1258,7 +1045,7 @@ export default function App() {
         setShowFilters((current) => !current);
         return true;
       case "view.map":
-        setMapExpanded((current) => !current);
+        mapDrawer.toggleMap();
         return true;
       case "view.thumbLarger":
       case "view.thumbSmaller": {
@@ -1304,53 +1091,7 @@ export default function App() {
         setLightboxOpen((current) => !current);
         return;
       }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      // Arrow navigation. In the lightbox we stay linear (single image
-      // pager). In the grid we measure column count from the DOM so
-      // up/down jump rows the same way Gallery does.
-      if (event.key === "ArrowLeft" || event.key === "ArrowUp" ||
-          event.key === "ArrowRight" || event.key === "ArrowDown") {
-        if (!stickerItemsForLightbox.length) return;
-        event.preventDefault();
-        const list = stickerItemsForLightbox;
-        const cur = stickerView.selected
-          ? list.findIndex((it) => it.asset_id === stickerView.selected.id)
-          : -1;
-        let next;
-        if (lightboxOpen) {
-          const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
-          next = cur < 0
-            ? (dir === 1 ? 0 : list.length - 1)
-            : (cur + dir + list.length) % list.length;
-        } else {
-          const isHoriz = event.key === "ArrowLeft" || event.key === "ArrowRight";
-          const dir = (event.key === "ArrowLeft" || event.key === "ArrowUp") ? -1 : 1;
-          if (isHoriz) {
-            next = cur < 0 ? (dir === 1 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, cur + dir));
-          } else {
-            const grid = document.querySelector("[data-sticker-grid='true']");
-            let cols = 1;
-            if (grid) {
-              const cards = grid.querySelectorAll("[data-sticker-card]");
-              if (cards.length > 0) {
-                const firstTop = cards[0].offsetTop;
-                cols = Array.from(cards).filter((el) => Math.abs(el.offsetTop - firstTop) < 2).length || 1;
-              }
-            }
-            next = cur < 0 ? 0 : Math.max(0, Math.min(list.length - 1, cur + dir * cols));
-          }
-        }
-        const item = list[next];
-        const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
-        if (sticker) stickerView.setSelected(sticker);
-        return;
-      }
-      // Esc closes lightbox (handled here so we don't fall through to asset logic)
-      if (event.key === "Escape" && lightboxOpen) {
-        event.preventDefault();
-        setLightboxOpen(false);
-        return;
-      }
+      handleStickerKey(event);
       return;
     }
 
@@ -1405,21 +1146,18 @@ export default function App() {
           summary={workspace.summary}
           status={workspace.status}
           setStatus={(next) => {
-            setViewMode("assets");
-            setPeopleGroup(null);
+            goToGallery();
             workspace.setStatusFilter(next);
           }}
           collections={workspace.collections}
           activeCollectionId={workspace.activeCollectionId}
           activeSmartCollectionId={workspace.activeSmartCollectionId}
           onOpenSmartCollection={(collection) => {
-            setViewMode("assets");
-            setPeopleGroup(null);
+            goToGallery();
             workspace.openSmartCollection(collection);
           }}
           onEditSmartCollection={(collection) => {
-            setViewMode("assets");
-            setPeopleGroup(null);
+            goToGallery();
             workspace.editSmartCollection(collection);
           }}
           onSnapshotSmartCollection={async (collection) => {
@@ -1432,8 +1170,7 @@ export default function App() {
             }
           }}
           onSelectCollection={(id) => {
-            setViewMode("assets");
-            setPeopleGroup(null);
+            goToGallery();
             clearPeopleGroupFilter();
             workspace.selectCollection(id);
           }}
@@ -1447,21 +1184,12 @@ export default function App() {
           stickerMode={viewMode === "stickers"}
           peopleMode={viewMode === "people"}
           discoverMode={viewMode === "discover"}
-          onOpenDiscover={() => {
-            workspace.clearCollection();
-            setViewMode("discover");
-          }}
+          onOpenDiscover={() => openView("discover")}
           onOpenStickerBrowser={() => {
-            setViewMode("stickers");
-            setPeopleGroup(null);
-            workspace.clearCollection();
+            openView("stickers");
             stickerView.refresh();
           }}
-          onOpenPeople={() => {
-            setViewMode("people");
-            setPeopleGroup(null);
-            workspace.clearCollection();
-          }}
+          onOpenPeople={() => openView("people")}
         />
 
         <section
@@ -1547,7 +1275,7 @@ export default function App() {
                 thumbSize={thumbSize}
                 setThumbSize={setThumbSize}
                 mapExpanded={mapExpanded}
-                onToggleMap={() => setMapExpanded((current) => !current)}
+                onToggleMap={mapDrawer.toggleMap}
                 showFilters={filterBarVisible}
                 onToggleFilters={() => setShowFilters((v) => !v)}
                 filterCount={activeFilterCount(workspace.filters)}
@@ -1612,10 +1340,10 @@ export default function App() {
                   // min() keeps the gallery visible even if the window shrinks
                   // below the saved drawer height.
                   gridTemplateRows: mapExpanded
-                    ? `min(${mapHeight}px, calc(100% - ${GALLERY_MIN_HEIGHT + MAP_HANDLE_HEIGHT}px)) ${MAP_HANDLE_HEIGHT}px minmax(0, 1fr)`
+                    ? `min(${mapDrawer.mapHeight}px, calc(100% - ${GALLERY_MIN_HEIGHT + MAP_HANDLE_HEIGHT}px)) ${MAP_HANDLE_HEIGHT}px minmax(0, 1fr)`
                     : "0px 0px minmax(0, 1fr)",
                   transition:
-                    mapResizing || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                    mapDrawer.mapResizing || window.matchMedia("(prefers-reduced-motion: reduce)").matches
                       ? "none"
                       : "grid-template-rows 400ms cubic-bezier(0.45, 0, 0.55, 1)",
                 }}
@@ -1629,18 +1357,18 @@ export default function App() {
                   base={workspace.activeBase}
                   catalogKey={workspace.info?.catalogPath || null}
                   refreshToken={workspace.catalogRevision}
-                  onViewportChange={handleViewportChange}
+                  onViewportChange={mapDrawer.handleViewportChange}
                   onSelectAsset={selectSingle}
-                  flyTo={mapFlyTo}
-                  fitBounds={mapFitBounds}
+                  flyTo={mapDrawer.mapFlyTo}
+                  fitBounds={mapDrawer.mapFitBounds}
                 />
                 {mapExpanded ? (
                   <MapResizeHandle
-                    mapHeight={mapHeight}
-                    onHeightChange={(height) => setMapHeight(clampMapHeight(height))}
-                    onResizingChange={setMapResizing}
+                    mapHeight={mapDrawer.mapHeight}
+                    onHeightChange={mapDrawer.setMapHeight}
+                    onResizingChange={mapDrawer.setMapResizing}
                     minHeight={MAP_MIN_HEIGHT}
-                    maxHeight={clampMapHeight(Number.POSITIVE_INFINITY)}
+                    maxHeight={mapDrawer.maxMapHeight()}
                     defaultHeight={defaultMapHeight()}
                     label={tNav("map.resize")}
                   />
@@ -1726,7 +1454,7 @@ export default function App() {
             onRelinked={() => workspace.refreshAll()}
             onOpenPersonGroup={openPersonGroup}
             onPeopleChanged={() => workspace.reloadDetail?.()}
-            onJumpToLocation={jumpToAssetLocation}
+            onJumpToLocation={mapDrawer.jumpToAssetLocation}
             onLocationChanged={() => workspace.bumpCatalogRevision()}
             pushToast={pushToast}
             onTagFilter={(tag) => {
@@ -1759,7 +1487,7 @@ export default function App() {
 
       {/* Single bottom-right surface: running-job cards stacked above
           transient toasts — no overlap between the two. */}
-      <div className="fixed bottom-4 right-4 z-[20000] flex flex-col items-end gap-2">
+      <div className="fixed bottom-4 right-4 flex flex-col items-end gap-2" style={{ zIndex: Z.toast }}>
         <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} onPause={workspace.pauseJob} onResume={workspace.resumeJob} />
         <ToastStack inline toasts={toasts} onDismiss={dismissToast} />
         {!api.isPackaged && <DevStaleNotice />}

@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 const sharp = require("sharp");
-const { launchApp, closeApp } = require("./helpers/app");
+const { launchApp, closeApp, galleryCards } = require("./helpers/app");
 
 // Real catalogs have HD previews off by default; the collage generates them
 // lazily and patches them into the open canvases. The fixture ships with HD
@@ -51,7 +51,7 @@ test.describe("Batch collage", () => {
   });
 
   test("selection within the single-template limit opens in single mode", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     await cards.first().waitFor({ timeout: 15_000 });
 
     // 4 images ≤ 12 (single-canvas template max) → single mode
@@ -67,7 +67,7 @@ test.describe("Batch collage", () => {
   });
 
   test("selection beyond the single-template limit opens in batch mode", async () => {
-    const cards = window.locator("[data-gallery-item='true']");
+    const cards = galleryCards(window);
     // All 14 seeded assets > 12 → batch mode by default: 14 ÷ 4 = 3 pages + 2 leftover
     await cards.nth(0).click();
     await cards.nth(13).click({ modifiers: ["Shift"] });
@@ -186,7 +186,9 @@ test.describe("Batch collage", () => {
     await expect(popover.getByText("Page 2 · 7 images")).toBeVisible();
     await popover.locator(".grid button").nth(2).click();
     await expect.poll(() => pixelsOf(1), { timeout: 3000 }).not.toBe(p2a);
-    await window.waitForTimeout(200);
+    // A redraw of page 1 from the same update would be on screen by now:
+    // the canvases paint on the next animation frame.
+    await window.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     expect(await pixelsOf(0)).toBe(p1a); // page 1 untouched
 
     // Esc closes the popover; overlay stays open
@@ -315,9 +317,12 @@ test.describe("Batch collage", () => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] });
     }, exportDir);
 
-    // Give page canvases a beat to finish loading previews before export
+    // Both page canvases have painted (the export itself waits for the HD
+    // previews it draws from, CollageCanvas.exportToBlob).
     await expect(window.locator("[data-testid='batch-page-card']")).toHaveCount(2);
-    await window.waitForTimeout(500);
+    await expect.poll(() => window.locator("[data-testid='batch-page-card'] canvas").evaluateAll(
+      (canvases) => canvases.length === 2 && canvases.every((canvas) => canvas.width > 0),
+    )).toBe(true);
 
     await window.getByRole("button", { name: /Export 2 to folder/ }).click();
 

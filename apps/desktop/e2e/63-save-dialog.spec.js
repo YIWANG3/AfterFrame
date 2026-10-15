@@ -84,6 +84,9 @@ test("Cancel in the panel writes nothing and registers nothing", async () => {
   const count = () => ctx.window.evaluate(() => window.mediaWorkspace.getSummary().then((s) => s.browse_assets));
   const before = await count();
   const { toasts, before: toastsBefore } = await saveThroughPanel({ canceled: true, filePath: "" });
+  // Nothing observable follows a cancel (handleExport returns before the
+  // saving flag is set), so a save that wrongly went ahead can only be
+  // given time to show: its toast and file land within this second.
   await ctx.window.waitForTimeout(1_000);
   expect(await toasts.count()).toBe(toastsBefore);
   expect(fs.readdirSync(outDir)).toEqual([]);
