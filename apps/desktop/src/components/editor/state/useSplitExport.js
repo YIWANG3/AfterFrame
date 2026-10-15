@@ -19,8 +19,8 @@ import {
 import { panelBoundaries, regionToPixels } from "../splitMath";
 import { pathSeparator } from "../../../utils/format";
 import { parentDir, pathParts } from "../pathParts";
+import { pad2 } from "../../../utils/math";
 
-const pad2 = (n) => String(n).padStart(2, "0");
 
 // The panels take the original's format where the browser can encode it,
 // else JPEG.

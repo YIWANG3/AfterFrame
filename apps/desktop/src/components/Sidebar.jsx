@@ -8,6 +8,7 @@ import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
 import { FOLDER_SORTS, canReorderFolders, visibleFolders } from "./folderList";
+import { Z } from "../ui";
 
 const FOLDER_VIEW_KEY = "sidebar.folderView"; // "list" | "covers"
 const FOLDER_SORT_KEY = "sidebar.folderSort"; // one of FOLDER_SORTS
@@ -29,7 +30,7 @@ function FolderSortMenu({ sort, onChange }) {
         <ArrowUpDown className="h-3.5 w-3.5" />
       </button>
       {open && (
-        <div data-testid="folder-sort-menu" className="absolute right-0 top-full z-[101] mt-1.5 min-w-[140px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay">
+        <div data-testid="folder-sort-menu" className="absolute right-0 top-full mt-1.5 min-w-[140px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ zIndex: Z.dropdown }}>
           {FOLDER_SORTS.map((value) => (
             <button
               key={value}

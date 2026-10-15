@@ -81,16 +81,6 @@ module.exports = [
   },
   {
     files: ["src/**/*.{js,jsx}"],
-    // Until refactor/renderer-app merges: its files still carry the literals,
-    // and are converted there, not here. Drop this list when it lands.
-    ignores: [
-      "src/App.jsx",
-      "src/components/ActivityCenter.jsx",
-      "src/components/Lightbox.jsx",
-      "src/components/SettingsOverlay.jsx",
-      "src/components/Sidebar.jsx",
-      "src/components/Toolbar.jsx",
-    ],
     plugins: { afterframe: { rules: { "no-z-index-literal": noZIndexLiteral } } },
     rules: { "afterframe/no-z-index-literal": "error" },
   },

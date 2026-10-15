@@ -16,6 +16,7 @@ import { OrientationFilter, FlagFilter } from "./filters/OrientationFlagFilters"
 import SmartCollectionControls from "./filters/SmartCollectionControls";
 import ColorPopover from "./filters/ColorPopover";
 import FacetChooser, { FACET_SLOTS } from "./filters/FacetChooser";
+import { adoptLegacyPref } from "../utils/prefs";
 
 // Collapsible facet filter bar under the Toolbar. Reads options/ranges from
 // `facetValues` and emits a structured `filters` object matching the sidecar's
@@ -27,6 +28,8 @@ import FacetChooser, { FACET_SLOTS } from "./filters/FacetChooser";
 const ZH_REGION_LABELS = { TW: "中国台湾", HK: "中国香港", MO: "中国澳门" };
 
 const HIDDEN_FACETS_PREF = "filterBar.hidden";
+// The choice lived under a bare localStorage key until 2026-10; carried over once.
+adoptLegacyPref("afterframe.filterBar.hidden", HIDDEN_FACETS_PREF, JSON.parse);
 
 const SLOT_IDS = new Set(FACET_SLOTS.map((slot) => slot.id));
 

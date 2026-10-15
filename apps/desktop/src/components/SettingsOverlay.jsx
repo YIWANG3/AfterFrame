@@ -15,6 +15,7 @@ import PeopleSettings from "./settings/PeopleSettings";
 import WatermarkSettings from "./settings/WatermarkSettings";
 import ShortcutsSettings from "./settings/ShortcutsSettings";
 import { matchShortcut } from "../shortcuts/store";
+import { Z } from "../ui";
 
 /* ─── SettingsOverlay ─────────────────────────────────────────
    Full-screen modal hosting all global Settings tabs. The same
@@ -92,7 +93,8 @@ export default function SettingsOverlay({
       tabIndex={-1}
       {...{ [TOP_LAYER_ATTR]: "true" }}
       data-settings-overlay=""
-      className="fixed inset-0 z-[11200] flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center bg-app/80 outline-none backdrop-blur-sm"
+      style={{ zIndex: Z.settings }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       onKeyDown={(e) => {
         e.stopPropagation();

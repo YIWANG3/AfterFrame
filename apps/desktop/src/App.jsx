@@ -52,6 +52,8 @@ import useAnnotationJob from "./components/annotation/useAnnotationJob";
 import { invalidateAnnotations } from "./components/annotation/annotationStore";
 import { invalidateTags } from "./components/annotation/tagStore";
 import WindowTitleBar from "./components/WindowTitleBar";
+import { shouldIgnoreKey } from "./components/editor/keys";
+import { Z } from "./ui";
 
 function hasSelfDragMarkers() {
   return window.__mediaWorkspaceDraggingAssetIds != null
@@ -61,18 +63,6 @@ function hasSelfDragMarkers() {
 function clearSelfDragMarkers() {
   window.__mediaWorkspaceDraggingAssetId = null;
   window.__mediaWorkspaceDraggingAssetIds = null;
-}
-
-// Global shortcuts must not steal keys from text fields. Range sliders (e.g.
-// the lightbox zoom slider) take no text, so they don't swallow shortcuts —
-// otherwise Esc with the zoom slider focused never reaches the close-lightbox
-// handler (it just leaves the slider showing its focus ring).
-function shouldIgnoreKey(event) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return false;
-  const tagName = target.tagName;
-  if (tagName === "INPUT" && target.type === "range") return false;
-  return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
 export default function App() {
@@ -1497,7 +1487,7 @@ export default function App() {
 
       {/* Single bottom-right surface: running-job cards stacked above
           transient toasts — no overlap between the two. */}
-      <div className="fixed bottom-4 right-4 z-[20000] flex flex-col items-end gap-2">
+      <div className="fixed bottom-4 right-4 flex flex-col items-end gap-2" style={{ zIndex: Z.toast }}>
         <JobDock inline jobs={workspace.jobs} queuedNote={workspace.queuedImportNote} onCancel={workspace.cancelJob} onPause={workspace.pauseJob} onResume={workspace.resumeJob} />
         <ToastStack inline toasts={toasts} onDismiss={dismissToast} />
         {!api.isPackaged && <DevStaleNotice />}

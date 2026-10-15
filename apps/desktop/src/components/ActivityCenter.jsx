@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
+import { Z } from "../ui";
 import {
   Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Palette, Pause, Play,
   CheckCircle2, XCircle, CircleSlash, RectangleVertical,
@@ -97,8 +98,8 @@ export default function ActivityCenter({ jobs, lastFinishedJob, onCancel, onPaus
       {open && rect && createPortal(
         <div
           ref={panelRef}
-          className="fixed z-[12000] w-[300px] rounded-lg border border-border/60 bg-chrome shadow-overlay"
-          style={{ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.left, window.innerWidth - 308)) }}
+          className="fixed w-[300px] rounded-lg border border-border/60 bg-chrome shadow-overlay"
+          style={{ zIndex: Z.popover, top: rect.bottom + 6, left: Math.max(8, Math.min(rect.left, window.innerWidth - 308)) }}
         >
           <div className="flex items-center justify-between border-b border-border/40 px-3 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted2">
