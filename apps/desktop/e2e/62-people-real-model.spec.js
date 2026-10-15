@@ -1,7 +1,7 @@
 // People recognition end to end with the face model the app ships
 // (native/FaceEmbedding.mlpackage): real photos → the bundled Core ML model →
 // person groups → the People UI → a name → the person's photos → a restart.
-// 12-people-view runs with a stub model and 18-people-flows on embeddings
+// 71-people-view runs with a stub model and 72-people-flows on embeddings
 // baked into a fixture, so neither ever ran a scan; the 0.5.8 report did it
 // by hand on real portraits.
 //
