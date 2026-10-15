@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  bool, clearPref, fields, hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref,
+  adoptLegacyPref, bool, clearPref, fields, hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref,
 } from "./prefs";
 
 describe("remembered choices", () => {
@@ -21,6 +21,20 @@ describe("remembered choices", () => {
     writePref("collage.gap", 24);
     expect(readPref("collage.gap", 0)).toBe(24);
     expect(store.get("afterframe.pref.collage.gap")).toBe("24");
+  });
+
+  it("adopts a bare legacy key once, and never over a value already kept", () => {
+    store.set("afterframe-sidebar-width", "260");
+    adoptLegacyPref("afterframe-sidebar-width", "sidebarWidth", Number);
+    expect(readPref("sidebarWidth", 240)).toBe(260);
+    expect(store.has("afterframe-sidebar-width")).toBe(false);
+    store.set("afterframe-sidebar-width", "300");
+    adoptLegacyPref("afterframe-sidebar-width", "sidebarWidth", Number);
+    expect(readPref("sidebarWidth", 240)).toBe(260);
+    expect(store.has("afterframe-sidebar-width")).toBe(false);
+    // Nothing stored: nothing written.
+    adoptLegacyPref("afterframe-theme", "theme");
+    expect(store.has("afterframe.pref.theme")).toBe(false);
   });
 
   it("forgets on clear, so the default comes back", () => {

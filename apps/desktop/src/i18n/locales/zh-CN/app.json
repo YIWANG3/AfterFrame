@@ -35,6 +35,8 @@
   },
   "noCatalogTitle": "未打开图库",
   "noCatalogMsg": "导入前请先新建或打开一个图库。",
+  "browseFailed": "浏览失败",
+  "queuedChanges": "排队中的更改：{{media}} 个媒体目录 · {{sources}} 个源目录",
   "dismiss": "关闭",
   "showInFinder": "在访达中显示",
   "annotationComplete": "标注完成",

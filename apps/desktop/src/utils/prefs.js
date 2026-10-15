@@ -34,6 +34,19 @@ export function clearPref(key) {
   try { localStorage.removeItem(PREFIX + key); } catch { /* nothing stored */ }
 }
 
+// A value an older version kept under a bare localStorage key (the theme,
+// a pane width) moves under its pref key once, so it is not forgotten by the
+// move; the bare key is removed either way. `parse` turns the stored string
+// into the pref's value, and the usual check applies on the next read.
+export function adoptLegacyPref(legacyKey, key, parse = (raw) => raw) {
+  try {
+    const raw = localStorage.getItem(legacyKey);
+    if (raw == null) return;
+    localStorage.removeItem(legacyKey);
+    if (localStorage.getItem(PREFIX + key) == null) writePref(key, parse(raw));
+  } catch { /* storage blocked */ }
+}
+
 // ── checks ──
 
 export const oneOf = (values) => (value) => (values.includes(value) ? value : undefined);
