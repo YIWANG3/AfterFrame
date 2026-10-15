@@ -1,4 +1,4 @@
-// Renderer side of the agent render bridge (see electron/agentRender.js).
+// Renderer side of the agent render bridge (see electron/agentBridge.js).
 // Handlers run the SAME rendering code the UI uses — collageRender for
 // collages, saveEditedImage for edit recipes, renderFrame for frame presets —
 // so agent output is pixel-identical to what the user would export by hand.

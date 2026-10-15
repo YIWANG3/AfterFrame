@@ -70,7 +70,7 @@ function createCatalogState({
   let current = resolveInitialCatalogPath({ env, configuredCatalogPath, rootDir, readAppSettings, scratchCatalogPath });
 
   // The bundled demo library lives under userData — app-owned, apart from
-  // real catalogs (see openSampleCatalog in main.js).
+  // real catalogs (see openSampleCatalog in sampleCatalog.js).
   const samplePath = () => path.join(getUserDataDir(), "afterframe", "sample.afcatalog");
   const isSample = () => !!current && current === samplePath();
 
