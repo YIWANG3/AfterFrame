@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { Z } from "../../ui";
 import { useTranslation } from "react-i18next";
 import { localFileUrl } from "../../utils/format";
-import { computeCellRects, drawCellImage, getImageRect, getPixelAlignedStrokeRect, roundRectPath, uncoveredStrips } from "./collageRender";
+import { cellImageRect, computeCellRects, drawCollageCells, getPixelAlignedStrokeRect, roundRectPath, uncoveredStrips } from "./collageRender";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
@@ -77,7 +77,7 @@ function isReady(img) {
 }
 
 const CollageCanvas = forwardRef(function CollageCanvas(
-  { images, template, canvasRatio, gap, padding, borderRadius, edgeBlur = 0, bgColor, exportWidth, className, mode = "single", highlightCell = -1, dimCell = -1, showGaps = false, sharedStates, onSwap, onReplace, onRemove, onCellDragOut, onSelectionChange, onSelectedStateChange, onCoverageChange },
+  { images, template, canvasRatio, gap, padding, borderRadius, edgeBlend = 0, bgColor, exportWidth, className, mode = "single", highlightCell = -1, dimCell = -1, showGaps = false, sharedStates, onSwap, onReplace, onRemove, onCellDragOut, onSelectionChange, onSelectedStateChange, onCoverageChange },
   ref,
 ) {
   const { t } = useTranslation("collage");
@@ -120,8 +120,8 @@ const CollageCanvas = forwardRef(function CollageCanvas(
 
   // Emit selection changes to parent
   // Store latest props in refs so redraw/handlers always see current values
-  const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, edgeBlur, bgColor, exportWidth, highlightCell, dimCell, showGaps });
-  propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, edgeBlur, bgColor, exportWidth, highlightCell, dimCell, showGaps };
+  const propsRef = useRef({ images, template, canvasRatio, gap, padding, borderRadius, edgeBlend, bgColor, exportWidth, highlightCell, dimCell, showGaps });
+  propsRef.current = { images, template, canvasRatio, gap, padding, borderRadius, edgeBlend, bgColor, exportWidth, highlightCell, dimCell, showGaps };
 
   useEffect(() => {
     onSelectionChangeRef.current?.(selectedIdx);
@@ -165,7 +165,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
   // list as deps, always dispatching to the newest paint.
   function paint() {
     const canvas = canvasRef.current;
-    const { template: tmpl, gap: g, padding: p, borderRadius: br, edgeBlur: eb, bgColor: bg, images: imgs, exportWidth: ew, highlightCell: hl, dimCell: dim, showGaps: gaps } = propsRef.current;
+    const { template: tmpl, gap: g, padding: p, borderRadius: br, edgeBlend: eb, bgColor: bg, images: imgs, exportWidth: ew, highlightCell: hl, dimCell: dim, showGaps: gaps } = propsRef.current;
     if (!canvas || !tmpl?.cells) return;
 
     const ctx = canvas.getContext("2d");
@@ -192,17 +192,22 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     const cellRects = computeCellRects(tmpl.cells, displayW, displayH, g * scale, (p || 0) * scale);
 
     const displayBr = br * scale;
+    const displayBlend = (eb || 0) * scale;
+    const loaded = cellRects.map((_, i) => getLoadedImage(imgs[i]));
+    const cellStates = cellRects.map((_, i) => getState(i));
+    drawCollageCells(ctx, {
+      cells: tmpl.cells, cellRects, images: loaded, states: cellStates,
+      gap: g * scale, borderRadius: displayBr, edgeBlend: displayBlend, pageW: displayW, pageH: displayH,
+    });
     // Coverage is judged in export pixels (the display is this much smaller),
     // and the display geometry is the export's scaled, so one tolerance maps.
     const gapTolerance = GAP_TOLERANCE_EXPORT_PX * scale;
     let uncoveredCells = 0;
     for (let i = 0; i < cellRects.length; i++) {
       const rect = cellRects[i];
-      const img = getLoadedImage(imgs[i]);
-      const state = getState(i);
-      if (img) {
-        drawCellImage(ctx, img, rect, state.pan, state.zoom, displayBr, (eb || 0) * scale);
-      } else {
+      const img = loaded[i];
+      const state = cellStates[i];
+      if (!img) {
         ctx.save();
         if (displayBr > 0) { roundRectPath(ctx, rect.x, rect.y, rect.w, rect.h, displayBr); ctx.clip(); }
         ctx.fillStyle = "rgba(255,255,255,0.04)";
@@ -212,7 +217,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       // A cell its photo does not fill exports with background showing. A
       // photo still loading is not a gap: the cell is judged once it draws.
       if (img) {
-        const strips = uncoveredStrips(rect, getImageRect(img, rect, state.pan, state.zoom), gapTolerance);
+        const strips = uncoveredStrips(rect, cellImageRect(img, rect, tmpl.cells[i], state.pan, state.zoom, g * scale, displayBlend), gapTolerance);
         if (strips.length) {
           uncoveredCells++;
           if (gaps) drawUncovered(ctx, rect, strips, displayBr);
@@ -339,7 +344,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
     }
     scheduleRedraw();
     return () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; } };
-  }, [images, template, canvasRatio, gap, padding, borderRadius, edgeBlur, bgColor, exportWidth, scheduleRedraw]);
+  }, [images, template, canvasRatio, gap, padding, borderRadius, edgeBlend, bgColor, exportWidth, scheduleRedraw]);
 
   // Hit test
   function hitTest(px, py) {
@@ -603,7 +608,7 @@ const CollageCanvas = forwardRef(function CollageCanvas(
       setSelectedIdx(-1);
     },
     async exportToBlob(targetWidth = 4096) {
-      const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, edgeBlur: eb, bgColor: bg, images: imgs } = propsRef.current;
+      const { template: tmpl, canvasRatio: ratio, gap: g, padding: p, borderRadius: br, edgeBlend: eb, bgColor: bg, images: imgs } = propsRef.current;
       if (!tmpl?.cells) return null;
       const targetH = Math.round(targetWidth / (ratio || 1));
       const offscreen = document.createElement("canvas");
@@ -636,21 +641,22 @@ const CollageCanvas = forwardRef(function CollageCanvas(
         if (img && !isReady(img)) await waitFor(img);
       }));
 
+      const exportImages = cellRects.map((_, i) => getLoadedImage(imgs[i]));
       for (let i = 0; i < cellRects.length; i++) {
-        const rect = cellRects[i];
-        const img = getLoadedImage(imgs[i]);
-        const state = getState(i);
         // Silent degradation is what makes "some cells are blurry" so hard to
         // trace after the fact — leave a breadcrumb when a cell exports from
         // anything other than its best (HD) candidate.
+        const img = exportImages[i];
         const best = getPreviewCandidates(imgs[i])[0];
         if (img && best && map.get(best) !== img) {
           console.warn(`[Collage] cell ${i} exported from a lower-res source (${img.naturalWidth}x${img.naturalHeight}); best candidate not ready: ${best}`);
         }
-        if (img) {
-          drawCellImage(ctx, img, rect, { x: state.pan.x * panScale, y: state.pan.y * panScale }, state.zoom, br, eb || 0);
-        }
       }
+      drawCollageCells(ctx, {
+        cells: tmpl.cells, cellRects, images: exportImages,
+        states: cellRects.map((_, i) => { const st = getState(i); return { pan: { x: st.pan.x * panScale, y: st.pan.y * panScale }, zoom: st.zoom }; }),
+        gap: g, borderRadius: br, edgeBlend: eb || 0, pageW: targetWidth, pageH: targetH,
+      });
       // Lossless: the format is chosen after this, in the save dialog, and
       // saveImage encodes once to it (JPEG at 92). A JPEG here was encoded a
       // second time on save, and a PNG save kept its artifacts.

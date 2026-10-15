@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getImageRect, getPixelAlignedStrokeRect, uncoveredStrips } from "./collageRender";
+import { blendedCellRect, getImageRect, getPixelAlignedStrokeRect, uncoveredStrips } from "./collageRender";
 
 const cell = { x: 10, y: 20, w: 200, h: 100 };
 const landscape = { naturalWidth: 400, naturalHeight: 100 }; // wider than the cell
@@ -95,5 +95,29 @@ describe("getPixelAlignedStrokeRect", () => {
     expect(ring.lineWidth).toBe(6);
     expect(ring.outer).toEqual({ x: 107, y: 49, w: 238, h: 194 });
     expect(ring.stroke).toEqual({ x: 110, y: 52, w: 232, h: 188 });
+  });
+});
+
+describe("blendedCellRect", () => {
+  // Left / Right on a 1000×600 page with a 20px gap: cells at x 0–490 and 510–1000.
+  const left = { x: 0, y: 0, w: 490, h: 600 };
+  const right = { x: 510, y: 0, w: 490, h: 600 };
+  const leftCell = { x: 0, y: 0, w: 0.5, h: 1 };
+  const rightCell = { x: 0.5, y: 0, w: 0.5, h: 1 };
+
+  it("reaches to the middle of the gap plus half the band on a shared edge only", () => {
+    const a = blendedCellRect(left, leftCell, 20, 100);
+    const b = blendedCellRect(right, rightCell, 20, 100);
+    expect(a).toEqual({ x: 0, y: 0, w: 490 + 10 + 50, h: 600, ramps: { left: 0, right: 100, top: 0, bottom: 0 } });
+    expect(b).toEqual({ x: 510 - 60, y: 0, w: 550, h: 600, ramps: { left: 100, right: 0, top: 0, bottom: 0 } });
+  });
+
+  it("the two ramps cover the same band, centred between the cells", () => {
+    const a = blendedCellRect(left, leftCell, 20, 100);
+    const b = blendedCellRect(right, rightCell, 20, 100);
+    const aBand = [a.x + a.w - a.ramps.right, a.x + a.w];
+    const bBand = [b.x, b.x + b.ramps.left];
+    expect(aBand).toEqual(bBand);
+    expect((aBand[0] + aBand[1]) / 2).toBe(500);
   });
 });

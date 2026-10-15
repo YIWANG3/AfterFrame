@@ -43,7 +43,7 @@ under `afterframe.pref.*` (`src/utils/prefs.js`, `src/hooks/usePref.js`):
 | Area | Remembered | Starts fresh |
 | --- | --- | --- |
 | Text | The look of the text last styled (font, size, weight, fill, stroke, background, shadow, glow, spacing, case, alignment, opacity), for the next "+ Text". A preset still gives a preset's look. | Text, position, rotation, depth; frame text |
-| Collage | Canvas ratio, gap, padding, corner radius, edge blur, background (with a "Defaults" reset), export width, export folder, "Highlight uncovered areas", batch group size, order, remainder, file-name prefix, the layout last picked for each image count | Images, single/batch mode, per-page layouts, pan/zoom |
+| Collage | Canvas ratio, gap, padding, corner radius, edge blend, background (with a "Defaults" reset), export width, export folder, "Highlight uncovered areas", batch group size, order, remainder, file-name prefix, the layout last picked for each image count | Images, single/batch mode, per-page layouts, pan/zoom |
 | Split | Panel ratio (or custom W:H), output folder (with "Back to the original's folder"), subfolder toggle | Panel count, region |
 | LUT | Strength for a LUT chosen on a photo that has none | Which LUT (never applied unasked) |
 | AI Repaint | Style, temperature, aspect ratio, resolution, compact style list | Prompt typed for one photo |
