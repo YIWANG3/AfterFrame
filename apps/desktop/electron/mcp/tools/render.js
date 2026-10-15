@@ -39,7 +39,7 @@ module.exports = (ctx) => {
           padding: { type: "number", description: "Outer margin in export px, default 0" },
           radius: { type: "number", description: "Cell corner radius in export px, default 0" },
           bg: { type: "string", description: "Background color, default #000000" },
-          export_width: { type: "number", description: "Output width in px, default 3000" },
+          export_width: { type: "number", description: "Output width in px, default 4096" },
         },
         required: ["asset_ids"],
       },

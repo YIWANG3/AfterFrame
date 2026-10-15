@@ -193,6 +193,84 @@ test("the cell menu removes the photo under the pointer, no matching it to a lis
   await expect(ctx.window.getByTitle("Left / Right", { exact: true })).toBeVisible();
 });
 
+// Mean colour of a patch of the single canvas, in display px.
+const meanColor = (x, y, w, h) => canvas().evaluate((c, [px, py, pw, ph]) => {
+  const dpr = window.devicePixelRatio || 1;
+  const { data } = c.getContext("2d").getImageData(Math.round(px * dpr), Math.round(py * dpr), Math.max(1, Math.round(pw * dpr)), Math.max(1, Math.round(ph * dpr)));
+  const sum = [0, 0, 0];
+  for (let i = 0; i < data.length; i += 4) for (let k = 0; k < 3; k++) sum[k] += data[i + k];
+  return sum.map((v) => Math.round(v / (data.length / 4)));
+}, [x, y, w, h]);
+
+// The slider is the quick drag; the number field beside it takes an exact
+// value, applied as it is typed and clamped to the remembered range on blur.
+test("gap, padding and corner radius take a typed value", async () => {
+  const field = (label) => ctx.window.getByText(label, { exact: true }).locator("xpath=../..");
+  const gapInput = ctx.window.getByTestId("collage-gap-input");
+  const gapSlider = field("Gap").locator('input[type="range"]');
+  await gapInput.fill("37");
+  await expect(gapSlider).toHaveValue("37");
+  // Beyond the slider's range is fine up to the cap; past the cap it clamps when the field is left.
+  await gapInput.fill("9999");
+  await gapInput.press("Enter");
+  await expect(gapInput).toHaveValue("2000");
+  await expect(gapSlider).toHaveValue(String(await gapSlider.getAttribute("max")));
+  await gapInput.fill("0");
+  await expect(gapSlider).toHaveValue("0");
+
+  const radiusInput = ctx.window.getByTestId("collage-radius-input");
+  await radiusInput.fill("120");
+  await expect(field("Border Radius").locator('input[type="range"]')).toHaveValue("120");
+  await radiusInput.fill("0");
+  await ctx.window.getByTestId("collage-padding-input").fill("8");
+  await expect(field("Padding").locator('input[type="range"]')).toHaveValue("8");
+  await ctx.window.getByTestId("collage-padding-input").fill("0");
+  await expect(ctx.window.getByTestId("collage-canvas-reset")).toHaveCount(0);
+});
+
+// A photo zoomed out or panned no longer fills its cell, and the export shows
+// background there. The box marks those areas and counts the cells.
+test("Highlight uncovered areas marks the cell its photo no longer fills", async () => {
+  const box = ctx.window.getByTestId("collage-show-gaps");
+  const count = ctx.window.getByTestId("collage-gap-count");
+  await expect(box).not.toBeChecked();
+  await expect(count).toHaveCount(0);
+  await box.check();
+  await expect(count).toHaveText("Every cell is covered");
+
+  // Left / Right: select the left cell and zoom it out to 0.8.
+  const size = await canvas().boundingBox();
+  await canvas().click({ position: { x: size.width * 0.25, y: size.height * 0.5 } });
+  const zoom = ctx.window.locator('input[type="range"][min="0.5"][max="5"]');
+  await expect(zoom).toBeVisible();
+  const band = [size.width * 0.1, 2, size.width * 0.3, 6]; // the top of the left cell
+  const before = await meanColor(...band);
+  await zoom.fill("0.8");
+  await expect(count).toHaveText("1 cell not fully covered");
+  // A landscape photo zoomed out leaves bands at the top and bottom: the top
+  // band is now a warning red, which the photo was not.
+  await expect.poll(async () => {
+    const [r, g, b] = await meanColor(...band);
+    return r > 120 && r - Math.max(g, b) > 40;
+  }).toBe(true);
+  expect(await meanColor(...band)).not.toEqual(before);
+
+  // Off: the canvas shows the photo as it is, the count goes.
+  await box.uncheck();
+  await expect(count).toHaveCount(0);
+  await expect.poll(async () => {
+    const [r, g, b] = await meanColor(...band);
+    return r - Math.max(g, b) > 40;
+  }).toBe(false);
+
+  // Back to a full cell for the exports below: on again, it says so.
+  await ctx.window.getByRole("button", { name: "Reset", exact: true }).click();
+  await box.check();
+  await expect(count).toHaveText("Every cell is covered");
+  await box.uncheck();
+  await ctx.window.getByTitle("Deselect (Esc)").click();
+});
+
 test("Export writes the JPEG at the chosen path and registers it as a version", async () => {
   test.setTimeout(90_000);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-collage-single-"));
@@ -212,7 +290,7 @@ test("Export writes the JPEG at the chosen path and registers it as a version", 
     await expect(ctx.window.getByText("Collage exported")).toBeVisible({ timeout: 30_000 });
     const meta = await sharp(out).metadata();
     expect(meta.format).toBe("jpeg");
-    expect(meta.width).toBe(3000);
+    expect(meta.width).toBe(4096); // the default export width
     await expect.poll(async () => (await callTool("search_assets", { query: "pair_collage", limit: 5 })).count, { timeout: 15_000 }).toBe(1);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -241,7 +319,7 @@ test("Export as PNG is a lossless render", async () => {
 
     const { data, info } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
     expect((await sharp(out).metadata()).format).toBe("png");
-    expect([info.width, info.height, info.channels]).toEqual([3000, 3000, 3]);
+    expect([info.width, info.height, info.channels]).toEqual([4096, 4096, 3]);
     const off = [];
     for (let y = 0; y < info.height; y++) {
       for (let x = 0; x < info.width; x++) {

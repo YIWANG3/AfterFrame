@@ -27,6 +27,9 @@ const BG_PRESETS = [
 ];
 
 export const EXPORT_WIDTHS = [1080, 2048, 3000, 4096];
+// Gap, padding and corner radius are export pixels; this caps what the
+// number fields accept and what a remembered value may be.
+export const MAX_SPACING_PX = 2000;
 
 /**
  * The "Images" section: every image in the collage (thumb + name, hover to
@@ -158,15 +161,44 @@ export function TemplateGrid({ templates, activeId, ratio, onSelect }) {
   );
 }
 
-function SliderField({ label, value, max, onChange }) {
+// A slider for the quick drag plus a number field for an exact value. The
+// slider covers the useful range for this export width; the field takes any
+// whole number up to MAX_SPACING_PX, applied as it is typed and clamped when
+// the field is left.
+function SliderField({ label, value, max, onChange, testId }) {
+  const [draft, setDraft] = useState(null); // the field's text while it is being edited
+  const commit = (raw) => {
+    setDraft(null);
+    if (raw === "") return;
+    const n = Math.round(Number(raw));
+    if (Number.isFinite(n)) onChange(Math.min(MAX_SPACING_PX, Math.max(0, n)));
+  };
   return (
     <div>
       <div className="flex items-center justify-between">
         <div className="text-[11px] text-muted">{label}</div>
-        <div className="text-[11px] text-muted2">{value}px</div>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            max={MAX_SPACING_PX}
+            step={1}
+            value={draft ?? String(value)}
+            data-testid={testId}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              const n = Number(e.target.value);
+              if (e.target.value !== "" && Number.isInteger(n) && n >= 0 && n <= MAX_SPACING_PX) onChange(n);
+            }}
+            onBlur={(e) => commit(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+            className="collage-ratio-input w-14 px-1.5 text-right text-[11px] tabular-nums text-text"
+          />
+          <span className="text-[11px] text-muted2">px</span>
+        </div>
       </div>
-      <input type="range" min={0} max={max} step={1} value={value}
-        onChange={(e) => onChange(Number(e.target.value))} className="mt-1 w-full" />
+      <input type="range" min={0} max={max} step={1} value={Math.min(value, max)}
+        onChange={(e) => { setDraft(null); onChange(Number(e.target.value)); }} className="mt-1 w-full" />
     </div>
   );
 }
@@ -255,9 +287,9 @@ export function CanvasSection({ canvas, exportWidth }) {
           </div>
         </div>
 
-        <SliderField label={t("gap")} value={gap} max={Math.round(exportWidth * 0.1)} onChange={onGapChange} />
-        <SliderField label={t("padding")} value={padding} max={Math.round(exportWidth * 0.1)} onChange={onPaddingChange} />
-        <SliderField label={t("borderRadius")} value={borderRadius} max={Math.round(exportWidth * 0.15)} onChange={onBorderRadiusChange} />
+        <SliderField label={t("gap")} value={gap} max={Math.round(exportWidth * 0.1)} onChange={onGapChange} testId="collage-gap-input" />
+        <SliderField label={t("padding")} value={padding} max={Math.round(exportWidth * 0.1)} onChange={onPaddingChange} testId="collage-padding-input" />
+        <SliderField label={t("borderRadius")} value={borderRadius} max={Math.round(exportWidth * 0.15)} onChange={onBorderRadiusChange} testId="collage-radius-input" />
 
         <div>
           <div className="text-[11px] text-muted">{t("background")}</div>

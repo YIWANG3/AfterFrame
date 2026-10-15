@@ -65,6 +65,14 @@ export function getPixelAlignedStrokeRect(rect, scaleX, scaleY, cssLineWidth) {
   };
 }
 
+// Where a cell's image lands: cover-fit, centred, then panned. The one
+// geometry both drawCellImage and the coverage check use.
+export function getImageRect(img, cellRect, pan, zoom) {
+  const { x, y, w, h } = cellRect;
+  const { drawW, drawH } = getDrawSize(img, w, h, zoom);
+  return { x: x + (w - drawW) / 2 + pan.x, y: y + (h - drawH) / 2 + pan.y, w: drawW, h: drawH };
+}
+
 export function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
   const { x, y, w, h } = cellRect;
   ctx.save();
@@ -76,11 +84,40 @@ export function drawCellImage(ctx, img, cellRect, pan, zoom, borderRadius) {
     ctx.rect(x, y, w, h);
     ctx.clip();
   }
-  const { drawW, drawH } = getDrawSize(img, w, h, zoom);
-  const drawX = x + (w - drawW) / 2 + pan.x;
-  const drawY = y + (h - drawH) / 2 + pan.y;
-  ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  const draw = getImageRect(img, cellRect, pan, zoom);
+  ctx.drawImage(img, draw.x, draw.y, draw.w, draw.h);
   ctx.restore();
+}
+
+/**
+ * The parts of a cell its image does not reach, as non-overlapping strips
+ * along the cell's edges (top and bottom bands first, then the side strips
+ * between them): empty when the image covers the cell. A cover-fit image at
+ * zoom 1 touches two edges exactly and overshoots the other two, so only a
+ * zoom below 1 or a pan opens a gap; `tolerance` absorbs float noise. No
+ * image at all leaves the whole cell uncovered.
+ */
+export function uncoveredStrips(cellRect, imageRect, tolerance = 0.5) {
+  const { x, y, w, h } = cellRect;
+  if (!imageRect) return [{ x, y, w, h }];
+  const clampTo = (v, max) => Math.min(Math.max(0, v), max);
+  const top = imageRect.y - y;
+  const bottom = (y + h) - (imageRect.y + imageRect.h);
+  const left = imageRect.x - x;
+  const right = (x + w) - (imageRect.x + imageRect.w);
+  const strips = [];
+  const bandTop = top > tolerance ? clampTo(top, h) : 0;
+  const bandBottom = bottom > tolerance ? clampTo(bottom, h - bandTop) : 0;
+  if (bandTop > 0) strips.push({ x, y, w, h: bandTop });
+  if (bandBottom > 0) strips.push({ x, y: y + h - bandBottom, w, h: bandBottom });
+  const midH = h - bandTop - bandBottom;
+  if (midH > 0) {
+    const sideLeft = left > tolerance ? clampTo(left, w) : 0;
+    const sideRight = right > tolerance ? clampTo(right, w - sideLeft) : 0;
+    if (sideLeft > 0) strips.push({ x, y: y + bandTop, w: sideLeft, h: midH });
+    if (sideRight > 0) strips.push({ x: x + w - sideRight, y: y + bandTop, w: sideRight, h: midH });
+  }
+  return strips;
 }
 
 function uniqueSortedBreakpoints(values, tol = 0.001) {
@@ -162,7 +199,7 @@ export function renderCollagePage({
   borderRadius = 0,
   bgColor = "#000000",
   states = [],
-  width = 3000,
+  width = 4096,
 }) {
   if (!template?.cells) throw new Error("template with cells is required");
   const targetH = Math.round(width / (canvasRatio || 1));

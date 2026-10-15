@@ -78,7 +78,7 @@ async function handleCollage(payload) {
     padding: padding ?? 0,
     borderRadius: borderRadius ?? 0,
     bgColor: bgColor || "#000000",
-    width: width || 3000,
+    width: width || 4096,
   });
   // Lossless, like CollageOverlay's export: saveImage encodes it once.
   const buffer = await canvasToBuffer(canvas, "image/png");

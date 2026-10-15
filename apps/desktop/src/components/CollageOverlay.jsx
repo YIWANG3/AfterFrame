@@ -14,8 +14,8 @@ import { hdPreviews } from "../hooks/useOnDemandHdPreviews";
 import { topLayerOpen } from "../utils/topLayer";
 import { useAddToFolder } from "../hooks/useAddToFolder";
 import { usePref } from "../hooks/usePref";
-import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
-import { EXPORT_WIDTHS } from "./collage/PanelControls";
+import { bool, hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
+import { EXPORT_WIDTHS, MAX_SPACING_PX } from "./collage/PanelControls";
 import { Button, Checkbox, Z, cx } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { parentDir } from "./editor/pathParts";
@@ -38,7 +38,7 @@ const PICKER_PRELOAD_PX = 1200;
 const ORDER_OPTIONS = ["selection", "captureTime", "filename"];
 const LAYOUTS_KEY = "collage.layoutByCount";
 const checkLayouts = recordOf(text(64));
-const checkSize = numberIn(0, 2000);
+const checkSize = numberIn(0, MAX_SPACING_PX);
 
 // The layout last picked for this many images, if it still exists.
 function rememberedLayout(count) {
@@ -529,7 +529,13 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
   const [padding, setPadding, resetPadding] = usePref("collage.padding", 0, checkSize);
   const [borderRadius, setBorderRadius, resetBorderRadius] = usePref("collage.radius", 0, checkSize);
   const [bgColor, setBgColor, resetBgColor] = usePref("collage.background", "#000000", hexColor);
-  const [exportWidth, setExportWidth] = usePref("collage.exportWidth", 3000, oneOf(EXPORT_WIDTHS));
+  const [exportWidth, setExportWidth] = usePref("collage.exportWidth", 4096, oneOf(EXPORT_WIDTHS));
+  // Highlight the parts of a cell its photo does not reach (a zoomed-out or
+  // panned photo exports with background showing there). The canvases report
+  // how many cells are short either way; the count shows while the box is on.
+  const [showGaps, setShowGaps] = usePref("collage.showGaps", false, bool);
+  const [singleGapCells, setSingleGapCells] = useState(0);
+  const [batchGapCells, setBatchGapCells] = useState({}); // page index -> count
   const [exporting, setExporting] = useState(false);
   // Opened from a folder, the exports can join it. On the web, an export is a
   // download, not a catalog asset, so there is nothing to add.
@@ -660,6 +666,12 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
     resetBorderRadius();
     resetBgColor();
   }
+  // Cells not fully covered on what is on screen: the one canvas, or every
+  // batch page (a page that is gone keeps its last count, so only the pages
+  // that exist count).
+  const gapCells = mode === "batch"
+    ? groups.reduce((sum, _group, gi) => sum + (batchGapCells[gi] || 0), 0)
+    : singleGapCells;
   // The canvas settings as one object for the panels (CanvasSection).
   const canvasSettings = {
     ratio: canvasRatio, gap, padding, radius: borderRadius, bg: bgColor,
@@ -964,6 +976,20 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Checkbox
+            label={t("showGaps")}
+            checked={showGaps}
+            onChange={setShowGaps}
+            testId="collage-show-gaps"
+          />
+          {showGaps && (
+            <span
+              data-testid="collage-gap-count"
+              className={cx("whitespace-nowrap text-[11px]", gapCells > 0 ? "text-warn" : "text-muted2")}
+            >
+              {gapCells > 0 ? t("gapCells", { count: gapCells }) : t("allCovered")}
+            </span>
+          )}
           {canAddToFolder && (
             <Checkbox
               className="max-w-[260px]"
@@ -1044,6 +1070,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
                         sharedStates={batchCellStates.current}
                         highlightCell={dragTarget}
                         dimCell={dragSource}
+                        showGaps={showGaps}
+                        onCoverageChange={(n) => setBatchGapCells((prev) => (prev[gi] === n ? prev : { ...prev, [gi]: n }))}
                         className="h-full w-full"
                         onCellDragOut={(cellIdx, e) => beginCellDrag(gi, cellIdx, e)}
                         onReplace={(cellIdx) => beginReplace(group[cellIdx])}
@@ -1123,6 +1151,8 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               borderRadius={borderRadius}
               bgColor={bgColor}
               exportWidth={exportWidth}
+              showGaps={showGaps}
+              onCoverageChange={setSingleGapCells}
               // No CSS radius on the element: it clipped the corner of whatever
               // ran to the edge (the photo, the selection ring) that the export
               // itself does not clip.
