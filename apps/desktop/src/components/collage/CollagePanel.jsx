@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, X, Crosshair, RotateCcw, Minus } from "lucide-react";
+import { Button } from "../../ui";
 import { getTemplatesForCount } from "./collageTemplates";
 import { PanelLabel, Section, TemplateGrid, CanvasSection, ExportWidthChips, ImagesSection } from "./PanelControls";
 
@@ -55,14 +56,15 @@ export default function CollagePanel({
               <div className="text-[11px] tabular-nums text-muted2">{selectedCellZoom.toFixed(2)}×</div>
             </div>
             <div className="mt-1 flex items-center gap-1.5">
-              <button
-                type="button"
+              <Button
+                variant="icon"
+                size="xs"
+                className="shrink-0"
                 title={t("zoomOut")}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
                 onClick={() => onSelectedZoomChange?.(Math.max(0.5, selectedCellZoom / 1.05))}
               >
                 <Minus className="h-3 w-3" />
-              </button>
+              </Button>
               <input
                 type="range"
                 min={0.5}
@@ -72,14 +74,15 @@ export default function CollagePanel({
                 onChange={(e) => onSelectedZoomChange?.(Number(e.target.value))}
                 className="min-w-0 flex-1 accent-[rgb(var(--accent-color))]"
               />
-              <button
-                type="button"
+              <Button
+                variant="icon"
+                size="xs"
+                className="shrink-0"
                 title={t("zoomIn")}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
                 onClick={() => onSelectedZoomChange?.(Math.min(5, selectedCellZoom * 1.05))}
               >
                 <Plus className="h-3 w-3" />
-              </button>
+              </Button>
             </div>
           </div>
           <div className="mt-3 flex gap-1.5">

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import ActivityCenter from "./ActivityCenter";
 import { LOCKED_HINT_KEY } from "./DesktopOnly";
 import { COLLECTION_SORTS, LIBRARY_SORTS } from "../hooks/workspaceLogic";
-import { Z } from "../ui";
+import { Button, cx, Z } from "../ui";
 import {
   ChevronDown,
   Plus,
@@ -75,19 +75,8 @@ const MENU_SECTIONS = [
   },
 ];
 
-function IconButton({ children, className = "", ...props }) {
-  return (
-    <button
-      type="button"
-      className={[
-        "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent",
-        className,
-      ].join(" ")}
-      {...props}
-    >
-      {children}
-    </button>
-  );
+function IconButton({ className = "", ...props }) {
+  return <Button variant="icon" className={cx("cursor-pointer disabled:hover:bg-transparent", className)} {...props} />;
 }
 
 // The four layout modes live in one compact dropdown (trigger shows the
@@ -121,10 +110,10 @@ function DisplayModeDropdown({ displayMode, setDisplayMode }) {
               key={key}
               type="button"
               data-testid={`display-mode-${key}`}
-              className={[
+              className={cx(
                 "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-hover",
                 displayMode === key ? "text-text" : "text-muted",
-              ].join(" ")}
+              )}
               onClick={() => { setDisplayMode(key); setOpen(false); }}
             >
               <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -164,10 +153,10 @@ function SortDropdown({ sort, setSort, inFolder = false }) {
             <button
               key={value}
               type="button"
-              className={[
+              className={cx(
                 "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors hover:bg-hover",
                 sort === value ? "text-text" : "text-muted",
-              ].join(" ")}
+              )}
               onClick={() => { setSort(value); setOpen(false); }}
             >
               <span className="flex h-3.5 w-3.5 items-center justify-center">
@@ -249,10 +238,10 @@ export default function Toolbar({
                       <button
                         key={key}
                         type="button"
-                        className={[
+                        className={cx(
                           "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12px] font-medium transition-colors",
                           locked ? "cursor-default text-muted2" : "cursor-pointer text-text hover:bg-hover",
-                        ].join(" ")}
+                        )}
                         title={locked ? tc(LOCKED_HINT_KEY) : undefined}
                         onClick={async () => {
                           if (locked) return;

@@ -1,33 +1,55 @@
 import cx from "./cx";
 
-// The app's button vocabulary. Variants map to what was previously seven
-// local re-implementations (TOOLBAR_BUTTON/ACCENT_BUTTON consts, FooterButton,
-// IconButton, OverlayButton, PrimaryButton/SecondaryButton...).
+// The app's button vocabulary: a look (`variant`) at a size.
 //
 //  primary    accent-filled call to action
 //  secondary  bordered neutral
 //  soft       neutral fill, no border
 //  ghost      borderless, hover reveals
-//  icon       square h-8 w-8 icon-only (toolbar style)
+//  tint       accent-tinted text button (the editor's Save, the collage's
+//             Export, the dev notice's Restart)
+//  icon       square icon-only (toolbar style)
 //  danger     destructive bordered (delete)
-const VARIANTS = {
-  primary:
-    "inline-flex h-8 items-center justify-center rounded-md bg-[rgb(var(--accent-color))] px-3 py-0 text-[12px] font-medium text-accentInk transition-colors hover:brightness-110",
-  secondary:
-    "inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-app px-3 py-0 text-[12px] font-medium text-text transition-colors hover:border-border hover:bg-hover",
-  soft:
-    "inline-flex h-8 items-center justify-center rounded-md bg-[var(--fill-2)] px-3 py-0 text-[12px] font-medium text-text transition-colors hover:bg-[var(--fill-3)]",
-  ghost:
-    "inline-flex h-8 items-center justify-center rounded-md px-2 py-0 text-[12px] text-muted2 transition-colors hover:bg-hover hover:text-text",
-  icon:
-    "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40",
-  danger:
-    "inline-flex h-8 items-center justify-center rounded-md border border-rose-500/30 bg-app px-3 py-0 text-[12px] font-medium text-rose-400 transition-colors hover:border-rose-500/50 hover:bg-rose-500/10",
+//
+//  md         h-8, 12px text — the app's default
+//  sm         h-7, 11px text — the editor and collage headers, Settings' rows
+//  xs         h-6 — a modal's close cross
+//
+// The size is a prop, not a className override: Tailwind orders arbitrary
+// values alphabetically, so `h-7 text-[11px]` appended to the md classes
+// loses to them. Note index.css (the Tahoe skin) keys on these utilities —
+// `bg-[rgb(var(--accent-color))]` is a pill, `border-border/70 bg-app` a
+// filled pill — so a variant's look is the skinned one.
+const LOOKS = {
+  primary: "bg-[rgb(var(--accent-color))] font-medium text-accentInk hover:brightness-110",
+  secondary: "border border-border/70 bg-app font-medium text-text hover:border-border hover:bg-hover",
+  soft: "bg-[var(--fill-2)] font-medium text-text hover:bg-[var(--fill-3)]",
+  ghost: "text-muted2 hover:bg-hover hover:text-text",
+  tint: "gap-1.5 bg-accent/10 font-medium text-accent hover:bg-accent/[0.18] disabled:opacity-60",
+  icon: "text-muted hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40",
+  danger: "border border-rose-500/30 bg-app font-medium text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10",
 };
 
-export default function Button({ variant = "secondary", className = "", type = "button", children, ...rest }) {
+const SIZES = {
+  md: { text: "h-8 px-3 py-0 text-[12px]", ghost: "h-8 px-2 py-0 text-[12px]", icon: "h-8 w-8" },
+  sm: { text: "h-7 px-3 py-0 text-[11px]", ghost: "h-7 px-2 py-0 text-[11px]", icon: "h-7 w-7" },
+  xs: { text: "h-6 px-2 py-0 text-[11px]", ghost: "h-6 px-1.5 py-0 text-[11px]", icon: "h-6 w-6" },
+};
+
+function sizeClasses(variant, size) {
+  const s = SIZES[size] ?? SIZES.md;
+  if (variant === "icon") return s.icon;
+  if (variant === "ghost") return s.ghost;
+  return s.text;
+}
+
+export default function Button({ variant = "secondary", size = "md", className = "", type = "button", children, ...rest }) {
   return (
-    <button type={type} className={cx(VARIANTS[variant], className)} {...rest}>
+    <button
+      type={type}
+      className={cx("inline-flex items-center justify-center rounded-md transition-colors", sizeClasses(variant, size), LOOKS[variant], className)}
+      {...rest}
+    >
       {children}
     </button>
   );

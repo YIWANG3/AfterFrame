@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Z } from "../ui";
+import { Modal, Z } from "../ui";
 import { Palette, X, Search, Check, Star, Sparkles, Play, FolderPlus } from "lucide-react";
 
 /* ── Proposed design‑token reference ────────────────────────── */
@@ -57,11 +57,8 @@ function Panel({ onClose }) {
   const [sliderVal, setSliderVal] = useState(50);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/60" style={{ zIndex: Z.designSystem }} onClick={onClose}>
-      <div
-        className="relative flex max-h-[85vh] w-[680px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-panel shadow-overlay"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal z="designSystem" card={false} onClose={onClose}>
+      <div className="relative flex max-h-[85vh] w-[680px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-panel shadow-overlay">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-6 py-4">
           <div className="flex items-center gap-2.5">
@@ -390,7 +387,7 @@ function Panel({ onClose }) {
           </p>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

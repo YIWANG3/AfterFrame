@@ -54,7 +54,7 @@ export default function TagBatchDialog({ count, onApply, onClose }) {
   const canApply = (tags.length > 0 || text.trim().length > 0) && !busy;
 
   return (
-    <Modal onClose={onClose} z="overlayTop" className="max-w-[400px]">
+    <Modal onClose={onClose} z="overlayTop" size="w-full max-w-[400px]">
       <div className="p-4" data-testid="tag-batch-dialog" {...{ [TOP_LAYER_ATTR]: "true" }}>
         <div className="flex items-center gap-2 text-[13.5px] font-semibold text-text">
           <Tag className="h-4 w-4 text-accent" />

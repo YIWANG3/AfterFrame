@@ -5,7 +5,7 @@
 // (Phase 4).
 
 import { Download, Loader2, X } from "lucide-react";
-import { Checkbox } from "../../../ui";
+import { Button, Checkbox } from "../../../ui";
 
 export default function EditorHeader({
   sourceLabel, edited, dimsLabel, saving, exportDisabled, onExport, onClose, t,
@@ -28,9 +28,9 @@ export default function EditorHeader({
             testId="editor-add-to-folder"
           />
         ) : null}
-        <button
-          type="button"
-          className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)] disabled:opacity-60"
+        <Button
+          variant="tint"
+          size="sm"
           onClick={() => void onExport()}
           disabled={exportDisabled}
           title={t("overlay.save")}
@@ -38,15 +38,10 @@ export default function EditorHeader({
           {/* A full-size save of a 100 MP photo takes seconds: show it working. */}
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           {saving ? t("overlay.saving") : t("overlay.saveButton")}
-        </button>
-        <button
-          type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
-          onClick={onClose}
-          title={t("overlay.close")}
-        >
+        </Button>
+        <Button variant="icon" size="sm" className="text-muted2" onClick={onClose} title={t("overlay.close")}>
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

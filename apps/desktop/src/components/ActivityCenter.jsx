@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Z } from "../ui";
+import { Button, cx, Z } from "../ui";
 import {
   Activity, X, Ban, FolderInput, Images, Sparkles, Wand2, FileSearch, ScanFace, Palette, Pause, Play,
   CheckCircle2, XCircle, CircleSlash, RectangleVertical,
@@ -76,18 +76,15 @@ export default function ActivityCenter({ jobs, lastFinishedJob, onCancel, onPaus
   return (
     <>
       <div className="relative">
-        <button
+        <Button
           ref={btnRef}
-          type="button"
+          variant="icon"
           title={t("activity.tip")}
           onClick={() => setOpen((v) => !v)}
-          className={[
-            "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-hover",
-            count > 0 || open ? "bg-selected text-accent" : "text-muted hover:text-text",
-          ].join(" ")}
+          className={cx("cursor-pointer", (count > 0 || open) && "bg-selected text-accent")}
         >
           <Activity className="h-3.5 w-3.5 stroke-[1.8]" />
-        </button>
+        </Button>
         {count > 0 && (
           <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-semibold text-accentInk">
             {count}
@@ -147,10 +144,10 @@ export default function ActivityCenter({ jobs, lastFinishedJob, onCancel, onPaus
                         title={cancelling ? t("activity.cancelling") : t("activity.cancel")}
                         disabled={cancelling}
                         onClick={() => onCancel?.(job.jobId)}
-                        className={[
+                        className={cx(
                           "shrink-0 rounded p-0.5 transition-colors",
                           cancelling ? "cursor-default text-muted2 opacity-50" : "text-muted2 hover:bg-hover hover:text-red-400",
-                        ].join(" ")}
+                        )}
                       >
                         <Ban className="h-3 w-3" />
                       </button>

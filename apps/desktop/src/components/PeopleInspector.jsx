@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderPlus, ImageUp, Images, LoaderCircle, Pencil, ScanFace, Trash2, UserRoundPen, UserRoundX, UsersRound, X } from "lucide-react";
+import { Button, cx } from "../ui";
 import api from "../api";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
@@ -150,10 +151,10 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
             type="button"
             onClick={(e) => setNaming(e.currentTarget.getBoundingClientRect())}
             title={named ? t("peoplePanel.rename") : t("people.addName")}
-            className={[
+            className={cx(
               "mt-3 flex max-w-full items-center gap-1.5 truncate rounded-md px-2 py-1 transition hover:bg-hover",
               named ? "text-[14px] font-semibold text-text" : "text-[12px] text-muted2 hover:text-text",
-            ].join(" ")}
+            )}
           >
             {named ? selectedGroup.name : t("people.addName")}
             <Pencil className="h-3 w-3 shrink-0 text-muted2" />
@@ -239,10 +240,10 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
                         anchorRect: e.currentTarget.getBoundingClientRect(),
                       });
                     }}
-                    className={[
+                    className={cx(
                       "relative overflow-hidden rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
                       selected ? "ring-2 ring-accent/85" : "",
-                    ].join(" ")}
+                    )}
                   >
                     <FaceCrop
                       src={localFileUrl(face.preview_path || face.image_path)}
@@ -302,14 +303,15 @@ export default function PeopleInspector({ people, onOpenGroup, onCreateAlbum, pu
             <UserRoundX className="h-3.5 w-3.5" />
             {t("peoplePanel.removeShort")}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="icon"
+            size="sm"
+            className="text-muted2"
             title={t("peoplePanel.clearSelection")}
             onClick={() => setSelectedFaces(new Set())}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition hover:bg-hover hover:text-text"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       )}
 

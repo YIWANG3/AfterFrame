@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Columns2, Rows2, X } from "lucide-react";
-import { Z } from "../../ui";
+import { Modal, cx } from "../../ui";
 import { localFileUrl } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
 import { oneOf } from "../../utils/prefs";
@@ -16,10 +16,10 @@ function ToolbarBtn({ active, icon: Icon, label, onClick }) {
   return (
     <button
       type="button"
-      className={[
+      className={cx(
         "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
         active ? "bg-white/12 text-white" : "text-white/40 hover:bg-white/8 hover:text-white/70",
-      ].join(" ")}
+      )}
       onClick={onClick}
       title={label}
     >
@@ -91,19 +91,6 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout: layo
     setOriginPct({ x: 50, y: 50 });
   }, [viewKey, layout]);
 
-  // Keyboard
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose?.();
-      }
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
-
   // Zoom centered on mouse position within the cell
   const onWheel = useCallback((e) => {
     e.preventDefault();
@@ -140,40 +127,44 @@ export default function BeforeAfterCompare({ beforePath, afterPath, layout: layo
 
   const cellProps = { zoom, pan, originPct, onWheel, onPointerDown, onPointerMove, onPointerUp };
 
+  // A full-screen surface, not a card: Escape is taken in the capture phase,
+  // before the editor or the lightbox below can read it as its own.
   return (
-    <div className="fixed inset-0 flex flex-col bg-[rgb(8,8,8)]" style={{ zIndex: Z.overlay }}>
-      {/* Header */}
-      <div
-        className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-[rgb(14,14,14)] px-4"
-        data-testid="compare-header"
-      >
-        <div aria-hidden="true" />
-        <div className="flex items-center gap-1" data-testid="compare-layout-controls">
-          <ToolbarBtn active={layout === "side"} icon={Columns2} label={t("compare.sideBySide")} onClick={() => chooseLayout("side")} />
-          <ToolbarBtn active={layout === "stack"} icon={Rows2} label={t("compare.topBottom")} onClick={() => chooseLayout("stack")} />
-        </div>
-        <button
-          type="button"
-          className="flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-white/40 transition-colors hover:bg-white/8 hover:text-white/70"
-          data-testid="compare-close"
-          onClick={onClose}
-          title={t("compare.close")}
+    <Modal z="overlay" backdrop="none" card={false} escape="capture" onClose={onClose}>
+      <div className="absolute inset-0 flex flex-col bg-[rgb(8,8,8)]">
+        {/* Header */}
+        <div
+          className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-[rgb(14,14,14)] px-4"
+          data-testid="compare-header"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+          <div aria-hidden="true" />
+          <div className="flex items-center gap-1" data-testid="compare-layout-controls">
+            <ToolbarBtn active={layout === "side"} icon={Columns2} label={t("compare.sideBySide")} onClick={() => chooseLayout("side")} />
+            <ToolbarBtn active={layout === "stack"} icon={Rows2} label={t("compare.topBottom")} onClick={() => chooseLayout("stack")} />
+          </div>
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center justify-self-end rounded-md text-white/40 transition-colors hover:bg-white/8 hover:text-white/70"
+            data-testid="compare-close"
+            onClick={onClose}
+            title={t("compare.close")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
-      {/* Compare area */}
-      <div className={`min-h-0 flex-1 flex ${horizontal ? "flex-row" : "flex-col"}`}>
-        <CompareCell src={beforeSrc} label={labels?.[0] || t("compare.before")} {...cellProps} />
-        <div className={`${horizontal ? "w-[2px]" : "h-[2px]"} shrink-0 bg-white/8`} />
-        <CompareCell src={afterSrc} label={labels?.[1] || t("compare.after")} {...cellProps} />
-      </div>
+        {/* Compare area */}
+        <div className={`min-h-0 flex-1 flex ${horizontal ? "flex-row" : "flex-col"}`}>
+          <CompareCell src={beforeSrc} label={labels?.[0] || t("compare.before")} {...cellProps} />
+          <div className={`${horizontal ? "w-[2px]" : "h-[2px]"} shrink-0 bg-white/8`} />
+          <CompareCell src={afterSrc} label={labels?.[1] || t("compare.after")} {...cellProps} />
+        </div>
 
-      {/* Footer */}
-      <div className="flex h-8 shrink-0 items-center justify-center bg-[rgb(14,14,14)] text-[10px] text-white/30">
-        {t("compare.hint")}
+        {/* Footer */}
+        <div className="flex h-8 shrink-0 items-center justify-center bg-[rgb(14,14,14)] text-[10px] text-white/30">
+          {t("compare.hint")}
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

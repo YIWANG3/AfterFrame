@@ -5,6 +5,7 @@
 // a bug in whatever feature was just written (electron/devStaleness.js).
 import { useEffect, useState } from "react";
 import { RotateCw } from "lucide-react";
+import { Button } from "../ui";
 import api from "../api";
 import { fileName } from "../utils/format";
 
@@ -38,14 +39,10 @@ export default function DevStaleNotice() {
           {state.count} file{state.count === 1 ? "" : "s"} changed since launch: {names}
         </div>
       </div>
-      <button
-        type="button"
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-[rgba(var(--accent-color),0.10)] px-2.5 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgba(var(--accent-color),0.18)]"
-        onClick={() => api.relaunchApp()}
-      >
+      <Button variant="tint" size="sm" className="shrink-0" onClick={() => api.relaunchApp()}>
         <RotateCw className="h-3 w-3" />
         Restart
-      </button>
+      </Button>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import api from "../../../api";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Sparkles, Loader2, ImagePlus, ChevronDown } from "lucide-react";
-import Modal from "../../../ui/Modal";
+import { Modal, cx } from "../../../ui";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
 import {
   HANDWRITING_STYLES,
@@ -330,7 +330,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
   }
 
   return (
-    <Modal onClose={onClose} className="max-w-[460px]">
+    <Modal onClose={onClose} size="w-full max-w-[460px]">
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">
           {t("handwriting.title")}
@@ -382,13 +382,13 @@ export default function HandwritingModal({ onAdd, onClose }) {
                   // Explicit user action — always load this preset's recipe.
                   setPromptText(promptForPreset(s));
                 }}
-                className={[
+                className={cx(
                   "flex flex-col items-center gap-1.5 rounded-md border px-2 pb-1.5 pt-2 transition-colors",
                   presetsExpanded ? "" : "w-[96px] shrink-0",
                   s.id === styleId && !refPath
                     ? "border-[rgb(var(--accent-color))] bg-[rgb(var(--accent-color)/0.08)]"
                     : "border-border/60 bg-app hover:border-border hover:bg-hover",
-                ].join(" ")}
+                )}
               >
                 <span className="flex h-9 w-full items-center justify-center overflow-hidden">
                   <img src={s.thumb} alt="" className="max-h-full max-w-full object-contain" />
@@ -531,12 +531,12 @@ export default function HandwritingModal({ onAdd, onClose }) {
                 key={c}
                 type="button"
                 onClick={() => setFill((f) => ({ ...f, mode: "solid", color: c }))}
-                className={[
+                className={cx(
                   "h-5 w-5 rounded-full border",
                   fill.mode === "solid" && c === fill.color
                     ? "border-[rgb(var(--accent-color))]"
                     : "border-border/60",
-                ].join(" ")}
+                )}
                 style={{ background: c }}
               />
             ))}

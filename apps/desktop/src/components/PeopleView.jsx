@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, LoaderCircle, RefreshCw, ScanFace, Settings2, Trash2, UsersRound } from "lucide-react";
+import { Button, cx } from "../ui";
 import { localFileUrl } from "../utils/format";
 import FaceCrop from "./FaceCrop";
 import FaceMenu from "./FaceMenu";
@@ -28,19 +29,19 @@ function PersonTile({ group, selected, onSelect, onOpen, onAddName, onContextMen
         onDoubleClick={() => onOpen(group)}
         onContextMenu={(event) => onContextMenu(group, event)}
         title={t("people.openGroup", { name: group.name || t("people.unnamed") })}
-        className={[
+        className={cx(
           "relative block overflow-hidden rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
           selected ? "ring-2 ring-accent/80" : "",
-        ].join(" ")}
+        )}
       >
         <FaceCrop
           src={localFileUrl(source)}
           bbox={group.cover_bbox}
           alt=""
-          className={[
+          className={cx(
             "h-[104px] w-[104px] rounded-xl border shadow-sm transition",
             selected ? "border-accent/60" : "border-border/50 group-hover/tile:border-accent/45",
-          ].join(" ")}
+          )}
         />
         {selected && (
           <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-app shadow-sm">
@@ -282,16 +283,16 @@ export default function PeopleView({ people, onOpenGroup, onOpenSettings }) {
                 {scanLabel}
               </button>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="icon"
               onClick={() => void load()}
               disabled={loading}
               title={t("people.refresh")}
               aria-label={t("people.refresh")}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-hover hover:text-text disabled:cursor-wait disabled:opacity-50"
+              className="disabled:cursor-wait disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            </button>
+            </Button>
           </>
         )}
       />

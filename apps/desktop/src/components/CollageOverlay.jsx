@@ -16,7 +16,7 @@ import { useAddToFolder } from "../hooks/useAddToFolder";
 import { usePref } from "../hooks/usePref";
 import { hexColor, intIn, numberIn, oneOf, readPref, recordOf, text, writePref } from "../utils/prefs";
 import { EXPORT_WIDTHS } from "./collage/PanelControls";
-import { Checkbox, Z } from "../ui";
+import { Button, Checkbox, Z, cx } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { parentDir } from "./editor/pathParts";
 
@@ -297,13 +297,9 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
               <span className="ml-2 text-muted2">{loading ? "…" : countLabel}</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="rounded-md p-1 text-muted2 hover:bg-hover hover:text-text"
-            onClick={onClose}
-          >
+          <Button variant="icon" size="xs" className="text-muted2" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
 
         {/* Source / sort / search controls */}
@@ -325,12 +321,12 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                 <button
                   key={s.id}
                   type="button"
-                  className={[
+                  className={cx(
                     "flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12px] transition-colors",
                     source === s.id
                       ? "bg-selected text-text"
                       : "text-muted hover:bg-hover hover:text-text",
-                  ].join(" ")}
+                  )}
                   onClick={() => { setSource(s.id); setShowDropdown(false); }}
                 >
                   <Images className="h-3.5 w-3.5 shrink-0 text-muted2" />
@@ -348,12 +344,12 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                     <button
                       key={col.collection_id}
                       type="button"
-                      className={[
+                      className={cx(
                         "flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12px] transition-colors",
                         source === col.collection_id
                           ? "bg-selected text-text"
                           : "text-muted hover:bg-hover hover:text-text",
-                      ].join(" ")}
+                      )}
                       onClick={() => { setSource(col.collection_id); setShowDropdown(false); }}
                     >
                       <Folder className="h-3.5 w-3.5 shrink-0 text-muted2" />
@@ -387,10 +383,10 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                       <button
                         key={value}
                         type="button"
-                        className={[
+                        className={cx(
                           "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors",
                           sort === value ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
-                        ].join(" ")}
+                        )}
                         onClick={() => { setSort(value); setShowSortDropdown(false); }}
                       >
                         <span className="flex h-3 w-3 items-center justify-center">
@@ -450,14 +446,14 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                     type="button"
                     disabled={used}
                     title={used ? t("alreadyAdded") : undefined}
-                    className={[
+                    className={cx(
                       "group absolute overflow-hidden rounded-md bg-panel2 transition",
                       used
                         ? "cursor-default"
                         : selected
                           ? "ring-2 ring-[rgb(var(--accent-color))]"
                           : "hover:ring-2 hover:ring-[rgb(var(--accent-color)/0.6)]",
-                    ].join(" ")}
+                    )}
                     style={{
                       left: `${left}px`,
                       top: `${top}px`,
@@ -472,21 +468,21 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                         alt=""
                         loading="lazy"
                         decoding="async"
-                        className={[
+                        className={cx(
                           "absolute inset-0 h-full w-full object-cover",
                           used ? "opacity-40 saturate-50" : "",
-                        ].join(" ")}
+                        )}
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-app text-[10px] text-muted2">{t("noPreview")}</div>
                     )}
                     <span
-                      className={[
+                      className={cx(
                         "absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border text-accentInk shadow-sm transition",
                         used || selected
                           ? "border-[rgb(var(--accent-color))] bg-[rgb(var(--accent-color))] opacity-100"
                           : "border-text/55 bg-app/70 opacity-75 group-hover:opacity-100",
-                      ].join(" ")}
+                      )}
                     >
                       {used || selected ? <Check className="h-3.5 w-3.5" /> : null}
                     </span>
@@ -504,12 +500,12 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
           </div>
           <button
             type="button"
-            className={[
+            className={cx(
               "inline-flex h-8 items-center justify-center rounded-md px-3 text-[12px] font-medium transition-colors",
               selectedItems.length
                 ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
                 : "cursor-default bg-app text-muted2",
-            ].join(" ")}
+            )}
             disabled={!selectedItems.length}
             onClick={addSelected}
           >
@@ -951,10 +947,10 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               <button
                 key={m.id}
                 type="button"
-                className={[
+                className={cx(
                   "rounded-[5px] px-3 py-0.5 text-[11px] transition-colors",
                   mode === m.id ? "bg-panel2 text-text" : "text-muted hover:text-text",
-                ].join(" ")}
+                )}
                 onClick={() => setMode(m.id)}
               >
                 {m.label}
@@ -977,9 +973,9 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               testId="collage-add-to-folder"
             />
           )}
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color)/0.12)] px-3 text-[11px] font-medium text-[rgb(var(--accent-color))] transition-colors hover:bg-[rgb(var(--accent-color)/0.18)]"
+          <Button
+            variant="tint"
+            size="sm"
             onClick={mode === "batch" ? handleBatchExport : handleExport}
             disabled={exporting || (mode === "batch" ? groups.length === 0 : images.length < 2)}
           >
@@ -987,15 +983,10 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             {exporting
               ? (exportProgress ? t("exportingProgress", exportProgress) : t("exporting"))
               : (mode === "batch" ? t("exportBatch", { n: groups.length }) : t("export"))}
-          </button>
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted2 transition-colors hover:bg-hover hover:text-text"
-            onClick={onClose}
-            title={t("close")}
-          >
+          </Button>
+          <Button variant="icon" size="sm" className="text-muted2" onClick={onClose} title={t("close")}>
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1033,10 +1024,10 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
                 return (
                   <div key={gi} className="group/page relative" data-testid="batch-page-card">
                     <div
-                      className={[
+                      className={cx(
                         "relative overflow-hidden rounded-md ring-1 transition-shadow",
                         dragTarget >= 0 ? "ring-[rgb(var(--accent-color))]" : "ring-border/80",
-                      ].join(" ")}
+                      )}
                       style={{ width: `${w}px`, aspectRatio: canvasRatio }}
                     >
                       <CollageCanvas
@@ -1064,10 +1055,10 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
                         type="button"
                         title={t("pageLayoutBtn")}
                         data-testid="page-layout-btn"
-                        className={[
+                        className={cx(
                           "absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-black/55 text-white/85 backdrop-blur-sm transition-opacity hover:bg-black/75",
                           popoverOpen ? "opacity-100" : "opacity-0 group-hover/page:opacity-100",
-                        ].join(" ")}
+                        )}
                         onClick={(e) => { e.stopPropagation(); setLayoutPopoverPage(popoverOpen ? -1 : gi); }}
                       >
                         <LayoutGrid className="h-3.5 w-3.5" />
