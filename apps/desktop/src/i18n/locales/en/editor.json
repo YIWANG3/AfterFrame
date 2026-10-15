@@ -16,6 +16,8 @@
     "scale": "Scale",
     "imageScale": "Image scale",
     "aspectRatio": "Aspect Ratio",
+    "aspectFree": "Free",
+    "aspectOriginal": "Original",
     "reset": "Reset",
     "apply": "Apply",
     "flipH": "Flip H",

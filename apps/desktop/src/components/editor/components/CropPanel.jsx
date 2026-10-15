@@ -4,6 +4,7 @@
 // commit handlers + current values. Extracted from EditorOverlay (Phase 4) so
 // the crop tool matches the <TextPanel>/... shape.
 
+import { useTranslation } from "react-i18next";
 import {
   RotateCcw, RotateCw, FlipHorizontal2, FlipVertical2, Undo2, Redo2,
 } from "lucide-react";
@@ -43,7 +44,10 @@ function getAspectPreviewBox(aspectKey) {
 }
 
 export function AspectButton({ preset, active, onClick }) {
+  const { t } = useTranslation("editor");
   const preview = getAspectPreviewBox(preset.key);
+  // Ratios read the same in every language; the two named presets don't.
+  const label = { free: t("overlay.aspectFree"), original: t("overlay.aspectOriginal") }[preset.key] ?? preset.label;
 
   return (
     <button
@@ -65,7 +69,7 @@ export function AspectButton({ preset, active, onClick }) {
           }}
         />
       </span>
-      <span>{preset.label}</span>
+      <span>{label}</span>
     </button>
   );
 }
