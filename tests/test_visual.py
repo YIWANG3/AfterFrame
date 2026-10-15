@@ -170,10 +170,16 @@ class VisualJobTest(unittest.TestCase):
         self.connection.commit()
 
     def fake_helper(self) -> Path:
-        path = self.root / "image-features"
-        path.write_text(FAKE_HELPER.format(python=sys.executable))
-        path.chmod(path.stat().st_mode | stat.S_IEXEC)
-        return path
+        script = self.root / "image-features.py"
+        script.write_text(FAKE_HELPER.format(python=sys.executable), encoding="utf-8")
+        if os.name == "nt":
+            # Windows runs programs, not scripts with a #! line: wrap it in a
+            # .cmd that hands it to this Python (as test_people_job does).
+            helper = self.root / "image-features.cmd"
+            helper.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+            return helper
+        script.chmod(script.stat().st_mode | stat.S_IEXEC)
+        return script
 
     def test_previews_bring_their_hash_and_group_the_re_encode(self):
         self.render_previews()
@@ -191,7 +197,7 @@ class VisualJobTest(unittest.TestCase):
     def test_the_preview_pass_uses_the_helper_the_app_names(self):
         with patch.dict(os.environ, {"IMAGE_FEATURES_PATH": str(self.fake_helper())}):
             self.render_previews()
-        self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1")["embedded"], 4)
+        self.assertEqual(visual_status(self.connection, embedding_model="fake-fp-1"), {"hashed": 4, "embedded": 4, "missing": 0, "duplicate_groups": 1})
         self.assertEqual(find_similar(self.connection, "image_one", limit=1)[0]["asset_id"], "image_one_again")
 
     def test_hashes_alone_find_the_re_encode_and_group_it(self):
