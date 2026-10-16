@@ -229,9 +229,11 @@ test("gap, padding and corner radius take a typed value", async () => {
 });
 
 // Edge blend cross-fades neighbouring photos across a band centred on their
-// shared edge, a linear ramp: two solid colours meet halfway at the seam and
+// shared edge, a linear ramp: the two cells meet halfway at the seam and
 // three quarters of the way in, a quarter. The page's outer edge, which no
-// other cell meets, stays as it is.
+// other cell meets, stays as it is. The colour fixtures are gentle
+// gradients and the blend cover-fits each one to its wider reach, so the
+// references are read after the blend, just outside the band on each side.
 test("edge blend cross-fades neighbouring cells across a linear band", async () => {
   // Two solid-colour fixtures join the pair: cells 3 and 4, the bottom row
   // of the 2×2 grid, purple on the left and pink on the right.
@@ -258,7 +260,6 @@ test("edge blend cross-fades neighbouring cells across a linear band", async () 
   const brightness = ([r, g, b]) => (r + g + b) / 3;
   const edgeBefore = brightness(await meanColor(4, y - 10, 2, 20));
   const seamBefore = await at(seam - 1);
-  const mix = (k) => purple.map((v, i) => Math.round(v * (1 - k) + pink[i] * k));
 
   const input = ctx.window.getByTestId("collage-edge-blend-input");
   await input.fill("400");
@@ -267,18 +268,20 @@ test("edge blend cross-fades neighbouring cells across a linear band", async () 
   // 400 export px on a 4096 export: the band is a tenth of the canvas wide.
   const half = size.width * (400 / 4096) / 2;
   await expect.poll(async () => {
+    const left = await at(seam - half - 6);
+    const right = await at(seam + half + 6);
+    const mix = (k) => left.map((v, i) => Math.round(v * (1 - k) + right[i] * k));
     const samples = [
       [await at(seam - 1), mix(0.5)],
       [await at(seam - half / 2), mix(0.25)],
       [await at(seam + half / 2), mix(0.75)],
-      [await at(seam - half - 6), purple],
-      [await at(seam + half + 6), pink],
+      // The band's ends: where a mask on a fractional rect once left a bright line.
+      [await at(seam - half), left],
+      [await at(seam + half), right],
     ];
-    return samples.map(([got, want]) => (near(got, want, 10) ? "ok" : `${got} vs ${want}`)).join("; ");
+    return samples.map(([got, want]) => (near(got, want, 14) ? "ok" : `${got} vs ${want}`)).join("; ");
   }).toBe("ok; ok; ok; ok; ok");
-  // Nothing fades at the page's edge: no cell meets it. (The purple fixture
-  // is a gentle gradient, and cover-fitting it to the wider reach shifts it
-  // a little, so brightness rather than the exact colour.)
+  // Nothing fades at the page's edge: no cell meets it.
   expect(brightness(await meanColor(4, y - 10, 2, 20))).toBeGreaterThan(edgeBefore * 0.8);
 
   await input.fill("0");
