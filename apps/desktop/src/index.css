@@ -397,10 +397,10 @@ html.electron, html.electron body { background: transparent; }
 html.electron #root { clip-path: inset(0 round 26px); background: rgb(var(--app-bg)); }
 html.electron.fs #root { clip-path: none; }
 /* 灯箱打开时根节点底色跟着变黑:灯箱是 90% 黑的浮层,clip-path 圆角边缘的抗锯齿像素会透出根节点的浅色底,浅色主题下顶边就漏出一条白线 */
-html.electron #root:has(.fixed.inset-0.z-\[10050\]),
-html.electron #root:has(.fixed.inset-0.z-\[10050\]) .noise-overlay { background: #000; }   /* 灯箱底下那层 bg-app 也要黑:合成层与普通层各自沿 clip-path 抗锯齿,边缘会错开 1px 露出下层浅色 */
+html.electron #root:has(.fixed.inset-0[data-layer="lightbox"]),
+html.electron #root:has(.fixed.inset-0[data-layer="lightbox"]) .noise-overlay { background: #000; }   /* 灯箱底下那层 bg-app 也要黑:合成层与普通层各自沿 clip-path 抗锯齿,边缘会错开 1px 露出下层浅色 */
 /* 灯箱底改实色黑、去掉 backdrop-blur:在透明窗里,贴着 clip-path 边缘的 backdrop-filter 会在窗口顶边渲染出一条浅色线 */
-html.electron .fixed.inset-0.z-\[10050\][class*="bg-black"] { background: #000; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.electron .fixed.inset-0[data-layer="lightbox"][class*="bg-black"] { background: #000; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html.electron .noise-overlay > .grid { -webkit-app-region: drag; }
 html.electron .noise-overlay > .grid > * { -webkit-app-region: no-drag; }
 html.electron .noise-overlay > .grid > aside.border-r { -webkit-app-region: drag; }
@@ -415,12 +415,12 @@ html.electron.fs .noise-overlay > .grid > section.bg-app .library-view > .app-to
 /* 全屏覆盖层(灯箱 / 编辑器 / 拼图 / 设置 / 对话框)打开时,底下的拖拽区仍然生效:Electron 算拖拽区只看元素矩形,不看层叠顺序。
    给覆盖层整块标 no-drag 把窗口从拖拽区里减掉;覆盖层自己的头部一行给回可拖,控件 no-drag */
 html.electron .fixed.inset-0 { -webkit-app-region: no-drag; }
-html.electron .fixed.inset-0.z-\[10100\] > .h-11, html.electron .fixed.inset-0.z-\[10200\] > .h-10,
+html.electron .fixed.inset-0[data-layer="editor"] > .h-11, html.electron .fixed.inset-0[data-layer="overlay"] > .h-10,
 html.electron .fixed.inset-0[data-settings-overlay] > .rounded-xl > .h-12,
-html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
-html.electron .fixed.inset-0.z-\[10100\] > .h-11 > *, html.electron .fixed.inset-0.z-\[10200\] > .h-10 > *,
+html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { -webkit-app-region: drag; }   /* 灯箱头部一行也可拖 */
+html.electron .fixed.inset-0[data-layer="editor"] > .h-11 > *, html.electron .fixed.inset-0[data-layer="overlay"] > .h-10 > *,
 html.electron .fixed.inset-0[data-settings-overlay] > .rounded-xl > .h-12 > *,
-html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start > * { -webkit-app-region: no-drag; }
+html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start > * { -webkit-app-region: no-drag; }
 /* 侧栏内零分割线(底部折叠钮 / 设置上方的两条线) */
 aside.border-r .border-t, aside.border-r .border-b, aside.border-r [class*="border-t"], aside.border-r [class*="border-b"] { border-color: transparent; }
 /* 侧栏条目:alpha 填充,选中 = 更亮的填充 */
@@ -429,26 +429,26 @@ aside.border-r [class*="hover:bg-hover"]:hover { background: var(--fill); }
 aside.border-r .text-accent { color: rgb(var(--text-color)); }
 
 /* ───────── 4b · 红绿灯安全区:盖住侧栏区域的全屏层,左上角让出 88px(灯占 18 至 70)───────── */
-html.electron .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-left: 88px; }            /* 灯箱头部 */
+html.electron .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { padding-left: 88px; }            /* 灯箱头部 */
 /* 编辑器 / 拼图头部不再靠左让位:标题改居中(见 4c),左上角天然空出来给红绿灯 */
 
 /* ───────── 4c · 覆盖层头部(编辑器 / 拼图):统一 44 高(红绿灯中心 22)、标题居中、动作靠右、关闭钮圆形 ───────── */
-.fixed.inset-0.z-\[10100\] > .h-11, .fixed.inset-0.z-\[10200\] > .h-10 {
+.fixed.inset-0[data-layer="editor"] > .h-11, .fixed.inset-0[data-layer="overlay"] > .h-10 {
   position: relative; height: 44px; justify-content: center; border-color: transparent; padding: 0 12px;
 }
-.fixed.inset-0.z-\[10100\] > .h-11 > .absolute.left-3 { position: static; }                        /* 编辑器:文件名 · 尺寸 居中 */
-.fixed.inset-0.z-\[10200\] > .h-10 > .flex.items-center.gap-2 {                                    /* 拼图:导出 + 关闭 绝对靠右 */
+.fixed.inset-0[data-layer="editor"] > .h-11 > .absolute.left-3 { position: static; }                        /* 编辑器:文件名 · 尺寸 居中 */
+.fixed.inset-0[data-layer="overlay"] > .h-10 > .flex.items-center.gap-2 {                                    /* 拼图:导出 + 关闭 绝对靠右 */
   position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
 }
-.fixed.inset-0.z-\[10100\] > .h-11 button.h-7.w-7, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7.w-7 { border-radius: 999px; }
+.fixed.inset-0[data-layer="editor"] > .h-11 button.h-7.w-7, .fixed.inset-0[data-layer="overlay"] > .h-10 button.h-7.w-7 { border-radius: 999px; }
 /* 头部主动作(编辑器「保存」/ 拼图「导出」):同一款胶囊,fill-2 底、正文色,不再各自用 accent 10% / 12% */
-.fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7), .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7) {
+.fixed.inset-0[data-layer="editor"] > .h-11 button.h-7:not(.w-7), .fixed.inset-0[data-layer="overlay"] > .h-10 button.h-7:not(.w-7) {
   height: 28px; padding: 0 12px; border-radius: 999px; background: var(--fill-2); color: rgb(var(--text-color));
 }
-.fixed.inset-0.z-\[10100\] > .h-11 button.h-7:not(.w-7):hover, .fixed.inset-0.z-\[10200\] > .h-10 button.h-7:not(.w-7):hover { background: var(--fill-3); }
-.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; background: var(--fill); padding: 2px; }
-.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; height: 24px; padding: 0 12px; }
-.fixed.inset-0.z-\[10200\] > .h-10 .rounded-\[7px\].bg-app > button.bg-panel2 { background: var(--fill-3); }
+.fixed.inset-0[data-layer="editor"] > .h-11 button.h-7:not(.w-7):hover, .fixed.inset-0[data-layer="overlay"] > .h-10 button.h-7:not(.w-7):hover { background: var(--fill-3); }
+.fixed.inset-0[data-layer="overlay"] > .h-10 .rounded-\[7px\].bg-app { border-radius: 999px; background: var(--fill); padding: 2px; }
+.fixed.inset-0[data-layer="overlay"] > .h-10 .rounded-\[7px\].bg-app > button { border-radius: 999px; height: 24px; padding: 0 12px; }
+.fixed.inset-0[data-layer="overlay"] > .h-10 .rounded-\[7px\].bg-app > button.bg-panel2 { background: var(--fill-3); }
 
 /* ───────── 5 · 工具栏:浮在内容之上,控件各自成玻璃胶囊;网格顶部让位,照片从胶囊底下穿过 ───────── */
 .noise-overlay > .grid > section.bg-app { position: relative; }
@@ -621,7 +621,7 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] .px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
 [data-editor-wheel-scope="panel"] .border-t.px-3.py-2, [data-editor-wheel-scope="panel"] .border-t.px-4.py-3 { padding-top: 6px; }
 [data-editor-wheel-scope="panel"] .tracking-\[0\.14em\].text-muted2 { color: rgb(var(--muted-text)); }
-[data-editor-wheel-scope="panel"], .fixed.inset-0.z-\[10100\] .rounded-xl.border.bg-chrome\/95 { border-color: transparent; background: var(--pop); }
+[data-editor-wheel-scope="panel"], .fixed.inset-0[data-layer="editor"] .rounded-xl.border.bg-chrome\/95 { border-color: transparent; background: var(--pop); }
 /* 面板底栏(重置 / 撤销 / 重做 / Apply):浮在面板底部的玻璃条,内容从它底下滚过;滚动区底部让位 52px。
    四个面板的底栏都是 `.border-t.px-3.py-2`;AI 面板未激活时整块 .hidden,其底栏不算数。
    面板里限高的小滚动区(下拉、logo 选单 max-h-44)不是主滚动区,不让位 */
@@ -805,32 +805,32 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 [data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
 
 /* ───────── 11c · 拼图(z 10200):右侧面板与编辑器面板同一套;页面卡去掉发丝环 ───────── */
-.fixed.inset-0.z-\[10200\] .border-b.border-border\/60, .fixed.inset-0.z-\[10200\] .border-t.border-border\/60,
-.fixed.inset-0.z-\[10200\] .border-l.border-border\/60 { border-color: transparent; }
-.fixed.inset-0.z-\[10200\] .border-b.border-border\/60.px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
-.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border { border-color: transparent; background-color: var(--fill-2); border-radius: 5px; height: 28px; }
-.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border:focus { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
-.fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed { border-style: solid; border-color: transparent; background: var(--fill); border-radius: 8px; }
-.fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed:hover { background: var(--fill-2); border-color: transparent; }
-.fixed.inset-0.z-\[10200\] .tracking-\[0\.14em\], .fixed.inset-0.z-\[10200\] .tracking-\[0\.12em\] { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text)); }
+.fixed.inset-0[data-layer="overlay"] .border-b.border-border\/60, .fixed.inset-0[data-layer="overlay"] .border-t.border-border\/60,
+.fixed.inset-0[data-layer="overlay"] .border-l.border-border\/60 { border-color: transparent; }
+.fixed.inset-0[data-layer="overlay"] .border-b.border-border\/60.px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
+.fixed.inset-0[data-layer="overlay"] input.rounded-md.bg-app.border { border-color: transparent; background-color: var(--fill-2); border-radius: 5px; height: 28px; }
+.fixed.inset-0[data-layer="overlay"] input.rounded-md.bg-app.border:focus { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
+.fixed.inset-0[data-layer="overlay"] .rounded-md.border.border-dashed { border-style: solid; border-color: transparent; background: var(--fill); border-radius: 8px; }
+.fixed.inset-0[data-layer="overlay"] .rounded-md.border.border-dashed:hover { background: var(--fill-2); border-color: transparent; }
+.fixed.inset-0[data-layer="overlay"] .tracking-\[0\.14em\], .fixed.inset-0[data-layer="overlay"] .tracking-\[0\.12em\] { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text)); }
 /* 页面卡:平时无环(那圈 ring-border 在浅色下从页面顶上露出来),只有拖拽目标态保留 accent 环 */
-.fixed.inset-0.z-\[10200\] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
+.fixed.inset-0[data-layer="overlay"] [data-testid="batch-page-card"] > .ring-1:not([class*="ring-[rgb"]) { --tw-ring-color: transparent; box-shadow: var(--shadow-menu); }
 
 /* ───────── 12a · 灯箱上下栏玻璃化:头部与底部(缩放行 + 胶片条)不再是两条实黑,改成压在照片之上的 Clear 玻璃。
    舞台(照片区)保留在两栏之间做适配,所以 fit 状态下照片不被遮;放大 / 拖动时照片从玻璃底下穿过。
    玻璃面板画在灯箱根节点的 ::before / ::after 上,向窗口外多伸 40px,避免 backdrop-filter 在窗口边缘采样出浅线 ───────── */
-.fixed.inset-0.z-\[10050\] { position: fixed; }
-.fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: 0; z-index: 20; }
-.fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: 0; z-index: 20; }
-.fixed.inset-0.z-\[10050\] > .h-16 { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; }
-.fixed.inset-0.z-\[10050\] > .relative.min-h-0.flex-1 { margin: 84px 0 140px; overflow: visible; z-index: 1; }
-.fixed.inset-0.z-\[10050\]::before, .fixed.inset-0.z-\[10050\]::after {
+.fixed.inset-0[data-layer="lightbox"] { position: fixed; }
+.fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { position: absolute; top: 0; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-center.justify-center.gap-3 { position: absolute; bottom: 76px; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0[data-layer="lightbox"] > .h-16 { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; }
+.fixed.inset-0[data-layer="lightbox"] > .relative.min-h-0.flex-1 { margin: 84px 0 140px; overflow: visible; z-index: 1; }
+.fixed.inset-0[data-layer="lightbox"]::before, .fixed.inset-0[data-layer="lightbox"]::after {
   content: ""; position: absolute; left: 0; right: 0; z-index: 10; pointer-events: none;
   /* 渐进模糊,没有清晰边缘:mask 从栏内实到栏外全透,压色也同步渐变;masked backdrop-filter 要独立合成层才会羽化 */
   transform: translateZ(0); will-change: transform;
   backdrop-filter: blur(22px) saturate(1.2); -webkit-backdrop-filter: blur(22px) saturate(1.2);
 }
-.fixed.inset-0.z-\[10050\]::before {
+.fixed.inset-0[data-layer="lightbox"]::before {
   top: -40px; height: 240px;
   /* 保留标题后的压色,用长尾缓出代替短距离线性退场,避免玻璃在照片上形成横向分界。 */
   --lightbox-header-fade: linear-gradient(180deg, #000 0%, #000 20%, rgba(0,0,0,.92) 35%, rgba(0,0,0,.64) 50%, rgba(0,0,0,.32) 65%, rgba(0,0,0,.1) 80%, rgba(0,0,0,.02) 90%, transparent 100%);
@@ -838,10 +838,10 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
   backdrop-filter: blur(18px) saturate(1.08); -webkit-backdrop-filter: blur(18px) saturate(1.08);
   -webkit-mask-image: var(--lightbox-header-fade); mask-image: var(--lightbox-header-fade);
 }
-.fixed.inset-0.z-\[10050\]::after { bottom: -40px; height: 220px;
+.fixed.inset-0[data-layer="lightbox"]::after { bottom: -40px; height: 220px;
   background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,.45) 55%, rgba(0,0,0,0));
   -webkit-mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); mask-image: linear-gradient(0deg, #000 0, #000 50%, transparent 100%); }
-.fixed.inset-0.z-\[10050\].bg-white::before, .fixed.inset-0.z-\[10050\].bg-white::after { display: none; }
+.fixed.inset-0[data-layer="lightbox"].bg-white::before, .fixed.inset-0[data-layer="lightbox"].bg-white::after { display: none; }
 
 /* ───────── 12 · 灯箱控件:Clear(媒体之上) ───────── */
 .bg-black\/42, .bg-black\/60.p-1 { background: rgba(20,20,23,.35); backdrop-filter: blur(14px) saturate(1.4); }
@@ -927,4 +927,4 @@ html.platform-win32.fs .window-titlebar { display: none; }
 html.platform-win32 .noise-overlay > .grid > aside.border-r { padding-top: 12px; }
 /* 全屏覆盖层(灯箱 / 编辑器 / 拼图 / 设置 / 对话框)从标题条下面开始,头部右侧的动作和关闭钮不会被窗口按钮盖住 */
 html.platform-win32 .fixed.inset-0 { top: var(--win-titlebar-h); }
-html.platform-win32 .fixed.inset-0.z-\[10050\] > .flex.shrink-0.items-start { padding-left: 24px; }   /* 灯箱头部:不用给红绿灯让 88px,回到 px-6 */
+html.platform-win32 .fixed.inset-0[data-layer="lightbox"] > .flex.shrink-0.items-start { padding-left: 24px; }   /* 灯箱头部:不用给红绿灯让 88px,回到 px-6 */
