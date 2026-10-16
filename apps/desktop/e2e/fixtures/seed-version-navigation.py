@@ -1,5 +1,6 @@
 """Extend only a private E2E catalog with versions on distant pages."""
 import os
+import shutil
 import sqlite3
 import sys
 from datetime import UTC, datetime
@@ -32,7 +33,12 @@ for i in range(400):
     asset_id = f"navigation-{i:04}"
     stem = f"nav-{i:04}"
     image_path = image_dir / f"{stem}.jpg"
-    os.link(source, image_path)
+    # A hard link, or a copy where the catalog is on another drive than
+    # the checkout (the Windows runner: the repository on D:, temp on C:).
+    try:
+        os.link(source, image_path)
+    except OSError:
+        shutil.copy2(source, image_path)
     stat = image_path.stat()
     row = {k: original[k] for k in columns}
     # Size and mtime must match the file on disk exactly (same format as the

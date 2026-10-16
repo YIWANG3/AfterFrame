@@ -50,7 +50,11 @@ test.describe("Related version gallery navigation", () => {
     await expect(search).toHaveValue("nav-");
 
     await search.fill("nav-0000");
-    await expect(card("navigation-0000")).toBeVisible();
+    // The search typed here wins over the reveal still loading from the
+    // click before: on the fast Windows runner this fill lands while that
+    // page is in flight, and the reveal used to put "nav-" back on landing.
+    await expect(search).toHaveValue("nav-0000");
+    await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1);
     await card("navigation-0000").click();
     await link("navigation-0399").click();
     await expectRevealed("navigation-0399", "nav-0399.jpg");

@@ -12,7 +12,12 @@ const { TINY_JPEG, makeImportDir } = require("./helpers/images");
 let ctx;
 
 // Files per import: the job has to outlast the dock's first poll (see below).
-const IMPORT_SIZE = 3000;
+// Fewer on Windows, as in e2e/65: the GitHub Windows runner imports tiny
+// files at 27 ms each on a good day and 60 ms on a bad one (2026-10-16, 3000
+// files still matching RAW after the 180 s wait below), and once the catalog
+// holds a RAW (the cancelled-import test's DNG) every later import also
+// matches sources, which is slower again.
+const IMPORT_SIZE = process.platform === "win32" ? 1500 : 3000;
 
 const callTool = (name, args) => mcpTool(ctx.mcpPort, name, args);
 
@@ -27,7 +32,9 @@ test.afterAll(async () => {
 });
 
 test("agent-started import shows a JobDock card and self-dismisses", async () => {
-  test.setTimeout(120_000);
+  // The 1500 files take 40–90 s on the GitHub Windows runner.
+  const follow = process.platform === "win32" ? 180_000 : 60_000;
+  test.setTimeout(60_000 + follow);
   // Big enough that the job is still running when the dock's first poll
   // lands (about 2 s in). Previews no longer spawn a process per file, so
   // tiny files import at about 1.6 ms each locally and about 5 ms on CI: 300,
@@ -58,7 +65,7 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
       await expect(async () => {
         result = await callTool("get_job_status", { job_id: jobId });
         expect(result.status).not.toBe("running");
-      }).toPass({ timeout: 60_000 });
+      }).toPass({ timeout: follow });
     }
     expect(result.status).toBe("succeeded");
 
@@ -203,14 +210,14 @@ const importCard = () => ctx.window.getByTestId("job-dock-card").filter({ hasTex
 // it on CI without a picker: its next import's click landed as the job poll
 // saw the previous import end.)
 test("a folder picked while an import runs is imported, even when that import ends before the picker closes", async () => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const running = fs.realpathSync(makeImportDir("running", IMPORT_SIZE));
   const picked = fs.realpathSync(makeImportDir("picked", 5));
   try {
     await importThroughToolbar(ctx.app, ctx.window, [running]);
     await expect(importCard()).toHaveCount(1, { timeout: 15_000 });
     const answerPicker = await importThroughToolbar(ctx.app, ctx.window, [picked], { hold: true });
-    await expect(importCard()).toHaveCount(0, { timeout: 180_000 });
+    await expect(importCard()).toHaveCount(0, { timeout: 240_000 });
     await answerPicker();
     await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 60_000 }).toBe(5);
     await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
@@ -225,7 +232,7 @@ test("a folder picked while an import runs is imported, even when that import en
 // says, where it used to go to the importer, which answered with the agent's
 // job and left the folder out.
 test("a folder picked before an agent's import starts waits for it, then is imported", async () => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const agents = fs.realpathSync(makeImportDir("agents", IMPORT_SIZE));
   const picked = fs.realpathSync(makeImportDir("waiting", 5));
   try {
@@ -235,7 +242,7 @@ test("a folder picked before an agent's import starts waits for it, then is impo
     await expect(importCard()).toHaveCount(1, { timeout: 15_000 });
     await answerPicker();
     await expect(importCard()).toContainText("Queued changes: 1 media · 0 sources", { timeout: 15_000 });
-    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 180_000 }).toBe(5);
+    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 240_000 }).toBe(5);
     await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
     expect((await pathsUnder(agents)).length).toBe(IMPORT_SIZE);
     await agentImport;
@@ -249,7 +256,7 @@ test("a folder picked before an agent's import starts waits for it, then is impo
 // notice of the agent's job is held back here): the importer reports itself
 // busy, and the folder waits all the same.
 test("a folder picked while an import runs that the window hasn't seen yet waits for it, then is imported", async () => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const unseen = fs.realpathSync(makeImportDir("unseen", IMPORT_SIZE));
   const picked = fs.realpathSync(makeImportDir("behind", 5));
   try {
@@ -269,7 +276,7 @@ test("a folder picked while an import runs that the window hasn't seen yet waits
     await expect(importCard()).toHaveCount(0);
     await answerPicker();
     await expect(importCard()).toContainText("Queued changes: 1 media · 0 sources", { timeout: 15_000 });
-    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 180_000 }).toBe(5);
+    await expect.poll(async () => (await pathsUnder(picked)).length, { timeout: 240_000 }).toBe(5);
     await expect(importCard()).toHaveCount(0, { timeout: 60_000 });
     expect((await pathsUnder(unseen)).length).toBe(IMPORT_SIZE);
     await agentImport;
