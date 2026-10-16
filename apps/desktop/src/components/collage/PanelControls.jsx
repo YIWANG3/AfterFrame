@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, RotateCcw, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
-import { Chip } from "../../ui";
+import { Checkbox, Chip, cx } from "../../ui";
 import { fileName, localFileUrl } from "../../utils/format";
 
 // Shared building blocks for CollagePanel (single mode) and BatchPanel
@@ -27,6 +27,9 @@ const BG_PRESETS = [
 ];
 
 export const EXPORT_WIDTHS = [1080, 2048, 3000, 4096];
+// Gap, padding and corner radius are export pixels; this caps what the
+// number fields accept and what a remembered value may be.
+export const MAX_SPACING_PX = 2000;
 
 /**
  * The "Images" section: every image in the collage (thumb + name, hover to
@@ -158,15 +161,44 @@ export function TemplateGrid({ templates, activeId, ratio, onSelect }) {
   );
 }
 
-function SliderField({ label, value, max, onChange }) {
+// A slider for the quick drag plus a number field for an exact value. The
+// slider covers the useful range for this export width; the field takes any
+// whole number up to MAX_SPACING_PX, applied as it is typed and clamped when
+// the field is left.
+function SliderField({ label, value, max, onChange, testId }) {
+  const [draft, setDraft] = useState(null); // the field's text while it is being edited
+  const commit = (raw) => {
+    setDraft(null);
+    if (raw === "") return;
+    const n = Math.round(Number(raw));
+    if (Number.isFinite(n)) onChange(Math.min(MAX_SPACING_PX, Math.max(0, n)));
+  };
   return (
     <div>
       <div className="flex items-center justify-between">
         <div className="text-[11px] text-muted">{label}</div>
-        <div className="text-[11px] text-muted2">{value}px</div>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            max={MAX_SPACING_PX}
+            step={1}
+            value={draft ?? String(value)}
+            data-testid={testId}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              const n = Number(e.target.value);
+              if (e.target.value !== "" && Number.isInteger(n) && n >= 0 && n <= MAX_SPACING_PX) onChange(n);
+            }}
+            onBlur={(e) => commit(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+            className="collage-ratio-input w-14 px-1.5 text-right text-[11px] tabular-nums text-text"
+          />
+          <span className="text-[11px] text-muted2">px</span>
+        </div>
       </div>
-      <input type="range" min={0} max={max} step={1} value={value}
-        onChange={(e) => onChange(Number(e.target.value))} className="mt-1 w-full" />
+      <input type="range" min={0} max={max} step={1} value={Math.min(value, max)}
+        onChange={(e) => { setDraft(null); onChange(Number(e.target.value)); }} className="mt-1 w-full" />
     </div>
   );
 }
@@ -174,8 +206,8 @@ function SliderField({ label, value, max, onChange }) {
 /**
  * The "Canvas" section: aspect ratio, gap, padding, border radius, background.
  * Identical between single and batch modes. `canvas` is the overlay's canvas
- * settings object: { ratio, gap, padding, radius, bg, setRatio, setGap,
- * setPadding, setRadius, setBg, onReset } (onReset null: nothing to reset).
+ * settings object: { ratio, gap, padding, radius, edgeBlend, bg, setRatio, setGap,
+ * setPadding, setRadius, setEdgeBlend, setBg, onReset } (onReset null: nothing to reset).
  */
 export function CanvasSection({ canvas, exportWidth }) {
   const {
@@ -183,6 +215,7 @@ export function CanvasSection({ canvas, exportWidth }) {
     gap, setGap: onGapChange,
     padding, setPadding: onPaddingChange,
     radius: borderRadius, setRadius: onBorderRadiusChange,
+    edgeBlend, setEdgeBlend,
     bg: bgColor, setBg: onBgColorChange,
     onReset,
   } = canvas;
@@ -255,9 +288,10 @@ export function CanvasSection({ canvas, exportWidth }) {
           </div>
         </div>
 
-        <SliderField label={t("gap")} value={gap} max={Math.round(exportWidth * 0.1)} onChange={onGapChange} />
-        <SliderField label={t("padding")} value={padding} max={Math.round(exportWidth * 0.1)} onChange={onPaddingChange} />
-        <SliderField label={t("borderRadius")} value={borderRadius} max={Math.round(exportWidth * 0.15)} onChange={onBorderRadiusChange} />
+        <SliderField label={t("gap")} value={gap} max={Math.round(exportWidth * 0.1)} onChange={onGapChange} testId="collage-gap-input" />
+        <SliderField label={t("padding")} value={padding} max={Math.round(exportWidth * 0.1)} onChange={onPaddingChange} testId="collage-padding-input" />
+        <SliderField label={t("borderRadius")} value={borderRadius} max={Math.round(exportWidth * 0.15)} onChange={onBorderRadiusChange} testId="collage-radius-input" />
+        <SliderField label={t("edgeBlend")} value={edgeBlend} max={Math.round(exportWidth * 0.1)} onChange={setEdgeBlend} testId="collage-edge-blend-input" />
 
         <div>
           <div className="text-[11px] text-muted">{t("background")}</div>
@@ -310,6 +344,29 @@ export function CanvasSection({ canvas, exportWidth }) {
         </div>
       </div>
     </Section>
+  );
+}
+
+/**
+ * The coverage check in the Export section: a box that highlights the parts
+ * of a cell its photo does not reach, and while it is on, how many cells
+ * are short. `coverage` is { show, setShow, gapCells }.
+ */
+export function CoverageCheck({ coverage }) {
+  const { t } = useTranslation("collage");
+  const { show, setShow, gapCells } = coverage;
+  return (
+    <div>
+      <Checkbox label={t("showGaps")} checked={show} onChange={setShow} testId="collage-show-gaps" />
+      {show && (
+        <div
+          data-testid="collage-gap-count"
+          className={cx("mt-1 pl-5 text-[10px]", gapCells > 0 ? "text-warn" : "text-muted2")}
+        >
+          {gapCells > 0 ? t("gapCells", { count: gapCells }) : t("allCovered")}
+        </div>
+      )}
+    </div>
   );
 }
 

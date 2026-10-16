@@ -63,7 +63,7 @@ function findCollageTemplate(count, templateId) {
 // One collage page: load sources (HD preview falls back to original), render
 // via the shared collageRender module, save + register like CollageOverlay.
 async function handleCollage(payload) {
-  const { files, templateId, canvasRatio, gap, padding, borderRadius, bgColor, width, savePath, sourceAssetIds } = payload;
+  const { files, templateId, canvasRatio, gap, padding, borderRadius, edgeBlend, bgColor, width, savePath, sourceAssetIds } = payload;
   const images = await Promise.all(
     files.map(async (f) => {
       try { return await loadImage(f.imagePath); }
@@ -77,8 +77,9 @@ async function handleCollage(payload) {
     gap: gap ?? 0,
     padding: padding ?? 0,
     borderRadius: borderRadius ?? 0,
+    edgeBlend: edgeBlend ?? 0,
     bgColor: bgColor || "#000000",
-    width: width || 3000,
+    width: width || 4096,
   });
   // Lossless, like CollageOverlay's export: saveImage encodes it once.
   const buffer = await canvasToBuffer(canvas, "image/png");

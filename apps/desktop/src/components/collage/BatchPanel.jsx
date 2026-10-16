@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Chip } from "../../ui";
 import { getTemplatesForCount } from "./collageTemplates";
 import { GROUP_SIZE_OPTIONS, MAX_TEMPLATE_COUNT } from "./collageBatch";
-import { Section, TemplateGrid, CanvasSection, ExportWidthChips, ImagesSection } from "./PanelControls";
+import { Section, TemplateGrid, CanvasSection, CoverageCheck, ExportWidthChips, ImagesSection } from "./PanelControls";
 
 export default function BatchPanel({
   imageCount,
@@ -17,6 +17,7 @@ export default function BatchPanel({
   templateId,
   onTemplateIdChange,
   canvas,
+  coverage,
   exportWidth,
   onExportWidthChange,
   namePrefix,
@@ -130,6 +131,7 @@ export default function BatchPanel({
 
       <Section label={t("export")}>
         <div className="space-y-3">
+          <CoverageCheck coverage={coverage} />
           <div>
             <div className="text-[11px] text-muted">{t("exportWidth")}</div>
             <div className="mt-1.5">
