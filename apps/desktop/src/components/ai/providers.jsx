@@ -6,10 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
 import api from "../../api";
-import { Modal, Button, cx } from "../../ui";
-
-const FIELD =
-  "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";
+import { Button, Modal, Select, TextInput } from "../../ui";
 
 function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
@@ -194,7 +191,7 @@ export function ProviderModal({
             <PanelLabel>{mode === "new" ? t("providers.newProvider") : t("providers.editProvider")}</PanelLabel>
             <button
               type="button"
-              className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
+              className="rounded p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
               onClick={onClose}
             >
               <X className="h-3.5 w-3.5" />
@@ -204,15 +201,11 @@ export function ProviderModal({
           {mode === "new" && (
             <label className="mt-3 block">
               <div className="mb-1 text-[11px] text-muted">{t("providers.type")}</div>
-              <select
-                value={selectedType}
-                onChange={(e) => handleTypeChange(e.target.value)}
-                className={FIELD}
-              >
+              <Select size="lg" className="w-full" value={selectedType} onChange={handleTypeChange}>
                 {PROVIDER_TYPES.filter((t) => api.can("aiRepaintMultiProvider") || t.type === "nanobanana").map((t) => (
                   <option key={t.type} value={t.type}>{t.label}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
 
@@ -224,11 +217,12 @@ export function ProviderModal({
 
           <label className="mt-3 block">
             <div className="mb-1 text-[11px] text-muted">{t("providers.name")}</div>
-            <input
+            <TextInput
+              size="lg"
+              className="w-full"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={setName}
               placeholder={t("providers.providerName")}
-              className={cx(FIELD, "placeholder:text-muted2")}
               autoFocus={mode === "new"}
             />
           </label>
@@ -240,27 +234,25 @@ export function ProviderModal({
           {isMultiField ? (
             <div className="mt-2 space-y-2">
               {tmpl.authFields.map((field) => (
-                <div key={field} className="flex h-8 items-center gap-2 rounded-md border border-border/70 bg-app px-2 hover:border-border focus-within:border-accent/50">
-                  <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted2" />
-                  <input
-                    value={parsedFields[field] || ""}
-                    onChange={(e) => updateField(field, e.target.value)}
-                    placeholder={tmpl.placeholders?.[field] || field}
-                    className="h-full flex-1 bg-transparent text-[12px] text-text outline-none placeholder:text-muted2"
-                  />
-                </div>
+                <TextInput
+                  key={field}
+                  size="lg"
+                  leading={<KeyRound className="h-3.5 w-3.5" />}
+                  value={parsedFields[field] || ""}
+                  onChange={(v) => updateField(field, v)}
+                  placeholder={tmpl.placeholders?.[field] || field}
+                />
               ))}
             </div>
           ) : (
-            <div className="mt-2 flex h-8 items-center gap-2 rounded-md border border-border/70 bg-app px-2 hover:border-border focus-within:border-accent/50">
-              <KeyRound className="h-3.5 w-3.5 text-muted2" />
-              <input
-                value={tokenValue}
-                onChange={(e) => setTokenValue(e.target.value)}
-                placeholder={tmpl?.placeholder || t("providers.apiKeyPlaceholder")}
-                className="h-full flex-1 bg-transparent text-[12px] text-text outline-none placeholder:text-muted2"
-              />
-            </div>
+            <TextInput
+              size="lg"
+              className="mt-2"
+              leading={<KeyRound className="h-3.5 w-3.5" />}
+              value={tokenValue}
+              onChange={setTokenValue}
+              placeholder={tmpl?.placeholder || t("providers.apiKeyPlaceholder")}
+            />
           )}
           {hasExistingToken && !tokenValue.trim() && (
             <div className="mt-1 text-[11px] text-muted">{t("providers.savedNote")}</div>

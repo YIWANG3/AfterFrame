@@ -11,6 +11,7 @@ import {
 import { ASPECT_PRESETS, getAspectRatio } from "../cropMath";
 import { MAX_IMAGE_ZOOM } from "../imageMath";
 import FooterButton from "./FooterButton";
+import { SliderRow } from "../../../ui";
 
 function getAspectPreviewBox(aspectKey) {
   const aspect = getAspectRatio(aspectKey, 1);
@@ -131,15 +132,12 @@ export default function CropPanel({
             <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("overlay.scale")}</div>
             <div className="text-[11px] text-muted">{imageZoom.toFixed(2)}×</div>
           </div>
-          <input
-            type="range"
-            min={String(minZoom)}
-            max={String(MAX_IMAGE_ZOOM)}
-            step="0.01"
+          <SliderRow
+            compact valueMode="none" className="mt-3"
+            min={minZoom} max={MAX_IMAGE_ZOOM} step={0.01}
             value={imageZoom}
-            onChange={(event) => onZoomChange(Number(event.target.value))}
-            className="mt-3 w-full"
-            aria-label={t("overlay.imageScale")}
+            onChange={onZoomChange}
+            ariaLabel={t("overlay.imageScale")}
           />
         </div>
 

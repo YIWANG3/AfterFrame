@@ -33,7 +33,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
       <div className="relative" onMouseEnter={enterItem} onMouseLeave={leaveItem}>
         <button
           type="button"
-          className="flex w-full cursor-pointer rounded-[6px] items-center justify-between px-3 py-1.5 text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer rounded-md items-center justify-between px-3 py-1.5 text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={onClick}
         >
           <span className="flex items-center gap-2.5">
@@ -55,7 +55,7 @@ function MenuItem({ icon: Icon, label, shortcut, onClick, locked = false, childr
     <button
       type="button"
       className={[
-        "flex w-full rounded-[6px] items-center justify-between px-3 py-1.5 text-left text-[12px]",
+        "flex w-full rounded-md items-center justify-between px-3 py-1.5 text-left text-[12px]",
         locked ? "cursor-default text-muted2" : "cursor-pointer text-muted hover:bg-hover hover:text-text",
       ].join(" ")}
       title={locked ? tc(LOCKED_HINT_KEY) : undefined}
@@ -75,7 +75,7 @@ function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
   return (
     <button
       type="button"
-      className="flex w-full cursor-pointer items-center justify-between gap-4 whitespace-nowrap rounded-[6px] px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+      className="flex w-full cursor-pointer items-center justify-between gap-4 whitespace-nowrap rounded-md px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
       onClick={onClick}
       {...rest}
     >
@@ -140,14 +140,14 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
       <MenuItem icon={Sparkles} label={t("gallery.menu.annotate")} locked={!api.can("annotation")}>
         <button
           type="button"
-          className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer rounded-md items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: true }); onClose(); }}
         >
           {t("gallery.menu.annotateSkip", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
         </button>
         <button
           type="button"
-          className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+          className="flex w-full cursor-pointer rounded-md items-center gap-2.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
           onClick={() => { onAnnotate?.(assetIds || [item.asset_id], { onlyMissing: false }); onClose(); }}
         >
           {t("gallery.menu.reannotate", { suffix: assetIds?.length > 1 ? ` ${assetIds.length}` : "" })}
@@ -159,7 +159,7 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
             <button
               key={ed.appPath}
               type="button"
-              className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+              className="flex w-full cursor-pointer rounded-md items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
               onClick={() => { onOpenWith?.(ed.appPath); onClose(); }}
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -192,7 +192,7 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
             <button
               key={col.collection_id}
               type="button"
-              className="flex w-full cursor-pointer rounded-[6px] items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
+              className="flex w-full cursor-pointer rounded-md items-center gap-2.5 px-3 py-1.5 text-left text-[12px] text-muted hover:bg-hover hover:text-text"
               onClick={() => { onAddTo(col.collection_id); onClose(); }}
             >
               <Folder className="h-3.5 w-3.5" />

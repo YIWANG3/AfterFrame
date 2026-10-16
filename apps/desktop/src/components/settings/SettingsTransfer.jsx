@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
 import api from "../../api";
 import { writePref } from "../../utils/prefs";
-import { Modal, Button, cx } from "../../ui";
+import { Button, cx, Modal, TextInput } from "../../ui";
 import { FieldRow, Group, Toggle } from "./SettingsPrimitives";
 
 // Settings ▸ General ▸ Backup & transfer. Export/import of global settings and
@@ -12,9 +12,6 @@ import { FieldRow, Group, Toggle } from "./SettingsPrimitives";
 
 const SECTIONS = ["general", "repaint", "annotation", "watermark"];
 const MIN_PASSPHRASE = 8;
-
-const FIELD =
-  "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50";
 
 function DialogShell({ title, onClose, children, footer }) {
   return (
@@ -55,13 +52,14 @@ function PassphraseInput({ value, onChange, placeholder, testId, autoFocus }) {
   return (
     <div className="relative">
       <KeyRound className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted2" />
-      <input
+      <TextInput
+        size="lg"
         type="password"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className={cx(FIELD, "pl-7")}
+        className="w-full pl-7"
         data-testid={testId}
       />
     </div>

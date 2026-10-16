@@ -356,7 +356,7 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
               className={ACTION_CHIP}
             >
               <X className="h-2.5 w-2.5" />
-              {t("filter.clear", { count: activeCount })}
+              <span>{t("filter.clear", { count: activeCount })}</span>
             </button>
           )}
           <SmartCollectionControls smart={smart} />

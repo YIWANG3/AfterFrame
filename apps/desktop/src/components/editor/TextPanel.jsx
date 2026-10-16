@@ -6,7 +6,7 @@ import {
   Type, ChevronDown, Undo2, Redo2, RotateCcw, Layers, Sparkles, FolderOpen, Cannabis, Brush, Blend,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
-import { SliderRow, Toggle } from "../../ui";
+import { SliderRow, TextArea, Toggle } from "../../ui";
 import BorderControls from "./components/BorderControls";
 import FooterButton from "./components/FooterButton";
 import MyLogosRow from "./components/MyLogosRow";
@@ -319,7 +319,7 @@ export default function TextPanel({
                     type="button"
                     data-token={key}
                     onClick={() => addFrameInfo(key)}
-                    className="rounded-md border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                    className="rounded border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
                   >
                     {t(`text.tokens.${key}`)}
                   </button>
@@ -328,7 +328,7 @@ export default function TextPanel({
                   type="button"
                   data-frame-text="true"
                   onClick={() => onAddFrameText?.()}
-                  className="flex items-center gap-1 rounded-md border border-dashed border-border/70 px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                  className="flex items-center gap-1 rounded border border-dashed border-border/70 px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
                 >
                   <Type className="h-3 w-3" />
                   {t("frame.freeText")}
@@ -532,11 +532,10 @@ export default function TextPanel({
           <>
             {/* Content */}
             <Section label={t("text.content")}>
-              <textarea
-                className="w-full resize-y rounded-md border border-border/60 bg-app px-2.5 py-2 text-[12px] leading-relaxed text-text outline-none transition-colors placeholder:text-muted2 focus:border-[rgb(var(--accent-color))]"
+              <TextArea
                 rows={2}
                 value={current.text}
-                onChange={(e) => update(current.id, { text: e.target.value })}
+                onChange={(text) => update(current.id, { text })}
                 placeholder={t("text.enterText")}
               />
             </Section>

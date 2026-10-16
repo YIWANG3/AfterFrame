@@ -1,83 +1,80 @@
-import { useRef } from "react";
 import cx from "./cx";
+import NumberInput, { formatNumber } from "./NumberInput";
 
-// Drag-to-scrub number input (click to type). Promoted from TextPanel where
-// it lived as a private NumInput; StickerPanel had a static value box copy.
-export function NumberDragInput({ value, min, max, step = 1, onChange, onCommit, className = "w-11" }) {
-  const ref = useRef(null);
-  const focusValueRef = useRef(null);
-  const DRAG_THRESHOLD = 3;
-  // Layer sizes get rescaled by float ratios when the crop/margin basis
-  // changes (fontSize, shadow, stroke...), so the model can hold 17.999999.
-  // Show and scrub from a 2-decimal rounding; the model keeps its precision.
-  const shown = Number.isFinite(value) ? Math.round(value * 100) / 100 : value;
-
-  const handleMouseDown = (e) => {
-    // If already focused (editing), let native input handle it
-    if (document.activeElement === ref.current) return;
-    e.preventDefault();
-    const startX = e.clientX;
-    const startVal = shown;
-    let dragging = false;
-
-    const onMove = (ev) => {
-      const dx = ev.clientX - startX;
-      if (!dragging && Math.abs(dx) < DRAG_THRESHOLD) return;
-      dragging = true;
-      // One px of drag = one step; keep the result on the step grid.
-      const raw = startVal + Math.round(dx) * step;
-      const next = Math.min(max, Math.max(min, Math.round(raw / step) * step));
-      onChange(next);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      if (!dragging) {
-        // Was a click, not a drag — focus the input for typing
-        ref.current?.focus();
-      } else {
-        // Opt-in: commit-on-release, e.g. one history entry after a scrub.
-        onCommit?.();
-      }
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
-
-  return (
+// The app's one slider: a range with its label and value. Every tool panel
+// used to draw its own (the text panel, the LUT strength, the crop zoom, the
+// collage spacing fields, the filter bar's facet ranges); they all go
+// through here now, so the track, thumb, label and value box match.
+//
+// `layout` "inline" puts label, range and value on one row (the editor's
+// panels); "stacked" puts the label and value on a header row with the range
+// full-width below (the collage panel). `valueMode` "input" shows the typed /
+// scrubbed NumberInput, "text" a read-only figure, "none" nothing — a bare
+// range for callers that frame the value themselves.
+//
+// `onCommit(value)` fires when a drag or key press on the range ends and when
+// the number field commits — one history entry per gesture. `resetValue`
+// snaps the value back on a double-click of the track. `inputMin` / `inputMax`
+// let the typed value go past the range (the collage spacing field takes any
+// whole number up to a cap; the slider covers the useful part).
+export function SliderRow({
+  label, min, max, step = 1, value, onChange, onCommit,
+  suffix, prefix, decimals, format,
+  layout = "inline", valueMode = "input", compact, className, resetValue,
+  inputMin, inputMax, inputClassName, labelClassName,
+  testId, inputTestId, ariaLabel,
+}) {
+  const rangeValue = Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+  const commitRange = onCommit ? (e) => onCommit(Number(e.currentTarget.value)) : undefined;
+  const range = (
     <input
-      ref={ref}
-      type="number" min={min} max={max} step={step} value={shown}
-      onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))}
-      onFocus={(e) => { focusValueRef.current = value; e.target.select(); }}
-      // Commit only when the value actually changed while focused — an idle
-      // click-then-click-away must not burn an undo step.
-      onBlur={() => { if (focusValueRef.current !== value) onCommit?.(); focusValueRef.current = null; }}
-      onMouseDown={handleMouseDown}
-      style={{ cursor: "ew-resize" }}
-      className={cx(
-        "hide-spinner rounded-md border border-border/60 bg-app px-1.5 py-0.5 text-center text-[11px] text-text outline-none focus:border-[rgb(var(--accent-color))] focus:cursor-text",
-        className,
-      )}
+      type="range" min={min} max={max} step={step} value={rangeValue}
+      onChange={(e) => onChange(Number(e.target.value))}
+      onPointerUp={commitRange}
+      onKeyUp={commitRange}
+      // Opt-in: double-click the track to snap back to a default value.
+      onDoubleClick={resetValue != null ? () => { onChange(resetValue); onCommit?.(resetValue); } : undefined}
+      className={layout === "stacked" ? "mt-1 w-full" : "min-w-0 flex-1"}
+      data-testid={testId}
+      aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
     />
   );
-}
 
-// Label + range + scrubable value. The single SliderRow — TextPanel and
-// StickerPanel previously each had their own.
-export function SliderRow({ label, min, max, step = 1, value, onChange, suffix, compact, className, resetValue }) {
+  const stacked = layout === "stacked";
+  const valueText = format ? format(value) : `${formatNumber(value, decimals)}${suffix ?? ""}`;
+  const valueEl = valueMode === "input" ? (
+    <>
+      <NumberInput
+        drag
+        value={value}
+        min={inputMin ?? min} max={inputMax ?? max} step={step}
+        decimals={decimals} prefix={prefix}
+        onChange={onChange} onCommit={onCommit}
+        className={inputClassName ?? "w-11"}
+        testId={inputTestId}
+      />
+      {suffix && <span className={cx(stacked ? "text-[11px]" : "text-[10px]", "text-muted2")}>{suffix}</span>}
+    </>
+  ) : valueMode === "text" ? (
+    <span className={cx("tabular-nums", stacked ? "text-[11px] text-muted2" : "min-w-[36px] text-right text-[11px] text-text")}>{valueText}</span>
+  ) : null;
+
+  if (stacked) {
+    return (
+      <div className={className}>
+        <div className="flex items-center justify-between">
+          <label className={cx("text-[11px] text-muted", labelClassName)}>{label}</label>
+          {valueEl && <div className="flex items-center gap-1">{valueEl}</div>}
+        </div>
+        {range}
+      </div>
+    );
+  }
   return (
     <div className={cx("flex items-center gap-2", compact ? "" : "mt-2", className)}>
-      {label && <label className="min-w-[48px] text-[10px] text-muted2">{label}</label>}
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        // Opt-in: double-click the track to snap back to a default value.
-        onDoubleClick={resetValue != null ? () => onChange(resetValue) : undefined}
-        className="slider flex-1"
-      />
-      <NumberDragInput value={value} min={min} max={max} step={step} onChange={onChange} />
-      {suffix && <span className="text-[10px] text-muted2">{suffix}</span>}
+      {label && <label className={cx("text-[10px] text-muted2", labelClassName ?? "min-w-[48px]")}>{label}</label>}
+      {range}
+      {valueEl}
     </div>
   );
 }

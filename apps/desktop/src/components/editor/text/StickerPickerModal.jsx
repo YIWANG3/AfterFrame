@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import api from "../../../api";
 import { localFileUrl as mediaUrlFor } from "../../../utils/format";
-import { Button } from "../../../ui";
+import { Button, TextInput } from "../../../ui";
 
 export default function StickerPickerModal({ onPick, onClose }) {
   const { t } = useTranslation("editor");
@@ -53,12 +53,13 @@ export default function StickerPickerModal({ onPick, onClose }) {
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
-        <input
+        <TextInput
+          size="md"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
           placeholder={t("text.search")}
           autoFocus
-          className="mt-3 h-7 w-full rounded-md border border-border/60 bg-app px-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
+          className="mt-3 w-full"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-border/60 px-3 py-3">
@@ -78,7 +79,7 @@ export default function StickerPickerModal({ onPick, onClose }) {
                 className="group flex flex-col text-left"
                 title={s.name || s.sourceLabel || s.filename}
               >
-                <div className="aspect-square overflow-hidden rounded-md border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
+                <div className="aspect-square overflow-hidden rounded-app border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
                   <img
                     src={mediaUrlFor(s.thumbPath || s.path)}
                     alt=""

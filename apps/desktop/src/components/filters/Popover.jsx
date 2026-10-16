@@ -80,7 +80,7 @@ export const MODE_LABELS = { any: "filter.match.any", all: "filter.match.all", i
 export function MatchModes({ modes, mode, onMode }) {
   const { t } = useTranslation("nav");
   return (
-    <div className="mb-1.5 flex gap-1 rounded-md bg-app p-0.5" data-facet-match="true">
+    <div className="mb-1.5 flex gap-1 rounded bg-app p-0.5" data-facet-match="true">
       {modes.map((option) => (
         <button
           key={option}
@@ -104,4 +104,4 @@ export function MatchModes({ modes, mode, onMode }) {
 // bare text ("Clear", "Save as smart collection") vanishes against an image.
 // These are the facet chips' classes, which is also what the skin hangs the
 // glass pill on (index.css: `.flex-wrap.border-b button.rounded-md.border`).
-export const ACTION_CHIP = "flex h-6 items-center gap-1 rounded-md border border-border/70 bg-app px-2 text-[11px] text-muted transition-colors hover:border-border hover:text-text";
+export const ACTION_CHIP = "flex h-6 items-center gap-1 rounded border border-border/70 bg-app px-2 text-[11px] text-muted transition-colors hover:border-border hover:text-text";

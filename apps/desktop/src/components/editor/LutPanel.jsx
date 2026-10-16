@@ -10,7 +10,7 @@ import {
   Star, StarOff, History, Grid2x2, Grid3x3,
 } from "lucide-react";
 import api from "../../api";
-import { Spinner } from "../../ui";
+import { SliderRow, Spinner, TextInput } from "../../ui";
 import FaceMenu from "../FaceMenu";
 import { formatBytes } from "../../utils/format";
 
@@ -67,7 +67,7 @@ function LutCell({ entry, groupKey, selected, current, error, thumb, aspect, scr
     >
       <div
         className={[
-          "relative w-full overflow-hidden rounded-md bg-app transition",
+          "relative w-full overflow-hidden rounded-app bg-app transition",
           selected ? "ring-2 ring-[rgb(var(--accent-color))]" : "ring-1 ring-border/50 group-hover:ring-border",
         ].join(" ")}
         style={{ aspectRatio: String(Math.min(1.5, Math.max(0.75, aspect))) }}
@@ -348,24 +348,16 @@ export default function LutPanel({
             ) : selectedEntry?.log ? (
               <div className="mt-1.5 text-[10.5px] leading-snug text-amber-300/80">{t("lut.logHint")}</div>
             ) : null}
-            <div className="mt-2 flex items-center gap-2">
-              <label className="min-w-[36px] text-[10px] text-muted2" htmlFor="lut-strength">{t("lut.strength")}</label>
-              <input
-                id="lut-strength"
-                data-testid="lut-strength"
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={strengthPct}
-                onChange={(e) => setStrength(Number(e.target.value) / 100)}
-                onPointerUp={(e) => setStrength(Number(e.currentTarget.value) / 100, { commit: true })}
-                onKeyUp={(e) => setStrength(Number(e.currentTarget.value) / 100, { commit: true })}
-                onDoubleClick={() => setStrength(1, { commit: true })}
-                className="slider flex-1"
-              />
-              <span className="w-9 text-right text-[11px] tabular-nums text-text">{strengthPct}%</span>
-            </div>
+            <SliderRow
+              label={t("lut.strength")}
+              min={0} max={100} step={1}
+              value={strengthPct}
+              valueMode="text" suffix="%"
+              onChange={(v) => setStrength(v / 100)}
+              onCommit={(v) => setStrength(v / 100, { commit: true })}
+              resetValue={100}
+              testId="lut-strength"
+            />
             <button
               type="button"
               data-testid="lut-compare"
@@ -384,13 +376,13 @@ export default function LutPanel({
         {total > 0 ? (
           <div className="relative mt-3">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted2" />
-            <input
-              type="text"
+            <TextInput
+              size="md"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={setQuery}
               placeholder={t("lut.search")}
               data-testid="lut-search"
-              className="w-full rounded-md bg-app py-1.5 pl-7 pr-2 text-[11.5px] text-text outline-none placeholder:text-muted2 focus:ring-1 focus:ring-[rgb(var(--accent-color))]"
+              className="w-full pl-7"
             />
           </div>
         ) : null}

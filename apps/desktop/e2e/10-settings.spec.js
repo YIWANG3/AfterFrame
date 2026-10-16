@@ -29,9 +29,10 @@ test("opens with the settings shortcut on the General tab; AI Annotation is a cl
 test("General tab — theme selector flips the applied theme live", async () => {
   await ctx.window.getByRole("button", { name: "General" }).click();
   await expect(ctx.window.getByText("Appearance")).toBeVisible();
-  // The settings-only styles in index.css apply: a 26px card and filled 8px
-  // fields. They once keyed on the overlay's z-index and silently stopped
-  // matching when #107 raised it.
+  // The 26px card comes from the settings-only styles in index.css (they
+  // once keyed on the overlay's z-index and silently stopped matching when
+  // #107 raised it); the filled, borderless 8px field is the Select
+  // primitive's own chrome (src/ui/fields.jsx, the 28 px size).
   const styles = await ctx.window.evaluate(() => {
     const root = document.querySelector("[data-settings-overlay]");
     const card = root.querySelector(":scope > .rounded-xl");
@@ -39,10 +40,10 @@ test("General tab — theme selector flips the applied theme live", async () => 
     return {
       card: getComputedStyle(card).borderRadius,
       select: getComputedStyle(select).borderRadius,
-      selectBorder: getComputedStyle(select).borderTopColor,
+      selectBorder: getComputedStyle(select).borderTopWidth,
     };
   });
-  expect(styles).toEqual({ card: "26px", select: "8px", selectBorder: "rgba(0, 0, 0, 0)" });
+  expect(styles).toEqual({ card: "26px", select: "8px", selectBorder: "0px" });
   // Two selects on this tab: language (0), theme (1).
   const themeSelect = ctx.window.getByRole("combobox").nth(1);
   await themeSelect.selectOption("light");

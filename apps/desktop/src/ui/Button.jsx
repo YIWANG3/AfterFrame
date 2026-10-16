@@ -17,9 +17,12 @@ import cx from "./cx";
 //
 // The size is a prop, not a className override: Tailwind orders arbitrary
 // values alphabetically, so `h-7 text-[11px]` appended to the md classes
-// loses to them. Note index.css (the Tahoe skin) keys on these utilities —
-// `bg-[rgb(var(--accent-color))]` is a pill, `border-border/70 bg-app` a
-// filled pill — so a variant's look is the skinned one.
+// loses to them. index.css (the Tahoe skin) still recolours
+// `border-border/70 bg-app` into a filled pill; the radius is decided here.
+// Every variant takes the radius of its size (xs 6px, sm / md 8px), so a
+// button matches the fields and buttons beside it. `pill` is a role, not a
+// look: the editor's and the collage's header actions (Save, Export) sit in
+// a bar of pills and pass it; a panel or dialog footer never does.
 const LOOKS = {
   primary: "bg-[rgb(var(--accent-color))] font-medium text-accentInk hover:brightness-110",
   secondary: "border border-border/70 bg-app font-medium text-text hover:border-border hover:bg-hover",
@@ -43,11 +46,11 @@ function sizeClasses(variant, size) {
   return s.text;
 }
 
-export default function Button({ variant = "secondary", size = "md", className = "", type = "button", children, ...rest }) {
+export default function Button({ variant = "secondary", size = "md", pill = false, className = "", type = "button", children, ...rest }) {
   return (
     <button
       type={type}
-      className={cx("inline-flex items-center justify-center rounded-md transition-colors", sizeClasses(variant, size), LOOKS[variant], className)}
+      className={cx("inline-flex items-center justify-center transition-colors", pill ? "rounded-full" : size === "xs" ? "rounded" : "rounded-md", sizeClasses(variant, size), LOOKS[variant], className)}
       {...rest}
     >
       {children}

@@ -113,7 +113,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
                 {readable && (
                   <button
                     type="button"
-                    className="rounded-md p-0.5 text-muted2 hover:text-text"
+                    className="rounded p-0.5 text-muted2 hover:text-text"
                     title={t("sidebar.editSmartRules")}
                     onClick={(e) => { e.stopPropagation(); onEditRules?.(col); }}
                   >
@@ -123,7 +123,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
                 {readable && (
                   <button
                     type="button"
-                    className="rounded-md p-0.5 text-muted2 hover:text-text"
+                    className="rounded p-0.5 text-muted2 hover:text-text"
                     title={t("sidebar.snapshotToFolder")}
                     onClick={(e) => { e.stopPropagation(); onSnapshot?.(col); }}
                   >
@@ -132,7 +132,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
                 )}
                 <button
                   type="button"
-                  className="rounded-md p-0.5 text-muted2 hover:text-text"
+                  className="rounded p-0.5 text-muted2 hover:text-text"
                   title={t("sidebar.rename")}
                   onClick={(e) => { e.stopPropagation(); setEditingId(col.collection_id); }}
                 >
@@ -140,7 +140,7 @@ export default function SmartCollections({ collections, activeId, view = "list",
                 </button>
                 <button
                   type="button"
-                  className="rounded-md p-0.5 text-muted2 hover:text-red-400"
+                  className="rounded p-0.5 text-muted2 hover:text-red-400"
                   title={t("sidebar.delete")}
                   onClick={(e) => { e.stopPropagation(); onDelete?.(col.collection_id); }}
                 >

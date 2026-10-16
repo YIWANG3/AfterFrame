@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { gradientColorAt, gradientStops, gradientWithStops, hexToRgba } from "../editor/render/canvasHelpers";
 import usePointerScrub from "../../ui/usePointerScrub";
-import { Z } from "../../ui";
+import { NumberInput, SliderRow, TextInput, Z } from "../../ui";
 
 // ── Color math ────────────────────────────────────────────
 
@@ -428,7 +428,7 @@ export default function ColorPickerPopover({
     >
       <div className="space-y-3">
         {showTabs && (
-          <div className="flex gap-1 rounded-md bg-app p-0.5">
+          <div className="flex gap-1 rounded bg-app p-0.5">
             {availableModes.map((m) => (
               <button
                 key={m}
@@ -481,40 +481,24 @@ export default function ColorPickerPopover({
             {multiStop && (
               <div className="flex items-center gap-2 text-[11px] text-muted2">
                 <span className="flex-1 truncate">{t("stopPosition")}</span>
-                <input
-                  type="number"
+                <NumberInput
+                  drag
                   min={0}
                   max={100}
                   value={Math.round((stops[activeStop]?.pos ?? 0) * 100)}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v)) moveStop(activeStop, Math.max(0, Math.min(100, v)) / 100);
-                  }}
-                  className="hide-spinner w-12 h-6 rounded border border-border/60 bg-app px-1.5 text-center text-[11px] text-text outline-none"
+                  onChange={(v) => moveStop(activeStop, v / 100)}
+                  className="w-12"
+                  suffix="%"
                 />
-                <span className="text-[10px] text-muted2">%</span>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={0}
-                max={360}
-                step={1}
-                value={Math.round(gradient.angle ?? 0)}
-                onChange={(e) => onGradientChange?.({ angle: Number(e.target.value) })}
-                className="flex-1 accent-[rgb(var(--accent-color))]"
-              />
-              <input
-                type="number"
-                value={Math.round(gradient.angle ?? 0)}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v)) onGradientChange?.({ angle: ((v % 360) + 360) % 360 });
-                }}
-                className="hide-spinner w-12 h-6 rounded border border-border/60 bg-app px-1.5 text-center text-[11px] text-text outline-none"
-              />
-            </div>
+            <SliderRow
+              compact
+              min={0} max={360} step={1}
+              value={Math.round(gradient.angle ?? 0)}
+              onChange={(angle) => onGradientChange?.({ angle })}
+              inputClassName="w-12" suffix="°"
+            />
           </>
         )}
 
@@ -531,33 +515,24 @@ export default function ColorPickerPopover({
               background: `linear-gradient(rgba(${cr},${cg},${cb},${opacity}), rgba(${cr},${cg},${cb},${opacity})), repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50% / 8px 8px`,
             }}
           />
-          <div className="flex h-6 flex-1 items-center rounded border border-border/60 bg-app px-2">
-            <span className="text-[11px] text-muted2">#</span>
-            <input
-              type="text"
-              value={hexDraft}
-              onChange={(e) => setHexDraft(e.target.value.toUpperCase())}
-              onBlur={onHexCommit}
-              onKeyDown={(e) => { if (e.key === "Enter") onHexCommit(); }}
-              maxLength={6}
-              className="ml-0.5 w-full bg-transparent text-[11px] text-text outline-none"
-              spellCheck={false}
-            />
-          </div>
-          <div className="flex h-6 w-[52px] items-center rounded border border-border/60 bg-app px-1.5">
-            <input
-              type="text"
-              value={`${Math.round(opacity * 100)}`}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v)) setOpacity(Math.max(0, Math.min(1, v / 100)));
-              }}
-              onBlur={() => {}}
-              className="w-full bg-transparent text-center text-[11px] text-text outline-none"
-              spellCheck={false}
-            />
-            <span className="text-[10px] text-muted2">%</span>
-          </div>
+          <TextInput
+            className="min-w-0 flex-1 gap-0.5"
+            leading="#"
+            value={hexDraft}
+            onChange={(v) => setHexDraft(v.toUpperCase())}
+            onBlur={onHexCommit}
+            onKeyDown={(e) => { if (e.key === "Enter") onHexCommit(); }}
+            maxLength={6}
+            spellCheck={false}
+          />
+          <NumberInput
+            drag
+            min={0} max={100}
+            value={Math.round(opacity * 100)}
+            onChange={(v) => setOpacity(v / 100)}
+            className="w-11"
+            suffix="%"
+          />
           {window.EyeDropper && (
             <button
               type="button"

@@ -5,5 +5,6 @@ export { Z } from "./zIndex";
 export { default as Button } from "./Button";
 export { default as Modal } from "./Modal";
 export { default as Spinner } from "./Spinner";
-export { SliderRow, NumberDragInput } from "./Slider";
-export { Toggle, Checkbox, TextInput, NumberInput, Select, Chip } from "./fields";
+export { SliderRow } from "./Slider";
+export { default as NumberInput } from "./NumberInput";
+export { Toggle, Checkbox, TextInput, TextArea, Select, Chip, FIELD_SIZE, FIELD_CHROME } from "./fields";

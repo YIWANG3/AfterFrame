@@ -85,6 +85,7 @@ export default function WatermarkSettings() {
         <FieldRow label={t("watermark.author")} hint={t("watermark.authorHint")}>
           {justSaved && <Check className="h-3.5 w-3.5 text-accent" aria-label={t("watermark.saved")} />}
           <TextInput
+            size="md"
             value={author}
             onChange={setAuthor}
             onBlur={saveAuthor}

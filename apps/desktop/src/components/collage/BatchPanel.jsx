@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Chip } from "../../ui";
+import { Chip, TextInput } from "../../ui";
 import { getTemplatesForCount } from "./collageTemplates";
 import { GROUP_SIZE_OPTIONS, MAX_TEMPLATE_COUNT } from "./collageBatch";
 import { Section, TemplateGrid, CanvasSection, CoverageCheck, ExportWidthChips, ImagesSection } from "./PanelControls";
@@ -140,12 +140,12 @@ export default function BatchPanel({
           </div>
           <div>
             <div className="text-[11px] text-muted">{t("fileNaming")}</div>
-            <input
-              type="text"
+            <TextInput
+              size="md"
               value={namePrefix}
-              onChange={(e) => onNamePrefixChange(e.target.value)}
+              onChange={onNamePrefixChange}
               placeholder="collage"
-              className="mt-1.5 w-full rounded-md bg-app px-2 py-1.5 text-[11px] text-text outline-none border border-border/40 focus:border-[rgb(var(--accent-color)/0.5)]"
+              className="mt-1.5 w-full"
             />
             <div className="mt-1.5 text-[10px] tabular-nums text-muted2">
               {t("namingPreview", { example: nameExample, count: groups.length })}

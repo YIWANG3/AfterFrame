@@ -10,7 +10,7 @@ import {
   Columns2, Rows2, Layers, Link, Unlink,
 } from "lucide-react";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
-import { NumberDragInput as NumInput } from "../../../ui";
+import { NumberInput } from "../../../ui";
 import { hexToRgba } from "../render/canvasHelpers";
 import {
   alignLeft, alignCenterH, alignRight,
@@ -34,7 +34,7 @@ export function IconBtn({ icon: Icon, onClick, title, disabled }) {
   return (
     <button
       type="button"
-      className="flex h-5 w-5 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-40 disabled:pointer-events-none"
+      className="flex h-5 w-5 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-40 disabled:pointer-events-none"
       onClick={onClick}
       title={title}
       disabled={disabled}
@@ -49,7 +49,7 @@ export function IconBtn({ icon: Icon, onClick, title, disabled }) {
 export function FieldCell({ label, value, min, max, onChange }) {
   return (
     <div>
-      <NumInput value={value} min={min} max={max} onChange={onChange} className="h-6 w-full" />
+      <NumberInput drag value={value} min={min} max={max} onChange={onChange} className="w-full" />
       <div className="mt-0.5 truncate text-center text-[9px] text-muted2">{label}</div>
     </div>
   );
@@ -83,7 +83,7 @@ export function SegGroup({ options, className }) {
 export function StackedField({ label, value, onChange, min, max }) {
   return (
     <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
-      <NumInput value={value} min={min} max={max} onChange={onChange} className="w-full h-6" />
+      <NumberInput drag value={value} min={min} max={max} onChange={onChange} className="w-full" />
       <span className="text-[10px] text-muted2">{label}</span>
     </div>
   );
@@ -133,8 +133,8 @@ export function PairedFields({
   return (
     <div className="flex flex-1 min-w-0 flex-col gap-1">
       <div className="flex items-stretch gap-2">
-        <NumInput value={leftValue} min={min} max={max} onChange={onLeftChange} className="flex-1 min-w-0 h-6" />
-        <NumInput value={rightValue} min={min} max={max} onChange={onRightChange} className="flex-1 min-w-0 h-6" />
+        <NumberInput drag value={leftValue} min={min} max={max} onChange={onLeftChange} className="min-w-0 flex-1" />
+        <NumberInput drag value={rightValue} min={min} max={max} onChange={onRightChange} className="min-w-0 flex-1" />
       </div>
       <div className="relative flex items-center">
         <span className="flex-1 text-center text-[10px] text-muted2">{leftLabel}</span>
@@ -208,7 +208,7 @@ export function AlignBar({ layers, onLayersChange, allLayers }) {
   const sep = "mx-0.5 h-3.5 w-px bg-border/60";
 
   return (
-    <div className="mt-2 flex items-center gap-0.5 rounded-md bg-app p-1">
+    <div className="mt-2 flex items-center gap-0.5 rounded bg-app p-1">
       <button type="button" className={abtn} title={t("text.align.left")} onClick={() => apply(alignLeft)}><AlignHorizontalJustifyStart className="h-3.5 w-3.5" /></button>
       <button type="button" className={abtn} title={t("text.align.centerH")} onClick={() => apply(alignCenterH)}><AlignHorizontalJustifyCenter className="h-3.5 w-3.5" /></button>
       <button type="button" className={abtn} title={t("text.align.right")} onClick={() => apply(alignRight)}><AlignHorizontalJustifyEnd className="h-3.5 w-3.5" /></button>

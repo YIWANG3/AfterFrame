@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, RotateCcw, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
-import { Checkbox, Chip, cx } from "../../ui";
+import { Checkbox, Chip, SliderRow, cx } from "../../ui";
 import { fileName, localFileUrl } from "../../utils/format";
 
 // Shared building blocks for CollagePanel (single mode) and BatchPanel
@@ -161,48 +161,6 @@ export function TemplateGrid({ templates, activeId, ratio, onSelect }) {
   );
 }
 
-// A slider for the quick drag plus a number field for an exact value. The
-// slider covers the useful range for this export width; the field takes any
-// whole number up to MAX_SPACING_PX, applied as it is typed and clamped when
-// the field is left.
-function SliderField({ label, value, max, onChange, testId }) {
-  const [draft, setDraft] = useState(null); // the field's text while it is being edited
-  const commit = (raw) => {
-    setDraft(null);
-    if (raw === "") return;
-    const n = Math.round(Number(raw));
-    if (Number.isFinite(n)) onChange(Math.min(MAX_SPACING_PX, Math.max(0, n)));
-  };
-  return (
-    <div>
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] text-muted">{label}</div>
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            min={0}
-            max={MAX_SPACING_PX}
-            step={1}
-            value={draft ?? String(value)}
-            data-testid={testId}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              const n = Number(e.target.value);
-              if (e.target.value !== "" && Number.isInteger(n) && n >= 0 && n <= MAX_SPACING_PX) onChange(n);
-            }}
-            onBlur={(e) => commit(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-            className="collage-ratio-input w-14 px-1.5 text-right text-[11px] tabular-nums text-text"
-          />
-          <span className="text-[11px] text-muted2">px</span>
-        </div>
-      </div>
-      <input type="range" min={0} max={max} step={1} value={Math.min(value, max)}
-        onChange={(e) => { setDraft(null); onChange(Number(e.target.value)); }} className="mt-1 w-full" />
-    </div>
-  );
-}
-
 /**
  * The "Canvas" section: aspect ratio, gap, padding, border radius, background.
  * Identical between single and batch modes. `canvas` is the overlay's canvas
@@ -288,10 +246,13 @@ export function CanvasSection({ canvas, exportWidth }) {
           </div>
         </div>
 
-        <SliderField label={t("gap")} value={gap} max={Math.round(exportWidth * 0.1)} onChange={onGapChange} testId="collage-gap-input" />
-        <SliderField label={t("padding")} value={padding} max={Math.round(exportWidth * 0.1)} onChange={onPaddingChange} testId="collage-padding-input" />
-        <SliderField label={t("borderRadius")} value={borderRadius} max={Math.round(exportWidth * 0.15)} onChange={onBorderRadiusChange} testId="collage-radius-input" />
-        <SliderField label={t("edgeBlend")} value={edgeBlend} max={Math.round(exportWidth * 0.1)} onChange={setEdgeBlend} testId="collage-edge-blend-input" />
+        {/* The slider covers the useful range for this export width; the field
+            takes any whole number up to MAX_SPACING_PX, applied as it is typed
+            and clamped when the field is left. */}
+        <SliderRow layout="stacked" label={t("gap")} min={0} max={Math.round(exportWidth * 0.1)} inputMax={MAX_SPACING_PX} suffix="px" inputClassName="w-14" value={gap} onChange={onGapChange} inputTestId="collage-gap-input" />
+        <SliderRow layout="stacked" label={t("padding")} min={0} max={Math.round(exportWidth * 0.1)} inputMax={MAX_SPACING_PX} suffix="px" inputClassName="w-14" value={padding} onChange={onPaddingChange} inputTestId="collage-padding-input" />
+        <SliderRow layout="stacked" label={t("borderRadius")} min={0} max={Math.round(exportWidth * 0.15)} inputMax={MAX_SPACING_PX} suffix="px" inputClassName="w-14" value={borderRadius} onChange={onBorderRadiusChange} inputTestId="collage-radius-input" />
+        <SliderRow layout="stacked" label={t("edgeBlend")} min={0} max={Math.round(exportWidth * 0.1)} inputMax={MAX_SPACING_PX} suffix="px" inputClassName="w-14" value={edgeBlend} onChange={setEdgeBlend} inputTestId="collage-edge-blend-input" />
 
         <div>
           <div className="text-[11px] text-muted">{t("background")}</div>

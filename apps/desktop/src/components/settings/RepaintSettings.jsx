@@ -9,6 +9,7 @@ import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "./SettingsPrimitives";
 import { getProviderType, dedupeModels, ProviderModal } from "../ai/providers";
 import api from "../../api";
+import { Select } from "../../ui";
 
 export default function RepaintSettings() {
   const { t } = useTranslation("settings");
@@ -128,15 +129,13 @@ export default function RepaintSettings() {
                   </div>
                   <div className="truncate text-[11px] text-muted2">{tmpl?.label || inst.type}</div>
                 </div>
-                <select
+                <Select
+                  size="md"
                   value={prefs.selectedModels?.[inst.id] || ""}
-                  onChange={(e) => persist({ selectedModels: { ...prefs.selectedModels, [inst.id]: e.target.value } })}
-                  className="h-7 w-[180px] shrink-0 rounded-md border border-border/60 bg-app px-1.5 text-[12px] text-text outline-none hover:border-border focus:border-accent/50"
-                >
-                  {modelOptions(inst).map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                  onChange={(id) => persist({ selectedModels: { ...prefs.selectedModels, [inst.id]: id } })}
+                  className="w-[180px] shrink-0"
+                  options={modelOptions(inst)}
+                />
                 <IconActionButton
                   onClick={() => refreshModels(inst)}
                   title={t("repaint.refreshModels")}

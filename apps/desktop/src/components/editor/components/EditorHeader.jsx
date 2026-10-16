@@ -30,6 +30,7 @@ export default function EditorHeader({
         ) : null}
         <Button
           variant="tint"
+          pill
           size="sm"
           onClick={() => void onExport()}
           disabled={exportDisabled}

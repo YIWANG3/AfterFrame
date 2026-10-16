@@ -447,7 +447,7 @@ function ImagePickerModal({ excludeIds, collections, summary, onAdd, onClose, re
                     disabled={used}
                     title={used ? t("alreadyAdded") : undefined}
                     className={cx(
-                      "group absolute overflow-hidden rounded-md bg-panel2 transition",
+                      "group absolute overflow-hidden rounded-app bg-panel2 transition",
                       used
                         ? "cursor-default"
                         : selected
@@ -957,7 +957,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-chrome px-4">
         <div className="flex items-center gap-3.5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("title")}</div>
-          <div className="flex rounded-[7px] bg-app p-0.5">
+          <div className="flex rounded-md bg-app p-0.5">
             {[
               { id: "single", label: t("singleMode") },
               { id: "batch", label: t("batchMode") },
@@ -966,7 +966,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
                 key={m.id}
                 type="button"
                 className={cx(
-                  "rounded-[5px] px-3 py-0.5 text-[11px] transition-colors",
+                  "rounded px-3 py-0.5 text-[11px] transition-colors",
                   mode === m.id ? "bg-panel2 text-text" : "text-muted hover:text-text",
                 )}
                 onClick={() => setMode(m.id)}
@@ -993,6 +993,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
           )}
           <Button
             variant="tint"
+            pill
             size="sm"
             onClick={mode === "batch" ? handleBatchExport : handleExport}
             disabled={exporting || (mode === "batch" ? groups.length === 0 : images.length < 2)}
@@ -1043,7 +1044,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
                   <div key={gi} className="group/page relative" data-testid="batch-page-card">
                     <div
                       className={cx(
-                        "relative overflow-hidden rounded-md ring-1 transition-shadow",
+                        "relative overflow-hidden rounded-app ring-1 transition-shadow",
                         dragTarget >= 0 ? "ring-[rgb(var(--accent-color))]" : "ring-border/80",
                       )}
                       style={{ width: `${w}px`, aspectRatio: canvasRatio }}
@@ -1112,7 +1113,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             {/* Drag ghost: thumbnail of the picked-up image following the cursor */}
             {cellDrag?.moved && (
               <div
-                className="pointer-events-none fixed h-16 w-16 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md shadow-overlay ring-2 ring-[rgb(var(--accent-color))]"
+                className="pointer-events-none fixed h-16 w-16 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-app shadow-overlay ring-2 ring-[rgb(var(--accent-color))]"
                 style={{ left: cellDrag.x, top: cellDrag.y, zIndex: Z.overlayDrag }}
               >
                 {(() => {

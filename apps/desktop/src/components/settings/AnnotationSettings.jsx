@@ -12,7 +12,7 @@ import api from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, AlertCircle, RefreshCw, Plus, Pencil, Trash2, X } from "lucide-react";
-import { Button, Modal, cx } from "../../ui";
+import { Button, cx, Modal, TextArea } from "../../ui";
 import {
   Group, FieldRow, Toggle, TextInput, NumberInput, Select,
   Chip, SecondaryButton, Callout, ActiveRadio, IconActionButton,
@@ -257,7 +257,7 @@ export default function AnnotationSettings() {
           label={t("annotation.maxTags")}
           hint={t("annotation.maxTagsHint")}
         >
-          <NumberInput value={settings.maxTags} min={1} max={50} onChange={(v) => persist({ maxTags: v })} />
+          <NumberInput size="md" className="w-[72px]" value={settings.maxTags} min={1} max={50} onChange={(v) => persist({ maxTags: v })} />
         </FieldRow>
 
         <FieldRow
@@ -265,6 +265,8 @@ export default function AnnotationSettings() {
           hint={t("annotation.maxDescLengthHint")}
         >
           <NumberInput
+            size="md"
+            className="w-[72px]"
             value={settings.maxCaptionChars}
             min={40}
             max={1000}
@@ -279,6 +281,8 @@ export default function AnnotationSettings() {
           hint={t("annotation.videoFrameIntervalHint")}
         >
           <NumberInput
+            size="md"
+            className="w-[72px]"
             value={settings.videoFrameInterval}
             min={0}
             max={3600}
@@ -293,6 +297,8 @@ export default function AnnotationSettings() {
           hint={t("annotation.maxWorkersHint")}
         >
           <NumberInput
+            size="md"
+            className="w-[72px]"
             value={settings.maxWorkers}
             min={1}
             max={16}
@@ -305,11 +311,10 @@ export default function AnnotationSettings() {
           hint={t("annotation.customInstructionsHint")}
           stack
         >
-          <textarea
+          <TextArea
             value={settings.customInstructions || ""}
-            onChange={(e) => persist({ customInstructions: e.target.value })}
+            onChange={(v) => persist({ customInstructions: v })}
             rows={3}
-            className="w-full resize-y rounded border border-border bg-app px-2.5 py-2 text-[12px] text-text outline-none placeholder:text-muted2/60 focus:border-accent"
             placeholder={t("annotation.optional")}
           />
         </FieldRow>
@@ -511,6 +516,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
 
       <FieldRow label={t("annotation.displayName")} hint={t("annotation.displayNameHint")}>
         <TextInput
+          size="md"
           value={draft.name}
           onChange={(v) => update({ name: v })}
           placeholder={providerLabel}
@@ -538,6 +544,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
             : t("annotation.hostUrlHint")}
         >
           <TextInput
+            size="md"
             value={draft.baseUrl || ""}
             onChange={(v) => update({ baseUrl: v })}
             monospace
@@ -554,6 +561,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
       >
         <div className="flex items-center gap-1.5">
           <TextInput
+            size="md"
             type="password"
             value={keyValue}
             onChange={(v) => { setKeyValue(v); }}
@@ -605,6 +613,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
           />
         ) : (
           <TextInput
+            size="md"
             value={draft.model || ""}
             onChange={(v) => update({ model: v })}
             monospace
@@ -617,7 +626,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
           onClick={handleFetchModels}
           disabled={fetchingModels}
           title={fetchingModels ? t("annotation.fetching") : (fetchedModels.length > 0 ? t("annotation.refreshModelList") : t("annotation.fetchModelList"))}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-app text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-app text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`h-3 w-3 ${fetchingModels ? "animate-spin" : ""}`} />
         </button>

@@ -22,7 +22,7 @@ function FolderSortMenu({ sort, onChange }) {
     <span ref={ref} className="relative flex">
       <button
         type="button"
-        className={`rounded-md p-0.5 transition-colors hover:bg-hover hover:text-text ${sort === "custom" ? "text-muted2" : "text-accent"}`}
+        className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${sort === "custom" ? "text-muted2" : "text-accent"}`}
         title={t("sidebar.sortFolders")}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -317,7 +317,7 @@ export default function Sidebar({
             <span className="flex items-center gap-0.5">
               <button
                 type="button"
-                className={`rounded-md p-0.5 transition-colors hover:bg-hover hover:text-text ${searchingFolders ? "text-text" : "text-muted2"}`}
+                className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${searchingFolders ? "text-text" : "text-muted2"}`}
                 title={t("sidebar.searchFolders")}
                 aria-pressed={searchingFolders}
                 onClick={() => (searchingFolders ? closeFolderSearch() : setSearchingFolders(true))}
@@ -327,7 +327,7 @@ export default function Sidebar({
               <FolderSortMenu sort={folderSort} onChange={changeFolderSort} />
               <button
                 type="button"
-                className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 title={folderView === "covers" ? t("sidebar.viewList") : t("sidebar.viewCovers")}
                 onClick={toggleFolderView}
               >
@@ -335,7 +335,7 @@ export default function Sidebar({
               </button>
               <button
                 type="button"
-                className="rounded-md p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+                className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
                 title={t("sidebar.newFolder")}
                 onClick={() => {
                   // The field opens on top of the list: show it, and let no
@@ -351,7 +351,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   data-testid="sidebar-manage-folders"
-                  className={`rounded-md p-0.5 transition-colors hover:bg-hover hover:text-text ${foldersMode ? "bg-selected text-accent" : "text-muted2"}`}
+                  className={`rounded p-0.5 transition-colors hover:bg-hover hover:text-text ${foldersMode ? "bg-selected text-accent" : "text-muted2"}`}
                   title={t("sidebar.manageFolders")}
                   aria-label={t("sidebar.manageFolders")}
                   aria-pressed={foldersMode}
@@ -579,7 +579,7 @@ export default function Sidebar({
                     <span className="hidden gap-0.5 group-hover:flex">
                       <button
                         type="button"
-                        className="rounded-md p-0.5 text-muted2 hover:text-text"
+                        className="rounded p-0.5 text-muted2 hover:text-text"
                         title={t("sidebar.annotateFolder")}
                         onClick={(e) => { e.stopPropagation(); onAnnotateCollection?.(col.collection_id); }}
                       >
@@ -587,7 +587,7 @@ export default function Sidebar({
                       </button>
                       <button
                         type="button"
-                        className="rounded-md p-0.5 text-muted2 hover:text-text"
+                        className="rounded p-0.5 text-muted2 hover:text-text"
                         title={t("sidebar.rename")}
                         onClick={(e) => { e.stopPropagation(); setEditingId(col.collection_id); }}
                       >
@@ -595,7 +595,7 @@ export default function Sidebar({
                       </button>
                       <button
                         type="button"
-                        className="rounded-md p-0.5 text-muted2 hover:text-red-400"
+                        className="rounded p-0.5 text-muted2 hover:text-red-400"
                         title={t("sidebar.delete")}
                         onClick={(e) => { e.stopPropagation(); onDeleteCollection?.(col.collection_id); }}
                       >

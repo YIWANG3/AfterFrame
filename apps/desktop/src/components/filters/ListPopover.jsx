@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 import Popover, { MatchModes } from "./Popover";
 import { toList, fromList, sameOption } from "./filterValues";
+import { TextInput } from "../../ui";
 
 // Multi-select list. Ticking several options means "any of these"; the popover
 // stays open so they can be ticked in a row. `modes` / `mode` / `onMode` add
@@ -54,12 +55,12 @@ export default function ListPopover({ label, value, options, onSelect, searchabl
   return (
     <Popover label={label} active={picked.length > 0} summary={summary} width={200} excluded={excluded}>
       {(searchable || onSearch) && (
-        <input
+        <TextInput
           autoFocus
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={setQ}
           placeholder={t("filter.searchPlaceholder", { label })}
-          className="mb-1.5 w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+          className="mb-1.5 w-full"
         />
       )}
       {onMode && modes?.length > 1 && picked.length > 0 && <MatchModes modes={modes} mode={mode} onMode={onMode} />}

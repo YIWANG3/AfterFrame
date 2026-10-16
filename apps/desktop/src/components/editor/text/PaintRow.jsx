@@ -5,7 +5,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
-import { NumberDragInput as NumInput } from "../../../ui";
+import { NumberInput, Select } from "../../../ui";
 import { gradientToCss, hexToRgba } from "../render/canvasHelpers";
 import { COLOR_SWATCHES } from "../textState";
 import { StackedColorField, StackedField } from "./controls";
@@ -34,22 +34,19 @@ export function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpac
       >
         <span className="block h-full w-full rounded-[3px]" style={{ background: swatchBg }} />
       </button>
-      <select
-        value={paint.mode}
-        onChange={(e) => onUpdate({ mode: e.target.value })}
-        className="h-6 flex-1 rounded border border-border/60 bg-app px-2 text-[11px] text-text outline-none cursor-pointer hover:border-border"
-      >
+      <Select className="flex-1" value={paint.mode} onChange={(mode) => onUpdate({ mode })}>
         {availableModes.includes("solid") && <option value="solid">{t("text.solid")}</option>}
         {availableModes.includes("gradient") && <option value="gradient">{t("text.linear")}</option>}
-      </select>
+      </Select>
       {onOpacityChange && (
         <>
-          <NumInput
+          <NumberInput
+            drag
             value={opacityValue ?? 100}
             min={0}
             max={opacityMax}
             onChange={onOpacityChange}
-            className="w-10 h-6"
+            className="w-10"
           />
           <span className="text-[10px] text-muted2">%</span>
         </>
@@ -76,7 +73,7 @@ export function PaintRow({ paint, availableModes, onUpdate, opacityValue, onOpac
   );
 }
 
-// Shared stroke/outline row — PaintRow with a trailing px NumInput. Used for
+// Shared stroke/outline row — PaintRow with a trailing px NumberInput. Used for
 // both the text Stroke section and the sticker Outline section so visual
 // changes only need to happen here.
 export function StrokeFieldRow({ paint, availableModes, onPaintUpdate, width, maxWidth, onWidthChange }) {
@@ -87,12 +84,13 @@ export function StrokeFieldRow({ paint, availableModes, onPaintUpdate, width, ma
       onUpdate={onPaintUpdate}
       trailing={
         <>
-          <NumInput
+          <NumberInput
+            drag
             value={width ?? 0}
             min={0}
             max={maxWidth}
             onChange={onWidthChange}
-            className="w-10 h-6"
+            className="w-10"
           />
           <span className="text-[10px] text-muted2">px</span>
         </>

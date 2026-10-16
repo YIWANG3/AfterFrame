@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, Sparkles, Trash2, Star, Loader2, RotateCcw } from "lucide-react";
 
-import { SliderRow } from "../../ui";
+import { SliderRow, TextInput } from "../../ui";
 import { localFileUrl, fileName, stickerLabel } from "../../utils/format";
 import ColorPickerPopover from "../collage/ColorPickerPopover";
 import { usePref } from "../../hooks/usePref";
@@ -98,11 +98,12 @@ function Library({ stickers, highlightId, onChanged }) {
       <div className="pb-2">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted3" />
-          <input
+          <TextInput
+            size="md"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             placeholder={t("sticker.search")}
-            className="h-7 w-full rounded-md border border-border/60 bg-app pl-7 pr-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
+            className="w-full pl-7"
           />
         </div>
       </div>
@@ -144,7 +145,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
     <div className="group flex flex-col" title={stickerLabel(sticker)}>
       <div
         className={[
-          "relative aspect-square overflow-hidden rounded-md border bg-checker transition-all",
+          "relative aspect-square overflow-hidden rounded-app border bg-checker transition-all",
           highlight
             ? "border-[rgb(var(--accent-color))] ring-2 ring-[rgb(var(--accent-color))]"
             : "border-border hover:border-[rgb(var(--accent-color))]",
@@ -364,7 +365,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
                     type="button"
                     onClick={() => setActiveIdx(i)}
                     className={[
-                      "relative aspect-square overflow-hidden rounded-md border-2 bg-checker transition-colors",
+                      "relative aspect-square overflow-hidden rounded-app border-2 bg-checker transition-colors",
                       i === activeIdx ? "border-[rgb(var(--accent-color))]" : "border-border hover:border-border-strong",
                     ].join(" ")}
                   >
@@ -379,7 +380,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             </Section>
 
             <Section label={t("sticker.preview")}>
-              <div className="mb-3 aspect-square overflow-hidden rounded-md border border-border bg-checker">
+              <div className="mb-3 aspect-square overflow-hidden rounded-app border border-border bg-checker">
                 {activeInst && (
                   <OutlinePreview
                     src={localFileUrl(activeInst.absolutePath)}
@@ -404,11 +405,12 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             </Section>
 
             <Section label={t("sticker.name")}>
-              <input
+              <TextInput
+                size="md"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={setName}
                 placeholder={t("sticker.stickerName")}
-                className="h-7 w-full rounded-md border border-border/60 bg-app px-2 text-[11px] text-text outline-none placeholder:text-muted3 focus:border-[rgb(var(--accent-color))]"
+                className="w-full"
               />
             </Section>
           </>
