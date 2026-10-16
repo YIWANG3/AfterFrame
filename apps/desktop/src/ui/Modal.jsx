@@ -22,6 +22,11 @@ import { Z } from "./zIndex";
 //   className  extra classes on the card (layout, padding)
 //   cardProps  attributes on the card (role, aria-label, data-* hooks)
 //   ...rest    attributes on the root (ref, tabIndex, data-top-layer, key handlers)
+//
+// The root carries data-layer="<rung>" (the z key): index.css keys the Tahoe
+// skin and the window drag regions on it, since the rung is an inline style,
+// not a class. The hand-rolled full-screen surfaces (Lightbox, EditorOverlay,
+// CollageOverlay) set the same attribute themselves.
 const BACKDROPS = {
   dim: "bg-black/45 backdrop-blur-[2px]",
   app: "bg-app/80 backdrop-blur-sm",
@@ -60,6 +65,7 @@ export default function Modal({
   const zIndex = typeof z === "number" ? z : Z[z] ?? Z.overlayTop;
   const node = (
     <div
+      data-layer={typeof z === "string" ? z : undefined}
       {...rest}
       className={cx("fixed inset-0 flex items-center justify-center px-5", BACKDROPS[backdrop] ?? BACKDROPS.dim, rootClassName)}
       style={{ zIndex }}

@@ -613,6 +613,7 @@ export default function Lightbox({
   return (
     <div
       style={{ zIndex: Z.lightbox }}
+      data-layer="lightbox"
       className={[
         "fixed inset-0 flex flex-col",
         proofMode ? "bg-white" : "bg-black/90 backdrop-blur-sm",

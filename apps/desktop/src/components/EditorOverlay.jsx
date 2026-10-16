@@ -982,6 +982,7 @@ export default function EditorOverlay({
     <div
       className="fixed inset-0 flex flex-col bg-app text-text"
       style={{ zIndex: Z.editor }}
+      data-layer="editor"
       onDragOver={handleLogoDragOver}
       onDragLeave={handleLogoDragLeave}
       onDrop={handleLogoDrop}
