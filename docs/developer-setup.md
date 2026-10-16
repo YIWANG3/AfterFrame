@@ -170,6 +170,11 @@ npm run dist:mac
 Output: `apps/desktop/release/AfterFrame-<version>-arm64.dmg`. `scripts/release.sh` wraps
 the signed, notarized build and the GitHub release.
 
+`apps/desktop/build/` is gitignored except for the three files electron-builder needs: the two
+icons and `entitlements.mac.plist` (the hardened-runtime entitlements `package.json` points
+`build.mac.entitlements` at). They are tracked, so a fresh checkout of a tag can sign; keep them
+listed in `.gitignore` if you add another file there.
+
 **This build needs macOS 14 or later** (`build.mac.minimumSystemVersion`). Every Apple Silicon Mac
 can update to it, numpy's fast Accelerate build needs it, and so do People, sticker cut-outs and the
 depth model. Older systems refuse to launch it with the system's own message; the macOS 12 builds
