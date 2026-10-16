@@ -548,14 +548,13 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 
 /* ───────── 6 · 筛选行:透明底、无底线;chip 胶囊无描边 ───────── */
 .flex-wrap.border-b[class*="bg-chrome"] { background: transparent; border-color: transparent; padding: 4px 12px 10px; }
-.flex-wrap.border-b button.rounded-md.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
-.flex-wrap.border-b button.rounded-md.border:hover { background: linear-gradient(var(--fill-2), var(--fill-2)), var(--glass); }
+/* 栏右侧的动作芯片(清除 / 存为智能收藏)与筛选芯片同一副玻璃胶囊;同一个 ACTION_CHIP 在弹层里挨着字段时保持 6px、无玻璃 */
+.flex-wrap.border-b button.rounded-md.border, .flex-wrap.border-b .filter-bar-actions > button.border { border-radius: 999px; border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); height: 28px; color: rgb(var(--text-color)); }
+.flex-wrap.border-b button.rounded-md.border:hover, .flex-wrap.border-b .filter-bar-actions > button.border:hover { background: linear-gradient(var(--fill-2), var(--fill-2)), var(--glass); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] { background: rgb(var(--accent-color)); color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"]:hover { background: linear-gradient(rgb(var(--accent-ink) / 0.1), rgb(var(--accent-ink) / 0.1)), rgb(var(--accent-color)); }
 .flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; }
-/* 栏右侧的动作芯片(清除 / 存为智能收藏)与左侧的筛选芯片同为胶囊;同一个 ACTION_CHIP 在弹层里挨着字段时保持 6px */
-.flex-wrap.border-b .filter-bar-actions > button { border-radius: 999px; }
 .flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
 
 /* ───────── 7 · 网格:缩略图去描边,选中留单色环;网格底透明 ───────── */
