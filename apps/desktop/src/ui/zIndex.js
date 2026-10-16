@@ -5,6 +5,11 @@
 // src/ (eslint.config.js). A new layer gets a named rung here, between the
 // ones it must sit above and below, never a number in a component.
 //
+// index.css cannot see an inline style, so a full-screen surface also carries
+// data-layer="<rung name>" on its root (ui/Modal adds it; Lightbox,
+// EditorOverlay and CollageOverlay set it by hand): the Tahoe skin, the
+// traffic-light gutters and the window drag regions key on that attribute.
+//
 // Stacking contexts: a rung is only compared with its siblings. The menus
 // inside an overlay (a collage cell's menu) take `dropdown` and still sit
 // over everything in that overlay; the popovers portaled to document.body
