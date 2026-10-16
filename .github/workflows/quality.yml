@@ -222,8 +222,8 @@ jobs:
           key: ffmpeg-n9.0.2-17-g2a571b6068-${{ runner.os }}
       - name: Fetch FFmpeg
         run: node apps/desktop/scripts/fetch-ffmpeg.mjs
-      # Eight specs set up their catalog with the sqlite3 command line, which
-      # Windows doesn't have.
+      # The harness (relocateFixturePaths) and eight specs query the catalog
+      # with the sqlite3 command line, which Windows doesn't have.
       - name: Install the sqlite3 command line
         run: |
           if (-not (Get-Command sqlite3 -ErrorAction SilentlyContinue)) { choco install sqlite -y --no-progress }
@@ -232,8 +232,11 @@ jobs:
         run: npm ci --prefix apps/desktop
       - name: Build renderer
         run: npm run build --prefix apps/desktop
+      # One retry: imports of thousands of tiny files run about five times
+      # slower here than on the Mac runner, and a spec timed to the Mac can
+      # miss by seconds. A spec that passes on its retry is listed as flaky.
       - name: Run Electron E2E
-        run: npm run e2e:only --prefix apps/desktop
+        run: npm run e2e:only --prefix apps/desktop -- --retries=1
       - name: Upload E2E failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
