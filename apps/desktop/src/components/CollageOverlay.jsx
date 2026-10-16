@@ -993,6 +993,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
           )}
           <Button
             variant="tint"
+            pill
             size="sm"
             onClick={mode === "batch" ? handleBatchExport : handleExport}
             disabled={exporting || (mode === "batch" ? groups.length === 0 : images.length < 2)}

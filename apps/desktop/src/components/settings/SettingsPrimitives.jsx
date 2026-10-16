@@ -113,7 +113,7 @@ export function PrimaryButton({ onClick, children, disabled }) {
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-7 items-center justify-center rounded-full border border-accent bg-accent px-3 text-[11px] font-semibold leading-none text-app",
+        "inline-flex h-7 items-center justify-center rounded-md border border-accent bg-accent px-3 text-[11px] font-semibold leading-none text-app",
         "transition-colors hover:bg-accent/90",
         disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
@@ -130,7 +130,7 @@ export function SecondaryButton({ onClick, children, disabled, className = "" })
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-7 items-center justify-center rounded-full border border-border bg-app px-3 text-[11px] leading-none text-text",
+        "inline-flex h-7 items-center justify-center rounded-md border border-border bg-app px-3 text-[11px] leading-none text-text",
         "transition-colors hover:bg-hover hover:text-text",
         disabled ? "cursor-not-allowed opacity-50" : "",
         className,

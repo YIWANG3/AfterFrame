@@ -626,7 +626,7 @@ function ProviderEditor({ initial, mode, onCancel, onSave }) {
           onClick={handleFetchModels}
           disabled={fetchingModels}
           title={fetchingModels ? t("annotation.fetching") : (fetchedModels.length > 0 ? t("annotation.refreshModelList") : t("annotation.fetchModelList"))}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-app text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-app text-muted transition-colors hover:bg-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`h-3 w-3 ${fetchingModels ? "animate-spin" : ""}`} />
         </button>

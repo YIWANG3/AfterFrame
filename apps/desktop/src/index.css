@@ -554,6 +554,8 @@ section.bg-app:has(> .flex-wrap.border-b) [data-testid="gallery-scroll"]::-webki
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"] svg { color: rgb(var(--accent-ink)); }
 .flex-wrap.border-b button.rounded-md.border[class*="bg-accent"]:hover { background: linear-gradient(rgb(var(--accent-ink) / 0.1), rgb(var(--accent-ink) / 0.1)), rgb(var(--accent-color)); }
 .flex-wrap.border-b .rounded-md.border[class*="bg-app"] { border-color: transparent; background: var(--glass); backdrop-filter: var(--blur); border-radius: 999px; }
+/* 栏右侧的动作芯片(清除 / 存为智能收藏)与左侧的筛选芯片同为胶囊;同一个 ACTION_CHIP 在弹层里挨着字段时保持 6px */
+.flex-wrap.border-b .filter-bar-actions > button { border-radius: 999px; }
 .flex-wrap.border-b .text-muted2 { color: rgb(var(--muted-text)); }
 
 /* ───────── 7 · 网格:缩略图去描边,选中留单色环;网格底透明 ───────── */
@@ -731,10 +733,9 @@ button:not([class*="bg-black"]):has(> svg.lucide-x:only-child):hover,
 button:not([class*="bg-black"]):has(> span:only-child > svg.lucide-x:only-child):hover { background: var(--fill-2) !important; color: rgb(var(--text-color)) !important; }
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
-button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
-/* 带边框 bg-app 的文字按钮是次级 CTA,胶囊;同样式的方形图标钮(w-6 / w-7 / w-8)按尺寸走 6 / 8 */
+button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); }
+/* 带边框 bg-app 的按钮:去线换 fill 底;圆角跟自己的尺寸走(工具栏 / 筛选栏里的胶囊由那两处的规则负责) */
 button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); }
-button.border.border-border\/70.bg-app:not(.w-6):not(.w-7):not(.w-8) { border-radius: 999px; }
 button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border-color: transparent; }
 
 /* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):
@@ -830,7 +831,7 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 }
 .discover-navigation::-webkit-scrollbar { display: none; }
 .discover-navigation button {
-  flex-shrink: 0; height: 32px; padding: 0 14px; border: 0; border-radius: 12px;
+  flex-shrink: 0; height: 32px; padding: 0 14px; border: 0; border-radius: 999px;
   font-size: 13px; font-weight: 500; color: rgb(var(--muted-text));
   background: var(--glass); transition: background .15s, color .15s;
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
