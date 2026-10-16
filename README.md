@@ -64,6 +64,9 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - Sort by imported time, captured time, rating, or name
 - Smart collections (a saved filter with a live count: exclude any filter, ratings below a value or unrated, either-or condition groups) and manual folders
 - Folder list you can sort (custom order, name, newest, most photos) and search by name; new folders go on top
+- **A page for your folders** shows every folder at once, with a mosaic of its newest photos, its count and the span of capture dates. Sort by last added or capture date too, filter by status, count or dates, switch to a sortable table, and select several to annotate or delete
+- **Look-alikes**: every photo gets a perceptual hash and, on the Mac, Apple Vision's feature print, so another export, a re-encode or a crop of one picture is found. A Look-alikes view in the sidebar, **Find Similar** on any photo, and a Similar strip in the inspector
+- **Copy** (⌘C) puts the selected photos on the clipboard as files, like Finder: paste them in Finder, WeChat, Notes or anything that takes a file drop
 - Full metadata inspector: EXIF, camera, lens, exposure, dates
 - Star rating system (imports Lightroom XMP ratings)
 - Pick and reject flags as in Lightroom (**P** / **X** / **U**, with **Shift** to move on to the next photo), and **Delete Rejected Photos…** to take the rejects out of the library or move them to the Trash
@@ -115,7 +118,7 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 
 - **Stickers** — extract subjects from any photo with one click (VisionKit on macOS 14+), save to a per-catalog library with optional outline and shadow, then drop them as image layers on any other photo. Stickers share the same depth, opacity, rotation, outline (with opacity), shadow, and outer-glow controls as text layers
 
-- **Collage** maker with 77 layout templates for 1 to 12 photos, adjustable gap/padding/border-radius, background color, and high-res export. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
+- **Collage** maker with 80 layout templates for 1 to 12 photos, gap, padding and corner radius by slider or typed value, background color, an **edge blend** that cross-fades neighbouring photos, a box that marks the parts of a cell its photo doesn't cover, and export at 4096 px by default. Per-cell pan and zoom with snap-to-center alignment guides, precise zoom slider, and trackpad pinch sync — drag any cell to reframe, swap two cells by dropping one on the other
 
 ![Batch collage](docs/assets/en/collage-batch.webp)
 
@@ -157,7 +160,7 @@ AfterFrame embeds an [MCP](https://modelcontextprotocol.io) server, so any AI ag
 
 > "Import the photos on my Desktop" · "Find the vertical shots from last month and show them to me" · "Crop these to 4:3 for Xiaohongshu" · "Tag everything that has no tags yet" · "Export this collection at 2048px JPEG"
 
-- **34 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, import, crop, export, tags/ratings, collections and smart collections, people, the map and locations, AI annotation & repaint jobs, collages, frames and text rendered by the app's own pipeline, library maintenance, deletion — plus job control
+- **37 tools**: search (full-text + EXIF facets), thumbnails the agent can actually see, look-alikes and similar photos, import, crop, export, tags/ratings, collections and smart collections, people, the map and locations, AI annotation & repaint jobs, collages, frames and text rendered by the app's own pipeline, library maintenance, deletion — plus job control
 - **Two-way selection bridge** — select photos in the app and say "these"; the agent's picks get highlighted and scrolled into view right in your gallery (`show_in_app`)
 - **Visible & cancellable** — agent-started work appears in the same background-activity dock as your own, with live progress and a Cancel button
 - **Local-only** — the server listens on `127.0.0.1:41706` while the app runs; same BYOK privacy stance as everything else
