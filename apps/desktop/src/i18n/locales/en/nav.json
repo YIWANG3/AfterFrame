@@ -73,6 +73,8 @@
     "searchPlaceholder": "Search folders",
     "newFolder": "New folder",
     "newFolderPlaceholder": "Folder name",
+    "edit": "Edit",
+    "done": "Done",
     "viewGrid": "Grid",
     "viewList": "List",
     "sortTitle": "Sort folders",

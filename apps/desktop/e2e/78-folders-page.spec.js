@@ -119,8 +119,13 @@ test("the list view is a table with the same rows, sortable by its headers", asy
   await expect(w().getByTestId("folders-sort")).toHaveText("Name");
 });
 
-test("a shift-click range deletes after one confirm; the sidebar follows", async () => {
+test("Edit turns the page into a picker; a shift-click range deletes after one confirm; the sidebar follows", async () => {
   const row = (name) => cards().filter({ hasText: name });
+  // Browsing: no checkboxes, and nothing is selectable.
+  await expect(cards().first().getByRole("button", { pressed: false })).toHaveCount(0);
+  await w().getByTestId("folders-edit").click();
+  await expect(w().getByTestId("folders-edit")).toHaveText("Done");
+  await expect(cards().first().getByRole("button", { pressed: false })).toHaveCount(1);
   await row("Scratch").click();
   await row("Trip Kyoto").click({ modifiers: ["Shift"] });
   const bar = w().getByTestId("folders-selection-bar");
@@ -136,12 +141,17 @@ test("a shift-click range deletes after one confirm; the sidebar follows", async
   expect(collections.map((c) => c.name)).toEqual(["Trip Tokyo"]);
 });
 
-test("Escape clears the selection; Enter opens the folder in the gallery", async () => {
+test("Escape clears the selection, then leaves edit mode; a plain click opens the folder in the gallery", async () => {
+  // Still editing after the delete: the remaining folder can be picked.
   await cards().first().click();
   await expect(w().getByTestId("folders-selection-bar")).toBeVisible();
   await w().keyboard.press("Escape");
   await expect(w().getByTestId("folders-selection-bar")).toHaveCount(0);
-  await cards().first().dblclick();
+  await expect(w().getByTestId("folders-edit")).toHaveText("Done");
+  await w().keyboard.press("Escape");
+  await expect(w().getByTestId("folders-edit")).toHaveText("Edit");
+  // Browsing again: a click is a jump into the folder.
+  await cards().first().click();
   await expect(w().getByTestId("gallery-title")).toHaveText("Trip Tokyo");
   await expect(galleryCards(w())).toHaveCount(2, { timeout: 10_000 });
   await expect(sidebarRows().first()).toHaveClass(/bg-selected/);

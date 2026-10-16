@@ -73,6 +73,8 @@
     "searchPlaceholder": "搜索文件夹",
     "newFolder": "新建文件夹",
     "newFolderPlaceholder": "文件夹名称",
+    "edit": "编辑",
+    "done": "完成",
     "viewGrid": "网格",
     "viewList": "列表",
     "sortTitle": "文件夹排序",

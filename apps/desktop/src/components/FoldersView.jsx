@@ -169,6 +169,9 @@ export default function FoldersView({
   const setView = (next) => { setViewState(next); writePref(VIEW_KEY, next); };
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  // Browsing by default: a click opens the folder. "Edit" turns the page
+  // into a picker — clicks select, the action bar appears — until "Done".
+  const [editing, setEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const anchorRef = useRef(null);
   const [menu, setMenu] = useState(null); // { folder, x, y }
@@ -208,21 +211,21 @@ export default function FoldersView({
     return () => observer.disconnect();
   }, [hasMore, visibleCount]);
 
+  // In edit mode a plain click toggles (a picker, not a list): ⌘ does the
+  // same, Shift extends from the anchor.
   function select(id, event) {
     const order = cards.map((c) => c.collection_id);
     setSelectedIds((current) => {
       if (event?.shiftKey && anchorRef.current) return new Set(selectRange(order, anchorRef.current, id));
-      if (event?.metaKey || event?.ctrlKey) {
-        const next = new Set(current);
-        if (next.has(id)) next.delete(id); else next.add(id);
-        anchorRef.current = id;
-        return next;
-      }
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
       anchorRef.current = id;
-      return new Set([id]);
+      return next;
     });
   }
   const clearSelection = () => { setSelectedIds(new Set()); anchorRef.current = null; };
+  const startEditing = () => setEditing(true);
+  const stopEditing = () => { setEditing(false); clearSelection(); };
 
   async function deleteFolders(ids) {
     const folders = ids.map((id) => byId.get(id)).filter(Boolean);
@@ -248,24 +251,26 @@ export default function FoldersView({
     for (const id of ids) onAnnotateFolder?.(id);
   }
 
-  // Esc clears; ⌘A selects what the page shows; Enter opens a lone selection;
-  // Delete / Backspace asks about the selection. Not while typing in a field.
+  // Esc closes the menu, then clears the selection, then leaves edit mode.
+  // In edit mode ⌘A selects what the page shows and Delete / Backspace asks
+  // about the selection. Not while typing in a field.
   useEffect(() => {
     function onKey(event) {
       const target = event.target;
       const typing = target instanceof HTMLElement && (target.closest("input, textarea, [contenteditable]"));
       if (event.key === "Escape") {
         if (menu) { setMenu(null); return; }
-        if (!typing && selected.length) { event.preventDefault(); clearSelection(); }
+        if (typing) return;
+        if (selected.length) { event.preventDefault(); clearSelection(); return; }
+        if (editing) { event.preventDefault(); stopEditing(); }
         return;
       }
-      if (typing || editingId || creating) return;
+      if (typing || editingId || creating || !editing) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setSelectedIds(new Set(cards.map((c) => c.collection_id)));
         return;
       }
-      if (event.key === "Enter" && selected.length === 1) { event.preventDefault(); onOpenFolder?.(selected[0]); return; }
       if ((event.key === "Delete" || event.key === "Backspace") && selected.length) { event.preventDefault(); void deleteFolders(selected); }
     }
     window.addEventListener("keydown", onKey);
@@ -298,7 +303,9 @@ export default function FoldersView({
   const openMenu = (folder, event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!selectedIds.has(folder.collection_id)) { setSelectedIds(new Set([folder.collection_id])); anchorRef.current = folder.collection_id; }
+    // While picking, the menu's folder joins the picture: a right-click on
+    // an unselected one makes it the selection.
+    if (editing && !selectedIds.has(folder.collection_id)) { setSelectedIds(new Set([folder.collection_id])); anchorRef.current = folder.collection_id; }
     const rect = event.currentTarget.getBoundingClientRect?.();
     setMenu({ folder, x: event.clientX || rect?.right || 0, y: event.clientY || rect?.bottom || 0 });
   };
@@ -318,17 +325,24 @@ export default function FoldersView({
   );
 
   // The card's shared handlers, for the grid tile and the list row alike.
+  // Browsing: a click (or Enter) opens the folder; ⌘ / Shift-click starts
+  // picking with it. Editing: a click (or Space) toggles it.
   const rowProps = (folder) => ({
     "data-folder-id": folder.collection_id,
     "data-selected": selectedIds.has(folder.collection_id) ? "true" : undefined,
     role: "button",
     tabIndex: 0,
-    onClick: (event) => { if (!event.target.closest("button, input")) select(folder.collection_id, event); },
-    onDoubleClick: (event) => { if (!event.target.closest("button, input")) onOpenFolder?.(folder.collection_id); },
+    onClick: (event) => {
+      if (event.target.closest("button, input")) return;
+      if (editing) { select(folder.collection_id, event); return; }
+      if (event.metaKey || event.ctrlKey || event.shiftKey) { startEditing(); select(folder.collection_id, event); return; }
+      onOpenFolder?.(folder.collection_id);
+    },
     onContextMenu: (event) => openMenu(folder, event),
     onKeyDown: (event) => {
       if (event.target !== event.currentTarget) return;
-      if (event.key === " ") { event.preventDefault(); select(folder.collection_id, event); }
+      if (event.key === "Enter" && !editing) { event.preventDefault(); onOpenFolder?.(folder.collection_id); }
+      if (event.key === " " && editing) { event.preventDefault(); select(folder.collection_id, event); }
     },
   });
 
@@ -355,6 +369,16 @@ export default function FoldersView({
             className="h-8 w-full rounded-md border border-border/70 bg-app py-0 pl-7 pr-2 text-[12px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
           />
         </label>
+
+        <Button
+          variant={editing ? "primary" : "secondary"}
+          data-testid="folders-edit"
+          aria-pressed={editing}
+          className="ml-1 shrink-0"
+          onClick={() => (editing ? stopEditing() : startEditing())}
+        >
+          {editing ? t("folders.done") : t("folders.edit")}
+        </Button>
 
         <SortDropdown sort={sort} setSort={setSort} />
 
@@ -457,27 +481,30 @@ export default function FoldersView({
                 <div
                   key={folder.collection_id}
                   {...rowProps(folder)}
-                  className="group/card relative cursor-default select-none outline-none focus-visible:[&>div:first-child]:ring-2 focus-visible:[&>div:first-child]:ring-accent/60"
+                  className={cx(
+                    "group/card relative select-none outline-none focus-visible:[&>div:first-child]:ring-2 focus-visible:[&>div:first-child]:ring-accent/60",
+                    editing ? "cursor-default" : "cursor-pointer",
+                  )}
                 >
                   <div className={cx(
                     "relative aspect-square overflow-hidden rounded-xl border border-border/40 transition",
                     isSelected ? "ring-2 ring-accent/80" : "group-hover/card:border-accent/40",
                   )}>
                     <CoverMosaic paths={folder.cover_preview_paths} className="h-full w-full" />
-                    <button
-                      type="button"
-                      aria-label={isSelected ? t("folders.clearSelection") : folder.name}
-                      aria-pressed={isSelected}
-                      onClick={(event) => { event.stopPropagation(); select(folder.collection_id, { metaKey: true }); }}
-                      className={cx(
-                        "absolute left-2 top-2 flex h-[18px] w-[18px] items-center justify-center rounded-full border transition",
-                        isSelected
-                          ? "border-accent bg-accent text-accentInk opacity-100"
-                          : "border-white/70 bg-black/35 text-white opacity-0 group-hover/card:opacity-100",
-                      )}
-                    >
-                      <Check className="h-3 w-3 stroke-[2.5]" />
-                    </button>
+                    {editing && (
+                      <button
+                        type="button"
+                        aria-label={folder.name}
+                        aria-pressed={isSelected}
+                        onClick={(event) => { event.stopPropagation(); select(folder.collection_id); }}
+                        className={cx(
+                          "absolute left-2 top-2 flex h-[18px] w-[18px] items-center justify-center rounded-full border transition",
+                          isSelected ? "border-accent bg-accent text-accentInk" : "border-white/70 bg-black/35 text-transparent",
+                        )}
+                      >
+                        <Check className="h-3 w-3 stroke-[2.5]" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       aria-label={t("folders.open")}
@@ -528,20 +555,23 @@ export default function FoldersView({
                     key={folder.collection_id}
                     {...rowProps(folder)}
                     className={cx(
-                      "cursor-default select-none border-t border-border/30 outline-none transition-colors focus-visible:bg-hover",
+                      "select-none border-t border-border/30 outline-none transition-colors focus-visible:bg-hover",
+                      editing ? "cursor-default" : "cursor-pointer",
                       isSelected ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
                     )}
                   >
                     <td className="px-2 py-1.5">
-                      <button
-                        type="button"
-                        aria-pressed={isSelected}
-                        aria-label={folder.name}
-                        onClick={(event) => { event.stopPropagation(); select(folder.collection_id, { metaKey: true }); }}
-                        className={cx("flex h-3.5 w-3.5 items-center justify-center rounded border", isSelected ? "border-accent bg-accent text-accentInk" : "border-muted2")}
-                      >
-                        {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
-                      </button>
+                      {editing && (
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          aria-label={folder.name}
+                          onClick={(event) => { event.stopPropagation(); select(folder.collection_id); }}
+                          className={cx("flex h-3.5 w-3.5 items-center justify-center rounded border", isSelected ? "border-accent bg-accent text-accentInk" : "border-muted2")}
+                        >
+                          {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                        </button>
+                      )}
                     </td>
                     <td className="px-2 py-1.5"><CoverMosaic paths={folder.cover_preview_paths?.slice(0, 1)} className="h-7 w-7 overflow-hidden rounded-md" /></td>
                     <td className="max-w-[320px] px-2 py-1.5 text-text">
@@ -562,7 +592,7 @@ export default function FoldersView({
         )}
       </main>
 
-      {selected.length > 0 && (
+      {editing && selected.length > 0 && (
         <div
           data-testid="folders-selection-bar"
           className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-border/60 bg-chrome/90 py-2 pl-3.5 pr-2 text-[12px] text-text shadow-overlay backdrop-blur-md"
