@@ -26,6 +26,9 @@ jobs:
           cache-dependency-path: apps/desktop/package-lock.json
       - run: python -m pip install -e "services/sidecar[dev]"
       - run: node apps/desktop/scripts/fetch-exiftool.mjs
+      - run: |
+          if (-not (Get-Command sqlite3 -ErrorAction SilentlyContinue)) { choco install sqlite -y --no-progress }
+          sqlite3 -version
       - run: npm ci --prefix apps/desktop
       - run: npm run build --prefix apps/desktop
       - name: Spec 74, three times
