@@ -45,6 +45,9 @@ class CollectionStatsTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.connection = connect(Path(self.directory.name) / "catalog.sqlite")
+        # Cleanups run last-in first: the connection closes before the
+        # directory goes, which Windows insists on (an open file cannot be deleted).
+        self.addCleanup(self.connection.close)
         init_db(self.connection)
 
     def by_id(self):
