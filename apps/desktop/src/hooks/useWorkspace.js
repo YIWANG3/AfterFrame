@@ -56,11 +56,12 @@ export default function useWorkspace({ pushToast } = {}) {
   const [scope, setScopeState] = useState(startScope);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
-  const updateScope = useCallback((patch) => setScopeState((current) => ({ ...current, ...patch })), []);
-  const replaceScope = useCallback((next) => setScopeState({ ...DEFAULT_SCOPE, ...next }), []);
+  const updateScope = useCallback((patch) => { console.log("[dbg] updateScope", JSON.stringify(patch)); setScopeState((current) => ({ ...current, ...patch })); }, []);
+  const replaceScope = useCallback((next) => { console.log("[dbg] replaceScope", JSON.stringify({ q: next.query, s: next.status, c: next.collectionId })); setScopeState({ ...DEFAULT_SCOPE, ...next }); }, []);
   // What the search box holds. It narrows the current page locally at once and
   // becomes scope.query after the debounce.
-  const [typedQuery, setTypedQuery] = useState("");
+  const [typedQuery, setTypedQueryRaw] = useState("");
+  const setTypedQuery = useCallback((value, tag = "input") => { console.log("[dbg] typedQuery", tag, JSON.stringify(value)); setTypedQueryRaw(value); }, []);
   const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
   const [selectedAssetId, setSelectedAssetIdState] = useState(null);
   const selectedAssetIdRef = useRef(null);
@@ -244,9 +245,11 @@ export default function useWorkspace({ pushToast } = {}) {
   // that search landing 200 ms later.
   const searchTimerRef = useRef(null);
   useEffect(() => {
-    if (typedQuery.trim() === scopeRef.current.query.trim()) return undefined;
-    searchTimerRef.current = setTimeout(() => updateScope({ query: typedQuery }), 250);
-    return () => clearTimeout(searchTimerRef.current);
+    if (typedQuery.trim() === scopeRef.current.query.trim()) { console.log("[dbg] debounce skip", JSON.stringify(typedQuery), "scope", JSON.stringify(scopeRef.current.query)); return undefined; }
+    console.log("[dbg] debounce schedule", JSON.stringify(typedQuery), "scope", JSON.stringify(scopeRef.current.query));
+    const query = typedQuery;
+    searchTimerRef.current = setTimeout(() => { console.log("[dbg] debounce fire", JSON.stringify(query)); updateScope({ query }); }, 250);
+    return () => { console.log("[dbg] debounce cleanup", JSON.stringify(query)); clearTimeout(searchTimerRef.current); };
   }, [typedQuery, updateScope]);
 
   // The one place a scope change turns into a browse. Runs after the render
@@ -254,6 +257,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // the sidebar/chips/toolbar — never a value captured before an await.
   const scopeKey = useMemo(() => scopeKeyOf(scope), [scope]);
   const browseCurrentScope = useEffectEvent(() => {
+    console.log("[dbg] browseCurrentScope", JSON.stringify(scopeRef.current.query), scopeKey === loadedScopeRef.current ? "already loaded" : "browse");
     if (scopeKey === loadedScopeRef.current) return;
     void loadBrowser({ scope: scopeRef.current });
   });
@@ -324,6 +328,7 @@ export default function useWorkspace({ pushToast } = {}) {
     if (append && (browserLoadingMore || browserLoading || !browserHasMore)) return;
     const requestId = browserRequestIdRef.current + 1;
     browserRequestIdRef.current = requestId;
+    console.log("[dbg] loadBrowser", requestId, JSON.stringify({ q: target.query, s: target.status, append, preserveView }));
     if (append) {
       setBrowserLoadingMore(true);
     } else {
@@ -478,7 +483,7 @@ export default function useWorkspace({ pushToast } = {}) {
   // loaded key is set first so the browse effect sees "already showing this".
   function installLoadedScope(next) {
     loadedScopeRef.current = scopeKeyOf(next);
-    setTypedQuery(next.query);
+    setTypedQuery(next.query, "installLoadedScope");
     replaceScope(next);
   }
 
@@ -505,6 +510,7 @@ export default function useWorkspace({ pushToast } = {}) {
     // Whatever is in the search box is part of the scope the user means, even
     // if its debounce has not landed yet — locate inside it, and stop the
     // debounce from browsing on its own behind this reveal.
+    console.log("[dbg] reveal clears debounce; typed", JSON.stringify(typedQuery), "scope", JSON.stringify(scopeRef.current.query));
     clearTimeout(searchTimerRef.current);
     const requestId = ++browserRequestIdRef.current;
     const startScope = { ...scopeRef.current, query: typedQuery };
@@ -683,7 +689,8 @@ export default function useWorkspace({ pushToast } = {}) {
       loadedScopeRef.current = null;
       setNavigation((count) => count + 1);
     }
-    setTypedQuery(full.query);
+    setTypedQuery(full.query, "goTo");
+    console.log("[dbg] goTo setScopeState", JSON.stringify({ q: full.query, s: full.status, c: full.collectionId }));
     setScopeState(full);
   }
 

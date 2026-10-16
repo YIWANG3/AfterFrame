@@ -1,0 +1,39 @@
+name: debug-win-74
+# Temporary (debug/win-74 only): spec 74 on the Windows runner, with the
+# [dbg] logs of this branch, to see what puts the search box back.
+on:
+  push:
+    branches: [debug/win-74]
+jobs:
+  win74:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/sidecar/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: python -m pip install -e "services/sidecar[dev]"
+      - run: node apps/desktop/scripts/fetch-exiftool.mjs
+      - run: npm ci --prefix apps/desktop
+      - run: npm run build --prefix apps/desktop
+      - name: Spec 74, three times
+        run: npm run e2e:only --prefix apps/desktop -- e2e/74-version-navigation.spec.js --repeat-each=3
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: win74-artifacts
+          path: apps/desktop/e2e/.artifacts/
+          include-hidden-files: true
+          retention-days: 3
