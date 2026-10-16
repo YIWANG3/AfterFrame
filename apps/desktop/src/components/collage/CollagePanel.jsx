@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Plus, X, Crosshair, RotateCcw, Minus } from "lucide-react";
 import { Button } from "../../ui";
 import { getTemplatesForCount } from "./collageTemplates";
-import { PanelLabel, Section, TemplateGrid, CanvasSection, ExportWidthChips, ImagesSection } from "./PanelControls";
+import { PanelLabel, Section, TemplateGrid, CanvasSection, CoverageCheck, ExportWidthChips, ImagesSection } from "./PanelControls";
 
 export default function CollagePanel({
   images,
@@ -11,6 +11,7 @@ export default function CollagePanel({
   template,
   onTemplateChange,
   canvas,
+  coverage,
   exportWidth,
   onExportWidthChange,
   onAddImages,
@@ -123,7 +124,10 @@ export default function CollagePanel({
       <CanvasSection canvas={canvas} exportWidth={exportWidth} />
 
       <Section label={t("export")}>
-        <ExportWidthChips exportWidth={exportWidth} onExportWidthChange={onExportWidthChange} />
+        <div className="space-y-3">
+          <CoverageCheck coverage={coverage} />
+          <ExportWidthChips exportWidth={exportWidth} onExportWidthChange={onExportWidthChange} />
+        </div>
       </Section>
     </div>
   );

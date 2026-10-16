@@ -37,6 +37,7 @@ module.exports = (ctx) => {
       inputSchema: {
         type: "object",
         properties: {
+          similar_to: { type: "string", description: "An asset id: that photo first, then the ones that look like it, nearest first (the look-alike index; see find_similar). Sort is ignored." },
           query: { type: "string", description: "Free-text search across name, path, camera, lens, caption, OCR text, tags" },
           status: { type: "string", enum: ["all", "matched", "unmatched", "rated", "recent"], description: "Asset subset; 'recent' = imported in the last 7 days. Default all" },
           sort: { type: "string", enum: ["name-asc", "name-desc", "imported-desc", "imported-asc", "captured-desc", "captured-asc", "rating-desc"], description: "Default name-asc" },
@@ -115,6 +116,7 @@ module.exports = (ctx) => {
           search: args.query ? String(args.query) : undefined,
           sort: args.sort ? String(args.sort) : undefined,
           filters,
+          similarTo: args.similar_to ? String(args.similar_to) : undefined,
         });
         for (const row of rows) rememberPreview(row.asset_id, row.preview_path, row.preview_hd_path);
         return {

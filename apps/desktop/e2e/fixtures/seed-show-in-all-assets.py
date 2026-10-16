@@ -38,6 +38,12 @@ source = Path(__file__).parent / "test-images" / "001-red.jpg"
 palette = db.execute("""SELECT rank, hex, share, l, a, b FROM asset_colors
                         WHERE asset_id = ?""", (original["asset_id"],)).fetchall()
 assert palette, "fixture catalog lost 001-red's colours"
+# Likewise its look-alike hash and feature print (asset_visual): a photo
+# without them starts the look-alike catch-up job at launch. Not the group:
+# 400 copies of one picture would fill the sidebar's Look-alikes.
+visual = db.execute("SELECT phash, hash_version, embedding, embedding_model FROM asset_visual WHERE asset_id = ?",
+                    (original["asset_id"],)).fetchone()
+assert visual, "fixture catalog lost 001-red's look-alike hash"
 image_dir = catalog / "burst-images"
 image_dir.mkdir()
 for burst in range(BURSTS):
@@ -71,5 +77,7 @@ for burst in range(BURSTS):
                        (asset_id, asset_id, preview["relative_path"], preview["width"], preview["height"]))
         db.executemany("INSERT INTO asset_colors (asset_id, rank, hex, share, l, a, b) VALUES (?, ?, ?, ?, ?, ?, ?)",
                        [(asset_id, *tuple(c)) for c in palette])
+        db.execute("INSERT INTO asset_visual (asset_id, phash, hash_version, embedding, embedding_model) VALUES (?, ?, ?, ?, ?)",
+                   (asset_id, *tuple(visual)))
 db.commit()
 db.close()

@@ -26,6 +26,8 @@ const SIDECAR_QUERIES = [
   ["workspace:facet-values", "facetValues", null],
   ["workspace:camera-makes", "cameraMakes", [], noArgs],
   ["workspace:search-facet", "searchFacet", [], (options) => (options?.field ? [options] : null)],
+  ["workspace:find-similar", "findSimilar", { similar: [] }, (options) => (options?.assetId ? [options] : null)],
+  ["workspace:list-lookalikes", "listLookalikes", { groups: [], asset_count: 0 }],
   ["workspace:list-people-groups", "listPeopleGroups", []],
   ["workspace:similar-people-groups", "similarPeopleGroups", []],
   ["workspace:people-group-detail", "peopleGroupDetail", null],

@@ -26,6 +26,7 @@
 | [mcp-parity-plan.md](mcp-parity-plan.md) | Phase 1–2 已实现（17→34 tools）；Phase 3–4 未开始 |
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
 | [liquid-glass-redesign.md](liquid-glass-redesign.md) | 视觉重构的调研、原型与定调；材质规则是现行约束 |
+| [local-models-plan.md](local-models-plan.md) | 本地小模型与开源库的扩展规划（不做修图、不碰 1 GB 以上）：A 近似重复/相似照片第一步已实现（feat/similar-images），挑片、OCR、视频场景、语义搜索、离线标签待做 |
 | [lut-plan.md](lut-plan.md) | 套 LUT 的编辑器工具：P1（只做 Mac）已随 0.5.11 发布（#190）；P2 未开始 |
 | [windows-support-plan.md](windows-support-plan.md) | Windows 现状审计、共享/分平台架构与路线；开发机见 `scripts/windows/setup-dev.ps1`。阶段 1、2 已合并，0.5.10 起发布 Windows 安装包（未签名）；签名、真机验收和阶段 3 未做 |
 | [foundation-refactor-plan.md](foundation-refactor-plan.md) | Phase 1–3 与补充修复已完成（2026-07-13/14）；Phase 4 的验收条件其实已满足（`window.mediaWorkspace` 只剩 `src/api` 和 `web-main.jsx`），文内没回填；Phase 5–6 未开始 |

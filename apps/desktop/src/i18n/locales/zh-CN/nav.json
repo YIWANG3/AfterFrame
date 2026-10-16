@@ -6,7 +6,9 @@
     "all": "全部素材",
     "recent": "最近添加",
     "rated": "已评分",
-    "matched": "含 RAW"
+    "matched": "含 RAW",
+    "lookalikes": "近似重复",
+    "similar": "相似照片"
   },
   "toolbar": {
     "search": "搜索",
@@ -342,6 +344,7 @@
       "generate_previews_hd": "生成高清预览",
       "enrich_raw": "补全 RAW 元数据",
       "analyze_colors": "分析色彩",
+      "analyze_visual": "查找近似重复",
       "annotate": "AI 标注",
       "people_index": "分析人物",
       "people_cluster": "整理人物分组",
@@ -357,6 +360,7 @@
       "ai_repaint": "AI 重绘",
       "people_index": "人物识别",
       "colors": "色彩分析",
+      "visual": "近似重复",
       "orientation": "照片方向"
     }
   },
@@ -381,6 +385,7 @@
     "menu": {
       "edit": "编辑…",
       "showInAllAssets": "在全部素材中定位",
+      "findSimilar": "查找相似照片",
       "compare": "对比",
       "collage": "拼图",
       "addToFolder": "加入文件夹",

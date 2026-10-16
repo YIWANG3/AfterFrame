@@ -93,10 +93,16 @@ A re-seed is not a no-op diff. Both seed scripts wipe the catalog and give
 every asset a fresh random id, so every preview file name and the whole
 `catalog.sqlite3` change. The committed `test-catalog.afcatalog` has also
 been migrated in place since it was seeded (dominant colours in #100,
-`display_shape` in #198) and `seed-catalog.js` does not compute colours: after
-a re-seed run the colours job on it (`create-job --job-type colors`, then
-`run-colors-job --job-id`), or `74-version-navigation` fails its "fixture
-catalog lost 001-red's colours" assertion, and check the specs that pin
+`display_shape` in #198, the look-alike hashes and feature prints of
+`asset_visual` in #230 — `people-catalog.afcatalog` too) and `seed-catalog.js`
+does not compute colours: after a re-seed run the colours job on it
+(`create-job --job-type colors`, then `run-colors-job --job-id`), or
+`74-version-navigation` fails its "fixture catalog lost 001-red's colours"
+assertion. The import's preview pass does hash each photo for the look-alike
+index, and `seed-catalog.js` names the `image-features` helper so the
+feature prints come too (build native first); a catalog without them makes
+every spec's launch start the look-alike catch-up job, whose JobDock card
+then collides with the specs' own Cancel buttons. Check the specs that pin
 fixture content (`02-navigation`'s Rated count, `23-map`'s Paris / Tokyo /
 Sydney, `52-color-filter`'s purple).
 Prefer extending a private copy from the spec (`prepareCatalog`, as

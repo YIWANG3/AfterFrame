@@ -1042,6 +1042,47 @@ def run_colors_job(connection, catalog_path: Path, job_id: str, *, limit: int | 
     )
 
 
+def run_visual_job(
+    connection, catalog_path: Path, job_id: str, *, helper_path: Path | None = None, limit: int | None = None, force: bool = False
+) -> dict[str, Any]:
+    """Hash and feature print for every photo whose preview has none yet
+    (db/visual.py), and the look-alike group each falls into. New previews
+    bring theirs as they are rendered; this is the catch-up for a library
+    from before the index, and the retry for previews that could not be read."""
+    from .db.visual import VisualAnalyzer, list_assets_missing_visual
+    from .visual import helper_path_from_env
+
+    catalog = ensure_catalog(catalog_path)
+    helper_binary = helper_path_from_env(helper_path)
+    _lower_priority()
+
+    def work(progress: ProgressCallback) -> dict[str, Any]:
+        analyzer = VisualAnalyzer(connection, helper_binary)
+        try:
+            rows = list_assets_missing_visual(connection, embedding_model=analyzer.embedding_model, limit=limit, force=force)
+            total = len(rows)
+            analyzed = failed = 0
+            reported_at = time.monotonic()
+            for index, row in enumerate(rows, start=1):
+                if analyzer.analyze(row["asset_id"], row["asset_type"], catalog.root / row["relative_path"]):
+                    analyzed += 1
+                else:
+                    failed += 1
+                # One asset per commit, as the colours job: a write held
+                # across a batch keeps the resident sidecar waiting.
+                connection.commit()
+                if index == total or time.monotonic() - reported_at >= 1.0:
+                    reported_at = time.monotonic()
+                    progress({"processed": index, "total": total})
+            return {"analyzed": analyzed, "embedded": analyzer.embedded, "grouped": analyzer.grouped, "failed": failed, "total": total}
+        finally:
+            analyzer.close()
+
+    return _run_single_phase_job(
+        connection, job_id, phase_key="analyze_visual", phase_label="Find Look-alikes", work=work,
+        payload_extra={"limit": limit, "force": force, "embedding": helper_binary is not None}, commit_on_cancel=True,
+    )
+
 def run_orientation_job(connection, catalog_path: Path, job_id: str) -> dict[str, Any]:
     """How each photo shows (portrait / landscape / square), read off the
     thumbnails made before the shape was recorded: the one-time catch-up for

@@ -11,6 +11,7 @@ from pathlib import Path
 from .browse import count_image_assets
 from .locations import delete_asset_location
 from .resource_sets import get_resource_set_for_asset
+from .visual import LOOKALIKES_CLAUSE
 
 
 def verify_assets(
@@ -351,6 +352,14 @@ def summary(connection: sqlite3.Connection) -> dict[str, int]:
             FROM image_lookup_registry AS registry
             JOIN assets ON assets.asset_id = registry.image_asset_id
             WHERE assets.app_rating > 0
+            """
+        ).fetchone()[0],
+        "lookalike_count": connection.execute(
+            f"""
+            SELECT COUNT(DISTINCT registry.image_asset_id)
+            FROM image_lookup_registry AS registry
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            WHERE {LOOKALIKES_CLAUSE}
             """
         ).fetchone()[0],
         "recently_added_count": connection.execute(

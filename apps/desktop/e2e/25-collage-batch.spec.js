@@ -310,6 +310,40 @@ test.describe("Batch collage", () => {
     expect(await canvasHash(0, cellW + 4, 4, cellW - 8, cellH - 8)).toBe(p1DefaultOtherCell);
   });
 
+  test("Highlight uncovered areas counts the panned cell across the pages", async () => {
+    // The test above panned a photo 22px right and left it on page 1 / cell 0,
+    // so the cell's left edge shows background. Every other cell is full.
+    const cards = window.locator("[data-testid='batch-page-card']");
+    const box = window.getByTestId("collage-show-gaps");
+    const count = window.getByTestId("collage-gap-count");
+    await expect(box).not.toBeChecked();
+    await box.check();
+    await expect(count).toHaveText("1 cell not fully covered");
+
+    const canvasBox = await cards.nth(0).locator("canvas").boundingBox();
+    const cellH = canvasBox.height / 2;
+    // Mean colour of the left edge of page 1 / cell 0 (display px → backing store).
+    const edge = () => window.evaluate(([h]) => {
+      const c = document.querySelector("[data-testid='batch-page-card'] canvas");
+      const dpr = window.devicePixelRatio || 1;
+      const { data } = c.getContext("2d").getImageData(0, Math.round(h * 0.3 * dpr), Math.max(1, Math.round(3 * dpr)), Math.round(h * 0.4 * dpr));
+      const sum = [0, 0, 0];
+      for (let i = 0; i < data.length; i += 4) for (let k = 0; k < 3; k++) sum[k] += data[i + k];
+      return sum.map((v) => Math.round(v / (data.length / 4)));
+    }, [cellH]);
+    await expect.poll(async () => {
+      const [r, g, b] = await edge();
+      return r > 120 && r - Math.max(g, b) > 40;
+    }).toBe(true);
+
+    await box.uncheck();
+    await expect(count).toHaveCount(0);
+    await expect.poll(async () => {
+      const [r, g, b] = await edge();
+      return r - Math.max(g, b) > 40;
+    }).toBe(false);
+  });
+
   test("export to folder writes one JPEG per page and registers them", async () => {
     // Stub the native directory picker (register() holds a reference to the
     // same dialog module object, so mutating it here reaches the handler).
@@ -332,12 +366,12 @@ test.describe("Batch collage", () => {
       { timeout: 30_000 },
     ).toBe(true);
 
-    // Default export: 3000px wide, 1:1 ratio
+    // Default export: 4096px wide, 1:1 ratio
     for (const file of expected) {
       const meta = await sharp(file).metadata();
       expect(meta.format).toBe("jpeg");
-      expect(meta.width).toBe(3000);
-      expect(meta.height).toBe(3000);
+      expect(meta.width).toBe(4096);
+      expect(meta.height).toBe(4096);
     }
   });
 
