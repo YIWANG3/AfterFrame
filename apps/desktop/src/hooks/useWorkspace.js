@@ -62,6 +62,8 @@ export default function useWorkspace({ pushToast } = {}) {
   // becomes scope.query after the debounce.
   const [typedQuery, setTypedQueryRaw] = useState("");
   const setTypedQuery = useCallback((value, tag = "input") => { console.log("[dbg] typedQuery", tag, JSON.stringify(value)); setTypedQueryRaw(value); }, []);
+  const typedQueryRef = useRef(typedQuery);
+  typedQueryRef.current = typedQuery;
   const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
   const [selectedAssetId, setSelectedAssetIdState] = useState(null);
   const selectedAssetIdRef = useRef(null);
@@ -518,7 +520,8 @@ export default function useWorkspace({ pushToast } = {}) {
     // Superseded by a newer reveal, a newer browse, or a scope the user changed.
     const isCurrent = () => navigationId === relatedNavigationRef.current
       && requestId === browserRequestIdRef.current
-      && scopeKeyOf(scopeRef.current) === startKey;
+      && scopeKeyOf(scopeRef.current) === startKey
+      && typedQueryRef.current === startScope.query;
     revealRef.current = navigationId;
     setBrowserLoading(true);
     setBrowserLoadingMore(false);
