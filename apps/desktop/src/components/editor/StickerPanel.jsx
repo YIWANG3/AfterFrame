@@ -145,7 +145,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
     <div className="group flex flex-col" title={stickerLabel(sticker)}>
       <div
         className={[
-          "relative aspect-square overflow-hidden rounded-md border bg-checker transition-all",
+          "relative aspect-square overflow-hidden rounded-app border bg-checker transition-all",
           highlight
             ? "border-[rgb(var(--accent-color))] ring-2 ring-[rgb(var(--accent-color))]"
             : "border-border hover:border-[rgb(var(--accent-color))]",
@@ -365,7 +365,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
                     type="button"
                     onClick={() => setActiveIdx(i)}
                     className={[
-                      "relative aspect-square overflow-hidden rounded-md border-2 bg-checker transition-colors",
+                      "relative aspect-square overflow-hidden rounded-app border-2 bg-checker transition-colors",
                       i === activeIdx ? "border-[rgb(var(--accent-color))]" : "border-border hover:border-border-strong",
                     ].join(" ")}
                   >
@@ -380,7 +380,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             </Section>
 
             <Section label={t("sticker.preview")}>
-              <div className="mb-3 aspect-square overflow-hidden rounded-md border border-border bg-checker">
+              <div className="mb-3 aspect-square overflow-hidden rounded-app border border-border bg-checker">
                 {activeInst && (
                   <OutlinePreview
                     src={localFileUrl(activeInst.absolutePath)}

@@ -5,11 +5,13 @@ import { Palette, X, Search, Check, Star, Sparkles, Play, FolderPlus } from "luc
 /* ── Proposed design‑token reference ────────────────────────── */
 const RADIUS_SCALE = [
   { label: "none",  css: "0 px",   tw: "rounded-none", cls: "rounded-none" },
-  { label: "sm",    css: "2 px",   tw: "rounded-sm",   cls: "rounded-sm" },
-  { label: "md",    css: "4 px",   tw: "rounded-md",   cls: "rounded-md" },
-  { label: "lg",    css: "8 px",   tw: "rounded-lg",   cls: "rounded-lg" },
-  { label: "xl",    css: "12 px",  tw: "rounded-xl",   cls: "rounded-xl" },
-  { label: "2xl",   css: "16 px",  tw: "rounded-2xl",  cls: "rounded-2xl" },
+  { label: "sm",    css: "4 px",   tw: "rounded-sm",   cls: "rounded-sm" },
+  { label: "base",  css: "6 px",   tw: "rounded",      cls: "rounded" },
+  { label: "md",    css: "8 px",   tw: "rounded-md",   cls: "rounded-md" },
+  { label: "app",   css: "10 px",  tw: "rounded-app",  cls: "rounded-app" },
+  { label: "lg",    css: "14 px",  tw: "rounded-lg",   cls: "rounded-lg" },
+  { label: "xl",    css: "18 px",  tw: "rounded-xl",   cls: "rounded-xl" },
+  { label: "2xl",   css: "22 px",  tw: "rounded-2xl",  cls: "rounded-2xl" },
   { label: "full",  css: "999 px", tw: "rounded-full",  cls: "rounded-full" },
 ];
 
@@ -232,7 +234,7 @@ function Panel({ onClose }) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setChecked(!checked)}
-                  className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                  className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
                     checked ? "border-accent bg-accent text-app" : "border-border/70 bg-transparent text-transparent"
                   }`}
                 >
@@ -401,7 +403,7 @@ export default function DesignSystemPanel() {
           Settings entry so the two don't overlap (dev-only panel). */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-16 left-4 flex h-8 w-8 items-center justify-center rounded-lg border border-border/50 bg-panel text-muted shadow-lg transition-colors hover:bg-hover hover:text-accent"
+        className="fixed bottom-16 left-4 flex h-8 w-8 items-center justify-center rounded-md border border-border/50 bg-panel text-muted shadow-lg transition-colors hover:bg-hover hover:text-accent"
         style={{ zIndex: Z.designSystem - 1 }}
         title="Design System"
       >

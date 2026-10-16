@@ -67,7 +67,7 @@ function LutCell({ entry, groupKey, selected, current, error, thumb, aspect, scr
     >
       <div
         className={[
-          "relative w-full overflow-hidden rounded-md bg-app transition",
+          "relative w-full overflow-hidden rounded-app bg-app transition",
           selected ? "ring-2 ring-[rgb(var(--accent-color))]" : "ring-1 ring-border/50 group-hover:ring-border",
         ].join(" ")}
         style={{ aspectRatio: String(Math.min(1.5, Math.max(0.75, aspect))) }}

@@ -79,7 +79,7 @@ export default function StickerPickerModal({ onPick, onClose }) {
                 className="group flex flex-col text-left"
                 title={s.name || s.sourceLabel || s.filename}
               >
-                <div className="aspect-square overflow-hidden rounded-md border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
+                <div className="aspect-square overflow-hidden rounded-app border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
                   <img
                     src={mediaUrlFor(s.thumbPath || s.path)}
                     alt=""

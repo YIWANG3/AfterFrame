@@ -89,7 +89,7 @@ export default function ColorPopover({ filters, onChange }) {
           ))}
         </div>
       )}
-      <div className="mt-2 flex gap-1 rounded-md bg-app p-0.5" data-color-tolerance="true">
+      <div className="mt-2 flex gap-1 rounded bg-app p-0.5" data-color-tolerance="true">
         {COLOR_TOLERANCES.map((level) => (
           <button
             key={level}

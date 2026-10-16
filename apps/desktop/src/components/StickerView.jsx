@@ -110,7 +110,7 @@ function StickerCard({ sticker, selected, onSelect, onContextMenu }) {
     >
       <div
         className={[
-          "relative aspect-square overflow-hidden rounded-md bg-checker transition-all duration-200",
+          "relative aspect-square overflow-hidden rounded-app bg-checker transition-all duration-200",
           selected
             ? "ring-2 ring-accent shadow-glow"
             : "ring-1 ring-border/40 group-hover:ring-accent/40 group-hover:shadow-card-hover",
@@ -171,7 +171,7 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
       type="button"
       onClick={onClick}
       className={[
-        "flex w-full rounded-[6px] items-center gap-2.5 px-3 py-1.5 text-left text-[12px] transition-colors",
+        "flex w-full rounded-md items-center gap-2.5 px-3 py-1.5 text-left text-[12px] transition-colors",
         danger
           ? "text-[rgb(var(--error-color))] hover:bg-[rgb(var(--error-color)/0.1)]"
           : "text-muted hover:bg-hover hover:text-text",

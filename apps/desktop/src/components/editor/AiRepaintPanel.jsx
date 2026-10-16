@@ -140,7 +140,7 @@ function StyleCard({ style, active, onSelect, onEdit, onDelete }) {
         <div className="ml-2 flex shrink-0 items-start gap-1">
           <button
             type="button"
-            className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
+            className="rounded p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
             onClick={(event) => {
               event.stopPropagation();
               onEdit();
@@ -151,7 +151,7 @@ function StyleCard({ style, active, onSelect, onEdit, onDelete }) {
           </button>
           <button
             type="button"
-            className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
+            className="rounded p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
             onClick={(event) => {
               event.stopPropagation();
               onDelete();
@@ -190,7 +190,7 @@ function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
         <button
           type="button"
-          className="rounded-md p-0.5 text-muted2 transition-colors hover:text-text"
+          className="rounded p-0.5 text-muted2 transition-colors hover:text-text"
           onClick={(event) => { event.stopPropagation(); onEdit(); }}
           title={t("repaint.editStyle")}
         >
@@ -198,7 +198,7 @@ function StyleRow({ style, active, onSelect, onEdit, onDelete }) {
         </button>
         <button
           type="button"
-          className="rounded-md p-0.5 text-muted2 transition-colors hover:text-text"
+          className="rounded p-0.5 text-muted2 transition-colors hover:text-text"
           onClick={(event) => { event.stopPropagation(); onDelete(); }}
           title={t("repaint.deleteStyle")}
         >

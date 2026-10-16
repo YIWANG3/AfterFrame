@@ -57,7 +57,7 @@ function FlagControl({ value, onChange }) {
             data-flag-button={flag}
             title={keys ? `${t(`flag.${flag}`)} (${keys})` : t(`flag.${flag}`)}
             onClick={() => onChange?.(active ? "none" : flag)}
-            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] transition-colors ${active ? on : "text-muted2 hover:bg-hover hover:text-text"}`}
+            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] transition-colors ${active ? on : "text-muted2 hover:bg-hover hover:text-text"}`}
           >
             <Icon className={`h-3 w-3 ${active && flag === "pick" ? "fill-current" : ""}`} />
             {t(`flag.${flag}`)}
@@ -88,7 +88,7 @@ function ThumbnailStrip({ items, icon: Icon, onSelect, testId, idAttribute = "da
           type="button"
           data-testid={testId}
           {...{ [idAttribute]: item.asset_id }}
-          className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-black transition-all hover:ring-2 hover:ring-accent/50"
+          className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-app bg-black transition-all hover:ring-2 hover:ring-accent/50"
           onClick={() => onSelect?.(item.asset_id)}
           title={item.stem}
         >

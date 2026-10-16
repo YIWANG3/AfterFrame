@@ -35,9 +35,13 @@ module.exports = {
         glow: "0 0 0 2.5px rgb(var(--accent-color))",
         "card-hover": "none",
       },
-      // 圆角体系:小控件 10 / 菜单胶囊 14 / 大面板 18(Tahoe 皮肤)
+      // 圆角按高度定:≤24 高的控件 `rounded` 6 / 25–34 高的按钮、列表行、菜单行 `rounded-md` 8 /
+      // 照片格、缩略图 `rounded-app` 10 / 菜单与弹层 `rounded-lg` 14 / 大面板 `rounded-xl` 18。
+      // 胶囊(999)只给工具栏、筛选芯片和主 / 次 CTA。字段(输入 / 下拉 / 数值框)在 src/ui/fields.jsx 写死 6 / 8。
       borderRadius: {
-        md: "10px",
+        sm: "4px",
+        DEFAULT: "6px",
+        md: "8px",
         lg: "14px",
         xl: "18px",
         "2xl": "22px",

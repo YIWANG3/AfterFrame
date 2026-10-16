@@ -319,7 +319,7 @@ export default function TextPanel({
                     type="button"
                     data-token={key}
                     onClick={() => addFrameInfo(key)}
-                    className="rounded-md border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                    className="rounded border border-border/60 bg-app px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
                   >
                     {t(`text.tokens.${key}`)}
                   </button>
@@ -328,7 +328,7 @@ export default function TextPanel({
                   type="button"
                   data-frame-text="true"
                   onClick={() => onAddFrameText?.()}
-                  className="flex items-center gap-1 rounded-md border border-dashed border-border/70 px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
+                  className="flex items-center gap-1 rounded border border-dashed border-border/70 px-2 py-0.5 text-[11px] text-muted transition-colors hover:border-border hover:text-text"
                 >
                   <Type className="h-3 w-3" />
                   {t("frame.freeText")}

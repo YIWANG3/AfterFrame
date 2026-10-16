@@ -334,7 +334,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
         </div>
         <button
           type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-text"
+          className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-hover hover:text-text"
           onClick={onClose}
         >
           <X className="h-3.5 w-3.5" />
@@ -414,7 +414,7 @@ export default function HandwritingModal({ onAdd, onClose }) {
               <button
                 type="button"
                 onClick={() => setRefPath(null)}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-text"
+                className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-hover hover:text-text"
                 title={t("handwriting.referenceClear")}
               >
                 <X className="h-3.5 w-3.5" />

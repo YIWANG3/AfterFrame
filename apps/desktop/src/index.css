@@ -623,11 +623,8 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 }
 [data-editor-wheel-scope="panel"]:has(> .border-t.px-3.py-2, > :not(.hidden) .border-t.px-3.py-2)
   .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]):not([class*="max-h-44"]) { padding-bottom: 52px; }
-/* 面板内小控件圆角按高度定(同心):≤24 高 6px,28 / 30 / 32 高 8px。
-   根因:Tailwind 的 rounded(4px)没跟着皮肤重映射,而 rounded-md 被映射成 10px,同一行里 4 与 10 混用。
-   字段(输入 / 下拉 / 多行 / 数值框 / 滑块值框)不在这里:它们的圆角与底色由 src/ui/fields.jsx 的 FIELD_SIZE / FIELD_CHROME 自带,同一套 24→6、28/32→8 */
-[data-editor-wheel-scope="panel"] :is(.h-5, .h-6)[class*="rounded"]:not(.rounded-full) { border-radius: 6px; }
-[data-editor-wheel-scope="panel"] :is(.h-7, .h-8, .h-\[30px\])[class*="rounded"]:not(.rounded-full) { border-radius: 8px; }
+/* 圆角不再在这里按高度 class 补:tailwind.config.js 的圆角表就是这套(rounded 6 / rounded-md 8 / rounded-app 10),
+   字段的圆角与底色由 src/ui/fields.jsx 自带,Button 原语的胶囊变体自己写 rounded-full */
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
 /* Split tool custom-ratio inputs: bare numbers inside the grey tile — no own
    background, border, ring or shadow in any state (overrides the generic
@@ -638,8 +635,6 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] input.split-ratio-input:focus-visible {
   border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
 }
-/* 只靠 padding 撑起来的小图标钮(风格卡片的编辑 / 删除、清空提示词):20-24 高,rounded-md 的 10px 太圆 */
-[data-editor-wheel-scope="panel"] :is(button.p-1, button.p-0\.5, button.py-1).rounded-md { border-radius: 6px; }
 /* 色板圆点:黑点在深底、白点在浅底都要靠一圈可见边;用正文色 18% 两套主题通吃 */
 [data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgb(var(--text-color) / 0.18); }
 /* ── 8c · 面板里仍带描边 + bg-app 的整宽容器(深度模型选择器之类):无描边、fill-2 底。字段本身见 fields.jsx ── */
@@ -655,8 +650,6 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:hover .ml-2.flex.shrink-0,
 [data-editor-wheel-scope="panel"] [role="button"].w-full.rounded-lg.border:focus-within .ml-2.flex.shrink-0 { opacity: 1; }
 [data-editor-wheel-scope="panel"] .space-y-2 > [role="button"] + [role="button"] { margin-top: 2px; }
-/* 紧凑视图的行同样 8px */
-[data-editor-wheel-scope="panel"] [role="button"].rounded-md.px-2\.5.py-1\.5, [data-editor-wheel-scope="panel"] button.rounded-md.px-2\.5.py-1\.5 { border-radius: 8px; }
 /* 分组标题:四个面板统一 11px / 600 / 0.04em(0.14em 的字距在中文上拉得太开);贴纸面板自己那套 9px 也并进来 */
 [data-editor-wheel-scope="panel"] .tracking-\[0\.14em\], [data-editor-wheel-scope="panel"] h4.uppercase, [data-editor-wheel-scope="panel"] h2.uppercase {
   font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text));
@@ -717,7 +710,6 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
    之前按钮 rounded(4px)、输入框 rounded-md(10px)、多行框 rounded(4px)混着。统一为 28 高、8px 圆角、无描边、fill 底;
    主按钮 accent 底同圆角;focus 用 1px 内环。
    设置面板按 data-settings-overlay 选中,别按 z-index 选:#107 把层级从 3000 挪到 11200 时,按 z-[3000] 写的这些规则整段失效过 ───────── */
-.fixed.inset-0[data-settings-overlay] :is(button.h-7, button.h-8)[class*="rounded"]:not([class*="rounded-full"]) { border-radius: 8px; }
 /* 卡片底已经是 --fill,卡内控件要再亮一档(fill-2)才分得出来 */
 .fixed.inset-0[data-settings-overlay] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); color: rgb(var(--text-color)); }
 .fixed.inset-0[data-settings-overlay] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
@@ -740,7 +732,9 @@ button:not([class*="bg-black"]):has(> span:only-child > svg.lucide-x:only-child)
 
 /* ───────── 11 · 按钮原语(对应 Button.jsx) ───────── */
 button[class*="bg-[rgb(var(--accent-color))]"] { color: rgb(var(--accent-ink)); border-radius: 999px; }
-button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); border-radius: 999px; }
+/* 带边框 bg-app 的文字按钮是次级 CTA,胶囊;同样式的方形图标钮(w-6 / w-7 / w-8)按尺寸走 6 / 8 */
+button.border.border-border\/70.bg-app { border-color: transparent; background: var(--fill); }
+button.border.border-border\/70.bg-app:not(.w-6):not(.w-7):not(.w-8) { border-radius: 999px; }
 button.border.border-border\/70.bg-app:hover { background: var(--fill-2); border-color: transparent; }
 
 /* ───────── 11b · 面板里的整行动作钮(检查器「用 AI 标注」、编辑器「生成场景深度」「检测主体」、裁剪的翻转 / 旋转):

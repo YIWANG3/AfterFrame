@@ -42,12 +42,12 @@ function Snippet({ id, code, label, hint }) {
       <div className="relative">
         <pre
           data-mcp-snippet={id}
-          className="overflow-x-auto rounded-[6px] bg-app px-3 py-2.5 pr-20 font-mono text-[11px] leading-relaxed text-text"
+          className="overflow-x-auto rounded-md bg-app px-3 py-2.5 pr-20 font-mono text-[11px] leading-relaxed text-text"
         >{code}</pre>
         <button
           type="button"
           onClick={copy}
-          className="absolute right-1.5 top-1.5 inline-flex h-6 items-center gap-1 rounded border border-border bg-panel px-2 text-[11px] text-text transition-colors hover:bg-hover"
+          className="absolute right-1.5 top-1.5 inline-flex h-6 items-center gap-1 rounded bg-[var(--fill-2)] px-2 text-[11px] text-text transition-colors hover:bg-[var(--fill-3)]"
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           {copied ? t("integrations.mcpCopied") : t("integrations.mcpCopy")}

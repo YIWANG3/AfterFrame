@@ -830,7 +830,7 @@ export default function Lightbox({
           <button
             type="button"
             ref={scaleLabelRef}
-            className="pointer-events-auto ml-1 w-12 shrink-0 rounded-md px-1 py-0.5 text-center text-[11px] tabular-nums text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
+            className="pointer-events-auto ml-1 w-12 shrink-0 rounded px-1 py-0.5 text-center text-[11px] tabular-nums text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
             onClick={() => resetToFit()}
             title={t("lightbox.resetToFit")}
           >

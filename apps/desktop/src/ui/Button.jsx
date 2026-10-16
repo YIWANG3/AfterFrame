@@ -17,18 +17,20 @@ import cx from "./cx";
 //
 // The size is a prop, not a className override: Tailwind orders arbitrary
 // values alphabetically, so `h-7 text-[11px]` appended to the md classes
-// loses to them. Note index.css (the Tahoe skin) keys on these utilities —
-// `bg-[rgb(var(--accent-color))]` is a pill, `border-border/70 bg-app` a
-// filled pill — so a variant's look is the skinned one.
+// loses to them. index.css (the Tahoe skin) still recolours
+// `border-border/70 bg-app` into a filled pill; the radius is decided here.
+// primary / secondary / tint are the app's calls to action and are pills;
+// the rest take the radius of their size (xs 6px, sm / md 8px).
 const LOOKS = {
-  primary: "bg-[rgb(var(--accent-color))] font-medium text-accentInk hover:brightness-110",
-  secondary: "border border-border/70 bg-app font-medium text-text hover:border-border hover:bg-hover",
+  primary: "rounded-full bg-[rgb(var(--accent-color))] font-medium text-accentInk hover:brightness-110",
+  secondary: "rounded-full border border-border/70 bg-app font-medium text-text hover:border-border hover:bg-hover",
   soft: "bg-[var(--fill-2)] font-medium text-text hover:bg-[var(--fill-3)]",
   ghost: "text-muted2 hover:bg-hover hover:text-text",
-  tint: "gap-1.5 bg-accent/10 font-medium text-accent hover:bg-accent/[0.18] disabled:opacity-60",
+  tint: "rounded-full gap-1.5 bg-accent/10 font-medium text-accent hover:bg-accent/[0.18] disabled:opacity-60",
   icon: "text-muted hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40",
   danger: "border border-rose-500/30 bg-app font-medium text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10",
 };
+const PILL = new Set(["primary", "secondary", "tint"]);
 
 const SIZES = {
   md: { text: "h-8 px-3 py-0 text-[12px]", ghost: "h-8 px-2 py-0 text-[12px]", icon: "h-8 w-8" },
@@ -47,7 +49,7 @@ export default function Button({ variant = "secondary", size = "md", className =
   return (
     <button
       type={type}
-      className={cx("inline-flex items-center justify-center rounded-md transition-colors", sizeClasses(variant, size), LOOKS[variant], className)}
+      className={cx("inline-flex items-center justify-center transition-colors", !PILL.has(variant) && (size === "xs" ? "rounded" : "rounded-md"), sizeClasses(variant, size), LOOKS[variant], className)}
       {...rest}
     >
       {children}

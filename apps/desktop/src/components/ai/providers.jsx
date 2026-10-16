@@ -191,7 +191,7 @@ export function ProviderModal({
             <PanelLabel>{mode === "new" ? t("providers.newProvider") : t("providers.editProvider")}</PanelLabel>
             <button
               type="button"
-              className="rounded-md p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
+              className="rounded p-1 text-muted2 transition-colors hover:bg-white/6 hover:text-text"
               onClick={onClose}
             >
               <X className="h-3.5 w-3.5" />

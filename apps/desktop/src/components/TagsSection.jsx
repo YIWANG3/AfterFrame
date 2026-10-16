@@ -40,7 +40,7 @@ function TagAdder({ onAdd, existing }) {
         type="button"
         onClick={() => setOpen(true)}
         data-testid="tag-add"
-        className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
+        className="inline-flex items-center gap-0.5 rounded border border-dashed border-border/60 px-2 py-[2px] text-[10px] text-muted2 transition-colors hover:border-border hover:text-text"
       >
         <Plus className="h-2.5 w-2.5" /> {t("add")}
       </button>

@@ -482,7 +482,7 @@ export default function FoldersView({
                       type="button"
                       aria-label={t("folders.open")}
                       onClick={(event) => openMenu(folder, event)}
-                      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md bg-black/45 text-white opacity-0 transition group-hover/card:opacity-100"
+                      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded bg-black/45 text-white opacity-0 transition group-hover/card:opacity-100"
                     >
                       <MoreHorizontal className="h-3.5 w-3.5" />
                     </button>
@@ -538,7 +538,7 @@ export default function FoldersView({
                         aria-pressed={isSelected}
                         aria-label={folder.name}
                         onClick={(event) => { event.stopPropagation(); select(folder.collection_id, { metaKey: true }); }}
-                        className={cx("flex h-3.5 w-3.5 items-center justify-center rounded border", isSelected ? "border-accent bg-accent text-accentInk" : "border-muted2")}
+                        className={cx("flex h-3.5 w-3.5 items-center justify-center rounded-sm border", isSelected ? "border-accent bg-accent text-accentInk" : "border-muted2")}
                       >
                         {isSelected && <Check className="h-2.5 w-2.5 stroke-[3]" />}
                       </button>

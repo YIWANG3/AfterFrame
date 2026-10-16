@@ -428,7 +428,7 @@ export default function ColorPickerPopover({
     >
       <div className="space-y-3">
         {showTabs && (
-          <div className="flex gap-1 rounded-md bg-app p-0.5">
+          <div className="flex gap-1 rounded bg-app p-0.5">
             {availableModes.map((m) => (
               <button
                 key={m}

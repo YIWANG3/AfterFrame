@@ -34,7 +34,7 @@ export function IconBtn({ icon: Icon, onClick, title, disabled }) {
   return (
     <button
       type="button"
-      className="flex h-5 w-5 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-40 disabled:pointer-events-none"
+      className="flex h-5 w-5 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-40 disabled:pointer-events-none"
       onClick={onClick}
       title={title}
       disabled={disabled}
@@ -208,7 +208,7 @@ export function AlignBar({ layers, onLayersChange, allLayers }) {
   const sep = "mx-0.5 h-3.5 w-px bg-border/60";
 
   return (
-    <div className="mt-2 flex items-center gap-0.5 rounded-md bg-app p-1">
+    <div className="mt-2 flex items-center gap-0.5 rounded bg-app p-1">
       <button type="button" className={abtn} title={t("text.align.left")} onClick={() => apply(alignLeft)}><AlignHorizontalJustifyStart className="h-3.5 w-3.5" /></button>
       <button type="button" className={abtn} title={t("text.align.centerH")} onClick={() => apply(alignCenterH)}><AlignHorizontalJustifyCenter className="h-3.5 w-3.5" /></button>
       <button type="button" className={abtn} title={t("text.align.right")} onClick={() => apply(alignRight)}><AlignHorizontalJustifyEnd className="h-3.5 w-3.5" /></button>
