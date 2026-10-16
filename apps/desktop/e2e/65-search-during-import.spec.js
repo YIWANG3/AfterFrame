@@ -19,8 +19,12 @@ const { TINY_JPEG } = require("./helpers/images");
 
 const RAW_FIXTURE = path.resolve(__dirname, "fixtures", "raw", "luna-morning.dng");
 // Files per background import: long enough for several of the gallery's
-// refreshes (tiny files import at about 2 ms each locally, 5 ms on CI).
-const BULK = 6000;
+// refreshes (tiny files import at about 2 ms each locally, 5 ms on the Mac
+// CI, 27 ms on the Windows one, where a quarter of them last as long).
+const BULK = process.platform === "win32" ? 1500 : 6000;
+// The name of a file that arrives `fraction` of the way through an import
+// (files import in name order): bulk_2000_… of 6000.
+const at = (fraction, suffix) => `${String(Math.round(BULK * fraction)).padStart(4, "0")}_${suffix}`;
 const QUERY = "DSC08452";
 
 let ctx;
@@ -114,7 +118,7 @@ test("a search, a selection, Select All and the context menu hold while an impor
   test.setTimeout(240_000);
   const cards = galleryCards(ctx.window);
   const search = ctx.window.getByPlaceholder("Search");
-  const bursts = [2000, 3000, 4000].map((n) => `bulk_${n}_${QUERY}.jpg`);
+  const bursts = [1 / 3, 1 / 2, 2 / 3].map((fraction) => `bulk_${at(fraction, `${QUERY}.jpg`)}`);
   await importThroughToolbar(ctx.app, ctx.window, [writeBulk("bulk", Object.fromEntries(bursts.map((name) => [name.slice("bulk_".length), TINY_JPEG])))]);
   await expect.poll(importStatus, { timeout: 30_000, intervals: [100] }).toBe("running");
 
@@ -166,7 +170,8 @@ test("a filter holds while an import runs", async () => {
   await ctx.window.getByRole("button", { name: /^All Assets/ }).first().click();
   if (!await ctx.window.locator("[data-filter-bar]").isVisible()) await ctx.window.getByRole("button", { name: "Filters" }).click();
   const raw = Buffer.concat([fs.readFileSync(RAW_FIXTURE), Buffer.alloc(200)]);
-  await importThroughToolbar(ctx.app, ctx.window, [writeBulk("more", { "3000_raw.dng": raw })]);
+  const lateRaw = at(1 / 2, "raw.dng");
+  await importThroughToolbar(ctx.app, ctx.window, [writeBulk("more", { [lateRaw]: raw })]);
   await expect.poll(importStatus, { timeout: 30_000, intervals: [100] }).toBe("running");
 
   await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "Format", exact: true }).click();
@@ -184,7 +189,7 @@ test("a filter holds while an import runs", async () => {
     return problems;
   });
   expect(broken).toEqual([]);
-  expect(grewWhileRunning(timeline, (name) => name === "more_3000_raw.dng"), "the new DNG showed while the import ran").toBe(true);
+  expect(grewWhileRunning(timeline, (name) => name === `more_${lateRaw}`), "the new DNG showed while the import ran").toBe(true);
   await expect(cards).toHaveCount(7);
   await ctx.window.getByRole("button", { name: /^Clear/ }).click();
 });
