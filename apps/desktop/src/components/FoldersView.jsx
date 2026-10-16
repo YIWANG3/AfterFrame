@@ -358,7 +358,9 @@ export default function FoldersView({
 
         <SortDropdown sort={sort} setSort={setSort} />
 
-        <div className="toolbar-modes ml-1 flex items-center gap-0.5">
+        {/* Not `toolbar-modes`: the skin hides that class on a narrow toolbar
+            (index.css container query), and this toggle must stay reachable. */}
+        <div className="ml-1 flex items-center gap-0.5">
           <IconButton title={t("folders.viewGrid")} aria-label={t("folders.viewGrid")} aria-pressed={view === "grid"} data-testid="folders-view-grid" className={view === "grid" ? "bg-selected text-accent" : ""} onClick={() => setView("grid")}>
             <LayoutGrid className="h-3.5 w-3.5 stroke-[1.6]" />
           </IconButton>
@@ -505,7 +507,7 @@ export default function FoldersView({
                 {[
                   ["name", "name"], ["count", "largest"], ["captured", "captured"], ["lastAdded", "lastAdded"], ["created", "newest"],
                 ].map(([column, sortKey]) => (
-                  <th key={column} className={cx("px-2 py-1.5 font-medium", column === "count" ? "text-right" : "")}>
+                  <th key={column} className={cx("whitespace-nowrap px-2 py-1.5 font-medium", column === "count" ? "text-right" : "")}>
                     <button
                       type="button"
                       onClick={() => setSort(sortKey)}
