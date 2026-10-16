@@ -14,7 +14,9 @@ module.exports = (ctx) => {
       description:
         "Collections management. Two kinds: a folder holds photos you add to it; a SMART collection is a saved " +
         "filter that fills itself and stays current (e.g. 5-star photos from the last 30 days). " +
-        "Actions: 'list' all collections (smart ones include their rules and live item_count); 'create' (name; " +
+        "Actions: 'list' all collections (smart ones include their rules and live item_count; folders also carry " +
+        "last_added_at, captured_from / captured_to — the capture-time span of their photos — and cover_preview_paths, " +
+        "the previews of the newest four photos); 'create' (name; " +
         "pass rules to make it smart); 'update_rules' (collection_id, rules) to change a smart collection's " +
         "conditions; 'rename' (collection_id, name); 'delete' (collection_id); 'add_items' / 'remove_items' " +
         "(collection_id, asset_ids; folders only); 'browse' (collection_id, limit/offset) to list the assets of either kind.",

@@ -5,9 +5,26 @@ import { matchesRules } from "./query";
 
 // Live, not a membership list.
 const smartCount = (rules) => assets.filter((a) => matchesRules(a, rules)).length;
+const EMPTY_STATS = { last_added_at: null, captured_from: null, captured_to: null, cover_preview_paths: [] };
+// What the sidecar's list-collections carries for the folder page
+// (db/collections.py collection_stats): asset_ids is in the order photos
+// joined, so the newest four are its tail; the row's updated_at moves with
+// every add, which stands in for the sidecar's per-item added_at.
+function folderStats(row, assetIds) {
+  if (!assetIds?.length) return EMPTY_STATS;
+  const byId = new Map(assets.map((a) => [a.asset_id, a]));
+  const times = assetIds.map((id) => byId.get(id)?.image_metadata?.capture_time).filter(Boolean).sort();
+  return {
+    last_added_at: row.updated_at,
+    captured_from: times[0] || null,
+    captured_to: times[times.length - 1] || null,
+    cover_preview_paths: [...assetIds].reverse().slice(0, 4)
+      .map((id) => byId.get(id)?.preview_path || byId.get(id)?.image_path).filter(Boolean),
+  };
+}
 const publicCollection = ({ asset_ids, ...row }) => (row.kind === "smart"
-  ? { ...row, item_count: row.rules ? smartCount(row.rules) : 0 }
-  : { ...row, item_count: asset_ids?.length ?? 0 });
+  ? { ...row, ...EMPTY_STATS, item_count: row.rules ? smartCount(row.rules) : 0 }
+  : { ...row, ...folderStats(row, asset_ids), item_count: asset_ids?.length ?? 0 });
 let nextCollectionId = 1;
 
 const emitCollectionsChanged = () => emitCatalogChanged("collections");

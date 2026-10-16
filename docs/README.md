@@ -31,6 +31,7 @@
 | [windows-support-plan.md](windows-support-plan.md) | Windows 现状审计、共享/分平台架构与路线；开发机见 `scripts/windows/setup-dev.ps1`。阶段 1、2 已合并，0.5.10 起发布 Windows 安装包（未签名）；签名、真机验收和阶段 3 未做 |
 | [foundation-refactor-plan.md](foundation-refactor-plan.md) | Phase 1–3 与补充修复已完成（2026-07-13/14）；Phase 4 的验收条件其实已满足（`window.mediaWorkspace` 只剩 `src/api` 和 `web-main.jsx`），文内没回填；Phase 5–6 未开始 |
 | [lens-logos-plan.md](lens-logos-plan.md) | 镜头厂商 logo：暂缓（2026-10-01），只做了导入时读 `lens_make` |
+| [folders-page-plan.md](folders-page-plan.md) | 文件夹数量上百后的独立管理页（统计、筛选、多选、批量删除 / 标注）；P1 已实现（2026-10-15，`FoldersView.jsx`、e2e 78）；P2（带搜索的"加入文件夹"选择器、设封面）未开始 |
 
 ## 已完成的计划（历史记录；实现以代码为准）
 
