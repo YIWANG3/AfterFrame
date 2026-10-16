@@ -27,7 +27,9 @@ test.afterAll(async () => {
 });
 
 test("agent-started import shows a JobDock card and self-dismisses", async () => {
-  test.setTimeout(120_000);
+  // The 3000 files take 80–90 s on the GitHub Windows runner.
+  const follow = process.platform === "win32" ? 180_000 : 60_000;
+  test.setTimeout(60_000 + follow);
   // Big enough that the job is still running when the dock's first poll
   // lands (about 2 s in). Previews no longer spawn a process per file, so
   // tiny files import at about 1.6 ms each locally and about 5 ms on CI: 300,
@@ -58,7 +60,7 @@ test("agent-started import shows a JobDock card and self-dismisses", async () =>
       await expect(async () => {
         result = await callTool("get_job_status", { job_id: jobId });
         expect(result.status).not.toBe("running");
-      }).toPass({ timeout: 60_000 });
+      }).toPass({ timeout: follow });
     }
     expect(result.status).toBe("succeeded");
 

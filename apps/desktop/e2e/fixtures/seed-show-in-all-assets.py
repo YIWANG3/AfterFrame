@@ -6,6 +6,7 @@ name order is not the capture order and a test can tell which one it sees.
 """
 import json
 import os
+import shutil
 import sqlite3
 import sys
 from datetime import UTC, datetime, timedelta
@@ -51,7 +52,12 @@ for burst in range(BURSTS):
         asset_id = f"burst-{burst:03}-{shot}"
         stem = stem_of(burst, shot)
         image_path = image_dir / f"{stem}.jpg"
-        os.link(source, image_path)
+        # A hard link, or a copy where the catalog is on another drive than
+        # the checkout (the Windows runner: the repository on D:, temp on C:).
+        try:
+            os.link(source, image_path)
+        except OSError:
+            shutil.copy2(source, image_path)
         stat = image_path.stat()
         modified = datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat()
         metadata = json.loads(original["metadata_json"])
