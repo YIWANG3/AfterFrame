@@ -50,10 +50,9 @@ test.describe("Related version gallery navigation", () => {
     await expect(search).toHaveValue("nav-");
 
     await search.fill("nav-0000");
-    // The narrowed grid first: on the Windows runner (once, unreproduced in
-    // 48 runs on a Windows box, at 1440 and 1024 px) the box was back to
-    // "nav-" right after this fill and the click below timed out on a card
-    // that kept being replaced. Checked here, that reads as what it is.
+    // The search typed here wins over the reveal still loading from the
+    // click before: on the fast Windows runner this fill lands while that
+    // page is in flight, and the reveal used to put "nav-" back on landing.
     await expect(search).toHaveValue("nav-0000");
     await expect(window.locator("[data-gallery-item='true']")).toHaveCount(1);
     await card("navigation-0000").click();
