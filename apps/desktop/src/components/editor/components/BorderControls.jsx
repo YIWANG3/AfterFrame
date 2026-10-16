@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookmarkPlus, ChevronDown, Copy, Link2, Link2Off, PanelTop, PanelBottom, PanelLeft, PanelRight, Pencil, Trash2 } from "lucide-react";
-import { NumberDragInput } from "../../../ui";
+import { NumberInput } from "../../../ui";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
 import { COLOR_SWATCHES } from "../textState";
 import { bgToCss } from "../render/canvasHelpers";
@@ -177,7 +177,8 @@ export default function BorderControls({
             return (
               <div key={edge} className="flex items-center gap-1" title={t(`border.${edge}`)}>
                 <Icon className="h-3 w-3 shrink-0 text-muted2" />
-                <NumberDragInput
+                <NumberInput
+                  drag
                   className="w-9"
                   min={0} max={100}
                   value={toPct(p[edge])}

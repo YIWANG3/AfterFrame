@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, X, Crosshair, RotateCcw, Minus } from "lucide-react";
-import { Button } from "../../ui";
+import { Button, SliderRow } from "../../ui";
 import { getTemplatesForCount } from "./collageTemplates";
 import { PanelLabel, Section, TemplateGrid, CanvasSection, CoverageCheck, ExportWidthChips, ImagesSection } from "./PanelControls";
 
@@ -66,14 +66,11 @@ export default function CollagePanel({
               >
                 <Minus className="h-3 w-3" />
               </Button>
-              <input
-                type="range"
-                min={0.5}
-                max={5}
-                step={0.01}
+              <SliderRow
+                compact valueMode="none" className="min-w-0 flex-1"
+                min={0.5} max={5} step={0.01}
                 value={selectedCellZoom}
-                onChange={(e) => onSelectedZoomChange?.(Number(e.target.value))}
-                className="min-w-0 flex-1 accent-[rgb(var(--accent-color))]"
+                onChange={(v) => onSelectedZoomChange?.(v)}
               />
               <Button
                 variant="icon"

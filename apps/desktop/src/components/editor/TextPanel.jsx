@@ -6,7 +6,7 @@ import {
   Type, ChevronDown, Undo2, Redo2, RotateCcw, Layers, Sparkles, FolderOpen, Cannabis, Brush, Blend,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
-import { SliderRow, Toggle } from "../../ui";
+import { SliderRow, TextArea, Toggle } from "../../ui";
 import BorderControls from "./components/BorderControls";
 import FooterButton from "./components/FooterButton";
 import MyLogosRow from "./components/MyLogosRow";
@@ -532,11 +532,10 @@ export default function TextPanel({
           <>
             {/* Content */}
             <Section label={t("text.content")}>
-              <textarea
-                className="w-full resize-y rounded-md border border-border/60 bg-app px-2.5 py-2 text-[12px] leading-relaxed text-text outline-none transition-colors placeholder:text-muted2 focus:border-[rgb(var(--accent-color))]"
+              <TextArea
                 rows={2}
                 value={current.text}
-                onChange={(e) => update(current.id, { text: e.target.value })}
+                onChange={(text) => update(current.id, { text })}
                 placeholder={t("text.enterText")}
               />
             </Section>

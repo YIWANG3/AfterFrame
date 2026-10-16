@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import Popover, { ACTION_CHIP } from "./Popover";
 import { setOrDelete, toList, fromList } from "./filterValues";
+import { TextInput } from "../../ui";
 
 // The colour filter takes any colour. This grid is the shortcut: the hue
 // wheel in two lightnesses, plus the neutrals. Anything else goes in the box.
@@ -68,12 +69,12 @@ export default function ColorPopover({ filters, onChange }) {
           setDraft("");
         }}
       >
-        <input
+        <TextInput
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={setDraft}
           placeholder={t("filter.colorHexPlaceholder")}
           data-color-hex-input="true"
-          className="h-6 min-w-0 flex-1 rounded border border-border/60 bg-app px-2 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+          className="min-w-0 flex-1"
         />
         <button type="submit" disabled={!isHex(draft)} className={`${ACTION_CHIP} disabled:opacity-40`}>{t("filter.colorAdd")}</button>
       </form>

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { getProviderType, ProviderModal } from "../ai/providers";
-import { Button, Checkbox, Modal, SliderRow } from "../../ui";
+import { Button, Checkbox, Modal, Select, SliderRow, TextArea, TextInput } from "../../ui";
 import cx from "../../ui/cx";
 import { fileName } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
@@ -88,9 +88,6 @@ const INITIAL_STYLES = [
   { id: "art-deco", name: "Art Deco", prompt: "Transform this photo into an Art Deco style. Strictly preserve the main subject and composition. Emphasize geometric silhouettes, elegant and luxurious color orchestration, streamlined but restrained decorative linework, poster-like compositional order, and urban sophistication. The final image should feel glamorous, modern, and refined. Avoid childish hand-drawn aesthetics and rough painterly treatment." },
   { id: "art-nouveau", name: "Art Nouveau", prompt: "Transform this photo into an Art Nouveau style. Preserve the original subject structure and composition. Emphasize organic curves, ornamental patterning, elegant contours, soft vintage color palettes, and decorative pictorial rhythm. The final image should feel refined, lyrical, and rich in poster-art elegance. Avoid modern cyber elements and overly aggressive geometric fragmentation." },
 ];
-
-const TOOLBAR_FIELD =
-  "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";
 
 function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
@@ -249,18 +246,19 @@ function EditStyleModal({ title, draft, onChange, onSave, onClose }) {
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <input
+          <TextInput
+            size="lg"
             value={draft.name}
-            onChange={(event) => onChange({ ...draft, name: event.target.value })}
+            onChange={(name) => onChange({ ...draft, name })}
             placeholder={t("repaint.styleName")}
-            className={`mt-3 ${TOOLBAR_FIELD} placeholder:text-muted2`}
+            className="mt-3 w-full"
             autoFocus
           />
-          <textarea
+          <TextArea
             value={draft.prompt}
-            onChange={(event) => onChange({ ...draft, prompt: event.target.value })}
+            onChange={(prompt) => onChange({ ...draft, prompt })}
             placeholder={t("repaint.prompt")}
-            className="mt-2 min-h-[96px] w-full rounded-md border border-border/70 bg-app px-2 py-2 text-[12px] leading-5 text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50"
+            className="mt-2 min-h-[96px]"
           />
         </div>
         <div className="flex items-center gap-2 border-t border-border/60 px-4 py-3">
@@ -723,10 +721,11 @@ export default function AiRepaintPanel({
       <div className="min-h-0 flex-1 overflow-y-auto py-2">
         <CollapsibleSection label={t("repaint.provider")} collapsed={collapsedSections.has("provider")} onToggle={() => toggleSection("provider")}>
           <div className="flex items-center gap-2">
-            <select
+            <Select
+              size="lg"
               value={activeProviderId || ""}
-              onChange={(event) => updateActiveProvider(event.target.value)}
-              className={`min-w-0 flex-1 ${TOOLBAR_FIELD}`}
+              onChange={updateActiveProvider}
+              className="min-w-0 flex-1"
             >
               {providerInstances.length === 0 && (
                 <option value="" disabled>{t("repaint.noProviders")}</option>
@@ -736,7 +735,7 @@ export default function AiRepaintPanel({
                   {p.name}{providerConfigs[p.id]?.token ? "" : " (no key)"}
                 </option>
               ))}
-            </select>
+            </Select>
             <button
               type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/70 bg-app text-text transition-colors hover:border-border hover:bg-hover"
@@ -759,15 +758,16 @@ export default function AiRepaintPanel({
           {activeInstance && (
             <div className="mt-2">
               <div className="text-[11px] text-muted">{t("repaint.model")}</div>
-              <select
+              <Select
+                size="lg"
                 value={selectedModel[activeProviderId] || ""}
-                onChange={(event) => updateSelectedModel(activeProviderId, event.target.value)}
-                className={`mt-1 ${TOOLBAR_FIELD}`}
+                onChange={(id) => updateSelectedModel(activeProviderId, id)}
+                className="mt-1 w-full"
               >
                 {(availableModels[activeProviderId] || []).map((m) => (
                   <option key={m.id} value={m.id}>{m.name}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
         </CollapsibleSection>
@@ -788,33 +788,35 @@ export default function AiRepaintPanel({
 
           <div className={cx("mt-4", isUpscaleModel && "opacity-40 pointer-events-none")}>
             <div className="text-[12px] text-text">{t("repaint.aspectRatio")}</div>
-            <select
+            <Select
+              size="lg"
               value={aspectRatio}
               disabled={isUpscaleModel}
-              onChange={(event) => setAspectRatio(event.target.value)}
-              className={`mt-2 ${TOOLBAR_FIELD}`}
+              onChange={setAspectRatio}
+              className="mt-2 w-full"
             >
               {ASPECT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="mt-4">
             <div className="text-[12px] text-text">{t("repaint.resolution")}</div>
-            <select
+            <Select
+              size="lg"
               value={resolution}
-              onChange={(event) => setResolution(event.target.value)}
-              className={`mt-2 ${TOOLBAR_FIELD}`}
+              onChange={setResolution}
+              className="mt-2 w-full"
             >
               {RESOLUTION_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </CollapsibleSection>
 
@@ -860,12 +862,12 @@ export default function AiRepaintPanel({
         >
           <div className="mb-3">
             <div className="relative">
-              <textarea
+              <TextArea
                 value={customPrompt}
-                onChange={(event) => setCustomPrompt(event.target.value)}
+                onChange={setCustomPrompt}
                 placeholder={t("repaint.onetimePrompt")}
                 rows={2}
-                className="w-full resize-none rounded-md border border-border/70 bg-app px-2.5 py-2 text-[12px] leading-5 text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50"
+                className="resize-none"
               />
               {customPrompt.trim() && (
                 <button

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Popover from "./Popover";
 import { setOrDelete } from "./filterValues";
+import { TextInput } from "../../ui";
 
 // "Contains" on one text field each. The search box matches seven fields at
 // once (a camera name hits as readily as a caption); these match exactly one,
@@ -42,12 +43,12 @@ export default function TextContainsPopover({ filters, onChange }) {
       {TEXT_FACETS.map((key) => (
         <label key={key} className="mb-1.5 block last:mb-0">
           <span className="mb-0.5 block text-[10px] text-muted2">{t(`filter.contains.${key}`)}</span>
-          <input
+          <TextInput
             data-text-facet={key}
             value={draft[key]}
-            onChange={(e) => setDraft((current) => ({ ...current, [key]: e.target.value }))}
+            onChange={(v) => setDraft((current) => ({ ...current, [key]: v }))}
             placeholder={t("filter.containsPlaceholder")}
-            className="w-full rounded border border-border/60 bg-app px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted2 focus:border-accent/50"
+            className="w-full"
           />
         </label>
       ))}

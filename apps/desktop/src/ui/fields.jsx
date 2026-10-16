@@ -1,6 +1,22 @@
 // Form field primitives — promoted from settings/SettingsPrimitives so the
 // whole app (not just the Settings tabs) shares one implementation.
 // SettingsPrimitives re-exports these for backwards compatibility.
+//
+// Every field (TextInput, Select, TextArea, NumberInput, the SliderRow's
+// value box) wears the same chrome: no border, fill-2, a 1px inset ring on
+// focus. The radius follows the height — 24 px fields are 6 px, 28 and 32 px
+// fields 8 px — so a row of mixed controls stays concentric. Panels used to
+// force this on with container CSS (index.css §8c / §10b); it lives here now.
+
+import cx from "./cx";
+
+export const FIELD_SIZE = {
+  sm: "h-6 rounded-[6px] px-2 text-[11px]",   // the editor's tool panels, popovers
+  md: "h-7 rounded-[8px] px-2.5 text-[12px]", // Settings rows
+  lg: "h-8 rounded-[8px] px-2.5 text-[12px]", // dialogs, the AI panel
+};
+export const FIELD_CHROME =
+  "bg-[var(--fill-2)] text-text outline-none placeholder:text-muted2/60 focus:shadow-[inset_0_0_0_1px_var(--fill-3)] focus-within:shadow-[inset_0_0_0_1px_var(--fill-3)] disabled:opacity-50";
 
 export function Toggle({ on, onChange, disabled }) {
   return (
@@ -50,71 +66,58 @@ export function Checkbox({ label, checked, onChange, testId, className = "" }) {
   );
 }
 
-export function TextInput({ value, onChange, type = "text", placeholder, monospace, className = "", ...rest }) {
-  return (
+export function TextInput({ value, onChange, type = "text", placeholder, monospace, size = "sm", leading, className = "", ...rest }) {
+  const input = (
     <input
       type={type}
       value={value ?? ""}
       onChange={(e) => onChange?.(e.target.value)}
       placeholder={placeholder}
-      className={[
-        "h-7 rounded border border-border bg-app px-2.5 text-[12px] text-text outline-none",
-        "placeholder:text-muted2/60 focus:border-accent",
-        monospace ? "font-mono" : "",
-        className,
-      ].join(" ")}
+      className={cx(
+        leading ? "h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted2/60" : cx(FIELD_SIZE[size], FIELD_CHROME),
+        monospace && "font-mono",
+        !leading && className,
+      )}
+      {...rest}
+    />
+  );
+  if (!leading) return input;
+  // An icon inside the field (a key, a magnifier): the wrapper wears the chrome.
+  return (
+    <div className={cx("flex items-center gap-2", FIELD_SIZE[size], FIELD_CHROME, className)}>
+      <span className="flex shrink-0 items-center text-muted2">{leading}</span>
+      {input}
+    </div>
+  );
+}
+
+// A multi-line field. Grows with `rows`; the radius is the 28 px fields'.
+export function TextArea({ value, onChange, className = "", rows = 3, ...rest }) {
+  return (
+    <textarea
+      value={value ?? ""}
+      rows={rows}
+      onChange={(e) => onChange?.(e.target.value)}
+      className={cx("w-full resize-y rounded-[8px] px-2.5 py-2 text-[12px] leading-relaxed", FIELD_CHROME, className)}
       {...rest}
     />
   );
 }
 
-export function NumberInput({ value, onChange, min, max, step = 1, className = "", suffix }) {
-  function handle(v) {
-    const n = Number(v);
-    if (Number.isNaN(n)) return;
-    let next = n;
-    if (Number.isFinite(min) && next < min) next = min;
-    if (Number.isFinite(max) && next > max) next = max;
-    onChange?.(next);
-  }
-  return (
-    <div className="flex items-center gap-1.5">
-      <input
-        type="number"
-        value={value ?? ""}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(e) => handle(e.target.value)}
-        className={[
-          "h-7 rounded border border-border bg-app px-2 text-right text-[12px] tabular-nums text-text outline-none focus:border-accent",
-          className || "w-[72px]",
-        ].join(" ")}
-      />
-      {suffix && <span className="text-[10px] text-muted2">{suffix}</span>}
-    </div>
-  );
-}
+const CHEVRON = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>\")";
 
-export function Select({ value, onChange, options, className = "" }) {
-  // options: [{ value, label }] or [{ label, options: [...] }] for groups
+// `options`: [{ value, label }] or [{ label, options: [...] }] for groups —
+// or pass <option> children for the odd conditional list.
+export function Select({ value, onChange, options, size = "sm", className = "", children, ...rest }) {
   return (
     <select
       value={value ?? ""}
       onChange={(e) => onChange?.(e.target.value)}
-      className={[
-        "h-7 rounded border border-border bg-app px-2.5 pr-7 text-[12px] text-text outline-none focus:border-accent",
-        className || "min-w-[200px]",
-      ].join(" ")}
-      style={{
-        appearance: "none",
-        backgroundImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>\")",
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "right 8px center",
-      }}
+      className={cx(FIELD_SIZE[size], FIELD_CHROME, "cursor-pointer appearance-none pr-7", className)}
+      style={{ backgroundImage: CHEVRON, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", backgroundSize: "12px 12px" }}
+      {...rest}
     >
-      {options.map((opt, i) =>
+      {children ?? options.map((opt, i) =>
         opt.options ? (
           <optgroup key={i} label={opt.label}>
             {opt.options.map((o) => (

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { FONT_OPTIONS } from "../textState";
 import { loadSystemFontFamilies } from "../fontFamilies";
+import { FIELD_CHROME, FIELD_SIZE, Select, cx } from "../../../ui";
 
 const WEIGHT_OPTIONS = [
   { value: 100, label: "Thin" },
@@ -21,15 +22,7 @@ const WEIGHT_OPTIONS = [
 
 export function WeightSelect({ value, onChange }) {
   return (
-    <select
-      className="h-6 flex-1 rounded border border-border/60 bg-app px-2 text-[11px] text-text outline-none transition-colors hover:border-border focus:border-[rgb(var(--accent-color))]"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-    >
-      {WEIGHT_OPTIONS.map((w) => (
-        <option key={w.value} value={w.value}>{w.label}</option>
-      ))}
-    </select>
+    <Select className="flex-1" value={value} onChange={(v) => onChange(Number(v))} options={WEIGHT_OPTIONS} />
   );
 }
 
@@ -140,7 +133,8 @@ export default function FontSelect({ value, onChange }) {
       <button
         type="button"
         data-testid="font-select"
-        className="flex h-6 w-full items-center gap-2 rounded border border-border/60 bg-app px-2 transition-colors hover:border-border focus:border-[rgb(var(--accent-color))] outline-none"
+        // The same field chrome as the weight Select beside it.
+        className={cx("flex w-full items-center gap-2", FIELD_SIZE.sm, FIELD_CHROME)}
         onClick={() => {
           if (!open) openValueRef.current = value;
           setOpen(!open);

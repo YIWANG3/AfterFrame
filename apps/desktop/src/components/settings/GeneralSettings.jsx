@@ -3,6 +3,7 @@ import i18n, { SUPPORTED_LOCALES } from "../../i18n";
 import api from "../../api";
 import { FieldRow, Group } from "./SettingsPrimitives";
 import SettingsTransfer from "./SettingsTransfer";
+import { Select } from "../../ui";
 
 // General app settings: interface language + color theme, backup & transfer.
 export default function GeneralSettings({ theme = "dark", setTheme }) {
@@ -21,27 +22,19 @@ export default function GeneralSettings({ theme = "dark", setTheme }) {
     <div>
       <Group>
       <FieldRow label={t("general.language")} hint={t("general.languageHint")}>
-        <select
-          value={current}
-          onChange={(e) => changeLanguage(e.target.value)}
-          className="h-7 max-w-[180px] rounded-md border border-border/60 bg-app px-1.5 text-[11px] text-text outline-none hover:border-border focus:border-accent/50"
-        >
+        <Select size="md" value={current} onChange={changeLanguage} className="max-w-[180px]">
           {SUPPORTED_LOCALES.map((l) => (
             <option key={l} value={l}>{tc(`language.${l}`)}</option>
           ))}
-        </select>
+        </Select>
       </FieldRow>
 
       <FieldRow label={t("general.theme")} hint={t("general.themeHint")}>
-        <select
-          value={theme}
-          onChange={(e) => setTheme?.(e.target.value)}
-          className="h-7 max-w-[180px] rounded-md border border-border/60 bg-app px-1.5 text-[11px] text-text outline-none hover:border-border focus:border-accent/50"
-        >
+        <Select size="md" value={theme} onChange={(v) => setTheme?.(v)} className="max-w-[180px]">
           <option value="dark">{t("general.themeDark")}</option>
           <option value="light">{t("general.themeLight")}</option>
           <option value="system">{t("general.themeSystem")}</option>
-        </select>
+        </Select>
       </FieldRow>
       </Group>
       <SettingsTransfer theme={theme} />

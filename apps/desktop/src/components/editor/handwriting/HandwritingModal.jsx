@@ -10,7 +10,7 @@ import api from "../../../api";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Sparkles, Loader2, ImagePlus, ChevronDown } from "lucide-react";
-import { Modal, cx } from "../../../ui";
+import { cx, Modal, Select, TextArea, TextInput } from "../../../ui";
 import ColorPickerPopover from "../../collage/ColorPickerPopover";
 import {
   HANDWRITING_STYLES,
@@ -27,9 +27,6 @@ import { matteHandwriting, colorizeHandwriting, loadHandwritingImage } from "../
 import { localFileUrl as mediaUrlFor } from "../../../utils/format";
 import { usePref } from "../../../hooks/usePref";
 import { fields, hexColor, intIn, numberIn, oneOf, recordOf, text as textOf } from "../../../utils/prefs";
-
-const FIELD =
-  "h-8 w-full rounded-md border border-border/70 bg-app px-2 py-0 text-[12px] text-text outline-none hover:border-border focus:border-accent/50";
 
 const COLOR_SWATCHES = ["#ffffff", "#000000", "#e8c547", "#f7c6d6", "#e05252", "#4f8fe0"];
 
@@ -345,13 +342,13 @@ export default function HandwritingModal({ onAdd, onClose }) {
       </div>
 
       <div className="flex max-h-[72vh] flex-col gap-3 overflow-y-auto px-4 py-3">
-        <input
-          type="text"
-          className={`${FIELD} shrink-0`}
+        <TextInput
+          size="lg"
+          className="w-full shrink-0"
           value={text}
           maxLength={40}
           placeholder={t("handwriting.textPlaceholder")}
-          onChange={(e) => setText(e.target.value)}
+          onChange={setText}
           data-testid="handwriting-text-input"
         />
 
@@ -443,12 +440,12 @@ export default function HandwritingModal({ onAdd, onClose }) {
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">
             {t("handwriting.customPrompt")}
           </div>
-          <textarea
-            className="w-full resize-none rounded-md border border-border/70 bg-app px-2.5 py-2 text-[12px] leading-relaxed text-text outline-none placeholder:text-muted2 hover:border-border focus:border-accent/50"
+          <TextArea
+            className="resize-none"
             rows={4}
             value={promptText}
             placeholder={t("handwriting.customPromptPlaceholder")}
-            onChange={(e) => setPromptText(e.target.value)}
+            onChange={setPromptText}
             data-testid="handwriting-custom-prompt"
           />
           {Boolean(text.trim()) && Boolean(promptText.trim()) && !needsText && (
@@ -470,10 +467,11 @@ export default function HandwritingModal({ onAdd, onClose }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <select
-            className={`${FIELD} min-w-0 flex-1`}
+          <Select
+            size="lg"
+            className="min-w-0 flex-1"
             value={providerId}
-            onChange={(e) => chooseProvider(e.target.value)}
+            onChange={chooseProvider}
             data-testid="handwriting-provider-select"
           >
             {providers.length === 0 && (
@@ -482,12 +480,12 @@ export default function HandwritingModal({ onAdd, onClose }) {
             {providers.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
-          <select className={`${FIELD} min-w-0 flex-1`} value={model} onChange={(e) => chooseModel(e.target.value)}>
+          </Select>
+          <Select size="lg" className="min-w-0 flex-1" value={model} onChange={chooseModel}>
             {modelOptions.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {(providers.length === 0 || providerConfigured === false) && (

@@ -2,7 +2,7 @@
 
 // Field primitives now live in src/ui — re-exported here so existing
 // settings-tab imports keep working unchanged.
-export { Toggle, TextInput, NumberInput, Select, Chip } from "../../ui/fields";
+export { Toggle, TextInput, NumberInput, Select, Chip } from "../../ui";
 // language: surface section groups with optional sub-caption, FieldRow with
 // label + hint + right-side control.
 

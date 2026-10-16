@@ -173,7 +173,6 @@ input[type="range"].lightbox-slider::-webkit-slider-thumb {
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-.no-spinner { -moz-appearance: textfield; }
 
 /* Thin scrollbar for in-popover lists, hugging the right edge. */
 .popover-scroll::-webkit-scrollbar {
@@ -307,15 +306,6 @@ select {
 }
 
 /* Hide number input spinners */
-.hide-spinner::-webkit-inner-spin-button,
-.hide-spinner::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.hide-spinner {
-  -moz-appearance: textfield;
-}
-
 /* Transparent checkerboard background — used to indicate alpha channel,
    especially in the sticker library grid where each thumbnail is a PNG with
    transparency. */
@@ -634,12 +624,11 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"]:has(> .border-t.px-3.py-2, > :not(.hidden) .border-t.px-3.py-2)
   .overflow-y-auto:not([class*="max-h-72"]):not([class*="max-h-[200px]"]):not([class*="max-h-44"]) { padding-bottom: 52px; }
 /* 面板内小控件圆角按高度定(同心):≤24 高 6px,28 / 30 / 32 高 8px。
-   根因:Tailwind 的 rounded(4px)没跟着皮肤重映射,而 rounded-md 被映射成 10px,同一行里 4 与 10 混用 */
+   根因:Tailwind 的 rounded(4px)没跟着皮肤重映射,而 rounded-md 被映射成 10px,同一行里 4 与 10 混用。
+   字段(输入 / 下拉 / 多行 / 数值框 / 滑块值框)不在这里:它们的圆角与底色由 src/ui/fields.jsx 的 FIELD_SIZE / FIELD_CHROME 自带,同一套 24→6、28/32→8 */
 [data-editor-wheel-scope="panel"] :is(.h-5, .h-6)[class*="rounded"]:not(.rounded-full) { border-radius: 6px; }
 [data-editor-wheel-scope="panel"] :is(.h-7, .h-8, .h-\[30px\])[class*="rounded"]:not(.rounded-full) { border-radius: 8px; }
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden > .rounded-md { border-radius: 0; }   /* 分段组内的项不各自圆角 */
-/* 文本 / 数值输入框、下拉、多行框:一律小圆角 5px,不随高度放大(用户:「这种输入框不能用大 radius」) */
-[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]) { border-radius: 5px; }
 /* Split tool custom-ratio inputs: bare numbers inside the grey tile — no own
    background, border, ring or shadow in any state (overrides the generic
    editor-panel input chrome above). */
@@ -649,18 +638,12 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 [data-editor-wheel-scope="panel"] input.split-ratio-input:focus-visible {
   border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
 }
-/* 带边框、bg-app 底的按钮(AI 面板的 + / 钥匙 / 新建风格)与旁边的字段同行,圆角跟字段走 5px */
-[data-editor-wheel-scope="panel"] button.border.bg-app[class*="rounded"]:not(.w-full) { border-radius: 5px; }
 /* 只靠 padding 撑起来的小图标钮(风格卡片的编辑 / 删除、清空提示词):20-24 高,rounded-md 的 10px 太圆 */
 [data-editor-wheel-scope="panel"] :is(button.p-1, button.p-0\.5, button.py-1).rounded-md { border-radius: 6px; }
 /* 色板圆点:黑点在深底、白点在浅底都要靠一圈可见边;用正文色 18% 两套主题通吃 */
 [data-editor-wheel-scope="panel"] .rounded-full[class*="border-border"] { border-color: rgb(var(--text-color) / 0.18); }
-/* ── 8c · 编辑器面板字段统一(浅色主题下描边全露出来了):输入 / 下拉 / 多行框 / 字体选择钮 / 数值框 一律无描边、fill-2 底,focus 1px 内环 ── */
-[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="color"]),
-[data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border,
+/* ── 8c · 面板里仍带描边 + bg-app 的整宽容器(深度模型选择器之类):无描边、fill-2 底。字段本身见 fields.jsx ── */
 [data-editor-wheel-scope="panel"] div.w-full.rounded-md.border[class*="bg-app"] { border-color: transparent; background-color: var(--fill-2); }
-[data-editor-wheel-scope="panel"] :is(input, select, textarea)[class*="rounded"]:focus,
-[data-editor-wheel-scope="panel"] button.h-6.w-full.rounded.border:focus-within { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
 /* 分段组(斜体 / 下划线 …):外框去线换 fill 底 */
 [data-editor-wheel-scope="panel"] .h-6.overflow-hidden.rounded-md.border { border-color: transparent; background: var(--fill); }
 /* 风格列表(AI 重绘「我的风格」,展开视图):不再是一张张描边卡,改成和紧凑视图同一种「行」:
@@ -712,15 +695,13 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
   box-shadow: 0 12px 32px rgba(0, 0, 0, .14), 0 2px 8px rgba(0, 0, 0, .07);
 }
 /* 小对话框(新建风格 / 服务商 / 标注服务 / 手写):底栏无线、按钮靠右、主按钮最右、删除类按钮靠左(Apple 顺序);
-   字段与带边框按钮 5px,底栏按钮 8px,关闭钮圆形 */
+   底栏按钮 8px,关闭钮圆形;字段的圆角由 fields.jsx 自带 */
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 { border-color: transparent; padding-top: 4px; justify-content: flex-end; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { order: 2; border-radius: 8px; }
 /* 手写弹窗是从文字面板里渲染出来的,DOM 上仍在编辑器面板作用域内,面板的字段 / 按钮圆角规则会把它的底栏按钮拆成 5 和 8 两档;这里压回统一的 8 */
 [data-editor-wheel-scope="panel"] .shadow-overlay.bg-chrome .border-t.px-4.py-3 > * { border-radius: 8px; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="accent-color"] { order: 3; }
 .shadow-overlay.bg-chrome .border-t.px-4.py-3 > [class*="rose-"] { order: 1; margin-right: auto; }
-.shadow-overlay.bg-chrome :is(input, select, textarea)[class*="rounded"],
-.shadow-overlay.bg-chrome div.h-8.rounded-md.border.bg-app { border-radius: 5px; }
 .shadow-overlay.bg-chrome button.p-1.rounded-md { border-radius: 999px; }
 .hover\:bg-hover:hover { background: var(--fill); }
 
@@ -741,26 +722,13 @@ aside.border-l .border-accent\/50 { border-color: transparent; }
 .fixed.inset-0[data-settings-overlay] button.border[class*="bg-app"] { border-color: transparent; background: var(--fill-2); color: rgb(var(--text-color)); }
 .fixed.inset-0[data-settings-overlay] button.border[class*="bg-app"]:hover { background: var(--fill-3); border-color: transparent; }
 .fixed.inset-0[data-settings-overlay] button.border-accent.bg-accent { border-color: transparent; color: rgb(var(--accent-ink)); }
-.fixed.inset-0[data-settings-overlay] :is(input, select, textarea)[class*="rounded"]:not([type="range"]):not([type="checkbox"]):not([type="radio"]) {
-  border-radius: 8px; border-color: transparent; background-color: var(--fill-2);
-}
-.fixed.inset-0[data-settings-overlay] :is(input, select, textarea)[class*="rounded"]:focus { border-color: transparent; box-shadow: inset 0 0 0 1px var(--fill-3); outline: none; }
-/* 密钥这类「图标 + 输入」的组合框(div.h-8 带边框)同样处理 */
-.fixed.inset-0[data-settings-overlay] div.h-8.rounded-md.border.bg-app { border-radius: 8px; border-color: transparent; background: var(--fill-2); }
 /* 子卡(服务商 / 模型行):深色用 fill,浅色用白底,与灰卡拉开;组件通过 --sub-card 取 */
 :root { --sub-card: var(--fill); }
 :root[data-theme="light"] { --sub-card: rgb(255 255 255 / 0.85); }
 :root[data-theme="light"] { --sel-ring-alpha: 0.55; }
 /* 浅色主题遮罩不要黑 45%,叠出来发脏 */
 :root[data-theme="light"] .fixed.inset-0.bg-app\/80 { background: rgba(0, 0, 0, 0.22); }
-.fixed.inset-0[data-settings-overlay] div.h-8.rounded-md.border.bg-app:focus-within { box-shadow: inset 0 0 0 1px var(--fill-3); }
 
-/* 下拉箭头:字段底色改用 background-color 写,别把自绘箭头抹掉;并给编辑器面板 / 设置 / 小对话框里的 select 统一一枚箭头 */
-[data-editor-wheel-scope="panel"] select, .fixed.inset-0[data-settings-overlay] select, .shadow-overlay.bg-chrome select {
-  appearance: none; -webkit-appearance: none; padding-right: 26px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
-  background-repeat: no-repeat; background-position: right 8px center; background-size: 12px 12px;
-}
 
 /* ───────── 10c · 关闭钮统一:凡是只有一个 X 图标的按钮(lucide 给 svg 加了 lucide-x 类),hover 底一律圆形 ───────── */
 /* !important:各作用域(编辑器面板 / 设置 / 对话框)按高度定圆角的规则特异度都比这条高,关闭钮的圆形必须压过它们 */
@@ -801,15 +769,13 @@ button.flex-col.rounded-md.border[class*="border-[rgb(var(--accent-color))]"]:ha
 [data-editor-wheel-scope="panel"] button.w-full.flex-col > span:last-child { color: rgb(255 255 255 / 0.55); }
 [data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] { background: rgb(38 38 42); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.9); }
 [data-editor-wheel-scope="panel"] button.w-full.flex-col[class*="border-[rgb(var(--accent-color))]"] > span:last-child { color: rgb(255 255 255 / 0.92); }
-/* 选择器类(模型文件、字体来源):左对齐、28 高、字段圆角 5px */
-[data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 5px; }
+/* 选择器类(模型文件、字体来源):左对齐、28 高、同 28 高字段的 8px */
+[data-editor-wheel-scope="panel"] button.w-full.h-7.rounded-md.border.bg-app { justify-content: flex-start; height: 28px; border-radius: 8px; }
 
 /* ───────── 11c · 拼图(z 10200):右侧面板与编辑器面板同一套;页面卡去掉发丝环 ───────── */
 .fixed.inset-0.z-\[10200\] .border-b.border-border\/60, .fixed.inset-0.z-\[10200\] .border-t.border-border\/60,
 .fixed.inset-0.z-\[10200\] .border-l.border-border\/60 { border-color: transparent; }
 .fixed.inset-0.z-\[10200\] .border-b.border-border\/60.px-4.py-3 { padding-top: 14px; padding-bottom: 14px; }
-.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border { border-color: transparent; background-color: var(--fill-2); border-radius: 5px; height: 28px; }
-.fixed.inset-0.z-\[10200\] input.rounded-md.bg-app.border:focus { border-color: transparent; outline: none; box-shadow: inset 0 0 0 1px var(--fill-3); }
 .fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed { border-style: solid; border-color: transparent; background: var(--fill); border-radius: 8px; }
 .fixed.inset-0.z-\[10200\] .rounded-md.border.border-dashed:hover { background: var(--fill-2); border-color: transparent; }
 .fixed.inset-0.z-\[10200\] .tracking-\[0\.14em\], .fixed.inset-0.z-\[10200\] .tracking-\[0\.12em\] { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: rgb(var(--muted-text)); }
