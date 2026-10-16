@@ -223,6 +223,24 @@ function createTaskStarters({
     return { ...formatJobStatus(job), missing: status?.missing || 0 };
   }
 
+  // The look-alike index (hash and, on a Mac, feature print) for photos
+  // whose preview has none yet: the catch-up after an import. Nothing to do
+  // is answered without a job; `force` redoes every photo.
+  async function startVisualTask({ force = false, priority = 80 } = {}) {
+    const current = await latestJobStatus("visual");
+    if (current.running) {
+      return current;
+    }
+    const status = await commands.visualStatus();
+    const count = force ? (status?.hashed || 0) + (status?.missing || 0) : (status?.missing || 0);
+    if (!(count > 0)) {
+      return { ...current, running: false, missing: 0 };
+    }
+    const job = await createJob("visual", { count, force }, { priority });
+    launchSidecarJob(jobArgv.visualJob({ jobId: job.job_id, force }));
+    return { ...formatJobStatus(job), missing: status?.missing || 0 };
+  }
+
   // How each photo shows (portrait / landscape), read off thumbnails made
   // before the shape was recorded: a catalog from an older version, once.
   // New thumbnails record theirs. Nothing to do is answered without a job.
@@ -445,7 +463,7 @@ function createTaskStarters({
     startImportTask,
     startPreviewTask,
     startAiRepaintTask,
-    startColorsTask,
+    startColorsTask, startVisualTask,
     startOrientationTask,
     startTextImageTask,
     resolveProviderCredentials,

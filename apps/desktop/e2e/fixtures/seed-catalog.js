@@ -72,7 +72,10 @@ const VIDEOS_DIR = path.join(FIXTURES_DIR, "test-videos");
 function runSidecar(args) {
   return execFileSync(PYTHON, ["-m", "media_workspace", ...args], {
     encoding: "utf-8",
-    env: { ...process.env, PYTHONPATH: SIDECAR_SRC, VIDEO_TOOL_PATH: VIDEO_TOOL_BIN },
+    // The import's preview pass also hashes each photo for the look-alike
+    // index and, with the helper, takes its Vision feature print; without
+    // them launch starts the catch-up job (e2e/71 relies on the vectors).
+    env: { ...process.env, PYTHONPATH: SIDECAR_SRC, VIDEO_TOOL_PATH: VIDEO_TOOL_BIN, IMAGE_FEATURES_PATH: path.join(path.dirname(VIDEO_TOOL_BIN), "image-features") },
   });
 }
 

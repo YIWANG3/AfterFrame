@@ -422,6 +422,26 @@ def _migrate_to_11(connection: sqlite3.Connection) -> None:
         )
 
 
+def _migrate_to_12(connection: sqlite3.Connection) -> None:
+    """What each photo looks like (hash, feature print, duplicate group).
+    The table only: the visual job fills it from the previews on disk."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_visual (
+            asset_id TEXT PRIMARY KEY,
+            phash INTEGER,
+            hash_version TEXT,
+            embedding BLOB,
+            embedding_model TEXT,
+            dup_group TEXT,
+            analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+        )
+        """
+    )
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_asset_visual_group ON asset_visual(dup_group)")
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     3: _migrate_to_3,
     4: _migrate_to_4,
@@ -432,6 +452,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     9: _migrate_to_9,
     10: _migrate_to_10,
     11: _migrate_to_11,
+    12: _migrate_to_12,
 }
 
 

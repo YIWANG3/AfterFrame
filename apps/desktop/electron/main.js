@@ -204,7 +204,7 @@ const { writeImageWithSourceMetadata } = createImageMetadataWriter({
 });
 const {
   formatJobStatus, latestJobStatus, createJob, listActiveJobsFormatted, resumeJob, activeRepaintProvider,
-  startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask, startOrientationTask,
+  startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask, startVisualTask, startOrientationTask,
   startAiRepaintTask, startTextImageTask,
 } = createTaskStarters({
   app,
@@ -321,7 +321,7 @@ jobsIpc.register({
   ipcMain,
   getCatalogState: catalog.state,
   formatJobStatus, latestJobStatus,
-  startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask, startOrientationTask,
+  startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask, startVisualTask, startOrientationTask,
   listActiveJobsFormatted, resumeJob,
   commands: sidecarCommands,
 });
@@ -561,6 +561,7 @@ app.whenReady().then(async () => {
     watcher: watcherApi,
     // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
     startPeopleIndex: (options) => peopleApi?.startPeopleIndex(options),
+    startVisualTask,
     // Dev and packaged builds get DIFFERENT default ports so running both at
     // once never collides — and agents deterministically reach the instance
     // they were configured for (repo .mcp.json → dev :41707; user-scope

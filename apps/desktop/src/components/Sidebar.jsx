@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
+import { Images, Clock, Star, Link, Copy, FolderPlus, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
@@ -53,7 +53,7 @@ function FolderSortMenu({ sort, onChange }) {
   );
 }
 
-const ICON_MAP = { Archive: Images, Clock, Star, Link };
+const ICON_MAP = { Archive: Images, Clock, Star, Link, Copy };
 
 
 export default function Sidebar({
@@ -64,6 +64,7 @@ export default function Sidebar({
   collections,
   activeCollectionId,
   activeSmartCollectionId,
+  similarTo = null,
   onOpenSmartCollection,
   onEditSmartCollection,
   onSnapshotSmartCollection,
@@ -261,7 +262,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !stickerMode && !peopleMode && !discoverMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !stickerMode && !peopleMode && !discoverMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button

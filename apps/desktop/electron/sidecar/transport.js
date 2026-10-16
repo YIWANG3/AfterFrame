@@ -313,6 +313,11 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
   const peopleWorkerPath = isPackaged
     ? path.join(resourcesPath, "native", "bin", "people-worker")
     : path.join(rootDir, "apps", "desktop", "native", "bin", "people-worker");
+  // Apple Vision feature prints for the look-alike index (visual job); the
+  // runner hashes alone where the helper is absent (Windows).
+  const imageFeaturesPath = isPackaged
+    ? path.join(resourcesPath, "native", "bin", "image-features")
+    : path.join(rootDir, "apps", "desktop", "native", "bin", "image-features");
   // ExifTool, which reads photo metadata (scripts/fetch-exiftool.mjs).
   const exifToolPath = isPackaged
     ? path.join(resourcesPath, "native", "exiftool")
@@ -323,7 +328,8 @@ function createSidecarTransport({ rootDir, sidecarSrc, isPackaged, resourcesPath
     ? path.join(resourcesPath, "native", "ffmpeg")
     : path.join(rootDir, "apps", "desktop", "native", "ffmpeg");
   const toolEnv = {
-    VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath, EXIFTOOL_PATH: exifToolPath, FFMPEG_PATH: ffmpegPath,
+    VIDEO_TOOL_PATH: videoToolPath, PEOPLE_WORKER_PATH: peopleWorkerPath, IMAGE_FEATURES_PATH: imageFeaturesPath,
+    EXIFTOOL_PATH: exifToolPath, FFMPEG_PATH: ffmpegPath,
   };
 
   function sidecarCommand(command) {

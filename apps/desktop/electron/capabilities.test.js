@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 
 const { desktopCapabilities } = require("./capabilities");
 
-const MACOS14_HELPERS = new Set(["video-tool", "people-worker", "compute-depth", "extract-sticker"]);
-const MACOS12_HELPERS = new Set(["video-tool"]);
+const MACOS14_HELPERS = new Set(["video-tool", "image-features", "people-worker", "compute-depth", "extract-sticker"]);
+const MACOS12_HELPERS = new Set(["video-tool", "image-features"]);
 
 test("a macOS 14 build declares nothing, so every feature stays available as before", () => {
   assert.deepEqual(desktopCapabilities("darwin", { hasHelper: (name) => MACOS14_HELPERS.has(name) }), {});

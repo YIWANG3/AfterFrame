@@ -34,7 +34,7 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       if (base) argv.push("--base", JSON.stringify(base));
       return callJson(argv);
     },
-    browseImages({ status = "all", limit = 120, offset = 0, search, sort, filters, base } = {}) {
+    browseImages({ status = "all", limit = 120, offset = 0, search, sort, filters, base, similarTo } = {}) {
       const argv = [
         "browse-images",
         "--status", String(status),
@@ -45,6 +45,7 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       if (sort) argv.push("--sort", String(sort));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
       if (base) argv.push("--base", JSON.stringify(base));
+      if (similarTo) argv.push("--similar-to", String(similarTo));
       return callJson(argv).then((rows) => rows || []);
     },
 
@@ -501,6 +502,27 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     // How many photos have their dominant colours, and how many still need them.
     colorStatus() {
       return callJson(["color-status"]);
+    },
+
+    // How many photos have their look-alike hash (and feature print), and
+    // how many still need one.
+    visualStatus() {
+      return callJson(["visual-status"]);
+    },
+
+    // The photos most like one, nearest first (the look-alike index).
+    findSimilar({ assetId, limit } = {}) {
+      const argv = ["find-similar", "--asset-id", String(assetId)];
+      if (limit) argv.push("--limit", String(limit));
+      return callJson(argv);
+    },
+
+    // Groups of photos that look the same, largest first.
+    listLookalikes({ limit, offset } = {}) {
+      const argv = ["list-lookalikes"];
+      if (limit) argv.push("--limit", String(limit));
+      if (offset) argv.push("--offset", String(offset));
+      return callJson(argv);
     },
 
     // How many photos have a thumbnail whose shape (portrait / landscape)

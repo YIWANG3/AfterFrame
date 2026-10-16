@@ -70,6 +70,7 @@ from .job_runner import (
     run_orientation_job,
     run_people_index_job,
     run_preview_job,
+    run_visual_job,
 )
 from .metadata import extract_image_candidate, iso_mtime
 from .preview_service import PreviewService
@@ -213,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_assets.add_argument("--path", type=Path, action="append", dest="paths", required=True)
 
     browse = subparsers.add_parser("browse-images", parents=[common])
-    browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], required=True)
+    browse.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], required=True)
     browse.add_argument("--limit", type=int, default=120)
     browse.add_argument("--offset", type=int, default=0)
     browse.add_argument("--search", default=None)
@@ -222,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     # JSON object to keep the surface small and forward-compatible.
     browse.add_argument("--filters", default=None, help="JSON object of facet filters")
     browse.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
+    browse.add_argument("--similar-to", default=None, help="asset id: that photo first, then the ones that look like it, nearest first")
 
     locate = subparsers.add_parser("locate-image-asset", parents=[common])
     locate.add_argument("--asset-id", required=True)
@@ -236,7 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     # (status/collection/search/facets) but ignores filters.geo — the map needs
     # points outside the current viewport to stay navigable.
     map_points = subparsers.add_parser("browse-map-points", parents=[common])
-    map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent"], default="all")
+    map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], default="all")
     map_points.add_argument("--collection-id", default=None)
     map_points.add_argument("--search", default=None)
     map_points.add_argument("--filters", default=None, help="JSON object of facet filters (geo key is ignored)")
@@ -403,7 +405,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_roots_parser.add_argument("--path", type=Path, action="append", required=True)
 
     create_job_parser = subparsers.add_parser("create-job", parents=[common])
-    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"], required=True)
+    create_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index", "visual"], required=True)
     create_job_parser.add_argument("--payload-json", default="{}")
     create_job_parser.add_argument("--priority", type=int, default=50)
 
@@ -411,7 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_job_parser.add_argument("--job-id", required=True)
 
     latest_job_parser = subparsers.add_parser("latest-job", parents=[common])
-    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index"])
+    latest_job_parser.add_argument("--job-type", choices=["import", "enrichment", "preview", "colors", "orientation", "ai_repaint", "text_image", "annotation", "people_model_download", "people_index", "visual"])
 
     cancel_job_parser = subparsers.add_parser("cancel-job", parents=[common])
     cancel_job_parser.add_argument("--job-id", required=True)
@@ -518,6 +520,23 @@ def build_parser() -> argparse.ArgumentParser:
     run_people_index_parser.add_argument("--worker-path", type=Path)
     run_people_index_parser.add_argument("--asset-id", action="append")
     run_people_index_parser.add_argument("--limit", type=int)
+
+    run_visual_job_parser = subparsers.add_parser("run-visual-job", parents=[common])
+    run_visual_job_parser.add_argument("--job-id", required=True)
+    run_visual_job_parser.add_argument("--helper-path", type=Path, help="the image-features helper; else IMAGE_FEATURES_PATH, else hashes only")
+    run_visual_job_parser.add_argument("--limit", type=int)
+    run_visual_job_parser.add_argument("--force", action="store_true", help="re-analyse photos that already have a hash")
+
+    visual_status_parser = subparsers.add_parser("visual-status", parents=[common])
+    visual_status_parser.add_argument("--helper-path", type=Path)
+
+    find_similar_parser = subparsers.add_parser("find-similar", parents=[common])
+    find_similar_parser.add_argument("--asset-id", required=True)
+    find_similar_parser.add_argument("--limit", type=int, default=24)
+
+    list_lookalikes_parser = subparsers.add_parser("list-lookalikes", parents=[common])
+    list_lookalikes_parser.add_argument("--limit", type=int, default=100)
+    list_lookalikes_parser.add_argument("--offset", type=int, default=0)
 
     subparsers.add_parser("repair-resource-sets", parents=[common])
     subparsers.add_parser("split-shared-assets", parents=[common])
@@ -1270,6 +1289,38 @@ def _cmd_color_status(args, connection, catalog, parser):
     return 0
 
 
+def _cmd_run_visual_job(args, connection, catalog, parser):
+    print(json.dumps(run_visual_job(connection, catalog.root, args.job_id, helper_path=args.helper_path, limit=args.limit, force=args.force), indent=2))
+    return 0
+
+
+def _cmd_visual_status(args, connection, catalog, parser):
+    from .db.visual import visual_status
+    from .visual import HELPERS, helper_path_from_env
+
+    # With a helper this machine uses, photos without its vector count as
+    # missing; without one (none, or a slow one: HELPERS decides, as it does
+    # for the job and the preview pass), hashes alone are complete.
+    helper = helper_path_from_env(args.helper_path)
+    model = HELPERS.model(helper) if helper else None
+    print(json.dumps(visual_status(connection, embedding_model=model)))
+    return 0
+
+
+def _cmd_find_similar(args, connection, catalog, parser):
+    from .db.visual import similar_assets
+
+    print(json.dumps({"asset_id": args.asset_id, "similar": similar_assets(connection, catalog.root, args.asset_id, limit=max(1, min(200, args.limit)))}))
+    return 0
+
+
+def _cmd_list_lookalikes(args, connection, catalog, parser):
+    from .db.visual import count_duplicate_assets, list_duplicate_groups
+
+    print(json.dumps({"groups": list_duplicate_groups(connection, limit=args.limit, offset=args.offset), "asset_count": count_duplicate_assets(connection)}))
+    return 0
+
+
 def _cmd_run_people_index_job(args, connection, catalog, parser):
     payload = run_people_index_job(
         connection,
@@ -1417,7 +1468,7 @@ def _cmd_browse_images(args, connection, catalog, parser):
     # it must stay read-only — reconciling assets.exists_on_disk is left to the
     # explicit verify-assets sweep. The live `present` value below is what the
     # UI badges/blocks read; the DB flag only gates preview/export batches.
-    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=json.loads(args.base) if args.base else None):
+    for row in list_image_assets(connection, status=args.status, limit=args.limit, offset=args.offset, search=args.search, sort=args.sort, filters=facet_filters, base=json.loads(args.base) if args.base else None, similar_to=args.similar_to):
         payload.append(_browse_row_payload(row, catalog))
     print(json.dumps(payload, indent=2))
     return 0
@@ -1831,6 +1882,10 @@ COMMAND_HANDLERS = {
     "orientation-status": _cmd_orientation_status,
     "color-status": _cmd_color_status,
     "run-people-index-job": _cmd_run_people_index_job,
+    "run-visual-job": _cmd_run_visual_job,
+    "visual-status": _cmd_visual_status,
+    "find-similar": _cmd_find_similar,
+    "list-lookalikes": _cmd_list_lookalikes,
     "generate-previews": _cmd_generate_previews,
     "refresh-assets": _cmd_refresh_assets,
     "facet-values": _cmd_facet_values,

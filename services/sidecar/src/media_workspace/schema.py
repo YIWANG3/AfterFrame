@@ -1,6 +1,6 @@
 # Catalog schema version. This is the only authoritative version declaration;
 # migration code and the public db package both import it from here.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 SCHEMA_STATEMENTS = [
@@ -390,6 +390,22 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_asset_locations_city ON asset_locations(city_key)",
+    # What each photo looks like, from its 512 px preview: a perceptual hash,
+    # a feature print when a Mac made one, and the look-alike group it fell
+    # into (db/visual.py). The visual job fills it.
+    """
+    CREATE TABLE IF NOT EXISTS asset_visual (
+        asset_id TEXT PRIMARY KEY,
+        phash INTEGER,
+        hash_version TEXT,
+        embedding BLOB,
+        embedding_model TEXT,
+        dup_group TEXT,
+        analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_asset_visual_group ON asset_visual(dup_group)",
     """
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_location_rtree USING rtree(
         location_id,

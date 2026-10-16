@@ -47,6 +47,9 @@ build() {
 }
 
 build video-tool video-tool.swift 12.0
+# Vision feature prints for the look-alike index: revision 1 on macOS 12 and
+# 13, revision 2 (behind #available) on 14.
+build image-features image-features.swift 12.0
 # Node-API is ABI stable: this addon doesn't need a rebuild for each Electron
 # version. Only headers are a build dependency; playback uses system frameworks.
 NAPI_HEADERS="$(node -p "require('node-api-headers').include_dir")"

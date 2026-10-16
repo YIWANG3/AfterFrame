@@ -177,6 +177,7 @@ export function filterTitle(status) {
   if (status === "matched") return "With Raw";
   if (status === "recent") return "Recently Added";
   if (status === "rated") return "Rated";
+  if (status === "lookalikes") return "Look-alikes";
   return "All Assets";
 }
 
@@ -218,6 +219,10 @@ export function navItems(summary) {
   }
   if (Number(summary?.raw_assets ?? 0) > 0) {
     items.push({ key: "matched", label: "With Raw", count: summary?.confirmed_matches ?? 0, icon: "Link" });
+  }
+  // Photos that look the same (the look-alike index): only once there are some.
+  if (Number(summary?.lookalike_count ?? 0) > 0) {
+    items.push({ key: "lookalikes", label: "Look-alikes", count: summary?.lookalike_count ?? 0, icon: "Copy" });
   }
   return items;
 }

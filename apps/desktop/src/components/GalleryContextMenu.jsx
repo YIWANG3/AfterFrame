@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Link2, Type, ExternalLink, RefreshCw, Flag, FlagOff, Tag, X, Copy } from "lucide-react";
+import { FolderPlus, FolderMinus, Folder, ChevronRight, Columns2, LayoutGrid, Eye, LocateFixed, Pencil, Trash2, Trash, Sparkles, Link2, Type, ExternalLink, RefreshCw, Flag, FlagOff, Tag, X, Copy, ScanSearch } from "lucide-react";
 import api from "../api";
 import { Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
@@ -88,7 +88,7 @@ function SubMenuItem({ icon: Icon, label, shortcut, onClick, ...rest }) {
   );
 }
 
-export default function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
+export default function ContextMenu({ x, y, item, assetIds, collections, activeCollectionId, editors, onAddTo, onRemoveFrom, onReveal, onShowInAllAssets, onFindSimilar, onRefreshFromDisk, onEdit, onOpenWith, onDeleteFromCatalog, onDeleteFromDisk, onCopy, onCopyPath, onCopyName, onCompare, onCollage, onAnnotate, onFlag, onAddTags, onClose }) {
   const { t } = useTranslation("nav");
   const ref = useRef(null);
   useDismiss(ref, onClose);
@@ -127,6 +127,9 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
       )}
       {onShowInAllAssets && (
         <MenuItem icon={LocateFixed} label={t("gallery.menu.showInAllAssets")} onClick={() => { onShowInAllAssets(item.asset_id); onClose(); }} />
+      )}
+      {onFindSimilar && (
+        <MenuItem icon={ScanSearch} label={t("gallery.menu.findSimilar")} onClick={() => { onFindSimilar(item.asset_id); onClose(); }} />
       )}
       {assetIds?.length === 2 && (
         <MenuItem icon={Columns2} label={t("gallery.menu.compare")} shortcut={shortcutLabel("photo.compare")} onClick={() => { onCompare?.(assetIds); onClose(); }} />

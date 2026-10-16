@@ -61,6 +61,12 @@ const CASES = [
     neverSent: ["--limit"],
   },
   {
+    builder: "visualJob",
+    minimal: { jobId: "j1" },
+    full: { jobId: "j1", force: true },
+    neverSent: ["--limit", "--helper-path"],
+  },
+  {
     builder: "orientationJob",
     minimal: { jobId: "j1" },
     full: { jobId: "j1" },

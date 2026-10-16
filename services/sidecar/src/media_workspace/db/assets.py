@@ -508,7 +508,8 @@ def list_assets_for_preview(
             assets.metadata_json AS metadata_json,
             preview_entries.relative_path AS existing_relative_path,
             preview_entries.status AS existing_status,
-            EXISTS (SELECT 1 FROM asset_colors c WHERE c.asset_id = assets.asset_id) AS has_colors
+            EXISTS (SELECT 1 FROM asset_colors c WHERE c.asset_id = assets.asset_id) AS has_colors,
+            EXISTS (SELECT 1 FROM asset_visual v WHERE v.asset_id = assets.asset_id AND v.phash IS NOT NULL) AS has_visual
         FROM assets
         LEFT JOIN preview_entries
             ON preview_entries.asset_id = assets.asset_id
