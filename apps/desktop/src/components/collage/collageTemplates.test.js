@@ -63,6 +63,16 @@ describe("collage templates", () => {
     expect(names(6)).toContain("Big + 5");
   });
 
+  // One row, every photo side by side: asked for at every count up to 9
+  // (2026-10-16); 2 has it as Left / Right.
+  it("offers a single-row layout for 2 to 9 photos", () => {
+    for (let count = 2; count <= 9; count++) {
+      const row = TEMPLATES[count].find((t) => t.cells.every((c) => c.y === 0 && c.h === 1));
+      expect(row, `${count} photos`).toBeDefined();
+      expect(row.cells.map((c) => c.x)).toEqual(row.cells.map((_, i) => i / count).map((v) => expect.closeTo(v, 6)));
+    }
+  });
+
   it("falls back to the largest smaller group when a count has no templates", () => {
     expect(getTemplatesForCount(13)).toBe(TEMPLATES[12]);
     expect(getTemplatesForCount(0)).toBe(TEMPLATES[2]);
