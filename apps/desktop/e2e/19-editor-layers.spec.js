@@ -354,13 +354,20 @@ test.describe("Unified undo/redo (transform + layers, one timeline)", () => {
     await expect(input).toBeVisible({ timeout: 5000 });
     const len0 = await historyLen(window);
 
-    // Type several digits quickly → several onChange ticks within the debounce
-    // window = one gesture.
+    // A size the layer doesn't have: a new layer is 120, and typing 120 over
+    // it leaves nothing to record (what the Windows runner did until
+    // 2026-10-16, where this typed "120" after a Control+a that selects all;
+    // on macOS Control+a only moves the caret, and "120" in front of 120 made
+    // 1120). Each digit of 96 and 84 is in range (min 8), so every keystroke
+    // applies live: several onChange ticks within the debounce window = one
+    // gesture.
+    const target = (await input.inputValue()) === "96" ? "84" : "96";
     await input.focus();
-    await input.press("Control+a");
-    await input.pressSequentially("120", { delay: 60 });
+    await input.selectText();
+    await input.pressSequentially(target, { delay: 60 });
 
     // After the debounce settles, the whole run is exactly ONE history entry.
     await expect.poll(() => historyLen(window), { timeout: 5000 }).toBe(len0 + 1);
+    await expect(input).toHaveValue(target);
   });
 });

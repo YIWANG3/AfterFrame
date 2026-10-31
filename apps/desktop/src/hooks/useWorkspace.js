@@ -61,6 +61,8 @@ export default function useWorkspace({ pushToast } = {}) {
   // What the search box holds. It narrows the current page locally at once and
   // becomes scope.query after the debounce.
   const [typedQuery, setTypedQuery] = useState("");
+  const typedQueryRef = useRef(typedQuery);
+  typedQueryRef.current = typedQuery;
   const [facetValues, setFacetValues] = useState(null); // dropdown/slider options
   const [selectedAssetId, setSelectedAssetIdState] = useState(null);
   const selectedAssetIdRef = useRef(null);
@@ -509,10 +511,14 @@ export default function useWorkspace({ pushToast } = {}) {
     const requestId = ++browserRequestIdRef.current;
     const startScope = { ...scopeRef.current, query: typedQuery };
     const startKey = scopeKeyOf(scopeRef.current);
-    // Superseded by a newer reveal, a newer browse, or a scope the user changed.
+    // Superseded by a newer reveal, a newer browse, a scope the user changed,
+    // or a search typed since: installing would put back the search this
+    // started with over the one now in the box (seen on the Windows runner,
+    // a search typed 80 ms after the click and before the page landed).
     const isCurrent = () => navigationId === relatedNavigationRef.current
       && requestId === browserRequestIdRef.current
-      && scopeKeyOf(scopeRef.current) === startKey;
+      && scopeKeyOf(scopeRef.current) === startKey
+      && typedQueryRef.current === startScope.query;
     revealRef.current = navigationId;
     setBrowserLoading(true);
     setBrowserLoadingMore(false);
