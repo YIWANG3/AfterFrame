@@ -235,7 +235,7 @@ services/sidecar/src/media_workspace/
 
 1. **平台判断只能写在 `platform/` 目录里。**
    - 用 ESLint 的 `no-restricted-properties` 禁止在其他地方使用 `process.platform`，`platform/` 目录豁免；Python 那边同理（ruff 的 banned-api）。
-   - 目前全仓只有 11 处平台判断，分布在 6 个文件里（main、appShell、stickers、people、depth、transport），收拢起来成本很小。
+   - 2026-10-02 审计时全仓只有 11 处平台判断，分布在 6 个文件里（main、appShell、stickers、people、depth、transport），收拢起来成本很小。现在多了不少，见 12.3。
 2. **原生能力以调用约定为边界。**
    - 现有工具已经是这种形态：`video-tool probe|poster|frames`、`people-worker --serve`（逐行收发 JSON）、`extract-sticker <in> <outdir>`（输出 `manifest.json`）、`compute-depth <src> <out> <model>`。
    - 调用方（`video.py`、`job_runner.py`、`ipc/*.js`）不需要知道背后是 Swift 还是 ONNX。
