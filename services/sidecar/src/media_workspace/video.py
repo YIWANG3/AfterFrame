@@ -17,16 +17,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
-from . import ffmpeg_video
+from . import ffmpeg_video, formats
 from .processes import no_window
 
 T = TypeVar("T")
 
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
-
-
 def is_video(path: Path) -> bool:
-    return path.suffix.lower() in VIDEO_EXTENSIONS
+    return formats.kind_of(path) == "video"
 
 
 def tool_path() -> str | None:

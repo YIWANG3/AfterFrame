@@ -20,13 +20,14 @@ import { panelBoundaries, regionToPixels } from "../splitMath";
 import { pathSeparator } from "../../../utils/format";
 import { parentDir, pathParts } from "../pathParts";
 import { pad2 } from "../../../utils/math";
+import { exportExtension } from "../../../../shared/formats.mjs";
 
 
 // The panels take the original's format where the browser can encode it,
 // else JPEG.
 function splitPath(filePath) {
-  const { dir, stem, ext } = pathParts(filePath);
-  return { dir, stem, ext: ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg" };
+  const { dir, stem, name } = pathParts(filePath);
+  return { dir, stem, ext: exportExtension(name) };
 }
 
 // Where the panels land: the chosen target directory (default: the

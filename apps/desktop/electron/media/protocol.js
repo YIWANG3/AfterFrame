@@ -12,7 +12,8 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 
-const HEIC_RE = /\.(heic|heif)$/i;
+// The originals media:// renders to a JPEG first (HEIC), from the format registry.
+const { TRANSCODE_RE: HEIC_RE } = require("../../shared/formats.mjs");
 
 // macOS: Image I/O through sips.
 async function sipsToJpeg(srcPath, outPath) {

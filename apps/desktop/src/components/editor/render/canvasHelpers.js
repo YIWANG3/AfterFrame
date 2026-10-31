@@ -2,6 +2,7 @@
 // No React, no closures — all inputs are passed explicitly.
 
 import { fileName } from "../../../utils/format";
+import { exportExtension, mimeForExport } from "../../../../shared/formats.mjs";
 
 const PREVIEW_MAX_EDGE = 2200;
 
@@ -353,8 +354,7 @@ export function deriveEditedFileName(sourcePath, preferredExt = null) {
   const originalName = fileName(sourcePath || "image.jpg");
   const dotIndex = originalName.lastIndexOf(".");
   const stem = dotIndex > 0 ? originalName.slice(0, dotIndex) : originalName;
-  const originalExt = dotIndex > 0 ? originalName.slice(dotIndex + 1).toLowerCase() : "";
-  const ext = preferredExt || (["jpg", "jpeg", "png", "webp"].includes(originalExt) ? originalExt : "jpg");
+  const ext = preferredExt || exportExtension(originalName);
   return `${stem}_edited.${ext}`;
 }
 
@@ -366,10 +366,7 @@ export function replaceFileName(targetPath, nextFileName) {
 }
 
 export function inferMimeType(filePath) {
-  const normalized = String(filePath || "").toLowerCase();
-  if (normalized.endsWith(".png")) return "image/png";
-  if (normalized.endsWith(".webp")) return "image/webp";
-  return "image/jpeg";
+  return mimeForExport(filePath);
 }
 
 export function canvasToBlob(canvas, mimeType) {

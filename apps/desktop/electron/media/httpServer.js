@@ -7,11 +7,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
-
-const VIDEO_MIME = {
-  ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
-  ".webm": "video/webm", ".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
-};
+const { videoMime } = require("../../shared/formats.mjs");
 
 // Starts listening on an ephemeral port right away; port() is 0 until then.
 function createMediaHttpServer({ allowlist }) {
@@ -24,7 +20,7 @@ function createMediaHttpServer({ allowlist }) {
       if (!(await allowlist.isAllowedMediaPathLoaded(filePath))) { res.writeHead(403).end(); return; }
       if (!fs.existsSync(filePath)) { res.writeHead(404).end(); return; }
       const stat = fs.statSync(filePath);
-      const mime = VIDEO_MIME[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+      const mime = videoMime(filePath);
       const range = req.headers.range;
       if (range) {
         const m = /bytes=(\d+)-(\d*)/.exec(range);

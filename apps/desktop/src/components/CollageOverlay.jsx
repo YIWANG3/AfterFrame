@@ -19,6 +19,7 @@ import { EXPORT_WIDTHS, MAX_SPACING_PX } from "./collage/PanelControls";
 import { Button, Checkbox, Z, cx } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { parentDir } from "./editor/pathParts";
+import { saveFilters } from "../../shared/formats.mjs";
 
 const PANEL_WIDTH = 300;
 const PAGE_SIZE = 48;
@@ -794,7 +795,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
 
       const savePath = await api.pickSavePath({
         defaultPath: lastDir ? `${lastDir}${pathSeparator(lastDir)}${defaultName}` : defaultName,
-        filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }, { name: "PNG", extensions: ["png"] }],
+        filters: saveFilters(["jpeg", "png"]),
       });
       if (!savePath) return;
       const savedDir = parentDir(savePath);

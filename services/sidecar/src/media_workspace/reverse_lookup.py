@@ -8,8 +8,8 @@ from pathlib import Path
 from sqlite3 import Row
 from typing import Any
 
-from . import exiftool
-from .config import DEFAULT_RAW_EXTENSIONS, Thresholds
+from . import exiftool, formats
+from .config import Thresholds
 from .db import (
     get_registry,
     load_raw_cache,
@@ -40,7 +40,7 @@ from .metadata import (
 from .models import ImageCandidate, MatchDecision
 from .progress import ProgressCallback, report_progress
 from .source_readiness import SourceNotReadyError, validate_source_ready
-from .video import VIDEO_EXTENSIONS, is_video
+from .video import is_video
 from .video import probe as probe_video
 
 # Files indexed per commit. One: the next file's metadata read (ExifTool,
@@ -53,7 +53,6 @@ RESOLVE_BATCH_COMMIT_SIZE = 1
 IMPORT_BATCH_SIZE = 100
 IMPORT_BATCH_SECONDS = 8.0
 RECALL_LIMIT = 200
-IMAGE_EXTENSIONS = {".avif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 
 
 def _previous_asset_signature(connection, path: Path) -> tuple[str, int, str] | None:
@@ -432,9 +431,10 @@ def resolve_image_batch(
                     deferred_files += 1
                     report_progress(progress_callback, phase="resolve_images", processed=processed, total=total, status_counts=counts)
                     continue
-            if is_video(path):
+            kind = formats.kind_of(path)
+            if kind == "video":
                 decision = index_video_file(connection, path.resolve(), commit=False)
-            elif is_raw(path):
+            elif kind == "raw":
                 decision = index_raw_file(connection, path.resolve(), commit=False)
             else:
                 decision = resolve_image(
@@ -475,7 +475,7 @@ def resolve_image_batch(
 
 
 def is_raw(path: Path) -> bool:
-    return path.suffix.lower() in DEFAULT_RAW_EXTENSIONS
+    return formats.kind_of(path) == "raw"
 
 
 def index_raw_file(connection, path: Path, commit: bool = True) -> MatchDecision:
@@ -567,9 +567,10 @@ def count_image_files(image_dir: Path) -> int:
     return sum(1 for _ in iter_image_files([image_dir.resolve()]))
 
 
-# Image exports + videos share the "import an image folder" scan; the batch
-# loop branches by type (videos skip RAW matching).
-MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | DEFAULT_RAW_EXTENSIONS
+# Image exports, RAWs and videos share the "import an image folder" scan; the
+# batch loop branches by kind (videos skip RAW matching). The registry says
+# what counts.
+MEDIA_EXTENSIONS = formats.IMPORTABLE_EXTENSIONS
 
 
 def iter_image_files(image_paths: list[Path]):

@@ -15,12 +15,10 @@ import api from "../../../api";
 import { useRef, useState } from "react";
 import { saveEditedImage } from "../render/saveImage";
 import { deriveEditedFileName, replaceFileName } from "../render/canvasHelpers";
+import { saveFilters } from "../../../../shared/formats.mjs";
 
-const SAVE_FILTERS = [
-  { name: "JPEG", extensions: ["jpg", "jpeg"] },
-  { name: "PNG", extensions: ["png"] },
-  { name: "WebP", extensions: ["webp"] },
-];
+// JPEG, PNG and WebP: what the format registry says an edited photo is saved as.
+const SAVE_FILTERS = saveFilters();
 
 export function useEditorSave({
   saveBasePath, buildSaveArgs, canSave, quickSavePathRef,

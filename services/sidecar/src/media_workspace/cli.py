@@ -7,6 +7,7 @@ import re
 import sys
 from pathlib import Path
 
+from . import formats
 from .ai_repaint import list_provider_models
 from .catalog import ensure_catalog
 from .db import (
@@ -380,7 +381,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_assets_p.add_argument("--asset-id", action="append", required=True)
     export_assets_p.add_argument("--dest", type=Path, required=True)
     export_assets_p.add_argument("--max-edge", type=int, help="Resize so the longest edge fits this many pixels")
-    export_assets_p.add_argument("--format", choices=["jpeg", "png", "webp"], help="Transcode to this format")
+    export_assets_p.add_argument("--format", choices=sorted(formats.EXPORT_FORMATS), help="Transcode to this format")
     export_assets_p.add_argument("--quality", type=int, default=90)
 
     repaint_history = subparsers.add_parser("list-repaint-history", parents=[common])

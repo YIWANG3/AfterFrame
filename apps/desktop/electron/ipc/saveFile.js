@@ -7,6 +7,7 @@ const fs = require("fs");
 const sharp = require("sharp");
 // Same boundaries the renderer previews with — one copy for both processes.
 const { panelBoundaries } = require("../../shared/splitGeometry.mjs");
+const { exportFormatForTarget } = require("../../shared/formats.mjs");
 
 // ── Orientation algebra ──────────────────────────────────────────────────────
 // Every combination of quarter turns and mirrors is an element of the dihedral
@@ -200,9 +201,9 @@ function register({
     // the saved file a second time.
     pipeline = pipeline.keepMetadata().withMetadata({ orientation: 1 });
 
-    const ext = path.extname(savePath).toLowerCase();
-    if (ext === ".png") pipeline = pipeline.png();
-    else if (ext === ".webp") pipeline = pipeline.webp({ quality });
+    const format = exportFormatForTarget(savePath);
+    if (format === "png") pipeline = pipeline.png();
+    else if (format === "webp") pipeline = pipeline.webp({ quality });
     else pipeline = pipeline.jpeg({ quality });
 
     await fs.promises.mkdir(path.dirname(savePath), { recursive: true });

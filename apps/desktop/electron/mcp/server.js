@@ -11,6 +11,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { requireCatalogPath } = require("../ipc/guard");
 const { createTools } = require("./tools");
+const { mimeForExport } = require("../../shared/formats.mjs");
 
 const DEFAULT_PORT = 41706;
 // The app's version (package.json; app.getVersion() reads the same field).
@@ -72,10 +73,7 @@ function jsonRpcError(id, code, message) {
 }
 
 function contentTypeFor(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".webp") return "image/webp";
-  if (ext === ".png") return "image/png";
-  return "image/jpeg";
+  return mimeForExport(filePath);
 }
 
 function createMcpServer(deps) {

@@ -25,9 +25,9 @@
 const fs = require("fs");
 const path = require("path");
 
-// Media we care about (image / video / RAW). The sidecar import is the source of
-// truth and re-filters, so this is just to avoid triggering on junk.
-const MEDIA_RE = /\.(jpe?g|png|gif|webp|avif|heic|heif|tiff?|bmp|mp4|mov|m4v|webm|cr2|cr3|crw|arw|srf|sr2|nef|nrw|raf|orf|rw2|raw|rwl|pef|ptx|dng|3fr|fff|iiq|eip|cap|mef|mos|mrw|srw|x3f|dcr|kdc|gpr|ari)$/i;
+// Media we care about (image / video / RAW): what the import takes, from the
+// format registry. The sidecar re-filters; this only avoids triggering on junk.
+const { MEDIA_RE } = require("../shared/formats.mjs");
 
 // A burst of writes (an editor exporting 200 files) is imported once it has
 // been quiet this long. Editor exports can pause between chunks; the sidecar

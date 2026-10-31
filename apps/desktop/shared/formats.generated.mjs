@@ -1,0 +1,141 @@
+// GENERATED from services/sidecar/src/media_workspace/formats.py — do not edit.
+// Regenerate with `npm run gen:formats`; tests/test_formats.py fails when this is stale.
+//
+// The format registry as the Electron main process and the renderer see it:
+// which files the catalog imports (and the watcher and Dock accept), which
+// originals an <img> can show, which the video range server serves, and
+// what an edited photo can be saved as. shared/formats.mjs has the helpers.
+
+export const FORMATS = Object.freeze([
+  {"family": "jpeg", "kind": "image", "label": "JPEG", "extensions": [".jpg", ".jpeg"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "png", "kind": "image", "label": "PNG", "extensions": [".png"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "webp", "kind": "image", "label": "WebP", "extensions": [".webp"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "avif", "kind": "image", "label": "AVIF", "extensions": [".avif"], "browserNative": true, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "heic", "kind": "image", "label": "HEIC", "extensions": [".heic"], "browserNative": false, "transcodeForBrowser": true, "exportSource": false, "mime": null},
+  {"family": "tiff", "kind": "image", "label": "TIFF", "extensions": [".tif", ".tiff"], "browserNative": false, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "3fr", "kind": "raw", "label": "Hasselblad 3FR", "extensions": [".3fr"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "ari", "kind": "raw", "label": "ARRIRAW", "extensions": [".ari"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "arw", "kind": "raw", "label": "Sony ARW", "extensions": [".arw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "srf", "kind": "raw", "label": "Sony SRF", "extensions": [".srf"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "sr2", "kind": "raw", "label": "Sony SR2", "extensions": [".sr2"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "bay", "kind": "raw", "label": "Casio BAY", "extensions": [".bay"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "cap", "kind": "raw", "label": "Phase One CAP", "extensions": [".cap"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "iiq", "kind": "raw", "label": "Phase One IIQ", "extensions": [".iiq"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "eip", "kind": "raw", "label": "Phase One EIP", "extensions": [".eip"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "cr2", "kind": "raw", "label": "Canon CR2", "extensions": [".cr2"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "cr3", "kind": "raw", "label": "Canon CR3", "extensions": [".cr3"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "crw", "kind": "raw", "label": "Canon CRW", "extensions": [".crw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "dcs", "kind": "raw", "label": "Kodak DCS", "extensions": [".dcs"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "dcr", "kind": "raw", "label": "Kodak DCR", "extensions": [".dcr"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "drf", "kind": "raw", "label": "Kodak DRF", "extensions": [".drf"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "k25", "kind": "raw", "label": "Kodak K25", "extensions": [".k25"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "kdc", "kind": "raw", "label": "Kodak KDC", "extensions": [".kdc"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "dng", "kind": "raw", "label": "DNG", "extensions": [".dng"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "erf", "kind": "raw", "label": "Epson ERF", "extensions": [".erf"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "fff", "kind": "raw", "label": "Hasselblad FFF", "extensions": [".fff"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "gpr", "kind": "raw", "label": "GoPro GPR", "extensions": [".gpr"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "mef", "kind": "raw", "label": "Mamiya MEF", "extensions": [".mef"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "mdc", "kind": "raw", "label": "Minolta MDC", "extensions": [".mdc"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "mos", "kind": "raw", "label": "Leaf MOS", "extensions": [".mos"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "mrw", "kind": "raw", "label": "Minolta MRW", "extensions": [".mrw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "nef", "kind": "raw", "label": "Nikon NEF", "extensions": [".nef"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "nrw", "kind": "raw", "label": "Nikon NRW", "extensions": [".nrw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "orf", "kind": "raw", "label": "Olympus ORF", "extensions": [".orf"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "pef", "kind": "raw", "label": "Pentax PEF", "extensions": [".pef"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "ptx", "kind": "raw", "label": "Pentax PTX", "extensions": [".ptx"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "pxn", "kind": "raw", "label": "Logitech PXN", "extensions": [".pxn"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "raf", "kind": "raw", "label": "Fujifilm RAF", "extensions": [".raf"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "raw", "kind": "raw", "label": "RAW", "extensions": [".raw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "rw2", "kind": "raw", "label": "Panasonic RW2", "extensions": [".rw2"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "rwl", "kind": "raw", "label": "Leica RWL", "extensions": [".rwl"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "rwz", "kind": "raw", "label": "Rawzor RWZ", "extensions": [".rwz"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "srw", "kind": "raw", "label": "Samsung SRW", "extensions": [".srw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "x3f", "kind": "raw", "label": "Sigma X3F", "extensions": [".x3f"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
+  {"family": "mp4", "kind": "video", "label": "MP4", "extensions": [".mp4", ".m4v"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/mp4"},
+  {"family": "mov", "kind": "video", "label": "QuickTime", "extensions": [".mov"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/quicktime"},
+  {"family": "webm", "kind": "video", "label": "WebM", "extensions": [".webm"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/webm"},
+  {"family": "mkv", "kind": "video", "label": "Matroska", "extensions": [".mkv"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/x-matroska"},
+  {"family": "avi", "kind": "video", "label": "AVI", "extensions": [".avi"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/x-msvideo"},
+]);
+
+// Lower-case, with the dot.
+export const IMPORTABLE_EXTENSIONS = new Set([
+  ".3fr",
+  ".ari",
+  ".arw",
+  ".avi",
+  ".avif",
+  ".bay",
+  ".cap",
+  ".cr2",
+  ".cr3",
+  ".crw",
+  ".dcr",
+  ".dcs",
+  ".dng",
+  ".drf",
+  ".eip",
+  ".erf",
+  ".fff",
+  ".gpr",
+  ".heic",
+  ".iiq",
+  ".jpeg",
+  ".jpg",
+  ".k25",
+  ".kdc",
+  ".m4v",
+  ".mdc",
+  ".mef",
+  ".mkv",
+  ".mos",
+  ".mov",
+  ".mp4",
+  ".mrw",
+  ".nef",
+  ".nrw",
+  ".orf",
+  ".pef",
+  ".png",
+  ".ptx",
+  ".pxn",
+  ".raf",
+  ".raw",
+  ".rw2",
+  ".rwl",
+  ".rwz",
+  ".sr2",
+  ".srf",
+  ".srw",
+  ".tif",
+  ".tiff",
+  ".webm",
+  ".webp",
+  ".x3f",
+]);
+
+// Anything the import would take: the watcher's pre-filter.
+export const MEDIA_RE = /\.(3fr|ari|arw|avi|avif|bay|cap|cr2|cr3|crw|dcr|dcs|dng|drf|eip|erf|fff|gpr|heic|iiq|jpeg|jpg|k25|kdc|m4v|mdc|mef|mkv|mos|mov|mp4|mrw|nef|nrw|orf|pef|png|ptx|pxn|raf|raw|rw2|rwl|rwz|sr2|srf|srw|tif|tiff|webm|webp|x3f)$/i;
+
+// An original an <img> can show over media://, directly or transcoded.
+export const BROWSER_IMAGE_RE = /\.(avif|heic|jpeg|jpg|png|webp)$/i;
+
+// Originals media:// renders to a JPEG before Chromium sees them.
+export const TRANSCODE_RE = /\.(heic)$/i;
+
+export const VIDEO_MIME = Object.freeze({
+  ".avi": "video/x-msvideo",
+  ".m4v": "video/mp4",
+  ".mkv": "video/x-matroska",
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+});
+
+// What the editor, Split, the collage and MCP exports write; keys are the
+// names tools and `export_assets.format` accept.
+export const EXPORT_FORMATS = Object.freeze({
+  "jpeg": {"extension": ".jpg", "extensions": [".jpg", ".jpeg"], "mime": "image/jpeg", "label": "JPEG"},
+  "png": {"extension": ".png", "extensions": [".png"], "mime": "image/png", "label": "PNG"},
+  "webp": {"extension": ".webp", "extensions": [".webp"], "mime": "image/webp", "label": "WebP"},
+});
