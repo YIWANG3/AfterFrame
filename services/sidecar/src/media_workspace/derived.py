@@ -21,6 +21,7 @@ from uuid import uuid4
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 
+from . import formats
 from .catalog import CatalogPaths
 from .config import Thresholds
 from .db import (
@@ -35,12 +36,10 @@ from .models import MatchDecision
 from .preview_service import PreviewService, preview_shape
 from .reverse_lookup import resolve_image
 
-# Formats Pillow reads + writes losslessly enough for crop/export. HEIC and
-# RAW are out of scope here — exports in those formats are rare.
-SUPPORTED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
-
-PIL_FORMAT_BY_NAME = {"jpeg": "JPEG", "png": "PNG", "webp": "WEBP"}
-EXT_BY_FORMAT = {"jpeg": ".jpg", "png": ".png", "webp": ".webp"}
+# Formats Pillow reads well enough to be the source of a crop or an export
+# (the registry's export_source rows), and what they can be written as.
+SUPPORTED_IMAGE_EXTS = formats.EXPORT_SOURCE_EXTENSIONS
+EXT_BY_FORMAT = {name: spec.extension for name, spec in formats.EXPORT_FORMATS.items()}
 
 
 def parse_ratio(value: str) -> tuple[float, float]:
@@ -423,7 +422,7 @@ def export_assets_to_dir(
     """
     dest_dir = dest_dir.expanduser().resolve()
     dest_dir.mkdir(parents=True, exist_ok=True)
-    if fmt and fmt not in PIL_FORMAT_BY_NAME:
+    if fmt and fmt not in formats.EXPORT_FORMATS:
         raise ValueError(f"unsupported format: {fmt}")
     results = []
     for asset_id in asset_ids:

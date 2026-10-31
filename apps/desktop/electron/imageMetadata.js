@@ -13,9 +13,10 @@ const fs = require("node:fs");
 const sharp = require("sharp");
 
 const { buildExifPayload } = require("./exif");
+const { exportFormatForTarget } = require("../shared/formats.mjs");
 
 async function writeImageWithSourceMetadata(readSourceMetadata, targetPath, outputBuffer, sourceMetadataPath, { quality } = {}) {
-  const ext = path.extname(targetPath).toLowerCase();
+  const format = exportFormatForTarget(targetPath);
   let pipeline = sharp(outputBuffer, { limitInputPixels: false }).withMetadata({ orientation: 1 });
 
   if (sourceMetadataPath) {
@@ -42,9 +43,9 @@ async function writeImageWithSourceMetadata(readSourceMetadata, targetPath, outp
     }
   }
 
-  if (ext === ".png") {
+  if (format === "png") {
     pipeline = pipeline.png();
-  } else if (ext === ".webp") {
+  } else if (format === "webp") {
     pipeline = pipeline.webp(quality ? { quality } : undefined);
   } else {
     pipeline = pipeline.jpeg(quality ? { quality } : undefined);

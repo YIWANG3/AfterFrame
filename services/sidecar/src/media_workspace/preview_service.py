@@ -12,10 +12,9 @@ from typing import BinaryIO
 
 from PIL import Image, ImageCms
 
-from . import raw_decode, video
+from . import formats, raw_decode, video
 from .catalog import CatalogPaths
 from .color_profiles import adobe_rgb_icc
-from .config import DEFAULT_RAW_EXTENSIONS
 from .db import list_assets_for_preview, set_display_shape, upsert_preview_entry
 from .db.colors import analyze_asset_colors
 from .db.visual import VISUAL_ASSET_TYPES, VisualAnalyzer
@@ -379,7 +378,7 @@ class PreviewService:
                 rendered = self._render_with_quicklook(
                     source_path, output_path, KIND_SIZES[kind], validate=validate
                 )
-        elif source_path.suffix.lower() in DEFAULT_RAW_EXTENSIONS:
+        elif formats.kind_of(source_path) == "raw":
             rendered = self._render_raw(source_path, output_path, kind, _row_metadata(row), validate=validate)
         else:
             rendered = self._render_image(

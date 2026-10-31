@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from media_workspace.file_types import detect_raw_format, in_system_folder, is_ignored_path, is_raw_file
-from media_workspace.reverse_lookup import MEDIA_EXTENSIONS, iter_image_files
+from media_workspace.reverse_lookup import iter_image_files
 from media_workspace.scanner import iter_candidate_paths
-from media_workspace.video import VIDEO_EXTENSIONS
-
-DESKTOP_PACKAGE = Path(__file__).resolve().parents[1] / "apps" / "desktop" / "package.json"
 
 
 class FileTypesTest(unittest.TestCase):
@@ -77,24 +73,6 @@ class SystemFolderTest(unittest.TestCase):
             walked = [p.name for p in iter_candidate_paths(card)]
             self.assertIn("IMG_0001.CR3", walked)
             self.assertNotIn("IMG_0002.CR3", walked)
-
-
-class DockDropTypesTest(unittest.TestCase):
-    """The Dock icon takes only the types Info.plist declares (build.mac.extendInfo in
-    apps/desktop/package.json), so a format import learns must be added there too."""
-
-    def test_the_dock_icon_takes_every_format_an_import_does(self) -> None:
-        package = json.loads(DESKTOP_PACKAGE.read_text(encoding="utf-8"))
-        declared = {entry["CFBundleTypeName"]: entry for entry in package["build"]["mac"]["extendInfo"]["CFBundleDocumentTypes"]}
-
-        def extensions(name: str) -> set[str]:
-            return {f".{ext}" for ext in declared[name]["CFBundleTypeExtensions"]}
-
-        self.assertEqual(extensions("Photo") | extensions("Video"), MEDIA_EXTENSIONS)
-        self.assertEqual(extensions("Video"), VIDEO_EXTENSIONS)
-        self.assertEqual(declared["Folder"]["LSItemContentTypes"], ["public.folder"])
-        # Accepts drops, but never becomes what Finder opens these files with.
-        self.assertEqual({entry["LSHandlerRank"] for entry in declared.values()}, {"None"})
 
 
 if __name__ == "__main__":

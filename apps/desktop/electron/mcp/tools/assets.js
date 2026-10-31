@@ -4,6 +4,7 @@
 const os = require("node:os");
 const path = require("node:path");
 const { thumbnailUrl } = require("./shared");
+const { EXPORT_FORMATS, EXPORT_FORMAT_NAMES, exportFormatForTarget } = require("../../../shared/formats.mjs");
 
 module.exports = (ctx) => {
   const { deps, commands, port, requireCatalog, rememberPreview, forgetPreview, derivedOutputDir } = ctx;
@@ -143,7 +144,8 @@ module.exports = (ctx) => {
               const detail = await commands.assetDetail({ assetId: id });
               if (!detail?.image_path) throw new Error("no file path for asset");
               const src = detail.image_path;
-              const ext = /\.(png|webp)$/i.test(src) ? path.extname(src).toLowerCase() : ".jpg";
+              // A PNG or WebP stays one; anything else (JPEG, HEIC, TIFF…) is written as JPEG.
+              const ext = EXPORT_FORMATS[exportFormatForTarget(src)].extension;
               // Same destination as the sidecar's own derived outputs — never
               // next to the source (that would litter the user's folders).
               const derivedDir = derivedOutputDir();
@@ -192,7 +194,7 @@ module.exports = (ctx) => {
           asset_ids: { type: "array", items: { type: "string" } },
           dest_dir: { type: "string", description: "Destination folder (absolute path; created if missing)" },
           max_edge: { type: "number", description: "Resize so the longest edge fits this many pixels" },
-          format: { type: "string", enum: ["jpeg", "png", "webp"], description: "Transcode to this format; default keeps original" },
+          format: { type: "string", enum: [...EXPORT_FORMAT_NAMES], description: "Transcode to this format; default keeps original" },
           quality: { type: "number", description: "JPEG/WebP quality 1-100, default 90" },
         },
         required: ["asset_ids", "dest_dir"],

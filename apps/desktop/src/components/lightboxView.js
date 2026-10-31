@@ -1,3 +1,5 @@
+import { browserShowsOriginal } from "../../shared/formats.mjs";
+
 // `onDemandHd`: a RAW's HD preview made while it was open (useOnDemandHdPreviews).
 // It arrives after the thumbnail is up, so it joins as the detail layer, the way
 // an image's original does, rather than replacing the view under the user.
@@ -34,11 +36,11 @@ export function buildLightboxSources(item, { onDemandHd = null } = {}) {
 // or a video), and media:// serves those bytes as they are — so the gallery's
 // Compare showed two broken images for RAWs. A RAW shows the HD preview made
 // on demand once it arrives, a better preview until then; a photo whose
-// original is missing shows its preview.
-const BROWSER_IMAGE = /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i;
+// original is missing shows its preview. Which formats an <img> can show is
+// the format registry's call (shared/formats.mjs).
 // Whether an <img> can show the photo's original file itself.
 export function showsOriginal(item) {
-  return Boolean(item) && item.asset_type !== "raw" && item.asset_type !== "video" && BROWSER_IMAGE.test(item.image_path || "");
+  return Boolean(item) && item.asset_type !== "raw" && item.asset_type !== "video" && browserShowsOriginal(item.image_path);
 }
 export function compareSource(item, { onDemandHd = null } = {}) {
   if (!item) return null;

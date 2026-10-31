@@ -32,6 +32,7 @@
 | [foundation-refactor-plan.md](foundation-refactor-plan.md) | Phase 1–3 与补充修复已完成（2026-07-13/14）；Phase 4 的验收条件其实已满足（`window.mediaWorkspace` 只剩 `src/api` 和 `web-main.jsx`），文内没回填；Phase 5–6 未开始 |
 | [lens-logos-plan.md](lens-logos-plan.md) | 镜头厂商 logo：暂缓（2026-10-01），只做了导入时读 `lens_make` |
 | [folders-page-plan.md](folders-page-plan.md) | 文件夹数量上百后的独立管理页（统计、筛选、多选、批量删除 / 标注）；P1 已实现（2026-10-15，`FoldersView.jsx`、e2e 78）；P2（带搜索的"加入文件夹"选择器、设封面）未开始 |
+| [format-support-plan.md](format-support-plan.md) | 进行中（2026-10-31）：对照 Eagle 的文件格式差距（HIF / PSD / GIF / BMP / MTS 等）与四份扩展名列表互不一致的盘点；P0 格式注册表（`formats.py` → 生成 `shared/formats.generated.mjs`）已实现，P1 加格式 / 交代不支持 / 原图统一未开工；第 6 节待拍板 |
 
 ## 已完成的计划（历史记录；实现以代码为准）
 
