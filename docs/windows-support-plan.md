@@ -1,6 +1,6 @@
 # Windows 支持：现状评估与方案
 
-> **状态（2026-10-06）**：阶段 1、2 已经全部合进 main。Windows 版能打出可用的安装包（未签名），核心功能都在开发机上验证过，全量 e2e 312 个通过，见第 12 节。还没做的：发布流程和签名、家用 Win11 真机验收，以及阶段 3 的视频、深度、抠图、人物。
+> **状态（2026-10-31）**：Windows 版从 0.5.10（2026-10-07）起随每个版本发布，安装包由 CI 构建并上传到 GitHub Release（未签名）。阶段 3 的视频（FFmpeg）和"打开方式"已补上（#193、#194）。深度、抠图 2026-10-13 决定暂缓，人物没开始，LUT 工具也还只在 Mac 上，相似照片在 Windows 上只比感知哈希。e2e 进了 CI 的 Windows job（#235，只提示不拦合并）。还没做的：签名、家用 Win11 真机验收、上面这几个功能。详见第 12 节。
 > 起因（2026-10-02）：社媒上要 Windows 版的反馈很多。
 > 依据：对 `439f397`（0.5.5）做了三路代码审计（Electron 主进程、Python sidecar、前端/打包/CI），关键结论都抽查核实过，性能数据是在本机实测的；第 10 节是在 Windows 真机上跑出来的结果。
 > 文中行号以 `439f397` 为准，0.5.6（#113、#114）改过的文件里行号有偏移。路径如果不以 `services/`、`tests/`、`docs/`、`scripts/` 开头，就是相对 `apps/desktop/` 而言。
@@ -15,7 +15,7 @@
 
 ## 1. 各功能在 Windows 上的现状
 
-下表是 2026-10-06 的状态。第 2、3 节是 2026-10-02 审计时的情况。
+下表是 2026-10-31 的状态。第 2、3 节是 2026-10-02 审计时的情况。
 
 | 功能 | 现在 | 说明 |
 |---|---|---|
@@ -25,15 +25,17 @@
 | MCP server | ✅ | 监听 `127.0.0.1` 的 TCP 端口，没有 POSIX 专属代码 |
 | 缩略图、预览、主色 | ✅ | Pillow（#118） |
 | HEIC | ✅ | pillow-heif（#118、#125） |
-| RAW | ✅，JPEG XL 压缩的 DNG 例外 | LibRaw（#149）：内嵌预览、真实尺寸、按需全尺寸。JPEG XL 的 DNG 见 12.3 |
+| RAW | ✅，JPEG XL 压缩的 DNG 例外 | LibRaw（#149）：内嵌预览、真实尺寸、按需全尺寸。JPEG XL 的 DNG 只能编辑内嵌预览，编辑器会提示（#193），见 12.3 |
 | 照片元数据 | ✅ | ExifTool（#150），Windows 上用官方的 `exiftool.exe` |
+| 相似照片、近似重复 | ✅，只比感知哈希 | Mac 还比 Vision 的 feature print（#230）；Windows 的 DINOv2 向量没做（`docs/local-models-plan.md`） |
 | 深度感知文字 | ❌ 置灰，提示"目前仅 macOS 版支持"（#119） | CoreML（`native/compute-depth.swift`） |
 | 贴纸主体抠图 | ❌ 同上（贴纸库本身能用） | Vision（`native/extract-sticker.swift`） |
 | 人物识别 | ❌ 同上 | Vision + CoreML 版 ArcFace（`native/people-worker.swift`） |
-| 视频 | ⚠️ H.264 能播放；没有封面和时长；HEVC 是黑屏 | AVFoundation（`native/video-tool.swift`） |
-| 用外部编辑器打开 | ❌ 右键菜单里不出现 | 只扫描 `/Applications`（`electron/ipc/editors.js:49`） |
+| LUT 工具 | ❌ 隐藏（#190） | RAW 的底图用的是 Apple 的 RAW 渲染，Windows 上的 LibRaw 渲染发灰（`docs/lut-plan.md`） |
+| 视频 | ✅ | FFmpeg（#194）：封面、时长、拍摄时间、悬停帧条；HEVC 先转 1080p H.264 代理再播放 |
+| 用外部编辑器打开 | ✅ | 从开始菜单的快捷方式找编辑器（#193） |
 
-浏览器版（官网 `try/web.html`）现在就能在 Windows 上用，相框、拼图、裁剪、AI 都可以。它的能力开关在 `src/api/browser/bridge.js:768-783`。
+浏览器版（官网 `try/web.html`）现在就能在 Windows 上用，相框、拼图、裁剪、AI 都可以。它的能力开关在 `src/api/browser/bridge.js` 的 `capabilities` 里。
 
 ## 2. 阻断项：不修就无法使用
 
@@ -174,6 +176,8 @@ Windows 下的管道默认使用系统的 ANSI 代码页：中文系统是 GBK�
 
 深度、抠图、人物、视频这 4 个功能，在 Windows 首版里通过能力开关隐藏，并标注"仅 macOS"，不要让用户点了才报错。要把它们补回来，需要第 5.5 节的 Windows 引擎。
 
+2026-10-31：视频已经补回（#194）。深度、抠图、人物仍然置灰，后来加的 LUT 工具（#190）在 Windows 上直接隐藏。
+
 ## 5. 架构方案：哪些共享，哪些分平台
 
 ### 5.1 兼容方案一定更复杂、更慢吗？
@@ -282,7 +286,7 @@ services/sidecar/src/media_workspace/
 
 ### 阶段 2：Windows 核心版公测（约 2–3 周，在第 9 节的 Windows 开发机上做）
 
-开发部分已完成。安装包能打，但还没签名，也还没发布。
+开发部分已完成。安装包从 0.5.10 起随版本发布，还没签名。
 
 | 项 | 估时 |
 |---|---|
@@ -291,11 +295,13 @@ services/sidecar/src/media_workspace/
 | ✅ 路径和文件系统：3.1、3.2 中对用户影响最大的那些（#120、#159、#164） | 3–4 天 |
 | ✅ 中文字体：`Microsoft YaHei` 兜底（#121、#162）；Noto Sans SC 改为本地子集没做 | 0.5–1 天 |
 | ✅ Windows CI：单测全部通过并进了 CI（#124）。e2e 在开发机上能跑（#161、#174、#208），并进了 CI（#235，只提示不拦合并） | 2–3 天 |
-| 安装包能构建（#178 在 GitHub Actions 上构建并检查）；签名暂不做（第 7 节第 3 条） | 1–2 天，另加证书申请周期 |
+| ✅ 安装包在 GitHub Actions 上构建（#178），在版本标签上手动运行时会上传到 Release（#188，0.5.10 起）；签名暂不做（第 7 节第 3 条） | 1–2 天，另加证书申请周期 |
 
 ### 阶段 3：补回苹果专属功能（每个约 1–2 周）
 
 视频（ffmpeg）约 1 周 → 深度约 1 周 → 抠图约 1–1.5 周 → 人脸约 2 周。顺序可以按候补名单里用户最想要的功能来调整。
+
+2026-10-31：视频已完成（#194），同时补了"打开方式"（#193）。深度和抠图做过一轮调研（12.3），2026-10-13 决定暂缓。人物没开始。
 
 **前置条件**：Windows 开发机已经就绪（第 9 节）。还需要代码签名证书和 GitHub Actions 的 Windows runner；公测前还要在一台家用 Windows 11 上做一次验收（见第 9 节"系统版本"）。
 
@@ -307,6 +313,8 @@ services/sidecar/src/media_workspace/
 4. **自动更新**：要不要同时给 Mac 加上 `electron-updater`？
 5. ~~**RAW 一致性**~~：已定。预览用相机内嵌的 JPEG（#126），尺寸和全尺寸解码用 LibRaw（#149），两个平台一样。Mac 的全尺寸渲染优先用 Image I/O，所以颜色可能和 Windows 略有差别。
 6. **安装包体积**：ffmpeg 和 ONNX 模型加起来可能让 Windows 安装包比 Mac 大不少，体积上限定多少？
+   - FFmpeg（LGPL 共享库版）让安装包大了约 42MB。0.5.11 到 0.5.13 的安装包都是 236MB，0.5.11 装好后 709MB。
+   - 深度和抠图的 ONNX 模型全精度约 330MB，压缩版约 140MB（12.3）。没定。
 7. **视觉**：Windows 上保留多少液态玻璃效果？透明窗口在 Windows 上有限制，建议改用不透明窗口加 Mica。
 
 ## 8. 附：审计中顺带发现的 Mac 问题
@@ -399,12 +407,12 @@ Python 的 34 个：
   - 每个 `win/*` PR 都要通过现有的 Mac CI 和 e2e，并在开发机上跑过相关测试；
   - 只在 Windows 上生效的代码放进 `platform/win32.js` 这类模块（5.4），Mac 的代码路径不变；
   - 阶段 2 完成前不发布 Windows 安装包，用户感知不到变化。
-- **Windows CI**：先加成"失败不阻塞合并"的提醒；等第 10 节的失败都修完，再改成必须通过，防止日常改动又把 Windows 弄坏。
+- **Windows CI**：先加成"失败不阻塞合并"的提醒；等第 10 节的失败都修完，再改成必须通过，防止日常改动又把 Windows 弄坏。单测（`windows` job）和 e2e（`windows-e2e` job，#235）目前都还是提醒。
 - **顺序**：按第 6 节阶段 1、阶段 2 的列表，一项一个 PR。
 
-## 12. 进展（2026-10-06）
+## 12. 进展（2026-10-31）
 
-阶段 1、2 已经全部合进 main。每项都跑过 Mac 的 CI 和 e2e，也都在开发机上实际验证过。
+阶段 1、2 已经全部合进 main，Windows 版从 0.5.10 起随版本发布。每项都跑过 Mac 的 CI 和 e2e，也都在开发机上实际验证过。
 
 ### 12.1 已合并
 
@@ -440,6 +448,23 @@ Python 的 34 个：
 | #175 | 慢电脑上响应更快：地名数据按块读取（开发机上首次反查从 5–6 秒降到约 0.3 秒，sidecar 进程从约 290MB 降到约 50MB）、numpy 按需加载、后台任务降低优先级 |
 | #177 | 导入期间还没有缩略图的 RAW、TIFF 卡片不再触发修复；缺的缩略图在后台补 |
 
+2026-10-06 之后：
+
+| PR | 内容 |
+|---|---|
+| #178 | 安装包在 GitHub Actions 的 Windows runner 上构建，并做冒烟检查 |
+| #183 | 导入时不再弹出终端窗口：sidecar 启动的子进程（ExifTool、RAW 解码）都带 `CREATE_NO_WINDOW` |
+| #188 | 0.5.10 发布，第一个带 Windows 安装包的版本。`windows-installer.yml` 在版本标签上手动运行时，会等 Mac 的 Release 建好，再把安装包传上去 |
+| #190 | LUT 工具（Mac）；Windows 上先隐藏 |
+| #193 | "打开方式"从开始菜单的快捷方式找编辑器；只能编辑内嵌预览的 RAW（JPEG XL 的 DNG）会在编辑器里提示 |
+| #194 | 视频走 FFmpeg（BtbN 的 LGPL 共享库版，按 SHA-256 锁定）：封面、时长、拍摄时间、悬停帧条；Chromium 解不了的 HEVC 先转 1080p H.264 代理再播放 |
+| #208 | e2e 在 Windows 上又能跑了：#198 之后快捷键按平台区分修饰键，打开设置要按 `ControlOrMeta+,`，不能按 `Meta+,`（那是 Win 键） |
+| #216 | HEVC 等代理时原视频保持暂停、静音；提示框的正文最多显示三行；裁剪工具的"自由""原始比例"有了中文 |
+| #217 | 拼图批量导出在 Windows 上按系统的分隔符拼保存路径，以前用的是 `/` |
+| #218、#228 | Ctrl+C 把选中的照片按文件放进剪贴板，Windows 上走 PowerShell 的 `Set-Clipboard`；#228 在开发机上验证过，e2e 39、42 也在那里跑过 |
+| #230 | 相似照片：每张预览算感知哈希，Mac 再加 Vision 的 feature print；Windows 上只比哈希 |
+| #235 | CI 新增 `windows-e2e` job，在 Windows runner 上跑全部 e2e（只提示不拦合并） |
+
 ### 12.2 验证情况
 
 在开发机上对 main 的 `3272d1a`（2026-10-05）：
@@ -458,18 +483,47 @@ Python 的 34 个：
 
 开发机是 4 核的限速云主机，没有显卡，同样的 Python 代码比 Mac 慢约 20 倍。导入时界面要靠 CPU 软件渲染，会占掉一半 CPU。家用电脑上的真实速度要等真机验收（12.3）。
 
+**2026-10-13，对 main 的 `1e18df1` 再跑全量 e2e**：310 个通过，38 个失败，57 个跳过，8 个没跑，用时 99 分钟。38 个失败没有一个是应用的问题：
+- 24 个是测试写法的问题，#208 修了：
+  - 打开设置按的是 `Meta+,`；
+  - 16-open-with 只认 `.app`；
+  - 64 的计时起点晚了，后台补缩略图的进程在它开始计时前就启动了。
+- 14 个是开发机太慢或没有 WebGL 造成的超时，日志里没有报错：
+  - 11 号的 3000 个文件导入；
+  - 65 号边导入 9000 个文件边搜索；
+  - 地图相关的用例。
+
+没跑的 8 个是失败用例之后的串行用例，以及 `demo`。
+
+在 #208 的分支上定向复跑：54 个通过，2 个失败（15:113 和 56:262），都是上面那类超时。
+
+**安装包实测**：把 GitHub Release 上的安装包覆盖安装到开发机上（`/S /allusers`），每次都核对了下载文件的 SHA-256。
+- **0.5.10（10-07）**：导入 JPG 和 5 种 RAW；导入时不弹终端窗口。
+- **0.5.11（10-13）**：
+  - 导入 4K HEVC、JPEG XL 的 DNG、JPG、CR3、ARW，5 个文件 39 秒。
+  - 视频的封面、时长、拍摄时间都对。拍摄时间按 UTC 存，按本地时间显示。
+  - HEVC 显示"正在准备视频…"后播放 1080p 代理，在开发机上要等 23–33 秒。
+  - "打开方式"能带着文件启动 GIMP；JXL 的 DNG 有提示。
+- **0.5.12（10-14）**：
+  - Windows 上仍然用网页播放器：H.264 直接播放，HEVC 走代理。#204 只把 Mac 改成了 AVPlayer。
+  - Ctrl+, 打开设置，快捷键页显示的是 Ctrl。
+  - RAW 打开时默认停在裁剪工具。
+  - 监视文件夹能用：#213 删掉的是 sidecar 里没人用的 `watcher.py`，监视本来就由 Electron 负责。
+
 ### 12.3 还没做的
 
 | 项 | 现状 |
 |---|---|
-| 发布流程 | 安装包（NSIS，约 175MB，未签名）一直在开发机上手动构建。#178 改为在 GitHub Actions 上构建并做冒烟检查，但不发布到 Release |
-| 签名 | 2026-10-03 决定暂不买证书。SmartScreen 会弹"已保护你的电脑"，下载页要教用户点"更多信息 → 仍要运行" |
+| 签名 | 2026-10-03 决定暂不买证书。SmartScreen 会弹"已保护你的电脑"，发布说明里教用户点"更多信息 → 仍要运行" |
 | 家用 Win11 真机验收 | 开发机是 Windows Server 2025 的云主机。SmartScreen、安装体验和真实速度都要在家用电脑上看 |
-| 视频 | H.264 能播放，但新导入的视频没有封面和时长（Swift 写的 `video-tool`）。HEVC 播放是黑屏，Windows 默认没有 HEVC 解码器。要用 ffmpeg 补回来，属于阶段 3 |
-| JPEG XL 压缩的 DNG | rawpy 自带的 LibRaw 0.22.1 没有编进 libjxl。缩略图用内嵌预览，没有问题；但编辑和导出会悄悄退回内嵌预览的尺寸（测试样例只有 256×144）。DNG Converter 的有损压缩、部分 Lightroom 和 iPhone 的 DNG 会用到这种压缩。Mac 上有 Image I/O 兜底 |
-| 用外部编辑器打开 | 只扫描 `/Applications`，Windows 上右键菜单里不出现 |
-| 深度、抠图、人物 | 阶段 3，ONNX Runtime |
+| 官网 | `site/` 从 #213（10-14）起写了支持 Windows 10+，指南里有 Windows 的安装说明，下载按钮指向 GitHub Release。SmartScreen 怎么点过去，还只写在 README 和发布说明里 |
+| 深度、抠图 | 2026-10-13 调研后暂缓。方案是：<br>• sidecar 新增子命令，输出和 Swift 程序一样（深度：8 位灰度图，越近越白；抠图：每个主体一张带透明边的 PNG，加一个清单）；<br>• ONNX Runtime 只用 CPU（约 15MB）。DirectML 已进入维护模式，不再加新功能；Windows ML 能从 Python 调用，但它装的显卡、NPU 加速要 Win11 24H2 及以上；<br>• 深度模型用 Depth Anything V2 Small（Apache-2.0，和 Mac 同一个模型）；<br>• 抠图模型用 BiRefNet_lite（MIT），按连通区域拆成多个主体；<br>• 避开 RMBG-1.4/2.0、ZIM 这类非商用许可的模型。<br>没定的是模型怎么给用户（打进安装包多出约 140–330MB，还是首次使用时下载），以及 CPU 上抠图的速度（M1 Max 的 CPU 上约 4 秒一张） |
+| 人物 | 没开始。和深度、抠图共用 ONNX Runtime；先要确认人脸模型权重的许可证（5.5） |
+| LUT 工具 | Windows 上隐藏（#190）。LUT 的计算是前端代码，不依赖平台，JPG、HEIC 可以直接放开。难在 RAW 的底图：Mac 用 Apple 的渲染，Windows 只能用内嵌 JPEG 或 LibRaw，LibRaw 的渲染发灰，富士、哈苏、松下、大疆的效果会打折扣（`docs/lut-plan.md`） |
+| 相似照片 | Windows 上只比感知哈希（#230），Mac 还比 Vision 的 feature print。Windows 的向量计划用 DINOv2-small（ONNX，约 45MB），和深度、抠图共用 ONNX Runtime（`docs/local-models-plan.md`） |
+| JPEG XL 压缩的 DNG | rawpy 自带的 LibRaw 0.22.1 没有编进 libjxl，编辑和导出只能用内嵌预览的尺寸（测试样例只有 256×144）。编辑器现在会说明这一点（#193），但还是解不了。DNG Converter 的有损压缩、部分 Lightroom 和 iPhone 的 DNG 会用到这种压缩。Mac 上有 Image I/O 兜底 |
+| HEVC 播放要等 | Windows 默认没有 HEVC 解码器，每段视频第一次打开时要先转码（结果有缓存）。开发机上一段 2 秒的 4K 片段要 23–35 秒，家用电脑上应该快得多，要等真机验收。装了微软的 HEVC 视频扩展的电脑上，Chromium 应该能直接解码原片，播放器发现有画面就不会转码，但这一点没实测过 |
 | Windows e2e 进 CI | `windows-e2e` job（#235）只提示不拦合并。改成必须通过之前，要先看几周它是否稳定 |
-| 平台判断收拢 | 能力上报已做（`electron/capabilities.js`），但 `process.platform` 仍分散在约 9 个文件里，也没有 lint 规则（5.4） |
+| 平台判断收拢 | 能力开关已经集中在 `electron/capabilities.js` 和 `shared/capabilities.mjs`，但平台判断还是分散的：Electron 里有 15 个文件直接读 `process.platform`，前端有 11 个文件按 `api.platform` 分支；也没有 lint 规则（5.4） |
 | 自动更新 | Mac 和 Windows 都没有 |
 | 中文字体本地子集、Mica | 体验优化，不阻塞 |
