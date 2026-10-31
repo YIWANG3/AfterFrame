@@ -290,7 +290,7 @@ services/sidecar/src/media_workspace/
 | ✅ 打包和进程：Windows 版 sidecar 构建、`extraResources` 按平台过滤、`windowsHide`、单实例锁、文件选择框（#117、#122、#123、#134、#158） | 2–3 天 |
 | ✅ 路径和文件系统：3.1、3.2 中对用户影响最大的那些（#120、#159、#164） | 3–4 天 |
 | ✅ 中文字体：`Microsoft YaHei` 兜底（#121、#162）；Noto Sans SC 改为本地子集没做 | 0.5–1 天 |
-| ✅ Windows CI：单测全部通过并进了 CI（#124）。e2e 在开发机上能跑（#161、#174），还没进 CI | 2–3 天 |
+| ✅ Windows CI：单测全部通过并进了 CI（#124）。e2e 在开发机上能跑（#161、#174、#208），并进了 CI（#235，只提示不拦合并） | 2–3 天 |
 | 安装包能构建（#178 在 GitHub Actions 上构建并检查）；签名暂不做（第 7 节第 3 条） | 1–2 天，另加证书申请周期 |
 
 ### 阶段 3：补回苹果专属功能（每个约 1–2 周）
@@ -469,7 +469,7 @@ Python 的 34 个：
 | JPEG XL 压缩的 DNG | rawpy 自带的 LibRaw 0.22.1 没有编进 libjxl。缩略图用内嵌预览，没有问题；但编辑和导出会悄悄退回内嵌预览的尺寸（测试样例只有 256×144）。DNG Converter 的有损压缩、部分 Lightroom 和 iPhone 的 DNG 会用到这种压缩。Mac 上有 Image I/O 兜底 |
 | 用外部编辑器打开 | 只扫描 `/Applications`，Windows 上右键菜单里不出现 |
 | 深度、抠图、人物 | 阶段 3，ONNX Runtime |
-| Windows e2e 进 CI | 只在开发机上跑（约 65 分钟）。CI 的 Windows job 只跑单测 |
+| Windows e2e 进 CI | `windows-e2e` job（#235）只提示不拦合并。改成必须通过之前，要先看几周它是否稳定 |
 | 平台判断收拢 | 能力上报已做（`electron/capabilities.js`），但 `process.platform` 仍分散在约 9 个文件里，也没有 lint 规则（5.4） |
 | 自动更新 | Mac 和 Windows 都没有 |
 | 中文字体本地子集、Mica | 体验优化，不阻塞 |
