@@ -55,7 +55,7 @@ function previewJob({ jobId, kind = "preview", assetType = "image", analyzeColor
 
 function aiRepaintJob({
   jobId, provider, inputPath, outputPath, originPath, prompt,
-  aspectRatio, imageSize, temperature, model, baseUrl, apiKey, collectionId,
+  aspectRatio, imageSize, temperature, model, baseUrl, apiKey, collectionId, referencePaths,
 }) {
   const argv = [
     "run-ai-repaint-job",
@@ -73,6 +73,8 @@ function aiRepaintJob({
   pushIf(argv, "--base-url", baseUrl);
   pushIf(argv, "--api-key", apiKey);
   pushIf(argv, "--collection-id", collectionId);
+  // Style reference images (colour / mood to match), one --reference each.
+  for (const ref of referencePaths || []) pushIf(argv, "--reference", ref);
   return argv;
 }
 

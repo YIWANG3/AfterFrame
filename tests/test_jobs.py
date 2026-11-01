@@ -18,12 +18,14 @@ from media_workspace.db import (
     init_db,
     list_active_jobs,
     list_jobs,
+    list_repaint_history,
     request_job_pause,
     request_job_resume,
     set_catalog_path,
 )
 from media_workspace.db.collections import create_collection, delete_collection
 from media_workspace.db.jobs import STALL_MINUTES_BY_JOB_TYPE, STALL_MINUTES_DEFAULT
+from media_workspace.derived import register_image_file
 from media_workspace.job_runner import run_ai_repaint_job, run_enrichment_job, run_import_job
 from media_workspace.scanner import scan_raw_directory
 
@@ -310,6 +312,59 @@ class JobsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AiRepaintReferencesTest(unittest.TestCase):
+    """Reference images are recorded in the job's payload and reach the
+    provider; a reference that is not on disk fails the job with a message
+    that names it, before any provider is called."""
+
+    def test_references_reach_the_provider_and_a_missing_one_fails_the_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            source = root / "shot.jpg"
+            Image.new("RGB", (64, 48), (120, 90, 200)).save(source, quality=90)
+            ref = root / "look.jpg"
+            Image.new("RGB", (64, 48), (250, 200, 180)).save(ref, quality=90)
+            # The photo is an asset of its own, so the repaint joins its version stack.
+            register_image_file(connection, catalog, source)
+
+            job = create_job(connection, "ai_repaint")
+            result = run_ai_repaint_job(
+                connection, catalog.root, job["job_id"], provider="mock",
+                input_path=source, output_path=root / "with-ref.jpg", prompt="p",
+                origin_path=source, reference_paths=[ref],
+            )
+            self.assertTrue(result["asset_id"])
+            row = get_job(connection, job["job_id"])
+            self.assertEqual(row["status"], "succeeded")
+            self.assertEqual(row["payload"]["reference_paths"], [str(ref.resolve())])
+            self.assertIn("look.jpg", json.dumps(row["result"]))
+
+            # The version list knows the result and, given the catalog root,
+            # where its preview is (inside the catalog, when one was made).
+            history = list_repaint_history(connection, str(source.resolve()), catalog_root=catalog.root)
+            self.assertEqual([h["asset_id"] for h in history], [result["asset_id"]])
+            self.assertIn("preview_path", history[0])
+            if history[0]["preview_path"]:
+                self.assertTrue(Path(history[0]["preview_path"]).is_relative_to(catalog.root.resolve()))
+            self.assertIsNone(list_repaint_history(connection, str(source.resolve()))[0]["preview_path"])
+
+            missing = create_job(connection, "ai_repaint")
+            with self.assertRaises(FileNotFoundError):
+                run_ai_repaint_job(
+                    connection, catalog.root, missing["job_id"], provider="mock",
+                    input_path=source, output_path=root / "no-ref.jpg", prompt="p",
+                    origin_path=source, reference_paths=[root / "gone.jpg"],
+                )
+            failed = get_job(connection, missing["job_id"])
+            self.assertEqual(failed["status"], "failed")
+            self.assertIn("gone.jpg", json.dumps(failed))
+            connection.close()
 
 
 class AiRepaintFolderTest(unittest.TestCase):

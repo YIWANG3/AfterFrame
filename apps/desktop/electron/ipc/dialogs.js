@@ -6,6 +6,7 @@
 // it can't slip behind the window and leave it clickable; macOS keeps its
 // free-standing panels.
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { importDialogOptions } = require("../importDialog");
 const { catalogDialogOptions } = require("../catalogDialog");
@@ -25,7 +26,9 @@ function createDialogs({ dialog, BrowserWindow, platform = process.platform }) {
 }
 
 // t(): a translator bound to the current locale. defaultCatalogDir(action):
-// where the open / create catalog dialogs start.
+// where the open / create catalog dialogs start. readAppSettings /
+// updateAppSettings: the app settings file, where the image pickers keep the
+// folder they were last used in (settings.pickerDirs[key]).
 function register({
   ipcMain,
   dialogs,
@@ -34,8 +37,25 @@ function register({
   defaultCatalogDir,
   createCatalogAt,
   addAllowedMediaDir,
+  readAppSettings = () => ({}),
+  updateAppSettings = async () => {},
 }) {
   const { showOpenDialogFor, showSaveDialogFor } = dialogs;
+
+  // The reference-image pickers open where they were last used: macOS only
+  // remembers a panel's folder on its own when nothing else is asked of it,
+  // and a reference is usually one of several in the same folder.
+  function pickerStart(key) {
+    const dir = readAppSettings()?.pickerDirs?.[key];
+    return typeof dir === "string" && dir && fs.existsSync(dir) ? { defaultPath: dir } : {};
+  }
+  function rememberPicker(key, filePath) {
+    const dir = path.dirname(filePath);
+    void updateAppSettings((settings) => ({
+      ...settings,
+      pickerDirs: { ...(settings?.pickerDirs || {}), [key]: dir },
+    }));
+  }
 
   // pick: "files" | "folders" from Import Files… / Import Folder… on Windows and
   // Linux, whose dialogs can't take both (../importDialog.js).
@@ -53,11 +73,29 @@ function register({
       title: "Choose reference image",
       properties: ["openFile"],
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      ...pickerStart("handwritingReference"),
     });
     if (result.canceled || !result.filePaths[0]) return null;
     const filePath = result.filePaths[0];
     addAllowedMediaDir(path.dirname(filePath));
+    rememberPicker("handwritingReference", filePath);
     return filePath;
+  });
+
+  // AI repaint style references: photos whose colours and mood the repaint
+  // should take on. Several at once; each goes to the job as --reference, and
+  // their folders are allowed through media:// for the panel's thumbnails.
+  ipcMain.handle("workspace:pick-repaint-refs", async (event) => {
+    const result = await showOpenDialogFor(event, {
+      title: "Choose reference images",
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "heic", "tif", "tiff"] }],
+      ...pickerStart("repaintReference"),
+    });
+    if (result.canceled || !result.filePaths.length) return [];
+    for (const dir of new Set(result.filePaths.map((p) => path.dirname(p)))) addAllowedMediaDir(dir);
+    rememberPicker("repaintReference", result.filePaths[0]);
+    return result.filePaths;
   });
 
   ipcMain.handle("workspace:pick-catalog", async (event) => {

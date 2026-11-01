@@ -5,6 +5,7 @@ import {
   AlignJustify,
   ChevronDown,
   Columns2,
+  ImagePlus,
   KeyRound,
   Loader2,
   Pencil,
@@ -18,7 +19,7 @@ import {
 import { getProviderType, ProviderModal } from "../ai/providers";
 import { Button, Checkbox, Modal, Select, SliderRow, TextArea, TextInput } from "../../ui";
 import cx from "../../ui/cx";
-import { fileName } from "../../utils/format";
+import { fileName, localFileUrl } from "../../utils/format";
 import { usePref } from "../../hooks/usePref";
 import { bool, numberIn, oneOf, text } from "../../utils/prefs";
 
@@ -43,6 +44,36 @@ const LEGACY_KEY_TO_TYPE = {
   openai_compatible: "openai_compatible",
   jimeng: "jimeng",
 };
+
+// Style references: photos whose colours and mood the repaint should take
+// on. With references and no prompt of the user's own, this is what is sent
+// (the sidecar adds the sentence that says which image is which); the style
+// presets are set aside, since a reference is the look. More than a few
+// references dilute each other and some providers cap the input images.
+const MAX_REFERENCES = 4;
+const REFERENCE_PROMPT =
+  "Re-grade this photograph so that its colour palette, tonal contrast, white balance, saturation, film grain " +
+  "and overall mood match the reference image(s). Keep it a realistic photograph and keep its composition, " +
+  "subjects, geometry and details exactly as they are; change only colour and tone.";
+
+// A small picture of a result or an earlier version, so the list says what
+// each one looks like, not only when it was made. Versions use the catalog's
+// 512 px preview; a fresh result its file. A picture that will not load
+// (folder no longer allowed, file gone) leaves an empty tile.
+function VersionThumb({ src }) {
+  if (!src) return null;
+  return (
+    <span className="flex h-7 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-app/80">
+      <img
+        src={localFileUrl(src)}
+        alt=""
+        className="h-full w-full object-cover"
+        data-testid="repaint-version-thumb"
+        onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
+      />
+    </span>
+  );
+}
 
 const ASPECT_OPTIONS = [
   { value: "auto", label: "Auto" },
@@ -297,6 +328,8 @@ export default function AiRepaintPanel({
   const [aspectRatio, setAspectRatio] = usePref("repaint.aspect", "auto", oneOf(ASPECT_OPTIONS.map((o) => o.value)));
   const [resolution, setResolution] = usePref("repaint.resolution", "4k", oneOf(RESOLUTION_OPTIONS.map((o) => o.value)));
   const [customPrompt, setCustomPrompt] = useState("");
+  // This photo's style references (file paths); not remembered across photos.
+  const [refPaths, setRefPaths] = useState([]);
   const [compactStyles, setCompactStyles] = usePref("repaint.compactStyles", false, bool);
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   const [generateStatus, setGenerateStatus] = useState({ running: false, status: null, error: null });
@@ -634,8 +667,28 @@ export default function AiRepaintPanel({
     setProviderModalState(null);
   }
 
+  // The native picker is a desktop bridge method; the web build has none.
+  const canPickReferences = typeof api.pickRepaintRefs === "function";
+  const hasReferences = refPaths.length > 0;
+
+  async function pickReferences() {
+    const picked = await api.pickRepaintRefs();
+    if (!Array.isArray(picked) || !picked.length) return;
+    setRefPaths((current) => {
+      const next = [...current];
+      for (const p of picked) if (p && !next.includes(p)) next.push(p);
+      return next.slice(0, MAX_REFERENCES);
+    });
+  }
+
+  function removeReference(refPath) {
+    setRefPaths((current) => current.filter((p) => p !== refPath));
+  }
+
   function queueApply() {
-    const effectivePrompt = customPrompt.trim() || selectedStyle?.prompt;
+    // A typed prompt always wins; otherwise references ask for their look,
+    // and without them the chosen style preset is the prompt.
+    const effectivePrompt = customPrompt.trim() || (hasReferences ? REFERENCE_PROMPT : selectedStyle?.prompt);
     if (!isUpscaleModel && !effectivePrompt) return;
     if (!providerConfigured) {
       if (providerInstances.length === 0) {
@@ -661,6 +714,7 @@ export default function AiRepaintPanel({
         temperature,
         model: selectedModel[activeProviderId] || null,
         collectionId: targetCollectionId || null,
+        referencePaths: isUpscaleModel ? [] : refPaths,
       });
       setGenerateStatus({
         running: Boolean(task?.running),
@@ -821,6 +875,51 @@ export default function AiRepaintPanel({
         </CollapsibleSection>
 
         <CollapsibleSection
+          label={t("repaint.reference")}
+          collapsed={collapsedSections.has("reference")}
+          onToggle={() => toggleSection("reference")}
+          className={isUpscaleModel ? "opacity-40 pointer-events-none" : undefined}
+        >
+          <div className="text-[11px] leading-4 text-muted">{t("repaint.referenceHint")}</div>
+          {hasReferences ? (
+            <div className="mt-2 flex flex-wrap gap-2" data-testid="repaint-refs">
+              {refPaths.map((refPath) => (
+                <div
+                  key={refPath}
+                  className="group relative h-14 w-20 overflow-hidden rounded-md border border-border/60 bg-app"
+                  title={fileName(refPath)}
+                >
+                  <img src={localFileUrl(refPath)} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeReference(refPath)}
+                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded bg-app/80 text-muted opacity-0 transition-opacity hover:text-text group-hover:opacity-100"
+                    title={t("repaint.referenceRemove")}
+                    data-testid="repaint-ref-remove"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {canPickReferences && refPaths.length < MAX_REFERENCES ? (
+            <button
+              type="button"
+              onClick={pickReferences}
+              className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-dashed border-border/70 bg-app px-2.5 text-[11px] text-muted transition-colors hover:border-border hover:bg-hover hover:text-text"
+              data-testid="repaint-pick-ref"
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+              {hasReferences ? t("repaint.referenceAddMore") : t("repaint.referencePick")}
+            </button>
+          ) : null}
+          {hasReferences ? (
+            <div className="mt-2 text-[11px] leading-4 text-muted">{t("repaint.referenceActive")}</div>
+          ) : null}
+        </CollapsibleSection>
+
+        <CollapsibleSection
           label={t("repaint.myStyles")}
           collapsed={collapsedSections.has("styles")}
           onToggle={() => toggleSection("styles")}
@@ -885,7 +984,8 @@ export default function AiRepaintPanel({
               )}
             </div>
           </div>
-          <div className={cx("max-h-[200px] overflow-y-auto", compactStyles ? "space-y-0.5" : "space-y-2")}>
+          {/* With references the look comes from them, not a preset. */}
+          <div className={cx("max-h-[200px] overflow-y-auto", compactStyles ? "space-y-0.5" : "space-y-2", hasReferences && "opacity-40 pointer-events-none")}>
             {!styles ? (
               <div className="flex items-center gap-2 py-4 text-[11px] text-muted2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -927,6 +1027,7 @@ export default function AiRepaintPanel({
                       isComparing ? "bg-[rgb(var(--accent-color)/0.12)] text-[rgb(var(--accent-color))]" : "text-muted hover:bg-hover hover:text-text",
                     )}
                   >
+                    <VersionThumb src={r.path} />
                     <span className="min-w-0 flex-1 truncate" title={r.path}>{name}</span>
                     <CompareButtons afterPath={r.path} compareState={compareState} onCompareChange={onCompareChange} t={t} />
                   </div>
@@ -958,6 +1059,7 @@ export default function AiRepaintPanel({
                       >
                         <ChevronDown className={cx("h-3 w-3 transition-transform", !isExpanded && "-rotate-90")} />
                       </button>
+                      <VersionThumb src={h.preview_path || h.output_path} />
                       <span className="min-w-0 flex-1 truncate" title={h.output_path}>{name}</span>
                       <CompareButtons afterPath={h.output_path} compareState={compareState} onCompareChange={onCompareChange} t={t} />
                     </div>
@@ -997,7 +1099,7 @@ export default function AiRepaintPanel({
               "inline-flex h-8 items-center justify-center rounded-md px-3 py-0 text-[12px] font-medium transition-colors",
               generateStatus.running
                 ? "ai-generating-btn text-accentInk"
-                : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim())
+                : providerConfigured && (isUpscaleModel || selectedStyle || customPrompt.trim() || hasReferences)
                   ? "bg-[rgb(var(--accent-color))] text-accentInk hover:brightness-110"
                   : "bg-[rgb(var(--accent-color)/0.18)] text-[rgb(var(--accent-color))]",
             )}

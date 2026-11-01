@@ -18,6 +18,14 @@ class ResidentParserTest(unittest.TestCase):
     def test_the_parser_is_built_once(self) -> None:
         self.assertIs(cli._get_parser(), cli._get_parser())
 
+    def test_repaint_references_are_repeatable_and_optional(self) -> None:
+        parser = cli._get_parser()
+        base = ["--catalog", "/c", "run-ai-repaint-job", "--job-id", "j", "--input", "/in.jpg", "--output", "/out.png", "--prompt", "p"]
+        with_refs = parser.parse_args([*base, "--reference", "/a.jpg", "--reference", "/b.jpg"])
+        # Path objects, not strings: Windows spells these with backslashes.
+        self.assertEqual(with_refs.reference_paths, [Path("/a.jpg"), Path("/b.jpg")])
+        self.assertIsNone(parser.parse_args(base).reference_paths)
+
     def test_a_request_keeps_none_of_the_last_ones_options(self) -> None:
         parser = cli._get_parser()
         first = parser.parse_args(["--catalog", "/c", "generate-previews", "--kind", "preview-hd", "--path", "/a.jpg", "--path", "/b.jpg"])
