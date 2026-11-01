@@ -372,15 +372,6 @@ def _gemini_generate(
     )
 
 
-def _inline_image_part(path: Path) -> dict[str, Any]:
-    return {
-        "inline_data": {
-            "mime_type": _detect_mime_type(path),
-            "data": base64.b64encode(path.read_bytes()).decode("utf-8"),
-        }
-    }
-
-
 # A reference is read for its colours and mood, not its pixels, and the
 # request carries every image inline: a 7 MB export per reference made the
 # upload to Seedream time out. So references travel as JPEGs no longer than
@@ -424,6 +415,41 @@ def _reference_data_url(path: Path) -> str:
     return f"data:{mime};base64," + base64.b64encode(data).decode("utf-8")
 
 
+# No provider here renders above 4K, so pixels past this on the long edge
+# only make the upload bigger: a 4000x2912 export (7 MB) stalled Seedream's
+# write past its timeout. A photo within the limit goes as the file it is.
+SOURCE_MAX_EDGE = 4096
+
+
+def _source_image(path: Path) -> tuple[bytes, str]:
+    """(bytes, mime) to send for the photo being edited: the file itself
+    while its long edge is within SOURCE_MAX_EDGE, else shrunk to it as a
+    high-quality JPEG."""
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(path) as opened:
+            if max(opened.size) <= SOURCE_MAX_EDGE:
+                return path.read_bytes(), _detect_mime_type(path)
+            upright = ImageOps.exif_transpose(opened) or opened
+            picture = upright.convert("RGB")
+            picture.thumbnail((SOURCE_MAX_EDGE, SOURCE_MAX_EDGE))
+            buffer = io.BytesIO()
+            picture.save(buffer, format="JPEG", quality=92)
+    except (ImportError, OSError, ValueError):
+        return path.read_bytes(), _detect_mime_type(path)
+    return buffer.getvalue(), "image/jpeg"
+
+
+def _source_part(path: Path) -> dict[str, Any]:
+    data, mime = _source_image(path)
+    return {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("utf-8")}}
+
+
+def _source_data_url(path: Path) -> str:
+    data, mime = _source_image(path)
+    return f"data:{mime};base64," + base64.b64encode(data).decode("utf-8")
+
+
 def run_gemini_repaint(
     input_path: Path,
     output_path: Path,
@@ -438,7 +464,7 @@ def run_gemini_repaint(
     sent_prompt, refs = _with_references(prompt, reference_paths)
     # The photo comes first, the references after it — the order the note in
     # the prompt describes.
-    parts: list[dict[str, Any]] = [{"text": sent_prompt}, _inline_image_part(input_path)]
+    parts: list[dict[str, Any]] = [{"text": sent_prompt}, _source_part(input_path)]
     parts.extend(_reference_part(ref) for ref in refs)
     return _gemini_generate(
         output_path,
@@ -546,8 +572,7 @@ def run_openai_repaint(
         raise ValueError("Missing OpenAI API key. Set OPENAI_API_KEY or pass --api-key.")
 
     sent_prompt, refs = _with_references(prompt, reference_paths)
-    mime_type = _detect_mime_type(input_path)
-    image_bytes = input_path.read_bytes()
+    image_bytes, mime_type = _source_image(input_path)
 
     # Build multipart/form-data request
     boundary = f"----FormBoundary{base64.b64encode(os.urandom(12)).decode()}"
@@ -736,10 +761,11 @@ def run_jimeng_repaint(
 ) -> RepaintResult:
     vs = _jimeng_client(access_key_id, secret_access_key)
 
-    image_bytes = input_path.read_bytes()
-    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
-
     req_key = model or DEFAULT_JIMENG_MODEL
+    # The upscaler wants every pixel of the original; the others get the
+    # photo within SOURCE_MAX_EDGE like every other provider.
+    image_bytes = input_path.read_bytes() if req_key == "jimeng_i2i_seed3_tilesr_cvtob" else _source_image(input_path)[0]
+    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
     # The upscaler and the inpainter take exactly the images they take; only
     # the image-generation models accept more input images, so the references
     # (and the note about them) apply there alone.
@@ -1047,7 +1073,7 @@ def run_ark_repaint(
     reference_paths: Sequence[Path] | None = None,
 ) -> RepaintResult:
     sent_prompt, refs = _with_references(prompt, reference_paths)
-    photo_url = _file_to_data_url(input_path)
+    photo_url = _source_data_url(input_path)
     image_input: str | list[str] = [photo_url, *(_reference_data_url(ref) for ref in refs)] if refs else photo_url
     return _ark_generate(
         output_path, sent_prompt, api_key=api_key, model=model,

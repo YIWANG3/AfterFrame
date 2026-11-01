@@ -69,6 +69,24 @@ class ReferenceImageTest(unittest.TestCase):
             self.assertEqual(ai_repaint._reference_image(text), (b"not a picture", "text/plain"))
 
 
+class SourceImageTest(unittest.TestCase):
+    """The photo itself goes as the file while it fits SOURCE_MAX_EDGE, and
+    shrunk to that edge (no provider renders larger) when it does not."""
+
+    def test_a_small_source_is_the_file_and_a_large_one_is_shrunk(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            small = _png(root / "small.png", (9, 8, 7))
+            self.assertEqual(ai_repaint._source_image(small), (small.read_bytes(), "image/png"))
+
+            big = root / "big.jpg"
+            Image.new("RGB", (6000, 4000), (30, 60, 90)).save(big, quality=90)
+            data, mime = ai_repaint._source_image(big)
+            self.assertEqual(mime, "image/jpeg")
+            with Image.open(io.BytesIO(data)) as sent:
+                self.assertEqual(sent.size, (ai_repaint.SOURCE_MAX_EDGE, 2731))
+
+
 class ProviderRequestsTest(unittest.TestCase):
     """What each provider is sent when two references ride along."""
 
