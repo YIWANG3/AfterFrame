@@ -15,7 +15,7 @@ export const FORMATS = Object.freeze([
   {"family": "bmp", "kind": "image", "label": "BMP", "extensions": [".bmp"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
   {"family": "heif", "kind": "image", "label": "HEIF", "extensions": [".heic", ".heif", ".hif"], "browserNative": false, "transcodeForBrowser": true, "exportSource": false, "mime": null},
   {"family": "psd", "kind": "image", "label": "Photoshop", "extensions": [".psd"], "browserNative": false, "transcodeForBrowser": true, "exportSource": true, "mime": null},
-  {"family": "tiff", "kind": "image", "label": "TIFF", "extensions": [".tif", ".tiff"], "browserNative": false, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "tiff", "kind": "image", "label": "TIFF", "extensions": [".tif", ".tiff"], "browserNative": false, "transcodeForBrowser": true, "exportSource": true, "mime": null},
   {"family": "3fr", "kind": "raw", "label": "Hasselblad 3FR", "extensions": [".3fr"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
   {"family": "ari", "kind": "raw", "label": "ARRIRAW", "extensions": [".ari"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
   {"family": "arw", "kind": "raw", "label": "Sony ARW", "extensions": [".arw"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
@@ -134,10 +134,10 @@ export const IMPORTABLE_EXTENSIONS = new Set([
 export const MEDIA_RE = /\.(3fr|3gp|ari|arw|avi|avif|bay|bmp|cap|cr2|cr3|crw|dcr|dcs|dng|drf|eip|erf|fff|gif|gpr|heic|heif|hif|iiq|insp|jfif|jpe|jpeg|jpg|k25|kdc|m2ts|m4v|mdc|mef|mkv|mos|mov|mp4|mrw|mts|nef|nrw|orf|pef|png|psd|ptx|pxn|raf|raw|rw2|rwl|rwz|sr2|srf|srw|tif|tiff|webm|webp|x3f)$/i;
 
 // An original an <img> can show over media://, directly or transcoded.
-export const BROWSER_IMAGE_RE = /\.(avif|bmp|gif|heic|heif|hif|insp|jfif|jpe|jpeg|jpg|png|psd|webp)$/i;
+export const BROWSER_IMAGE_RE = /\.(avif|bmp|gif|heic|heif|hif|insp|jfif|jpe|jpeg|jpg|png|psd|tif|tiff|webp)$/i;
 
 // Originals media:// renders to a JPEG before Chromium sees them.
-export const TRANSCODE_RE = /\.(heic|heif|hif|psd)$/i;
+export const TRANSCODE_RE = /\.(heic|heif|hif|psd|tif|tiff)$/i;
 
 export const VIDEO_MIME = Object.freeze({
   ".3gp": "video/3gpp",

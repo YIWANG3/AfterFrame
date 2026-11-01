@@ -43,6 +43,10 @@ _RAW_DECODE_HD_EDGE = 8000
 _RAW_EMBEDDED_MIN_EDGE = {"preview": 512, "preview-hd": 2000}
 
 _PREVIEW_JPEG_QUALITY = 90  # sips-sized files (~46 KB vs 49 KB for a 512px preview)
+# The render that stands in for a HEIF, PSD or TIFF original in the lightbox
+# and the editor (transcode_to_jpeg): near-lossless, as Electron asks sips
+# for on macOS (electron/media/protocol.js).
+TRANSCODE_JPEG_QUALITY = 95
 _ORIENTATION_TAG = 0x0112
 
 # These are the user's own photos, not untrusted uploads: a 200-megapixel
@@ -78,6 +82,7 @@ def render_pillow_preview(
     orientation: int | None = None,
     icc_profile: bytes | None = None,
     exif: bytes | None = None,
+    quality: int = _PREVIEW_JPEG_QUALITY,
 ) -> None:
     """A JPEG with the long edge at most `size`, matching what sips -Z gave:
 
@@ -112,7 +117,7 @@ def render_pillow_preview(
         else:
             frame = image.convert("RGB")
     frame.thumbnail((size, size), Image.Resampling.LANCZOS)
-    options: dict = {"quality": _PREVIEW_JPEG_QUALITY}
+    options: dict = {"quality": quality}
     if icc_profile and _profile_space(icc_profile) == "RGB ":
         options["icc_profile"] = icc_profile
     if exif:
@@ -248,14 +253,16 @@ def render_raw_full(source: Path, target: Path) -> str:
         partial.unlink(missing_ok=True)
 
 
-def transcode_to_jpeg(source: Path, target: Path) -> None:
+def transcode_to_jpeg(source: Path, target: Path, quality: int = TRANSCODE_JPEG_QUALITY) -> None:
     """The full-size JPEG Electron shows in place of an original the renderer
-    can't decode: HEIC/HEIF where there is no sips (Windows). Same handling as
-    previews (orientation tag, ICC profile, transparency), and written beside
-    the target then renamed in, so a concurrent reader never sees half a file."""
+    can't decode (HEIF, PSD, TIFF: the registry's `transcode_for_browser`)
+    where there is no sips (Windows). Same handling as previews (orientation
+    tag, ICC profile, transparency, 16-bit and CMYK), near-lossless since the
+    editor works from it too, and written beside the target then renamed in,
+    so a concurrent reader never sees half a file."""
     partial = target.with_name(f".{target.name}.{os.getpid()}.partial")
     try:
-        render_pillow_preview(source, partial, _JPEG_MAX_EDGE)
+        render_pillow_preview(source, partial, _JPEG_MAX_EDGE, quality=quality)
         os.replace(partial, target)
     finally:
         partial.unlink(missing_ok=True)

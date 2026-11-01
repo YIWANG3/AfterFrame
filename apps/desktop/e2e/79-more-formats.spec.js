@@ -2,13 +2,15 @@
 // stills under Canon's .HIF and the generic .heif, a Photoshop file, GIF and
 // BMP, a JPEG under one of its other names, and AVCHD / 3GP clips. Each
 // imports with the kind its registry row says and gets a real preview; the
-// PSD reaches the lightbox through the same JPEG transcode as HEIC (37), and
+// PSD and a TIFF (P1c) reach the lightbox through the same JPEG render as
+// HEIC (37), and
 // the AVCHD clip opens in the video player (AVPlayer reads MPEG-TS on macOS;
 // elsewhere Chromium can't, and the H.264 proxy takes over as for HEVC in 14).
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const sharp = require("sharp");
 const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 
@@ -17,7 +19,7 @@ const HEIC = path.join(FIXTURES, "heic", "iphone-style.heic");
 const JPEG = path.join(FIXTURES, "test-image.jpg");
 const FORMATS = path.join(FIXTURES, "formats");
 
-// name in the import folder → [fixture, expected asset_type]
+// name in the import folder → [fixture (null: made below), expected asset_type]
 const FILES = {
   "canonstill.HIF": [HEIC, "image"],
   "genericstill.heif": [HEIC, "image"],
@@ -25,6 +27,7 @@ const FILES = {
   "pixelgif.gif": [path.join(FORMATS, "pixel.gif"), "image"],
   "pixelbmp.bmp": [path.join(FORMATS, "pixel.bmp"), "image"],
   "panorama.insp": [JPEG, "image"],
+  "scantiff.tif": [null, "image"],
   "camcorder.MTS": [path.join(FORMATS, "clip.mts"), "video"],
   "oldphone.3gp": [path.join(FORMATS, "clip.3gp"), "video"],
 };
@@ -43,7 +46,10 @@ async function assetNamed(name) {
 
 test.beforeAll(async () => {
   importDir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-formats-"));
-  for (const [name, [fixture]] of Object.entries(FILES)) fs.copyFileSync(fixture, path.join(importDir, name));
+  for (const [name, [fixture]] of Object.entries(FILES)) if (fixture) fs.copyFileSync(fixture, path.join(importDir, name));
+  // A scanner's 16-bit TIFF, the kind no browser decodes.
+  await sharp({ create: { width: 320, height: 200, channels: 3, background: { r: 180, g: 120, b: 60 } } })
+    .toColourspace("rgb16").tiff({ compression: "lzw" }).toFile(path.join(importDir, "scantiff.tif"));
   ctx = await launchApp({ testName: "more-formats" });
   await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
@@ -72,20 +78,30 @@ test("every added format imports as its kind, with a rendered preview", async ()
   expect(hif.image_metadata).toMatchObject({ camera_make: "Canon", camera_model: "Canon EOS R6m2" });
 });
 
-test("the lightbox shows a PSD's original through the JPEG transcode", async () => {
-  const { asset_id: assetId } = await assetNamed("layeredpsd.psd");
-  await callTool("show_in_app", { asset_ids: [assetId] });
-  const card = ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${assetId}"]`);
-  await expect(card).toBeVisible({ timeout: 5_000 });
-  await card.dblclick();
+// The detail layer asks for the original itself; media:// answers with a
+// full-size JPEG render of it, cached under userData.
+for (const [name, width] of [["layeredpsd.psd", 320], ["scantiff.tif", 320]]) {
+  test(`the lightbox shows the original of ${name} through the JPEG render`, async () => {
+    const { asset_id: assetId } = await assetNamed(name);
+    await callTool("show_in_app", { asset_ids: [assetId] });
+    const card = ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${assetId}"]`);
+    await expect(card).toBeVisible({ timeout: 5_000 });
+    await card.dblclick();
 
-  const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
-  const detail = viewport.locator("[data-lightbox-layer='detail']");
-  // The detail layer asks for the .psd itself; media:// answers with a JPEG.
-  await expect(detail).toHaveAttribute("src", /layeredpsd\.psd/);
-  await expect(detail).toHaveCSS("visibility", "visible", { timeout: 10_000 });
-  await expect.poll(() => detail.evaluate((img) => img.naturalWidth), { timeout: 10_000 }).toBe(320);
-  await ctx.window.keyboard.press("Escape");
+    const viewport = ctx.window.locator("[data-lightbox-viewport='true']");
+    const detail = viewport.locator("[data-lightbox-layer='detail']");
+    await expect(detail).toHaveAttribute("src", new RegExp(name.replace(".", "\\.")));
+    await expect(detail).toHaveCSS("visibility", "visible", { timeout: 10_000 });
+    await expect.poll(() => detail.evaluate((img) => img.naturalWidth), { timeout: 10_000 }).toBe(width);
+    await ctx.window.keyboard.press("Escape");
+  });
+}
+
+test("the renders sit in one cache under userData, not the temp folder", async () => {
+  const cache = path.join(ctx.userDataDir, "transcode-cache");
+  const renders = fs.readdirSync(cache).filter((file) => file.endsWith(".jpg") && !file.startsWith("."));
+  expect(renders.length).toBeGreaterThanOrEqual(2);
+  expect(fs.existsSync(path.join(os.tmpdir(), "afterframe-heic-cache"))).toBe(false);
 });
 
 test("an AVCHD clip opens in the video player with its duration", async () => {

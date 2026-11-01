@@ -56,6 +56,13 @@ export function needsBrowserTranscode(filePath) {
   return TRANSCODE_RE.test(String(filePath || ""));
 }
 
+// Whether Chromium decodes this original itself: cheap enough for a gallery
+// card to show in place of a missing thumbnail. A transcoded original is not:
+// that is a full-size render per card.
+export function browserDecodesOriginal(filePath) {
+  return browserShowsOriginal(filePath) && !needsBrowserTranscode(filePath);
+}
+
 // What the video range server answers with.
 export function videoMime(filePath) {
   return VIDEO_MIME[extensionOf(filePath)] || "application/octet-stream";

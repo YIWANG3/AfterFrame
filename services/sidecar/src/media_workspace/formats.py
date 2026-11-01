@@ -15,7 +15,7 @@ A row is one format family (JPEG, with .jpg/.jpeg/...), with:
 - `browser_native`: Chromium decodes the original itself, so the lightbox and
   the editor can load it over media://;
 - `transcode_for_browser`: Chromium can't, but media:// renders it to a JPEG
-  first (HEIF, PSD); the lightbox treats these as showable too;
+  first (HEIF, PSD, TIFF); the lightbox treats these as showable too;
 - `export_source`: Pillow reads it well enough to be the source of a crop,
   a text overlay or a transcoded export (derived.py);
 - `mime`: the type the video range server answers with.
@@ -128,8 +128,9 @@ _IMAGE_FORMATS: tuple[MediaFormat, ...] = (
     # without one, "Maximize Compatibility" off, fails to render). Shown through
     # the same transcode as HEIF. .psb is not read.
     MediaFormat("psd", "image", "Photoshop", (".psd",), transcode_for_browser=True, export_source=True),
-    # No browser decodes TIFF, so a TIFF's lightbox ceiling is its HD preview.
-    MediaFormat("tiff", "image", "TIFF", (".tif", ".tiff"), export_source=True),
+    # No browser decodes TIFF either: the lightbox and the editor get the same
+    # JPEG render as HEIF (a 16-bit or CMYK scan comes out as 8-bit sRGB).
+    MediaFormat("tiff", "image", "TIFF", (".tif", ".tiff"), transcode_for_browser=True, export_source=True),
 )
 
 _VIDEO_FORMATS: tuple[MediaFormat, ...] = (

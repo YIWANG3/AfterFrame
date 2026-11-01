@@ -118,6 +118,8 @@
     "stickerLibraryHint": "抠出的贴纸及其缩略图。删除会移除已保存的贴纸。",
     "videoProxies": "视频播放代理",
     "videoProxiesHint": "为播放器无法解码的片段(如 10-bit HEVC)转码的 H.264 版本。可放心删除，需要时会重新生成。",
+    "renders": "原图渲染",
+    "rendersHint": "打开 HEIF、PSD、TIFF 原图时生成的全尺寸 JPEG，只保留最近的 1 GB。可放心删除，需要时会重新生成。",
     "openFolder": "在访达中打开",
     "lutTitle": "LUT",
     "lutSubtitle": "编辑器里的 LUT 工具用。所有图库共用。",

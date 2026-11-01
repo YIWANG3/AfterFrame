@@ -118,6 +118,8 @@
     "stickerLibraryHint": "Extracted stickers and their thumbnails. Deleting removes saved stickers.",
     "videoProxies": "Video playback proxies",
     "videoProxiesHint": "H.264 versions transcoded for clips the player can't decode (e.g. 10-bit HEVC). Safe to delete — regenerated when needed.",
+    "renders": "Rendered originals",
+    "rendersHint": "Full-size JPEGs of HEIF, PSD and TIFF originals, made when one is opened. Keeps the most recent 1 GB. Safe to delete — regenerated when needed.",
     "openFolder": "Open in Finder",
     "lutTitle": "LUTs",
     "lutSubtitle": "For the editor's LUT tool. Shared by every catalog.",
