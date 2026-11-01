@@ -1,6 +1,6 @@
 # 文件格式支持：对照 Eagle 的差距与格式注册表重构
 
-> **状态（2026-11-01）**：P0（纯重构，#242）、P1a（加格式，#243，PSD 走和 HEIF 一样的转码而不是 HD 预览）、P1b（不支持的文件有交代，#244）已合并；P1c（原图统一，见 4.5 节的实际做法）已实现；P2 未开工。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
+> **状态（2026-11-01）**：P0（纯重构，#242）、P1a（加格式，#243，PSD 走和 HEIF 一样的转码而不是 HD 预览）、P1b（不支持的文件有交代，#244）、P1c（原图统一，#245，见 4.5 节的实际做法）已合并；P2 的格式 facet 按家族聚合是 #246（4.6 节的实际做法，不加列）；JXL、`.xmp` 边车评分、`.mxf` 各自单独评估，未开工。第 6 节的五条都已按建议定下：只报不收、JPEG 95 + ICC、PSD 进 P1a、Dock 表继续用测试守约、HEIF 家族合并显示。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
 
 ## 0. 结论
 
@@ -228,8 +228,8 @@ schema 加一列 `format TEXT`（迁移时按扩展名回填，`.tif` 走一次�
 | **P1a 加格式** | 图像：heif、hif、psd、gif、bmp、jfif、jpe、insp；视频：mts、m2ts、3gp。每个都要：Pillow / ffprobe 冒烟（Mac + Windows 盒子）、Dock 类型、`showsOriginal` 行为、e2e 夹具（37-heic-import 扩成 HEIF 家族；PSD 和 MTS 各一个小夹具，MTS 用 ffmpeg 合成，和 70-native-video 的 ProRes 同法） | 1.5 天 | 一个 PR 一类格式，不叠 PR |
 | **P1b 交代不支持** | `skipped_unsupported / skipped_companion` 计数、toast + JobDock 详情、渲染层不再把单文件注册成根、Settings → Library 的"支持的格式"面板（从注册表生成，按当前平台标注） | 1.5 天 | e2e：丢一个 `.docx` 进去有 toast；只丢伴生文件没有 toast |
 | **P1c 原图统一** | 4.5 节：`transcode_for_browser` 驱动的 JPEG 95 渲染（TIFF 加入），缓存从临时目录搬到 userData 并限额，删 HEIC 特判 | 2 天 | 37-heic-import、35-raw-import、e2e/11 的 tif 重试不变；79 多出 TIFF 的 Lightbox 用例 |
-| **P2** | `assets.format` 列 + facet 按 family + MCP 参数；JXL（评估 `pillow-jxl-plugin` 打包）；`.xmp` 边车评分；`.mxf` | 2 到 3 天，可拆 | — |
-| **文档** | README 的格式段落改为指向 Settings 面板一句话；`docs/README.md` 加本文 | 0.5 天 | — |
+| **P2** | facet 按家族（4.6 节，不加列）+ MCP `asset_type` enum 修正：#246；JXL（评估 `pillow-jxl-plugin` 打包）、`.xmp` 边车评分、`.mxf`：各自单独评估、单独 PR | 2 到 3 天，可拆 | 47 / 48 / 53 的格式选项从 "JPG" 变成 jpeg（显示 JPEG）；51 的老规则 "jpg" 仍显示 JPG |
+| **文档** | README 的格式段落改为指向 Settings 面板一句话；`docs/README.md` 的状态行 | 0.5 天 | 已做 |
 
 P0 是其余所有期的前提；P1a / P1b / P1c 互不依赖，可以并行；P2 依赖 P0。总计约一周到一周半。
 
