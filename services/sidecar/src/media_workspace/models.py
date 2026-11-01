@@ -39,6 +39,9 @@ class _FileMetadata:
     # Keyword-only with a default: older constructors do not pass it, and a
     # subclass can still add required fields after it.
     lens_make: str | None = field(default=None, kw_only=True)
+    # The XMP sidecar's mtime when the file had one: what changed-media
+    # compares to notice a Lightroom re-rating of an otherwise untouched RAW.
+    sidecar_modified_time: str | None = field(default=None, kw_only=True)
 
     @property
     def aspect_ratio(self) -> float | None:

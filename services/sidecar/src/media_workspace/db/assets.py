@@ -65,6 +65,7 @@ def _file_metadata_fields(metadata: RawMetadata | ImageCandidate) -> dict[str, A
         "stem_key": metadata.stem_key,
         "file_size": metadata.file_size,
         "modified_time": metadata.modified_time,
+        "sidecar_modified_time": metadata.sidecar_modified_time,
     }
 
 
@@ -79,9 +80,11 @@ def _upsert_asset_row(
     """The assets row and its primary asset_files row, for any media type.
 
     A re-import refreshes the file's stats and metadata and marks it present
-    again, but never overwrites a rating the user set in the app (COALESCE);
-    `app_rating` is the file's embedded rating, the value a first import
-    starts from (videos carry none)."""
+    again. `app_rating` is the file's own stars (embedded, or its XMP
+    sidecar's; videos carry none): a first import starts from them, and a
+    re-import follows them only while the app's rating still is what the
+    file said last time (metadata_json.rating). A rating the user set or
+    cleared in the app differs from that, so it stays."""
     connection.execute(
         """
         INSERT INTO assets (
@@ -98,7 +101,10 @@ def _upsert_asset_row(
             file_size = excluded.file_size,
             modified_time = excluded.modified_time,
             metadata_json = excluded.metadata_json,
-            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
+            app_rating = CASE
+                WHEN assets.app_rating IS json_extract(assets.metadata_json, '$.rating') THEN excluded.app_rating
+                ELSE assets.app_rating
+            END,
             exists_on_disk = 1,
             updated_at = CURRENT_TIMESTAMP
         """,

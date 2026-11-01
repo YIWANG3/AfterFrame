@@ -16,6 +16,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 from PIL import Image
 
@@ -167,6 +168,7 @@ FIELDS = (
     "gps_longitude",
     "width",
     "height",
+    "sidecar_modified_time",
 )
 # What the RAW matcher needs; the rest waits for enrichment.
 MATCHER_FIELDS = ("capture_time", "camera_make", "camera_model")
@@ -377,10 +379,52 @@ def _from_pillow(path: Path) -> dict[str, Any]:
     }
 
 
+_XMP_NS = "http://ns.adobe.com/xap/1.0/"
+
+
+def sidecar_path(path: Path) -> Path | None:
+    """The XMP sidecar beside `path`, if there is one: IMG.xmp (Lightroom,
+    Bridge, Camera Raw) or IMG.CR2.xmp (darktable), in either case of the
+    extension (Windows and most Macs don't tell them apart, Linux does)."""
+    for stem in (path.with_suffix(""), path):
+        for extension in (".xmp", ".XMP"):
+            candidate = stem.with_name(stem.name + extension)
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def sidecar_rating(sidecar: Path) -> int | None:
+    """The stars an XMP sidecar gives its photo: xmp:Rating as an attribute
+    of rdf:Description (how Adobe writes it) or as an element, 0 to 5. None
+    when the sidecar has no rating or isn't XMP, and for Bridge's and
+    darktable's -1: that marks a rejected photo, not a star count, and the
+    flag here is the user's own."""
+    try:
+        root = ElementTree.parse(sidecar).getroot()
+    except (OSError, ElementTree.ParseError):
+        return None
+    tag = f"{{{_XMP_NS}}}Rating"
+    for element in root.iter():
+        value = element.get(tag)
+        if value is None and element.tag == tag:
+            value = element.text
+        if value is None:
+            continue
+        try:
+            rating = int(float(str(value).strip()))
+        except ValueError:
+            return None
+        return rating if 0 <= rating <= 5 else None
+    return None
+
+
 def read_metadata(path: Path, profile: str = "full", raw: bool = False) -> dict[str, Any]:
     """The catalog's metadata fields for `path`, None where unknown. A RAW's
     size is LibRaw's, cropped to the image the camera delivers: ExifTool's
-    includes the sensor's margins for some formats (ARW, NEF, DNG)."""
+    includes the sensor's margins for some formats (ARW, NEF, DNG). An XMP
+    sidecar's stars beat the ones embedded in the file: Lightroom writes
+    the sidecar, the camera wrote the file."""
     if profile not in RAW_METADATA_PROFILES:
         raise ValueError(f"unsupported metadata profile: {profile}")
     found: dict[str, Any] = {}
@@ -393,6 +437,13 @@ def read_metadata(path: Path, profile: str = "full", raw: bool = False) -> dict[
         found = _from_exiftool(tags)
     elif not raw:
         found = _from_pillow(path)
+    if profile == "full":
+        sidecar = sidecar_path(path)
+        if sidecar is not None:
+            found["sidecar_modified_time"] = iso_mtime(sidecar)
+            rating = sidecar_rating(sidecar)
+            if rating is not None:
+                found["rating"] = rating
     if raw and profile == "full":
         info = raw_decode.raw_info(path)
         if info:
