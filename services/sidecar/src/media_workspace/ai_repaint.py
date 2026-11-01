@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -254,16 +255,57 @@ def _extract_data_image(payload: dict, provider_label: str) -> tuple[bytes, str]
     raise RuntimeError(f"{provider_label} response missing both b64_json and url.")
 
 
-def run_mock_repaint(input_path: Path, output_path: Path, prompt: str) -> RepaintResult:
+def reference_note(count: int) -> str:
+    """The sentence appended to a repaint prompt when reference images ride
+    along. Every provider receives the photo first and the references after
+    it, and none of them labels its inputs, so the prompt has to say which
+    image is which and what the references are for (colour and mood, not
+    content)."""
+    if count == 1:
+        which = "The second image is a style reference"
+        its = "its"
+        them = "the reference image"
+    else:
+        which = f"The following {count} images are style references"
+        its = "their"
+        them = "the reference images"
+    return (
+        f"\n\nThe first image is the photo to edit. {which}: match {its} colour palette, tonal contrast, "
+        f"white balance, saturation, film grain and overall mood as closely as possible, while keeping the "
+        f"first photo's composition, subjects, geometry and details exactly as they are. Do not copy any "
+        f"objects, people or scenery from {them}."
+    )
+
+
+def _with_references(prompt: str, reference_paths: Sequence[Path] | None) -> tuple[str, list[Path]]:
+    """(prompt to send, reference files): the prompt grows the note above
+    when there are references, and is left alone when there are none."""
+    refs = [Path(p) for p in (reference_paths or [])]
+    if not refs:
+        return prompt, []
+    return prompt + reference_note(len(refs)), refs
+
+
+def run_mock_repaint(
+    input_path: Path,
+    output_path: Path,
+    prompt: str,
+    *,
+    reference_paths: Sequence[Path] | None = None,
+) -> RepaintResult:
+    sent_prompt, refs = _with_references(prompt, reference_paths)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(input_path, output_path)
+    notes = ["Mock mode copied the input image to validate the local repaint flow."]
+    if refs:
+        notes.append(f"Mock mode received {len(refs)} reference image(s): " + ", ".join(p.name for p in refs))
     return RepaintResult(
         provider="mock",
         model="mock-pass-through",
         output_path=str(output_path),
         mime_type=_detect_mime_type(input_path),
-        prompt=prompt,
-        notes=["Mock mode copied the input image to validate the local repaint flow."],
+        prompt=sent_prompt,
+        notes=notes,
     )
 
 
@@ -329,6 +371,15 @@ def _gemini_generate(
     )
 
 
+def _inline_image_part(path: Path) -> dict[str, Any]:
+    return {
+        "inline_data": {
+            "mime_type": _detect_mime_type(path),
+            "data": base64.b64encode(path.read_bytes()).decode("utf-8"),
+        }
+    }
+
+
 def run_gemini_repaint(
     input_path: Path,
     output_path: Path,
@@ -338,19 +389,16 @@ def run_gemini_repaint(
     model: str = DEFAULT_GEMINI_MODEL,
     aspect_ratio: str | None = None,
     image_size: str | None = None,
+    reference_paths: Sequence[Path] | None = None,
 ) -> RepaintResult:
-    parts: list[dict[str, Any]] = [
-        {"text": prompt},
-        {
-            "inline_data": {
-                "mime_type": _detect_mime_type(input_path),
-                "data": base64.b64encode(input_path.read_bytes()).decode("utf-8"),
-            }
-        },
-    ]
+    sent_prompt, refs = _with_references(prompt, reference_paths)
+    # The photo comes first, the references after it — the order the note in
+    # the prompt describes.
+    parts: list[dict[str, Any]] = [{"text": sent_prompt}, _inline_image_part(input_path)]
+    parts.extend(_inline_image_part(ref) for ref in refs)
     return _gemini_generate(
         output_path,
-        prompt,
+        sent_prompt,
         api_key=api_key,
         model=model,
         parts=parts,
@@ -369,6 +417,7 @@ def run_nanobanana_repaint(
     model: str = DEFAULT_GEMINI_MODEL,
     aspect_ratio: str | None = None,
     image_size: str | None = None,
+    reference_paths: Sequence[Path] | None = None,
 ) -> RepaintResult:
     result = run_gemini_repaint(
         input_path=input_path,
@@ -378,6 +427,7 @@ def run_nanobanana_repaint(
         model=model,
         aspect_ratio=aspect_ratio,
         image_size=image_size,
+        reference_paths=reference_paths,
     )
     return RepaintResult(
         provider=NANOBANANA_PROVIDER,
@@ -445,11 +495,13 @@ def run_openai_repaint(
     aspect_ratio: str | None = None,
     image_size: str | None = None,
     base_url: str = OPENAI_API_BASE,
+    reference_paths: Sequence[Path] | None = None,
 ) -> RepaintResult:
     effective_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not effective_key:
         raise ValueError("Missing OpenAI API key. Set OPENAI_API_KEY or pass --api-key.")
 
+    sent_prompt, refs = _with_references(prompt, reference_paths)
     mime_type = _detect_mime_type(input_path)
     image_bytes = input_path.read_bytes()
 
@@ -474,8 +526,12 @@ def run_openai_repaint(
         )
 
     _add_field("model", model)
-    _add_field("prompt", prompt)
+    _add_field("prompt", sent_prompt)
+    # The edits endpoint takes several `image[]` parts; the first is the photo
+    # the prompt's note calls "the first image", the rest are the references.
     _add_file("image[]", input_path.name, image_bytes, mime_type)
+    for ref in refs:
+        _add_file("image[]", ref.name, ref.read_bytes(), _detect_mime_type(ref))
 
     size = _openai_size_from_resolution(aspect_ratio)
     _add_field("size", size)
@@ -488,7 +544,7 @@ def run_openai_repaint(
         data=body,
         output_path=output_path,
         model=model,
-        prompt=prompt,
+        prompt=sent_prompt,
     )
 
 
@@ -631,6 +687,7 @@ def run_jimeng_repaint(
     aspect_ratio: str | None = None,
     image_size: str | None = None,
     scale: float | None = None,
+    reference_paths: Sequence[Path] | None = None,
 ) -> RepaintResult:
     vs = _jimeng_client(access_key_id, secret_access_key)
 
@@ -638,11 +695,16 @@ def run_jimeng_repaint(
     img_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
     req_key = model or DEFAULT_JIMENG_MODEL
+    # The upscaler and the inpainter take exactly the images they take; only
+    # the image-generation models accept more input images, so the references
+    # (and the note about them) apply there alone.
+    takes_references = req_key not in ("jimeng_i2i_seed3_tilesr_cvtob", "jimeng_image2image_dream_inpaint")
+    sent_prompt, refs = _with_references(prompt, reference_paths if takes_references else None)
 
     # Build submit payload based on model type
     submit_body: dict[str, Any] = {
         "req_key": req_key,
-        "prompt": prompt,
+        "prompt": sent_prompt,
     }
 
     if req_key == "jimeng_i2i_seed3_tilesr_cvtob":
@@ -662,8 +724,9 @@ def run_jimeng_repaint(
         mask_b64 = base64.b64encode(mask_png).decode("utf-8")
         submit_body["binary_data_base64"] = [img_b64, mask_b64]
     else:
-        # 图片生成 4.0 / 4.6 — image-to-image via binary_data_base64
-        submit_body["binary_data_base64"] = [img_b64]
+        # 图片生成 4.0 / 4.6 — image-to-image via binary_data_base64; the photo
+        # first, then the references, as the prompt's note says.
+        submit_body["binary_data_base64"] = [img_b64] + [base64.b64encode(ref.read_bytes()).decode("utf-8") for ref in refs]
         submit_body["force_single"] = True
         size_params = _jimeng_size_params(aspect_ratio, image_size)
         submit_body.update(size_params)
@@ -678,7 +741,7 @@ def run_jimeng_repaint(
         model=req_key,
         output_path=str(written_path),
         mime_type=output_mime,
-        prompt=prompt,
+        prompt=sent_prompt,
         notes=[],
     )
 
@@ -866,7 +929,7 @@ def _ark_generate(
     model: str,
     aspect_ratio: str | None,
     image_size: str | None = None,
-    image_input: str | None = None,
+    image_input: str | list[str] | None = None,
 ) -> RepaintResult:
     effective_key = api_key or os.environ.get("ARK_API_KEY")
     if not effective_key:
@@ -879,6 +942,8 @@ def _ark_generate(
         "response_format": "b64_json",
         "watermark": False,
     }
+    # Seedream takes one image as a string and several as a list (the photo
+    # first, then the references).
     if image_input:
         body["image"] = image_input
 
@@ -934,11 +999,15 @@ def run_ark_repaint(
     model: str = DEFAULT_ARK_MODEL,
     aspect_ratio: str | None = None,
     image_size: str | None = None,
+    reference_paths: Sequence[Path] | None = None,
 ) -> RepaintResult:
+    sent_prompt, refs = _with_references(prompt, reference_paths)
+    photo_url = _file_to_data_url(input_path)
+    image_input: str | list[str] = [photo_url, *(_file_to_data_url(ref) for ref in refs)] if refs else photo_url
     return _ark_generate(
-        output_path, prompt, api_key=api_key, model=model,
+        output_path, sent_prompt, api_key=api_key, model=model,
         aspect_ratio=aspect_ratio, image_size=image_size,
-        image_input=_file_to_data_url(input_path),
+        image_input=image_input,
     )
 
 

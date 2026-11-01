@@ -312,6 +312,48 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class AiRepaintReferencesTest(unittest.TestCase):
+    """Reference images are recorded in the job's payload and reach the
+    provider; a reference that is not on disk fails the job with a message
+    that names it, before any provider is called."""
+
+    def test_references_reach_the_provider_and_a_missing_one_fails_the_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = ensure_catalog(root / "demo.afcatalog")
+            connection = connect(catalog.db_path)
+            init_db(connection)
+            set_catalog_path(connection, catalog.root)
+            source = root / "shot.jpg"
+            Image.new("RGB", (64, 48), (120, 90, 200)).save(source, quality=90)
+            ref = root / "look.jpg"
+            Image.new("RGB", (64, 48), (250, 200, 180)).save(ref, quality=90)
+
+            job = create_job(connection, "ai_repaint")
+            result = run_ai_repaint_job(
+                connection, catalog.root, job["job_id"], provider="mock",
+                input_path=source, output_path=root / "with-ref.jpg", prompt="p",
+                origin_path=source, reference_paths=[ref],
+            )
+            self.assertTrue(result["asset_id"])
+            row = get_job(connection, job["job_id"])
+            self.assertEqual(row["status"], "succeeded")
+            self.assertEqual(row["payload"]["reference_paths"], [str(ref.resolve())])
+            self.assertIn("look.jpg", json.dumps(row["result"]))
+
+            missing = create_job(connection, "ai_repaint")
+            with self.assertRaises(FileNotFoundError):
+                run_ai_repaint_job(
+                    connection, catalog.root, missing["job_id"], provider="mock",
+                    input_path=source, output_path=root / "no-ref.jpg", prompt="p",
+                    origin_path=source, reference_paths=[root / "gone.jpg"],
+                )
+            failed = get_job(connection, missing["job_id"])
+            self.assertEqual(failed["status"], "failed")
+            self.assertIn("gone.jpg", json.dumps(failed))
+            connection.close()
+
+
 class AiRepaintFolderTest(unittest.TestCase):
     """A repaint started from a folder, its "add to folder" box ticked, joins
     that folder. The job does it, not the editor: the editor may be closed by

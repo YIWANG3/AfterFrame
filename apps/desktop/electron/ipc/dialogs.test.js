@@ -67,6 +67,14 @@ test("pick-handwriting-ref: the file's folder is allowed through media://", asyn
   assert.equal(await registered({ canceled: true }).handlers.get("workspace:pick-handwriting-ref")(event), null);
 });
 
+test("pick-repaint-refs: several images at once, each folder allowed through media://, [] when cancelled", async () => {
+  const picked = registered({ canceled: false, filePaths: ["/refs/a.jpg", "/refs/b.png", "/other/c.jpg"] });
+  assert.deepEqual(await picked.handlers.get("workspace:pick-repaint-refs")(event), ["/refs/a.jpg", "/refs/b.png", "/other/c.jpg"]);
+  assert.deepEqual(picked.allowed, ["/refs", "/other"]);
+  assert.ok(picked.calls[0][1].properties.includes("multiSelections"));
+  assert.deepEqual(await registered({ canceled: true }).handlers.get("workspace:pick-repaint-refs")(event), []);
+});
+
 test("pick-catalog / create-catalog: start in the given folder; create goes through the catalog's path rules", async () => {
   const opened = registered({ canceled: false, filePaths: ["/libs/a.afcatalog"] });
   assert.equal(await opened.handlers.get("workspace:pick-catalog")(event), "/libs/a.afcatalog");

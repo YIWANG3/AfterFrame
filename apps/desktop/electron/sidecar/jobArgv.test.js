@@ -77,7 +77,7 @@ const CASES = [
     full: {
       jobId: "j1", provider: "mock", inputPath: "/in.jpg", outputPath: "/out.png", originPath: "/orig.cr3", prompt: "p",
       aspectRatio: "1:1", imageSize: "2K", temperature: 0.5, model: "m", baseUrl: "https://x", apiKey: "k",
-      collectionId: "c",
+      collectionId: "c", referencePaths: ["/ref1.jpg", "/ref2.jpg"],
     },
   },
   {
@@ -150,6 +150,14 @@ test("optional values are omitted when empty, kept when set", () => {
   const repaint = jobArgv.aiRepaintJob({ jobId: "j", provider: "mock", inputPath: "/i", outputPath: "/o", prompt: "p", temperature: 0 });
   assert.ok(repaint.includes("--temperature"), "temperature 0 is a real value, not 'unset'");
   assert.equal(repaint[repaint.indexOf("--origin-path") + 1], "/i", "origin defaults to the input path");
+  assert.ok(!repaint.includes("--reference"), "no references, no --reference");
+
+  // One --reference per style reference image, in the order given (the
+  // sidecar's prompt note calls them "the second image" and so on).
+  const withRefs = jobArgv.aiRepaintJob({
+    jobId: "j", provider: "mock", inputPath: "/i", outputPath: "/o", prompt: "p", referencePaths: ["/a.jpg", "/b.png"],
+  });
+  assert.deepEqual(withRefs.slice(-4), ["--reference", "/a.jpg", "--reference", "/b.png"]);
 
   const annotation = jobArgv.annotationJob({
     jobId: "j", provider: "openai", model: "m", reannotate: false, assetIds: [], settings: { videoFrameInterval: 0, maxWorkers: 0 },

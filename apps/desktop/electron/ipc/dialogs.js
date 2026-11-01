@@ -60,6 +60,20 @@ function register({
     return filePath;
   });
 
+  // AI repaint style references: photos whose colours and mood the repaint
+  // should take on. Several at once; each goes to the job as --reference, and
+  // their folders are allowed through media:// for the panel's thumbnails.
+  ipcMain.handle("workspace:pick-repaint-refs", async (event) => {
+    const result = await showOpenDialogFor(event, {
+      title: "Choose reference images",
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "heic", "tif", "tiff"] }],
+    });
+    if (result.canceled || !result.filePaths.length) return [];
+    for (const dir of new Set(result.filePaths.map((p) => path.dirname(p)))) addAllowedMediaDir(dir);
+    return result.filePaths;
+  });
+
   ipcMain.handle("workspace:pick-catalog", async (event) => {
     const options = catalogDialogOptions({ action: "open", defaultDir: defaultCatalogDir("open"), t: t() });
     const result = await showOpenDialogFor(event, options);

@@ -151,6 +151,7 @@ export const IPC_METHODS = [
   ["getTextImageStatus", "workspace:text-image-status", 0],
   ["startTextImage", "workspace:text-image-start", 1],
   ["pickHandwritingRef", "workspace:pick-handwriting-ref", 0],
+  ["pickRepaintRefs", "workspace:pick-repaint-refs", 0],
   ["getHandwritingPresetRef", "workspace:handwriting-preset-ref", 1],
   ["listAiModels", "workspace:list-ai-models", 2],
   ["listRepaintHistory", "workspace:list-repaint-history", 1],

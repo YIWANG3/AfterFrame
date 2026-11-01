@@ -556,6 +556,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_ai_repaint_job_parser.add_argument("--temperature", type=float)
     run_ai_repaint_job_parser.add_argument("--api-key")
     run_ai_repaint_job_parser.add_argument("--collection-id")
+    # Style reference images, one flag each; the photo's colours and mood
+    # should follow them. Optional, any number.
+    run_ai_repaint_job_parser.add_argument("--reference", type=Path, action="append", dest="reference_paths")
 
     run_text_image_job_parser = subparsers.add_parser("run-text-image-job", parents=[common])
     run_text_image_job_parser.add_argument("--job-id", required=True)
@@ -908,6 +911,7 @@ def _cmd_run_ai_repaint_job(args, connection, catalog, parser):
         model=getattr(args, "model", None),
         base_url=getattr(args, "base_url", None),
         collection_id=args.collection_id,
+        reference_paths=getattr(args, "reference_paths", None),
     )
     print(json.dumps(payload, indent=2))
     return 0

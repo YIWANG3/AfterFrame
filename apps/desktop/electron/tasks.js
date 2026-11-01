@@ -280,6 +280,11 @@ function createTaskStarters({
     if (!prompt.trim() && !isUpscale) {
       throw new Error("Missing prompt");
     }
+    // Style reference images: the result should take on their colours and
+    // mood. The sidecar sends them to the provider after the photo itself.
+    const referencePaths = (Array.isArray(options?.referencePaths) ? options.referencePaths : [])
+      .map((p) => String(p || "").trim())
+      .filter(Boolean);
     const current = await latestJobStatus("ai_repaint");
     if (current.running) {
       return current;
@@ -308,6 +313,7 @@ function createTaskStarters({
       // The folder the editor was opened from, when its box is ticked: the
       // job puts the result there (it may finish after the editor closes).
       collection_id: options?.collectionId ? String(options.collectionId) : null,
+      reference_paths: referencePaths,
     };
     const job = await createJob("ai_repaint", payload);
     launchSidecarJob(jobArgv.aiRepaintJob({
@@ -325,6 +331,7 @@ function createTaskStarters({
       baseUrl,
       apiKey,
       collectionId: payload.collection_id,
+      referencePaths,
     }));
     return formatJobStatus(job);
   }

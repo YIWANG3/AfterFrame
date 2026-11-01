@@ -1214,13 +1214,19 @@ def run_ai_repaint_job(
     model: str | None = None,
     base_url: str | None = None,
     collection_id: str | None = None,
+    reference_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
+    # Style references: photos whose colour and mood the result should take
+    # on. They go to the provider after the photo itself (ai_repaint.py adds
+    # the sentence that tells the model which image is which).
+    references = [Path(p) for p in (reference_paths or [])]
     payload = {
         "provider": provider,
         "input_path": str(input_path.resolve()),
         "output_path": str(output_path.resolve()),
         "origin_path": str(origin_path.resolve()) if origin_path else None,
         "prompt": prompt,
+        "reference_paths": [str(p.resolve()) for p in references],
         "api_key_supplied": bool(api_key),
         "aspect_ratio": aspect_ratio,
         "image_size": image_size,
@@ -1232,11 +1238,15 @@ def run_ai_repaint_job(
     }
     update_job(connection, job_id, status="running", payload=payload, progress=0.1, result={"current_phase": {"status": "running"}}, error_text=None)
     try:
+        missing = [str(p) for p in references if not p.is_file()]
+        if missing:
+            raise FileNotFoundError("Reference image not found: " + ", ".join(missing))
         if provider == "mock":
             result = run_mock_repaint(
                 input_path=input_path,
                 output_path=output_path,
                 prompt=prompt,
+                reference_paths=references,
             )
         else:
             # The key arrives on argv (the app resolves it from the keychain
@@ -1255,6 +1265,7 @@ def run_ai_repaint_job(
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
                     scale=temperature,
+                    reference_paths=references,
                 )
             elif provider == ARK_PROVIDER:
                 result = run_ark_repaint(
@@ -1265,6 +1276,7 @@ def run_ai_repaint_job(
                     model=model or DEFAULT_ARK_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
+                    reference_paths=references,
                 )
             elif provider == OPENAI_PROVIDER:
                 result = run_openai_repaint(
@@ -1275,6 +1287,7 @@ def run_ai_repaint_job(
                     model=model or DEFAULT_OPENAI_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
+                    reference_paths=references,
                 )
             elif provider == OPENAI_COMPATIBLE_PROVIDER:
                 result = run_openai_repaint(
@@ -1286,6 +1299,7 @@ def run_ai_repaint_job(
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
                     base_url=base_url or "https://api.openai.com/v1",
+                    reference_paths=references,
                 )
             else:
                 result = run_nanobanana_repaint(
@@ -1296,6 +1310,7 @@ def run_ai_repaint_job(
                     model=model or DEFAULT_GEMINI_MODEL,
                     aspect_ratio=aspect_ratio,
                     image_size=image_size,
+                    reference_paths=references,
                 )
 
         # Shared register pipeline (asset upsert → raw-binding inheritance →

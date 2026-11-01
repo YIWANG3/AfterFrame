@@ -141,6 +141,7 @@ Bring your own API key. AfterFrame does not bundle or proxy any AI service — y
 
 - Supports Gemini, GPT Image, Seedream (Volcengine Ark), Jimeng, or any OpenAI-compatible endpoint — manage providers and per-provider model defaults in Settings → AI Repaint; model lists refresh live from each provider's API
 - 25 built-in style prompts (oil painting, anime, watercolor, ink, concept art, and more)
+- Reference images: add one to four photos whose colours, tones and mood the repaint should take on (colour matching against another photographer's look, or your own earlier edit) while this photo's content stays as it is; also available to agents via the MCP `repaint_asset` tool
 - Side-by-side and stacked before/after comparison
 - Version history for every repaint
 
