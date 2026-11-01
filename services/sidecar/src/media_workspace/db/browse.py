@@ -9,6 +9,7 @@ import sqlite3
 
 # The facet filters (what the filter bar sends) live in facets.py: one registry
 # that the WHERE builder, the rules validation and the option counts all read.
+from .. import formats
 from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses
 from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
 
@@ -311,6 +312,9 @@ def locate_image_asset(connection: sqlite3.Connection, asset_id: str, *,
 # status), the search text and every OTHER active filter. A facet's own keys
 # are left out of its own count — with PNG selected, JPG must still say how
 # many JPGs there are, or the dropdown could never be used to switch.
+# A photo's bare, lower-case extension (the column keeps its dot).
+_EXTENSION_SQL = "LOWER(TRIM(assets.extension, '.'))"
+
 _FACET_FROM = (
     "FROM image_lookup_registry AS registry "
     "JOIN assets ON assets.asset_id = registry.image_asset_id "
@@ -436,8 +440,12 @@ def get_facet_values(
         "cameras": value_counts("camera", "assets.meta_camera_model"),
         "lenses": value_counts("lens", "assets.meta_lens_model"),
         "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
-        # Dot-stripped + lowercased (jpg, png, mp4, cr2, 3fr, …).
-        "extensions": value_counts("extension", "LOWER(TRIM(assets.extension, '.'))", "c DESC, v"),
+        # By format family (jpeg, heif, png, mp4, cr3, …): .jpg and .jpeg are
+        # one JPEG, .heic and .hif one HEIF. `label` is what to show.
+        "extensions": [
+            {**row, "label": formats.format_label(row["value"])}
+            for row in value_counts("extension", formats.family_sql(_EXTENSION_SQL), "c DESC, v")
+        ],
         "iso": min_max("iso", "meta_iso"),
         "aperture": min_max("aperture", "meta_aperture"),
         "focal": min_max("focal", "meta_focal"),

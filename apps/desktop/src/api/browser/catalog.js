@@ -2,8 +2,9 @@
 // locating, facet options, and the writes to one photo (rating, flag,
 // description, delete).
 
+import { familyOf, formatLabel } from "../../../shared/formats.mjs";
 import sampleManifest from "../../../sample-photos/manifest.json";
-import { assets, collections, fileExt, newAssetId, showDescription } from "./state";
+import { assets, collections, newAssetId, showDescription } from "./state";
 import { aggregateTags, facetUniverse, matchesFacetFilters, matchesRules, matchesSearch, sortAssets } from "./query";
 
 const samplePhotos = import.meta.glob("../../../sample-photos/*.jpg", { query: "?url", import: "default", eager: true });
@@ -107,7 +108,8 @@ export const catalogMethods = {
       cameras: counts(metasFor("camera").map((m) => m.camera_model)),
       lenses: counts(metasFor("lens").map((m) => m.lens_model)),
       tags: aggregateTags(60, "", facetUniverse("tag", view)),
-      extensions: counts(facetUniverse("extension", view).map((a) => fileExt(a.file_name))),
+      extensions: counts(facetUniverse("extension", view).map((a) => familyOf(a.file_name)))
+        .map((row) => ({ ...row, label: formatLabel(row.value) })),
       iso: minMax("iso", "iso"),
       aperture: minMax("aperture", "aperture"),
       focal: minMax("focal", "focal_length"),
@@ -144,7 +146,7 @@ export const catalogMethods = {
     };
     if (field === "camera") return pick((a) => a.image_metadata?.camera_model);
     if (field === "lens") return pick((a) => a.image_metadata?.lens_model);
-    if (field === "extension") return pick((a) => fileExt(a.file_name));
+    if (field === "extension") return pick((a) => familyOf(a.file_name));
     if (field === "tag") return aggregateTags(limit, needle, universe);
     return [];
   },

@@ -190,6 +190,44 @@ VIDEO_EXTENSIONS = extensions("video")
 EXPORT_SOURCE_EXTENSIONS = frozenset(ext for fmt in REGISTRY if fmt.export_source for ext in fmt.extensions)
 
 
+_BY_FAMILY: dict[str, MediaFormat] = {fmt.family: fmt for fmt in REGISTRY}
+
+
+def _bare(value: object) -> str:
+    """"jpg" for ".JPG", "jpg" or "JPG": the form a Format filter compares in."""
+    return str(value).strip().lower().lstrip(".")
+
+
+def format_label(value: object) -> str:
+    """What the Format facet shows for a value: the family's label ("JPEG",
+    "Canon CR3") or, for an extension that is not a family name (a rule an
+    agent saved as "jpg"), the extension upper-cased."""
+    name = _bare(value)
+    fmt = _BY_FAMILY.get(name)
+    return fmt.label if fmt else name.upper()
+
+
+def filter_extensions(value: object) -> frozenset[str]:
+    """The bare, lower-case extensions a Format filter value stands for: all of
+    a family's ("jpeg" → jpg, jpeg, jfif, jpe, insp), or the one extension
+    named. A saved rule that says "JPG" keeps meaning only .jpg files."""
+    name = _bare(value)
+    fmt = _BY_FAMILY.get(name)
+    return frozenset(ext[1:] for ext in fmt.extensions) if fmt else frozenset({name})
+
+
+def family_sql(extension_expr: str) -> str:
+    """A SQL expression turning a bare lower-case extension (`extension_expr`)
+    into its registry family, so the Format facet counts .jpg and .jpeg as
+    one JPEG and .heic / .hif as one HEIF. An extension the registry doesn't
+    know stays itself."""
+    whens = "".join(
+        f" WHEN '{ext[1:]}' THEN '{fmt.family}'"
+        for fmt in REGISTRY for ext in fmt.extensions if ext[1:] != fmt.family
+    )
+    return f"CASE {extension_expr}{whens} ELSE {extension_expr} END"
+
+
 def export_format_for(path: Path | str) -> str | None:
     """Which EXPORT_FORMATS entry a file already is ("jpeg" for .JPG), or None."""
     suffix = Path(path).suffix.lower()

@@ -28,6 +28,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
+from .. import formats
+
 Clause = tuple[str, list[object]]
 
 EXCLUDE_KEY = "exclude"
@@ -225,9 +227,11 @@ def _asset_type(filters: dict) -> list[Clause]:
 
 
 def _extension(filters: dict) -> list[Clause]:
-    # File format (jpg / png / mp4 / cr2 / 3fr / …); the stored extension keeps
-    # a leading dot, so trim it on both sides for a clean compare.
-    values = [str(v).lower().lstrip(".") for v in _values(filters.get("extension"))]
+    # File format, as a registry family ("jpeg", "heif", "cr3": what the bar
+    # offers and counts) or one extension ("jpg", as rules saved before the
+    # families, or by an agent, say). A family stands for all its extensions.
+    # The stored extension keeps a leading dot, so trim it for the compare.
+    values = sorted({ext for v in _values(filters.get("extension")) for ext in formats.filter_extensions(v)})
     return [_in("LOWER(TRIM(assets.extension, '.'))", values)] if values else []
 
 

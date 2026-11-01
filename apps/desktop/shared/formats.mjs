@@ -22,6 +22,32 @@ export { BROWSER_IMAGE_RE, EXPORT_FORMATS, FORMATS, IMPORTABLE_EXTENSIONS, MEDIA
 export const EXPORT_FORMAT_NAMES = Object.freeze(Object.keys(EXPORT_FORMATS));
 
 const BY_EXTENSION = new Map(FORMATS.flatMap((format) => format.extensions.map((ext) => [ext, format])));
+const BY_FAMILY = new Map(FORMATS.map((format) => [format.family, format]));
+
+// "jpg" for ".JPG", "jpg" or "JPG": the form a Format filter compares in.
+const bare = (value) => String(value ?? "").trim().toLowerCase().replace(/^\./, "");
+
+// The format family a photo belongs to ("jpeg" for IMG_0001.JPG, "heif" for
+// a .HIF, "cr3"), or its bare extension when the registry doesn't know it.
+export function familyOf(filePath) {
+  return formatFor(filePath)?.family || extensionOf(filePath).slice(1) || null;
+}
+
+// What the Format facet shows for a value: the family's label ("JPEG",
+// "Canon CR3") or, for an extension that is not a family name (a rule an
+// agent saved as "jpg"), the extension upper-cased.
+export function formatLabel(value) {
+  const name = bare(value);
+  return BY_FAMILY.get(name)?.label || name.toUpperCase();
+}
+
+// The bare, lower-case extensions a Format filter value stands for: all of a
+// family's ("jpeg" → jpg, jpeg, jfif, jpe, insp), or the one extension named.
+export function filterExtensions(value) {
+  const name = bare(value);
+  const format = BY_FAMILY.get(name);
+  return format ? format.extensions.map((ext) => ext.slice(1)) : [name];
+}
 
 // ".jpg" (lower-case, with the dot) for "/a/IMG_0001.JPG"; "" when there is none.
 export function extensionOf(filePath) {

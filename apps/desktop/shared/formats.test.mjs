@@ -4,6 +4,9 @@ import {
   EXPORT_FORMAT_NAMES,
   MEDIA_RE,
   browserShowsOriginal,
+  familyOf,
+  filterExtensions,
+  formatLabel,
   exportExtension,
   exportFormatForTarget,
   extensionOf,
@@ -71,6 +74,23 @@ test("an edited copy keeps a JPEG, PNG or WebP extension and becomes a JPEG othe
   assert.equal(exportFormatForTarget("out.HEIC"), "jpeg");
   assert.equal(mimeForExport("out.webp"), "image/webp");
   assert.equal(mimeForExport("out.jpg"), "image/jpeg");
+});
+
+test("the Format facet speaks in families: a label for each, and the extensions a value stands for", () => {
+  assert.equal(familyOf("/p/IMG_0001.JPG"), "jpeg");
+  assert.equal(familyOf("/p/IMG_0002.HIF"), "heif");
+  assert.equal(familyOf("/p/B0000333.3FR"), "3fr");
+  assert.equal(familyOf("/p/odd.xyz"), "xyz");
+  assert.equal(familyOf(""), null);
+  assert.equal(formatLabel("jpeg"), "JPEG");
+  assert.equal(formatLabel("heif"), "HEIF");
+  assert.equal(formatLabel("cr3"), "Canon CR3");
+  assert.equal(formatLabel("jpg"), "JPG"); // an extension, as an agent's rule may say
+  assert.equal(formatLabel(".XYZ"), "XYZ");
+  assert.deepEqual(filterExtensions("jpeg"), ["jpg", "jpeg", "jfif", "jpe", "insp"]);
+  assert.deepEqual(filterExtensions("HEIF"), ["heic", "heif", "hif"]);
+  assert.deepEqual(filterExtensions("JPG"), ["jpg"]);
+  assert.deepEqual(filterExtensions(".mov"), ["mov"]);
 });
 
 test("save-dialog filters list JPEG, PNG and WebP in that order, or a chosen subset", () => {
