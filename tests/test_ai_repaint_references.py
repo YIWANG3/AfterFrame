@@ -5,6 +5,7 @@ sends instead of calling it."""
 from __future__ import annotations
 
 import base64
+import io
 import json
 import tempfile
 import unittest
@@ -41,6 +42,33 @@ class ReferenceNoteTest(unittest.TestCase):
             self.assertIn("ref.png", with_ref.notes[1])
 
 
+class ReferenceImageTest(unittest.TestCase):
+    """What is sent for a reference: a JPEG no longer than REFERENCE_MAX_EDGE,
+    whatever the file was, so a 7 MB export does not ride along whole."""
+
+    def test_a_large_reference_is_shrunk_and_a_small_one_still_becomes_a_jpeg(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            big = root / "big.png"
+            Image.new("RGB", (4000, 2500), (200, 100, 50)).save(big)
+            data, mime = ai_repaint._reference_image(big)
+            self.assertEqual(mime, "image/jpeg")
+            with Image.open(io.BytesIO(data)) as sent:
+                self.assertEqual(sent.size, (ai_repaint.REFERENCE_MAX_EDGE, 960))
+            self.assertLess(len(data), big.stat().st_size)
+
+            small = _png(root / "small.png", (1, 2, 3))
+            data, mime = ai_repaint._reference_image(small)
+            self.assertEqual(mime, "image/jpeg")
+            with Image.open(io.BytesIO(data)) as sent:
+                self.assertEqual(sent.size, (8, 6))
+
+            # Not an image at all: sent as it is rather than failing the job here.
+            text = root / "notes.txt"
+            text.write_text("not a picture")
+            self.assertEqual(ai_repaint._reference_image(text), (b"not a picture", "text/plain"))
+
+
 class ProviderRequestsTest(unittest.TestCase):
     """What each provider is sent when two references ride along."""
 
@@ -51,7 +79,9 @@ class ProviderRequestsTest(unittest.TestCase):
         self.refs = [_png(root / "ref-a.png", (200, 100, 50)), _png(root / "ref-b.png", (50, 100, 200))]
         self.out = root / "out.png"
         self.photo_b64 = base64.b64encode(self.photo.read_bytes()).decode()
-        self.ref_b64 = [base64.b64encode(p.read_bytes()).decode() for p in self.refs]
+        # References travel shrunk and re-encoded (see _reference_image), so
+        # the expected bytes are what that helper gives, not the files.
+        self.ref_b64 = [base64.b64encode(ai_repaint._reference_image(p)[0]).decode() for p in self.refs]
         # A 1x1 PNG the fake providers answer with.
         self.answer_png = base64.b64encode(_png(root / "answer.png", (0, 0, 0)).read_bytes()).decode()
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import mimetypes
 import os
@@ -380,6 +381,49 @@ def _inline_image_part(path: Path) -> dict[str, Any]:
     }
 
 
+# A reference is read for its colours and mood, not its pixels, and the
+# request carries every image inline: a 7 MB export per reference made the
+# upload to Seedream time out. So references travel as JPEGs no longer than
+# this on the long edge (a few hundred KB each).
+REFERENCE_MAX_EDGE = 1536
+
+
+def _reference_image(path: Path) -> tuple[bytes, str]:
+    """(bytes, mime) to send for a reference image: the file shrunk to
+    REFERENCE_MAX_EDGE and re-encoded as JPEG, or the file as it is when
+    Pillow cannot read it."""
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:  # pragma: no cover - Pillow is a sidecar dependency
+        return path.read_bytes(), _detect_mime_type(path)
+    try:
+        with Image.open(path) as opened:
+            upright = ImageOps.exif_transpose(opened) or opened
+            picture = upright.convert("RGB")
+            picture.thumbnail((REFERENCE_MAX_EDGE, REFERENCE_MAX_EDGE))
+            buffer = io.BytesIO()
+            picture.save(buffer, format="JPEG", quality=90)
+    except (OSError, ValueError):
+        # Not something Pillow reads (a HEIC without the plugin, say): the
+        # file goes as it is and the provider says what it makes of it.
+        return path.read_bytes(), mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    return buffer.getvalue(), "image/jpeg"
+
+
+def _reference_part(path: Path) -> dict[str, Any]:
+    data, mime = _reference_image(path)
+    return {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("utf-8")}}
+
+
+def _reference_b64(path: Path) -> str:
+    return base64.b64encode(_reference_image(path)[0]).decode("utf-8")
+
+
+def _reference_data_url(path: Path) -> str:
+    data, mime = _reference_image(path)
+    return f"data:{mime};base64," + base64.b64encode(data).decode("utf-8")
+
+
 def run_gemini_repaint(
     input_path: Path,
     output_path: Path,
@@ -395,7 +439,7 @@ def run_gemini_repaint(
     # The photo comes first, the references after it — the order the note in
     # the prompt describes.
     parts: list[dict[str, Any]] = [{"text": sent_prompt}, _inline_image_part(input_path)]
-    parts.extend(_inline_image_part(ref) for ref in refs)
+    parts.extend(_reference_part(ref) for ref in refs)
     return _gemini_generate(
         output_path,
         sent_prompt,
@@ -531,7 +575,8 @@ def run_openai_repaint(
     # the prompt's note calls "the first image", the rest are the references.
     _add_file("image[]", input_path.name, image_bytes, mime_type)
     for ref in refs:
-        _add_file("image[]", ref.name, ref.read_bytes(), _detect_mime_type(ref))
+        ref_bytes, ref_mime = _reference_image(ref)
+        _add_file("image[]", ref.name, ref_bytes, ref_mime)
 
     size = _openai_size_from_resolution(aspect_ratio)
     _add_field("size", size)
@@ -726,7 +771,7 @@ def run_jimeng_repaint(
     else:
         # 图片生成 4.0 / 4.6 — image-to-image via binary_data_base64; the photo
         # first, then the references, as the prompt's note says.
-        submit_body["binary_data_base64"] = [img_b64] + [base64.b64encode(ref.read_bytes()).decode("utf-8") for ref in refs]
+        submit_body["binary_data_base64"] = [img_b64] + [_reference_b64(ref) for ref in refs]
         submit_body["force_single"] = True
         size_params = _jimeng_size_params(aspect_ratio, image_size)
         submit_body.update(size_params)
@@ -1003,7 +1048,7 @@ def run_ark_repaint(
 ) -> RepaintResult:
     sent_prompt, refs = _with_references(prompt, reference_paths)
     photo_url = _file_to_data_url(input_path)
-    image_input: str | list[str] = [photo_url, *(_file_to_data_url(ref) for ref in refs)] if refs else photo_url
+    image_input: str | list[str] = [photo_url, *(_reference_data_url(ref) for ref in refs)] if refs else photo_url
     return _ark_generate(
         output_path, sent_prompt, api_key=api_key, model=model,
         aspect_ratio=aspect_ratio, image_size=image_size,
