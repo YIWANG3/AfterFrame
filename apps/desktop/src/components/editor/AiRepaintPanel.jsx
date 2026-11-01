@@ -56,6 +56,25 @@ const REFERENCE_PROMPT =
   "and overall mood match the reference image(s). Keep it a realistic photograph and keep its composition, " +
   "subjects, geometry and details exactly as they are; change only colour and tone.";
 
+// A small picture of a result or an earlier version, so the list says what
+// each one looks like, not only when it was made. Versions use the catalog's
+// 512 px preview; a fresh result its file. A picture that will not load
+// (folder no longer allowed, file gone) leaves an empty tile.
+function VersionThumb({ src }) {
+  if (!src) return null;
+  return (
+    <span className="flex h-7 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-app/80">
+      <img
+        src={localFileUrl(src)}
+        alt=""
+        className="h-full w-full object-cover"
+        data-testid="repaint-version-thumb"
+        onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
+      />
+    </span>
+  );
+}
+
 const ASPECT_OPTIONS = [
   { value: "auto", label: "Auto" },
   { value: "1:1", label: "1:1" },
@@ -1008,6 +1027,7 @@ export default function AiRepaintPanel({
                       isComparing ? "bg-[rgb(var(--accent-color)/0.12)] text-[rgb(var(--accent-color))]" : "text-muted hover:bg-hover hover:text-text",
                     )}
                   >
+                    <VersionThumb src={r.path} />
                     <span className="min-w-0 flex-1 truncate" title={r.path}>{name}</span>
                     <CompareButtons afterPath={r.path} compareState={compareState} onCompareChange={onCompareChange} t={t} />
                   </div>
@@ -1039,6 +1059,7 @@ export default function AiRepaintPanel({
                       >
                         <ChevronDown className={cx("h-3 w-3 transition-transform", !isExpanded && "-rotate-90")} />
                       </button>
+                      <VersionThumb src={h.preview_path || h.output_path} />
                       <span className="min-w-0 flex-1 truncate" title={h.output_path}>{name}</span>
                       <CompareButtons afterPath={h.output_path} compareState={compareState} onCompareChange={onCompareChange} t={t} />
                     </div>

@@ -712,8 +712,12 @@ def list_catalog_roots(connection: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def list_repaint_history(connection: sqlite3.Connection, asset_path: str) -> list[dict]:
-    """Return all AI repaint records for the resource set that contains *asset_path*."""
+def list_repaint_history(connection: sqlite3.Connection, asset_path: str, *, catalog_root: Path | None = None) -> list[dict]:
+    """Return all AI repaint records for the resource set that contains *asset_path*.
+
+    With *catalog_root*, each record carries `preview_path`: the version's
+    512 px catalog preview, so a list of versions can show what each one
+    looks like without opening the full file."""
     # 1. Find asset_id from path
     row = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?",
@@ -732,9 +736,11 @@ def list_repaint_history(connection: sqlite3.Connection, asset_path: str) -> lis
     # 3. Get all ai_repaint members in this set
     repaint_members = connection.execute(
         """
-        SELECT rsi.asset_id, assets.canonical_path, rsi.parent_asset_id
+        SELECT rsi.asset_id, assets.canonical_path, rsi.parent_asset_id,
+               pe.relative_path AS preview_relative_path
         FROM resource_set_items rsi
         JOIN assets ON assets.asset_id = rsi.asset_id
+        LEFT JOIN preview_entries pe ON pe.asset_id = rsi.asset_id AND pe.kind = 'preview'
         WHERE rsi.set_id = ? AND rsi.version_kind = 'ai_repaint'
         ORDER BY rsi.sort_order
         """,
@@ -748,6 +754,8 @@ def list_repaint_history(connection: sqlite3.Connection, asset_path: str) -> lis
     results = []
     for member in repaint_members:
         output_path = member["canonical_path"]
+        preview_relative = member["preview_relative_path"]
+        preview_path = str((catalog_root / preview_relative).resolve()) if catalog_root and preview_relative else None
         job = connection.execute(
             """
             SELECT job_id, payload_json, result_json, created_at
@@ -761,6 +769,7 @@ def list_repaint_history(connection: sqlite3.Connection, asset_path: str) -> lis
         entry: dict = {
             "asset_id": member["asset_id"],
             "output_path": output_path,
+            "preview_path": preview_path,
             "parent_asset_id": member["parent_asset_id"],
         }
         if job:

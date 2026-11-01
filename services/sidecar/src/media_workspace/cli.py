@@ -1608,7 +1608,7 @@ def _cmd_confirm_match(args, connection, catalog, parser):
 
 def _cmd_list_repaint_history(args, connection, catalog, parser):
     from .db import list_repaint_history
-    history = list_repaint_history(connection, str(args.asset_path.resolve()))
+    history = list_repaint_history(connection, str(args.asset_path.resolve()), catalog_root=catalog.root)
     print(json.dumps(history, ensure_ascii=False))
     return 0
 
