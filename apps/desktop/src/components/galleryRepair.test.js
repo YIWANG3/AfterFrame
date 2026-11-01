@@ -43,15 +43,17 @@ describe("stale-source repairs", () => {
 describe("cards awaiting their thumbnail", () => {
   const card = (fields) => ({ asset_id: "a1", asset_type: "image", exists_on_disk: true, ...fields });
 
-  it("awaits a thumbnail when the original is one an <img> can't show", () => {
+  it("awaits a thumbnail when Chromium doesn't decode the original itself", () => {
     expect(awaitingThumbnail(card({ asset_type: "raw", image_path: "/p/B0000333.3FR" }))).toBe(true);
     expect(awaitingThumbnail(card({ asset_type: "video", image_path: "/p/clip.mov" }))).toBe(true);
+    // media:// could render these, but at full size, one per card: wait for the thumbnail.
+    expect(awaitingThumbnail(card({ image_path: "/p/scan.tif" }))).toBe(true);
+    expect(awaitingThumbnail(card({ image_path: "/p/IMG_0002.HEIC" }))).toBe(true);
   });
 
-  it("shows the original itself when it can: a JPEG, and a HEIC or TIFF (media:// makes them a JPEG)", () => {
+  it("shows the original itself when Chromium decodes it: a JPEG, a PNG", () => {
     expect(awaitingThumbnail(card({ image_path: "/p/IMG_0001.JPG" }))).toBe(false);
-    expect(awaitingThumbnail(card({ image_path: "/p/IMG_0002.HEIC" }))).toBe(false);
-    expect(awaitingThumbnail(card({ image_path: "/p/scan.tif" }))).toBe(false);
+    expect(awaitingThumbnail(card({ image_path: "/p/shot.png" }))).toBe(false);
   });
 
   it("awaits nothing once the thumbnail is there, or when the file is gone", () => {

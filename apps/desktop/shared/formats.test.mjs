@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   EXPORT_FORMAT_NAMES,
   MEDIA_RE,
+  browserDecodesOriginal,
   browserShowsOriginal,
   exportExtension,
   exportFormatForTarget,
@@ -44,6 +45,10 @@ test("an <img> shows JPEG-like originals and a transcoded HEIF, PSD or TIFF, not
   assert.equal(needsBrowserTranscode("/p/d.jpg"), false);
   assert.equal(needsBrowserTranscode("/p/d.gif"), false);
   assert.ok(browserShowsOriginal("/p/scan.tif") && needsBrowserTranscode("/p/scan.TIFF"));
+  assert.ok(browserDecodesOriginal("/p/d.JPG") && browserDecodesOriginal("/p/d.webp"));
+  assert.equal(browserDecodesOriginal("/p/scan.tif"), false);
+  assert.equal(browserDecodesOriginal("/p/IMG_0002.HEIC"), false);
+  assert.equal(browserDecodesOriginal("/p/B0000333.3FR"), false);
   assert.equal(browserShowsOriginal("/p/B0000333.3FR"), false);
   assert.equal(browserShowsOriginal(""), false);
 });

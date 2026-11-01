@@ -1,4 +1,4 @@
-import { showsOriginal } from "./lightboxView";
+import { browserDecodesOriginal } from "../../shared/formats.mjs";
 
 // Which loaded cards the gallery should repair from disk because the source
 // changed under the catalog (or an image never got its dimensions), and which
@@ -32,12 +32,15 @@ export function staleSourceRepairs(items) {
 }
 
 // A card with nothing to show until its thumbnail is made: none yet, and an
-// original an <img> can't show (a RAW, a TIFF, a video). Loading the original
-// could only fail, and the failure was taken for a broken preview: a full
-// refresh from disk on the resident sidecar, during an import, for thumbnails
-// the import was about to make. A missing file never gets one.
+// original Chromium doesn't decode itself (a RAW, a video, or a TIFF / HEIC
+// that media:// would first have to render at full size, one card at a time).
+// Loading a RAW could only fail, and the failure was taken for a broken
+// preview: a full refresh from disk on the resident sidecar, during an
+// import, for thumbnails the import was about to make. A missing file never
+// gets one.
 export function awaitingThumbnail(item) {
-  return Boolean(item?.asset_id) && !item.preview_path && item.exists_on_disk !== false && !showsOriginal(item);
+  if (!item?.asset_id || item.preview_path || item.exists_on_disk === false) return false;
+  return item.asset_type === "raw" || item.asset_type === "video" || !browserDecodesOriginal(item.image_path);
 }
 
 // Which loaded assets await a thumbnail, and which don't (their budget of
