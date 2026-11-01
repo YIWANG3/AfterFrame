@@ -226,6 +226,8 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 
 **监视文件夹**：`electron/watcher.js` 原来只放行媒体文件名，`.xmp` 一律忽略；现在一个 `.xmp` 的变化映射到它的照片（`IMG.CR2.xmp` → `IMG.CR2`；`IMG.xmp` → 同目录下同名的媒体文件，可能两个），走原来的 `changed-media` → 导入路径。`changed_media` 对一个本身没变的照片再比边车的 mtime 和 `metadata_json.sidecar_modified_time`，不同（出现、改写、删掉）就算变了。照片本身没变，所以不重做预览，只更新评分。
 
+**对真实文件验过**（2026-11-01，文件只在本地，没进仓库）：八个真实边车——Lightroom 写的五个（XMP Core 4.2 / 5.6 / 7.0 三代 toolkit，星级 0、1、2 都有，其中一个带关键词和颜色标签 Blue）、darktable 一个、Photoshop CS2 两个——`sidecar_rating` 的结果和 ExifTool 的 `XMP-xmp:Rating` 逐个一致。佳能 1D X Mark III 直出的 10 位 HIF（`heix` brand，5472×3648）导入为 image、ExifTool 读到机型、sips 和 Pillow 两条转码路径都出图；Photoshop 存的四个 PSD 和一个 TIFF 导入、预览、两条转码都成功，两个渲染为纯白的 PSD 用 psd-tools 核对过是文件本身就白（空组 / 无图层），不是没读到合成图。e2e 里现写的 Adobe 格式 XML 和真文件的差别只在历史栈和命名空间数量，解析器不受影响。
+
 **不做**：`xmp:Label`（AfterFrame 没有颜色标签的概念）、`dc:subject` 关键词进标签（和 AI 标签混在一起显示，要先定来源怎么区分）、`-1` 映射成 X 旗标（旗标是用户自己的）。三项写在第 6 节。
 
 ### 4.8 不做什么
