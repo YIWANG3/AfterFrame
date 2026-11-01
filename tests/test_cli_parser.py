@@ -22,7 +22,8 @@ class ResidentParserTest(unittest.TestCase):
         parser = cli._get_parser()
         base = ["--catalog", "/c", "run-ai-repaint-job", "--job-id", "j", "--input", "/in.jpg", "--output", "/out.png", "--prompt", "p"]
         with_refs = parser.parse_args([*base, "--reference", "/a.jpg", "--reference", "/b.jpg"])
-        self.assertEqual([str(p) for p in with_refs.reference_paths], ["/a.jpg", "/b.jpg"])
+        # Path objects, not strings: Windows spells these with backslashes.
+        self.assertEqual(with_refs.reference_paths, [Path("/a.jpg"), Path("/b.jpg")])
         self.assertIsNone(parser.parse_args(base).reference_paths)
 
     def test_a_request_keeps_none_of_the_last_ones_options(self) -> None:
