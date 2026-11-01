@@ -666,11 +666,12 @@ def build_parser() -> argparse.ArgumentParser:
     read_meta_p = subparsers.add_parser("read-image-metadata", parents=[common])
     read_meta_p.add_argument("--path", type=Path, required=True)
 
-    # A full-size JPEG of an original the renderer can't decode (HEIC where
-    # there is no sips): Electron's media:// serves it in the original's place.
+    # A full-size JPEG of an original the renderer can't decode (HEIF, PSD, TIFF,
+    # where there is no sips): Electron's media:// serves it in the original's place.
     transcode_p = subparsers.add_parser("transcode-image", parents=[common])
     transcode_p.add_argument("--source", type=Path, required=True)
     transcode_p.add_argument("--output", type=Path, required=True)
+    transcode_p.add_argument("--quality", type=int, default=None, help="JPEG quality; near-lossless by default")
 
     return parser
 
@@ -759,7 +760,7 @@ def _cmd_annotation_list_models(args) -> int:
 
 def _cmd_transcode_image(args) -> int:
     from .preview_service import transcode_to_jpeg
-    transcode_to_jpeg(args.source, args.output)
+    transcode_to_jpeg(args.source, args.output, **({"quality": args.quality} if args.quality else {}))
     print(json.dumps({"output": str(args.output)}))
     return 0
 

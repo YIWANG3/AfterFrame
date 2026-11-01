@@ -247,7 +247,21 @@ class PillowPreviewTest(unittest.TestCase):
             with Image.open(target) as jpeg:
                 self.assertEqual(jpeg.format, "JPEG")
                 self.assertEqual(jpeg.size, full_size)
+                # Near-lossless (quality 95 scales the standard luminance table to
+                # 2; the previews' 90 gives 3), the colour profile kept.
+                self.assertLessEqual(jpeg.quantization[0][0], 2)
+                self.assertTrue(jpeg.info.get("icc_profile"))
             self.assertEqual(sorted(p.name for p in Path(temp_dir).iterdir()), ["original.jpg"])
+
+    def test_a_sixteen_bit_tiff_transcodes_to_an_rgb_jpeg_of_its_size(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "scan.tif"
+            Image.new("I;16", (320, 200), 40_000).save(source)
+            target = Path(temp_dir) / "scan.jpg"
+            transcode_to_jpeg(source, target)
+            with Image.open(target) as jpeg:
+                self.assertEqual((jpeg.format, jpeg.mode, jpeg.size), ("JPEG", "RGB", (320, 200)))
+                self.assertAlmostEqual(jpeg.getpixel((10, 10))[0], 40_000 // 257, delta=2)
 
     def test_transcode_image_needs_no_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

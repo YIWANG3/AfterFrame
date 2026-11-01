@@ -35,7 +35,7 @@ test("the import, the watcher and the Dock agree on what is media", () => {
   }
 });
 
-test("an <img> shows JPEG-like originals and a transcoded HEIF or PSD, not a TIFF or a RAW", () => {
+test("an <img> shows JPEG-like originals and a transcoded HEIF, PSD or TIFF, not a RAW", () => {
   assert.ok(browserShowsOriginal("/p/d.JPG"));
   assert.ok(browserShowsOriginal("/p/d.gif") && browserShowsOriginal("/p/d.bmp") && browserShowsOriginal("/p/d.insp"));
   assert.ok(browserShowsOriginal("/p/IMG_0002.HEIC"));
@@ -43,7 +43,7 @@ test("an <img> shows JPEG-like originals and a transcoded HEIF or PSD, not a TIF
   assert.ok(needsBrowserTranscode("/p/IMG_0003.HIF") && needsBrowserTranscode("/p/layered.psd"));
   assert.equal(needsBrowserTranscode("/p/d.jpg"), false);
   assert.equal(needsBrowserTranscode("/p/d.gif"), false);
-  assert.equal(browserShowsOriginal("/p/scan.tif"), false);
+  assert.ok(browserShowsOriginal("/p/scan.tif") && needsBrowserTranscode("/p/scan.TIFF"));
   assert.equal(browserShowsOriginal("/p/B0000333.3FR"), false);
   assert.equal(browserShowsOriginal(""), false);
 });

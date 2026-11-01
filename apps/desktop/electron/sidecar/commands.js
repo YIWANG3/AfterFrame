@@ -492,10 +492,12 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     readImageMetadata(imagePath) {
       return callJson(["read-image-metadata", "--path", String(imagePath)]);
     },
-    // A full-size JPEG of an original the renderer can't decode (HEIC where
-    // there is no sips); media:// serves it in the original's place.
-    transcodeImage(sourcePath, outputPath) {
-      return callJson(["transcode-image", "--source", String(sourcePath), "--output", String(outputPath)]);
+    // A full-size JPEG of an original the renderer can't decode (HEIF, PSD,
+    // TIFF, where there is no sips); media:// serves it in the original's place.
+    transcodeImage(sourcePath, outputPath, { quality } = {}) {
+      const argv = ["transcode-image", "--source", String(sourcePath), "--output", String(outputPath)];
+      if (quality) argv.push("--quality", String(quality));
+      return callJson(argv);
     },
 
     // ── Jobs ─────────────────────────────────────────────────────────────

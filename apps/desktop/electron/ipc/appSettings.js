@@ -12,6 +12,8 @@ function cacheDirs(userData) {
     depth: path.join(userData, "depth-cache"),
     stickers: path.join(userData, "stickers"),
     videoProxies: path.join(userData, "video-proxies"),
+    // JPEG renders of originals the renderer can't decode (electron/media/protocol.js).
+    renders: path.join(userData, "transcode-cache"),
     luts: path.join(userData, "afterframe", "luts"),
   };
 }

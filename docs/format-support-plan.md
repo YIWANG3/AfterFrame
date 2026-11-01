@@ -1,6 +1,6 @@
 # 文件格式支持：对照 Eagle 的差距与格式注册表重构
 
-> **状态（2026-11-01）**：P0（纯重构）已合并（#242），P1a（加格式，第 3 节的图像和视频两组，PSD 走和 HEIF 一样的转码而不是 HD 预览）已实现；P1b / P1c / P2 未开工。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
+> **状态（2026-11-01）**：P0（纯重构，#242）、P1a（加格式，#243，PSD 走和 HEIF 一样的转码而不是 HD 预览）、P1b（不支持的文件有交代，#244）已合并；P1c（原图统一，见 4.5 节的实际做法）已实现；P2 未开工。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
 
 ## 0. 结论
 
@@ -197,12 +197,13 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 
 ### 4.5 "原图显示"的统一
 
-今天有三条互不相干的路：JPEG 之流 Chromium 直接显示；HEIC 由 `protocol.js` 的 `HEIC_RE` 特判转码；RAW 和 TIFF 没有原图、靠 HD 预览。按注册表的 `browser_native` 收成两条：
+重构前有三条互不相干的路：JPEG 之流 Chromium 直接显示；HEIC 由 `protocol.js` 的 `HEIC_RE` 特判转码；RAW 和 TIFF 没有原图、靠 HD 预览。按注册表收成两条（P1c 的实际做法，和最初设想的差别见下）：
 
 - `browser_native = True`：`media://` 原样投递，不变。
-- `browser_native = False`（HEIC / HIF / TIFF / PSD / RAW）：Lightbox 顶层和编辑器画布统一用**全尺寸渲染**（`preview-hd` 对 RAW 已经是"全尺寸"语义，`preview_service.KIND_SIZES` 对这些格式也取全尺寸），缓存在 catalog 的预览目录里而不是 `os.tmpdir()/afterframe-heic-cache`，`protocol.js` 的 HEIC 特判删掉，`useRawEditSource` 改名成 `useRenderedEditSource`、对所有非原生格式生效。
+- `transcode_for_browser = True`（HEIF 全家、PSD、TIFF）：Lightbox 的细节层、Compare 和编辑器画布都照常请求原图路径，`media://`（`electron/media/protocol.js`）第一次被问到时把原图渲染成**全尺寸 JPEG 95**（macOS 用 `sips`，带 ICC 和 EXIF；其他平台用 sidecar 的 Pillow，`transcode-image --quality 95`，16 位和 CMYK 一并处理），缓存在 `userData/transcode-cache`，按最近使用保留 1 GB，设置 → 图库 → 缓存里可以打开。HEIC 特判、`os.tmpdir()/afterframe-heic-cache` 和 "TIFF 没有原图" 一起清掉：加一种浏览器不认的格式只需在注册表里标 `transcode_for_browser`。
+- RAW 不走这条路，仍是按需 HD（相机内嵌 JPEG）+ 编辑时的全尺寸渲染（`rawEditSource.js`）。最初设想把 RAW 也并进"全尺寸渲染"，但 RAW 的全尺寸解码是秒级、内嵌 JPEG 是毫秒级，而且 35-raw-import 守着的那套按需 HD 逻辑本身没有问题；渲染放进 catalog 的预览目录也不如 userData 下带预算的缓存（一张 4800 万像素的 HEIF 渲染出来 25 MB，进 catalog 就不会被清）。
 
-这一步把 HEIC 的临时目录缓存、RAW 的按需 HD、TIFF 没有原图三个历史包袱一起清掉，但牵涉 `lightboxView`、`EditorOverlay:358-412`、`rawEditSource.js`、`useOnDemandHdPreviews`，放在 P1 的最后一个 PR 单独做。编辑源用 JPEG 92 还是 PNG 是个要拍板的问题（第 6 节）。
+编辑源用 JPEG 95 + 保留 ICC（第 6 节第 2 条，按建议定）。
 
 ### 4.6 落库：`assets.format`
 
@@ -226,7 +227,7 @@ schema 加一列 `format TEXT`（迁移时按扩展名回填，`.tif` 走一次�
 | **P0 纯重构** | `formats.py` + `formats.generated.mjs` + 同步测试；`config.py / reverse_lookup.py / video.py / derived.py / watcher.js / lightboxView.js / protocol.js / httpServer.js / package.json` 的列表改成消费注册表；三种 RAW 判法收成 `classify`；9 处导出编码器表收成一处 | 1.5 天 | 支持的扩展名集合**不变**（测试断言新旧集合相等后再删旧常量）；全部单测 + e2e 绿 |
 | **P1a 加格式** | 图像：heif、hif、psd、gif、bmp、jfif、jpe、insp；视频：mts、m2ts、3gp。每个都要：Pillow / ffprobe 冒烟（Mac + Windows 盒子）、Dock 类型、`showsOriginal` 行为、e2e 夹具（37-heic-import 扩成 HEIF 家族；PSD 和 MTS 各一个小夹具，MTS 用 ffmpeg 合成，和 70-native-video 的 ProRes 同法） | 1.5 天 | 一个 PR 一类格式，不叠 PR |
 | **P1b 交代不支持** | `skipped_unsupported / skipped_companion` 计数、toast + JobDock 详情、渲染层不再把单文件注册成根、Settings → Library 的"支持的格式"面板（从注册表生成，按当前平台标注） | 1.5 天 | e2e：丢一个 `.docx` 进去有 toast；只丢伴生文件没有 toast |
-| **P1c 原图统一** | 4.5 节：`browser_native` 驱动的全尺寸渲染，删 HEIC 特判和临时目录缓存 | 2 天 | 37-heic-import、35-raw-import、e2e/11 的 tif 重试不变；HEIC 在 Lightbox 的首次打开时间不退步 |
+| **P1c 原图统一** | 4.5 节：`transcode_for_browser` 驱动的 JPEG 95 渲染（TIFF 加入），缓存从临时目录搬到 userData 并限额，删 HEIC 特判 | 2 天 | 37-heic-import、35-raw-import、e2e/11 的 tif 重试不变；79 多出 TIFF 的 Lightbox 用例 |
 | **P2** | `assets.format` 列 + facet 按 family + MCP 参数；JXL（评估 `pillow-jxl-plugin` 打包）；`.xmp` 边车评分；`.mxf` | 2 到 3 天，可拆 | — |
 | **文档** | README 的格式段落改为指向 Settings 面板一句话；`docs/README.md` 加本文 | 0.5 天 | — |
 

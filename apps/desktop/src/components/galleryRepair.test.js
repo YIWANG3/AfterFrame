@@ -45,13 +45,13 @@ describe("cards awaiting their thumbnail", () => {
 
   it("awaits a thumbnail when the original is one an <img> can't show", () => {
     expect(awaitingThumbnail(card({ asset_type: "raw", image_path: "/p/B0000333.3FR" }))).toBe(true);
-    expect(awaitingThumbnail(card({ image_path: "/p/scan.tif" }))).toBe(true);
     expect(awaitingThumbnail(card({ asset_type: "video", image_path: "/p/clip.mov" }))).toBe(true);
   });
 
-  it("shows the original itself when it can: a JPEG, and a HEIC (media:// makes it a JPEG)", () => {
+  it("shows the original itself when it can: a JPEG, and a HEIC or TIFF (media:// makes them a JPEG)", () => {
     expect(awaitingThumbnail(card({ image_path: "/p/IMG_0001.JPG" }))).toBe(false);
     expect(awaitingThumbnail(card({ image_path: "/p/IMG_0002.HEIC" }))).toBe(false);
+    expect(awaitingThumbnail(card({ image_path: "/p/scan.tif" }))).toBe(false);
   });
 
   it("awaits nothing once the thumbnail is there, or when the file is gone", () => {

@@ -236,6 +236,9 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
         <FieldRow label={t("library.videoProxies")} hint={t("library.videoProxiesHint")}>
           <OpenFolderButton kind="videoProxies" label={t("library.openFolder")} />
         </FieldRow>
+        <FieldRow label={t("library.renders")} hint={t("library.rendersHint")}>
+          <OpenFolderButton kind="renders" label={t("library.openFolder")} />
+        </FieldRow>
       </Group>
     </div>
   );

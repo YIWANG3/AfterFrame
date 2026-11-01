@@ -508,17 +508,18 @@ app.whenReady().then(async () => {
   // Baseline allowlist entries that don't depend on the catalog. The whole
   // userData dir is app-owned (settings, sticker library, depth-cache …) —
   // allowing only the afterframe/ subdir broke depth-field loading.
-  const heicCacheDir = path.join(os.tmpdir(), "afterframe-heic-cache");
-  addBaselineMediaDir(heicCacheDir);
   addBaselineMediaDir(app.getPath("userData"));
   if (!isPackaged) addBaselineMediaDir(rootDir); // dev fixtures / demo assets
 
-  // media:// (images; HEIC transcoded on the fly) — see ./media/protocol.js.
+  // media:// (images; HEIF, PSD and TIFF originals rendered to JPEG on the
+  // fly, cached under userData) — see ./media/protocol.js.
   registerMediaProtocol({
-    protocol, net, allowlist: media, heicCacheDir,
+    protocol, net, allowlist: media, cacheDir: path.join(app.getPath("userData"), "transcode-cache"),
     // No sips off macOS: the sidecar converts with Pillow + pillow-heif.
-    convertHeic: process.platform === "darwin" ? undefined : (src, out) => sidecarCommands.transcodeImage(src, out),
+    convert: process.platform === "darwin" ? undefined : (src, out, options) => sidecarCommands.transcodeImage(src, out, options),
   });
+  // Up to 0.5.14 the renders lived in the temp folder, which Windows never empties.
+  fs.rm(path.join(os.tmpdir(), "afterframe-heic-cache"), { recursive: true, force: true }, () => {});
 
   const catalogPreparation = sample.prepareCatalogPath().finally(() => {
     // A paused task remains paused; only queued durable people tasks are

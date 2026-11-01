@@ -1,7 +1,7 @@
 // HEIC (iPhone) photos end to end. Chromium cannot decode HEIC, so the app
 // renders previews through sips in the sidecar and, when the lightbox asks
-// for the original, main.js transcodes it to a cached JPEG behind the
-// media:// protocol (transcodeHeicToJpeg) — a path no spec had exercised
+// for the original, main.js renders it to a JPEG cached under userData
+// behind the media:// protocol (electron/media/protocol.js) — a path no spec had exercised
 // (docs/review/2026-09-17-E2E覆盖率.md, A5). The fixture is a real-camera
 // JPEG re-encoded as HEIC by sips at 800px, camera EXIF intact.
 
@@ -12,7 +12,6 @@ const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp, callTool: mcpTool, galleryCards } = require("./helpers/app");
 
 const HEIC_FIXTURE = path.resolve(__dirname, "fixtures", "heic", "iphone-style.heic");
-const HEIC_CACHE = path.join(os.tmpdir(), "afterframe-heic-cache");
 
 let ctx;
 let importDir;
@@ -67,6 +66,6 @@ test("the lightbox shows the original through the HEIC → JPEG transcode", asyn
   await expect(detail).toHaveAttribute("src", /IMG_4021\.HEIC/);
   await expect(detail).toHaveCSS("visibility", "visible", { timeout: 10_000 });
   await expect.poll(() => detail.evaluate((img) => img.naturalWidth), { timeout: 10_000 }).toBe(800);
-  const cached = fs.readdirSync(HEIC_CACHE).filter((name) => name.endsWith(".jpg"));
+  const cached = fs.readdirSync(path.join(ctx.userDataDir, "transcode-cache")).filter((name) => name.endsWith(".jpg"));
   expect(cached.length).toBeGreaterThan(0);
 });

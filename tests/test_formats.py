@@ -44,9 +44,9 @@ class RegistryTest(unittest.TestCase):
     def test_what_the_browser_shows_and_what_media_transcodes_first(self) -> None:
         shown = {ext for fmt in formats.REGISTRY if fmt.browser_native or fmt.transcode_for_browser for ext in fmt.extensions}
         transcoded = {ext for fmt in formats.REGISTRY if fmt.transcode_for_browser for ext in fmt.extensions}
-        self.assertEqual(transcoded, {".heic", ".heif", ".hif", ".psd"})
-        self.assertTrue({".jpg", ".gif", ".bmp", ".insp", ".hif", ".psd"} <= shown)
-        self.assertFalse({".tif", ".nef", ".mp4"} & shown)
+        self.assertEqual(transcoded, {".heic", ".heif", ".hif", ".psd", ".tif", ".tiff"})
+        self.assertTrue({".jpg", ".gif", ".bmp", ".insp", ".hif", ".psd", ".tif"} <= shown)
+        self.assertFalse({".nef", ".mp4"} & shown)
         for fmt in formats.REGISTRY:
             self.assertFalse(fmt.browser_native and fmt.transcode_for_browser, fmt.family)
 
