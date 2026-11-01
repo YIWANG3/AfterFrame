@@ -86,6 +86,17 @@ class SourceImageTest(unittest.TestCase):
             with Image.open(io.BytesIO(data)) as sent:
                 self.assertEqual(sent.size, (ai_repaint.SOURCE_MAX_EDGE, 2731))
 
+            # Within the pixel limit but heavy on disk (maximum-quality export):
+            # re-encoded at the same pixels, so the upload shrinks.
+            heavy = root / "heavy.png"
+            Image.effect_noise((3000, 2000), 80).convert("RGB").save(heavy)
+            self.assertGreater(heavy.stat().st_size, ai_repaint.SOURCE_MAX_BYTES)
+            data, mime = ai_repaint._source_image(heavy)
+            self.assertEqual(mime, "image/jpeg")
+            self.assertLess(len(data), heavy.stat().st_size)
+            with Image.open(io.BytesIO(data)) as sent:
+                self.assertIn(sent.size, [(3000, 2000), (ai_repaint.SOURCE_FALLBACK_EDGE, 2048)])
+
 
 class ProviderRequestsTest(unittest.TestCase):
     """What each provider is sent when two references ride along."""

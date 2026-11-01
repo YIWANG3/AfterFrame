@@ -415,26 +415,33 @@ def _reference_data_url(path: Path) -> str:
     return f"data:{mime};base64," + base64.b64encode(data).decode("utf-8")
 
 
-# No provider here renders above 4K, so pixels past this on the long edge
-# only make the upload bigger: a 4000x2912 export (7 MB) stalled Seedream's
-# write past its timeout. A photo within the limit goes as the file it is.
+# The photo rides inline (base64 in JSON or a multipart part), so its byte
+# size is the upload. No provider here renders above 4K, and a camera export
+# saved at maximum quality is three times the bytes of the same pixels at
+# quality 92: a 4000x2912 export (7 MB) stalled Seedream's write past its
+# timeout. A photo within both limits goes as the file it is; otherwise it is
+# re-encoded at SOURCE_MAX_EDGE, and shrunk once more if still too heavy.
 SOURCE_MAX_EDGE = 4096
+SOURCE_MAX_BYTES = 2_500_000
+SOURCE_FALLBACK_EDGE = 3072
 
 
 def _source_image(path: Path) -> tuple[bytes, str]:
-    """(bytes, mime) to send for the photo being edited: the file itself
-    while its long edge is within SOURCE_MAX_EDGE, else shrunk to it as a
-    high-quality JPEG."""
+    """(bytes, mime) to send for the photo being edited."""
     try:
         from PIL import Image, ImageOps
         with Image.open(path) as opened:
-            if max(opened.size) <= SOURCE_MAX_EDGE:
+            if max(opened.size) <= SOURCE_MAX_EDGE and path.stat().st_size <= SOURCE_MAX_BYTES:
                 return path.read_bytes(), _detect_mime_type(path)
             upright = ImageOps.exif_transpose(opened) or opened
             picture = upright.convert("RGB")
             picture.thumbnail((SOURCE_MAX_EDGE, SOURCE_MAX_EDGE))
             buffer = io.BytesIO()
             picture.save(buffer, format="JPEG", quality=92)
+            if buffer.tell() > SOURCE_MAX_BYTES:
+                picture.thumbnail((SOURCE_FALLBACK_EDGE, SOURCE_FALLBACK_EDGE))
+                buffer = io.BytesIO()
+                picture.save(buffer, format="JPEG", quality=90)
     except (ImportError, OSError, ValueError):
         return path.read_bytes(), _detect_mime_type(path)
     return buffer.getvalue(), "image/jpeg"
