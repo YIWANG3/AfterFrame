@@ -220,7 +220,7 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 
 **谁写边车**：Lightroom Classic 和 Bridge / Camera Raw 对 RAW 写 `IMG.xmp`（JPEG / TIFF / DNG / PSD 它们直接写进文件，今天已经读到）；darktable 写 `IMG.CR2.xmp`；Capture One 用自己的 `.cos`，DxO 用 `.dop`，RawTherapee 用 `.pp3`，这三个不带 XMP 星级，不读。边车里和选片有关的是 `xmp:Rating`（星级）、`xmp:Label`（颜色标签）、`dc:subject` / `lr:hierarchicalSubject`（关键词）；其余是 Camera Raw 的调色参数（`crs:*`），**不渲染**：复现 Adobe 的处方等于重写一个 Camera Raw，结果必然和 LR 里看到的不一样，比不读更误导。AfterFrame 是选片工具，RAW 预览走内嵌 JPEG，这一点不变。
 
-**读法**（`metadata.sidecar_path / sidecar_rating`）：导入读元数据时在文件旁找两种名字（两种大小写），找到就用 `xml.etree` 取 `xmp:Rating`，不走 ExifTool（边车几 KB，纯 XML，少一次进程往返，没有 ExifTool 的平台也能读）。边车里有 0–5 的星级就以边车为准（它比相机写进 RAW 的星级新）；没有星级、或是 Bridge / darktable 的 `-1`（拒片，不是星数）就退回文件里嵌的。`IMG.xmp` 同时作用于同名的 `IMG.CR2` 和 `IMG.JPG`：LR 把 RAW+JPEG 当一张照片，星级应该两张卡都显示。边车的 mtime 记在 `metadata_json.sidecar_modified_time`。
+**读法**（`metadata.sidecar_path / sidecar_rating`）：导入读元数据时在文件旁找两种名字（两种大小写），找到就用 `xml.etree` 取 `xmp:Rating`，不走 ExifTool（边车几 KB，纯 XML，少一次进程往返，没有 ExifTool 的平台也能读）。边车里有 0–5 的星级就以边车为准（它比相机写进 RAW 的星级新）；没有星级、或是 Bridge / darktable 的 `-1`（拒片，不是星数）就退回文件里嵌的。`IMG.xmp` 同时作用于同名的 `IMG.CR2` 和 `IMG.JPG`：LR 把 RAW+JPEG 当一张照片，星级应该两张卡都显示。视频也读（`index_video_file`）：LR 没法把星级写进视频文件，评过分的视频必有边车。边车的 mtime 记在 `metadata_json.sidecar_modified_time`。
 
 **什么时候生效**：导入和再导入每次都重读元数据（`resolve_image / index_raw_file` 本来就不跳过已入库的文件），所以再导一次就跟上。写入规则从"只在应用里没有评分时取文件的星级"（`COALESCE`）改成**"应用里的评分还是上次从文件读到的那个，就跟着文件变"**：`app_rating IS metadata_json.rating` 时取新值，否则保留。用户在应用里打过的分、清掉的分（0）都和文件的不同，所以保留；没动过的跟着 LR 走，LR 清掉星级时这里也清掉。不加 `rating_source` 列，`metadata_json.rating` 已经是"上次文件说的"。嵌在 JPEG 里的星级同样受益：在 LR 里改了星再存回 JPEG，这里跟着变。
 

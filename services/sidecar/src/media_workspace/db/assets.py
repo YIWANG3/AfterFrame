@@ -240,8 +240,12 @@ def upsert_video_asset(
     file_size: int,
     modified_time: str,
     metadata: dict,
+    rating: int | None = None,
+    sidecar_modified_time: str | None = None,
     commit: bool = True,
 ) -> str:
+    """`rating` and `sidecar_modified_time` are the clip's XMP sidecar's: the
+    only place Lightroom can put a video's stars."""
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?",
         (path,),
@@ -258,15 +262,18 @@ def upsert_video_asset(
         "fps": metadata.get("fps"),
         "codec": metadata.get("codec"),
         "has_audio": metadata.get("hasAudio"),
+        "rating": rating,
         "normalized_stem": normalized_stem,
         "stem_key": stem_key,
         "file_size": file_size,
         "modified_time": modified_time,
+        "sidecar_modified_time": sidecar_modified_time,
     }
     _upsert_asset_row(
         connection, "video",
         _AssetFile(asset_id, path, stem, normalized_stem, stem_key, extension, fingerprint, file_size, modified_time),
         asset_metadata,
+        app_rating=rating,
     )
     if commit:
         connection.commit()
