@@ -103,7 +103,7 @@ module.exports = (ctx) => {
     {
       name: "import_directory",
       description:
-        "Import media into the catalog. `image_dirs` are folders/files of processed images (JPEG/PNG/WebP/HEIC); " +
+        "Import media into the catalog. `image_dirs` are folders/files of processed images (JPEG, HEIF, TIFF, PSD and the like) and videos; " +
         "`raw_dirs` are folders of RAW camera files. Provide either or both. Starts an import job " +
         `(scan → match → previews) and waits up to ${IMPORT_WAIT_MS / 1000}s; if still running, returns the job_id — ` +
         "poll with get_job_status. The job is also visible (and cancellable) in the app's JobDock.",

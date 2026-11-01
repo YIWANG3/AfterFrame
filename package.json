@@ -12,6 +12,7 @@
     "test:electron": "npm --prefix apps/desktop run test:electron",
     "test:renderer": "npm --prefix apps/desktop run test:renderer",
     "test:e2e": "npm --prefix apps/desktop run e2e",
+    "gen:formats": "PYTHONPATH=services/sidecar/src python3 -m media_workspace.formats --emit-js apps/desktop/shared/formats.generated.mjs",
     "test:e2e:coverage": "npm --prefix apps/desktop run e2e:coverage",
     "test:coverage": "npm --prefix apps/desktop run coverage"
   }

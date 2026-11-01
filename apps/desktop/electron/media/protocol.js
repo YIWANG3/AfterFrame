@@ -1,10 +1,10 @@
 // The media:// scheme: images (and anything that is not video) come to the
-// renderer through here, gated by the allowlist. HEIC/HEIF originals are
-// transcoded to JPEG on first request and cached on disk, keyed by path +
-// mtime + size, because Chromium cannot decode them: with macOS `sips`, or
-// elsewhere with the `convert` main.js passes (the sidecar's Pillow). Video
-// goes through ./httpServer.js instead (see there). Extracted from main.js
-// (review 2026-09-16 §2).
+// renderer through here, gated by the allowlist. Originals Chromium cannot
+// decode but the format registry marks `transcode_for_browser` (HEIC/HEIF,
+// PSD) are transcoded to JPEG on first request and cached on disk, keyed by
+// path + mtime + size: with macOS `sips`, or elsewhere with the `convert`
+// main.js passes (the sidecar's Pillow). Video goes through ./httpServer.js
+// instead (see there). Extracted from main.js (review 2026-09-16 §2).
 
 const path = require("node:path");
 const fs = require("node:fs");
@@ -12,8 +12,8 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 
-// The originals media:// renders to a JPEG first (HEIC), from the format registry.
-const { TRANSCODE_RE: HEIC_RE } = require("../../shared/formats.mjs");
+// The originals media:// renders to a JPEG first, from the format registry.
+const { TRANSCODE_RE } = require("../../shared/formats.mjs");
 
 // macOS: Image I/O through sips.
 async function sipsToJpeg(srcPath, outPath) {
@@ -43,7 +43,7 @@ function createHeicTranscoder({ cacheDir, convert = sipsToJpeg }) {
       await converting.get(outPath);
       if (fs.existsSync(outPath)) return outPath;
     } catch (err) {
-      console.error("[media] HEIC transcode failed:", err?.message || err);
+      console.error("[media] transcode failed:", err?.message || err);
     }
     return null;
   };
@@ -64,7 +64,7 @@ function registerMediaProtocol({ protocol, net, allowlist, heicCacheDir, convert
       return new Response("forbidden", { status: 403 });
     }
     const existsOnDisk = fs.existsSync(resolved);
-    if (existsOnDisk && HEIC_RE.test(resolved)) {
+    if (existsOnDisk && TRANSCODE_RE.test(resolved)) {
       const jpeg = await transcodeHeicToJpeg(resolved);
       if (jpeg) return net.fetch(pathToFileURL(jpeg).toString());
       // Fall through to original on failure (will surface the load error).

@@ -49,7 +49,8 @@ The core of AfterFrame — a catalog-based workflow that keeps your originals on
 - RAW files from 1,200+ cameras read with [LibRaw](https://www.libraw.org/): the camera's embedded preview when it's big enough, a full decode when it isn't; RAW HD previews are made when you open the photo, not at import
 - Two preview tiers: fast 512px thumbnails always, plus optional 2000px HD previews (toggle in Settings → Library, off by default to save disk)
 - Optional RAW source indexing and matching by filename
-- HEIC / HEIF support — originals are transcoded to JPEG on demand so iPhone photos display everywhere (lightbox, editor, collage) at full resolution
+- HEIC / HEIF support (`.heic`, `.heif` and the `.hif` stills Canon, Sony and Fujifilm cameras write) — originals are transcoded to JPEG on demand so they display everywhere (lightbox, editor, collage) at full resolution; Photoshop `.psd`, GIF and BMP import too
+- Video: MP4 / MOV / M4V / WebM / MKV / AVI, AVCHD camcorder `.mts` / `.m2ts` and `.3gp`; what the system can't play gets an H.264 proxy
 - Unified background-activity dock: imports, previews, annotation, and AI jobs all report progress in one place and can be cancelled
 - Bilingual interface (English / 简体中文) — switch live in Settings → General
 - **Keyboard shortcuts you can rebind** in Settings → Shortcuts, the menu's included
