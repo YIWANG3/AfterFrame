@@ -5,6 +5,26 @@ import api from "../../api";
 import { baseName, fileName } from "../../utils/format";
 import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
 import LutLibraryGroup from "./LutLibraryGroup";
+import { FORMATS } from "../../../shared/formats.mjs";
+
+// What the import takes, from the format registry (the sidecar's
+// media_workspace/formats.py through shared/formats.generated.mjs): one line
+// of extensions per kind. Not a document: this is where the import summary's
+// "Supported formats" lands, and it can't go stale.
+const EXTENSIONS_BY_KIND = Object.fromEntries(["image", "raw", "video"].map((kind) => [
+  kind,
+  FORMATS.filter((format) => format.kind === kind).flatMap((format) => format.extensions).map((ext) => ext.slice(1)).sort(),
+]));
+
+function FormatList({ kind }) {
+  return (
+    <div className="flex flex-wrap gap-1" data-format-list={kind}>
+      {EXTENSIONS_BY_KIND[kind].map((ext) => (
+        <span key={ext} className="rounded bg-hover px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted2">{ext}</span>
+      ))}
+    </div>
+  );
+}
 
 // Dominant colours: how many photos have them, and the two ways to run the
 // job by hand — the missing ones (normally done on open), or every photo
@@ -186,6 +206,11 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
             </span>
           </SecondaryButton>
         </div>
+      </Group>
+      <Group title={t("library.formatsTitle")} subtitle={t("library.formatsSubtitle")}>
+        <FieldRow label={t("library.formatsPhotos")} stack><FormatList kind="image" /></FieldRow>
+        <FieldRow label={t("library.formatsRaw")} stack><FormatList kind="raw" /></FieldRow>
+        <FieldRow label={t("library.formatsVideo")} stack><FormatList kind="video" /></FieldRow>
       </Group>
       <Group title={t("library.previewsTitle")}>
         <FieldRow label={t("library.generateHd")} hint={t("library.generateHdHint")}>

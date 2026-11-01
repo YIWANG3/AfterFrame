@@ -11,6 +11,7 @@
 //   refreshAll(opts), refreshBrowse(), setSummary(summary)
 // `lastFinishedJob` is a hook argument because an effect keys off it.
 
+import { describeSkippedExtensions } from "../utils/skippedFiles";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import api from "../api";
 import { collapseRootPaths, determineImportMode, fileName, mergeRoots } from "../utils/format";
@@ -252,8 +253,8 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
     );
     const already = resolve?.result?.already_in_catalog || 0;
     const added = resolve?.result?.newly_added || 0;
+    const { t, pushToast } = bridgeRef.current;
     if (already > 0) {
-      const { t, pushToast } = bridgeRef.current;
       pushToast?.({
         title: added > 0
           ? t("importMixed", { added, already })
@@ -262,6 +263,23 @@ export default function useImportPipeline(bridgeRef, lastFinishedJob) {
           ? t("importMixedMsg", { count: already })
           : t("importAllExistingMsg"),
         ttl: 6000,
+      });
+    }
+    // Files the import walked past because the catalog doesn't take their
+    // type (a .docx in the folder, a .psb): said once, with what they were,
+    // and a way to the list of what does import. Sidecars (.xmp, .thm) are
+    // counted apart and not mentioned (docs/format-support-plan.md §4.4).
+    const unsupported = resolve?.result?.skipped_unsupported;
+    if (unsupported?.count > 0) {
+      pushToast?.({
+        title: t("importSkippedUnsupported", { count: unsupported.count }),
+        message: t("importSkippedUnsupportedMsg", { kinds: describeSkippedExtensions(unsupported.by_extension, t("importSkippedNoExtension")) }),
+        ttl: 9000,
+        actions: [{
+          label: t("importSupportedFormats"),
+          primary: true,
+          onClick: () => window.dispatchEvent(new CustomEvent("afterframe:open-settings", { detail: { tab: "library" } })),
+        }],
       });
     }
     // One toast per finished import; the bridge (a stable ref) only formats it.

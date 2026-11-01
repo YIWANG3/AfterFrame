@@ -40,6 +40,7 @@ const systemFontsIpc = require("./ipc/systemFonts");
 const videoIpc = require("./ipc/video");
 const nativeDragIpc = require("./ipc/nativeDrag");
 const nativeVideoIpc = require("./ipc/nativeVideo");
+const { importableRoots } = require("./importRoots");
 const { createAgentBridge } = require("./agentBridge");
 const watcherModule = require("./watcher");
 const { createMcpServer } = require("./mcp/server");
@@ -218,7 +219,9 @@ const {
 });
 
 async function registerRoots(rootType, paths) {
-  const uniquePaths = [...new Set((paths || []).filter(Boolean))];
+  // A dropped file the catalog doesn't import is no root (the import's
+  // summary counts it as skipped); folders are, whatever they hold.
+  const uniquePaths = importableRoots([...new Set((paths || []).filter(Boolean))]);
   if (!uniquePaths.length) {
     return [];
   }

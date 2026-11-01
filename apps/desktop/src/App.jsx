@@ -622,6 +622,13 @@ export default function App() {
       if (action === "app:open-settings") openSettings();
     });
   }, []);
+  // A toast's way to a settings tab (the import summary's "Supported formats"
+  // → Library), from code with no line to this component.
+  useEffect(() => {
+    const onOpen = (event) => openSettings(event.detail?.tab || null);
+    window.addEventListener("afterframe:open-settings", onOpen);
+    return () => window.removeEventListener("afterframe:open-settings", onOpen);
+  }, []);
 
   // The user's rebound keys (Settings → Keyboard Shortcuts), before the
   // first key press if they can be.
