@@ -305,6 +305,8 @@ dialogsIpc.register({
   },
   createCatalogAt: (targetPath) => catalog.createAt(targetPath),
   addAllowedMediaDir,
+  readAppSettings,
+  updateAppSettings,
 });
 
 editorsIpc.register({ ipcMain });

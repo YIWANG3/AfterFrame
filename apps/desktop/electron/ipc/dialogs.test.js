@@ -34,11 +34,12 @@ test("createDialogs: modal to the asking window on Windows / Linux, free-standin
   assert.equal(macDialogs.dialogParent(event), null);
 });
 
-function registered(result, { platform = "darwin" } = {}) {
+function registered(result, { platform = "darwin", settings = {} } = {}) {
   const { dialog, calls } = fakeDialog(result);
   const handlers = new Map();
   const allowed = [];
   const created = [];
+  let stored = settings;
   register({
     ipcMain: { handle: (c, fn) => handlers.set(c, fn) },
     dialogs: createDialogs({ dialog, BrowserWindow, platform }),
@@ -47,8 +48,10 @@ function registered(result, { platform = "darwin" } = {}) {
     defaultCatalogDir: () => DEFAULT_DIR,
     createCatalogAt: (p) => { created.push(p); return `${p}.afcatalog`; },
     addAllowedMediaDir: (dir) => allowed.push(dir),
+    readAppSettings: () => stored,
+    updateAppSettings: async (mutate) => { stored = await mutate(stored); return stored; },
   });
-  return { handlers, calls, allowed, created };
+  return { handlers, calls, allowed, created, settings: () => stored };
 }
 
 test("pick-directories: the import dialog's options for the platform, [] when cancelled", async () => {
@@ -73,6 +76,29 @@ test("pick-repaint-refs: several images at once, each folder allowed through med
   assert.deepEqual(picked.allowed, ["/refs", "/other"]);
   assert.ok(picked.calls[0][1].properties.includes("multiSelections"));
   assert.deepEqual(await registered({ canceled: true }).handlers.get("workspace:pick-repaint-refs")(event), []);
+});
+
+test("the reference pickers open in the folder they were last used in, and remember the new one", async () => {
+  // Nothing remembered yet: no defaultPath, the panel decides.
+  const first = registered({ canceled: false, filePaths: [path.join(DEFAULT_DIR, "a.jpg"), path.join(DEFAULT_DIR, "b.jpg")] });
+  await first.handlers.get("workspace:pick-repaint-refs")(event);
+  assert.equal(first.calls[0][1].defaultPath, undefined);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(first.settings().pickerDirs.repaintReference, DEFAULT_DIR);
+
+  // Remembered and still there: the picker starts in it. A cancelled pick
+  // changes nothing.
+  const again = registered({ canceled: true }, { settings: { pickerDirs: { repaintReference: DEFAULT_DIR, handwritingReference: DEFAULT_DIR } } });
+  await again.handlers.get("workspace:pick-repaint-refs")(event);
+  assert.equal(again.calls[0][1].defaultPath, DEFAULT_DIR);
+  await again.handlers.get("workspace:pick-handwriting-ref")(event);
+  assert.equal(again.calls[1][1].defaultPath, DEFAULT_DIR);
+  assert.equal(again.settings().pickerDirs.repaintReference, DEFAULT_DIR);
+
+  // A remembered folder that is gone is not offered (the panel would show an error).
+  const gone = registered({ canceled: true }, { settings: { pickerDirs: { repaintReference: path.join(DEFAULT_DIR, "no-such-folder-af") } } });
+  await gone.handlers.get("workspace:pick-repaint-refs")(event);
+  assert.equal(gone.calls[0][1].defaultPath, undefined);
 });
 
 test("pick-catalog / create-catalog: start in the given folder; create goes through the catalog's path rules", async () => {
