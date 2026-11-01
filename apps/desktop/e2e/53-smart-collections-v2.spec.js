@@ -167,13 +167,13 @@ test("condition groups: any one of them may hold, and they save with the collect
 
   // The groups sit under the bar's own conditions: add a format on top.
   await bar().getByRole("button", { name: "Format", exact: true }).click();
-  await option("JPG").click();
+  await option("jpeg").click();
   await ctx.window.keyboard.press("Escape");
   const narrowed = await browseLength({ extension: "jpg", any_of: groups });
   await expect(cards()).toHaveCount(narrowed);
 
   const saved = await saveAsSmart("Canon or unrated JPGs");
-  expect(saved.rules.filters).toEqual({ extension: "JPG", any_of: groups });
+  expect(saved.rules.filters).toEqual({ extension: "jpeg", any_of: groups });
   expect(saved.item_count).toBe(narrowed);
 
   // Editing the collection brings the groups back into the dialog.

@@ -2,6 +2,7 @@
 // search clause, facet filters and smart-collection rules (db/browse.py,
 // db/facets.py), as predicates over asset records.
 
+import { filterExtensions } from "../../../shared/formats.mjs";
 import { assets, collections, fileExt, normalizeTag } from "./state";
 
 // The toolbar's sort orders. `assets` is in import order, oldest first.
@@ -111,7 +112,8 @@ function matchesFacetConditions(asset, filters) {
     const shape = meta.height > meta.width ? "portrait" : meta.width > meta.height ? "landscape" : meta.width ? "square" : null;
     if (!orientations.includes(shape)) return false;
   }
-  const extensions = facetValues(filters.extension).map((v) => String(v).toLowerCase().replace(/^\./, ""));
+  // A family ("jpeg") stands for all its extensions; "jpg" for that one.
+  const extensions = facetValues(filters.extension).flatMap(filterExtensions);
   if (extensions.length && !extensions.includes(fileExt(asset.file_name))) return false;
   const wanted = facetValues(filters.tag).map(normalizeTag);
   if (wanted.length) {

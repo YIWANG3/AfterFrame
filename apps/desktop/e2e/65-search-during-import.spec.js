@@ -175,7 +175,7 @@ test("a filter holds while an import runs", async () => {
   await expect.poll(importStatus, { timeout: 30_000, intervals: [100] }).toBe("running");
 
   await ctx.window.locator("[data-filter-bar]").getByRole("button", { name: "Format", exact: true }).click();
-  await ctx.window.locator('[data-facet-option="DNG"]').click();
+  await ctx.window.locator('[data-facet-option="dng"]').click();
   await ctx.window.keyboard.press("Escape");
   await expect(cards.filter({ hasText: "DSC0845" })).toHaveCount(6, { timeout: 15_000 });
   expect(await importStatus(), "the import ran through it").toBe("running");

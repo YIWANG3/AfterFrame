@@ -205,13 +205,16 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 
 编辑源用 JPEG 95 + 保留 ICC（第 6 节第 2 条，按建议定）。
 
-### 4.6 落库：`assets.format`
+### 4.6 格式 facet 按家族聚合（实际做法：不加列）
 
-schema 加一列 `format TEXT`（迁移时按扩展名回填，`.tif` 走一次嗅探），值是注册表的 `family`。用处：
+最初设想 schema 加一列 `format TEXT`（迁移时按扩展名回填）。实现时改成**不落库**：家族是扩展名的纯函数，注册表就是那张映射表，加一列只是把它抄进每一行，还要迁移和回填。做法：
 
-- 筛选栏的"格式"facet 从按扩展名（`heic` 和 `hif` 两项）变成按 family（HEIF 一项），标签用 `label`。
-- Inspector 显示 "Canon CR3" 而不是 "cr3"，`RAW_EXTENSION_FORMATS` 退役。
-- MCP `search_assets` 多一个 `format` 参数，`asset_type` 的 enum 补上 `"raw"`（现在 `db/facets.py` 收，`server.js:341` 不收，是个 bug）。
+- `formats.family_sql(expr)` 生成一段 `CASE … WHEN 'jpg' THEN 'jpeg' … END`，`get_facet_values` 的 `extensions` 用它按家族计数，每项带注册表的 `label`（JPEG、HEIF、Canon CR3）；`.jpg` 和 `.jpeg` 是一项 JPEG，`.heic / .heif / .hif` 是一项 HEIF（第 6 节第 5 条就此了结）。键名仍叫 `extensions`，渲染层、MCP `get_catalog_info`、web bridge 都不用改读法。
+- facet 子句 `extension` 的值可以是家族（`jpeg`，筛选栏发的）或单个扩展名（`jpg`，老规则和 agent 发的）：家族展开成它的全部扩展名（`formats.filter_extensions`），单个扩展名仍只匹配它自己。已保存的智能集合规则 `{extension: "JPG"}` 语义不变，不需要迁移。
+- 渲染层 `FilterBar` 显示 `label`；`shared/formats.mjs` 的 `formatLabel / filterExtensions / familyOf` 供筛选条和 web bridge（`src/api/browser`）镜像同一套规则。
+- MCP `search_assets` 的 `extension` 说明改为"家族或扩展名"，`asset_type` 的 enum 补上 `"raw"`（原来 `db/facets.py` 收、工具 schema 不收，是个 bug）。没有另加 `format` 参数：`extension` 已经接受家族。
+- Inspector 没改：它今天不单独显示格式一栏，文件名里有扩展名。
+- e2e 47 / 48 / 53 的格式选项从 "JPG" 变成 `jpeg`（显示 JPEG）；51 里 agent 存的老规则 "jpg" 仍显示为 JPG。
 
 ### 4.7 不做什么
 
@@ -239,7 +242,7 @@ P0 是其余所有期的前提；P1a / P1b / P1c 互不依赖，可以并行；P
 2. **非原生格式的编辑源**（4.5）：全尺寸 JPEG 92（和 RAW 今天一致，有一次有损）还是 PNG（无损，HEIC 一张 48 MP 的 PNG 要 100 MB 以上）？建议 JPEG 95 + 保留 ICC，和 RAW 对齐。
 3. **PSD 要不要进 P1a**：Pillow 只读合成图层，带图层的 PSD 如果没有保存合成图（Photoshop 的 "Maximize Compatibility" 关掉时）读出来是空白。建议进，失败走现有的 `status='failed'` + "No preview"。
 4. **`package.json` 的 Dock 类型表要不要改成生成**，还是继续用测试守约。
-5. **`.heif / .hif` 的 facet 标签**：和 `.heic` 合并显示为 "HEIF"（P2 落库之后自然如此），P1 阶段先分开显示可接受吗。
+5. **`.heif / .hif` 的 facet 标签**：和 `.heic` 合并显示为 "HEIF"——已随 4.6 节落地。
 
 ## 来源
 

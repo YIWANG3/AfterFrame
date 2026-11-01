@@ -56,7 +56,7 @@ class FolderFacetTests(unittest.TestCase):
         self.assertEqual(self.counts(facets["cameras"]), {"CFV 100C": 2, "Canon R6": 1})
         # "city" is only on a photo outside the folder: not offered at all.
         self.assertEqual(self.counts(facets["tags"]), {"coast": 2})
-        self.assertEqual(self.counts(facets["extensions"]), {"jpg": 3})
+        self.assertEqual(self.counts(facets["extensions"]), {"jpeg": 3})
         self.assertEqual(facets["iso"], {"min": 100, "max": 3200})
 
     def test_each_count_is_what_choosing_that_option_shows(self):

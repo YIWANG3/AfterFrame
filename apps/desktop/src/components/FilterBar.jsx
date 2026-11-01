@@ -1,3 +1,4 @@
+import { formatLabel } from "../../shared/formats.mjs";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useTranslation } from "react-i18next";
@@ -194,8 +195,10 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
         <ListPopover
           label={t("filter.format")}
           value={f.extension}
-          options={extensions.map((e) => ({ value: String(e.value).toUpperCase(), count: e.count }))}
-          labelOf={(value) => String(value).toUpperCase()} // a rule saved by an agent may say "jpg"
+          // Families ("jpeg", "heif"), labelled by the registry; a rule saved by
+          // an agent, or before the families, may name one extension ("jpg").
+          options={extensions.map((e) => ({ value: e.value, label: e.label, count: e.count }))}
+          labelOf={(value, opt) => opt?.label || formatLabel(value)}
           {...exclusion("extension")}
           onSelect={(v) => onChange(setFacet("extension", "extension", v))}
         />

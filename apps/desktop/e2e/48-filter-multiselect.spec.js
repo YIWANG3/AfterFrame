@@ -62,8 +62,8 @@ test("other facets still narrow it, and their counts are taken inside the picked
   await bar().getByRole("button", { name: "Format", exact: true }).click();
   const formats = await optionCounts();
   // Only the formats those two cameras have, with the numbers picking them would give.
-  expect(formats.JPG).toBe(await browseLength({ camera: [CANON, HASSELBLAD], extension: "jpg" }));
-  expect(formats.MP4).toBeUndefined();
+  expect(formats.jpeg).toBe(await browseLength({ camera: [CANON, HASSELBLAD], extension: "jpg" }));
+  expect(formats.mp4).toBeUndefined();
   await ctx.window.keyboard.press("Escape");
 
   // The camera dropdown itself still offers the third camera, with ITS count.
