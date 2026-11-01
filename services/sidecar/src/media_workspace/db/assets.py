@@ -65,6 +65,7 @@ def _file_metadata_fields(metadata: RawMetadata | ImageCandidate) -> dict[str, A
         "stem_key": metadata.stem_key,
         "file_size": metadata.file_size,
         "modified_time": metadata.modified_time,
+        "sidecar_modified_time": metadata.sidecar_modified_time,
     }
 
 
@@ -79,9 +80,11 @@ def _upsert_asset_row(
     """The assets row and its primary asset_files row, for any media type.
 
     A re-import refreshes the file's stats and metadata and marks it present
-    again, but never overwrites a rating the user set in the app (COALESCE);
-    `app_rating` is the file's embedded rating, the value a first import
-    starts from (videos carry none)."""
+    again. `app_rating` is the file's own stars (embedded, or its XMP
+    sidecar's; videos carry none): a first import starts from them, and a
+    re-import follows them only while the app's rating still is what the
+    file said last time (metadata_json.rating). A rating the user set or
+    cleared in the app differs from that, so it stays."""
     connection.execute(
         """
         INSERT INTO assets (
@@ -98,7 +101,10 @@ def _upsert_asset_row(
             file_size = excluded.file_size,
             modified_time = excluded.modified_time,
             metadata_json = excluded.metadata_json,
-            app_rating = COALESCE(assets.app_rating, excluded.app_rating),
+            app_rating = CASE
+                WHEN assets.app_rating IS json_extract(assets.metadata_json, '$.rating') THEN excluded.app_rating
+                ELSE assets.app_rating
+            END,
             exists_on_disk = 1,
             updated_at = CURRENT_TIMESTAMP
         """,
@@ -234,8 +240,12 @@ def upsert_video_asset(
     file_size: int,
     modified_time: str,
     metadata: dict,
+    rating: int | None = None,
+    sidecar_modified_time: str | None = None,
     commit: bool = True,
 ) -> str:
+    """`rating` and `sidecar_modified_time` are the clip's XMP sidecar's: the
+    only place Lightroom can put a video's stars."""
     existing = connection.execute(
         "SELECT asset_id FROM asset_files WHERE path = ?",
         (path,),
@@ -252,15 +262,18 @@ def upsert_video_asset(
         "fps": metadata.get("fps"),
         "codec": metadata.get("codec"),
         "has_audio": metadata.get("hasAudio"),
+        "rating": rating,
         "normalized_stem": normalized_stem,
         "stem_key": stem_key,
         "file_size": file_size,
         "modified_time": modified_time,
+        "sidecar_modified_time": sidecar_modified_time,
     }
     _upsert_asset_row(
         connection, "video",
         _AssetFile(asset_id, path, stem, normalized_stem, stem_key, extension, fingerprint, file_size, modified_time),
         asset_metadata,
+        app_rating=rating,
     )
     if commit:
         connection.commit()

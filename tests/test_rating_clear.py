@@ -1,7 +1,8 @@
 """A rating cleared in the app stays cleared. Import seeds a photo's rating
-from the stars its file carries (XMP/EXIF Rating) only while the catalog has
-none for it; a clear is a rating of its own, so importing or refreshing the
-photo again must not bring the file's stars back."""
+from the stars its file carries (XMP/EXIF Rating, or its XMP sidecar's) and
+follows them while the app's rating still is what the file said last time;
+a rating set or cleared in the app is a rating of its own, so importing or
+refreshing the photo again must not bring the file's stars back."""
 from __future__ import annotations
 
 import contextlib
@@ -56,6 +57,20 @@ class ClearedRatingTest(unittest.TestCase):
         self.assertEqual(self.rating(), 0)
         self.import_photo(rating=5)
         self.assertEqual(self.rating(), 0)
+
+    def test_the_files_new_stars_follow_while_the_app_has_none_of_its_own(self) -> None:
+        # Lightroom re-rates the photo (and writes the file or its sidecar).
+        self.import_photo(rating=5)
+        self.import_photo(rating=4)
+        self.assertEqual(self.rating(), 4)
+        self.import_photo(rating=None)  # the stars taken away in Lightroom
+        self.assertIsNone(self.rating())
+
+    def test_a_rating_set_in_the_app_stays_when_the_files_stars_change(self) -> None:
+        self.import_photo(rating=5)
+        self.rate(3)
+        self.import_photo(rating=4)
+        self.assertEqual(self.rating(), 3)
 
     def test_a_changed_rating_survives_importing_the_photo_again(self) -> None:
         self.import_photo(rating=5)

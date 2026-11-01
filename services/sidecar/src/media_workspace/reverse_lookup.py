@@ -32,6 +32,8 @@ from .metadata import (
     iso_mtime,
     normalize_stem,
     quick_fingerprint_from_handle,
+    sidecar_path,
+    sidecar_rating,
     stable_asset_id,
     stem_alnum_key,
 )
@@ -537,6 +539,8 @@ def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecisi
         fingerprint = quick_fingerprint_from_handle(handle, stat.st_size, mode="head-tail")
     asset_id = str(existing["asset_id"]) if existing else stable_asset_id("video", fingerprint, str(resolved))
     metadata = probe_video(resolved) or {}
+    # Lightroom can't write stars into a clip, so a rated video has a sidecar.
+    sidecar = sidecar_path(resolved)
     upsert_video_asset(
         connection,
         path=str(resolved),
@@ -549,6 +553,8 @@ def index_video_file(connection, path: Path, commit: bool = True) -> MatchDecisi
         file_size=stat.st_size,
         modified_time=iso_mtime(resolved, stat),
         metadata=metadata,
+        rating=sidecar_rating(sidecar) if sidecar is not None else None,
+        sidecar_modified_time=iso_mtime(sidecar) if sidecar is not None else None,
         commit=commit,
     )
     # Register as 'unmatched' (no RAW) so videos ride the registry-based browse /

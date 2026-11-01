@@ -29,6 +29,24 @@ const path = require("path");
 // format registry. The sidecar re-filters; this only avoids triggering on junk.
 const { MEDIA_RE } = require("../shared/formats.mjs");
 
+// An XMP sidecar is Lightroom's (Bridge's, darktable's) way of re-rating a
+// RAW without touching it: its change is its photo's change. IMG.CR2.xmp
+// (darktable) names the photo; IMG.xmp (Adobe) is the photo's stem, and
+// stands for every media file of that stem beside it (the RAW and its JPEG).
+const SIDECAR_RE = /\.xmp$/i;
+
+function photosOfSidecar(filePath) {
+  const bare = filePath.slice(0, -".xmp".length);
+  if (MEDIA_RE.test(bare)) return [bare];
+  const dir = path.dirname(bare);
+  const stem = path.basename(bare).toLowerCase();
+  let names;
+  try { names = fs.readdirSync(dir); } catch { return []; }
+  return names
+    .filter((name) => MEDIA_RE.test(name) && path.parse(name).name.toLowerCase() === stem)
+    .map((name) => path.join(dir, name));
+}
+
 // A burst of writes (an editor exporting 200 files) is imported once it has
 // been quiet this long. Editor exports can pause between chunks; the sidecar
 // also validates JPEG completeness and source stability, so a longer pause
@@ -120,13 +138,16 @@ function onChange(root, relative, eventGeneration, catalogPath) {
   if (eventGeneration !== generation || !sameCatalog(catalog.path(), catalogPath)) return;
   if (!relative) return;
   const name = String(relative);
-  if (!MEDIA_RE.test(name)) return;
+  const sidecar = SIDECAR_RE.test(name);
+  if (!sidecar && !MEDIA_RE.test(name)) return;
   // Hidden files and folders: temp files, .Trashes, .Spotlight-V100, editors' scratch.
   if (name.split(/[\\/]/).some((part) => part.startsWith("."))) return;
   const filePath = path.join(root, name);
   // A catalog kept inside a watched folder writes its own previews there.
   if (catalogPath && isInside(filePath, catalogPath)) return;
-  pending.add(filePath);
+  const files = sidecar ? photosOfSidecar(filePath) : [filePath];
+  if (!files.length) return;
+  for (const file of files) pending.add(file);
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(() => flush(eventGeneration, catalogPath), quietMs);
 }
@@ -213,4 +234,4 @@ function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings,
   return { start: rebuild, rebuild, stop: close, watchedDirs, addWatchedDir, removeWatchedDir };
 }
 
-module.exports = { register, importTargets };
+module.exports = { photosOfSidecar, register, importTargets };

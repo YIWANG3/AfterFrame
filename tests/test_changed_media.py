@@ -1,6 +1,8 @@
 """A watched folder reports files whose only change is their extended
 attributes: AirDrop records whom it sent a photo to on the photo itself.
-changed-media says which of the reported files an import would change."""
+changed-media says which of the reported files an import would change.
+A photo as it was whose XMP sidecar came, changed or went has changed: that
+is how Lightroom re-rates a RAW."""
 from __future__ import annotations
 
 import contextlib
@@ -118,6 +120,25 @@ class ChangedMediaTest(unittest.TestCase):
 
         photo.write_bytes(b"\xff\xd8a-new-export-over-it\xff\xd9")
         self.assertEqual(self.changed(photo)["changed"], [str(photo)])
+
+    def test_a_photo_whose_sidecar_came_changed_or_went_is_kept(self) -> None:
+        photo = self.export("rated.jpg")
+        [asset_id] = self.import_files(photo)
+        sidecar = self.folder / "rated.xmp"
+        sidecar.write_text("<x:xmpmeta xmlns:x='adobe:ns:meta/'/>")
+
+        self.assertEqual(self.changed(photo)["changed"], [str(photo)], "a sidecar appeared")
+
+        self.import_files(photo)
+        self.assertEqual(self.changed(photo), {"changed": [], "unchanged": 1, "present_asset_ids": [asset_id]})
+
+        stat = sidecar.stat()
+        os.utime(sidecar, (stat.st_atime, stat.st_mtime + 60))
+        self.assertEqual(self.changed(photo)["changed"], [str(photo)], "the sidecar was rewritten")
+
+        self.import_files(photo)
+        sidecar.unlink()
+        self.assertEqual(self.changed(photo)["changed"], [str(photo)], "the sidecar went")
 
 
 if __name__ == "__main__":

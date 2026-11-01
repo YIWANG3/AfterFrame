@@ -1,6 +1,6 @@
 # 文件格式支持：对照 Eagle 的差距与格式注册表重构
 
-> **状态（2026-11-01）**：P0（纯重构，#242）、P1a（加格式，#243，PSD 走和 HEIF 一样的转码而不是 HD 预览）、P1b（不支持的文件有交代，#244）、P1c（原图统一，#245，见 4.5 节的实际做法）已合并；P2 的格式 facet 按家族聚合是 #246（4.6 节的实际做法，不加列）；JXL、`.xmp` 边车评分、`.mxf` 各自单独评估，未开工。第 6 节的五条都已按建议定下：只报不收、JPEG 95 + ICC、PSD 进 P1a、Dock 表继续用测试守约、HEIF 家族合并显示。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
+> **状态（2026-11-01）**：P0（纯重构，#242）、P1a（加格式，#243，PSD 走和 HEIF 一样的转码而不是 HD 预览）、P1b（不支持的文件有交代，#244）、P1c（原图统一，#245，见 4.5 节的实际做法）已合并；P2 的格式 facet 按家族聚合是 #246（4.6 节的实际做法，不加列）；`.xmp` 边车评分是 4.7 节（只读星级，边车变了跟着变，直到用户在应用里自己打过分）；JXL、`.mxf` 各自单独评估，未开工。第 6 节的五条都已按建议定下：只报不收、JPEG 95 + ICC、PSD 进 P1a、Dock 表继续用测试守约、HEIF 家族合并显示。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
 
 ## 0. 结论
 
@@ -190,7 +190,7 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 "skipped_companion":   {"count": 8,  "by_extension": {".xmp": 6, ".thm": 2}},   # 已知伴生文件，不提醒
 ```
 
-- **伴生文件**（`.xmp .thm .lrv .aae .pp3 .dop .on1 .cos`，Lightroom / 相机 / Capture One 的边车）：知道它是什么，所以不算"不支持"，不打扰用户。P2 再决定要不要读 `.xmp` 边车里的评分和标签（现在 README 说的"导入 Lightroom XMP 评分"读的是嵌在 JPEG 里的 XMP，边车文件没有碰）。
+- **伴生文件**（`.xmp .thm .lrv .aae .pp3 .dop .on1 .cos`，Lightroom / 相机 / Capture One 的边车）：知道它是什么，所以不算"不支持"，不打扰用户。边车里的星级 4.7 节读了（嵌在 JPEG 里的 XMP 一直读到），关键词和颜色标签见第 6 节 6、7。
 - **不支持**：toast 一句"已跳过 12 个不支持的文件（docx、zip）"，JobDock 里这次导入的详情可以展开看扩展名计数；toast 上一个"查看支持的格式"按钮直达 Settings → Library 的格式面板。
 - `addImagesFromPaths` 在渲染层**先**按 `IMPORTABLE_EXTENSIONS` 分流：单个不支持的文件不再被 `registerRoots` 注册成根；文件夹照旧整个注册，由 sidecar 过滤计数。
 - Windows 启动参数（`singleInstance.js`）同样过一遍 `classify`。
@@ -216,7 +216,21 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 - Inspector 没改：它今天不单独显示格式一栏，文件名里有扩展名。
 - e2e 47 / 48 / 53 的格式选项从 "JPG" 变成 `jpeg`（显示 JPEG）；51 里 agent 存的老规则 "jpg" 仍显示为 JPG。
 
-### 4.7 不做什么
+### 4.7 `.xmp` 边车评分（实际做法：只读星级，不加列）
+
+**谁写边车**：Lightroom Classic 和 Bridge / Camera Raw 对 RAW 写 `IMG.xmp`（JPEG / TIFF / DNG / PSD 它们直接写进文件，今天已经读到）；darktable 写 `IMG.CR2.xmp`；Capture One 用自己的 `.cos`，DxO 用 `.dop`，RawTherapee 用 `.pp3`，这三个不带 XMP 星级，不读。边车里和选片有关的是 `xmp:Rating`（星级）、`xmp:Label`（颜色标签）、`dc:subject` / `lr:hierarchicalSubject`（关键词）；其余是 Camera Raw 的调色参数（`crs:*`），**不渲染**：复现 Adobe 的处方等于重写一个 Camera Raw，结果必然和 LR 里看到的不一样，比不读更误导。AfterFrame 是选片工具，RAW 预览走内嵌 JPEG，这一点不变。
+
+**读法**（`metadata.sidecar_path / sidecar_rating`）：导入读元数据时在文件旁找两种名字（两种大小写），找到就用 `xml.etree` 取 `xmp:Rating`，不走 ExifTool（边车几 KB，纯 XML，少一次进程往返，没有 ExifTool 的平台也能读）。边车里有 0–5 的星级就以边车为准（它比相机写进 RAW 的星级新）；没有星级、或是 Bridge / darktable 的 `-1`（拒片，不是星数）就退回文件里嵌的。`IMG.xmp` 同时作用于同名的 `IMG.CR2` 和 `IMG.JPG`：LR 把 RAW+JPEG 当一张照片，星级应该两张卡都显示。视频也读（`index_video_file`）：LR 没法把星级写进视频文件，评过分的视频必有边车。边车的 mtime 记在 `metadata_json.sidecar_modified_time`。
+
+**什么时候生效**：导入和再导入每次都重读元数据（`resolve_image / index_raw_file` 本来就不跳过已入库的文件），所以再导一次就跟上。写入规则从"只在应用里没有评分时取文件的星级"（`COALESCE`）改成**"应用里的评分还是上次从文件读到的那个，就跟着文件变"**：`app_rating IS metadata_json.rating` 时取新值，否则保留。用户在应用里打过的分、清掉的分（0）都和文件的不同，所以保留；没动过的跟着 LR 走，LR 清掉星级时这里也清掉。不加 `rating_source` 列，`metadata_json.rating` 已经是"上次文件说的"。嵌在 JPEG 里的星级同样受益：在 LR 里改了星再存回 JPEG，这里跟着变。
+
+**监视文件夹**：`electron/watcher.js` 原来只放行媒体文件名，`.xmp` 一律忽略；现在一个 `.xmp` 的变化映射到它的照片（`IMG.CR2.xmp` → `IMG.CR2`；`IMG.xmp` → 同目录下同名的媒体文件，可能两个），走原来的 `changed-media` → 导入路径。`changed_media` 对一个本身没变的照片再比边车的 mtime 和 `metadata_json.sidecar_modified_time`，不同（出现、改写、删掉）就算变了。照片本身没变，所以不重做预览，只更新评分。
+
+**对真实文件验过**（2026-11-01，文件只在本地，没进仓库）：八个真实边车——Lightroom 写的五个（XMP Core 4.2 / 5.6 / 7.0 三代 toolkit，星级 0、1、2 都有，其中一个带关键词和颜色标签 Blue）、darktable 一个、Photoshop CS2 两个——`sidecar_rating` 的结果和 ExifTool 的 `XMP-xmp:Rating` 逐个一致。佳能 1D X Mark III 直出的 10 位 HIF（`heix` brand，5472×3648）导入为 image、ExifTool 读到机型、sips 和 Pillow 两条转码路径都出图；Photoshop 存的四个 PSD 和一个 TIFF 导入、预览、两条转码都成功，两个渲染为纯白的 PSD 用 psd-tools 核对过是文件本身就白（空组 / 无图层），不是没读到合成图。e2e 里现写的 Adobe 格式 XML 和真文件的差别只在历史栈和命名空间数量，解析器不受影响。
+
+**不做**：`xmp:Label`（AfterFrame 没有颜色标签的概念）、`dc:subject` 关键词进标签（和 AI 标签混在一起显示，要先定来源怎么区分）、`-1` 映射成 X 旗标（旗标是用户自己的）。三项写在第 6 节。
+
+### 4.8 不做什么
 
 - 不做 Eagle 的"任意文件入库 + 自定义缩略图"。AfterFrame 的定位是选片，catalog 里只放照片和视频。
 - 不做音频、字体、Office、3D、源文件（除 PSD）。
@@ -231,7 +245,7 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 | **P1a 加格式** | 图像：heif、hif、psd、gif、bmp、jfif、jpe、insp；视频：mts、m2ts、3gp。每个都要：Pillow / ffprobe 冒烟（Mac + Windows 盒子）、Dock 类型、`showsOriginal` 行为、e2e 夹具（37-heic-import 扩成 HEIF 家族；PSD 和 MTS 各一个小夹具，MTS 用 ffmpeg 合成，和 70-native-video 的 ProRes 同法） | 1.5 天 | 一个 PR 一类格式，不叠 PR |
 | **P1b 交代不支持** | `skipped_unsupported / skipped_companion` 计数、toast + JobDock 详情、渲染层不再把单文件注册成根、Settings → Library 的"支持的格式"面板（从注册表生成，按当前平台标注） | 1.5 天 | e2e：丢一个 `.docx` 进去有 toast；只丢伴生文件没有 toast |
 | **P1c 原图统一** | 4.5 节：`transcode_for_browser` 驱动的 JPEG 95 渲染（TIFF 加入），缓存从临时目录搬到 userData 并限额，删 HEIC 特判 | 2 天 | 37-heic-import、35-raw-import、e2e/11 的 tif 重试不变；79 多出 TIFF 的 Lightbox 用例 |
-| **P2** | facet 按家族（4.6 节，不加列）+ MCP `asset_type` enum 修正：#246；JXL（评估 `pillow-jxl-plugin` 打包）、`.xmp` 边车评分、`.mxf`：各自单独评估、单独 PR | 2 到 3 天，可拆 | 47 / 48 / 53 的格式选项从 "JPG" 变成 jpeg（显示 JPEG）；51 的老规则 "jpg" 仍显示 JPG |
+| **P2** | facet 按家族（4.6 节，不加列）+ MCP `asset_type` enum 修正：#246；`.xmp` 边车评分（4.7 节）：单独 PR；JXL（评估 `pillow-jxl-plugin` 打包）、`.mxf`：各自单独评估、单独 PR | 2 到 3 天，可拆 | 47 / 48 / 53 的格式选项从 "JPG" 变成 jpeg（显示 JPEG）；51 的老规则 "jpg" 仍显示 JPG |
 | **文档** | README 的格式段落改为指向 Settings 面板一句话；`docs/README.md` 的状态行 | 0.5 天 | 已做 |
 
 P0 是其余所有期的前提；P1a / P1b / P1c 互不依赖，可以并行；P2 依赖 P0。总计约一周到一周半。
@@ -243,6 +257,8 @@ P0 是其余所有期的前提；P1a / P1b / P1c 互不依赖，可以并行；P
 3. **PSD 要不要进 P1a**：Pillow 只读合成图层，带图层的 PSD 如果没有保存合成图（Photoshop 的 "Maximize Compatibility" 关掉时）读出来是空白。建议进，失败走现有的 `status='failed'` + "No preview"。
 4. **`package.json` 的 Dock 类型表要不要改成生成**，还是继续用测试守约。
 5. **`.heif / .hif` 的 facet 标签**：和 `.heic` 合并显示为 "HEIF"——已随 4.6 节落地。
+6. **边车里的关键词**（`dc:subject`）要不要进 `asset_tags`：有用，但要先定它和 AI 标签在界面上怎么区分（`source` 列已经有 `ai` / 用户两种）。4.7 节先不读。
+7. **边车里的拒片**（`xmp:Rating = -1`，Bridge / darktable）要不要映射成 X 旗标：建议不要，旗标是用户在这里自己做的决定；4.7 节当作没有星级。
 
 ## 来源
 

@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { register, importTargets } = require("./watcher");
+const { photosOfSidecar, register, importTargets } = require("./watcher");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const fdDir = process.platform === "darwin" ? "/dev/fd" : process.platform === "linux" ? "/proc/self/fd" : null;
@@ -125,6 +125,32 @@ test("a photo moved out and put back isn't imported; the renderer hears it's the
   await sleep(400);
   assert.deepEqual(sent, []);
   assert.deepEqual(present.flat(), ["image_back"]);
+});
+
+test("an XMP sidecar written beside a photo is that photo's change", async (t) => {
+  const { api, watched, sent } = setup(t);
+  api.start();
+  await sleep(300);
+  const raw = path.join(watched, "day 1", "DSC_0006.NEF");
+  fs.writeFileSync(raw, "raw");
+  await waitFor(() => sent.length);
+  sent.length = 0;
+  await sleep(400);
+  fs.writeFileSync(path.join(watched, "day 1", "DSC_0006.xmp"), "<x:xmpmeta/>"); // Lightroom re-rates the RAW
+  await waitFor(() => sent.length);
+  await sleep(400);
+  assert.deepEqual(sent.flat().map((p) => fs.realpathSync(p)), [fs.realpathSync(raw)]);
+});
+
+test("a sidecar names its photo by stem (Adobe) or by full name (darktable); a lone one names nothing", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-sidecar-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const name of ["IMG_0001.CR2", "img_0001.JPG", "IMG_0001.xmp", "IMG_0002.NEF", "IMG_0002.NEF.xmp", "notes.xmp"]) {
+    fs.writeFileSync(path.join(dir, name), name);
+  }
+  assert.deepEqual(photosOfSidecar(path.join(dir, "IMG_0001.xmp")).sort(), [path.join(dir, "IMG_0001.CR2"), path.join(dir, "img_0001.JPG")]);
+  assert.deepEqual(photosOfSidecar(path.join(dir, "IMG_0002.NEF.xmp")), [path.join(dir, "IMG_0002.NEF")]);
+  assert.deepEqual(photosOfSidecar(path.join(dir, "notes.xmp")), []);
 });
 
 test("files are imported when the catalog can't say whether they changed", async (t) => {

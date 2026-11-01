@@ -15,7 +15,7 @@ from typing import Any
 
 from .catalog import CatalogPaths
 from .db import list_assets_for_preview
-from .metadata import iso_mtime
+from .metadata import iso_mtime, sidecar_path
 from .preview_service import PreviewService
 from .reverse_lookup import iter_image_files, resolve_image_batch
 
@@ -42,6 +42,11 @@ def scan_new_media(connection: sqlite3.Connection, directories: list[Path]) -> d
     return {"new_files": new_files, "scanned": scanned, "known": known_hit, "tombstoned": tombstoned_hit}
 
 
+def _sidecar_mtime(path: Path) -> str | None:
+    sidecar = sidecar_path(path)
+    return iso_mtime(sidecar) if sidecar is not None else None
+
+
 def changed_media(connection: sqlite3.Connection, paths: list[str]) -> dict[str, Any]:
     """Which of these files, reported by a watched folder, would an import
     change? The folder reports more than new and rewritten files: AirDrop, a
@@ -49,8 +54,9 @@ def changed_media(connection: sqlite3.Connection, paths: list[str]) -> dict[str,
     attributes. Dropped: a file the catalog holds as it is on disk (present,
     same size and mtime: what the importer itself compares), and one the
     user removed that hasn't been rewritten since (the auto import skips it
-    the same way). The rest, unreadable paths included, are the import's to
-    decide.
+    the same way). A photo as it was whose XMP sidecar appeared, changed or
+    went (Lightroom re-rating a RAW writes only the sidecar) has changed
+    too. The rest, unreadable paths included, are the import's to decide.
 
     `present_asset_ids` are the dropped files the catalog holds. Browsing
     stats files live and leaves exists_on_disk alone, so a photo moved out
@@ -68,7 +74,8 @@ def changed_media(connection: sqlite3.Connection, paths: list[str]) -> dict[str,
             continue
         known = connection.execute(
             """
-            SELECT assets.asset_id, assets.file_size, assets.modified_time, assets.exists_on_disk
+            SELECT assets.asset_id, assets.file_size, assets.modified_time, assets.exists_on_disk,
+                   json_extract(assets.metadata_json, '$.sidecar_modified_time') AS sidecar_modified_time
             FROM asset_files
             JOIN assets ON assets.asset_id = asset_files.asset_id
             WHERE asset_files.path = ?
@@ -81,6 +88,7 @@ def changed_media(connection: sqlite3.Connection, paths: list[str]) -> dict[str,
             int(known["exists_on_disk"]) == 1
             and int(stat.st_size) == int(known["file_size"] or 0)
             and iso_mtime(path, stat) == str(known["modified_time"] or "")
+            and _sidecar_mtime(path) == known["sidecar_modified_time"]
         ):
             unchanged += 1
             present_asset_ids.append(str(known["asset_id"]))
