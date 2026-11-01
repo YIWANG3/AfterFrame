@@ -22,6 +22,11 @@ A row is one format family (JPEG, with .jpg/.jpeg/...), with:
 
 RAW rows are one per extension, because LibRaw, the Inspector and the format
 facet all speak in those names ("cr3", "arw"); their `family` is the extension.
+
+Files outside the registry are skipped at import and counted
+(reverse_lookup.iter_image_files), in two buckets the import's summary tells
+apart: the known companions of photos (COMPANION_EXTENSIONS), which nobody
+needs reminding of, and everything else, which the user is told about.
 """
 from __future__ import annotations
 
@@ -31,6 +36,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RAW_SIGNATURE_SAMPLE_BYTES = 4096
+
+# Sidecars that travel with photos and clips: Lightroom's and Capture One's
+# edits (.xmp .cos), Apple's (.aae), RawTherapee's and DxO's (.pp3 .dop),
+# ON1's (.on1), a camcorder's thumbnails and GoPro's / Insta360's low-res
+# twins (.thm .lrv). Not assets, and not worth a "skipped" notice either.
+COMPANION_EXTENSIONS: frozenset[str] = frozenset({".xmp", ".thm", ".lrv", ".aae", ".pp3", ".dop", ".on1", ".cos"})
+
+
+def is_companion(path: Path) -> bool:
+    return path.suffix.lower() in COMPANION_EXTENSIONS
 
 
 @dataclass(frozen=True, slots=True)

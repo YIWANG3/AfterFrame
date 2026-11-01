@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -404,13 +405,16 @@ def resolve_image_batch(
 
     total = sum(count_image_files(image_dir.resolve()) for image_dir in image_dirs)
     report_progress(progress_callback, phase="resolve_images", processed=0, total=total, status_counts=counts)
+    skipped = new_skip_counts()
 
     for image_dir in image_dirs:
-        if persist_roots:
+        # A folder is a root whatever it holds; a lone file only when it is
+        # one the catalog imports (a dropped .docx was registered as a root).
+        if persist_roots and (image_dir.is_dir() or image_dir.suffix.lower() in MEDIA_EXTENSIONS):
             upsert_catalog_root(connection, "image", image_dir.resolve(), commit=False)
         # Metadata is read one file at a time below; ExifTool reads the next
         # few meanwhile.
-        for path in exiftool.read_ahead(iter_image_files([image_dir.resolve()]), wanted=lambda path: not is_video(path)):
+        for path in exiftool.read_ahead(iter_image_files([image_dir.resolve()], skipped), wanted=lambda path: not is_video(path)):
             if respect_tombstones or validate_sources:
                 if _is_tombstoned(connection, tombstones, path):
                     processed += 1
@@ -470,6 +474,8 @@ def resolve_image_batch(
         "newly_added": processed - already_in_catalog - skipped_deleted - deferred_files,
         "skipped_deleted": skipped_deleted,
         "deferred_files": deferred_files,
+        "skipped_unsupported": skip_summary(skipped["unsupported"]),
+        "skipped_companion": skip_summary(skipped["companion"]),
         "changed_paths": list(dict.fromkeys(changed_paths)),
     }
 
@@ -573,15 +579,37 @@ def count_image_files(image_dir: Path) -> int:
 MEDIA_EXTENSIONS = formats.IMPORTABLE_EXTENSIONS
 
 
-def iter_image_files(image_paths: list[Path]):
+def new_skip_counts() -> dict[str, Counter[str]]:
+    """What an import walk leaves out, by extension: `unsupported` (the user
+    is told) and `companion` (sidecars of photos, kept quiet about)."""
+    return {"unsupported": Counter(), "companion": Counter()}
+
+
+def skip_summary(counts: Counter[str]) -> dict[str, Any]:
+    return {"count": sum(counts.values()), "by_extension": dict(counts.most_common())}
+
+
+def iter_image_files(image_paths: list[Path], skipped: dict[str, Counter[str]] | None = None):
+    """The files an import of `image_paths` (folders or files) takes, in
+    order. Hidden and system files are passed over silently; every other file
+    outside the registry is counted in `skipped` (new_skip_counts()) when one
+    is given, so the import can say what it left out."""
+    def take(path: Path) -> bool:
+        if path.suffix.lower() in MEDIA_EXTENSIONS:
+            return True
+        if skipped is not None and not path.name.startswith("."):
+            bucket = "companion" if formats.is_companion(path) else "unsupported"
+            skipped[bucket][path.suffix.lower()] += 1
+        return False
+
     for image_path in image_paths:
         image_path = image_path.resolve()
         if is_ignored_path(image_path):
             continue
         if image_path.is_file():
-            if image_path.suffix.lower() in MEDIA_EXTENSIONS:
+            if take(image_path):
                 yield image_path
             continue
         for path in sorted(image_path.rglob("*")):
-            if not is_ignored_path(path) and path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
+            if not is_ignored_path(path) and path.is_file() and take(path):
                 yield path
