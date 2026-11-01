@@ -150,6 +150,22 @@ class WithFFmpegTest(unittest.TestCase):
         with Image.open(poster) as image:
             self.assertEqual(image.size, (320, 180))
 
+    def test_a_short_mpeg_ts_clip_gets_a_poster(self) -> None:
+        # AVCHD camcorders write MPEG-TS, which has no index: a seek lands on a
+        # keyframe at or past the target, and a one-second clip has nothing
+        # after its only keyframe. The poster is then the first frame.
+        assert TOOLS is not None
+        clip = self.dir / "camcorder.mts"
+        subprocess.run(
+            [TOOLS[0], "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=25", "-t", "1",
+             "-c:v", "mpeg2video", "-g", "250", "-f", "mpegts", str(clip)],
+            check=True,
+        )
+        poster = self.dir / "mts-poster.jpg"
+        ffmpeg_video.poster(clip, poster)
+        with Image.open(poster) as image:
+            self.assertEqual((image.format, image.size), ("JPEG", (320, 180)))
+
     def test_frames_and_their_manifest(self) -> None:
         out = self.dir / "frames"
         manifest = ffmpeg_video.frames(self.clip, out, count=4, max_edge=160)

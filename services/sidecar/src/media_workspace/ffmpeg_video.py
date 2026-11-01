@@ -244,10 +244,15 @@ def _frame(ffmpeg: str, path: Path, seconds: float, target: Path, max_edge: int,
         chain.append(
             f"scale=w='if(gte(iw,ih),min(iw,{max_edge}),-1)':h='if(gte(iw,ih),-1,min(ih,{max_edge}))':flags=lanczos"
         )
-    command = [ffmpeg, "-v", "error", "-nostdin", "-ss", f"{seconds:.3f}", "-i", str(path), "-frames:v", "1", "-an", "-sn", "-dn"]
-    if chain:
-        command += ["-vf", ",".join(chain)]
-    data = _run([*command, "-f", "image2pipe", "-c:v", "bmp", "-"], FRAME_TIMEOUT_SECONDS)
+    one_frame = ["-frames:v", "1", *(["-vf", ",".join(chain)] if chain else []), "-f", "image2pipe", "-c:v", "bmp", "-"]
+    command = [ffmpeg, "-v", "error", "-nostdin", "-ss", f"{seconds:.3f}", "-i", str(path), "-an", "-sn", "-dn", *one_frame]
+    data = _run(command, FRAME_TIMEOUT_SECONDS)
+    if not data:
+        # MPEG-TS (AVCHD) has no index: FFmpeg seeks it by position and can
+        # land past the target with nothing left to decode in a short clip, and
+        # FFmpeg 8 gives no frame at all from a one-GOP clip once -sn/-dn are
+        # on. The first frame from the start, then: a poster, if not the one asked for.
+        data = _run([ffmpeg, "-v", "error", "-nostdin", "-i", str(path), "-an", *one_frame], FRAME_TIMEOUT_SECONDS)
     if not data:
         raise VideoToolError(f"no frame at {seconds:.2f} s")
     target.parent.mkdir(parents=True, exist_ok=True)

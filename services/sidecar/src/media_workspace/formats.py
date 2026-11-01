@@ -15,7 +15,7 @@ A row is one format family (JPEG, with .jpg/.jpeg/...), with:
 - `browser_native`: Chromium decodes the original itself, so the lightbox and
   the editor can load it over media://;
 - `transcode_for_browser`: Chromium can't, but media:// renders it to a JPEG
-  first (HEIC); the lightbox treats these as showable too;
+  first (HEIF, PSD); the lightbox treats these as showable too;
 - `export_source`: Pillow reads it well enough to be the source of a crop,
   a text overlay or a transcoded export (derived.py);
 - `mime`: the type the video range server answers with.
@@ -96,13 +96,23 @@ _RAW_FORMATS: tuple[MediaFormat, ...] = (
 )
 
 _IMAGE_FORMATS: tuple[MediaFormat, ...] = (
-    MediaFormat("jpeg", "image", "JPEG", (".jpg", ".jpeg"), browser_native=True, export_source=True),
+    # .jfif and .jpe are the JPEG's other names; .insp is an Insta360 panorama,
+    # a JPEG with the camera's own extension.
+    MediaFormat("jpeg", "image", "JPEG", (".jpg", ".jpeg", ".jfif", ".jpe", ".insp"), browser_native=True, export_source=True),
     MediaFormat("png", "image", "PNG", (".png",), browser_native=True, export_source=True),
     MediaFormat("webp", "image", "WebP", (".webp",), browser_native=True, export_source=True),
     MediaFormat("avif", "image", "AVIF", (".avif",), browser_native=True),
-    # Chromium can't decode HEIC; media:// hands it a JPEG made by sips or the
-    # sidecar (electron/media/protocol.js).
-    MediaFormat("heic", "image", "HEIC", (".heic",), transcode_for_browser=True),
+    # Only the first frame of an animated GIF is kept.
+    MediaFormat("gif", "image", "GIF", (".gif",), browser_native=True, export_source=True),
+    MediaFormat("bmp", "image", "BMP", (".bmp",), browser_native=True, export_source=True),
+    # HEIF: .heic is the iPhone's, .hif Canon's, Sony's and Fujifilm's HEIF
+    # stills, .heif the generic name. Chromium decodes none of them; media://
+    # hands over a JPEG made by sips or the sidecar (electron/media/protocol.js).
+    MediaFormat("heif", "image", "HEIF", (".heic", ".heif", ".hif"), transcode_for_browser=True),
+    # Photoshop: the flattened composite Pillow and Image I/O read (a PSD saved
+    # without one, "Maximize Compatibility" off, fails to render). Shown through
+    # the same transcode as HEIF. .psb is not read.
+    MediaFormat("psd", "image", "Photoshop", (".psd",), transcode_for_browser=True, export_source=True),
     # No browser decodes TIFF, so a TIFF's lightbox ceiling is its HD preview.
     MediaFormat("tiff", "image", "TIFF", (".tif", ".tiff"), export_source=True),
 )
@@ -113,6 +123,10 @@ _VIDEO_FORMATS: tuple[MediaFormat, ...] = (
     MediaFormat("webm", "video", "WebM", (".webm",), mime="video/webm"),
     MediaFormat("mkv", "video", "Matroska", (".mkv",), mime="video/x-matroska"),
     MediaFormat("avi", "video", "AVI", (".avi",), mime="video/x-msvideo"),
+    # AVCHD camcorders (Sony, Panasonic, Canon) write H.264 in MPEG-TS. AVFoundation
+    # plays it on the Mac; elsewhere Chromium can't, and the H.264 proxy steps in.
+    MediaFormat("avchd", "video", "AVCHD", (".mts", ".m2ts"), mime="video/mp2t"),
+    MediaFormat("3gp", "video", "3GP", (".3gp",), mime="video/3gpp"),
 )
 
 REGISTRY: tuple[MediaFormat, ...] = _IMAGE_FORMATS + _RAW_FORMATS + _VIDEO_FORMATS

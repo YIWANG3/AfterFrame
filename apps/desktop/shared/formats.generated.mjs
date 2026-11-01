@@ -7,11 +7,14 @@
 // what an edited photo can be saved as. shared/formats.mjs has the helpers.
 
 export const FORMATS = Object.freeze([
-  {"family": "jpeg", "kind": "image", "label": "JPEG", "extensions": [".jpg", ".jpeg"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "jpeg", "kind": "image", "label": "JPEG", "extensions": [".jpg", ".jpeg", ".jfif", ".jpe", ".insp"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
   {"family": "png", "kind": "image", "label": "PNG", "extensions": [".png"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
   {"family": "webp", "kind": "image", "label": "WebP", "extensions": [".webp"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
   {"family": "avif", "kind": "image", "label": "AVIF", "extensions": [".avif"], "browserNative": true, "transcodeForBrowser": false, "exportSource": false, "mime": null},
-  {"family": "heic", "kind": "image", "label": "HEIC", "extensions": [".heic"], "browserNative": false, "transcodeForBrowser": true, "exportSource": false, "mime": null},
+  {"family": "gif", "kind": "image", "label": "GIF", "extensions": [".gif"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "bmp", "kind": "image", "label": "BMP", "extensions": [".bmp"], "browserNative": true, "transcodeForBrowser": false, "exportSource": true, "mime": null},
+  {"family": "heif", "kind": "image", "label": "HEIF", "extensions": [".heic", ".heif", ".hif"], "browserNative": false, "transcodeForBrowser": true, "exportSource": false, "mime": null},
+  {"family": "psd", "kind": "image", "label": "Photoshop", "extensions": [".psd"], "browserNative": false, "transcodeForBrowser": true, "exportSource": true, "mime": null},
   {"family": "tiff", "kind": "image", "label": "TIFF", "extensions": [".tif", ".tiff"], "browserNative": false, "transcodeForBrowser": false, "exportSource": true, "mime": null},
   {"family": "3fr", "kind": "raw", "label": "Hasselblad 3FR", "extensions": [".3fr"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
   {"family": "ari", "kind": "raw", "label": "ARRIRAW", "extensions": [".ari"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": null},
@@ -56,16 +59,20 @@ export const FORMATS = Object.freeze([
   {"family": "webm", "kind": "video", "label": "WebM", "extensions": [".webm"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/webm"},
   {"family": "mkv", "kind": "video", "label": "Matroska", "extensions": [".mkv"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/x-matroska"},
   {"family": "avi", "kind": "video", "label": "AVI", "extensions": [".avi"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/x-msvideo"},
+  {"family": "avchd", "kind": "video", "label": "AVCHD", "extensions": [".mts", ".m2ts"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/mp2t"},
+  {"family": "3gp", "kind": "video", "label": "3GP", "extensions": [".3gp"], "browserNative": false, "transcodeForBrowser": false, "exportSource": false, "mime": "video/3gpp"},
 ]);
 
 // Lower-case, with the dot.
 export const IMPORTABLE_EXTENSIONS = new Set([
   ".3fr",
+  ".3gp",
   ".ari",
   ".arw",
   ".avi",
   ".avif",
   ".bay",
+  ".bmp",
   ".cap",
   ".cr2",
   ".cr3",
@@ -77,13 +84,20 @@ export const IMPORTABLE_EXTENSIONS = new Set([
   ".eip",
   ".erf",
   ".fff",
+  ".gif",
   ".gpr",
   ".heic",
+  ".heif",
+  ".hif",
   ".iiq",
+  ".insp",
+  ".jfif",
+  ".jpe",
   ".jpeg",
   ".jpg",
   ".k25",
   ".kdc",
+  ".m2ts",
   ".m4v",
   ".mdc",
   ".mef",
@@ -92,11 +106,13 @@ export const IMPORTABLE_EXTENSIONS = new Set([
   ".mov",
   ".mp4",
   ".mrw",
+  ".mts",
   ".nef",
   ".nrw",
   ".orf",
   ".pef",
   ".png",
+  ".psd",
   ".ptx",
   ".pxn",
   ".raf",
@@ -115,20 +131,23 @@ export const IMPORTABLE_EXTENSIONS = new Set([
 ]);
 
 // Anything the import would take: the watcher's pre-filter.
-export const MEDIA_RE = /\.(3fr|ari|arw|avi|avif|bay|cap|cr2|cr3|crw|dcr|dcs|dng|drf|eip|erf|fff|gpr|heic|iiq|jpeg|jpg|k25|kdc|m4v|mdc|mef|mkv|mos|mov|mp4|mrw|nef|nrw|orf|pef|png|ptx|pxn|raf|raw|rw2|rwl|rwz|sr2|srf|srw|tif|tiff|webm|webp|x3f)$/i;
+export const MEDIA_RE = /\.(3fr|3gp|ari|arw|avi|avif|bay|bmp|cap|cr2|cr3|crw|dcr|dcs|dng|drf|eip|erf|fff|gif|gpr|heic|heif|hif|iiq|insp|jfif|jpe|jpeg|jpg|k25|kdc|m2ts|m4v|mdc|mef|mkv|mos|mov|mp4|mrw|mts|nef|nrw|orf|pef|png|psd|ptx|pxn|raf|raw|rw2|rwl|rwz|sr2|srf|srw|tif|tiff|webm|webp|x3f)$/i;
 
 // An original an <img> can show over media://, directly or transcoded.
-export const BROWSER_IMAGE_RE = /\.(avif|heic|jpeg|jpg|png|webp)$/i;
+export const BROWSER_IMAGE_RE = /\.(avif|bmp|gif|heic|heif|hif|insp|jfif|jpe|jpeg|jpg|png|psd|webp)$/i;
 
 // Originals media:// renders to a JPEG before Chromium sees them.
-export const TRANSCODE_RE = /\.(heic)$/i;
+export const TRANSCODE_RE = /\.(heic|heif|hif|psd)$/i;
 
 export const VIDEO_MIME = Object.freeze({
+  ".3gp": "video/3gpp",
   ".avi": "video/x-msvideo",
+  ".m2ts": "video/mp2t",
   ".m4v": "video/mp4",
   ".mkv": "video/x-matroska",
   ".mov": "video/quicktime",
   ".mp4": "video/mp4",
+  ".mts": "video/mp2t",
   ".webm": "video/webm",
 });
 

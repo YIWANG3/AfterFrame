@@ -1,6 +1,6 @@
 # 文件格式支持：对照 Eagle 的差距与格式注册表重构
 
-> **状态（2026-10-31）**：P0（纯重构）已实现：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期（P1 起未开工），第 6 节待拍板。
+> **状态（2026-11-01）**：P0（纯重构）已合并（#242），P1a（加格式，第 3 节的图像和视频两组，PSD 走和 HEIF 一样的转码而不是 HD 预览）已实现；P1b / P1c / P2 未开工。P0：`services/sidecar/src/media_workspace/formats.py` 是注册表，`apps/desktop/shared/formats.generated.mjs`（`npm run gen:formats`）+ `shared/formats.mjs` 是 JS 侧，`tests/test_formats.py` 守同步；支持的集合没变。第 1 节是 Eagle 的现状，第 2 节是重构前的现状，第 3 节是差距，第 4 节是方案，第 5 节分期，第 6 节待拍板。
 
 ## 0. 结论
 

@@ -29,19 +29,34 @@ class RegistryTest(unittest.TestCase):
                 self.assertNotIn(ext, seen, f"{ext} is both {seen.get(ext)} and {fmt.family}")
                 seen[ext] = fmt.family
 
-    def test_the_import_set_is_what_it_was_before_the_registry(self) -> None:
+    def test_the_import_set_is_the_one_the_plan_settled_on(self) -> None:
         # The registry replaced four hand-kept lists (docs/format-support-plan.md
-        # §2) without changing what imports. Widen it in formats.py, on purpose.
-        self.assertEqual(formats.IMAGE_EXTENSIONS, {".avif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"})
-        self.assertEqual(formats.VIDEO_EXTENSIONS, {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"})
+        # §2); P1a then widened it by §3. Widen it further in formats.py, on purpose.
+        self.assertEqual(formats.IMAGE_EXTENSIONS, {
+            ".avif", ".bmp", ".gif", ".heic", ".heif", ".hif", ".insp", ".jfif", ".jpe", ".jpeg", ".jpg",
+            ".png", ".psd", ".tif", ".tiff", ".webp",
+        })
+        self.assertEqual(formats.VIDEO_EXTENSIONS, {".3gp", ".avi", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mts", ".webm"})
         self.assertEqual(len(formats.RAW_EXTENSIONS), 38)
         self.assertEqual(MEDIA_EXTENSIONS, formats.IMPORTABLE_EXTENSIONS)
-        self.assertEqual(SUPPORTED_IMAGE_EXTS, {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"})
+        self.assertEqual(SUPPORTED_IMAGE_EXTS, {".bmp", ".gif", ".jpg", ".jpeg", ".jfif", ".jpe", ".insp", ".png", ".psd", ".webp", ".tif", ".tiff"})
+
+    def test_what_the_browser_shows_and_what_media_transcodes_first(self) -> None:
+        shown = {ext for fmt in formats.REGISTRY if fmt.browser_native or fmt.transcode_for_browser for ext in fmt.extensions}
+        transcoded = {ext for fmt in formats.REGISTRY if fmt.transcode_for_browser for ext in fmt.extensions}
+        self.assertEqual(transcoded, {".heic", ".heif", ".hif", ".psd"})
+        self.assertTrue({".jpg", ".gif", ".bmp", ".insp", ".hif", ".psd"} <= shown)
+        self.assertFalse({".tif", ".nef", ".mp4"} & shown)
+        for fmt in formats.REGISTRY:
+            self.assertFalse(fmt.browser_native and fmt.transcode_for_browser, fmt.family)
 
     def test_kind_by_extension(self) -> None:
         self.assertEqual(formats.kind_of(Path("/p/IMG_0001.JPG")), "image")
         self.assertEqual(formats.kind_of(Path("/p/DSC_0001.NEF")), "raw")
         self.assertEqual(formats.kind_of(Path("/p/clip.MOV")), "video")
+        self.assertEqual(formats.kind_of(Path("/p/00001.MTS")), "video")
+        self.assertEqual(formats.kind_of(Path("/p/IMG_0001.HIF")), "image")
+        self.assertEqual(formats.kind_of(Path("/p/layered.psb")), None)
         self.assertIsNone(formats.kind_of(Path("/p/notes.txt")))
         self.assertIsNone(formats.kind_of(Path("/p/.DS_Store")))
         self.assertTrue(is_raw(Path("a.cr3")) and not is_raw(Path("a.jpg")))
@@ -83,7 +98,7 @@ class GeneratedJsTest(unittest.TestCase):
         for name in ("FORMATS", "IMPORTABLE_EXTENSIONS", "MEDIA_RE", "BROWSER_IMAGE_RE", "TRANSCODE_RE", "VIDEO_MIME", "EXPORT_FORMATS"):
             self.assertIn(f"export const {name} =", text)
         self.assertIn("|nef|", text)
-        self.assertNotIn("|gif|", text)
+        self.assertNotIn("|xmp|", text)
 
 
 class DockDropTypesTest(unittest.TestCase):
