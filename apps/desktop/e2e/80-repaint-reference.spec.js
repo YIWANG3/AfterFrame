@@ -82,6 +82,8 @@ test("a repaint with a reference and no prompt asks for the reference's look", a
   expect(result.prompt).toContain("The second image is a style reference");
   expect((result.notes || []).join(" ")).toContain("look-a.jpg");
   expect(fs.readdirSync(tmp).some((f) => f.startsWith("harbour_ai-repaint_"))).toBe(true);
+  // The result and version lists show what each repaint looks like.
+  await expect(ctx.window.getByTestId("repaint-version-thumb").first()).toBeVisible({ timeout: 10_000 });
 });
 
 test("a prompt of the user's own goes first; the reference still rides along", async () => {
