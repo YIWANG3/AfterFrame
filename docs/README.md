@@ -9,7 +9,7 @@
 | 文档 | 说明 |
 |---|---|
 | [developer-setup.md](developer-setup.md) | 开发环境、命令、质量门（lint / 单测 / E2E / Python ruff+mypy） |
-| [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；第一个是 LUT（#256） |
+| [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；第一个是 LUT（#257） |
 | [agent-native-mcp.md](agent-native-mcp.md) | 内嵌 MCP server 设计与 34 个 tool 的现状（顶部状态行持续更新） |
 | [settings-scope.md](settings-scope.md) | 哪些设置属于 app、哪些属于 catalog |
 | [naming.md](naming.md) | 产品为什么有四个名字（AfterFrame / media-workspace / …） |
