@@ -6,6 +6,9 @@ const assert = require("node:assert/strict");
 const net = require("node:net");
 const { createMcpServer } = require("./server");
 
+// The least host a server can be built on: no catalog, no tasks, no services.
+const HOST = { catalog: { state: () => ({ currentCatalogPath: null }) }, commands: {}, tasks: {}, agentBridge: {}, services: {} };
+
 function listenOnFreePort() {
   return new Promise((resolve) => {
     const blocker = net.createServer();
@@ -18,7 +21,7 @@ test("reports running with the live url and tool count once listening", async ()
   const { port } = probe.address();
   await new Promise((resolve) => probe.close(resolve));
 
-  const mcp = createMcpServer({ port });
+  const mcp = createMcpServer(HOST, { port });
   assert.equal(mcp.getStatus().status, "starting");
   await mcp.start();
   try {
@@ -35,7 +38,7 @@ test("reports running with the live url and tool count once listening", async ()
 test("reports port_in_use when another process holds the port", async () => {
   const blocker = await listenOnFreePort();
   try {
-    const mcp = createMcpServer({ port: blocker.address().port });
+    const mcp = createMcpServer(HOST, { port: blocker.address().port });
     assert.equal(await mcp.start(), null);
     const status = mcp.getStatus();
     assert.equal(status.status, "port_in_use");

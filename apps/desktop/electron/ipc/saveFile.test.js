@@ -26,7 +26,7 @@ const { processAndSave } = register({
   dialogs: {},
   rootDir: os.tmpdir(),
   writeImageWithSourceMetadata: async () => {},
-  addAllowedMediaDir: () => {},
+  media: { addAllowedMediaDir: () => {} },
 });
 
 // 2x3 grayscale ramp — asymmetric on both axes, so every one of the eight
@@ -141,6 +141,7 @@ test("save-image asks for quality 92, never sharp's default 80", async () => {
     dialog: {},
     rootDir: os.tmpdir(),
     writeImageWithSourceMetadata: async (...args) => { calls.push(args); },
+    media: { addAllowedMediaDir: () => {} },
   });
   const pixels = new Uint8Array([1, 2, 3]).buffer;
   await handlers.get("workspace:save-image")({}, "/tmp/out/collage.jpg", pixels, "/photos/a.jpg");

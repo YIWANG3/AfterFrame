@@ -34,14 +34,17 @@ async function renderCollage(assets, assetIds, extra = {}) {
   const { commands, ensured } = fakeCatalog(assets);
   const rendered = [];
   const mcp = createMcpServer({
-    port: 0,
-    getCatalogState: () => ({ currentCatalogPath: catalogPath, catalogHasDb: () => true }),
+    catalog: { state: () => ({ currentCatalogPath: catalogPath, catalogHasDb: () => true }) },
     commands,
-    async askRenderer(kind, payload) {
-      rendered.push(payload.files);
-      return { asset: { asset_id: "collage_1" }, template_id: "t", width: 1, height: 1, saved_path: payload.savePath };
+    tasks: {},
+    services: {},
+    agentBridge: {
+      async askRenderer(kind, payload) {
+        rendered.push(payload.files);
+        return { asset: { asset_id: "collage_1" }, template_id: "t", width: 1, height: 1, saved_path: payload.savePath };
+      },
     },
-  });
+  }, { port: 0 });
   await mcp.start();
   try {
     const { port } = mcp.server.address();

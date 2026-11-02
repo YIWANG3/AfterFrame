@@ -17,8 +17,10 @@ function setup(initial = {}, { platform = "darwin", userData } = {}) {
     readAppSettings: () => settings,
     updateAppSettings: async (mutate) => { settings = mutate(settings); return settings; },
     platform,
-    installMenu: () => { menu.installed += 1; },
-    setMenuAccelerators: (on) => { menu.accelerators = on; },
+    appShell: {
+      installMenu: () => { menu.installed += 1; },
+      setMenuAccelerators: (on) => { menu.accelerators = on; },
+    },
   });
   return { handlers, opened, menu, settings: () => settings };
 }

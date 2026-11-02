@@ -17,7 +17,7 @@ function setup(runVideoTool, { videoToolPath = null, timeouts } = {}) {
   register({
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     app: { getPath: () => userData },
-    allowlist: { isAllowedMediaPathLoaded: async () => true, addAllowedMediaDir: () => {} },
+    media: { isAllowedMediaPathLoaded: async () => true, addAllowedMediaDir: () => {} },
     videoToolPath: videoToolPath || path.join(userData, "no-video-tool"),
     runVideoTool,
     timeouts,

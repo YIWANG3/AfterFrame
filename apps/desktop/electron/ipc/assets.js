@@ -3,7 +3,7 @@
 
 const { withCatalog } = require("./guard");
 
-function register({ ipcMain, shell, dialog, BrowserWindow, commands, addAllowedMediaDir, getCatalogState, getUserDataPath, t }) {
+function register({ ipcMain, shell, dialog, BrowserWindow, commands, media: { addAllowedMediaDir }, catalog: { state: getCatalogState }, getUserDataPath, t }) {
   const fs = require("node:fs");
   const path = require("node:path");
   const { cacheName, fullRenderNeeded, pruneCache, readRenderer, writeRenderer } = require("../rawEditSource");

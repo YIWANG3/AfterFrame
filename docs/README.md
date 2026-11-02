@@ -33,6 +33,8 @@
 | [lens-logos-plan.md](lens-logos-plan.md) | 镜头厂商 logo：暂缓（2026-10-01），只做了导入时读 `lens_make` |
 | [folders-page-plan.md](folders-page-plan.md) | 文件夹数量上百后的独立管理页（统计、筛选、多选、批量删除 / 标注）；P1 已实现（2026-10-15，`FoldersView.jsx`、e2e 78）；P2（带搜索的"加入文件夹"选择器、设封面）未开始 |
 | [format-support-plan.md](format-support-plan.md) | 进行中（2026-11-01）：对照 Eagle 的文件格式差距与四份扩展名列表互不一致的盘点；P0 格式注册表（#242）、P1 加格式 / 交代不支持 / 原图统一（#243–#245）已合并，P2 的格式 facet 按家族聚合是 #246；JXL、`.xmp` 边车评分、`.mxf` 未开工 |
+| [plugin-architecture-research.md](plugin-architecture-research.md) | 计划（2026-11-01）：本体做资源管理、编辑功能迁成 feature module、公开 API 先做处理器型；第 5 节是 LUT / AI 重绘 / 贴纸的代码地图，第 6 节是准备 PR 和 PR 1；第 8 节待拍板 |
+| [feature-modules-plan.md](feature-modules-plan.md) | 进行中（2026-11-01）：编辑功能迁成 feature module 的逐 PR 实施计划：host 对象、`features/` 目录、ToolRail 读表、LUT 推导收进 hook 四个准备 PR，然后 LUT / AI 重绘 / 贴纸提取三个迁移；第 11 节待拍板 |
 
 ## 已完成的计划（历史记录；实现以代码为准）
 

@@ -29,7 +29,7 @@ function setup({ platform = "darwin", onDisk = [], allowed = () => true, child =
       writeText: (text) => written.push({ text }),
       writeBuffer: (format, buffer) => written.push({ format, buffer: buffer.toString("utf8") }),
     },
-    allowlist: { isAllowedMediaPathLoaded: async (p) => allowed(p) },
+    media: { isAllowedMediaPathLoaded: async (p) => allowed(p) },
     platform,
     spawn: (command, args, options) => { spawned.push({ command, args, options }); return child(); },
     fileExists: (p) => onDisk.includes(p),

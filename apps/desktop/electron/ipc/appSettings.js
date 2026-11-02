@@ -25,8 +25,7 @@ function register({
   readAppSettings,
   updateAppSettings,
   platform = process.platform,
-  installMenu,
-  setMenuAccelerators,
+  appShell: { installMenu, setMenuAccelerators },
 }) {
   // Open an app cache directory in Finder / Explorer (for manual cleanup).
   ipcMain.handle("app:open-cache-dir", (_event, kind) => {

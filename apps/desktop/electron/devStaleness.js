@@ -38,7 +38,14 @@ function changedSince(roots, sinceMs, limit = 5) {
   return { stale: changed.length > 0, count: changed.length, files: changed.slice(0, limit).map((c) => c.file) };
 }
 
-function register({ ipcMain, app, roots, enabled, startedAtMs = Date.now() }) {
+function register({
+  ipcMain, app, isPackaged, sidecarSrc,
+  // Off in a packaged app, and under e2e (AFTERFRAME_USER_DATA), where a file
+  // saved while the suite runs must not put a notice over the UI being tested.
+  enabled = !isPackaged && !process.env.AFTERFRAME_USER_DATA,
+  roots = [__dirname, path.join(__dirname, "..", "shared"), path.join(__dirname, "..", "features"), sidecarSrc],
+  startedAtMs = Date.now(),
+}) {
   ipcMain.handle("app:dev-staleness", () => {
     if (!enabled) return { stale: false, count: 0, files: [] };
     const result = changedSince(roots, startedAtMs);

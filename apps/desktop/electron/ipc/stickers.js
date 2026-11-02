@@ -14,7 +14,7 @@ const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
 
-function register({ app, ipcMain, isPackaged, addAllowedMediaDir }) {
+function register({ app, ipcMain, isPackaged, media: { addAllowedMediaDir } }) {
   const stickerToolPath = isPackaged
     ? path.join(process.resourcesPath, "native", "bin", "extract-sticker")
     : path.join(__dirname, "..", "..", "native", "bin", "extract-sticker");

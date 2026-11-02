@@ -46,8 +46,8 @@ function registered(result, { platform = "darwin", settings = {} } = {}) {
     platform,
     t: () => (key) => key,
     defaultCatalogDir: () => DEFAULT_DIR,
-    createCatalogAt: (p) => { created.push(p); return `${p}.afcatalog`; },
-    addAllowedMediaDir: (dir) => allowed.push(dir),
+    catalog: { createAt: (p) => { created.push(p); return `${p}.afcatalog`; } },
+    media: { addAllowedMediaDir: (dir) => allowed.push(dir) },
     readAppSettings: () => stored,
     updateAppSettings: async (mutate) => { stored = await mutate(stored); return stored; },
   });

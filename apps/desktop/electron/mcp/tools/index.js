@@ -6,9 +6,10 @@
 // `properties: {` block, then `async handler(`.
 //
 // ctx (built in server.js):
-//   deps                 what main.js passed createMcpServer: the agent bridge
-//                        (revealAssetsInApp, askRenderer, getCurrentSelection,
-//                        broadcastCatalogChanged), task starters, watcher…
+//   deps                 assembled in server.js from the host (../host.js): the
+//                        agent bridge (revealAssetsInApp, askRenderer,
+//                        getCurrentSelection, broadcastCatalogChanged), task
+//                        starters, the watcher, annotation / save-file apis
 //   commands             sidecar verb layer
 //   getCatalogState      catalog.state
 //   port                 the server's port, for thumbnail URLs

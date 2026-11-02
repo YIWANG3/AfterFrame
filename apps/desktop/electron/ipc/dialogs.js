@@ -34,9 +34,17 @@ function register({
   dialogs,
   platform = process.platform,
   t,
-  defaultCatalogDir,
-  createCatalogAt,
-  addAllowedMediaDir,
+  app,
+  isPackaged,
+  rootDir,
+  // Where the open / create catalog dialogs start: the repo's data/ in dev,
+  // else Documents (a new catalog goes under Documents/AfterFrame).
+  defaultCatalogDir = (action) => {
+    if (!isPackaged) return path.join(rootDir, "data");
+    return action === "create" ? path.join(app.getPath("documents"), "AfterFrame") : app.getPath("documents");
+  },
+  catalog: { createAt: createCatalogAt },
+  media: { addAllowedMediaDir },
   readAppSettings = () => ({}),
   updateAppSettings = async () => {},
 }) {

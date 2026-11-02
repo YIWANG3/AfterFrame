@@ -58,6 +58,7 @@ const { registerMediaProtocol } = require("./media/protocol");
 const { createMediaHttpServer } = require("./media/httpServer");
 const { createAppShell } = require("./appShell");
 const { desktopCapabilities } = require("./capabilities");
+const { createHost, createServices } = require("./host");
 const { claimSingleInstance, launchPaths } = require("./singleInstance");
 const { createLocale } = require("./locale");
 const { loadDevEnv } = require("./devEnv");
@@ -163,7 +164,7 @@ const tokens = createTokenStore({
   readAppSettings,
   updateAppSettings,
 });
-const { decryptToken, setStoredProviderConfig, deleteStoredProviderConfig, getStoredProviderConfigWithMigration, providerCredentials } = tokens;
+const { providerCredentials } = tokens;
 
 // media:// allowlist — see ./media/allowlist.js. Created before the task
 // starters and ipc modules that take addAllowedMediaDir; catalog roots load
@@ -198,25 +199,24 @@ const stopResidentSidecar = sidecarTransport.stopResident;
 const sidecarCommands = createSidecarCommands(sidecarTransport.callJsonAsync, sidecarTransport.callJsonOneShot);
 
 // Image write-back with the original's EXIF/XMP, and the background-task
-// starters — see ./imageMetadata.js and ./tasks.js; the module-level names
-// below are what the ipc/mcp modules receive through their register() deps.
+// starters — see ./imageMetadata.js and ./tasks.js. Both reach the ipc/mcp
+// modules through the host built below.
 const { writeImageWithSourceMetadata } = createImageMetadataWriter({
   readSourceMetadata: (sourcePath) => sidecarCommands.readImageMetadata(sourcePath),
 });
-const {
-  formatJobStatus, latestJobStatus, createJob, listActiveJobsFormatted, resumeJob, activeRepaintProvider,
-  startEnrichmentTask, startImportTask, startPreviewTask, startColorsTask, startVisualTask, startOrientationTask,
-  startAiRepaintTask, startTextImageTask,
-} = createTaskStarters({
+// The apis registered modules hand to the ones after them — see ./host.js.
+const services = createServices();
+const tasks = createTaskStarters({
   app,
   readAppSettings,
   commands: sidecarCommands,
   launchSidecarJob,
   addAllowedMediaDir,
   providerCredentials,
-  // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
-  resumePeopleIndexJob: (jobId) => peopleApi?.resumePeopleIndexJob(jobId),
+  // people registers after the task starters exist; read it at call time.
+  resumePeopleIndexJob: (jobId) => services.people?.resumePeopleIndexJob(jobId),
 });
+const { startImportTask } = tasks;
 
 async function registerRoots(rootType, paths) {
   // A dropped file the catalog doesn't import is no root (the import's
@@ -232,7 +232,6 @@ async function registerRoots(rootType, paths) {
 // Agent ↔ app window: the selection mirror, catalog-changed broadcasts, reveal
 // and in-renderer rendering — see ./agentBridge.js.
 const agentBridge = createAgentBridge({ BrowserWindow, ipcMain });
-let mcpServerApi = null;
 
 // Window, application menu, fullscreen and the open-file queue — see
 // ./appShell.js. The menu re-renders from getLocale on every install.
@@ -266,13 +265,13 @@ async function switchCatalogTo(nextCatalogPath) {
   console.log("[ipc:switch-catalog] nextCatalogPath:", nextCatalogPath, "scratchCatalogPath:", scratchCatalogPath);
   if (!nextCatalogPath && !scratchCatalogPath) {
     catalog.set(null);
-    watcherApi?.rebuild?.();
+    services.watcher?.rebuild?.();
     console.log("[ipc:switch-catalog] cleared catalog (packaged mode, no path)");
     stopResidentSidecar();
     return true;
   }
   catalog.set(catalog.normalize(nextCatalogPath || scratchCatalogPath) || scratchCatalogPath);
-  watcherApi?.rebuild?.();
+  services.watcher?.rebuild?.();
   console.log("[ipc:switch-catalog] catalog set to:", catalog.path());
   stopResidentSidecar(); // next sidecar call restarts it bound to the new catalog
   // Per-catalog caches must not leak across libraries: media allowlist roots,
@@ -281,9 +280,9 @@ async function switchCatalogTo(nextCatalogPath) {
   agentBridge.clearSelection();
   // Not `?.clearPreviewCache?.()` — the second optional chain silently no-ops
   // when the method goes missing, which is exactly how this leak survived.
-  mcpServerApi?.clearPreviewCache();
+  services.mcp?.clearPreviewCache();
   await sample.prepareCatalogPath();
-  void peopleApi?.recoverQueuedPeopleJobs?.();
+  void services.people?.recoverQueuedPeopleJobs?.();
   // Persist last catalog path for next launch
   if (catalog.path()) {
     await updateAppSettings((s) => ({ ...s, lastCatalogPath: catalog.path() }));
@@ -297,133 +296,47 @@ ipcMain.handle("workspace:reset-sample-catalog", () => sample.openSampleCatalog(
 ipcMain.handle("workspace:register-roots", (_event, rootType, paths) => registerRoots(rootType, paths));
 
 const dialogs = dialogsIpc.createDialogs({ dialog, BrowserWindow });
-dialogsIpc.register({
-  ipcMain, dialogs, t,
-  defaultCatalogDir: (action) => {
-    if (!isPackaged) return path.join(rootDir, "data");
-    return action === "create" ? path.join(app.getPath("documents"), "AfterFrame") : app.getPath("documents");
-  },
-  createCatalogAt: (targetPath) => catalog.createAt(targetPath),
-  addAllowedMediaDir,
-  readAppSettings,
-  updateAppSettings,
+
+// Everything a register(host) can reach — ./host.js lists it and says why it
+// is frozen. Built once, here, after every part above exists; the modules
+// below destructure what they use.
+const host = createHost({
+  app, ipcMain, dialog, shell, BrowserWindow, nativeImage, clipboard, sharp,
+  platform: process.platform, isPackaged, rootDir, resourcesPath: process.resourcesPath, nativeBin, sidecarSrc,
+  getUserDataPath: () => app.getPath("userData"), t,
+  getAppSettingsPath, readAppSettings, updateAppSettings, readCatalogSettings, updateCatalogSettings,
+  catalog, commands: sidecarCommands, launchSidecarJob, registerRoots,
+  tasks, tokens, media, mediaHttp,
+  getMainWindow, appShell, locale, agentBridge,
+  dialogs, writeImageWithSourceMetadata,
+  services,
 });
 
-editorsIpc.register({ ipcMain });
-
-const watcherApi = watcherModule.register({
-  ipcMain,
-  getMainWindow,
-  getCatalogPath: catalog.path,
-  readCatalogSettings,
-  updateCatalogSettings,
-  changedMedia: (paths) => sidecarCommands.changedMedia(paths),
-});
-
-let peopleApi = null;
-
-jobsIpc.register({
-  ipcMain,
-  getCatalogState: catalog.state,
-  formatJobStatus, latestJobStatus,
-  startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask, startVisualTask, startOrientationTask,
-  listActiveJobsFormatted, resumeJob,
-  commands: sidecarCommands,
-});
-
-aiIpc.register({
-  app, ipcMain,
-  commands: sidecarCommands,
-  getCatalogState: catalog.state,
-  readAppSettings, updateAppSettings,
-  getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig,
-  startAiRepaintTask, startTextImageTask, latestJobStatus, formatJobStatus,
-});
-
-const annotationApi = annotationIpc.register({
-  ipcMain,
-  commands: sidecarCommands,
-  getCatalogState: catalog.state,
-  readAppSettings, updateAppSettings,
-  getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig,
-  createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
-});
-
-peopleApi = peopleIpc.register({
-  app, ipcMain, dialog,
-  isPackaged,
-  resourcesPath: process.resourcesPath,
-  readAppSettings, updateAppSettings,
-  getCatalogState: catalog.state,
-  createJob, launchSidecarJob, latestJobStatus, formatJobStatus,
-  commands: sidecarCommands,
-});
-
-browseIpc.register({
-  ipcMain,
-  commands: sidecarCommands,
-  getCatalogState: catalog.state,
-});
-
-assetsIpc.register({
-  ipcMain, shell, dialog, BrowserWindow,
-  commands: sidecarCommands, addAllowedMediaDir,
-  getCatalogState: catalog.state,
-  getUserDataPath: () => app.getPath("userData"),
-  t,
-});
+dialogsIpc.register(host);
+editorsIpc.register(host);
+services.set("watcher", watcherModule.register(host));
+jobsIpc.register(host);
+aiIpc.register(host);
+services.set("annotation", annotationIpc.register(host));
+services.set("people", peopleIpc.register(host));
+browseIpc.register(host);
+assetsIpc.register(host);
 
 ipcMain.on("app:get-media-port", (event) => {
   event.returnValue = mediaHttp.port();
 });
 
-settingsTransferIpc.register({
-  app, ipcMain, dialog,
-  getMainWindow,
-  getAppSettingsPath, readAppSettings, updateAppSettings,
-  decryptToken, setStoredProviderConfig,
-  isEncryptionAvailable: tokens.isEncryptionAvailable,
-  applyLocale: locale.applyLocale,
-});
-
+settingsTransferIpc.register(host);
 // Cache folders, preview settings, shortcuts, menu accelerators — see
 // ./ipc/appSettings.js.
-appSettingsIpc.register({
-  ipcMain, shell,
-  getUserDataPath: () => app.getPath("userData"),
-  readAppSettings, updateAppSettings,
-  installMenu: appShell.installMenu,
-  setMenuAccelerators: appShell.setMenuAccelerators,
-});
-
-// macOS plays originals with AVPlayer, and the player's fullscreen button
-// uses the shell's — see ./ipc/nativeVideo.js.
-nativeVideoIpc.register({
-  ipcMain, BrowserWindow, app, allowlist: media,
-  toggleFullscreen: appShell.toggleAppFullscreen,
-  addonPath: path.join(nativeBin, "video-player.node"),
-});
+appSettingsIpc.register(host);
+// macOS plays originals with AVPlayer — see ./ipc/nativeVideo.js.
+nativeVideoIpc.register(host);
 // Playback proxy + keyframe filmstrip — see ./ipc/video.js.
-videoIpc.register({
-  ipcMain, app, allowlist: media,
-  videoToolPath: path.join(nativeBin, "video-tool"),
-  // No video-tool off macOS: the sidecar runs its commands with FFmpeg, in a
-  // process of its own, as the resident one is serial.
-  runVideoTool: process.platform === "darwin"
-    ? null
-    : (args, timeoutMs) => sidecarCommands.videoTool(args, timeoutMs),
-});
-
+videoIpc.register(host);
 // Dev only: tells the renderer when electron/, shared/, features/ or the
-// sidecar's sources are newer than this process (see electron/devStaleness.js). Off in a
-// packaged app, and under e2e (AFTERFRAME_USER_DATA), where a file saved while
-// the suite runs must not put a notice over the UI being tested.
-require("./devStaleness").register({
-  ipcMain,
-  app,
-  enabled: !isPackaged && !process.env.AFTERFRAME_USER_DATA,
-  roots: [__dirname, path.join(__dirname, "..", "shared"), path.join(__dirname, "..", "features"), sidecarSrc],
-});
+// sidecar's sources are newer than this process (see electron/devStaleness.js).
+require("./devStaleness").register(host);
 
 // What this platform can do (api.can in the renderer); read once by preload.
 ipcMain.on("app:capabilities", (event) => {
@@ -432,27 +345,15 @@ ipcMain.on("app:capabilities", (event) => {
 
 // The clipboard: text (paths, names) and, like Finder, the selected photos as
 // files — see ./ipc/clipboard.js.
-clipboardIpc.register({ ipcMain, clipboard, allowlist: media });
+clipboardIpc.register(host);
 
 // Settings → Integrations: where agents connect, and whether the server came up.
-ipcMain.handle("app:mcp-status", () => mcpServerApi?.getStatus() ?? { status: "starting" });
+ipcMain.handle("app:mcp-status", () => services.mcp?.getStatus() ?? { status: "starting" });
 
-const saveFileApi = saveFileIpc.register({
-  ipcMain, dialogs,
-  rootDir,
-  writeImageWithSourceMetadata,
-  addAllowedMediaDir,
-});
-
-frameLogosIpc.register({ ipcMain });
-frameTemplatesIpc.register({
-  app, ipcMain, dialog, sharp, readAppSettings, updateAppSettings,
-  getMainWindow,
-});
-lutsIpc.register({
-  app, ipcMain, dialog, shell, readAppSettings, updateAppSettings,
-  getMainWindow,
-});
+services.set("saveFile", saveFileIpc.register(host));
+frameLogosIpc.register(host);
+frameTemplatesIpc.register(host);
+lutsIpc.register(host);
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.
 // The overlay calls window.__vibepinCapture(rect) → this handler → capturePage.
@@ -478,27 +379,12 @@ ipcMain.handle("workspace:set-theme", (_event, theme) => {
   return nativeTheme.themeSource;
 });
 
-collectionsIpc.register({
-  ipcMain,
-  commands: sidecarCommands,
-  getCatalogState: catalog.state,
-});
-
+collectionsIpc.register(host);
 // Native OS drag-out — see ./ipc/nativeDrag.js.
-nativeDragIpc.register({ ipcMain, nativeImage });
-
-systemFontsIpc.register({ ipcMain });
-
-depthIpc.register({
-  app, ipcMain, dialog,
-  isPackaged,
-  readAppSettings, updateAppSettings,
-});
-stickerIpc.register({
-  app, ipcMain,
-  isPackaged,
-  addAllowedMediaDir,
-});
+nativeDragIpc.register(host);
+systemFontsIpc.register(host);
+depthIpc.register(host);
+stickerIpc.register(host);
 
 app.on("open-file", (event, filePath) => {
   event.preventDefault();
@@ -527,7 +413,7 @@ app.whenReady().then(async () => {
     // A paused task remains paused; only queued durable people tasks are
     // resumed after an app restart. The runner uses its cursor and model path
     // stored in the task payload, so it cannot silently switch model spaces.
-    void peopleApi?.recoverQueuedPeopleJobs?.();
+    void services.people?.recoverQueuedPeopleJobs?.();
   });
   // A saved sample catalog can be reopened without the welcome action. Finish
   // its targeted migration before the first gallery query sees legacy previews.
@@ -543,38 +429,18 @@ app.whenReady().then(async () => {
       appShell.queueExternalImport(file);
     }
   }
-  try { watcherApi.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
+  try { services.watcher.start(); } catch (err) { console.warn("[watcher] start failed:", err?.message || err); }
 
   // Embedded MCP server — external AI agents (Claude Code etc.) drive the app
   // through this while it runs. Failures must never affect the app itself.
-  mcpServerApi = createMcpServer({
-    getCatalogState: catalog.state,
-    startImportTask,
-    formatJobStatus,
-    registerRoots,
-    revealAssetsInApp: agentBridge.revealAssetsInApp,
-    getCurrentSelection: agentBridge.getCurrentSelection,
-    broadcastCatalogChanged: agentBridge.broadcastCatalogChanged,
-    askRenderer: agentBridge.askRenderer,
-    commands: sidecarCommands,
-    startAnnotationTask: annotationApi.startAnnotationTask,
-    startAiRepaintTask,
-    activeRepaintProvider,
-    listActiveJobsFormatted,
-    resumeJob,
-    sharp,
-    processAndSave: saveFileApi.processAndSave,
-    watcher: watcherApi,
-    // Arrow-wrapped: peopleApi is assigned after this module-level wiring runs.
-    startPeopleIndex: (options) => peopleApi?.startPeopleIndex(options),
-    startVisualTask,
+  services.set("mcp", createMcpServer(host, {
     // Dev and packaged builds get DIFFERENT default ports so running both at
     // once never collides — and agents deterministically reach the instance
     // they were configured for (repo .mcp.json → dev :41707; user-scope
     // registration → release :41706). Env var still overrides both.
     port: Number(process.env.AFTERFRAME_MCP_PORT) || (isPackaged ? 41706 : 41707),
-  });
-  mcpServerApi.start();
+  }));
+  services.mcp.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
