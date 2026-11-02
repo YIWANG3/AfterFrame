@@ -147,7 +147,7 @@ export const CORE_IPC_METHODS = [
   ["pickHandwritingRef", "workspace:pick-handwriting-ref", 0],
   ["getHandwritingPresetRef", "workspace:handwriting-preset-ref", 1],
   ["listAiModels", "workspace:list-ai-models", 2],
-  // ── stickers / depth / misc ──
+  // ── depth / people / misc (stickers are the sticker feature's rows) ──
   ["computeDepth", "workspace:compute-depth", 1],
   ["getDepthModel", "workspace:get-depth-model", 0],
   ["pickDepthModel", "workspace:pick-depth-model", 0],
@@ -169,12 +169,6 @@ export const CORE_IPC_METHODS = [
   ["mergePeopleGroups", "workspace:merge-people-groups", 1],
   ["removeFaceFromPerson", "workspace:remove-face-from-person", 1],
   ["assignFaceToPerson", "workspace:assign-face-to-person", 1],
-  ["stickerList", "workspace:sticker-list", 0],
-  ["stickerDetect", "workspace:sticker-detect", 1],
-  ["stickerSave", "workspace:sticker-save", 1],
-  ["stickerDelete", "workspace:sticker-delete", 1],
-  ["stickerToggleStar", "workspace:sticker-toggle-star", 1],
-  ["stickerCleanupScratch", "workspace:sticker-cleanup-scratch", 1],
   // ── files & external ──
   ["pickDirectories", "workspace:pick-directories", 2],
   ["createCatalog", "workspace:create-catalog", 0],

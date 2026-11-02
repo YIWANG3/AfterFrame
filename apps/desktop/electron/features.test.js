@@ -36,9 +36,10 @@ test("capabilities: off the manifest's platforms, or without its helper, the cap
   assert.deepEqual(capabilitiesFromFeatures("linux", {}, manifests), { lut: false, stickerExtract: false });
 });
 
-test("the lut manifest alone: false off macOS, nothing on it", () => {
+test("the real manifests: nothing off on a Mac with every helper; LUT and stickers off elsewhere", () => {
   assert.deepEqual(capabilitiesFromFeatures("darwin"), {});
-  assert.deepEqual(capabilitiesFromFeatures("win32"), { lut: false });
+  assert.deepEqual(capabilitiesFromFeatures("darwin", { hasHelper: (name) => name !== "extract-sticker" }), { stickerExtract: false });
+  assert.deepEqual(capabilitiesFromFeatures("win32"), { lut: false, stickerExtract: false });
 });
 
 test("registerFeatures calls each entry's register(host) in manifest order", () => {

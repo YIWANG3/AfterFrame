@@ -2,13 +2,15 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import useDismiss from "../ui/useDismiss";
 import { useTranslation } from "react-i18next";
 import api from "../api";
-import { Images, Clock, Star, Link, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Cannabis, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
+import { Images, Clock, Star, Link, Copy, FolderPlus, FolderCog, Folder, Trash2, Pencil, Sparkles, UsersRound, Image as ImageIcon, List, Compass, Search, ArrowUpDown, Check, X } from "lucide-react";
 import { DesktopHint, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { baseName, browseCount, formatTimestamp, navItems, localFileUrl } from "../utils/format";
 import SmartCollections from "./SmartCollections";
 import InlineEdit from "./InlineEdit";
 import { FOLDER_SORTS, canReorderFolders, visibleFolders } from "./folderList";
 import { Z } from "../ui";
+// The feature modules' library views (manifest `sidebarView`), listed below the browse rows.
+import { sidebarViews } from "../../features/index.js";
 
 const FOLDER_VIEW_KEY = "sidebar.folderView"; // "list" | "covers"
 const FOLDER_SORT_KEY = "sidebar.folderSort"; // one of FOLDER_SORTS
@@ -76,11 +78,12 @@ export default function Sidebar({
   onDeleteCollection,
   onAnnotateCollection,
   onAddToCollection,
-  onOpenStickerBrowser,
+  onOpenView,
   onOpenPeople,
   onOpenDiscover,
   onOpenFolders,
-  stickerMode = false,
+  // The view App is showing: "assets", "people", … or a feature view's id.
+  activeView = "assets",
   peopleMode = false,
   discoverMode = false,
   foldersMode = false,
@@ -88,6 +91,7 @@ export default function Sidebar({
   const { t, i18n } = useTranslation("nav");
   const { t: tc } = useTranslation("common");
   const browse = navItems(summary);
+  const featureViewMode = sidebarViews.some((view) => view.id === activeView);
   const rootSummary = [];
   if (browseCount(summary)) rootSummary.push(t("sidebar.assetsCount", { count: browseCount(summary) }));
   if (summary?.updated_at) rootSummary.push(t("sidebar.updated", { time: formatTimestamp(summary.updated_at, { zoneless: "utc" }) }));
@@ -239,7 +243,7 @@ export default function Sidebar({
                 </span>
               </button>
             ) : null;
-            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !stickerMode && !peopleMode && !discoverMode && !foldersMode && item.key === status;
+            const active = !activeCollectionId && !activeSmartCollectionId && !similarTo && !featureViewMode && !peopleMode && !discoverMode && !foldersMode && item.key === status;
             return (
               <Fragment key={item.key}>
               <button
@@ -262,24 +266,34 @@ export default function Sidebar({
               </Fragment>
             );
           })}
-          <button
-            type="button"
-            title={!api.can("stickerExtract") ? tc(LOCKED_HINT_KEY) : undefined}
-            onClick={api.can("stickerExtract") ? (e) => { e.currentTarget.blur(); onOpenStickerBrowser?.(); } : undefined}
-            className={[
-              "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
-              !api.can("stickerExtract")
-                ? "cursor-default text-muted2"
-                : stickerMode
-                  ? "bg-selected text-text"
-                  : "text-muted hover:bg-hover/70 hover:text-text",
-            ].join(" ")}
-          >
-            <span className="flex items-center gap-2.5">
-              <Cannabis className={`h-4 w-4 stroke-[1.6] ${stickerMode ? "text-accent" : ""}`} />
-              <span className="text-[13px]">{t("sidebar.stickers")}</span>
-            </span>
-          </button>
+          {/* The feature modules' views (today the sticker library), each
+              locked with the platform hint where its feature is off. */}
+          {sidebarViews.map(({ id, icon: ViewIcon, labelKey, cap, unavailable }) => {
+            const available = api.can(cap);
+            if (!available && unavailable === "hidden") return null;
+            const current = activeView === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                title={!available ? tc(LOCKED_HINT_KEY) : undefined}
+                onClick={available ? (e) => { e.currentTarget.blur(); onOpenView?.(id); } : undefined}
+                className={[
+                  "flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left outline-none transition-colors focus:outline-none focus-visible:outline-none",
+                  !available
+                    ? "cursor-default text-muted2"
+                    : current
+                      ? "bg-selected text-text"
+                      : "text-muted hover:bg-hover/70 hover:text-text",
+                ].join(" ")}
+              >
+                <span className="flex items-center gap-2.5">
+                  <ViewIcon className={`h-4 w-4 stroke-[1.6] ${current ? "text-accent" : ""}`} />
+                  <span className="text-[13px]">{t(labelKey)}</span>
+                </span>
+              </button>
+            );
+          })}
           <button
             type="button"
             title={!api.can("people") ? tc(LOCKED_HINT_KEY) : undefined}
@@ -302,7 +316,7 @@ export default function Sidebar({
 
         <SmartCollections
           collections={collections}
-          activeId={stickerMode || peopleMode || discoverMode || foldersMode ? null : activeSmartCollectionId}
+          activeId={featureViewMode || peopleMode || discoverMode || foldersMode ? null : activeSmartCollectionId}
           view={folderView}
           onOpen={onOpenSmartCollection}
           onEditRules={onEditSmartCollection}

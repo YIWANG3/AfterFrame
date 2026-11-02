@@ -10,7 +10,6 @@ import { Panel as AiRepaintPanel } from "../../features/repaint/renderer/index.j
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";
-import StickerPanel from "./editor/StickerPanel";
 import { useFrameTool } from "./editor/state/useFrameTool";
 import { useFramePlacement } from "./editor/state/useFramePlacement";
 import { useEditorTestApi } from "./editor/editorTestApi";
@@ -26,7 +25,6 @@ import { drawLayersOnCanvas } from "./editor/render/drawLayers";
 import { createOverlayLayer } from "./editor/textState";
 import { isFrameLayer } from "./editor/layerStack";
 import { bakeCrop } from "./editor/render/bakeCrop";
-import StickerRegionOverlay from "./editor/components/StickerRegionOverlay";
 import EditorHeader from "./editor/components/EditorHeader";
 import EditorLoading from "./editor/components/EditorLoading";
 import ToolRail from "./editor/components/ToolRail";
@@ -39,6 +37,11 @@ import SplitOverlay from "./editor/components/SplitOverlay";
 // The LUT tool is a feature module (features/lut): its hooks are called here
 // like the core tools' (rules of hooks), its panel is a lazy chunk.
 import { Panel as LutPanel, useTool as useLutTool, useLutSource } from "../../features/lut/renderer/index.js";
+// The Sticker tool is a feature module too (features/sticker): its hook is
+// called here, its panel is a lazy chunk, and its canvas overlay is found
+// through the tool table (manifest `editorTool.overlay`).
+import { Panel as StickerPanel, useTool as useStickerTool } from "../../features/sticker/renderer/index.js";
+import { editorToolFeatures } from "../../features/index.js";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
@@ -48,7 +51,7 @@ import { useCropTool } from "./editor/state/useCropTool";
 import { initialSplitState, useSplitTool } from "./editor/state/useSplitTool";
 import { useSplitExport, resolveSplitOutputDir } from "./editor/state/useSplitExport";
 import { useTextTool } from "./editor/state/useTextTool";
-import { useStickerTool } from "./editor/state/useStickerTool";
+import { useStickerImageCache } from "./editor/state/useStickerImageCache";
 import { useDepthModel } from "./editor/state/useDepthModel";
 import { useSceneDepth } from "./editor/state/useSceneDepth";
 import { useAddToFolder } from "../hooks/useAddToFolder";
@@ -261,10 +264,10 @@ export default function EditorOverlay({
   const handleComputeDepth = depth.compute;
   const handleClearDepth = depth.clearAll;
 
-  const { imageCache: stickerImageCache, region: sticker } = useStickerTool({
-    layers,
-    assetId: item?.asset_id,
-  });
+  // Decoded sticker images for the layer renderer — the editor core's: layers
+  // carry stickers whether or not the sticker feature is present.
+  const stickerImageCache = useStickerImageCache(layers);
+  const stickerTool = useStickerTool({ assetId: item?.asset_id });
 
   const { depthModel, pickDepthModel: handlePickDepthModel, resetDepthModel: handleResetDepthModel } =
     useDepthModel({
@@ -634,6 +637,11 @@ export default function EditorOverlay({
     discreteRotationDeg, flipX, flipY, sourcePath,
     apply: applyState, record: recordState, pushToast, t,
   });
+
+  // The feature modules' tool hooks by rail key, for the table-driven overlay
+  // (each hook is called above by name — rules of hooks).
+  const featureTools = { lut: lutTool, sticker: stickerTool };
+  const ActiveOverlay = editorToolFeatures.find((row) => row.key === tool)?.Overlay || null;
 
   useEffect(() => {
     const canvas = imageCanvasRef.current;
@@ -1130,16 +1138,12 @@ export default function EditorOverlay({
               </div>
             )}
 
-            {/* Sticker region — drag-to-draw marquee for limiting subject detection
-                to a sub-rect when VisionKit can't find the subject in the full frame. */}
-            {tool === "sticker" && imageRect && (
-              <StickerRegionOverlay
-                imageRect={imageRect}
-                region={sticker.region}
-                drag={sticker.drag}
-                onDragChange={sticker.setDrag}
-                onCommit={sticker.commit}
-              />
+            {/* The active feature tool's canvas overlay (manifest
+                `editorTool.overlay`): today the Sticker tool's drag-to-draw
+                marquee that limits subject detection to a sub-rect when
+                VisionKit can't find the subject in the full frame. */}
+            {ActiveOverlay && imageRect && (
+              <ActiveOverlay imageRect={imageRect} tool={featureTools[tool]} />
             )}
 
             {showCropUi && (
@@ -1296,13 +1300,15 @@ export default function EditorOverlay({
               </Suspense>
             ) : tool === "sticker" ? (
               <div className="flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden">
-                <StickerPanel
-                  sourcePath={sourcePath}
-                  sourceLabel={sourceLabel}
-                  pushToast={pushToast}
-                  region={sticker.region}
-                  onClearRegion={sticker.clear}
-                />
+                <Suspense fallback={null}>
+                  <StickerPanel
+                    sourcePath={sourcePath}
+                    sourceLabel={sourceLabel}
+                    pushToast={pushToast}
+                    region={stickerTool.region}
+                    onClearRegion={stickerTool.clear}
+                  />
+                </Suspense>
               </div>
             ) : null}
             {/* Always mounted so data loads when editor opens, hidden when not active */}

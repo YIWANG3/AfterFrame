@@ -19,7 +19,6 @@ import useAgentBridge from "./hooks/useAgentBridge";
 import useAssetActions from "./hooks/useAssetActions";
 import useCatalogCatchUp from "./hooks/useCatalogCatchUp";
 import useMapDrawer, { GALLERY_MIN_HEIGHT, MAP_HANDLE_HEIGHT, MAP_MIN_HEIGHT, defaultMapHeight } from "./hooks/useMapDrawer";
-import useStickerViewKeys from "./hooks/useStickerViewKeys";
 import Sidebar from "./components/Sidebar";
 import Toolbar, { DISPLAY_MODE_KEYS } from "./components/Toolbar";
 import Gallery from "./components/Gallery";
@@ -38,7 +37,11 @@ import FilterGroupsDialog from "./components/FilterGroupsDialog";
 import { activeFilterCount } from "./hooks/workspaceLogic";
 import MapDrawer from "./components/map/MapDrawer";
 import MapResizeHandle from "./components/map/MapResizeHandle";
-import { StickerToolbar, StickerGallery, StickerInspector, useStickerView } from "./components/StickerView";
+// The feature modules' library views (features/<id>/manifest.mjs
+// `sidebarView`): the table from the registry, and each view's state hook
+// imported by name (rules of hooks).
+import { sidebarViews } from "../features/index.js";
+import { useView as useStickerView } from "../features/sticker/renderer/index.js";
 import PeopleView from "./components/PeopleView";
 import FoldersView from "./components/FoldersView";
 import PeopleInspector from "./components/PeopleInspector";
@@ -107,7 +110,7 @@ export default function App() {
     setCollageSourceId(workspace.activeCollectionId || null);
     setCollageItems(items);
   }
-  const [viewMode, setViewMode] = useState("assets"); // "assets" | "stickers" | "people" | "discover" | "folders"
+  const [viewMode, setViewMode] = useState("assets"); // "assets" | "people" | "discover" | "folders" | a feature view's id ("stickers")
   const [peopleGroup, setPeopleGroup] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const workspaceSplitRef = useRef(null);
@@ -274,33 +277,14 @@ export default function App() {
       async setLocale(lng) { await i18n.changeLanguage(lng); await api.setLocale(lng); },
     });
   }, [editorItem]);
-  const stickerView = useStickerView();
-
-  // Sticker items, shaped for Lightbox/Inspector consumers.
-  const stickerItemsForLightbox = useMemo(() => {
-    const q = (stickerView.query || "").trim().toLowerCase();
-    const list = q
-      ? stickerView.stickers.filter((s) =>
-          (s.name || "").toLowerCase().includes(q) ||
-          (s.sourceLabel || "").toLowerCase().includes(q) ||
-          (s.sourcePath || "").toLowerCase().includes(q),
-        )
-      : stickerView.stickers;
-    return list.map((s) => ({
-      asset_id: s.id,
-      image_path: s.path,
-      image_preview_path: s.path,
-      raw_preview_path: s.path,
-      stem: s.name || s.sourceLabel || s.filename,
-      image_metadata: { width: s.width, height: s.height },
-    }));
-  }, [stickerView.stickers, stickerView.query]);
-
-  const stickerLightboxIndex = useMemo(() => {
-    if (!stickerView.selected) return 0;
-    return Math.max(0, stickerItemsForLightbox.findIndex((it) => it.asset_id === stickerView.selected.id));
-  }, [stickerItemsForLightbox, stickerView.selected]);
-  const handleStickerKey = useStickerViewKeys({ stickerView, items: stickerItemsForLightbox, lightboxOpen, setLightboxOpen });
+  // The feature modules' library views: App holds each one's state for as
+  // long as it runs (its useView hook, called by name), and the active one,
+  // if any, takes the centre pane, the inspector and the Lightbox's items.
+  const stickerView = useStickerView({ lightboxOpen, setLightboxOpen });
+  const featureViewStates = { stickers: stickerView };
+  const featureView = sidebarViews.find((view) => view.id === viewMode) || null;
+  const featureViewState = featureView ? featureViewStates[featureView.id] : null;
+  if (featureView && !featureViewState) throw new Error(`App.jsx: no state hook for the "${featureView.id}" view — call its useView above`);
   const resizeSidebar = usePaneResize(workspace.setSidebarWidth, ...SIDEBAR_WIDTH_RANGE);
   // Dragged from the right edge, so the value grows leftwards.
   const resizeInspector = usePaneResize((value) => workspace.setInspectorWidth(-value), -INSPECTOR_WIDTH_RANGE[1], -INSPECTOR_WIDTH_RANGE[0]);
@@ -702,10 +686,12 @@ export default function App() {
       case "people":
         setViewMode("people");
         return { opened: "people" };
-      case "stickers":
-        setViewMode("stickers");
-        return { opened: "stickers" };
       default:
+        // The feature modules' views, by their sidebarView id.
+        if (sidebarViews.some((row) => row.id === view)) {
+          setViewMode(view);
+          return { opened: view };
+        }
         throw new Error(`unknown view: ${view}`);
     }
   };
@@ -1104,14 +1090,14 @@ export default function App() {
     if (editorItem || viewMode === "people" || compareState || collageItems || tagDialogIds) return;
     if (event.defaultPrevented || typing) return;
 
-    if (viewMode === "stickers") {
+    if (featureView) {
       if (matchShortcut(event, ["library"])?.id === "lightbox.toggle") {
-        if (!stickerView.selected) return;
+        if (!featureViewState.selected) return;
         event.preventDefault();
         setLightboxOpen((current) => !current);
         return;
       }
-      handleStickerKey(event);
+      featureViewState.handleKey(event);
       return;
     }
 
@@ -1202,14 +1188,14 @@ export default function App() {
           onDeleteCollection={workspace.deleteCollection}
           onAnnotateCollection={(collectionId) => runAnnotation(null, { scope: "collection", collectionId, onlyMissing: true })}
           onAddToCollection={workspace.addToCollection}
-          stickerMode={viewMode === "stickers"}
+          activeView={viewMode}
           peopleMode={viewMode === "people"}
           discoverMode={viewMode === "discover"}
           foldersMode={viewMode === "folders"}
           onOpenDiscover={() => openView("discover")}
-          onOpenStickerBrowser={() => {
-            openView("stickers");
-            stickerView.refresh();
+          onOpenView={(id) => {
+            openView(id);
+            featureViewStates[id]?.refresh?.();
           }}
           onOpenPeople={() => openView("people")}
           onOpenFolders={() => openView("folders")}
@@ -1238,24 +1224,8 @@ export default function App() {
               onSample={handleOpenSampleCatalog}
               sampleBusy={sampleBusy}
             />
-          ) : viewMode === "stickers" ? (
-            <>
-              <StickerToolbar
-                count={stickerView.stickers.length}
-                query={stickerView.query}
-                setQuery={stickerView.setQuery}
-              />
-              <div data-testid="workspace-split" className="min-h-0 flex-1 overflow-hidden">
-                <StickerGallery
-                  stickers={stickerView.stickers}
-                  query={stickerView.query}
-                  selectedId={stickerView.selected?.id || null}
-                  onSelect={stickerView.setSelected}
-                  onDelete={stickerView.handleDelete}
-                  loading={stickerView.loading}
-                />
-              </div>
-            </>
+          ) : featureView ? (
+            <featureView.View view={featureViewState} />
           ) : viewMode === "people" ? (
             <PeopleView
               people={peopleGroups}
@@ -1471,11 +1441,8 @@ export default function App() {
           )}
         </section>
 
-        {viewMode === "stickers" ? (
-          <StickerInspector
-            sticker={stickerView.selected}
-            onStar={stickerView.handleStar}
-          />
+        {featureView ? (
+          <featureView.Inspector view={featureViewState} />
         ) : viewMode === "people" ? (
           <PeopleInspector
             people={peopleGroups}
@@ -1535,24 +1502,17 @@ export default function App() {
       </div>
       <Lightbox
         open={lightboxOpen}
-        items={viewMode === "stickers" ? stickerItemsForLightbox : currentItems}
-        currentIndex={viewMode === "stickers" ? stickerLightboxIndex : Math.max(selectedIndex, 0)}
+        items={featureView ? featureViewState.lightboxItems : currentItems}
+        currentIndex={featureView ? featureViewState.lightboxIndex : Math.max(selectedIndex, 0)}
         catalogKey={activeCatalogPath}
-        proofMode={viewMode === "stickers" ? false : proofMode}
-        onToggleProof={viewMode === "stickers" ? undefined : (() => setProofMode((current) => !current))}
-        onEdit={viewMode === "stickers" ? undefined : openEditor}
+        proofMode={featureView ? false : proofMode}
+        onToggleProof={featureView ? undefined : (() => setProofMode((current) => !current))}
+        onEdit={featureView ? undefined : openEditor}
         onClose={() => {
           setProofMode(false);
           setLightboxOpen(false);
         }}
-        onIndexChange={viewMode === "stickers"
-          ? (idx) => {
-              const item = stickerItemsForLightbox[idx];
-              const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
-              if (sticker) stickerView.setSelected(sticker);
-            }
-          : selectByIndex
-        }
+        onIndexChange={featureView ? featureViewState.onLightboxIndexChange : selectByIndex}
       />
       <SettingsOverlay
         open={settingsOpen}

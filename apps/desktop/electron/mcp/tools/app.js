@@ -1,5 +1,12 @@
 // The app window: what the user has selected, and showing them things.
 // Shape and ctx: see tools/index.js.
+const { loadManifests } = require("../../features");
+
+// The library views show_in_app can switch to: the host's, then the feature
+// modules' (manifest `contributes.sidebarView.id`; App.jsx opens them by the
+// same id).
+const CORE_VIEWS = ["gallery", "editor", "collage", "people"];
+const FEATURE_VIEWS = loadManifests().flatMap((manifest) => (manifest.contributes?.sidebarView ? [manifest.contributes.sidebarView.id] : []));
 
 module.exports = (ctx) => {
   const { deps, requireCatalog } = ctx;
@@ -15,7 +22,7 @@ module.exports = (ctx) => {
         type: "object",
         properties: {
           asset_ids: { type: "array", items: { type: "string" }, description: "Asset ids (required for gallery/editor/collage)" },
-          view: { type: "string", enum: ["gallery", "editor", "collage", "people", "stickers"], description: "Default gallery" },
+          view: { type: "string", enum: [...CORE_VIEWS, ...FEATURE_VIEWS], description: "Default gallery" },
         },
       },
       async handler(args) {
