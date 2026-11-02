@@ -9,10 +9,10 @@ import {
   Trash2, Tag, Undo2, Redo2, AlertTriangle, Plus, ChevronsDownUp, ChevronsUpDown,
   Star, StarOff, History, Grid2x2, Grid3x3,
 } from "lucide-react";
-import api from "../../api";
-import { SliderRow, Spinner, TextInput } from "../../ui";
-import FaceMenu from "../FaceMenu";
-import { formatBytes } from "../../utils/format";
+import api from "../../../src/api";
+import { SliderRow, Spinner, TextInput } from "../../../src/ui";
+import FaceMenu from "../../../src/components/FaceMenu";
+import { formatBytes } from "../../../src/utils/format";
 
 function LogBadge({ t }) {
   return (

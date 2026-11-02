@@ -1,8 +1,8 @@
 // Every row of shared/ipcChannels.mjs must be answered by exactly one
-// ipcMain.handle(...) somewhere under electron/, and every handler must be
-// reachable from the table — otherwise a channel is dead on one side and
+// ipcMain.handle(...) somewhere under electron/ or features/*/electron/, and
+// every handler must be reachable from the table — otherwise a channel is dead on one side and
 // nothing says so until a click does nothing. Channel strings are literals
-// throughout electron/, so this is a text scan — plus the handler tables
+// throughout, so this is a text scan — plus the handler tables
 // ipc/browse.js registers in a loop, whose rows are read from the module.
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -32,11 +32,19 @@ function walk(dir, out = []) {
   return out;
 }
 
+// Main-process code: electron/ and each feature module's electron/ (its
+// renderer/ holds no handlers, and no handler may hide there).
+const APP_DIR = path.join(__dirname, "..");
+const MAIN_PROCESS_FILES = [
+  ...walk(__dirname),
+  ...walk(path.join(APP_DIR, "features")).filter((file) => file.split(path.sep).includes("electron")),
+];
+
 const registered = new Map(); // channel -> [file]
 const record = (channel, file) => registered.set(channel, [...(registered.get(channel) || []), file]);
-for (const file of walk(__dirname)) {
+for (const file of MAIN_PROCESS_FILES) {
   const source = fs.readFileSync(file, "utf8");
-  for (const m of source.matchAll(/ipcMain\.handle\("([^"]+)"/g)) record(m[1], path.relative(__dirname, file));
+  for (const m of source.matchAll(/ipcMain\.handle\("([^"]+)"/g)) record(m[1], path.relative(APP_DIR, file));
 }
 for (const [file, table] of HANDLER_TABLES) {
   for (const [channel] of table) record(channel, file);
@@ -52,5 +60,5 @@ test("every table channel has exactly one ipcMain.handle", () => {
 
 test("every ipcMain.handle is reachable from the table", () => {
   const orphans = [...registered.keys()].filter((channel) => !NOT_IN_TABLE.has(channel) && !IPC_METHODS.some(([, c]) => c === channel)).sort();
-  assert.deepEqual(orphans, [], "handled in electron/ but no bridge method reaches it (add a row or list it in NOT_IN_TABLE)");
+  assert.deepEqual(orphans, [], "handled in the main process but no bridge method reaches it (add a row or list it in NOT_IN_TABLE)");
 });

@@ -1,7 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { desktopCapabilities } = require("./capabilities");
+const { desktopCapabilities, MAC_HELPERS } = require("./capabilities");
+const { loadManifests } = require("./features");
 
 const MACOS14_HELPERS = new Set(["video-tool", "image-features", "people-worker", "compute-depth", "extract-sticker"]);
 const MACOS12_HELPERS = new Set(["video-tool", "image-features"]);
@@ -38,4 +39,10 @@ test("every flag declared is a feature of shared/capabilities.mjs", async () => 
     desktopCapabilities("linux"),
   ].flatMap(Object.keys);
   for (const flag of declared) assert.ok(FEATURE_NAMES.includes(flag), `${flag} is not in shared/capabilities.mjs`);
+});
+
+test("a feature's flag comes from its manifest or the hand-written table, never both", () => {
+  const fromManifests = loadManifests().map((manifest) => manifest.capability).filter(Boolean);
+  assert.ok(fromManifests.includes("lut"), "the lut feature declares its capability in its manifest");
+  for (const flag of Object.keys(MAC_HELPERS)) assert.ok(!fromManifests.includes(flag), `${flag} is in both`);
 });

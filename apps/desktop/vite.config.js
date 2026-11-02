@@ -19,7 +19,7 @@ async function coveragePlugins() {
   if (!coverageBuild) return [];
   const { default: istanbul } = await import("vite-plugin-istanbul");
   return [istanbul({
-    include: ["src/**/*.{js,jsx}", "features/**/renderer/**/*.{js,jsx}"],
+    include: ["src/**/*.{js,jsx}", "features/index.js", "features/**/renderer/**/*.{js,jsx}"],
     exclude: ["node_modules", "**/*.test.{js,jsx}"],
     extension: [".js", ".jsx"],
     requireEnv: false,
@@ -78,6 +78,10 @@ module.exports = defineConfig(async () => ({
   base: "./",
   plugins: [react(), maplibreClassicWorker(), ...(await coveragePlugins())],
   resolve: { alias: { "@sidecar-data": SIDECAR_DATA } },
+  // vitest (npm run test:renderer): the renderer's tests, in src/ and in the
+  // feature modules' renderer/ trees. Their electron/ tests are node:test
+  // files (npm run test:electron), which vitest must not pick up.
+  test: { include: ["src/**/*.test.{js,jsx}", "features/**/renderer/**/*.test.{js,jsx}"] },
   server: {
     host: "127.0.0.1",
     port: 5173,

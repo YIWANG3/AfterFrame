@@ -9,6 +9,7 @@
 | 文档 | 说明 |
 |---|---|
 | [developer-setup.md](developer-setup.md) | 开发环境、命令、质量门（lint / 单测 / E2E / Python ruff+mypy） |
+| [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；第一个是 LUT（#256） |
 | [agent-native-mcp.md](agent-native-mcp.md) | 内嵌 MCP server 设计与 34 个 tool 的现状（顶部状态行持续更新） |
 | [settings-scope.md](settings-scope.md) | 哪些设置属于 app、哪些属于 catalog |
 | [naming.md](naming.md) | 产品为什么有四个名字（AfterFrame / media-workspace / …） |
@@ -27,14 +28,14 @@
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
 | [liquid-glass-redesign.md](liquid-glass-redesign.md) | 视觉重构的调研、原型与定调；材质规则是现行约束 |
 | [local-models-plan.md](local-models-plan.md) | 本地小模型与开源库的扩展规划（不做修图、不碰 1 GB 以上）：A 近似重复/相似照片第一步已实现（feat/similar-images），挑片、OCR、视频场景、语义搜索、离线标签待做 |
-| [lut-plan.md](lut-plan.md) | 套 LUT 的编辑器工具：P1（只做 Mac）已随 0.5.11 发布（#190）；P2 未开始 |
+| [lut-plan.md](lut-plan.md) | 套 LUT 的编辑器工具：P1（只做 Mac）已随 0.5.11 发布（#190），2026-11-02 迁成 `features/lut/`；P2 未开始 |
 | [windows-support-plan.md](windows-support-plan.md) | Windows 现状审计、共享/分平台架构与路线；开发机见 `scripts/windows/setup-dev.ps1`。阶段 1、2 已合并，0.5.10 起发布 Windows 安装包（未签名）；签名、真机验收和阶段 3 未做 |
 | [foundation-refactor-plan.md](foundation-refactor-plan.md) | Phase 1–3 与补充修复已完成（2026-07-13/14）；Phase 4 的验收条件其实已满足（`window.mediaWorkspace` 只剩 `src/api` 和 `web-main.jsx`），文内没回填；Phase 5–6 未开始 |
 | [lens-logos-plan.md](lens-logos-plan.md) | 镜头厂商 logo：暂缓（2026-10-01），只做了导入时读 `lens_make` |
 | [folders-page-plan.md](folders-page-plan.md) | 文件夹数量上百后的独立管理页（统计、筛选、多选、批量删除 / 标注）；P1 已实现（2026-10-15，`FoldersView.jsx`、e2e 78）；P2（带搜索的"加入文件夹"选择器、设封面）未开始 |
 | [format-support-plan.md](format-support-plan.md) | 进行中（2026-11-01）：对照 Eagle 的文件格式差距与四份扩展名列表互不一致的盘点；P0 格式注册表（#242）、P1 加格式 / 交代不支持 / 原图统一（#243–#245）已合并，P2 的格式 facet 按家族聚合是 #246；JXL、`.xmp` 边车评分、`.mxf` 未开工 |
 | [plugin-architecture-research.md](plugin-architecture-research.md) | 计划（2026-11-01）：本体做资源管理、编辑功能迁成 feature module、公开 API 先做处理器型；第 5 节是 LUT / AI 重绘 / 贴纸的代码地图，第 6 节是准备 PR 和 PR 1；第 8 节待拍板 |
-| [feature-modules-plan.md](feature-modules-plan.md) | 进行中（2026-11-01）：编辑功能迁成 feature module 的逐 PR 实施计划：host 对象、`features/` 目录、ToolRail 读表、LUT 推导收进 hook 四个准备 PR，然后 LUT / AI 重绘 / 贴纸提取三个迁移；第 11 节待拍板 |
+| [feature-modules-plan.md](feature-modules-plan.md) | 进行中（2026-11-02）：编辑功能迁成 feature module 的逐 PR 实施计划。四个准备 PR（#252–#255）和 PR 1 LUT 迁移已做；AI 重绘、贴纸提取两个迁移未开工 |
 
 ## 已完成的计划（历史记录；实现以代码为准）
 

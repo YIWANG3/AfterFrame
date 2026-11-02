@@ -11,7 +11,7 @@
 // Everything cached here is bounded: a library can hold thousands of LUTs
 // of up to 7 MB of text each, and the panel touches every one it shows.
 
-import api from "../../../api";
+import api from "../../../../src/api";
 import { parseCube, CubeError } from "../../../../shared/cubeLut.mjs";
 import { applyLut, prepareLut } from "./lutKernel";
 

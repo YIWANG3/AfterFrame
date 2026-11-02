@@ -1,6 +1,6 @@
 # 编辑功能迁成 feature module：实施计划
 
-> **状态（2026-11-01）**：§11 四项已拍板；PR 0a 做完在 `refactor/main-host`，落地形状见 §2 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
+> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT 迁成第一个 feature module）做完在 `feat/feature-module-lut`，落地形状见 §6 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
 
 ## 0. 范围与规矩
 
@@ -225,6 +225,19 @@ export default {
 - Windows CI（#235 起 e2e 在 Windows 跑）：LUT 按钮不出现、设置页无 LUT 分组，和今天一样。
 - `mac-builds.cjs` 的 macOS 12 构建：LUT 不受影响（它没有 helper）。
 
+**做完后的记录（2026-11-02，`feat/feature-module-lut`）**，和上面不一样的地方：
+
+- 清单没有 `renderer: () => import(...)` 字段：渲染层注册表 `features/index.js` 静态 import 各 feature 的 `renderer/index.js`（面板在那里面 `lazy()`），清单里放一个没人调的懒加载函数只会让 Vite 多切一个 chunk。清单就是纯数据，一行代码都没有。等沙箱插件真要从清单动态加载时再加。
+- `editorTool` 贡献写 `unavailable: "hidden"`，和 `editorTools.js` 行里的字段同名，不另起 `hidden: true`。
+- `editorTools.js`：`CORE_TOOLS`（六个还在核心里的）加 `editorToolFeatures`，按 `RAIL_ORDER` 排；有工具不在 `RAIL_ORDER` 里就抛错。LUT 的图标 `LutGlyph` 搬到 `features/lut/renderer/LutGlyph.jsx`，经 `renderer/index.js` 的 `icon` 导出。
+- `features/index.js` 对每个清单检查注册表里有它的渲染层，没有就抛错。
+- `electron/capabilities.js` 导出 `MAC_HELPERS`，`capabilities.test.js` 用它断言"清单推出的和手写的没有重叠"；"`web: false` 的清单必须在 web bridge 里声明 false"放在 `src/api/capabilities.test.js`（它本来就解析 bridge 的 capabilities 块），顺带让它扫 `features/` 目录（`.mjs` 也扫，清单的 `capability: "lut"` 就是被它读到的）。新建 `electron/features.test.js` 五条。
+- `electron/ipcChannels.test.js` 扫 `electron/` 加 `features/*/electron/`（feature 的 `renderer/` 里不许有 handler）。
+- vitest 的范围从命令行过滤改成 `vite.config.js` 的 `test.include`（`src/**` 和 `features/**/renderer/**` 的测试）：`vitest run src features` 的 `features` 是文件名过滤，会把 `electron/features.test.js` 和 `features/lut/electron/lutLibrary.test.js` 两个 node:test 文件也抓进来。`test:renderer` 变成 `vitest run`。
+- eslint 和 istanbul 的 renderer 文件列表加了 `features/index.js`（它不在任何 `renderer/` 下）。
+- `IPC_METHODS` 183 行不变，LUT 的 11 行从中段挪到了末尾（清单行接在 `CORE_IPC_METHODS` 后面）；preload 和 facade 按名字取，顺序无关。
+- 没做：`npm run pack` 的打包验收和 `e2e:coverage`（67-lut 明显覆盖被搬的文件）。
+
 ## 7. PR 2：AI 重绘
 
 **分支** `feat/feature-module-repaint`。**估时** 2 到 3 天。清单新字段：`mcpTools`。
@@ -259,7 +272,7 @@ export default {
 | 2 | 0b `features/` 配置 | 半天 | — |
 | 3 | 0c ToolRail 读表 | 半天 | — |
 | 4 | 0d LUT 推导收进 hook | 1 天 | — |
-| 5 | 1 LUT | 2 到 3 天 | 0a–0d 全部合入 |
+| 5 | 1 LUT | 2 到 3 天（实际半天） | 0a–0d 全部合入 |
 | 6 | 2 AI 重绘 | 2 到 3 天 | 1 |
 | 7 | 3 贴纸 | 3 天 | 2 |
 

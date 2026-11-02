@@ -9,13 +9,18 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FEATURE_NAMES } from "../../shared/capabilities.mjs";
 
-const SRC = fileURLToPath(new URL("..", import.meta.url));
+import manifests from "../../features/manifests.mjs";
 
+const SRC = fileURLToPath(new URL("..", import.meta.url));
+const APP = fileURLToPath(new URL("../..", import.meta.url));
+
+// Renderer sources and the feature modules (their renderer/ code, and the
+// manifests, where a feature names its `capability: "…"`).
 function sources(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const file = join(dir, entry.name);
     if (entry.isDirectory()) return sources(file);
-    return /\.(js|jsx)$/.test(entry.name) && !/\.test\.(js|jsx)$/.test(entry.name) ? [file] : [];
+    return /\.(js|jsx|mjs)$/.test(entry.name) && !/\.test\.(js|jsx)$/.test(entry.name) ? [file] : [];
   });
 }
 
@@ -26,11 +31,11 @@ function sources(dir) {
 const CHECKED = [/\bapi\.can\(\s*"([^"]+)"/g, /\bcap:\s*"([A-Za-z]+)"/g, /\bcapability:\s*"([A-Za-z]+)"/g];
 
 const checked = new Map(); // name → files
-for (const file of sources(SRC)) {
+for (const file of [...sources(SRC), ...sources(join(APP, "features"))]) {
   const text = readFileSync(file, "utf8");
   for (const pattern of CHECKED) {
     for (const [, name] of text.matchAll(pattern)) {
-      checked.set(name, [...(checked.get(name) || []), file.slice(SRC.length)]);
+      checked.set(name, [...(checked.get(name) || []), file.slice(APP.length)]);
     }
   }
 }
@@ -58,5 +63,18 @@ describe("feature flags (shared/capabilities.mjs)", () => {
     expect(declared.web).toBe("true");
     // The browser has no LUT library: declared, not left to a missing method.
     expect(declared.lut).toBe("false");
+  });
+
+  it("every feature module that says web: false is declared false by the web bridge", () => {
+    const declared = webCapabilities();
+    for (const { id, capability, web } of manifests) {
+      if (web === false) expect(declared[capability], `${id}: ${capability} in src/api/browser/bridge.js`).toBe("false");
+    }
+  });
+
+  it("every feature module's capability is on the list", () => {
+    for (const { id, capability } of manifests) {
+      expect(FEATURE_NAMES, `${id}'s manifest`).toContain(capability);
+    }
   });
 });
