@@ -25,7 +25,7 @@ const noZIndexLiteral = {
 // under renderer/ and main-process code under electron/; each tree gets the
 // same rules as src/ and electron/ respectively, and their manifests the
 // shared-ESM rules.
-const RENDERER_FILES = ["src/**/*.{js,jsx}", "features/**/renderer/**/*.{js,jsx}"];
+const RENDERER_FILES = ["src/**/*.{js,jsx}", "features/index.js", "features/**/renderer/**/*.{js,jsx}"];
 
 const sharedRules = {
   ...js.configs.recommended.rules,

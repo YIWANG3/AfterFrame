@@ -16,9 +16,9 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { writeJsonAtomic } = require("./settingsStore");
-const { readCubeHeader } = require("../shared/cubeLut.mjs");
-const { guessLogInput } = require("../shared/lutLogGuess.mjs");
+const { writeJsonAtomic } = require("../../../electron/settingsStore");
+const { readCubeHeader } = require("../../../shared/cubeLut.mjs");
+const { guessLogInput } = require("../../../shared/lutLogGuess.mjs");
 
 const INDEX_VERSION = 1;
 const HEADER_BYTES = 64 * 1024; // headers are a few lines; data starts early

@@ -1,10 +1,12 @@
 // LUT library IPC (docs/lut-plan.md §1): the editor's LUT tool and the
-// Library settings read it; ../lutLibrary.js does the work. Errors come back
+// Library settings read it; ./lutLibrary.js does the work. The main-process
+// entry of the lut feature module (features/lut/manifest.mjs `electron`),
+// registered by electron/features.js with the same host as every ipc module. Errors come back
 // as { error: code } rather than thrown: an IPC rejection loses its code.
 
 const path = require("node:path");
 const fs = require("node:fs");
-const { createLutLibrary } = require("../lutLibrary");
+const { createLutLibrary } = require("./lutLibrary");
 
 function register({ app, ipcMain, dialog, shell, readAppSettings, updateAppSettings, getMainWindow }) {
   const base = path.join(app.getPath("userData"), "afterframe");

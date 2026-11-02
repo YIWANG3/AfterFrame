@@ -15,7 +15,7 @@
     "build": "vite build",
     "build:web": "vite build --config vite.web.config.js",
     "test:electron": "node --test \"electron/**/*.test.js\" \"features/**/electron/**/*.test.js\" scripts/camera-names/filter.test.mjs scripts/lib/download.test.mjs shared/formats.test.mjs",
-    "test:renderer": "vitest run src features",
+    "test:renderer": "vitest run",
     "test:unit": "npm run test:electron && npm run test:renderer",
     "check": "npm run lint && npm run test:unit && npm run build",
     "build:native": "bash scripts/build-native.sh",

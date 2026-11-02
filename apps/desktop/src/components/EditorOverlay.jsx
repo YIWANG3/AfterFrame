@@ -1,5 +1,5 @@
 import api from "../api";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clamp, fileName } from "../utils/format";
 import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
@@ -34,9 +34,9 @@ import CropOverlay from "./editor/components/CropOverlay";
 import AngleRuler from "./editor/components/AngleRuler";
 import SplitPanel from "./editor/components/SplitPanel";
 import SplitOverlay from "./editor/components/SplitOverlay";
-import LutPanel from "./editor/LutPanel";
-import { useLutTool } from "./editor/state/useLutTool";
-import { useLutSource } from "./editor/state/useLutSource";
+// The LUT tool is a feature module (features/lut): its hooks are called here
+// like the core tools' (rules of hooks), its panel is a lazy chunk.
+import { Panel as LutPanel, useTool as useLutTool, useLutSource } from "../../features/lut/renderer/index.js";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
@@ -1280,16 +1280,18 @@ export default function EditorOverlay({
                 canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
               />
             ) : tool === "lut" ? (
-              <LutPanel
-                t={t}
-                tool={lutTool}
-                lut={editorState.lut}
-                base={lutTool.base}
-                onUndo={handleUndo}
-                canUndo={historyIndex > 0}
-                onRedo={handleRedo}
-                canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
-              />
+              <Suspense fallback={null}>
+                <LutPanel
+                  t={t}
+                  tool={lutTool}
+                  lut={editorState.lut}
+                  base={lutTool.base}
+                  onUndo={handleUndo}
+                  canUndo={historyIndex > 0}
+                  onRedo={handleRedo}
+                  canRedo={historyIndex >= 0 && historyIndex < history.length - 1}
+                />
+              </Suspense>
             ) : tool === "sticker" ? (
               <div className="flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden">
                 <StickerPanel

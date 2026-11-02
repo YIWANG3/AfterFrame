@@ -2,7 +2,7 @@
 
 > **状态（2026-10-14）**：P1 已随 0.5.11 发布（#190），只做 Mac；P2 未开始。
 >
-> **状态（2026-10-07）**：P1 已在 `feat/lut` 上实现，只做 Mac。e2e 是 `67-lut.spec.js`，单测在 `src/components/editor/lut/` 和 `electron/lutLibrary.test.js`。
+> **状态（2026-11-02）**：P1 已随 0.5.11 发布，只做 Mac；2026-11-02 起代码是第一个 feature module，在 `apps/desktop/features/lut/`（[feature-modules-plan.md](feature-modules-plan.md) §6），下文的文件路径是迁移前的。e2e 是 `67-lut.spec.js`，单测在 `features/lut/renderer/lut/` 和 `features/lut/electron/lutLibrary.test.js`。
 >
 > 在作者的真实素材上实测（M1 Max）：
 > - RAW：索尼 A7M4、富士 GFX50S II、尼康 Z8 高效率 RAW、哈苏 907X 1 亿像素都以 Apple 渲染为底。预览套用约 0.1 秒，全尺寸保存 1.0–3.1 秒。

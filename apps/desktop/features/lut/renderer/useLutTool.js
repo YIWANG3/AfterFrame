@@ -7,14 +7,14 @@
 // the save computes, so dragging it costs nothing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import api from "../../../api";
-import { confirm } from "../../confirm";
-import { numberIn, readPref, writePref } from "../../../utils/prefs";
-import { buildTransformedCanvas } from "../render/canvasHelpers";
+import api from "../../../src/api";
+import { confirm } from "../../../src/components/confirm";
+import { numberIn, readPref, writePref } from "../../../src/utils/prefs";
+import { buildTransformedCanvas } from "../../../src/components/editor/render/canvasHelpers";
 import {
   forgetLut, fullSizeParallelism, gradeCanvas, gradePixels, isLutFault, LutError, lutPoolInfo, releaseLutWorkers,
   thumbnailConcurrency,
-} from "../lut/lutPool";
+} from "./lut/lutPool";
 
 const THUMB_EDGE = 280; // px, long edge: a ~140 px cell (two columns) at 2× density
 

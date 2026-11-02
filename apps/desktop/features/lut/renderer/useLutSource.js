@@ -16,7 +16,7 @@
 //                   null when the LUT tool does not apply to this photo
 
 import { useEffect, useState } from "react";
-import { useNeutralRawRender } from "../../../hooks/useRawEditSource";
+import { useNeutralRawRender } from "../../../src/hooks/useRawEditSource";
 
 export function useLutSource({ open, active, item, isRaw, available, sourceBaked }) {
   const itemKey = item?.asset_id ?? item?.image_path ?? null;

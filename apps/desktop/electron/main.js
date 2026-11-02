@@ -31,7 +31,6 @@ const annotationIpc = require("./ipc/annotation");
 const peopleIpc = require("./ipc/people");
 const frameLogosIpc = require("./ipc/frameLogos");
 const frameTemplatesIpc = require("./ipc/frameTemplates");
-const lutsIpc = require("./ipc/luts");
 const editorsIpc = require("./ipc/editors");
 const settingsTransferIpc = require("./ipc/settingsTransfer");
 const dialogsIpc = require("./ipc/dialogs");
@@ -58,6 +57,7 @@ const { registerMediaProtocol } = require("./media/protocol");
 const { createMediaHttpServer } = require("./media/httpServer");
 const { createAppShell } = require("./appShell");
 const { desktopCapabilities } = require("./capabilities");
+const { registerFeatures } = require("./features");
 const { createHost, createServices } = require("./host");
 const { claimSingleInstance, launchPaths } = require("./singleInstance");
 const { createLocale } = require("./locale");
@@ -353,7 +353,9 @@ ipcMain.handle("app:mcp-status", () => services.mcp?.getStatus() ?? { status: "s
 services.set("saveFile", saveFileIpc.register(host));
 frameLogosIpc.register(host);
 frameTemplatesIpc.register(host);
-lutsIpc.register(host);
+// The feature modules (features/<id>/manifest.mjs `electron`): today the LUT
+// library — see electron/features.js.
+registerFeatures(host);
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.
 // The overlay calls window.__vibepinCapture(rect) → this handler → capturePage.

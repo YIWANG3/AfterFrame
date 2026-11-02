@@ -4,7 +4,7 @@ import { FolderOpen, FolderInput, FolderPlus, Trash2, Palette } from "lucide-rea
 import api from "../../api";
 import { baseName, fileName } from "../../utils/format";
 import { Group, FieldRow, Toggle, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
-import LutLibraryGroup from "./LutLibraryGroup";
+import { settingsGroups } from "../../../features/index.js";
 import { FORMATS } from "../../../shared/formats.mjs";
 
 // What the import takes, from the format registry (the sidecar's
@@ -225,7 +225,9 @@ export default function LibrarySettings({ info, summary, onSwitchCatalog, onClos
           <ColorAnalysisRow />
         </Group>
       )}
-      {api.can("lut") ? <LutLibraryGroup /> : null}
+      {/* The feature modules' groups on this tab (today: the LUT library), each
+          shown only where its feature is available. */}
+      {settingsGroups("library").map(({ id, capability, SettingsGroup }) => (api.can(capability) ? <SettingsGroup key={id} /> : null))}
       <Group title={t("library.cacheStorage")} subtitle={t("library.cacheSubtitle")}>
         <FieldRow label={t("library.depthMaps")} hint={t("library.depthMapsHint")}>
           <OpenFolderButton kind="depth" label={t("library.openFolder")} />

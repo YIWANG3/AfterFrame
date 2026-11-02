@@ -6,10 +6,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, FolderPlus, Trash2, X } from "lucide-react";
-import api from "../../api";
-import { confirm } from "../confirm";
-import { fileName, formatBytes } from "../../utils/format";
-import { Group, FieldRow, SecondaryButton, IconActionButton } from "./SettingsPrimitives";
+import api from "../../../src/api";
+import { confirm } from "../../../src/components/confirm";
+import { fileName, formatBytes } from "../../../src/utils/format";
+import { Group, FieldRow, SecondaryButton, IconActionButton } from "../../../src/components/settings/SettingsPrimitives";
 
 export default function LutLibraryGroup() {
   const { t } = useTranslation("settings");

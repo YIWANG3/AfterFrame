@@ -20,8 +20,15 @@
 //
 // Web build: src/api/browser/bridge.js implements a subset of these names in
 // the browser; the parity test only asks that it names nothing else.
+//
+// The table is the host's rows (CORE_IPC_METHODS) followed by the rows each
+// feature module declares in its manifest (features/<id>/manifest.mjs
+// `contributes.ipc`, answered by the feature's own electron entry). The
+// manifests are pure data, so shared/ may import them.
 
-export const IPC_METHODS = [
+import manifests from "../features/manifests.mjs";
+
+export const CORE_IPC_METHODS = [
   // ── workspace / catalog ──
   ["getInfo", "workspace:info", 0],
   ["getSummary", "workspace:summary", 0],
@@ -74,18 +81,6 @@ export const IPC_METHODS = [
   ["importPersonalLogo", "app:import-personal-logo", 1],
   ["renamePersonalLogo", "app:rename-personal-logo", 2],
   ["deletePersonalLogo", "app:delete-personal-logo", 1],
-  // ── LUT library (electron/ipc/luts.js) ──
-  ["listLuts", "app:luts", 0],
-  ["readLut", "app:read-lut", 1],
-  ["importLuts", "app:import-luts", 1],
-  ["addLutFolder", "app:add-lut-folder", 1],
-  ["removeLutFolder", "app:remove-lut-folder", 1],
-  ["setLutLogMark", "app:set-lut-log-mark", 2],
-  ["setLutFavorite", "app:set-lut-favorite", 2],
-  ["noteLutUsed", "app:note-lut-used", 1],
-  ["revealLut", "app:reveal-lut", 1],
-  ["trashLut", "app:trash-lut", 1],
-  ["clearLutLibrary", "app:clear-lut-library", 0],
   ["setBrandLogo", "app:set-brand-logo", 2],
   ["setCameraName", "app:set-camera-name", 2],
   ["listCameraMakes", "workspace:camera-makes", 0],
@@ -216,5 +211,7 @@ export const IPC_METHODS = [
   ["pickSavePath", "workspace:pick-save-path", 1],
   ["pickDirectory", "workspace:pick-directory", 1],
 ];
+
+export const IPC_METHODS = [...CORE_IPC_METHODS, ...manifests.flatMap((manifest) => manifest.contributes?.ipc ?? [])];
 
 export const IPC_METHOD_NAMES = IPC_METHODS.map(([method]) => method);
