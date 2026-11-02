@@ -8,17 +8,12 @@ const { withCatalog, catalogRequired, jobStatusHandler } = require("./guard");
 function register({
   ipcMain,
   commands,
-  getCatalogState,
+  catalog: { state: getCatalogState },
   readAppSettings,
   updateAppSettings,
-  getStoredProviderConfigWithMigration,
-  providerCredentials,
-  setStoredProviderConfig,
-  deleteStoredProviderConfig,
-  createJob,
+  tokens: { getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig },
   launchSidecarJob,
-  latestJobStatus,
-  formatJobStatus,
+  tasks: { createJob, latestJobStatus, formatJobStatus },
 }) {
   const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
   // Where a provider's key is stored: the repaint token store, under the

@@ -4,7 +4,7 @@
 
 const { withCatalog } = require("./guard");
 
-function register({ ipcMain, commands, getCatalogState }) {
+function register({ ipcMain, commands, catalog: { state: getCatalogState } }) {
   const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
 
   ipcMain.handle("workspace:list-collections", guarded([], async () => {

@@ -93,7 +93,7 @@ function runChild(spawn, [command, args]) {
 }
 
 function register({
-  ipcMain, clipboard, allowlist,
+  ipcMain, clipboard, media: allowlist,
   platform = process.platform,
   spawn = require("node:child_process").spawn,
   fileExists = fileExistsOnDisk,

@@ -76,16 +76,31 @@ function contentTypeFor(filePath) {
   return mimeForExport(filePath);
 }
 
-function createMcpServer(deps) {
-  const {
-    getCatalogState,
-    commands,
-    startImportTask,
-    formatJobStatus,
-    registerRoots,
-    sharp,
-    port = DEFAULT_PORT,
-  } = deps;
+// host: the main-process host (../host.js). The tools read what they need
+// through ctx.deps, assembled here, so no tool file depends on the host's shape.
+function createMcpServer(host, { port = DEFAULT_PORT } = {}) {
+  const { catalog, commands, tasks, registerRoots, sharp, agentBridge, services } = host;
+  const getCatalogState = catalog.state;
+  const { startImportTask, formatJobStatus } = tasks;
+  const deps = {
+    // The agent ↔ app window bridge.
+    revealAssetsInApp: agentBridge.revealAssetsInApp,
+    getCurrentSelection: agentBridge.getCurrentSelection,
+    broadcastCatalogChanged: agentBridge.broadcastCatalogChanged,
+    askRenderer: agentBridge.askRenderer,
+    // Background-task starters.
+    startAiRepaintTask: tasks.startAiRepaintTask,
+    activeRepaintProvider: tasks.activeRepaintProvider,
+    listActiveJobsFormatted: tasks.listActiveJobsFormatted,
+    resumeJob: tasks.resumeJob,
+    startVisualTask: tasks.startVisualTask,
+    // What other modules registered (host.services). The server is created
+    // last, after all of them; they are still read at call time.
+    startAnnotationTask: (...args) => services.annotation.startAnnotationTask(...args),
+    processAndSave: (...args) => services.saveFile.processAndSave(...args),
+    startPeopleIndex: (options) => services.people?.startPeopleIndex(options),
+    watcher: services.watcher,
+  };
 
   const requireCatalog = () => requireCatalogPath(getCatalogState);
 

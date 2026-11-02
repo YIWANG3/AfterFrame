@@ -18,7 +18,7 @@ function setup(allow = async () => true, platform = "darwin") {
   };
   const app = new EventEmitter();
   const toggleFullscreen = () => { simpleFullScreen = !simpleFullScreen; };
-  register({ ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, BrowserWindow: { fromWebContents: () => window }, app, allowlist: { isAllowedMediaPathLoaded: allow }, addonPath: "test.node", loadAddon: () => addon, toggleFullscreen, platform });
+  register({ ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, BrowserWindow: { fromWebContents: () => window }, app, media: { isAllowedMediaPathLoaded: allow }, addonPath: "test.node", loadAddon: () => addon, toggleFullscreen, platform });
   const event = { sender, senderFrame: sender.mainFrame };
   const ask = (verb, ...args) => handlers.get(`app:native-video-${verb}`)(event, ...args);
   const fullscreen = () => handlers.get("app:video-fullscreen")(event);

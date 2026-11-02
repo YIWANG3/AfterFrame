@@ -4,7 +4,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-function register({ ipcMain, BrowserWindow, app, allowlist, addonPath, toggleFullscreen, platform = process.platform, loadAddon = require }) {
+function register({
+  ipcMain, BrowserWindow, app, media: allowlist, nativeBin, appShell,
+  addonPath = path.join(nativeBin, "video-player.node"),
+  // The player's fullscreen button uses the shell's.
+  toggleFullscreen = appShell.toggleAppFullscreen,
+  platform = process.platform, loadAddon = require,
+}) {
   let addon;
   const sessions = new Map();
   // webContents id -> its window's simple fullscreen before a player's

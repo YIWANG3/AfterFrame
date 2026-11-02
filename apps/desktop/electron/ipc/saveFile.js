@@ -59,7 +59,7 @@ function register({
   dialogs,
   rootDir,
   writeImageWithSourceMetadata,
-  addAllowedMediaDir,
+  media: { addAllowedMediaDir },
 }) {
   ipcMain.handle("workspace:pick-save-path", async (event, options) => {
     const result = await dialogs.showSaveDialogFor(event, {

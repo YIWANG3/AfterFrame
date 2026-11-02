@@ -20,10 +20,8 @@ function register({
   getAppSettingsPath,
   readAppSettings,
   updateAppSettings,
-  decryptToken,
-  setStoredProviderConfig,
-  isEncryptionAvailable,
-  applyLocale,
+  tokens: { decryptToken, setStoredProviderConfig, isEncryptionAvailable },
+  locale: { applyLocale },
 }) {
   // One pending import at a time: inspect parses the file, apply consumes it,
   // so the renderer never round-trips the (secret-bearing) bundle.

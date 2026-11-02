@@ -12,17 +12,11 @@ function register({
   app,
   ipcMain,
   commands,
-  getCatalogState,
+  catalog: { state: getCatalogState },
   readAppSettings,
   updateAppSettings,
-  getStoredProviderConfigWithMigration,
-  providerCredentials,
-  setStoredProviderConfig,
-  deleteStoredProviderConfig,
-  startAiRepaintTask,
-  startTextImageTask,
-  latestJobStatus,
-  formatJobStatus,
+  tokens: { getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig },
+  tasks: { startAiRepaintTask, startTextImageTask, latestJobStatus, formatJobStatus },
 }) {
   function aiStylesPath() {
     return path.join(app.getPath("userData"), "afterframe", "ai-styles.json");

@@ -20,7 +20,14 @@ const { spawnSafely } = require("../spawnSafely");
 const TRANSCODE_TIMEOUT_MS = 30 * 60_000;
 const FRAMES_TIMEOUT_MS = 3 * 60_000;
 
-function register({ ipcMain, app, allowlist, videoToolPath, runVideoTool = null, timeouts = {} }) {
+function register({
+  ipcMain, app, media: allowlist, nativeBin, commands, platform = process.platform,
+  videoToolPath = path.join(nativeBin, "video-tool"),
+  // No video-tool off macOS: the sidecar runs its commands with FFmpeg, in a
+  // process of its own, as the resident one is serial.
+  runVideoTool = platform === "darwin" ? null : (args, timeoutMs) => commands.videoTool(args, timeoutMs),
+  timeouts = {},
+}) {
   const transcodeTimeoutMs = timeouts.transcode ?? TRANSCODE_TIMEOUT_MS;
   const framesTimeoutMs = timeouts.frames ?? FRAMES_TIMEOUT_MS;
   const runTool = runVideoTool

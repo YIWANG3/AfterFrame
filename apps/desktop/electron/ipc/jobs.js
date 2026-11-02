@@ -6,18 +6,13 @@ const { withCatalog, jobStatusHandler } = require("./guard");
 
 function register({
   ipcMain,
-  getCatalogState,
-  formatJobStatus,
-  latestJobStatus,
-  startImportTask,
-  startEnrichmentTask,
-  startPreviewTask,
-  startColorsTask,
-  startVisualTask,
-  startOrientationTask,
-  listActiveJobsFormatted,
-  resumeJob,
+  catalog: { state: getCatalogState },
   commands,
+  tasks: {
+    formatJobStatus, latestJobStatus,
+    startImportTask, startEnrichmentTask, startPreviewTask, startColorsTask, startVisualTask, startOrientationTask,
+    listActiveJobsFormatted, resumeJob,
+  },
 }) {
   const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
   const status = (jobType) => jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, jobType);

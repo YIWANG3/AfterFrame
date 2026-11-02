@@ -47,7 +47,7 @@ const PEOPLE_WRITES = [
 
 const uniquePaths = (paths) => [...new Set((paths || []).map(String).filter(Boolean))];
 
-function register({ ipcMain, commands, getCatalogState }) {
+function register({ ipcMain, commands, catalog: { state: getCatalogState } }) {
   const guarded = (fallback, fn) => withCatalog(getCatalogState, fallback, fn);
 
   sidecarQueries(ipcMain, { commands, getCatalogState }, SIDECAR_QUERIES);

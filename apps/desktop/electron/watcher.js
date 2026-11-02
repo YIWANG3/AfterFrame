@@ -190,7 +190,12 @@ function rebuild() {
   }
 }
 
-function register({ ipcMain, getMainWindow, getCatalogPath, readCatalogSettings, updateCatalogSettings, changedMedia = keepAll, quietPeriodMs = QUIET_MS }) {
+function register({
+  ipcMain, getMainWindow, catalog: { path: getCatalogPath }, readCatalogSettings, updateCatalogSettings,
+  // The sidecar's changed-media filter; a test without a sidecar keeps every path.
+  commands = null, changedMedia = commands ? (paths) => commands.changedMedia(paths) : keepAll,
+  quietPeriodMs = QUIET_MS,
+}) {
   getWindow = getMainWindow;
   catalog = { path: getCatalogPath, read: readCatalogSettings, update: updateCatalogSettings, changed: changedMedia };
   quietMs = quietPeriodMs;

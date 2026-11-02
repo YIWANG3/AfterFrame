@@ -23,7 +23,7 @@ function setup(t, { changedMedia } = {}) {
   const api = register({
     ipcMain: { handle: (name, fn) => { handlers[name] = fn; } },
     getMainWindow: () => ({ webContents: { isDestroyed: () => false, send: (channel, payload) => channels[channel].push(payload) } }),
-    getCatalogPath: () => catalogPath,
+    catalog: { path: () => catalogPath },
     readCatalogSettings: () => ({ integrations: { watchedDirs: [watched] } }),
     updateCatalogSettings: async () => {},
     changedMedia,
