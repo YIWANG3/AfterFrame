@@ -50,6 +50,10 @@ test.beforeAll(async () => {
   // A scanner's 16-bit TIFF, the kind no browser decodes.
   await sharp({ create: { width: 320, height: 200, channels: 3, background: { r: 180, g: 120, b: 60 } } })
     .toColourspace("rgb16").tiff({ compression: "lzw" }).toFile(path.join(importDir, "scantiff.tif"));
+  // A TIFF nothing decodes (a truncated copy from a failing card): it imports,
+  // its card says "No preview", and the lightbox's filmstrip must not draw
+  // Chromium's broken-image glyph for it.
+  fs.writeFileSync(path.join(importDir, "truncated.tif"), Buffer.concat([fs.readFileSync(path.join(importDir, "scantiff.tif")).subarray(0, 600), Buffer.alloc(4000, 0x5a)]));
   ctx = await launchApp({ testName: "more-formats" });
   await expect(galleryCards(ctx.window).first()).toBeVisible({ timeout: 15_000 });
 });
@@ -96,6 +100,28 @@ for (const [name, width] of [["layeredpsd.psd", 320], ["scantiff.tif", 320]]) {
     await ctx.window.keyboard.press("Escape");
   });
 }
+
+test("a photo without a preview is a placeholder in the filmstrip, not a broken image", async () => {
+  const broken = await assetNamed("truncated.tif");
+  expect(broken.image_preview_path, "nothing renders a truncated TIFF").toBeFalsy();
+  const brokenCard = ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${broken.asset_id}"]`);
+  await callTool("show_in_app", { asset_ids: [broken.asset_id] });
+  await expect(brokenCard).toBeVisible({ timeout: 5_000 });
+  await expect(brokenCard.getByText("No preview")).toBeVisible();
+
+  const { asset_id: assetId } = await assetNamed("scantiff.tif");
+  await callTool("show_in_app", { asset_ids: [assetId] });
+  await ctx.window.locator(`[data-gallery-item='true'][data-asset-id="${assetId}"]`).dblclick();
+  await expect(ctx.window.locator("[data-lightbox-viewport='true']")).toBeVisible({ timeout: 8_000 });
+  const thumb = ctx.window.locator('button[title="truncated.tif"]');
+  await expect(thumb).toBeVisible();
+  await expect(thumb.locator("[data-filmstrip-placeholder]")).toBeVisible();
+  await expect(thumb.locator("img")).toHaveCount(0);
+  // Its neighbour from the same import is a real thumbnail.
+  const good = ctx.window.locator('button[title="scantiff.tif"] img');
+  await expect.poll(() => good.evaluate((img) => img.naturalWidth), { timeout: 10_000 }).toBeGreaterThan(0);
+  await ctx.window.keyboard.press("Escape");
+});
 
 test("the renders sit in one cache under userData, not the temp folder", async () => {
   const cache = path.join(ctx.userDataDir, "transcode-cache");

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Flag, FlagOff, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag, FlagOff, ImageOff, Minus, Pencil, Plus, Star, SwatchBook, X } from "lucide-react";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clamp, fileName, localFileUrl, httpMediaUrl } from "../utils/format";
@@ -8,6 +8,8 @@ import VideoPlayer from "./VideoPlayer";
 import api from "../api";
 import { shortcutLabel, useShortcuts } from "../shortcuts/store";
 import { Z } from "../ui";
+import PreviewImage from "./PreviewImage";
+import { browserDecodesOriginal } from "../../shared/formats.mjs";
 
 const MAX_SCALE = 8;
 const MIN_SCALE = 0.02;
@@ -86,7 +88,10 @@ function Filmstrip({ items, index, onPick, hidden }) {
     >
       {items.slice(start, end).map((item, offset) => {
         const i = start + offset;
-        const src = item.preview_path || item.image_path;
+        // The catalog preview, or the file itself while there is none (a JPEG
+        // shows at once). A file the browser can't decode (a TIFF whose
+        // render failed) would otherwise draw Chromium's broken-image glyph.
+        const src = item.preview_path || (browserDecodesOriginal(item.image_path) ? item.image_path : null);
         const on = i === index;
         return (
           <button
@@ -100,7 +105,13 @@ function Filmstrip({ items, index, onPick, hidden }) {
             ].join(" ")}
             title={fileName(item.image_path) || item.stem}
           >
-            {src ? <img src={localFileUrl(src)} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover" /> : null}
+            {src ? (
+              <PreviewImage src={localFileUrl(src)} alt="" placeholderLabel={<ImageOff size={14} data-filmstrip-placeholder="true" />} />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-muted">
+                <ImageOff size={14} data-filmstrip-placeholder="true" />
+              </span>
+            )}
           </button>
         );
       })}
