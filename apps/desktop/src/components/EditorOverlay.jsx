@@ -3,7 +3,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clamp, fileName } from "../utils/format";
 import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
-import useRawEditSource, { useNeutralRawRender } from "../hooks/useRawEditSource";
+import useRawEditSource from "../hooks/useRawEditSource";
 import AiRepaintPanel from "./editor/AiRepaintPanel";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
@@ -36,7 +36,7 @@ import SplitPanel from "./editor/components/SplitPanel";
 import SplitOverlay from "./editor/components/SplitOverlay";
 import LutPanel from "./editor/LutPanel";
 import { useLutTool } from "./editor/state/useLutTool";
-import { fullSizeParallelism, gradeCanvas } from "./editor/lut/lutPool";
+import { useLutSource } from "./editor/state/useLutSource";
 import { BASE_STATE, cloneState, stateEquals } from "./editor/state/editorStateModel";
 import { useEditorHistory } from "./editor/state/useEditorHistory";
 import { useEditorImage } from "./editor/state/useEditorImage";
@@ -192,11 +192,6 @@ export default function EditorOverlay({
   });
   const awaitingRawSource = open && isRaw && rawEditSource === undefined;
   const awaitingSource = awaitingHd || awaitingRawSource;
-  // The LUT tool grades a RAW on Apple's rendering of it, never the camera's
-  // embedded JPEG (docs/lut-plan.md, RAW): once the tool is opened on a RAW,
-  // the picture swaps to that render for the rest of the session — edits,
-  // layers and history stay. Not after an Apply: the baked picture would be
-  // lost, so the LUT grades what Apply made.
   const lutAvailable = api.can("lut");
   const itemKey = item?.asset_id ?? item?.image_path ?? null;
   // A tool belongs to the photo it was picked on. The editor stays mounted
@@ -212,19 +207,15 @@ export default function EditorOverlay({
     setTool("crop");
   }
   // Per photo (keyed, so the first render of the next photo is already clean).
-  const [neutralItem, setNeutralItem] = useState(null);
   const [bakedItem, setBakedItem] = useState(null);
-  const neutralWanted = open && neutralItem === itemKey;
   const sourceBaked = open && bakedItem === itemKey;
-  const neutralRaw = useNeutralRawRender({ item, enabled: open && isRaw && lutAvailable && neutralWanted });
-  const neutralPath = isRaw ? neutralRaw?.path || null : null;
-  // Apple's render asked for and not back yet (a couple of seconds): the
-  // picture on screen is still the camera's JPEG, about to be replaced.
-  const neutralRendering = isRaw && lutAvailable && !sourceBaked && neutralWanted && neutralRaw === undefined;
-  const neutralSwapRef = useRef(null);
-  neutralSwapRef.current = neutralPath;
+  // The LUT tool grades a RAW on its own render of it (useLutSource): once
+  // the tool is opened on a RAW, that render stands in for the picture.
+  const lutSource = useLutSource({ open, active: tool === "lut", item, isRaw, available: lutAvailable, sourceBaked });
+  const sourceOverrideRef = useRef(null);
+  sourceOverrideRef.current = lutSource.sourceOverride;
   const resolvedSourcePath = awaitingSource ? null : (isRaw
-    ? (neutralPath || rawEditSource || rawHdPath || item?.image_preview_path || item?.preview_path)
+    ? (lutSource.sourceOverride || rawEditSource || rawHdPath || item?.image_preview_path || item?.preview_path)
     : item?.image_path) || item?.image_preview_path || item?.raw_preview_path || null;
   // After an Apply the working picture is the baked canvas: the path it came
   // from must not change under it (a render landing late would reload it).
@@ -234,13 +225,8 @@ export default function EditorOverlay({
     : resolvedSourcePath;
   frozenSourceRef.current = { key: itemKey, path: sourcePath };
   useEffect(() => {
-    if (!open) {
-      setNeutralItem(null);
-      setBakedItem(null);
-    } else if (tool === "lut" && isRaw && lutAvailable && !sourceBaked) {
-      setNeutralItem(itemKey);
-    }
-  }, [open, tool, isRaw, lutAvailable, sourceBaked, itemKey]);
+    if (!open) setBakedItem(null);
+  }, [open]);
   const saveBasePath = item?.image_path || sourcePath;
   // Image load lives in its own hook. `setSourceImage`/`setPreviewSource` + the
   // ref are exposed so Apply/Text-apply can promote a freshly baked canvas.
@@ -498,9 +484,9 @@ export default function EditorOverlay({
   useEffect(() => {
     if (!open) resetItemRef.current = null; // a reopened editor starts fresh
     if (!open || !sourcePath) return undefined;
-    // The LUT tool swapping a RAW's picture for Apple's rendering of the same
-    // RAW: keep the tool, the edits and the history.
-    if (resetItemRef.current === itemKey && neutralSwapRef.current === sourcePath) {
+    // A tool swapping the picture for another rendering of the same photo
+    // (the LUT tool on a RAW): keep the tool, the edits and the history.
+    if (resetItemRef.current === itemKey && sourceOverrideRef.current === sourcePath) {
       nativeSaveSourcePathRef.current = sourcePath;
       return undefined;
     }
@@ -637,28 +623,15 @@ export default function EditorOverlay({
   const composedActive = !!composedView;
   const hasImageRect = !!imageRect;
 
-  // LUT tool (docs/lut-plan.md): the preview graded at full strength, turned
-  // like the photo, drawn over it at the chosen strength — the same mix the
-  // save computes, so the slider costs a redraw, not a regrade.
-  const lutState = editorState.lut;
+  // LUT tool (docs/lut-plan.md): the graded preview is drawn over the photo
+  // at the chosen strength, and the save gets the LUT as a full-size step.
   const lutTool = useLutTool({
-    open, active: tool === "lut", previewSource, transformedPreview, editorStateRef, lut: lutState,
+    open, active: tool === "lut", previewSource, transformedPreview, editorStateRef, lut: editorState.lut,
     // No thumbnails of the camera's JPEG only to throw them away.
-    baseReady: !neutralRendering,
+    base: lutSource.base, baseReady: !lutSource.rendering,
+    discreteRotationDeg, flipX, flipY, sourcePath,
     apply: applyState, record: recordState, pushToast, t,
   });
-  const lutGradedTransformed = useMemo(() => {
-    const graded = lutTool.gradedPreview;
-    if (!graded) return null;
-    return buildTransformedCanvas(graded, graded.width, graded.height, discreteRotationDeg, flipX, flipY);
-  }, [lutTool.gradedPreview, discreteRotationDeg, flipX, flipY]);
-  const lutStrength = lutState?.strength ?? 1;
-  const lutShown = !!(lutState && lutGradedTransformed && !lutTool.comparing && lutStrength > 0);
-  const lutBase = !isRaw || !lutAvailable ? null
-    : sourceBaked ? "baked"
-    : neutralRaw?.path ? (neutralRaw.renderer === "libraw" ? "libraw" : "apple")
-    : neutralRendering ? "rendering"
-    : "embedded";
 
   useEffect(() => {
     const canvas = imageCanvasRef.current;
@@ -668,12 +641,12 @@ export default function EditorOverlay({
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(transformedPreview, 0, 0);
-    if (lutShown && lutGradedTransformed.width === canvas.width && lutGradedTransformed.height === canvas.height) {
-      context.globalAlpha = lutStrength;
-      context.drawImage(lutGradedTransformed, 0, 0);
+    if (lutTool.shown && lutTool.gradedTransformed.width === canvas.width && lutTool.gradedTransformed.height === canvas.height) {
+      context.globalAlpha = lutTool.strength;
+      context.drawImage(lutTool.gradedTransformed, 0, 0);
       context.globalAlpha = 1;
     }
-  }, [transformedPreview, hasImageRect, composedActive, lutShown, lutGradedTransformed, lutStrength]);
+  }, [transformedPreview, hasImageRect, composedActive, lutTool.shown, lutTool.gradedTransformed, lutTool.strength]);
 
   // Paint the depth field into a display canvas with the SAME intrinsic dimensions
   // as the source canvas. This way the two canvases share identical
@@ -710,13 +683,6 @@ export default function EditorOverlay({
     setMessage("");
   }
 
-  // The chosen LUT as a full-resolution step for the save and split paths:
-  // the photo (cropped, not yet framed) in, the graded copy out. Null when
-  // there is nothing to grade.
-  const lutGrader = (lut) => (lut && lut.strength > 0
-    ? (canvas) => gradeCanvas(canvas, lut.id, lut.strength, { parallel: fullSizeParallelism() })
-    : null);
-
   // Save / export pipeline. buildSaveArgs assembles the full saveEditedImage
   // context from current state; the hook reads it through a ref so a backdoor
   // save after a transform runs against the latest state.
@@ -743,7 +709,7 @@ export default function EditorOverlay({
     drawLayersToCtx: drawTextLayersOnCanvas,
     nativeSaveSourcePath: nativeSaveSourcePathRef.current,
     isLayerRenderable: (layer) => isTextLayer(layer) || isStickerLayer(layer) || isOverlayLayer(layer),
-    gradeContent: lutGrader(editorStateRef.current.lut),
+    gradeContent: lutTool.grader(),
   });
   const { saving, executeSaveRef, handleExport, handleQuickSave } = useEditorSave({
     saveBasePath,
@@ -759,7 +725,7 @@ export default function EditorOverlay({
 
   const splitExport = useSplitExport({
     saveBasePath, sourcePath, sourceImageRef, nativeSaveSourcePathRef, editorStateRef,
-    getGrader: () => lutGrader(editorStateRef.current.lut),
+    getGrader: lutTool.grader,
     getCount: () => splitToolRef.current.count,
     pushToast, t,
     // No path: App refreshes the gallery; the split hook raises its own toast.
@@ -852,7 +818,7 @@ export default function EditorOverlay({
     imageRect, screenOutputRect, screenOutputView, viewTransform, placement, viewportSize,
     commitAspect, applyCanvasPad, clearFramePreset, applyFramePreset, frameToolRef,
     deleteLayer: handleDeleteLayer, moveLayer: handleMoveLayer, selectLayers, undo: handleUndo, redo: handleRedo,
-    lutGradedTransformed, lutTool, lutBase, sourcePath, imageCanvasRef,
+    lutTool, sourcePath, imageCanvasRef,
     splitToolRef, splitDestRef, splitExportingRef, splitExportRef, saveBasePath,
   });
 
@@ -1020,13 +986,13 @@ export default function EditorOverlay({
         onPointerCancel={viewportPointerEnd}
       >
         {/* Nothing drawn yet: the catalog's preview stands in, dimmed. */}
-        {loadState === "loading" || lutBase === "rendering" ? (
+        {loadState === "loading" || lutSource.rendering ? (
           <EditorLoading
             previewPath={imageRect ? null : item?.preview_hd_path || item?.image_preview_hd_path || item?.image_preview_path || item?.preview_path || null}
             viewportSize={viewportSize}
             over={imageRect}
             label={isRaw && awaitingSource ? t("overlay.renderingRaw")
-              : lutBase === "rendering" || (isRaw && neutralPath && !sourceBaked) ? t("lut.base.rendering")
+              : lutSource.rendering || (lutSource.sourceOverride && !sourceBaked) ? t("lut.base.rendering")
               : t("overlay.loading")}
             hint={isRaw && awaitingSource ? t("overlay.renderingRawHint") : null}
           />
@@ -1317,8 +1283,8 @@ export default function EditorOverlay({
               <LutPanel
                 t={t}
                 tool={lutTool}
-                lut={lutState}
-                base={lutBase}
+                lut={editorState.lut}
+                base={lutTool.base}
                 onUndo={handleUndo}
                 canUndo={historyIndex > 0}
                 onRedo={handleRedo}
