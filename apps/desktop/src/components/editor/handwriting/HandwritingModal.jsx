@@ -22,7 +22,7 @@ import {
   TEXT_IMAGE_DEFAULT_MODELS,
   TEXT_IMAGE_CAPABLE_TYPES,
 } from "./styles";
-import { dedupeModels } from "../../ai/providers";
+import { dedupeModels } from "../../../utils/aiModels";
 import { matteHandwriting, colorizeHandwriting, loadHandwritingImage } from "../render/handwritingMatte";
 import { localFileUrl as mediaUrlFor } from "../../../utils/format";
 import { usePref } from "../../../hooks/usePref";

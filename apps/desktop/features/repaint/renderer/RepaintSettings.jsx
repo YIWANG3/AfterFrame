@@ -6,10 +6,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "./SettingsPrimitives";
-import { getProviderType, dedupeModels, ProviderModal } from "../ai/providers";
-import api from "../../api";
-import { Select } from "../../ui";
+import { ActiveRadio, Group, Callout, IconActionButton, SecondaryButton } from "../../../src/components/settings/SettingsPrimitives";
+import { getProviderType, ProviderModal } from "./providers";
+import { dedupeModels } from "../../../src/utils/aiModels";
+import api from "../../../src/api";
+import { Select } from "../../../src/ui";
 
 export default function RepaintSettings() {
   const { t } = useTranslation("settings");

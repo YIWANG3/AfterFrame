@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Brain, FolderOpen, Info, Wand2, Languages, Plug, Stamp, UsersRound, Keyboard } from "lucide-react";
+import { X, Brain, FolderOpen, Info, Languages, Plug, Stamp, UsersRound, Keyboard } from "lucide-react";
 import api from "../api";
 import { DesktopOnlyPane, LOCKED_HINT_KEY } from "./DesktopOnly";
 import { TOP_LAYER_ATTR } from "../utils/topLayer";
 import { oneOf, readPref, writePref } from "../utils/prefs";
 import GeneralSettings from "./settings/GeneralSettings";
 import AnnotationSettings from "./settings/AnnotationSettings";
-import RepaintSettings from "./settings/RepaintSettings";
+import { settingsTabs } from "../../features/index.js";
 import LibrarySettings from "./settings/LibrarySettings";
 import IntegrationsSettings from "./settings/IntegrationsSettings";
 import AboutSettings from "./settings/AboutSettings";
@@ -25,17 +25,28 @@ import { Button, Modal, cx } from "../ui";
 // `cap` marks tabs a bridge may declare desktop-only (api.can): the tab stays
 // visible with a "Desktop" badge and its pane renders dimmed inside
 // DesktopOnlyPane, advertising what the desktop app offers.
-const TABS = [
+// The host's tabs; the feature modules add theirs (features/index.js
+// `settingsTabs`, today AI Repaint), and TAB_ORDER puts them in order.
+const CORE_TABS = [
   { id: "general", key: "general", icon: Languages },
   { id: "shortcuts", key: "shortcuts", icon: Keyboard },
   { id: "ai", key: "ai", icon: Brain, cap: "annotation" },
-  { id: "repaint", key: "repaint", icon: Wand2, cap: "aiRepaint" },
   { id: "people", key: "people", icon: UsersRound, cap: "people" },
   { id: "watermark", key: "watermark", icon: Stamp },
   { id: "library", key: "library", icon: FolderOpen, cap: "libraryManagement" },
   { id: "integrations", key: "integrations", icon: Plug, cap: "integrations" },
   { id: "about", key: "about", icon: Info },
 ];
+
+// Top to bottom. Every tab, core or feature, has its place here: a new
+// feature adds its id, or Settings refuses to open.
+const TAB_ORDER = ["general", "shortcuts", "ai", "repaint", "people", "watermark", "library", "integrations", "about"];
+
+const tabById = new Map([...CORE_TABS, ...settingsTabs].map((entry) => [entry.id, entry]));
+const unplacedTabs = [...tabById.keys()].filter((id) => !TAB_ORDER.includes(id));
+if (unplacedTabs.length) throw new Error(`SettingsOverlay: no place for the ${unplacedTabs.join(", ")} tab — add it to TAB_ORDER`);
+
+const TABS = TAB_ORDER.map((id) => tabById.get(id)).filter(Boolean);
 
 // Settings opens on the tab it was left on (utils/prefs.js), unless the
 // caller asks for one.
@@ -151,7 +162,7 @@ export default function SettingsOverlay({
                 {tab === "general" && <GeneralSettings theme={theme} setTheme={setTheme} />}
                 {tab === "shortcuts" && <ShortcutsSettings />}
                 {tab === "ai" && <AnnotationSettings />}
-                {tab === "repaint" && <RepaintSettings />}
+                {settingsTabs.map(({ id, Pane }) => (tab === id ? <Pane key={id} /> : null))}
                 {tab === "people" && <PeopleSettings />}
                 {tab === "watermark" && <WatermarkSettings />}
                 {tab === "library" && (

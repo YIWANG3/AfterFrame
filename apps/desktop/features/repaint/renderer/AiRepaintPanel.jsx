@@ -1,4 +1,4 @@
-import api from "../../api";
+import api from "../../../src/api";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -16,12 +16,12 @@ import {
   X,
 } from "lucide-react";
 
-import { getProviderType, ProviderModal } from "../ai/providers";
-import { Button, Checkbox, Modal, Select, SliderRow, TextArea, TextInput } from "../../ui";
-import cx from "../../ui/cx";
-import { fileName, localFileUrl } from "../../utils/format";
-import { usePref } from "../../hooks/usePref";
-import { bool, numberIn, oneOf, text } from "../../utils/prefs";
+import { getProviderType, ProviderModal } from "./providers";
+import { Button, Checkbox, Modal, Select, SliderRow, TextArea, TextInput } from "../../../src/ui";
+import cx from "../../../src/ui/cx";
+import { fileName, localFileUrl } from "../../../src/utils/format";
+import { usePref } from "../../../src/hooks/usePref";
+import { bool, numberIn, oneOf, text } from "../../../src/utils/prefs";
 
 /* ── Provider type templates (not instances) ── */
 

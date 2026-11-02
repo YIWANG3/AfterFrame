@@ -14,7 +14,7 @@
 // Capability names stay string literals: src/api/capabilities.test.js reads
 // this file as text and holds every cap in it to the shared list.
 
-import { Crop, Type, Cannabis, Sparkles, Columns3, createLucideIcon } from "lucide-react";
+import { Crop, Type, Cannabis, Columns3, createLucideIcon } from "lucide-react";
 import { editorToolFeatures } from "../../../features/index.js";
 
 // The Frame tool: a photo in a frame with an info bar below it. (Lucide's
@@ -25,13 +25,13 @@ const PhotoFrame = createLucideIcon("photo-frame", [
   ["path", { d: "M8 17.5h4", key: "bar" }],
 ]);
 
+// The tools still in the editor core; LUT and AI Repaint are feature modules.
 const CORE_TOOLS = [
   { key: "crop", icon: Crop, labelKey: "overlay.tools.crop", cap: null, unavailable: null },
   { key: "split", icon: Columns3, labelKey: "overlay.tools.split", cap: null, unavailable: null },
   { key: "text", icon: Type, labelKey: "overlay.tools.text", cap: null, unavailable: null },
   { key: "frame", icon: PhotoFrame, labelKey: "overlay.tools.frame", cap: null, unavailable: null },
   { key: "sticker", icon: Cannabis, labelKey: "overlay.tools.sticker", cap: "stickerExtract", unavailable: "locked" },
-  { key: "ai", icon: Sparkles, labelKey: "overlay.tools.repaint", cap: "aiRepaint", unavailable: "locked" },
 ];
 
 // Top to bottom. Every tool, core or feature, has its place here: a new

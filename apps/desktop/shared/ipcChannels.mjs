@@ -135,23 +135,18 @@ export const CORE_IPC_METHODS = [
   ["removeAssetTag", "workspace:remove-asset-tag", 2],
   ["testAnnotationConnection", "workspace:test-annotation-connection", 1],
   ["listAnnotationModels", "workspace:list-annotation-models", 1],
-  // ── ai repaint ──
+  // ── AI providers (electron/ipc/ai.js: credentials, preferences, models —
+  //    the text tool and the repaint feature share them) + text image ──
   ["getAiProviderToken", "workspace:get-ai-provider-token", 1],
   ["setAiProviderToken", "workspace:set-ai-provider-token", 2],
   ["deleteAiProviderToken", "workspace:delete-ai-provider-token", 1],
   ["getAiPreferences", "workspace:get-ai-preferences", 0],
   ["saveAiPreferences", "workspace:save-ai-preferences", 1],
-  ["getAiRepaintStatus", "workspace:ai-repaint-status", 0],
-  ["startAiRepaint", "workspace:ai-repaint-start", 1],
   ["getTextImageStatus", "workspace:text-image-status", 0],
   ["startTextImage", "workspace:text-image-start", 1],
   ["pickHandwritingRef", "workspace:pick-handwriting-ref", 0],
-  ["pickRepaintRefs", "workspace:pick-repaint-refs", 0],
   ["getHandwritingPresetRef", "workspace:handwriting-preset-ref", 1],
   ["listAiModels", "workspace:list-ai-models", 2],
-  ["listRepaintHistory", "workspace:list-repaint-history", 1],
-  ["getAiStyles", "workspace:get-ai-styles", 0],
-  ["saveAiStyles", "workspace:save-ai-styles", 1],
   // ── stickers / depth / misc ──
   ["computeDepth", "workspace:compute-depth", 1],
   ["getDepthModel", "workspace:get-depth-model", 0],

@@ -1,11 +1,12 @@
-// AI Repaint IPC — provider token storage, model listing, style library,
-// repaint job kickoff + status, repaint history.
-// Provider tokens use safeStorage via the deps passed in; styles live in a
-// plain JSON file under userData/afterframe/.
+// AI providers IPC — the credentials (safeStorage, through host.tokens),
+// preferences and model listing of the image-generation providers, shared by
+// the editor's text tool (handwriting, text-image jobs below) and the AI
+// Repaint feature module (features/repaint/electron/repaint.js, which owns
+// the repaint job, its history and the style library). The provider registry
+// itself (the five provider types) is the repaint feature's for now.
 
 const path = require("path");
 const fs = require("fs");
-const { writeJsonAtomic } = require("../settingsStore");
 const { jobStatusHandler } = require("./guard");
 
 function register({
@@ -16,25 +17,9 @@ function register({
   readAppSettings,
   updateAppSettings,
   tokens: { getStoredProviderConfigWithMigration, providerCredentials, setStoredProviderConfig, deleteStoredProviderConfig },
-  tasks: { startAiRepaintTask, startTextImageTask, latestJobStatus, formatJobStatus },
+  tasks: { startTextImageTask, latestJobStatus, formatJobStatus },
 }) {
-  function aiStylesPath() {
-    return path.join(app.getPath("userData"), "afterframe", "ai-styles.json");
-  }
-  function readAiStyles() {
-    try {
-      return JSON.parse(fs.readFileSync(aiStylesPath(), "utf-8"));
-    } catch {
-      return null;
-    }
-  }
-  const writeAiStyles = (styles) => writeJsonAtomic(aiStylesPath(), styles);
-
   const status = (jobType) => jobStatusHandler({ getCatalogState, latestJobStatus, formatJobStatus }, jobType);
-
-  ipcMain.handle("workspace:ai-repaint-status", status("ai_repaint"));
-
-  ipcMain.handle("workspace:ai-repaint-start", (_event, options) => startAiRepaintTask(options));
 
   ipcMain.handle("workspace:text-image-status", status("text_image"));
 
@@ -73,19 +58,6 @@ function register({
 
   ipcMain.handle("workspace:save-ai-preferences", async (_event, prefs) => {
     await updateAppSettings((settings) => ({ ...settings, aiPreferences: prefs }));
-  });
-
-  ipcMain.handle("workspace:get-ai-styles", () => {
-    return readAiStyles();
-  });
-
-  ipcMain.handle("workspace:save-ai-styles", async (_event, styles) => {
-    await writeAiStyles(styles);
-  });
-
-  ipcMain.handle("workspace:list-repaint-history", async (_event, assetPath) => {
-    if (!assetPath) return [];
-    return await commands.listRepaintHistory(assetPath);
   });
 
   ipcMain.handle("workspace:get-ai-provider-token", async (_event, provider) => {
