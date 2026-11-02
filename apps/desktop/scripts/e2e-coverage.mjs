@@ -8,6 +8,7 @@
 // summary per process and writes HTML reports under .coverage/report/:
 //   renderer  src/**            istanbul (vite-plugin-istanbul) → nyc
 //   main      electron/**       V8 (NODE_V8_COVERAGE)           → c8
+//             features/**/electron/**
 //   sidecar   media_workspace   Python coverage (parallel data)  → coverage
 //
 // With --with-unit the three unit suites run first, into .coverage/unit/*:
@@ -171,10 +172,11 @@ function mainReport(tempDir, outDir) {
   if (!jsonFilesIn(tempDir).length) return null;
   run("npx", ["c8", "report",
     "--temp-directory", tempDir, "--reports-dir", outDir,
-    "--all", "--src", "electron",
+    "--all", "--src", "electron", "--src", "features",
     // preload.js runs in the renderer's isolated world, which NODE_V8_COVERAGE
     // never sees — counting it here would read as a permanent 0 %.
-    "--include", "electron/**/*.js", "--exclude", "electron/**/*.test.js", "--exclude", "electron/preload.js",
+    "--include", "electron/**/*.js", "--include", "features/**/electron/**/*.js",
+    "--exclude", "electron/**/*.test.js", "--exclude", "features/**/*.test.js", "--exclude", "electron/preload.js",
     "--reporter=html", "--reporter=json-summary", "--reporter=text-summary"]);
   return readSummary(path.join(outDir, "coverage-summary.json"));
 }

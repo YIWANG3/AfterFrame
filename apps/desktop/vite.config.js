@@ -19,7 +19,7 @@ async function coveragePlugins() {
   if (!coverageBuild) return [];
   const { default: istanbul } = await import("vite-plugin-istanbul");
   return [istanbul({
-    include: "src/**/*.{js,jsx}",
+    include: ["src/**/*.{js,jsx}", "features/**/renderer/**/*.{js,jsx}"],
     exclude: ["node_modules", "**/*.test.{js,jsx}"],
     extension: [".js", ".jsx"],
     requireEnv: false,

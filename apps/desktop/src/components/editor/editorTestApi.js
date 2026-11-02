@@ -11,7 +11,6 @@
 import { useEffect, useRef } from "react";
 import { getSourceDimensions } from "./render/canvasHelpers";
 import { getStageBounds } from "./imageMath";
-import { lutPoolInfo } from "./lut/lutPool";
 import { resolveSplitOutputDir } from "./state/useSplitExport";
 
 function buildEditorTestApi(h) {
@@ -119,30 +118,8 @@ function buildEditorTestApi(h) {
     selectLayers: (ids) => h.selectLayers(ids),
     undo: () => h.undo(),
     redo: () => h.redo(),
-    // LUT tool (docs/lut-plan.md).
-    getLutState: () => ({
-      lut: h.editorStateRef.current.lut,
-      // Graded with the LUT chosen now (a switch shows the previous one
-      // until the new grade lands).
-      gradedReady: !!h.lutGradedTransformed && h.lutTool.gradedId === h.editorStateRef.current.lut?.id,
-      grading: h.lutTool.grading,
-      base: h.lutBase,
-      sourcePath: h.sourcePath,
-      library: h.lutTool.library
-        ? {
-            ...h.lutTool.library,
-            luts: h.lutTool.library.luts.map((l) => ({
-              id: l.id, name: l.name, group: l.group, source: l.source, log: l.log, error: l.error,
-            })),
-          }
-        : null,
-      errors: h.lutTool.errors,
-      pool: lutPoolInfo(),
-    }),
-    refreshLuts: async () => {
-      const next = await h.lutTool.refresh();
-      return next?.luts?.length ?? 0;
-    },
+    // LUT tool (docs/lut-plan.md): getLutState, refreshLuts — the hook's own.
+    ...h.lutTool.testApi,
     // The preview as drawn (graded at the current strength), 0..1 coords.
     sampleDisplayPixel: (fx = 0.5, fy = 0.5) => {
       const canvas = h.imageCanvasRef.current;

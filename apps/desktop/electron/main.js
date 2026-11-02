@@ -334,8 +334,8 @@ appSettingsIpc.register(host);
 nativeVideoIpc.register(host);
 // Playback proxy + keyframe filmstrip — see ./ipc/video.js.
 videoIpc.register(host);
-// Dev only: tells the renderer when electron/, shared/ or the sidecar's
-// sources are newer than this process (see electron/devStaleness.js).
+// Dev only: tells the renderer when electron/, shared/, features/ or the
+// sidecar's sources are newer than this process (see electron/devStaleness.js).
 require("./devStaleness").register(host);
 
 // What this platform can do (api.can in the renderer); read once by preload.

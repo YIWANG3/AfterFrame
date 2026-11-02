@@ -10,8 +10,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import { confirm } from "../../confirm";
 import { numberIn, readPref, writePref } from "../../../utils/prefs";
+import { buildTransformedCanvas } from "../render/canvasHelpers";
 import {
-  forgetLut, gradeCanvas, gradePixels, isLutFault, LutError, releaseLutWorkers, thumbnailConcurrency,
+  forgetLut, fullSizeParallelism, gradeCanvas, gradePixels, isLutFault, LutError, lutPoolInfo, releaseLutWorkers,
+  thumbnailConcurrency,
 } from "../lut/lutPool";
 
 const THUMB_EDGE = 280; // px, long edge: a ~140 px cell (two columns) at 2× density
@@ -29,9 +31,14 @@ function errorCode(error) {
   return error instanceof LutError ? error.code : error?.code || "failed";
 }
 
+// `base` and `baseReady` come from useLutSource (what the LUT grades, and
+// whether that picture is on screen yet); `discreteRotationDeg`, `flipX`
+// and `flipY` turn the graded preview like the photo; `sourcePath` is only
+// reported by the test api.
 export function useLutTool({
   open, active, previewSource, transformedPreview, editorStateRef, lut,
-  baseReady = true, apply, record, pushToast, t,
+  base = null, baseReady = true, discreteRotationDeg = 0, flipX = false, flipY = false, sourcePath = null,
+  apply, record, pushToast, t,
 }) {
   const [library, setLibrary] = useState(cachedLibrary);
   const [loading, setLoading] = useState(false);
@@ -192,6 +199,29 @@ export function useLutTool({
   const current = gradeKey && graded && graded.source === previewSource ? graded : null;
   const gradedPreview = current?.canvas || null;
   const gradedId = current?.key || null;
+
+  // ── preview composition ─────────────────────────────────────────────────
+  // The preview graded at full strength, turned like the photo, for the
+  // editor to draw over it at the chosen strength — the same mix the save
+  // computes, so the slider costs a redraw, not a regrade.
+  const gradedTransformed = useMemo(() => {
+    if (!gradedPreview) return null;
+    return buildTransformedCanvas(gradedPreview, gradedPreview.width, gradedPreview.height, discreteRotationDeg, flipX, flipY);
+  }, [gradedPreview, discreteRotationDeg, flipX, flipY]);
+  const strength = lut?.strength ?? 1;
+  const shown = !!(lut && gradedTransformed && !comparing && strength > 0);
+
+  // ── save ────────────────────────────────────────────────────────────────
+  // The chosen LUT as a full-resolution step for the save and split paths:
+  // the photo (cropped, not yet framed) in, the graded copy out. Read at
+  // save time (the history ref, not the rendered state): null when there is
+  // nothing to grade.
+  const grader = useCallback(() => {
+    const chosen = editorStateRef.current.lut;
+    return chosen && chosen.strength > 0
+      ? (canvas) => gradeCanvas(canvas, chosen.id, chosen.strength, { parallel: fullSizeParallelism() })
+      : null;
+  }, [editorStateRef]);
 
   // ── thumbnails ──────────────────────────────────────────────────────────
   // The photo (rotated/flipped, uncropped, ungraded) at THUMB_EDGE; each LUT
@@ -425,11 +455,39 @@ export function useLutTool({
     return out;
   }, [library, query, view.filter, view.hideLog]);
 
+  // ── test backdoor (editorTestApi.js spreads this into window.__afterframeTest)
+  const testApi = {
+    getLutState: () => ({
+      lut: editorStateRef.current.lut,
+      // Graded with the LUT chosen now (a switch shows the previous one
+      // until the new grade lands).
+      gradedReady: !!gradedTransformed && gradedId === editorStateRef.current.lut?.id,
+      grading,
+      base,
+      sourcePath,
+      library: library
+        ? {
+            ...library,
+            luts: library.luts.map((l) => ({
+              id: l.id, name: l.name, group: l.group, source: l.source, log: l.log, error: l.error,
+            })),
+          }
+        : null,
+      errors,
+      pool: lutPoolInfo(),
+    }),
+    refreshLuts: async () => {
+      const next = await refresh();
+      return next?.luts?.length ?? 0;
+    },
+  };
+
   return {
     library, loading, importing, query, setQuery, groups, errors,
     refresh, select, browseTo, cursor, setStrength, importPaths, addFolder, relocateFolder, removeFolder,
     setLogMark, toggleFavorite, trash, view, setView,
     gradedPreview, gradedId, grading, comparing, setComparing,
+    gradedTransformed, shown, strength, base, grader, testApi,
     requestThumb, cancelThumb, thumbFor, thumbVersion, thumbAspect: thumbBase ? thumbBase.width / thumbBase.height : 1,
   };
 }

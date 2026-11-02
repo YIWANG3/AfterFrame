@@ -43,7 +43,7 @@ function register({
   // Off in a packaged app, and under e2e (AFTERFRAME_USER_DATA), where a file
   // saved while the suite runs must not put a notice over the UI being tested.
   enabled = !isPackaged && !process.env.AFTERFRAME_USER_DATA,
-  roots = [__dirname, path.join(__dirname, "..", "shared"), sidecarSrc],
+  roots = [__dirname, path.join(__dirname, "..", "shared"), path.join(__dirname, "..", "features"), sidecarSrc],
   startedAtMs = Date.now(),
 }) {
   ipcMain.handle("app:dev-staleness", () => {
