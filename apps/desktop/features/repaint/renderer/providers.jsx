@@ -1,12 +1,14 @@
 /* AI provider registry + the create/edit credentials modal.
    Shared by the editor's AiRepaintPanel and Settings → AI Repaint —
-   extracted so the settings tab no longer imports the whole editor panel. */
+   extracted so the settings tab no longer imports the whole editor panel.
+   The registry lives in the repaint feature for now; the sidecar's
+   ai_repaint.py has its own list, merging the two is a later PR. */
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, X } from "lucide-react";
-import api from "../../api";
-import { Button, Modal, Select, TextInput } from "../../ui";
+import api from "../../../src/api";
+import { Button, Modal, Select, TextInput } from "../../../src/ui";
 
 function PanelLabel({ children }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{children}</div>;
@@ -79,26 +81,6 @@ export const PROVIDER_TYPES = [
 
 export function getProviderType(typeKey) {
   return PROVIDER_TYPES.find((t) => t.type === typeKey) || null;
-}
-
-// Defensive display-time dedupe: stale modelsCache entries may hold several
-// ids under one display name (Gemini stable + "-preview", Ark dated
-// snapshots). Keep one per name, preferring the stable / newer id.
-export function dedupeModels(models) {
-  const byName = new Map();
-  for (const m of models || []) {
-    const key = m.name || m.id;
-    const prev = byName.get(key);
-    if (!prev) {
-      byName.set(key, m);
-      continue;
-    }
-    const prevPreview = /-preview$/.test(prev.id || "");
-    const curPreview = /-preview$/.test(m.id || "");
-    if (prevPreview && !curPreview) byName.set(key, m);
-    else if (prevPreview === curPreview && String(m.id) > String(prev.id)) byName.set(key, m);
-  }
-  return [...byName.values()];
 }
 
 function generateInstanceId() {

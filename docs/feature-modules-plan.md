@@ -1,6 +1,6 @@
 # 编辑功能迁成 feature module：实施计划
 
-> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT 迁成第一个 feature module）做完在 `feat/feature-module-lut`，落地形状见 §6 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
+> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）做完在 `feat/feature-module-repaint`，落地形状见 §7 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
 
 ## 0. 范围与规矩
 
@@ -251,6 +251,17 @@ export default {
 
 验收：`03-editor`、`80-repaint-reference`、`10-settings`、`34-settings-transfer`、`08-mcp-http`、`toolSchemas.test.js`（要让它也扫 `features/**/electron/mcpTools.js`）。
 
+**做完后的记录（2026-11-02，`feat/feature-module-repaint`）**，和上面不一样的地方：
+
+- **`ipc/ai.js` 的拆法**：供应商凭据（get / set / delete token）、偏好（aiPreferences）、模型列表（list-ai-models）**留在宿主**，不只是 text-image：文字工具的手写弹窗（`HandwritingModal`）直接读 `getAiPreferences` 和 `getAiProviderToken`，重绘模块不在时它也得能用。搬进 `features/repaint/electron/repaint.js` 的是重绘自己的：`ai-repaint-status / start`、`list-repaint-history`、`get / save-ai-styles`、`pick-repaint-refs`。清单的 `ipc` 是这 6 行；`ipc/ai.js` 文件名不改（历史），头注释改成"AI providers + text image"。
+- **`pick-repaint-refs` 跟着搬了**：`dialogs.js` 里"记住上次文件夹"的 `pickerStart / rememberPicker` 收进 `createDialogs`（多收 `readAppSettings / updateAppSettings`），通过 `host.dialogs` 给所有模块用；`dialogs.js` 的 register 不再收这两个设置函数。相应单测拆开：手写图的留在 `dialogs.test.js`，重绘图的到 `features/repaint/electron/repaint.test.js`（5 条，含"注册的 channel 和清单一致"）。
+- **`dedupeModels`** 被核心的 `HandwritingModal` 和重绘的 `RepaintSettings` 共用，搬到 `src/utils/aiModels.js`；`providers.jsx`（`PROVIDER_TYPES`、`ProviderModal`、`getProviderType`）整体进 `features/repaint/renderer/`，文字工具不读它。
+- **MCP**：`repaint_asset` 原样进 `features/repaint/electron/mcpTools.js`；`electron/features.js` 加 `loadMcpToolGroups()`（清单 `contributes.mcpTools` 相对路径），`mcp/tools/index.js` 的 `GROUPS` 末尾展开它；`toolSchemas.test.js` 从清单读 feature 的工具文件一起扫。工具数仍是 37，`08-mcp-http` 的名单不变。
+- **Settings tab**：清单 `settingsTab: { id: "repaint", key: "repaint" }`（`key` 是 settings 命名空间 `tabs.*` 下的标签键，没另起 labelKey / icon 字段，图标从 `renderer/index.js` 的 `settingsTabIcon` 来）；`features/index.js` 导出 `settingsTabs`；`SettingsOverlay.jsx` 变成 `CORE_TABS` + `settingsTabs` 按 `TAB_ORDER` 排，面板处 `settingsTabs.map(...)`。
+- **面板不懒加载**：`renderer/index.js` 的 `Panel` 是普通 import，因为编辑器一开就挂着它（清单 `editorTool.mount: "always"`），切 chunk 没意义。EditorOverlay 仍手写 `tool === "ai" ? "flex …" : "hidden"`，`mount` 字段先是记录，等 PR 3 看要不要表驱动。
+- `IPC_METHODS` 仍 183 行；供应商注册表和 sidecar 的 if 链没合并（按计划另开 PR）；`api/browser/ai.js` 没动；`tasks.js` 的 `startAiRepaintTask / activeRepaintProvider` 留在宿主。
+- 没做：`e2e:coverage`。
+
 ## 8. PR 3：贴纸提取
 
 **分支** `feat/feature-module-sticker`。**估时** 3 天。清单新字段：`sidebarView`、`layerSource`、`helper`。
@@ -273,7 +284,7 @@ export default {
 | 3 | 0c ToolRail 读表 | 半天 | — |
 | 4 | 0d LUT 推导收进 hook | 1 天 | — |
 | 5 | 1 LUT | 2 到 3 天（实际半天） | 0a–0d 全部合入 |
-| 6 | 2 AI 重绘 | 2 到 3 天 | 1 |
+| 6 | 2 AI 重绘 | 2 到 3 天（实际半天） | 1 |
 | 7 | 3 贴纸 | 3 天 | 2 |
 
 0a 到 0d 互不依赖，可以并行开，但每个都从 main 开分支、各自合入 main 后 PR 1 再开。全部约两周到两周半。

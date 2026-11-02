@@ -20,6 +20,10 @@
 //   rememberPreview / forgetPreview / resolvePreviewPaths / withRawHdPreviews
 //                        the preview-path cache behind /assets/{id}
 
+const { loadMcpToolGroups } = require("../../features");
+
+// The host's groups, then the feature modules' (features/<id>/manifest.mjs
+// `contributes.mcpTools`; today repaint_asset).
 const GROUPS = [
   require("./browse"),
   require("./app"),
@@ -29,6 +33,7 @@ const GROUPS = [
   require("./people"),
   require("./visual"),
   require("./render"),
+  ...loadMcpToolGroups(),
 ];
 
 function createTools(ctx) {

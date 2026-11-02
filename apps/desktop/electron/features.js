@@ -39,4 +39,13 @@ function registerFeatures(host, features = loadFeatures()) {
   for (const { module } of features) module.register(host);
 }
 
-module.exports = { FEATURES_DIR, loadManifests, loadFeatures, capabilitiesFromFeatures, registerFeatures };
+// The MCP tool groups the manifests contribute (`contributes.mcpTools`, a
+// path relative to the manifest): each module exports (ctx) => tools[] like
+// electron/mcp/tools/*.js, and mcp/tools/index.js appends them to its own.
+function loadMcpToolGroups(manifests = loadManifests()) {
+  return manifests
+    .filter((manifest) => manifest.contributes?.mcpTools)
+    .map((manifest) => require(path.join(FEATURES_DIR, manifest.id, manifest.contributes.mcpTools)));
+}
+
+module.exports = { FEATURES_DIR, loadManifests, loadFeatures, capabilitiesFromFeatures, registerFeatures, loadMcpToolGroups };

@@ -3,7 +3,8 @@
 The editing tools (LUT, AI repaint, sticker extraction, …) are moving out of
 `src/` and `electron/` into self-contained feature modules under this
 directory. The plan and the reasons are in `docs/feature-modules-plan.md`;
-the LUT tool (`lut/`) is the first one and the shape to copy.
+the LUT tool (`lut/`) is the first one and the shape to copy; AI Repaint
+(`repaint/`) adds a Settings tab and an MCP tool.
 
 Layout, one directory per feature:
 
@@ -16,8 +17,9 @@ features/
     manifest.mjs           # pure data: id, capability, platforms, what it contributes, entry path
     electron/              # main-process code (CommonJS, Node), named by manifest.electron;
                            # its entry exports register(host) like every module in electron/ipc/
-    renderer/              # React/Vite code; renderer/index.js exports Panel (lazy), useTool,
-                           # SettingsGroup, icon — whichever the manifest's contributions need
+    renderer/              # React/Vite code; renderer/index.js exports Panel (lazy or not),
+                           # useTool, SettingsGroup, SettingsTab, icon, settingsTabIcon —
+                           # whichever the manifest's contributions need
 ```
 
 How the host reads a manifest:
@@ -29,7 +31,14 @@ How the host reads a manifest:
   it with the host (`registerFeatures(host)` in main.js), and turns
   `platforms` / `helper` into capability flags (`electron/capabilities.js`).
 - `src/components/editor/editorTools.js` places the `editorTool` rows on the
-  rail; `LibrarySettings.jsx` renders the `settingsGroup` rows for its tab.
+  rail; `SettingsOverlay.jsx` places the `settingsTab` rows among its own;
+  `LibrarySettings.jsx` renders the `settingsGroup` rows for its tab.
+- `electron/mcp/tools/index.js` appends each manifest's `mcpTools` group
+  (a module exporting `(ctx) => tools[]`, the shape of `mcp/tools/*.js`).
+- What two features (or a feature and the core) share stays in the host: the
+  AI providers' credentials and preferences (`electron/ipc/ai.js`) serve the
+  text tool as well as repaint, and `host.dialogs` remembers picker folders
+  for every module.
 - A feature's hooks are imported and called by EditorOverlay directly (rules
   of hooks); only the panel is a lazy chunk.
 

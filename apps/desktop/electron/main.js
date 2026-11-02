@@ -295,7 +295,7 @@ ipcMain.handle("workspace:open-sample-catalog", () => sample.openSampleCatalog()
 ipcMain.handle("workspace:reset-sample-catalog", () => sample.openSampleCatalog({ reset: true }));
 ipcMain.handle("workspace:register-roots", (_event, rootType, paths) => registerRoots(rootType, paths));
 
-const dialogs = dialogsIpc.createDialogs({ dialog, BrowserWindow });
+const dialogs = dialogsIpc.createDialogs({ dialog, BrowserWindow, readAppSettings, updateAppSettings });
 
 // Everything a register(host) can reach — ./host.js lists it and says why it
 // is frozen. Built once, here, after every part above exists; the modules
@@ -353,8 +353,8 @@ ipcMain.handle("app:mcp-status", () => services.mcp?.getStatus() ?? { status: "s
 services.set("saveFile", saveFileIpc.register(host));
 frameLogosIpc.register(host);
 frameTemplatesIpc.register(host);
-// The feature modules (features/<id>/manifest.mjs `electron`): today the LUT
-// library — see electron/features.js.
+// The feature modules (features/<id>/manifest.mjs `electron`): the LUT
+// library and AI Repaint — see electron/features.js.
 registerFeatures(host);
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.

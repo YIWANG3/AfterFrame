@@ -9,7 +9,7 @@
 | 文档 | 说明 |
 |---|---|
 | [developer-setup.md](developer-setup.md) | 开发环境、命令、质量门（lint / 单测 / E2E / Python ruff+mypy） |
-| [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；第一个是 LUT（#257） |
+| [../apps/desktop/features/README.md](../apps/desktop/features/README.md) | feature module 的目录形状和约定（清单、`electron/`、`renderer/`、测试和 lint 怎么找到它们）；已迁：LUT（#257）、AI 重绘 |
 | [agent-native-mcp.md](agent-native-mcp.md) | 内嵌 MCP server 设计与 34 个 tool 的现状（顶部状态行持续更新） |
 | [settings-scope.md](settings-scope.md) | 哪些设置属于 app、哪些属于 catalog |
 | [naming.md](naming.md) | 产品为什么有四个名字（AfterFrame / media-workspace / …） |
@@ -35,7 +35,7 @@
 | [folders-page-plan.md](folders-page-plan.md) | 文件夹数量上百后的独立管理页（统计、筛选、多选、批量删除 / 标注）；P1 已实现（2026-10-15，`FoldersView.jsx`、e2e 78）；P2（带搜索的"加入文件夹"选择器、设封面）未开始 |
 | [format-support-plan.md](format-support-plan.md) | 进行中（2026-11-01）：对照 Eagle 的文件格式差距与四份扩展名列表互不一致的盘点；P0 格式注册表（#242）、P1 加格式 / 交代不支持 / 原图统一（#243–#245）已合并，P2 的格式 facet 按家族聚合是 #246；JXL、`.xmp` 边车评分、`.mxf` 未开工 |
 | [plugin-architecture-research.md](plugin-architecture-research.md) | 计划（2026-11-01）：本体做资源管理、编辑功能迁成 feature module、公开 API 先做处理器型；第 5 节是 LUT / AI 重绘 / 贴纸的代码地图，第 6 节是准备 PR 和 PR 1；第 8 节待拍板 |
-| [feature-modules-plan.md](feature-modules-plan.md) | 进行中（2026-11-02）：编辑功能迁成 feature module 的逐 PR 实施计划。四个准备 PR（#252–#255）和 PR 1 LUT 迁移已做；AI 重绘、贴纸提取两个迁移未开工 |
+| [feature-modules-plan.md](feature-modules-plan.md) | 进行中（2026-11-02）：编辑功能迁成 feature module 的逐 PR 实施计划。四个准备 PR（#252–#255）、PR 1 LUT（#257）、PR 2 AI 重绘已做；PR 3 贴纸提取未开工 |
 
 ## 已完成的计划（历史记录；实现以代码为准）
 

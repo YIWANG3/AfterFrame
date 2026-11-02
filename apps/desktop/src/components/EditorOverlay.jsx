@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import { clamp, fileName } from "../utils/format";
 import { needsOnDemandHd, useOnDemandHdPreview } from "../hooks/useOnDemandHdPreviews";
 import useRawEditSource from "../hooks/useRawEditSource";
-import AiRepaintPanel from "./editor/AiRepaintPanel";
+// AI Repaint is a feature module (features/repaint); its panel stays mounted
+// (manifest `mount: "always"`, honoured below by hand).
+import { Panel as AiRepaintPanel } from "../../features/repaint/renderer/index.js";
 import BeforeAfterCompare from "./editor/BeforeAfterCompare";
 import TextPanel from "./editor/TextPanel";
 import TextCanvas from "./editor/TextCanvas";

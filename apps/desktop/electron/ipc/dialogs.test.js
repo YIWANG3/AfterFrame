@@ -42,14 +42,16 @@ function registered(result, { platform = "darwin", settings = {} } = {}) {
   let stored = settings;
   register({
     ipcMain: { handle: (c, fn) => handlers.set(c, fn) },
-    dialogs: createDialogs({ dialog, BrowserWindow, platform }),
+    dialogs: createDialogs({
+      dialog, BrowserWindow, platform,
+      readAppSettings: () => stored,
+      updateAppSettings: async (mutate) => { stored = await mutate(stored); return stored; },
+    }),
     platform,
     t: () => (key) => key,
     defaultCatalogDir: () => DEFAULT_DIR,
     catalog: { createAt: (p) => { created.push(p); return `${p}.afcatalog`; } },
     media: { addAllowedMediaDir: (dir) => allowed.push(dir) },
-    readAppSettings: () => stored,
-    updateAppSettings: async (mutate) => { stored = await mutate(stored); return stored; },
   });
   return { handlers, calls, allowed, created, settings: () => stored };
 }
@@ -70,34 +72,26 @@ test("pick-handwriting-ref: the file's folder is allowed through media://", asyn
   assert.equal(await registered({ canceled: true }).handlers.get("workspace:pick-handwriting-ref")(event), null);
 });
 
-test("pick-repaint-refs: several images at once, each folder allowed through media://, [] when cancelled", async () => {
-  const picked = registered({ canceled: false, filePaths: ["/refs/a.jpg", "/refs/b.png", "/other/c.jpg"] });
-  assert.deepEqual(await picked.handlers.get("workspace:pick-repaint-refs")(event), ["/refs/a.jpg", "/refs/b.png", "/other/c.jpg"]);
-  assert.deepEqual(picked.allowed, ["/refs", "/other"]);
-  assert.ok(picked.calls[0][1].properties.includes("multiSelections"));
-  assert.deepEqual(await registered({ canceled: true }).handlers.get("workspace:pick-repaint-refs")(event), []);
-});
-
-test("the reference pickers open in the folder they were last used in, and remember the new one", async () => {
+// The repaint feature's picker (features/repaint/electron/repaint.test.js)
+// shares this memory through host.dialogs.
+test("the handwriting picker opens in the folder it was last used in, and remembers the new one", async () => {
   // Nothing remembered yet: no defaultPath, the panel decides.
-  const first = registered({ canceled: false, filePaths: [path.join(DEFAULT_DIR, "a.jpg"), path.join(DEFAULT_DIR, "b.jpg")] });
-  await first.handlers.get("workspace:pick-repaint-refs")(event);
+  const first = registered({ canceled: false, filePaths: [path.join(DEFAULT_DIR, "hand.png")] });
+  await first.handlers.get("workspace:pick-handwriting-ref")(event);
   assert.equal(first.calls[0][1].defaultPath, undefined);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(first.settings().pickerDirs.repaintReference, DEFAULT_DIR);
+  assert.equal(first.settings().pickerDirs.handwritingReference, DEFAULT_DIR);
 
   // Remembered and still there: the picker starts in it. A cancelled pick
   // changes nothing.
-  const again = registered({ canceled: true }, { settings: { pickerDirs: { repaintReference: DEFAULT_DIR, handwritingReference: DEFAULT_DIR } } });
-  await again.handlers.get("workspace:pick-repaint-refs")(event);
-  assert.equal(again.calls[0][1].defaultPath, DEFAULT_DIR);
+  const again = registered({ canceled: true }, { settings: { pickerDirs: { handwritingReference: DEFAULT_DIR } } });
   await again.handlers.get("workspace:pick-handwriting-ref")(event);
-  assert.equal(again.calls[1][1].defaultPath, DEFAULT_DIR);
-  assert.equal(again.settings().pickerDirs.repaintReference, DEFAULT_DIR);
+  assert.equal(again.calls[0][1].defaultPath, DEFAULT_DIR);
+  assert.equal(again.settings().pickerDirs.handwritingReference, DEFAULT_DIR);
 
   // A remembered folder that is gone is not offered (the panel would show an error).
-  const gone = registered({ canceled: true }, { settings: { pickerDirs: { repaintReference: path.join(DEFAULT_DIR, "no-such-folder-af") } } });
-  await gone.handlers.get("workspace:pick-repaint-refs")(event);
+  const gone = registered({ canceled: true }, { settings: { pickerDirs: { handwritingReference: path.join(DEFAULT_DIR, "no-such-folder-af") } } });
+  await gone.handlers.get("workspace:pick-handwriting-ref")(event);
   assert.equal(gone.calls[0][1].defaultPath, undefined);
 });
 

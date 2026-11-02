@@ -11,10 +11,22 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
+const { loadManifests, FEATURES_DIR } = require("../features");
+
+// The host's tool files, and the groups the feature modules contribute
+// (manifest `contributes.mcpTools`, the same shape).
 const TOOLS_DIR = path.join(__dirname, "tools");
-const toolFiles = fs.readdirSync(TOOLS_DIR)
-  .filter((name) => name.endsWith(".js") && !["index.js", "shared.js"].includes(name))
-  .map((name) => ({ name, source: fs.readFileSync(path.join(TOOLS_DIR, name), "utf8") }));
+const toolFiles = [
+  ...fs.readdirSync(TOOLS_DIR)
+    .filter((name) => name.endsWith(".js") && !["index.js", "shared.js"].includes(name))
+    .map((name) => ({ name, source: fs.readFileSync(path.join(TOOLS_DIR, name), "utf8") })),
+  ...loadManifests()
+    .filter((manifest) => manifest.contributes?.mcpTools)
+    .map((manifest) => {
+      const file = path.join(FEATURES_DIR, manifest.id, manifest.contributes.mcpTools);
+      return { name: path.relative(path.dirname(FEATURES_DIR), file), source: fs.readFileSync(file, "utf8") };
+    }),
+];
 
 // Walk a balanced { ... } body starting just after its opening brace.
 function braceBody(text, from) {

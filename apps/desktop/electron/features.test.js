@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const { loadManifests, loadFeatures, capabilitiesFromFeatures, registerFeatures, FEATURES_DIR } = require("./features");
+const { loadManifests, loadFeatures, capabilitiesFromFeatures, registerFeatures, loadMcpToolGroups, FEATURES_DIR } = require("./features");
 
 test("every manifest's electron entry resolves to a module with register()", () => {
   const manifests = loadManifests();
@@ -47,4 +47,15 @@ test("registerFeatures calls each entry's register(host) in manifest order", () 
   const features = ["one", "two"].map((id) => ({ manifest: { id }, module: { register: (h) => calls.push([id, h]) } }));
   registerFeatures(host, features);
   assert.deepEqual(calls, [["one", host], ["two", host]]);
+});
+
+test("the manifests' MCP tool groups load by path and export (ctx) => tools[]", () => {
+  const groups = loadMcpToolGroups();
+  assert.equal(groups.length, loadManifests().filter((m) => m.contributes?.mcpTools).length);
+  assert.ok(groups.length >= 1, "the repaint feature contributes repaint_asset");
+  for (const group of groups) assert.equal(typeof group, "function");
+  assert.deepEqual(loadMcpToolGroups([{ id: "lut", contributes: {} }]), []);
+  const [repaint] = loadMcpToolGroups([{ id: "repaint", contributes: { mcpTools: "./electron/mcpTools.js" } }]);
+  const tools = repaint({ deps: {}, commands: {}, requireCatalog: () => {} });
+  assert.deepEqual(tools.map((t) => t.name), ["repaint_asset"]);
 });
