@@ -1,6 +1,6 @@
 # 编辑功能迁成 feature module：实施计划
 
-> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）做完在 `feat/feature-module-sticker`，落地形状见 §8 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
+> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）做完在 `feat/feature-module-sticker`（#259），落地形状见 §8 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
 
 ## 0. 范围与规矩
 
