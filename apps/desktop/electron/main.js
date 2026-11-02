@@ -414,15 +414,15 @@ videoIpc.register({
     : (args, timeoutMs) => sidecarCommands.videoTool(args, timeoutMs),
 });
 
-// Dev only: tells the renderer when electron/, shared/ or the sidecar's
-// sources are newer than this process (see electron/devStaleness.js). Off in a
+// Dev only: tells the renderer when electron/, shared/, features/ or the
+// sidecar's sources are newer than this process (see electron/devStaleness.js). Off in a
 // packaged app, and under e2e (AFTERFRAME_USER_DATA), where a file saved while
 // the suite runs must not put a notice over the UI being tested.
 require("./devStaleness").register({
   ipcMain,
   app,
   enabled: !isPackaged && !process.env.AFTERFRAME_USER_DATA,
-  roots: [__dirname, path.join(__dirname, "..", "shared"), sidecarSrc],
+  roots: [__dirname, path.join(__dirname, "..", "shared"), path.join(__dirname, "..", "features"), sidecarSrc],
 });
 
 // What this platform can do (api.can in the renderer); read once by preload.

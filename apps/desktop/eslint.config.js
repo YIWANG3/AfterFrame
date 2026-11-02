@@ -21,6 +21,12 @@ const noZIndexLiteral = {
   },
 };
 
+// Feature modules (features/<id>/, see features/README.md) hold renderer code
+// under renderer/ and main-process code under electron/; each tree gets the
+// same rules as src/ and electron/ respectively, and their manifests the
+// shared-ESM rules.
+const RENDERER_FILES = ["src/**/*.{js,jsx}", "features/**/renderer/**/*.{js,jsx}"];
+
 const sharedRules = {
   ...js.configs.recommended.rules,
   "no-unused-vars": ["error", {
@@ -48,7 +54,7 @@ module.exports = [
     ],
   },
   {
-    files: ["src/**/*.{js,jsx}"],
+    files: RENDERER_FILES,
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -70,7 +76,7 @@ module.exports = [
     // pins it to preload and the web bridge); a component reaching for
     // window.mediaWorkspace directly is how four preload methods went missing
     // from the facade unnoticed.
-    files: ["src/**/*.{js,jsx}"],
+    files: RENDERER_FILES,
     ignores: ["src/api/**", "src/web-main.jsx"],
     rules: {
       "no-restricted-syntax": ["error", {
@@ -80,7 +86,7 @@ module.exports = [
     },
   },
   {
-    files: ["src/**/*.{js,jsx}"],
+    files: RENDERER_FILES,
     plugins: { afterframe: { rules: { "no-z-index-literal": noZIndexLiteral } } },
     rules: { "afterframe/no-z-index-literal": "error" },
   },
@@ -92,13 +98,14 @@ module.exports = [
   },
   {
     // Cross-process pure modules: ESM for Vite, require(esm)'d by main.
-    files: ["shared/**/*.mjs"],
+    files: ["shared/**/*.mjs", "features/**/*.mjs"],
     languageOptions: { ecmaVersion: "latest", sourceType: "module" },
     rules: sharedRules,
   },
   {
     files: [
       "electron/**/*.js",
+      "features/**/electron/**/*.js",
       "*.config.js",
       "*.cjs",
       "scripts/**/*.cjs",
