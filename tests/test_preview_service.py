@@ -71,18 +71,24 @@ class PreviewServiceTest(unittest.TestCase):
 
             def side_effect(cmd, check, capture_output, text, timeout=None, creationflags=0):
                 out = Path(cmd[cmd.index("--out") + 1])
+                seen["cmd"] = cmd
                 seen["out"] = out
-                out.write_bytes(b"jpgdata")
+                Image.new("RGB", (800, 600), (200, 30, 30)).save(out, "JPEG")
                 return None
 
             run_mock.side_effect = side_effect
             rendered = service._render_with_sips(source, output, 512)
 
-            # sips wrote to a TEMP path in the same directory, not the final file.
+            # sips renders at full size (no -Z: black for float TIFFs) to a
+            # temp file, which Pillow scales into the catalog, so the final
+            # preview is the same kind of file as every other.
+            self.assertNotIn("-Z", seen["cmd"])
             self.assertNotEqual(seen["out"], output)
-            self.assertEqual(seen["out"].parent, output.parent)
+            self.assertFalse(seen["out"].exists())
             self.assertEqual(rendered, output)
-            self.assertEqual(output.read_bytes(), b"jpgdata")
+            with Image.open(output) as preview:
+                self.assertEqual(preview.size, (512, 384))
+                self.assertEqual(preview.mode, "RGB")
             # No leftover temp files after the atomic replace.
             self.assertEqual([p.name for p in output.parent.iterdir()], [output.name])
 
@@ -227,6 +233,30 @@ class PillowPreviewTest(unittest.TestCase):
             self.assertGreater(centre[0], 200)
             self.assertLess(centre[1], 60)
 
+    def test_float_and_thirty_two_bit_grey_stretch_to_a_visible_picture(self) -> None:
+        """A 32-bit float TIFF (an HDR merge, a depth map) came out black and a
+        32-bit integer one white: both were divided as 16-bit. Their own range
+        maps to black..white (imagecodecs-samples gray_f4 / gray_u4, 2026-11-02)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ramp = [[x / 299 for x in range(300)] for _ in range(200)]
+            for name, mode, scale in (("hdr.tif", "F", 1.0), ("depth.tif", "I", 2**31 - 1), ("counts.tif", "I", 40_000)):
+                image = Image.new(mode, (300, 200))
+                image.putdata([int(v * scale) if mode == "I" else v * scale for row in ramp for v in row])
+                image.save(Path(temp_dir) / name)
+                preview = self.render(Path(temp_dir) / name)
+                self.assertEqual(preview.mode, "RGB", name)
+                left, right = preview.getpixel((2, 100))[0], preview.getpixel((297, 100))[0]
+                self.assertLess(left, 10, name)
+                self.assertGreater(right, 245, name)
+                self.assertTrue(110 < preview.getpixel((150, 100))[0] < 145, (name, preview.getpixel((150, 100))))
+
+    def test_a_flat_float_image_is_mid_grey_not_black(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "flat.tif"
+            Image.new("F", (40, 30), 0.25).save(source)
+            preview = self.render(source)
+            self.assertEqual(preview.getpixel((20, 15)), (128, 128, 128))
+
     def test_heic_decodes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "heic-preview.jpg"
@@ -318,11 +348,13 @@ class PillowPreviewTest(unittest.TestCase):
             output = service.output_path("img_0123456789ab", "preview")
 
             def sips(cmd, check, capture_output, text, timeout=None, creationflags=0):
-                Path(cmd[cmd.index("--out") + 1]).write_bytes(b"jpg-from-sips")
+                Image.new("RGB", (64, 48), (10, 200, 10)).save(Path(cmd[cmd.index("--out") + 1]), "JPEG")
 
             run_mock.side_effect = sips
             rendered = service._render_image(source, output, 512)
-            self.assertEqual(rendered.read_bytes(), b"jpg-from-sips")
+            with Image.open(rendered) as preview:
+                self.assertEqual(preview.size, (64, 48))
+                self.assertGreater(preview.getpixel((32, 24))[1], 180)
             self.assertEqual(run_mock.call_args.args[0][0], "sips")
 
     @patch("media_workspace.preview_service.has_image_io", return_value=False)

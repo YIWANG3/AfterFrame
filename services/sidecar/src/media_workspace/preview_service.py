@@ -10,6 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
 
+import numpy as np
 from PIL import Image, ImageCms
 
 from . import formats, raw_decode, video
@@ -75,6 +76,23 @@ def _cmyk_to_srgb(image: Image.Image, icc_profile: bytes) -> Image.Image:
     return image.convert("RGB")
 
 
+def _stretch_to_eight_bit(image: Image.Image) -> Image.Image:
+    """A 32-bit integer or floating-point grey image (a depth map, an HDR
+    merge, a scientific TIFF) has no white point of its own: dividing as for
+    16-bit gave white for 32-bit ints and black for 0–1 floats. Its darkest
+    pixel becomes black and its brightest white, so the picture is at least
+    visible; a flat image comes out mid-grey."""
+    values = np.asarray(image, dtype=np.float64)
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return Image.new("L", image.size, 128)
+    low, high = float(finite.min()), float(finite.max())
+    if high <= low:
+        return Image.new("L", image.size, 128)
+    scaled = np.nan_to_num((values - low) * (255.0 / (high - low)), nan=0.0, posinf=255.0, neginf=0.0)
+    return Image.fromarray(np.clip(scaled, 0, 255).astype(np.uint8), "L")
+
+
 def render_pillow_preview(
     source: Path | BinaryIO,
     target: Path,
@@ -108,8 +126,10 @@ def render_pillow_preview(
         if image.mode == "CMYK" and icc_profile:
             frame = _cmyk_to_srgb(image, icc_profile)
             icc_profile = None  # the pixels are sRGB now
-        elif image.mode in ("I;16", "I;16B", "I;16L", "I"):
+        elif image.mode in ("I;16", "I;16B", "I;16L"):
             frame = image.convert("I").point(lambda value: value * (1 / 257)).convert("L").convert("RGB")
+        elif image.mode in ("I", "F"):
+            frame = _stretch_to_eight_bit(image).convert("RGB")
         elif image.has_transparency_data:
             rgba = image.convert("RGBA")
             frame = Image.new("RGB", rgba.size, (255, 255, 255))
@@ -576,14 +596,23 @@ class PreviewService:
         return self._atomic(output_path, lambda tmp: render_pillow_preview(source_path, tmp, size), validate=validate)
 
     def _render_with_sips(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
-        return self._atomic(output_path, lambda tmp: subprocess.run(
-            ["sips", "-s", "format", "jpeg", "-Z", str(size), "--out", str(tmp), str(source_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=_IMAGE_IO_TIMEOUT_SECONDS,
-            **no_window(),
-        ), validate=validate)
+        # sips renders at full size and Pillow scales: `sips -Z` gives a black
+        # image for a floating-point RGB TIFF (Photoshop's 32-bit HDR) that
+        # sips without -Z renders right (imagecodecs-samples, 2026-11-02).
+        def render(tmp: Path) -> None:
+            with tempfile.TemporaryDirectory(prefix="media-workspace-sips-") as temp_dir:
+                full = Path(temp_dir) / "full.jpg"
+                subprocess.run(
+                    ["sips", "-s", "format", "jpeg", "--out", str(full), str(source_path)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=_IMAGE_IO_TIMEOUT_SECONDS,
+                    **no_window(),
+                )
+                render_pillow_preview(full, tmp, size)
+
+        return self._atomic(output_path, render, validate=validate)
 
     def _render_with_quicklook(self, source_path: Path, output_path: Path, size: int, validate=None) -> Path:
         with tempfile.TemporaryDirectory(prefix="media-workspace-ql-") as temp_dir:

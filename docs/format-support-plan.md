@@ -205,6 +205,8 @@ export const EXPORT_FORMATS = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 
 编辑源用 JPEG 95 + 保留 ICC（第 6 节第 2 条，按建议定）。
 
+**对 imagecodecs-samples 验过**（2026-11-02，[cgohlke/imagecodecs-samples](https://github.com/cgohlke/imagecodecs-samples)，739 个合成小图，只在本地）：整个文件夹走真实导入 6 秒，362 个进库、377 个按扩展名跳过并弹出提示；362 个里 262 个有预览，100 个没有——全是 64 位、lzma/zstd/webp/png/jxl/jp2/lerc 内压缩、16 位 JPEG-in-TIFF 之类的科研 TIFF，"No preview" 是对的。Lightbox 对测过的每个摄影格式都能显示，包括 12 位 JPEG、10/12 位 HEIF/AVIF、动图、16 位 PNG。顺手修了三处：Pillow 对 32 位浮点灰度出全黑、32 位整数灰度出全白（都按 16 位除 257），改为按图像自身极值拉到 0–255；`sips -Z` 对浮点 RGB TIFF 出全黑而不带 `-Z` 正常，sips 兜底改成全尺寸渲染后由 Pillow 缩放（CMYK+alpha 的 TIFF 也因此有了缩略图）；Lightbox 胶片条对没有预览的资源画的是浏览器破图图标，改为和网格一致的占位。另有 96 个 TIFF 变体（有符号整数、10/14 位、12 位 RGB、浮点 RGB、PixarLog）只靠 sips 渲染成功，Windows 上会是 "No preview"，不打算追。
+
 ### 4.6 格式 facet 按家族聚合（实际做法：不加列）
 
 最初设想 schema 加一列 `format TEXT`（迁移时按扩展名回填）。实现时改成**不落库**：家族是扩展名的纯函数，注册表就是那张映射表，加一列只是把它抄进每一行，还要迁移和回填。做法：
