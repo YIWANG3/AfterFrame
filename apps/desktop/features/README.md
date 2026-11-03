@@ -75,6 +75,9 @@ Conventions:
   `features/**/electron/**/*.test.js`, `npm run test:renderer` (vitest, the
   `test.include` in `vite.config.js`) picks up `features/**/renderer/**/*.test.js`.
 - e2e specs stay numbered in `e2e/`; a feature does not get its own spec folder.
+  Locally a PR runs its acceptance specs and `npm run e2e:ci-skipped` (the
+  specs that skip themselves on the GitHub runner); the whole suite runs on
+  every PR in `quality.yml`.
 - ESLint applies the renderer rules (`src/`) to `features/**/renderer/**`, the
   main-process rules (`electron/`) to `features/**/electron/**`, and the
   shared-ESM rules to `features/**/*.mjs`.

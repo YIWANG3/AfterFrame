@@ -12,7 +12,7 @@
 
 1. 一个 PR 一件事，从 main 开分支，不叠 PR。
 2. 每个 PR 行为零变化。验收是现有测试，不是新功能。
-3. 每个 PR 跑全量 e2e（`npm run e2e`），不只跑 CI 子集；用 `npm run e2e:coverage` 看被搬的文件有哪些 spec 碰到。
+3. ~~每个 PR 跑全量 e2e（`npm run e2e`），不只跑 CI 子集。~~ **改（2026-11-02）**：全量套件 `quality.yml` 每个 PR 都在 macos-15 上跑（2026-10-14 起），本地再跑 14 分钟是重复的，还把机器占住。本地只跑验收 spec 加 CI 上自己跳过的那几个（`npm run e2e:ci-skipped`：fs-watch 和地图瓦片类，GitHub runner 上不稳才跳的），全量看 PR 的 CI；只有改到 e2e harness 本身才本地跑全量。`npm run e2e:coverage` 照旧用来看被搬的文件有哪些 spec 碰到。
 4. e2e spec 不搬：编号唯一（#226），`testDir` 是 `e2e/`。
 5. 新功能（Apple Photos、本地模型）等 PR 1 合入后直接按新形态写。
 
@@ -305,7 +305,7 @@ export default {
 
 - [ ] 从最新 main 开分支，不基于别的 PR 分支
 - [ ] `npm run check`
-- [ ] 全量 `npm run e2e`（不是 CI 子集）
+- [ ] 本地：验收 spec + `npm run e2e:ci-skipped`；全量看 PR 的 CI（§0 规矩 3）
 - [ ] `npm run e2e:coverage`，确认被搬 / 被改的文件有 spec 覆盖
 - [ ] 搬文件用 `git mv`
 - [ ] PR 描述写清：搬了什么、改了什么、什么没动、怎么验证的
