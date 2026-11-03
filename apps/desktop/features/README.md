@@ -1,20 +1,24 @@
 # Feature modules
 
-The editing tools (LUT, AI repaint, sticker extraction, …) are moving out of
-`src/` and `electron/` into self-contained feature modules under this
-directory. The plan and the reasons are in `docs/feature-modules-plan.md`;
-the LUT tool (`lut/`) is the first one and the shape to copy; AI Repaint
-(`repaint/`) adds a Settings tab and an MCP tool; the sticker tool
-(`sticker/`) adds a canvas overlay, a sidebar view and a layer source, and
-needs a native helper.
+The editing tools (LUT, AI repaint, sticker extraction) live in
+self-contained feature modules under this directory, each assembled from its
+manifest; the app body under `src/` and `electron/` manages the library. The
+plan and the reasons are in `docs/feature-modules-plan.md`; the LUT tool
+(`lut/`) is the shape to copy; AI Repaint (`repaint/`) adds a Settings tab
+and an MCP tool; the sticker tool (`sticker/`) adds a canvas overlay, a
+sidebar view and a layer source, and needs a native helper. The manifest's
+shape is frozen as **manifest v1** (`manifestSchema.mjs`, the reference
+below).
 
 Layout, one directory per feature:
 
 ```
 features/
-  manifests.mjs            # the one static list of every manifest, both processes import it
+  manifestSchema.mjs       # manifest v1: the fields, their rules, the renderer exports each needs
+  manifests.mjs            # the one static list of every manifest, validated at import; both processes import it
   index.js                 # the renderer's registry: manifest id → renderer/index.js exports,
-                           # plus the tool-rail rows and Settings groups the manifests contribute
+                           # plus the tool-rail rows, Settings groups and tabs, sidebar views and
+                           # layer sources the manifests contribute
   <id>/
     manifest.mjs           # pure data: id, capability, platforms, what it contributes, entry path
     electron/              # main-process code (CommonJS, Node), named by manifest.electron;
@@ -76,3 +80,62 @@ Conventions:
   shared-ESM rules to `features/**/*.mjs`.
 - The packaged app ships `features/**` minus the tests (`package.json`
   `build.files`), and dev staleness watches it like `electron/` and `shared/`.
+
+## Manifest v1 (frozen 2026-11-02)
+
+`features/manifests.mjs` runs every manifest through
+`validateManifests()` when it is imported, so a wrong manifest stops the
+process that imports it first (main at startup, the renderer at module load,
+vitest and node:test alike) with the field named. The rules below are the
+contract; `manifestSchema.mjs` is their code. A change to the shape is a
+change to the contract: bump `MANIFEST_VERSION`, change the validator, this
+table and `docs/feature-modules-plan.md` §12 together, and say why in the PR.
+
+### Top-level fields
+
+All nine are required except `electron` (and every top-level key must be one
+of them).
+
+| Field | Type | Rule | Read by |
+|---|---|---|---|
+| `manifestVersion` | `1` | The shape this manifest follows. | `manifestSchema.mjs` |
+| `id` | string | `^[a-z][a-z0-9-]*$`, unique; the directory name under `features/`. | both: entry paths resolve against `features/<id>/`; `features/index.js` keys `FEATURES` by it |
+| `capability` | string | A name in `shared/capabilities.mjs`, unique: the flag `api.can()` checks for every contribution. | `electron/capabilities.js` (declares it false where the feature cannot run), the UI tables |
+| `platforms` | `null` or non-empty array of `"darwin"`, `"win32"`, `"linux"` | Where the feature declares itself available; `null` is everywhere. | `electron/features.js` `capabilitiesFromFeatures` |
+| `helper` | `null` or string | A `native/bin` name (`^[a-z][a-z0-9-]*$`); the capability is false when the build lacks it (the macOS 12 builds). | same |
+| `web` | boolean | Whether the browser build ("Try in browser") has the feature; `false` makes `src/api/browser/bridge.js` declare the capability false. | the web bridge, `src/api/capabilities.test.js` |
+| `trust` | `"bundled"` | The trust tier. `bundled` is first-party: in-tree, privileged (Node, helpers, sharp). The sandboxed third-party tier is not accepted yet; it will come with a version bump. | `manifestSchema.mjs` |
+| `contributes` | object | At least one of the contributions below; no other keys. | see each |
+| `electron` | string, optional | The main-process entry, `./…​.js` relative to the manifest, exporting `register(host)` (the shape of `electron/ipc/*`). Required when there are `ipc` rows. A manifest without one has nothing to run in main. | `electron/features.js` `loadFeatures` / `registerFeatures` |
+
+### Contributions
+
+Each is an object (or, for `ipc`, an array; for `mcpTools`, a path) with
+exactly the fields listed; `unavailable` says what the UI does with the
+contribution where the capability is false (`"locked"`: shown greyed with the
+platform hint, `"hidden"`: not shown).
+
+| Contribution | Fields | Unique across manifests | Placed by | Renderer exports it needs |
+|---|---|---|---|---|
+| `editorTool` | `key` (`^[a-z][a-z0-9-]*$`), `labelKey` (editor namespace), `unavailable`, optional `overlay` (boolean, default false), optional `mount` (`"active"` default, or `"always"`: the panel stays mounted for the editor's life) | `key` | `src/components/editor/editorTools.js` puts the row where `RAIL_ORDER` says (a key missing there stops the editor); EditorOverlay mounts `Overlay` over the canvas when `overlay` is true, with props `{ imageRect, tool }` (`tool` = what the feature's `useTool` returned) | `Panel`, `icon`; `Overlay` when `overlay`; `useTool` by convention when the tool has state (EditorOverlay imports it by name) |
+| `settingsGroup` | `tab` (`"library"`: the only tab that renders groups so far) | — | `LibrarySettings.jsx` renders `settingsGroups("library")`, each gated by the capability | `SettingsGroup` |
+| `settingsTab` | `id` (`^[a-z][a-z0-9-]*$`), `key` (label under the settings namespace's `tabs`) | `id` | `SettingsOverlay.jsx` places it per its `TAB_ORDER` | `SettingsTab`, `settingsTabIcon` |
+| `sidebarView` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey` (nav namespace), `unavailable` | `id` | `Sidebar.jsx` lists it below the browse rows; `App.jsx` hosts the active one (`View` centre pane, `Inspector` right pane) and holds its state from `useView({ lightboxOpen, setLightboxOpen })`, which must offer `refresh`, `selected`, `lightboxItems`, `lightboxIndex`, `onLightboxIndexChange`, `handleKey`; the agent's `show_in_app` reaches it by `id` (`electron/mcp/tools/app.js` builds its enum from the manifests) | `View`, `Inspector`, `useView`, `sidebarIcon` |
+| `layerSource` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey`, `hideLabelKey` (editor namespace) | `id` | `TextPanel.jsx` shows a picker button per source; `StickerPickerModal` lists the chosen one's images | `layerSource`: `{ icon, list(), thumbUrl(entry) }` |
+| `ipc` | non-empty array of `[method, channel, arity]`: method `^[a-z][A-Za-z0-9]*$` (becomes `api.<method>`), channel `^[a-z]+:[a-z0-9-]+$`, arity an integer 0–3 | method, channel (and against the core rows: `electron/ipcChannels.test.js`) | `shared/ipcChannels.mjs` appends the rows to `IPC_METHODS`; preload, facade and the parity tests see them without a change; the `electron` entry answers them | — |
+| `mcpTools` | path `./…​.js` relative to the manifest, a module exporting `(ctx) => tools[]` (the shape of `electron/mcp/tools/*.js`) | tool names (`electron/mcp/tools` tests) | `electron/mcp/tools/index.js` appends the group | — |
+
+### What is deliberately not in v1
+
+- **A processor contribution** (pixels in, pixels out, the shape a develop
+  or film-look tool would use). The LUT tool reaches the save path by hand
+  (`gradeContent` in EditorOverlay), on 8-bit canvas pixels; a processor
+  chain with a 16-bit or float base is its own plan and will be v2.
+- **A sandboxed trust tier** and anything a third-party plugin needs (a
+  renderer entry other than an in-tree `renderer/index.js`, a message
+  bridge, a permission list). `docs/plugin-architecture-research.md` has the
+  direction; the first example plugin decides the fields.
+- **Per-feature i18n namespaces**: the label keys point into the host's
+  namespaces (`docs/feature-modules-plan.md` §11.4).
+- **Job types, facets, context-menu items**: no feature has needed one.
+

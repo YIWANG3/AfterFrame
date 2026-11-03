@@ -81,7 +81,7 @@ module.exports = defineConfig(async () => ({
   // vitest (npm run test:renderer): the renderer's tests, in src/ and in the
   // feature modules' renderer/ trees. Their electron/ tests are node:test
   // files (npm run test:electron), which vitest must not pick up.
-  test: { include: ["src/**/*.test.{js,jsx}", "features/**/renderer/**/*.test.{js,jsx}"] },
+  test: { include: ["src/**/*.test.{js,jsx}", "features/*.test.js", "features/**/renderer/**/*.test.{js,jsx}"] },
   server: {
     host: "127.0.0.1",
     port: 5173,

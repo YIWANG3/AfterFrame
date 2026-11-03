@@ -1,6 +1,6 @@
 # 编辑功能迁成 feature module：实施计划
 
-> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）做完在 `feat/feature-module-sticker`（#259），落地形状见 §8 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
+> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）已合入（#259），落地形状见 §8 末尾；清单 v1 冻结做在 `feat/feature-manifest-v1`，见 §12。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
 
 ## 0. 范围与规矩
 
@@ -37,7 +37,7 @@ apps/desktop/
     cubeLut.mjs            # 两进程共用的纯函数留在 shared，不进 feature
 ```
 
-### 1.1 清单（第一版只有 PR 1 用得到的字段）
+### 1.1 清单（第一版只有 PR 1 用得到的字段；冻结后的全貌见 §12 和 `features/README.md`）
 
 ```js
 // features/lut/manifest.mjs — 纯数据。渲染层代码和主进程代码都不能从这里 import，
@@ -297,6 +297,7 @@ export default {
 | 5 | 1 LUT | 2 到 3 天（实际半天） | 0a–0d 全部合入 |
 | 6 | 2 AI 重绘 | 2 到 3 天（实际半天） | 1 |
 | 7 | 3 贴纸 | 3 天（实际半天） | 2 |
+| 8 | 清单 v1 冻结 | 1 天（实际半天） | 3 |
 
 0a 到 0d 互不依赖，可以并行开，但每个都从 main 开分支、各自合入 main 后 PR 1 再开。全部约两周到两周半。
 
@@ -316,3 +317,31 @@ export default {
 2. ~~PR 0b 到 0d 三个小 PR 分开合，还是合成一个"准备"PR。~~ **已定（2026-11-01）：分开，各自从 main 开。** 文件集合不相交；0d 是唯一有行为风险的（e2e 67），单独一个好 revert。
 3. ~~`features/<id>/electron/index.js` 这个入口约定，还是在清单里写路径。~~ **已定（2026-11-01）：清单里写 `electron: "./electron/xxx.js"`，不立文件名约定。** 清单本来就有 `renderer` 懒加载函数，入口已经在清单里；再规定 `index.js` 是多一条规则而不是少一个字段。第三方插件的三种形态（沙箱 iframe、CLI 可执行文件、无主进程）也都落在显式字段上。
 4. ~~LUT 的 i18n 字串留在 `editor.json` / `settings.json`，还是 PR 1 就给 feature 自己的 namespace。~~ **已定（2026-11-01）：留着，PR 3 之后看三个样本一起搬一次。** 三个 feature 的字串分布不同，一个样本定不了格式；`data-testid` 从翻译后的 label 派生，搬 key 连带改 e2e，搬两次不划算。第三方沙箱插件自带字串、走 postMessage 传 locale，不要求核心先拆。
+
+## 12. 清单 v1 冻结（2026-11-02，`feat/feature-manifest-v1`）
+
+三个样本迁完，清单字段定形。字段表和每个字段谁读，在 [`apps/desktop/features/README.md`](../apps/desktop/features/README.md) 的 "Manifest v1"，这里只记拍板和没进 v1 的东西。
+
+**做了什么**：
+
+- `features/manifestSchema.mjs`：v1 的规则（`validateManifest` 返回问题列表，`validateManifests` 查跨清单唯一性并整体抛错，`rendererExportsFor` 列出各贡献要求 `renderer/index.js` 导出什么），只依赖 `shared/capabilities.mjs`。`features/manifests.mjs` 在 import 时校验整张表，哪个进程先 import 哪个进程先炸，错误里带字段名。`features/index.js` 启动时按 `rendererExportsFor` 查导出。
+- 三份清单加 `manifestVersion: 1`。其余字段一个没改：三个样本用到的就是 v1 的全部。
+- 测试：`electron/features.test.js` 四条（真实清单全过且目录存在、每条规则各一个反例、跨清单唯一性、导出清单），`features/index.test.js`（vitest，`vite.config.js` 的 include 加 `features/*.test.js`）查注册表按清单各出一行。
+
+**拍板**：
+
+1. **顶层九个字段全部必填（`electron` 除外），未知字段报错。** 可选字段靠默认值会让三个样本各写各的；全写出来，读清单不用翻 schema。
+2. **`trust` 只接受 `"bundled"`。** 沙箱等级还没有任何代码，先接受这个值等于承诺了不存在的东西；第一个第三方插件来的时候升 v2 一起定。
+3. **`unavailable` 两个值，`locked` / `hidden`，`editorTool` 和 `sidebarView` 都必填。** 不设默认，因为两个样本选的不一样（LUT 隐藏、贴纸锁住），强制写出来。
+4. **`settingsGroup.tab` 枚举只有 `"library"`。** 只有 LibrarySettings 渲染 groups；哪天别的 tab 也渲染，再加值。
+5. **`ipc` 行的 arity 0–3**，和核心表的最大值一致；有 `ipc` 必须有 `electron` 入口。
+6. **`useTool` 不是必需导出。** 重绘工具没有自己的 hook；EditorOverlay 反正按名 import。`rendererExportsFor` 只列硬性的。
+7. **hook 继续显式 import（§8 已定），`useFeatureTools` 不做。** 冻结没有改变三个样本的调用方式，就没理由加 eslint 例外。
+
+**没进 v1，留给 v2 的**（各自单独立项，不在本轮）：
+
+- **处理器型贡献（`processor`）和它的基底格式。** 2026-11-02 讨论过 Lightroom 式 develop 工具：要有序的处理器链、`editorStateModel` 的参数槽、16-bit/float 线性基底（现在 LUT 走 8-bit canvas）、WebGL/WebGPU 实时渲染，RAW 解码和去马赛克留在 sidecar 或 Core Image。用户决定先放一放，把插件做完。LUT 的 `gradeContent` 接法保持手写。
+- **沙箱等级、第三方插件的渲染入口和消息桥。** 下一步是 `examples/plugins/` 的示例插件，写不动的地方回头改契约。
+- **i18n 搬进 feature 自己的 namespace**（§11.4），三个都合入了，可以搬了，单独一个 PR。
+- **`jobTypes`、facet、右键菜单项**：没有样本用到，不预留。
+

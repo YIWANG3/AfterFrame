@@ -2,6 +2,8 @@
 // model per a prompt and style references, the result a new version in the
 // original's stack. Pure data, read by both processes (features/manifests.mjs).
 export default {
+  // The shape this manifest follows (features/manifestSchema.mjs).
+  manifestVersion: 1,
   id: "repaint",
   // The flag api.can() checks (shared/capabilities.mjs). Every desktop build
   // has it; the web build has the Gemini provider alone and says so with

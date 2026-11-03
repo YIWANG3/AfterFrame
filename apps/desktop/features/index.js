@@ -6,14 +6,20 @@
 // App import a feature's hooks themselves (rules of hooks), see
 // docs/feature-modules-plan.md §6 and §8.
 import manifests from "./manifests.mjs";
+import { rendererExportsFor } from "./manifestSchema.mjs";
 import * as lut from "./lut/renderer/index.js";
 import * as repaint from "./repaint/renderer/index.js";
 import * as sticker from "./sticker/renderer/index.js";
 
 export const FEATURES = { lut, repaint, sticker };
 
+// Every manifest has a renderer here, and that renderer exports what the
+// manifest's contributions need (manifestSchema.mjs says which).
 for (const manifest of manifests) {
-  if (!FEATURES[manifest.id]) throw new Error(`features/index.js: no renderer registered for the "${manifest.id}" manifest`);
+  const renderer = FEATURES[manifest.id];
+  if (!renderer) throw new Error(`features/index.js: no renderer registered for the "${manifest.id}" manifest`);
+  const missing = rendererExportsFor(manifest).filter((name) => renderer[name] === undefined);
+  if (missing.length) throw new Error(`features/index.js: ${manifest.id}/renderer/index.js does not export ${missing.join(", ")}`);
 }
 
 // Rows for src/components/editor/editorTools.js, in manifest order; that file

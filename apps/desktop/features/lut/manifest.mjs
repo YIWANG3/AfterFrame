@@ -2,6 +2,8 @@
 // LUT library in Settings ▸ Library. Pure data, read by both processes
 // (features/manifests.mjs): no code imports here, only names and paths.
 export default {
+  // The shape this manifest follows (features/manifestSchema.mjs).
+  manifestVersion: 1,
   id: "lut",
   // The flag api.can() checks (shared/capabilities.mjs). Declared false where
   // the feature cannot run: off the platforms below, or without its helper.
