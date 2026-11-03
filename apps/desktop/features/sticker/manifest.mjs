@@ -3,6 +3,8 @@
 // the Stickers library view in the sidebar. Pure data, read by both processes
 // (features/manifests.mjs).
 export default {
+  // The shape this manifest follows (features/manifestSchema.mjs).
+  manifestVersion: 1,
   id: "sticker",
   // The flag api.can() checks (shared/capabilities.mjs). Declared false off
   // macOS, and on the macOS 12 builds that leave the helper out (mac-builds.cjs).

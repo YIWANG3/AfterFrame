@@ -30,6 +30,7 @@
     "dist:win": "npm run fetch:exiftool && npm run fetch:ffmpeg && npm run build:sidecar && npm run build && electron-builder --win",
     "e2e": "npm run build && playwright test",
     "e2e:only": "playwright test",
+    "e2e:ci-skipped": "npm run build && node scripts/e2e-ci-skipped.mjs",
     "e2e:coverage": "node scripts/e2e-coverage.mjs",
     "coverage": "node scripts/e2e-coverage.mjs --with-unit",
     "e2e:coverage:report": "node scripts/e2e-coverage.mjs --report-only",
