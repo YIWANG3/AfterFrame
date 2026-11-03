@@ -28,3 +28,48 @@ describe("features/index.js", () => {
     for (const row of layerSources) expect(typeof row.list).toBe("function");
   });
 });
+
+// The features' strings (features/i18n.js): one namespace per feature, both
+// languages with the same keys, and every label the manifests name resolves.
+// (The resources are checked directly: src/i18n/index.js needs the preload
+// and a window, which this node test has not.)
+import { featureResources, featureNamespaces } from "./i18n.js";
+
+const flatKeys = (obj, prefix = "") =>
+  Object.entries(obj).flatMap(([key, value]) => (value && typeof value === "object" ? flatKeys(value, `${prefix}${key}.`) : [`${prefix}${key}`]));
+// i18next plural forms: zh-CN has one form, so "_one" exists in en alone.
+const singular = (key) => key.replace(/_(one|other|zero|few|many)$/, "");
+
+describe("features/i18n.js", () => {
+  it("has a namespace per manifest, named by its id, in every language", () => {
+    expect(featureNamespaces).toEqual(manifests.map((m) => m.id));
+    for (const lng of ["en", "zh-CN"]) {
+      expect(Object.keys(featureResources[lng]).sort()).toEqual(featureNamespaces.slice().sort());
+    }
+  });
+
+  it("keeps en and zh-CN in step for every feature", () => {
+    for (const id of featureNamespaces) {
+      const en = new Set(flatKeys(featureResources.en[id]).map(singular));
+      const zh = new Set(flatKeys(featureResources["zh-CN"][id]).map(singular));
+      expect([...zh].filter((k) => !en.has(k)), `${id}: zh-CN keys missing from en`).toEqual([]);
+      expect([...en].filter((k) => !zh.has(k)), `${id}: en keys missing from zh-CN`).toEqual([]);
+    }
+  });
+
+  it("resolves every label the manifests name, in its own namespace", () => {
+    const labels = manifests.flatMap(({ id, contributes }) =>
+      [contributes.editorTool?.labelKey, contributes.settingsTab?.labelKey, contributes.sidebarView?.labelKey, contributes.layerSource?.labelKey, contributes.layerSource?.hideLabelKey]
+        .filter(Boolean)
+        .map((key) => ({ id, key })));
+    expect(labels.length).toBeGreaterThan(0);
+    for (const { id, key } of labels) {
+      expect(key.startsWith(`${id}:`), `${id}: ${key} is in the feature's namespace`).toBe(true);
+      const [ns, path] = key.split(":");
+      for (const lng of ["en", "zh-CN"]) {
+        const value = path.split(".").reduce((node, part) => node?.[part], featureResources[lng][ns]);
+        expect(typeof value, `${lng}: ${key}`).toBe("string");
+      }
+    }
+  });
+});

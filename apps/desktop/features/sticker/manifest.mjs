@@ -19,15 +19,14 @@ export default {
     // The rail button, locked (not hidden) where the flag is false, and a
     // canvas overlay while the tool is active: the drag-to-draw rect that
     // limits detection (renderer/index.js `Overlay`).
-    editorTool: { key: "sticker", labelKey: "overlay.tools.sticker", unavailable: "locked", overlay: true },
+    editorTool: { key: "sticker", labelKey: "sticker:tool", unavailable: "locked", overlay: true },
     // A library view of its own, entered from the sidebar below the browse
     // rows (Sidebar.jsx places it; App.jsx hosts it); the agent's show_in_app
-    // reaches it by the same id. `labelKey` is under the nav namespace.
-    sidebarView: { id: "stickers", labelKey: "sidebar.stickers", unavailable: "locked" },
+    // reaches it by the same id.
+    sidebarView: { id: "stickers", labelKey: "sticker:sidebar", unavailable: "locked" },
     // Where the Text tool's "add sticker" picker gets its images
-    // (renderer/index.js `layerSource`: { icon, list, thumbUrl }); the labels
-    // are under the editor namespace.
-    layerSource: { id: "stickers", labelKey: "text.addStickerLayer", hideLabelKey: "text.hideStickerPicker" },
+    // (renderer/index.js `layerSource`: { icon, list, thumbUrl }).
+    layerSource: { id: "stickers", labelKey: "sticker:addLayer", hideLabelKey: "sticker:hideLayerPicker" },
     // The bridge methods this feature adds to shared/ipcChannels.mjs,
     // answered by the electron entry below.
     ipc: [

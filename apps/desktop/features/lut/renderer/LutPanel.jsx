@@ -4,6 +4,7 @@
 // the state, EditorOverlay draws the graded photo.
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Search, FileInput, FolderPlus, FolderOpen, Eye, X, ChevronDown, ChevronRight,
   Trash2, Tag, Undo2, Redo2, AlertTriangle, Plus, ChevronsDownUp, ChevronsUpDown,
@@ -18,7 +19,7 @@ function LogBadge({ t }) {
   return (
     <span
       className="pointer-events-none rounded bg-black/65 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-300"
-      title={t("lut.logHint")}
+      title={t("logHint")}
       data-testid="lut-log-badge"
     >
       Log
@@ -62,7 +63,7 @@ function LutCell({ entry, groupKey, selected, current, error, thumb, aspect, scr
       data-current={current ? "true" : "false"}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      title={broken ? `${entry.name} · ${t(`lut.errors.${broken}`, { defaultValue: broken })}` : entry.name}
+      title={broken ? `${entry.name} · ${t(`errors.${broken}`, { defaultValue: broken })}` : entry.name}
       className="group flex min-w-0 flex-col gap-1 text-left"
     >
       <div
@@ -83,7 +84,7 @@ function LutCell({ entry, groupKey, selected, current, error, thumb, aspect, scr
         )}
         {entry.log ? <div className="absolute left-1 top-1"><LogBadge t={t} /></div> : null}
         {entry.favorite ? (
-          <div className="absolute right-1 top-1 rounded bg-black/55 p-[2px]" title={t("lut.favorite")} data-testid="lut-favorite-badge">
+          <div className="absolute right-1 top-1 rounded bg-black/55 p-[2px]" title={t("favorite")} data-testid="lut-favorite-badge">
             <Star className="h-2.5 w-2.5 fill-amber-300 text-amber-300" />
           </div>
         ) : null}
@@ -136,12 +137,12 @@ function AddLutsMenu({ t, importing, onImport, onAddFolder }) {
       >
         {/* Busy in place: text below would change the panel's height. */}
         {importing ? <Spinner className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {importing ? t("lut.importing") : t("lut.add")}
+        {importing ? t("importing") : t("add")}
       </button>
       {open ? (
         <div className="absolute right-0 top-8 z-30 w-max rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" data-testid="lut-add-menu">
-          {item("lut-import", FileInput, t("lut.importFiles"), t("lut.importFilesHint"), onImport)}
-          {item("lut-add-folder", FolderPlus, t("lut.addFolderShort"), t("lut.addFolderHint"), onAddFolder)}
+          {item("lut-import", FileInput, t("importFiles"), t("importFilesHint"), onImport)}
+          {item("lut-add-folder", FolderPlus, t("addFolderShort"), t("addFolderHint"), onAddFolder)}
         </div>
       ) : null}
     </div>
@@ -161,15 +162,15 @@ function LutInfo({ entry, library, t }) {
       <span className="min-w-0 flex-1 truncate">
         {[
           entry.lutSize ? `${entry.lutSize}³` : null,
-          folder ? t("lut.infoFolder", { name: folder }) : t("lut.infoLibrary"),
+          folder ? t("infoFolder", { name: folder }) : t("infoLibrary"),
         ].filter(Boolean).join(" · ")}
       </span>
       <button
         type="button"
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted2 transition-colors hover:bg-hover hover:text-text"
         onClick={() => api.revealLut(entry.id)}
-        title={t("lut.revealInFinder")}
-        aria-label={t("lut.revealInFinder")}
+        title={t("revealInFinder")}
+        aria-label={t("revealInFinder")}
         data-testid="lut-info-reveal"
       >
         <FolderOpen className="h-3 w-3" />
@@ -180,12 +181,13 @@ function LutInfo({ entry, library, t }) {
 
 function baseLabel(base, t) {
   if (!base) return null;
-  return t(`lut.base.${base}`);
+  return t(`base.${base}`);
 }
 
 export default function LutPanel({
-  t, tool, lut, base, onUndo, onRedo, canUndo, canRedo,
+  tool, lut, base, onUndo, onRedo, canUndo, canRedo,
 }) {
+  const { t } = useTranslation("lut");
   const scrollRef = useRef(null);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [menu, setMenu] = useState(null); // { x, y, entry }
@@ -266,14 +268,14 @@ export default function LutPanel({
 
   const menuItems = menu ? [
     menu.entry.favorite
-      ? { key: "unfav", icon: StarOff, label: t("lut.unfavorite"), onClick: () => toggleFavorite(menu.entry) }
-      : { key: "fav", icon: Star, label: t("lut.favorite"), onClick: () => toggleFavorite(menu.entry) },
-    { key: "reveal", icon: FolderOpen, label: t("lut.revealInFinder"), onClick: () => api.revealLut(menu.entry.id) },
+      ? { key: "unfav", icon: StarOff, label: t("unfavorite"), onClick: () => toggleFavorite(menu.entry) }
+      : { key: "fav", icon: Star, label: t("favorite"), onClick: () => toggleFavorite(menu.entry) },
+    { key: "reveal", icon: FolderOpen, label: t("revealInFinder"), onClick: () => api.revealLut(menu.entry.id) },
     menu.entry.log
-      ? { key: "unmark", icon: Tag, label: t("lut.unmarkLog"), onClick: () => setLogMark(menu.entry, false) }
-      : { key: "mark", icon: Tag, label: t("lut.markLog"), onClick: () => setLogMark(menu.entry, true) },
+      ? { key: "unmark", icon: Tag, label: t("unmarkLog"), onClick: () => setLogMark(menu.entry, false) }
+      : { key: "mark", icon: Tag, label: t("markLog"), onClick: () => setLogMark(menu.entry, true) },
     ...(menu.entry.source === "library"
-      ? [{ key: "trash", icon: Trash2, label: t("lut.moveToTrash"), danger: true, onClick: () => trash(menu.entry) }]
+      ? [{ key: "trash", icon: Trash2, label: t("moveToTrash"), danger: true, onClick: () => trash(menu.entry) }]
       : []),
   ] : [];
 
@@ -293,12 +295,12 @@ export default function LutPanel({
     >
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("lut.title")}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted2">{t("title")}</div>
           <div className="flex items-center gap-1">
-            <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35" onClick={onUndo} disabled={!canUndo} title={t("lut.undo")} aria-label={t("lut.undo")}>
+            <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35" onClick={onUndo} disabled={!canUndo} title={t("undo")} aria-label={t("undo")}>
               <Undo2 className="h-3.5 w-3.5" />
             </button>
-            <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35" onClick={onRedo} disabled={!canRedo} title={t("lut.redo")} aria-label={t("lut.redo")}>
+            <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-hover hover:text-text disabled:opacity-35" onClick={onRedo} disabled={!canRedo} title={t("redo")} aria-label={t("redo")}>
               <Redo2 className="h-3.5 w-3.5" />
             </button>
             <AddLutsMenu t={t} importing={importing} onImport={() => importPaths(null)} onAddFolder={addFolder} />
@@ -321,8 +323,8 @@ export default function LutPanel({
                   type="button"
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
                   onClick={() => toggleFavorite(selectedEntry)}
-                  title={selectedEntry.favorite ? t("lut.unfavorite") : t("lut.favorite")}
-                  aria-label={selectedEntry.favorite ? t("lut.unfavorite") : t("lut.favorite")}
+                  title={selectedEntry.favorite ? t("unfavorite") : t("favorite")}
+                  aria-label={selectedEntry.favorite ? t("unfavorite") : t("favorite")}
                   aria-pressed={!!selectedEntry.favorite}
                   data-testid="lut-favorite-toggle"
                 >
@@ -333,8 +335,8 @@ export default function LutPanel({
                 type="button"
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-text"
                 onClick={() => select(null)}
-                title={t("lut.remove")}
-                aria-label={t("lut.remove")}
+                title={t("remove")}
+                aria-label={t("remove")}
                 data-testid="lut-clear"
               >
                 <X className="h-3.5 w-3.5" />
@@ -343,13 +345,13 @@ export default function LutPanel({
             {selectedEntry ? <LutInfo entry={selectedEntry} library={library} t={t} /> : null}
             {selectedError ? (
               <div className="mt-1.5 text-[11px] leading-snug text-amber-400" data-testid="lut-selected-error">
-                {selectedMissing ? t("lut.selectedMissing") : t(`lut.errors.${selectedError}`, { defaultValue: selectedError })}
+                {selectedMissing ? t("selectedMissing") : t(`errors.${selectedError}`, { defaultValue: selectedError })}
               </div>
             ) : selectedEntry?.log ? (
-              <div className="mt-1.5 text-[10.5px] leading-snug text-amber-300/80">{t("lut.logHint")}</div>
+              <div className="mt-1.5 text-[10.5px] leading-snug text-amber-300/80">{t("logHint")}</div>
             ) : null}
             <SliderRow
-              label={t("lut.strength")}
+              label={t("strength")}
               min={0} max={100} step={1}
               value={strengthPct}
               valueMode="text" suffix="%"
@@ -368,7 +370,7 @@ export default function LutPanel({
               onLostPointerCapture={() => setComparing(false)}
             >
               <Eye className="h-3.5 w-3.5" />
-              {grading ? t("lut.applying") : t("lut.holdToCompare")}
+              {grading ? t("applying") : t("holdToCompare")}
             </button>
           </div>
         ) : null}
@@ -380,7 +382,7 @@ export default function LutPanel({
               size="md"
               value={query}
               onChange={setQuery}
-              placeholder={t("lut.search")}
+              placeholder={t("search")}
               data-testid="lut-search"
               className="w-full pl-7"
             />
@@ -392,14 +394,14 @@ export default function LutPanel({
         {unavailableFolders.map((folder) => (
           <div key={folder.path} className="mt-2 rounded-md bg-amber-500/10 px-2.5 py-2" data-testid="lut-folder-missing">
             <div className="text-[10.5px] leading-snug text-amber-300" title={folder.path}>
-              {t("lut.folderMissing", { name: folder.name })}
+              {t("folderMissing", { name: folder.name })}
             </div>
             <div className="mt-1.5 flex gap-1.5">
               <button type="button" className="rounded px-2 py-1 text-[10.5px] text-text hover:bg-hover" onClick={() => relocateFolder(folder.path)}>
-                {t("lut.relocate")}
+                {t("relocate")}
               </button>
               <button type="button" className="rounded px-2 py-1 text-[10.5px] text-muted hover:bg-hover hover:text-text" onClick={() => removeFolder(folder.path)}>
-                {t("lut.removeFolder")}
+                {t("removeFolder")}
               </button>
             </div>
           </div>
@@ -409,7 +411,7 @@ export default function LutPanel({
           <>
             {/* What the list shows: everything or the favourites, Log LUTs or not. */}
             <div className="mt-2 flex items-center gap-1" data-testid="lut-filters">
-              {[["all", t("lut.filterAll")], ["favorites", t("lut.filterFavorites")]].map(([key, label]) => (
+              {[["all", t("filterAll")], ["favorites", t("filterFavorites")]].map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
@@ -433,20 +435,20 @@ export default function LutPanel({
                   view.hideLog ? "bg-selected text-text" : "text-muted hover:bg-hover hover:text-text",
                 ].join(" ")}
                 onClick={() => setView({ hideLog: !view.hideLog })}
-                title={t("lut.hideLogHint")}
+                title={t("hideLogHint")}
               >
-                {t("lut.hideLog")}
+                {t("hideLog")}
               </button>
             </div>
             {/* How many, how big, and all groups open or shut. */}
             <div className="mt-1.5 flex items-center gap-1 text-[10.5px] text-muted2">
               <span className="min-w-0 flex-1 truncate">
-                {t("lut.groupsSummary", {
+                {t("groupsSummary", {
                   groups: groups.filter((g) => !g.special).length,
                   count: new Set(groups.flatMap((g) => g.luts.map((l) => l.id))).size,
                 })}
               </span>
-              {[[2, Grid2x2, t("lut.largeThumbs")], [3, Grid3x3, t("lut.smallThumbs")]].map(([cols, Icon, label]) => (
+              {[[2, Grid2x2, t("largeThumbs")], [3, Grid3x3, t("smallThumbs")]].map(([cols, Icon, label]) => (
                 <button
                   key={cols}
                   type="button"
@@ -471,7 +473,7 @@ export default function LutPanel({
                   onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.key)))}
                 >
                   {allCollapsed ? <ChevronsUpDown className="h-3 w-3" /> : <ChevronsDownUp className="h-3 w-3" />}
-                  {allCollapsed ? t("lut.expandAll") : t("lut.collapseAll")}
+                  {allCollapsed ? t("expandAll") : t("collapseAll")}
                 </button>
               ) : null}
             </div>
@@ -482,38 +484,38 @@ export default function LutPanel({
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2" data-testid="lut-list">
         {total === 0 ? (
           <div className="flex flex-col items-center gap-3 px-2 py-6 text-center">
-            <div className="text-[12px] text-text">{loading ? t("lut.loading") : t("lut.empty")}</div>
+            <div className="text-[12px] text-text">{loading ? t("loading") : t("empty")}</div>
             {!loading ? (
               <div className="flex flex-col gap-2 self-stretch">
                 {/* accentInk: the accent is white in the dark theme, near-black in the light one. */}
                 <button
                   type="button"
                   data-testid="lut-empty-import"
-                  title={t("lut.importFilesHint")}
+                  title={t("importFilesHint")}
                   className="rounded-md bg-[rgb(var(--accent-color))] px-3 py-2 text-[11.5px] font-medium text-accentInk transition-all hover:brightness-110 disabled:opacity-50"
                   onClick={() => importPaths(null)}
                   disabled={importing}
                 >
-                  {importing ? t("lut.importing") : t("lut.importFiles")}
+                  {importing ? t("importing") : t("importFiles")}
                 </button>
                 <button
                   type="button"
                   data-testid="lut-empty-add-folder"
-                  title={t("lut.addFolderHint")}
+                  title={t("addFolderHint")}
                   className="rounded-md border border-border/60 px-3 py-2 text-[11.5px] text-text hover:bg-hover"
                   onClick={addFolder}
                 >
-                  {t("lut.addFolderShort")}
+                  {t("addFolderShort")}
                 </button>
               </div>
             ) : null}
-            {!loading ? <div className="text-[10.5px] text-muted2">{t("lut.emptyHint")}</div> : null}
+            {!loading ? <div className="text-[10.5px] text-muted2">{t("emptyHint")}</div> : null}
           </div>
         ) : groups.length === 0 ? (
           <div className="px-2 py-6 text-center text-[11px] leading-relaxed text-muted" data-testid="lut-no-match">
             {view.filter === "favorites" && !query.trim() && !(library?.luts || []).some((l) => l.favorite)
-              ? t("lut.noFavorites")
-              : t("lut.noMatch")}
+              ? t("noFavorites")
+              : t("noMatch")}
           </div>
         ) : (
           groups.map((group) => {
@@ -535,7 +537,7 @@ export default function LutPanel({
                   {group.special === "favorites" ? <Star className="h-3 w-3 shrink-0 fill-amber-300/80 text-amber-300/80" /> : null}
                   {group.special === "recent" ? <History className="h-3 w-3 shrink-0" /> : null}
                   <span className="min-w-0 flex-1 truncate">
-                    {group.special ? t(`lut.${group.special}`) : group.title || t("lut.ungrouped")}
+                    {group.special ? t(`${group.special}`) : group.title || t("ungrouped")}
                   </span>
                   {group.source === "folder" ? <FolderOpen className="h-3 w-3 shrink-0 opacity-60" /> : null}
                   <span className="tabular-nums opacity-70">{group.luts.length}</span>
@@ -578,14 +580,14 @@ export default function LutPanel({
         >
           <FolderOpen className="h-3 w-3 shrink-0" />
           <span className="truncate">
-            {t("lut.libraryFooter", { count: library.library?.count || 0, size: formatBytes(library.library?.bytes) || "0 MB" })}
+            {t("libraryFooter", { count: library.library?.count || 0, size: formatBytes(library.library?.bytes) || "0 MB" })}
           </span>
         </button>
       ) : null}
 
       {dropActive ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-app/70" data-testid="lut-drop-hint">
-          <div className="rounded-lg border border-dashed border-border bg-chrome px-4 py-3 text-[12px] text-text">{t("lut.dropHint")}</div>
+          <div className="rounded-lg border border-dashed border-border bg-chrome px-4 py-3 text-[12px] text-text">{t("dropHint")}</div>
         </div>
       ) : null}
 

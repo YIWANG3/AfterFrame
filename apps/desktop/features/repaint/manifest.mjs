@@ -18,10 +18,10 @@ export default {
     // stays mounted while the editor is open, whichever tool is active, so
     // its providers and history load once (EditorOverlay honours `mount` by
     // hand until panel mounting is table-driven).
-    editorTool: { key: "ai", labelKey: "overlay.tools.repaint", unavailable: "locked", mount: "always" },
+    editorTool: { key: "ai", labelKey: "repaint:tool", unavailable: "locked", mount: "always" },
     // Settings ▸ AI Repaint: the providers and their models (SettingsOverlay
-    // places it; `key` is its label under the settings namespace's `tabs`).
-    settingsTab: { id: "repaint", key: "repaint" },
+    // places it).
+    settingsTab: { id: "repaint", labelKey: "repaint:settingsTab" },
     // The bridge methods this feature adds to shared/ipcChannels.mjs,
     // answered by the electron entry below. The providers' credentials,
     // preferences and model listing are the host's rows (electron/ipc/ai.js):

@@ -150,7 +150,7 @@ export default function SettingsOverlay({
                 )}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{t(`tabs.${entry.key}`)}</span>
+                <span className="min-w-0 flex-1 truncate">{t(entry.labelKey ?? `tabs.${entry.key}`)}</span>
               </button>
             );
           })}

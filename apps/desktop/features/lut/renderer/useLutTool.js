@@ -7,6 +7,7 @@
 // the save computes, so dragging it costs nothing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../../../src/api";
 import { confirm } from "../../../src/components/confirm";
 import { numberIn, readPref, writePref } from "../../../src/utils/prefs";
@@ -38,8 +39,9 @@ function errorCode(error) {
 export function useLutTool({
   open, active, previewSource, transformedPreview, editorStateRef, lut,
   base = null, baseReady = true, discreteRotationDeg = 0, flipX = false, flipY = false, sourcePath = null,
-  apply, record, pushToast, t,
+  apply, record, pushToast,
 }) {
+  const { t } = useTranslation("lut");
   const [library, setLibrary] = useState(cachedLibrary);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -329,12 +331,12 @@ export function useLutTool({
     const entry = next?.luts?.find((l) => l.id === firstId);
     if (entry && (imported + duplicates) === 1) select(entry);
     const parts = [];
-    if (imported) parts.push(t("lut.importedCount", { count: imported }));
-    if (duplicates) parts.push(t("lut.duplicateCount", { count: duplicates }));
-    if (failed.length) parts.push(t("lut.failedCount", { count: failed.length }));
+    if (imported) parts.push(t("importedCount", { count: imported }));
+    if (duplicates) parts.push(t("duplicateCount", { count: duplicates }));
+    if (failed.length) parts.push(t("failedCount", { count: failed.length }));
     pushToast?.({
-      title: imported || duplicates ? t("lut.importDone") : t("lut.importNothing"),
-      message: [parts.join(" · "), failed.slice(0, 3).map((f) => `${f.name}: ${t(`lut.errors.${f.error}`, { defaultValue: f.error })}`).join("\n")]
+      title: imported || duplicates ? t("importDone") : t("importNothing"),
+      message: [parts.join(" · "), failed.slice(0, 3).map((f) => `${f.name}: ${t(`errors.${f.error}`, { defaultValue: f.error })}`).join("\n")]
         .filter(Boolean).join("\n"),
       tone: failed.length && !imported && !duplicates ? "error" : undefined,
       ttl: failed.length ? 9000 : 4000,
@@ -354,7 +356,7 @@ export function useLutTool({
   const addFolder = useCallback(async () => {
     const res = await api.addLutFolder(null);
     if (res?.error) {
-      pushToast?.({ title: t(`lut.errors.${res.error}`, { defaultValue: res.error }), tone: "error", ttl: 6000 });
+      pushToast?.({ title: t(`errors.${res.error}`, { defaultValue: res.error }), tone: "error", ttl: 6000 });
       return;
     }
     if (!res?.canceled) await refresh();
@@ -365,7 +367,7 @@ export function useLutTool({
   const relocateFolder = useCallback(async (oldPath) => {
     const res = await api.addLutFolder(null);
     if (res?.error) {
-      pushToast?.({ title: t(`lut.errors.${res.error}`, { defaultValue: res.error }), tone: "error", ttl: 6000 });
+      pushToast?.({ title: t(`errors.${res.error}`, { defaultValue: res.error }), tone: "error", ttl: 6000 });
       return;
     }
     if (res?.canceled) return;
@@ -387,16 +389,16 @@ export function useLutTool({
 
   const trash = useCallback(async (entry) => {
     const ok = await confirm({
-      title: t("lut.trashTitle"),
-      message: t("lut.trashMessage", { name: entry.name }),
-      confirmLabel: t("lut.trashConfirm"),
-      cancelLabel: t("lut.cancel"),
+      title: t("trashTitle"),
+      message: t("trashMessage", { name: entry.name }),
+      confirmLabel: t("trashConfirm"),
+      cancelLabel: t("cancel"),
       danger: true,
     });
     if (!ok) return;
     const res = await api.trashLut(entry.id);
     if (res?.error) {
-      pushToast?.({ title: t("lut.trashFailed"), message: res.message || res.error, tone: "error", ttl: 6000 });
+      pushToast?.({ title: t("trashFailed"), message: res.message || res.error, tone: "error", ttl: 6000 });
       return;
     }
     forgetLut(entry.id);

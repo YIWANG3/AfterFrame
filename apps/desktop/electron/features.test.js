@@ -108,7 +108,7 @@ test("manifest v1: a wrong field is reported by name", () => {
   assert.match(problem({ contributes: { editorTool: { key: "x", labelKey: "k", unavailable: "locked", color: "red" } } }), /editorTool.color is not a field/);
   assert.match(problem({ contributes: { editorTool: { key: "x", unavailable: "locked" } } }), /editorTool.labelKey is a non-empty string/);
   assert.match(problem({ contributes: { settingsGroup: { tab: "general" } } }), /settingsGroup.tab is one of library/);
-  assert.match(problem({ contributes: { settingsTab: { id: "x" } } }), /settingsTab.key is a non-empty string/);
+  assert.match(problem({ contributes: { settingsTab: { id: "x" } } }), /settingsTab.labelKey is a non-empty string/);
   assert.match(problem({ contributes: { sidebarView: { id: "x", labelKey: "k" } } }), /sidebarView.unavailable is one of/);
   assert.match(problem({ contributes: { layerSource: { id: "x", labelKey: "k" } } }), /layerSource.hideLabelKey is a non-empty string/);
   assert.match(problem({ contributes: { ipc: [] } }), /ipc is a non-empty array/);
@@ -134,14 +134,14 @@ test("manifest v1: what must be unique across manifests", () => {
   assert.throws(() => schema.validateManifests([a, { ...a }]), /a: id "a" is also a's[\s\S]*a: capability "lut" is also a's/);
   assert.throws(() => schema.validateManifests([valid({ id: "a" }), valid({ id: "b" })]), /b: capability "lut" is also a's/);
   assert.throws(() => schema.validateManifests({}), /the manifest list is an array/);
-  const fine = [a, { ...b, contributes: { settingsTab: { id: "b", key: "b" } } }];
+  const fine = [a, { ...b, contributes: { settingsTab: { id: "b", labelKey: "b:tab" } } }];
   assert.equal(schema.validateManifests(fine), fine);
 });
 
 test("manifest v1: the renderer exports each contribution needs", () => {
   assert.deepEqual(schema.rendererExportsFor(valid()), ["Panel", "icon"]);
   assert.deepEqual(schema.rendererExportsFor(valid({ contributes: { editorTool: { key: "x", labelKey: "k", unavailable: "locked", overlay: true } } })), ["Panel", "icon", "Overlay"]);
-  assert.deepEqual(schema.rendererExportsFor(valid({ contributes: { settingsGroup: { tab: "library" }, settingsTab: { id: "x", key: "x" } } })), ["SettingsGroup", "SettingsTab", "settingsTabIcon"]);
+  assert.deepEqual(schema.rendererExportsFor(valid({ contributes: { settingsGroup: { tab: "library" }, settingsTab: { id: "x", labelKey: "x:tab" } } })), ["SettingsGroup", "SettingsTab", "settingsTabIcon"]);
   assert.deepEqual(schema.rendererExportsFor(valid({ contributes: { sidebarView: { id: "v", labelKey: "k", unavailable: "locked" }, layerSource: { id: "v", labelKey: "k", hideLabelKey: "h" } } })), ["View", "Inspector", "useView", "sidebarIcon", "layerSource"]);
   assert.deepEqual(schema.rendererExportsFor(valid({ contributes: { ipc: [["m", "app:m", 0]], mcpTools: "./electron/t.js" } })), []);
 });

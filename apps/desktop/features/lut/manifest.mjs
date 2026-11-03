@@ -17,7 +17,7 @@ export default {
   contributes: {
     // A button on the editor's tool rail (src/components/editor/editorTools.js
     // places it). Hidden rather than locked where the flag is false.
-    editorTool: { key: "lut", labelKey: "overlay.tools.lut", unavailable: "hidden" },
+    editorTool: { key: "lut", labelKey: "lut:tool", unavailable: "hidden" },
     // A group on a Settings tab, gated by the capability.
     settingsGroup: { tab: "library" },
     // The bridge methods this feature adds to shared/ipcChannels.mjs:
