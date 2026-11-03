@@ -43,6 +43,6 @@ test("every flag declared is a feature of shared/capabilities.mjs", async () => 
 
 test("a feature's flag comes from its manifest or the hand-written table, never both", () => {
   const fromManifests = loadManifests().map((manifest) => manifest.capability).filter(Boolean);
-  assert.ok(fromManifests.includes("lut"), "the lut feature declares its capability in its manifest");
+  for (const flag of ["lut", "aiRepaint", "stickerExtract"]) assert.ok(fromManifests.includes(flag), `the ${flag} feature declares its capability in its manifest`);
   for (const flag of Object.keys(MAC_HELPERS)) assert.ok(!fromManifests.includes(flag), `${flag} is in both`);
 });

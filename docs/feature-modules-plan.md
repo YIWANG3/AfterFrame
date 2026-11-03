@@ -1,6 +1,6 @@
 # 编辑功能迁成 feature module：实施计划
 
-> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）做完在 `feat/feature-module-repaint`，落地形状见 §7 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
+> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）做完在 `feat/feature-module-sticker`（#259），落地形状见 §8 末尾。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
 
 ## 0. 范围与规矩
 
@@ -275,6 +275,17 @@ export default {
 
 验收：`04-sticker`、`43-sticker-library`、`19-editor-layers`、`02-navigation`、`08-mcp-http`。
 
+**做完后的记录（2026-11-02，`feat/feature-module-sticker`）**，和上面不一样的地方：
+
+- **搬了什么**：`ipc/stickers.js` → `features/sticker/electron/stickers.js`（抽图工具路径改从 `host.nativeBin` 取，不再自己判断 `isPackaged`；加 `stickers.test.js` 5 条：channel 和清单一致、save/list/star/delete 往返、缩略图补生成、detect 的三种拒绝、scratch 清理只删自己的目录）；`StickerPanel.jsx`、`StickerRegionOverlay.jsx`、`StickerView.jsx`、`hooks/useStickerViewKeys.js` → `features/sticker/renderer/`。`state/useStickerRegion.js` 搬过去改名 `useStickerTool.js`（只剩选区状态）；旧的 `state/useStickerTool.js` 删了——它只是把 `useStickerImageCache` 和选区拼在一起，而图片层解码缓存是核心的（图层里有贴纸和这个模块在不在无关），现在 EditorOverlay 直接调 `useStickerImageCache(layers)`。
+- **清单新字段**：`helper: "extract-sticker"`（macOS 12 构建缺它就锁，`electron/capabilities.js` 的手写表只剩 depth / people）；`editorTool.overlay: true`；`sidebarView: { id: "stickers", labelKey: "sidebar.stickers", unavailable: "locked" }`（labelKey 在 nav 命名空间）；`layerSource: { id: "stickers", labelKey: "text.addStickerLayer", hideLabelKey: "text.hideStickerPicker" }`（editor 命名空间）。
+- **画布覆盖层**：`features/index.js` 的 `editorToolFeatures` 行多一个 `Overlay`（清单 `overlay: true` 时取 `renderer/index.js` 的 `Overlay`）；EditorOverlay 里 `const featureTools = { lut: lutTool, sticker: stickerTool }` 按 rail key 收各模块的 hook 结果，`ActiveOverlay = editorToolFeatures.find(key === tool)?.Overlay`，渲染 `<ActiveOverlay imageRect tool={featureTools[tool]} />`。覆盖层组件的 props 统一成 `{ imageRect, tool }`（`StickerRegionOverlay` 从 `tool` 里解构 region / drag / setDrag / commit）。**面板没有表驱动**：各工具面板的 props 都不一样，仍是 `tool === "sticker" ? <Suspense><StickerPanel …/></Suspense>`；`mount: "always"` 也还是手写。
+- **侧栏视图**：`features/index.js` 导出 `sidebarViews`（id、labelKey、icon、cap、unavailable、View、Inspector）。`Sidebar.jsx` 的贴纸按钮变成 `sidebarViews.map(...)`，props 从 `stickerMode / onOpenStickerBrowser` 改成 `activeView / onOpenView(id)`。`App.jsx`：`useView` 的调用仍是显式 import（`useView as useStickerView`），结果放进 `featureViewStates = { stickers: stickerView }`；`featureView = sidebarViews.find(id === viewMode)`，中栏 `<featureView.View view={state}/>`、右栏 `<featureView.Inspector view={state}/>`、Lightbox 的 items / index / onIndexChange / 键盘处理都从 state 取；agent 的 `show_in_app` 的 switch 默认分支查 `sidebarViews`，主进程 `mcp/tools/app.js` 的 `view` 枚举从清单拼（`CORE_VIEWS` + 各清单的 `sidebarView.id`，仍是那 5 个值）。**useView 的约定**（App 的 chrome 需要的）：`refresh`、`selected`、`lightboxItems`、`lightboxIndex`、`onLightboxIndexChange`、`handleKey`；贴纸视图把原来在 App 里的"shape 成 Lightbox items"和 `useStickerViewKeys` 收进了自己的 `useView`。
+- **图层来源**：`features/index.js` 导出 `layerSources`（id、labelKey、hideLabelKey、cap + 模块的 `{ icon, list, thumbUrl }`）。`TextPanel.jsx` 的贴纸按钮变成 `layerSources.map(...)`，打开状态从布尔改成"哪个来源的 picker 开着"；`StickerPickerModal` 收 `source`，用 `source.list()` / `source.thumbUrl(s)`，不再直接碰 `api.stickerList`。`StickerPickerModal.jsx`、`StickerLayerInspector.jsx`、`useStickerImageCache.js`、`drawLayers.js`、`layerStack.js`、`textState.js` 按计划留在核心。
+- **hook 的通用调用方式——拍板：继续显式 import。** 三个样本（LUT、重绘、贴纸）各一行 import、一处调用，`featureTools` / `featureViewStates` 两张小表把结果接回表驱动的部分；`useFeatureTools` 加 eslint 例外留到清单冻结时再看。`editorStateModel` 不动：贴纸选区不进历史栈，没有槽要泛化。
+- **没动**：`native/extract-sticker.swift`（构建脚本认它的路径）；i18n（`stickerView.json` 命名空间、nav 的 `sidebar.stickers`、editor 的 `sticker.*` / `text.*StickerLayer` 都在原处，按 §11 等三个 PR 都合入后统一搬）；Settings ▸ Library 的"贴纸库"打开文件夹一行（它是缓存存储表的一行，`appSettings.js` 的 kind → 路径表是宿主的，Windows 上今天也显示，没改成 settingsGroup）；web 的 `api/browser/editor.js` 的 `stickerList: async () => []`；`IPC_METHODS` 仍 183 行。
+- 没做：`e2e:coverage`。
+
 ## 9. 时间表
 
 | 顺序 | PR | 估时 | 依赖 |
@@ -285,7 +296,7 @@ export default {
 | 4 | 0d LUT 推导收进 hook | 1 天 | — |
 | 5 | 1 LUT | 2 到 3 天（实际半天） | 0a–0d 全部合入 |
 | 6 | 2 AI 重绘 | 2 到 3 天（实际半天） | 1 |
-| 7 | 3 贴纸 | 3 天 | 2 |
+| 7 | 3 贴纸 | 3 天（实际半天） | 2 |
 
 0a 到 0d 互不依赖，可以并行开，但每个都从 main 开分支、各自合入 main 后 PR 1 再开。全部约两周到两周半。
 

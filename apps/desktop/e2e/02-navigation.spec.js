@@ -17,7 +17,7 @@ test.describe("Sidebar navigation", () => {
   });
 
   test("can switch to Stickers view", async () => {
-    test.skip(lacks("stickerExtract"), "the sticker browser and tool are macOS-only for now (electron/capabilities.js)");
+    test.skip(lacks("stickerExtract"), "the sticker browser and tool are macOS-only for now (features/sticker/manifest.mjs)");
     const stickersBtn = window.getByRole("button", { name: /Stickers/i }).first();
     await expect(stickersBtn).toBeVisible({ timeout: 10_000 });
     await stickersBtn.click();

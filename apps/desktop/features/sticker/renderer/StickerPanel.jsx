@@ -1,15 +1,16 @@
-import api from "../../api";
+import api from "../../../src/api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, Sparkles, Trash2, Star, Loader2, RotateCcw } from "lucide-react";
 
-import { SliderRow, TextInput } from "../../ui";
-import { localFileUrl, fileName, stickerLabel } from "../../utils/format";
-import ColorPickerPopover from "../collage/ColorPickerPopover";
-import { usePref } from "../../hooks/usePref";
-import { fields, hexColor, intIn } from "../../utils/prefs";
+import { SliderRow, TextInput } from "../../../src/ui";
+import { localFileUrl, fileName, stickerLabel } from "../../../src/utils/format";
+import ColorPickerPopover from "../../../src/components/collage/ColorPickerPopover";
+import { usePref } from "../../../src/hooks/usePref";
+import { fields, hexColor, intIn } from "../../../src/utils/prefs";
 
-// Sticker tool — only handles "production" of sticker PNGs:
+// The Sticker tool's panel (the sticker feature module) — only handles
+// "production" of sticker PNGs:
 //   • Library tab: browse / star / delete entries from local sticker folder
 //   • Create new tab: run VisionKit subject segmentation on the current image,
 //     pick an instance, adjust outline, bake to PNG, save to library

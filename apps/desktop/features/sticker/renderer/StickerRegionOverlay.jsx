@@ -1,13 +1,14 @@
 import { useRef } from "react";
 
-// Marquee overlay drawn on the editor canvas while the Sticker tool is active.
-// User drags a rect; the parent (EditorOverlay) holds the committed region in
-// state and feeds it back to the Sticker tool's Detect call to constrain
-// VisionKit segmentation to a sub-rect of the source image.
+// Marquee overlay drawn on the editor canvas while the Sticker tool is active
+// (the manifest's `editorTool.overlay`; EditorOverlay mounts it with the
+// image's screen rect and the tool's state from useStickerTool). The user
+// drags a rect; the committed region goes to the panel's Detect call to
+// constrain VisionKit segmentation to a sub-rect of the source image.
 
 function clamp01(n) { return Math.max(0, Math.min(1, n)); }
 
-export default function StickerRegionOverlay({ imageRect, region, drag, onDragChange, onCommit }) {
+export default function StickerRegionOverlay({ imageRect, tool: { region, drag, setDrag: onDragChange, commit: onCommit } }) {
   const overlayRef = useRef(null);
 
   function clientToImageNorm(clientX, clientY) {

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useDismiss from "../ui/useDismiss";
-import { Z } from "../ui";
+import useDismiss from "../../../src/ui/useDismiss";
+import { Z } from "../../../src/ui";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Star, Trash2, FolderOpen, Cannabis, Eye } from "lucide-react";
-import { localFileUrl, fileName, stickerLabel } from "../utils/format";
-import LibraryToolbar from "./LibraryToolbar";
-import { DetailRow, Section } from "./inspector/InspectorPrimitives";
-import api from "../api";
+import { localFileUrl, fileName, stickerLabel } from "../../../src/utils/format";
+import LibraryToolbar from "../../../src/components/LibraryToolbar";
+import { DetailRow, Section } from "../../../src/components/inspector/InspectorPrimitives";
+import api from "../../../src/api";
+import useStickerViewKeys from "./useStickerViewKeys";
 
-// Sticker view that slots into the main App layout (replacing Toolbar+Gallery
-// in the center pane and the Inspector on the right when active). Same chrome
-// language as the photo gallery — square thumbs only, no filter/sort/display
-// modes, just search.
+// The Stickers library view (the sticker feature module's `sidebarView`),
+// slotted into the main App layout: View replaces Toolbar+Gallery in the
+// centre pane and Inspector the asset inspector on the right while it is the
+// active view; useView holds its state. Same chrome language as the photo
+// gallery — square thumbs only, no filter/sort/display modes, just search.
 
 const THUMB_MIN = 180;
 const GAP = 12;
@@ -307,9 +309,80 @@ export function StickerInspector({ sticker, onStar }) {
   );
 }
 
-/* ─── Hook to manage sticker state for App.jsx ────────────── */
+/* ─── The view as App.jsx hosts it (features/index.js `sidebarViews`) ── */
 
-export function useStickerView() {
+// The centre pane. The split container keeps the gallery's testid, so the
+// e2e helpers find the pane in either view.
+export function View({ view }) {
+  return (
+    <>
+      <StickerToolbar count={view.stickers.length} query={view.query} setQuery={view.setQuery} />
+      <div data-testid="workspace-split" className="min-h-0 flex-1 overflow-hidden">
+        <StickerGallery
+          stickers={view.stickers}
+          query={view.query}
+          selectedId={view.selected?.id || null}
+          onSelect={view.setSelected}
+          onDelete={view.handleDelete}
+          loading={view.loading}
+        />
+      </div>
+    </>
+  );
+}
+
+// The right-hand pane.
+export function Inspector({ view }) {
+  return <StickerInspector sticker={view.selected} onStar={view.handleStar} />;
+}
+
+// The view's state, which App holds for as long as it runs (App calls this on
+// every render whichever view is showing — rules of hooks): the library and
+// the selection, plus what App's own chrome needs from any feature view —
+// `refresh` on entering it, `selected`, the items shaped for the Lightbox
+// (`lightboxItems`, `lightboxIndex`, `onLightboxIndexChange`) and `handleKey`
+// for the keys the view owns (true when it took the key).
+export function useView({ lightboxOpen, setLightboxOpen }) {
+  const stickerView = useStickerView();
+
+  const lightboxItems = useMemo(() => {
+    const q = (stickerView.query || "").trim().toLowerCase();
+    const list = q
+      ? stickerView.stickers.filter((s) =>
+          (s.name || "").toLowerCase().includes(q) ||
+          (s.sourceLabel || "").toLowerCase().includes(q) ||
+          (s.sourcePath || "").toLowerCase().includes(q),
+        )
+      : stickerView.stickers;
+    return list.map((s) => ({
+      asset_id: s.id,
+      image_path: s.path,
+      image_preview_path: s.path,
+      raw_preview_path: s.path,
+      stem: s.name || s.sourceLabel || s.filename,
+      image_metadata: { width: s.width, height: s.height },
+    }));
+  }, [stickerView.stickers, stickerView.query]);
+
+  const lightboxIndex = useMemo(() => {
+    if (!stickerView.selected) return 0;
+    return Math.max(0, lightboxItems.findIndex((it) => it.asset_id === stickerView.selected.id));
+  }, [lightboxItems, stickerView.selected]);
+
+  const handleKey = useStickerViewKeys({ stickerView, items: lightboxItems, lightboxOpen, setLightboxOpen });
+
+  function onLightboxIndexChange(idx) {
+    const item = lightboxItems[idx];
+    const sticker = stickerView.stickers.find((s) => s.id === item?.asset_id);
+    if (sticker) stickerView.setSelected(sticker);
+  }
+
+  return { ...stickerView, lightboxItems, lightboxIndex, onLightboxIndexChange, handleKey };
+}
+
+/* ─── The library and the selection ─────────────────────────── */
+
+function useStickerView() {
   const [stickers, setStickers] = useState([]);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);

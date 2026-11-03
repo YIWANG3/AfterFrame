@@ -1,5 +1,5 @@
-// Keyboard navigation of the Stickers view, extracted from App.jsx (review
-// S2): the arrows move the selection — linearly in the lightbox (a single
+// Keyboard navigation of the Stickers view (StickerView.jsx useView calls
+// it): the arrows move the selection — linearly in the lightbox (a single
 // image pager), by rows in the grid, where the column count is measured from
 // the DOM so up/down jump rows the same way Gallery does — and Esc closes the
 // lightbox. `items` is the sticker list shaped for the Lightbox (asset_id =

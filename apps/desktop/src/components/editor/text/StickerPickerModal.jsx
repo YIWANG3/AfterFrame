@@ -1,14 +1,13 @@
-// The sticker library, as a picker that covers just the panel and stays open
+// A layer source's images (features/index.js `layerSources`; today the
+// sticker library), as a picker that covers just the panel and stays open
 // while several stickers are added in a row.
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
-import api from "../../../api";
-import { localFileUrl as mediaUrlFor } from "../../../utils/format";
 import { Button, TextInput } from "../../../ui";
 
-export default function StickerPickerModal({ onPick, onClose }) {
+export default function StickerPickerModal({ source, onPick, onClose }) {
   const { t } = useTranslation("editor");
   const [stickers, setStickers] = useState([]);
   const [query, setQuery] = useState("");
@@ -18,14 +17,14 @@ export default function StickerPickerModal({ onPick, onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        const list = await api.stickerList();
+        const list = await source.list();
         if (!cancelled) setStickers(list || []);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     function onKey(e) { if (e.key === "Escape") onClose(); }
@@ -81,7 +80,7 @@ export default function StickerPickerModal({ onPick, onClose }) {
               >
                 <div className="aspect-square overflow-hidden rounded-app border border-border bg-checker transition-colors group-hover:border-[rgb(var(--accent-color))]">
                   <img
-                    src={mediaUrlFor(s.thumbPath || s.path)}
+                    src={source.thumbUrl(s)}
                     alt=""
                     className="h-full w-full object-contain"
                   />

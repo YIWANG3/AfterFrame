@@ -19,7 +19,6 @@ const os = require("node:os");
 const sharp = require("sharp");
 
 const { makeT } = require("./i18n");
-const stickerIpc = require("./ipc/stickers");
 const depthIpc = require("./ipc/depth");
 const collectionsIpc = require("./ipc/collections");
 const aiIpc = require("./ipc/ai");
@@ -354,7 +353,7 @@ services.set("saveFile", saveFileIpc.register(host));
 frameLogosIpc.register(host);
 frameTemplatesIpc.register(host);
 // The feature modules (features/<id>/manifest.mjs `electron`): the LUT
-// library and AI Repaint — see electron/features.js.
+// library, AI Repaint and the sticker library — see electron/features.js.
 registerFeatures(host);
 
 // vibepin (dev only): pixel-perfect element/region screenshots for annotations.
@@ -386,7 +385,6 @@ collectionsIpc.register(host);
 nativeDragIpc.register(host);
 systemFontsIpc.register(host);
 depthIpc.register(host);
-stickerIpc.register(host);
 
 app.on("open-file", (event, filePath) => {
   event.preventDefault();

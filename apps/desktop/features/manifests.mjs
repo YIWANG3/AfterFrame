@@ -3,5 +3,6 @@
 // (features/index.js, shared/ipcChannels.mjs) import it.
 import lut from "./lut/manifest.mjs";
 import repaint from "./repaint/manifest.mjs";
+import sticker from "./sticker/manifest.mjs";
 
-export default [lut, repaint];
+export default [lut, repaint, sticker];

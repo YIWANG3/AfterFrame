@@ -1,23 +1,22 @@
-// Sticker extraction & library — IPC handlers for the Sticker tool.
-// Manifest-based storage at ~/Library/Application Support/AfterFrame/stickers/
-// with a library.json index. A precompiled Swift CLI (extract-sticker.swift →
-// native/bin/extract-sticker) does the VisionKit segmentation; renderer bakes
-// outline into the PNG before save.
+// Sticker extraction & library — the sticker feature module's main-process
+// side (../manifest.mjs lists the channels). Manifest-based storage at
+// <userData>/stickers/ with a library.json index. A precompiled Swift CLI
+// (native/extract-sticker.swift → native/bin/extract-sticker, the manifest's
+// `helper`) does the VisionKit segmentation; the renderer bakes the outline
+// into the PNG before save.
 
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
-const { spawnSafely } = require("../spawnSafely");
-const { writeJsonAtomic } = require("../settingsStore");
+const { spawnSafely } = require("../../../electron/spawnSafely");
+const { writeJsonAtomic } = require("../../../electron/settingsStore");
 const sharp = require("sharp");
 
 const THUMB_MAX_EDGE = 512;
 
-function register({ app, ipcMain, isPackaged, media: { addAllowedMediaDir } }) {
-  const stickerToolPath = isPackaged
-    ? path.join(process.resourcesPath, "native", "bin", "extract-sticker")
-    : path.join(__dirname, "..", "..", "native", "bin", "extract-sticker");
+function register({ app, ipcMain, nativeBin, platform = process.platform, media: { addAllowedMediaDir } }) {
+  const stickerToolPath = path.join(nativeBin, "extract-sticker");
 
   const stickerLibraryDir = path.join(app.getPath("userData"), "stickers");
   try { fs.mkdirSync(stickerLibraryDir, { recursive: true }); } catch (_) {}
@@ -103,7 +102,7 @@ function register({ app, ipcMain, isPackaged, media: { addAllowedMediaDir } }) {
   // sub-rect — useful when VisionKit can't find a small subject in the
   // full frame but succeeds when the subject fills more of it.
   ipcMain.handle("workspace:sticker-detect", async (_event, options) => {
-    if (process.platform !== "darwin") {
+    if (platform !== "darwin") {
       throw new Error("Sticker extraction requires macOS.");
     }
     const sourcePath = String(options?.sourcePath || "");

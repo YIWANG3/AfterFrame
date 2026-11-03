@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useEffectEvent, useRef } from "react"
 import { useTranslation } from "react-i18next";
 
 import {
-  Type, ChevronDown, Undo2, Redo2, RotateCcw, Layers, Sparkles, FolderOpen, Cannabis, Brush, Blend,
+  Type, ChevronDown, Undo2, Redo2, RotateCcw, Layers, Sparkles, FolderOpen, Brush, Blend,
 } from "lucide-react";
 import HandwritingModal from "./handwriting/HandwritingModal";
 import { SliderRow, TextArea, Toggle } from "../../ui";
@@ -29,6 +29,7 @@ import StickerLayerInspector from "./text/StickerLayerInspector";
 import GlowSection from "./text/GlowSection";
 import StickerPickerModal from "./text/StickerPickerModal";
 import { mergeOwnLayers, paintFromFields, paintToFields } from "./text/textPanelLogic";
+import { layerSources } from "../../../features/index.js";
 
 // What "Photo info" offers, as the token sources frame templates use.
 const TOKEN_SOURCES = {
@@ -183,7 +184,8 @@ export default function TextPanel({
     setTokenMissing(added ? null : key);
   };
 
-  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  // The layer source whose picker is open (features/index.js `layerSources`), or null.
+  const [pickerSource, setPickerSource] = useState(null);
   const [handwritingOpen, setHandwritingOpen] = useState(false);
   const [presetsExpanded, setPresetsExpanded] = useState(false);
   const addOverlayLayer = () => {
@@ -209,7 +211,7 @@ export default function TextPanel({
     });
     onLayersChange([...layers, nl]);
     onSelectionChange(new Set([nl.id]));
-    setStickerPickerOpen(false);
+    setPickerSource(null);
   };
 
   const deleteLayer = (id) => {
@@ -489,14 +491,19 @@ export default function TextPanel({
               disabled={!api.has("startTextImage")}
               onClick={() => setHandwritingOpen(true)}
             />
-            <IconBtn
-              icon={Cannabis}
-              title={api.can("stickerExtract")
-                ? (stickerPickerOpen ? t("text.hideStickerPicker") : t("text.addStickerLayer"))
-                : `${t("text.addStickerLayer")} · ${t(LOCKED_HINT_KEY, { ns: "common" })}`}
-              disabled={!api.can("stickerExtract")}
-              onClick={() => setStickerPickerOpen((v) => !v)}
-            />
+            {/* The feature modules' layer sources (today the sticker
+                library), each locked where its feature is off. */}
+            {layerSources.map((source) => (
+              <IconBtn
+                key={source.id}
+                icon={source.icon}
+                title={api.can(source.cap)
+                  ? (pickerSource?.id === source.id ? t(source.hideLabelKey) : t(source.labelKey))
+                  : `${t(source.labelKey)} · ${t(LOCKED_HINT_KEY, { ns: "common" })}`}
+                disabled={!api.can(source.cap)}
+                onClick={() => setPickerSource((current) => (current?.id === source.id ? null : source))}
+              />
+            ))}
             <IconBtn icon={Type} title={t("text.addTextLayer")} onClick={addLayer} />
           </div>
         }>
@@ -665,10 +672,11 @@ export default function TextPanel({
           );
         })()}
       </div>
-      {stickerPickerOpen && (
+      {pickerSource && (
         <StickerPickerModal
+          source={pickerSource}
           onPick={(s) => handleAddSticker(s)}
-          onClose={() => setStickerPickerOpen(false)}
+          onClose={() => setPickerSource(null)}
         />
       )}
       {handwritingOpen && (
