@@ -14,7 +14,6 @@ import enInspector from "./locales/en/inspector.json";
 import enAnnotation from "./locales/en/annotation.json";
 import enEditor from "./locales/en/editor.json";
 import enCollage from "./locales/en/collage.json";
-import enStickerView from "./locales/en/stickerView.json";
 import enApp from "./locales/en/app.json";
 import zhCommon from "./locales/zh-CN/common.json";
 import zhSettings from "./locales/zh-CN/settings.json";
@@ -23,16 +22,19 @@ import zhInspector from "./locales/zh-CN/inspector.json";
 import zhAnnotation from "./locales/zh-CN/annotation.json";
 import zhEditor from "./locales/zh-CN/editor.json";
 import zhCollage from "./locales/zh-CN/collage.json";
-import zhStickerView from "./locales/zh-CN/stickerView.json";
 import zhApp from "./locales/zh-CN/app.json";
 import api from "../api";
 import { withPlatformCopy } from "./platformCopy";
+import { SUPPORTED_LOCALES } from "./locales.js";
+import { featureResources, featureNamespaces } from "../../features/i18n.js";
 
-export const SUPPORTED_LOCALES = ["en", "zh-CN"];
+export { SUPPORTED_LOCALES };
 
+// The host's namespaces, then one per feature module (features/i18n.js),
+// named by the manifest id.
 const resources = {
-  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation, editor: enEditor, collage: enCollage, stickerView: enStickerView, app: enApp },
-  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation, editor: zhEditor, collage: zhCollage, stickerView: zhStickerView, app: zhApp },
+  en: { common: enCommon, settings: enSettings, nav: enNav, inspector: enInspector, annotation: enAnnotation, editor: enEditor, collage: enCollage, app: enApp, ...featureResources.en },
+  "zh-CN": { common: zhCommon, settings: zhSettings, nav: zhNav, inspector: zhInspector, annotation: zhAnnotation, editor: zhEditor, collage: zhCollage, app: zhApp, ...featureResources["zh-CN"] },
 };
 
 function initialLocale() {
@@ -49,7 +51,7 @@ i18n.use(initReactI18next).init({
   lng: initialLocale(),
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "settings", "nav", "inspector", "annotation", "editor", "collage", "stickerView", "app"],
+  ns: ["common", "settings", "nav", "inspector", "annotation", "editor", "collage", "app", ...featureNamespaces],
   interpolation: { escapeValue: false },
   returnNull: false,
   // Resources are bundled and registered synchronously, so there's nothing to

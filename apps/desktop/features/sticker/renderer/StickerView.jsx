@@ -22,7 +22,7 @@ const GAP = 12;
 /* ─── Top toolbar — replacement for Toolbar.jsx ─────────────── */
 
 export function StickerToolbar({ count, query, setQuery }) {
-  const { t } = useTranslation("stickerView");
+  const { t } = useTranslation("sticker", { keyPrefix: "view" });
   return (
     <LibraryToolbar
       icon={Cannabis}
@@ -38,7 +38,7 @@ export function StickerToolbar({ count, query, setQuery }) {
 /* ─── Main grid area — replacement for Gallery.jsx ───────────── */
 
 export function StickerGallery({ stickers, query, selectedId, onSelect, onDelete, loading }) {
-  const { t } = useTranslation("stickerView");
+  const { t } = useTranslation("sticker", { keyPrefix: "view" });
   const [contextMenu, setContextMenu] = useState(null);
   const filtered = useMemo(() => {
     if (!query?.trim()) return stickers;
@@ -138,7 +138,7 @@ function StickerCard({ sticker, selected, onSelect, onContextMenu }) {
 }
 
 function StickerContextMenu({ x, y, onReveal, onDelete, onClose }) {
-  const { t } = useTranslation("stickerView");
+  const { t } = useTranslation("sticker", { keyPrefix: "view" });
   const ref = useRef(null);
   const [pos, setPos] = useState({ x, y });
   useDismiss(ref, onClose);
@@ -186,7 +186,7 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
 }
 
 function EmptyState({ query }) {
-  const { t } = useTranslation("stickerView");
+  const { t } = useTranslation("sticker", { keyPrefix: "view" });
   return (
     <div className="grid h-full place-items-center px-8 py-10">
       <div className="max-w-md rounded-lg border border-dashed border-border/60 px-8 py-10 text-center">
@@ -206,7 +206,7 @@ function EmptyState({ query }) {
 /* ─── Right pane — replacement for Inspector.jsx ─────────────── */
 
 export function StickerInspector({ sticker, onStar }) {
-  const { t } = useTranslation("stickerView");
+  const { t } = useTranslation("sticker", { keyPrefix: "view" });
   if (!sticker) {
     return (
       <aside className="flex h-full items-center justify-center overflow-y-auto bg-chrome px-4">

@@ -94,12 +94,12 @@ export default function RepaintSettings() {
   return (
     <div>
       <Group
-        title={t("repaint.providers")}
-        subtitle={t("repaint.providersSubtitle")}
+        title={t("repaint:settings.providers")}
+        subtitle={t("repaint:settings.providersSubtitle")}
       >
         <div className="py-3">
         {prefs.providers.length === 0 && (
-          <div className="mb-2.5"><Callout>{t("repaint.noProvider")}</Callout></div>
+          <div className="mb-2.5"><Callout>{t("repaint:settings.noProvider")}</Callout></div>
         )}
 
         <div className="flex flex-col gap-1.5">
@@ -117,7 +117,7 @@ export default function RepaintSettings() {
                 <ActiveRadio
                   active={active}
                   onClick={() => persist({ activeProvider: inst.id })}
-                  title={active ? t("repaint.activeProvider") : t("repaint.makeActive")}
+                  title={active ? t("repaint:settings.activeProvider") : t("repaint:settings.makeActive")}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -139,20 +139,20 @@ export default function RepaintSettings() {
                 />
                 <IconActionButton
                   onClick={() => refreshModels(inst)}
-                  title={t("repaint.refreshModels")}
+                  title={t("repaint:settings.refreshModels")}
                   disabled={refreshing[inst.id]}
                 >
                   <RefreshCw className={`h-3 w-3 ${refreshing[inst.id] ? "animate-spin" : ""}`} />
                 </IconActionButton>
                 <IconActionButton
                   onClick={() => setModal({ mode: "edit", instance: inst })}
-                  title={t("repaint.editProvider")}
+                  title={t("repaint:settings.editProvider")}
                 >
                   <Pencil className="h-3 w-3" />
                 </IconActionButton>
                 <IconActionButton
                   onClick={() => handleDelete(inst.id)}
-                  title={t("repaint.removeProvider")}
+                  title={t("repaint:settings.removeProvider")}
                   danger
                 >
                   <Trash2 className="h-3 w-3" />
@@ -164,7 +164,7 @@ export default function RepaintSettings() {
 
         <div className="mt-2.5">
           <SecondaryButton onClick={() => setModal({ mode: "new", instance: null })}>
-            <span className="inline-flex items-center gap-1"><Plus className="h-3 w-3" /> {t("repaint.addProvider")}</span>
+            <span className="inline-flex items-center gap-1"><Plus className="h-3 w-3" /> {t("repaint:settings.addProvider")}</span>
           </SecondaryButton>
         </div>
         </div>

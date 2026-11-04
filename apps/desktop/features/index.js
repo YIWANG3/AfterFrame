@@ -70,7 +70,7 @@ export const settingsTabs = manifests
   .filter((manifest) => manifest.contributes?.settingsTab)
   .map(({ id, capability, contributes: { settingsTab } }) => ({
     id: settingsTab.id,
-    key: settingsTab.key,
+    labelKey: settingsTab.labelKey,
     icon: FEATURES[id].settingsTabIcon,
     cap: capability,
     Pane: FEATURES[id].SettingsTab,

@@ -16,6 +16,7 @@ Layout, one directory per feature:
 features/
   manifestSchema.mjs       # manifest v1: the fields, their rules, the renderer exports each needs
   manifests.mjs            # the one static list of every manifest, validated at import; both processes import it
+  i18n.js                  # the features' locale files, one namespace per manifest id, for src/i18n/index.js
   index.js                 # the renderer's registry: manifest id → renderer/index.js exports,
                            # plus the tool-rail rows, Settings groups and tabs, sidebar views and
                            # layer sources the manifests contribute
@@ -23,6 +24,8 @@ features/
     manifest.mjs           # pure data: id, capability, platforms, what it contributes, entry path
     electron/              # main-process code (CommonJS, Node), named by manifest.electron;
                            # its entry exports register(host) like every module in electron/ipc/
+    renderer/locales/      # the feature's strings: en.json, zh-CN.json — its own i18n namespace,
+                           # named by the manifest id (features/i18n.js registers them)
     renderer/              # React/Vite code; renderer/index.js exports Panel (lazy or not),
                            # useTool, Overlay, icon (editor tool); SettingsGroup, SettingsTab,
                            # settingsTabIcon (Settings); View, Inspector, useView, sidebarIcon
@@ -83,6 +86,17 @@ Conventions:
   shared-ESM rules to `features/**/*.mjs`.
 - The packaged app ships `features/**` minus the tests (`package.json`
   `build.files`), and dev staleness watches it like `electron/` and `shared/`.
+- A feature's strings live in `renderer/locales/<lng>.json` and form its own
+  i18n namespace, named by the manifest id (`useTranslation("lut")`;
+  `features/i18n.js` collects them with `import.meta.glob`, `src/i18n/index.js`
+  registers them next to the host's). Every `labelKey` in a manifest carries
+  the namespace (`"lut:tool"`), so the host's `t()` resolves it whichever
+  namespace its hook was given. A feature that needs a host string (the LUT
+  group's "Open in Finder", the provider rows AI Repaint shares with the
+  text tool) reaches it the same way (`t("settings:library.openFolder")`);
+  the host reaches a feature string only through the manifest's labelKeys,
+  with one exception noted in EditorOverlay (`lut:base.rendering`).
+  `features/index.test.js` keeps en and zh-CN in step per feature.
 
 ## Manifest v1 (frozen 2026-11-02)
 
@@ -93,6 +107,10 @@ vitest and node:test alike) with the field named. The rules below are the
 contract; `manifestSchema.mjs` is their code. A change to the shape is a
 change to the contract: bump `MANIFEST_VERSION`, change the validator, this
 table and `docs/feature-modules-plan.md` §12 together, and say why in the PR.
+Amended 2026-11-03, before any manifest existed outside this repository:
+every `labelKey` is `<namespace>:<key>` in the feature's own namespace, and
+`settingsTab` names its label with `labelKey` (it had `key`, a label under
+the host's settings namespace).
 
 ### Top-level fields
 
@@ -120,11 +138,11 @@ platform hint, `"hidden"`: not shown).
 
 | Contribution | Fields | Unique across manifests | Placed by | Renderer exports it needs |
 |---|---|---|---|---|
-| `editorTool` | `key` (`^[a-z][a-z0-9-]*$`), `labelKey` (editor namespace), `unavailable`, optional `overlay` (boolean, default false), optional `mount` (`"active"` default, or `"always"`: the panel stays mounted for the editor's life) | `key` | `src/components/editor/editorTools.js` puts the row where `RAIL_ORDER` says (a key missing there stops the editor); EditorOverlay mounts `Overlay` over the canvas when `overlay` is true, with props `{ imageRect, tool }` (`tool` = what the feature's `useTool` returned) | `Panel`, `icon`; `Overlay` when `overlay`; `useTool` by convention when the tool has state (EditorOverlay imports it by name) |
+| `editorTool` | `key` (`^[a-z][a-z0-9-]*$`), `labelKey` (`<id>:<key>` in the feature's namespace), `unavailable`, optional `overlay` (boolean, default false), optional `mount` (`"active"` default, or `"always"`: the panel stays mounted for the editor's life) | `key` | `src/components/editor/editorTools.js` puts the row where `RAIL_ORDER` says (a key missing there stops the editor); EditorOverlay mounts `Overlay` over the canvas when `overlay` is true, with props `{ imageRect, tool }` (`tool` = what the feature's `useTool` returned) | `Panel`, `icon`; `Overlay` when `overlay`; `useTool` by convention when the tool has state (EditorOverlay imports it by name) |
 | `settingsGroup` | `tab` (`"library"`: the only tab that renders groups so far) | — | `LibrarySettings.jsx` renders `settingsGroups("library")`, each gated by the capability | `SettingsGroup` |
-| `settingsTab` | `id` (`^[a-z][a-z0-9-]*$`), `key` (label under the settings namespace's `tabs`) | `id` | `SettingsOverlay.jsx` places it per its `TAB_ORDER` | `SettingsTab`, `settingsTabIcon` |
-| `sidebarView` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey` (nav namespace), `unavailable` | `id` | `Sidebar.jsx` lists it below the browse rows; `App.jsx` hosts the active one (`View` centre pane, `Inspector` right pane) and holds its state from `useView({ lightboxOpen, setLightboxOpen })`, which must offer `refresh`, `selected`, `lightboxItems`, `lightboxIndex`, `onLightboxIndexChange`, `handleKey`; the agent's `show_in_app` reaches it by `id` (`electron/mcp/tools/app.js` builds its enum from the manifests) | `View`, `Inspector`, `useView`, `sidebarIcon` |
-| `layerSource` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey`, `hideLabelKey` (editor namespace) | `id` | `TextPanel.jsx` shows a picker button per source; `StickerPickerModal` lists the chosen one's images | `layerSource`: `{ icon, list(), thumbUrl(entry) }` |
+| `settingsTab` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey` (`<id>:<key>`) | `id` | `SettingsOverlay.jsx` places it per its `TAB_ORDER` | `SettingsTab`, `settingsTabIcon` |
+| `sidebarView` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey` (`<id>:<key>`), `unavailable` | `id` | `Sidebar.jsx` lists it below the browse rows; `App.jsx` hosts the active one (`View` centre pane, `Inspector` right pane) and holds its state from `useView({ lightboxOpen, setLightboxOpen })`, which must offer `refresh`, `selected`, `lightboxItems`, `lightboxIndex`, `onLightboxIndexChange`, `handleKey`; the agent's `show_in_app` reaches it by `id` (`electron/mcp/tools/app.js` builds its enum from the manifests) | `View`, `Inspector`, `useView`, `sidebarIcon` |
+| `layerSource` | `id` (`^[a-z][a-z0-9-]*$`), `labelKey`, `hideLabelKey` (`<id>:<key>`) | `id` | `TextPanel.jsx` shows a picker button per source; `StickerPickerModal` lists the chosen one's images | `layerSource`: `{ icon, list(), thumbUrl(entry) }` |
 | `ipc` | non-empty array of `[method, channel, arity]`: method `^[a-z][A-Za-z0-9]*$` (becomes `api.<method>`), channel `^[a-z]+:[a-z0-9-]+$`, arity an integer 0–3 | method, channel (and against the core rows: `electron/ipcChannels.test.js`) | `shared/ipcChannels.mjs` appends the rows to `IPC_METHODS`; preload, facade and the parity tests see them without a change; the `electron` entry answers them | — |
 | `mcpTools` | path `./…​.js` relative to the manifest, a module exporting `(ctx) => tools[]` (the shape of `electron/mcp/tools/*.js`) | tool names (`electron/mcp/tools` tests) | `electron/mcp/tools/index.js` appends the group | — |
 
@@ -138,7 +156,5 @@ platform hint, `"hidden"`: not shown).
   renderer entry other than an in-tree `renderer/index.js`, a message
   bridge, a permission list). `docs/plugin-architecture-research.md` has the
   direction; the first example plugin decides the fields.
-- **Per-feature i18n namespaces**: the label keys point into the host's
-  namespaces (`docs/feature-modules-plan.md` §11.4).
 - **Job types, facets, context-menu items**: no feature has needed one.
 

@@ -1,6 +1,6 @@
 # 编辑功能迁成 feature module：实施计划
 
-> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）已合入（#259），落地形状见 §8 末尾；清单 v1 冻结做在 `feat/feature-manifest-v1`，见 §12。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
+> **状态（2026-11-02）**：§11 四项已拍板；四个准备 PR 已合入 main（0a #252、0b #255、0c #253、0d #254）；PR 1（LUT）已合入（#257）；PR 2（AI 重绘）已合入（#258）；PR 3（贴纸）已合入（#259），落地形状见 §8 末尾；清单 v1 冻结已合入（#260），见 §12；i18n 搬进各功能自己的 namespace 做在 `feat/feature-i18n`，见 §13。方向和代码地图见 [plugin-architecture-research.md](plugin-architecture-research.md)，本文只讲怎么做：六个 PR，每个零行为变化、可独立合入和回滚。基于 main fa2e8b38（#249）读代码得出，未运行。
 
 ## 0. 范围与规矩
 
@@ -298,6 +298,7 @@ export default {
 | 6 | 2 AI 重绘 | 2 到 3 天（实际半天） | 1 |
 | 7 | 3 贴纸 | 3 天（实际半天） | 2 |
 | 8 | 清单 v1 冻结 | 1 天（实际半天） | 3 |
+| 9 | i18n 搬进各功能 namespace | 半天 | 8 |
 
 0a 到 0d 互不依赖，可以并行开，但每个都从 main 开分支、各自合入 main 后 PR 1 再开。全部约两周到两周半。
 
@@ -316,7 +317,7 @@ export default {
 1. ~~`host` 是冻结对象加可写的 `services`，还是全部可写。~~ **已定（2026-11-01）：冻结，只有 `services` 可写。** 读 host.js 一眼能看出 feature 拿得到什么，以后公开 API 从这张清单里挑子集；全部可写的话三个 PR 后 host 又变回隐式全局对象。
 2. ~~PR 0b 到 0d 三个小 PR 分开合，还是合成一个"准备"PR。~~ **已定（2026-11-01）：分开，各自从 main 开。** 文件集合不相交；0d 是唯一有行为风险的（e2e 67），单独一个好 revert。
 3. ~~`features/<id>/electron/index.js` 这个入口约定，还是在清单里写路径。~~ **已定（2026-11-01）：清单里写 `electron: "./electron/xxx.js"`，不立文件名约定。** 清单本来就有 `renderer` 懒加载函数，入口已经在清单里；再规定 `index.js` 是多一条规则而不是少一个字段。第三方插件的三种形态（沙箱 iframe、CLI 可执行文件、无主进程）也都落在显式字段上。
-4. ~~LUT 的 i18n 字串留在 `editor.json` / `settings.json`，还是 PR 1 就给 feature 自己的 namespace。~~ **已定（2026-11-01）：留着，PR 3 之后看三个样本一起搬一次。** 三个 feature 的字串分布不同，一个样本定不了格式；`data-testid` 从翻译后的 label 派生，搬 key 连带改 e2e，搬两次不划算。第三方沙箱插件自带字串、走 postMessage 传 locale，不要求核心先拆。
+4. ~~LUT 的 i18n 字串留在 `editor.json` / `settings.json`，还是 PR 1 就给 feature 自己的 namespace。~~ **已定（2026-11-01）：留着，PR 3 之后看三个样本一起搬一次。** 搬了（2026-11-03，§13）。 三个 feature 的字串分布不同，一个样本定不了格式；`data-testid` 从翻译后的 label 派生，搬 key 连带改 e2e，搬两次不划算。第三方沙箱插件自带字串、走 postMessage 传 locale，不要求核心先拆。
 
 ## 12. 清单 v1 冻结（2026-11-02，`feat/feature-manifest-v1`）
 
@@ -342,6 +343,21 @@ export default {
 
 - **处理器型贡献（`processor`）和它的基底格式。** 2026-11-02 讨论过 Lightroom 式 develop 工具：要有序的处理器链、`editorStateModel` 的参数槽、16-bit/float 线性基底（现在 LUT 走 8-bit canvas）、WebGL/WebGPU 实时渲染，RAW 解码和去马赛克留在 sidecar 或 Core Image。用户决定先放一放，把插件做完。LUT 的 `gradeContent` 接法保持手写。
 - **沙箱等级、第三方插件的渲染入口和消息桥。** 下一步是 `examples/plugins/` 的示例插件，写不动的地方回头改契约。
-- **i18n 搬进 feature 自己的 namespace**（§11.4），三个都合入了，可以搬了，单独一个 PR。
 - **`jobTypes`、facet、右键菜单项**：没有样本用到，不预留。
+
+## 13. i18n 搬进各功能自己的 namespace（2026-11-03，`feat/feature-i18n`）
+
+§11.4 留的事：三个功能的字串原来散在宿主的 `editor` / `settings` / `nav` namespace 和一个单独的 `stickerView` namespace 里。现在每个功能一个 namespace，名字就是清单 id，文件在 `features/<id>/renderer/locales/{en,zh-CN}.json`。
+
+**做了什么**：
+
+- `features/i18n.js` 用 `import.meta.glob` 收各功能的 locale 文件，按 id 和语言拼成 `featureResources`，并断言每个清单两种语言都有；`src/i18n/index.js` 把它们和宿主的 namespace 一起注册。只 import JSON，不 import 任何 renderer 代码，避免 `src/i18n → features → 宿主组件 → src/i18n` 的环。`SUPPORTED_LOCALES` 挪到 `src/i18n/locales.js`，让 `features/i18n.js` 不用 import i18next 实例。
+- 搬动：`editor.lut.*`、`editor.overlay.tools.lut` → `lut`（设置页的 `settings.library.lut*` 去掉 lut 前缀收进 `lut.settings.*`）；`editor.repaint.*`、`editor.overlay.tools.repaint`、`settings.tabs.repaint`、`settings.repaint.*` → `repaint`（后者收进 `repaint.settings.*`，因为 `addProvider` / `editProvider` 两个键在面板和设置页里都有）；`editor.sticker.*`、`editor.overlay.tools.sticker`、`nav.sidebar.stickers`、`editor.text.addStickerLayer` / `hideStickerPicker` 和整个 `stickerView` → `sticker`（视图的键收进 `sticker.view.*`，`StickerView` 用 `useTranslation("sticker", { keyPrefix: "view" })`，调用处一行没改）。宿主 JSON 只有删行，没有改动。
+- 代码：LUT 的面板和 hook 原来收宿主传进来的 `t`（editor namespace），现在各自 `useTranslation("lut")`，EditorOverlay 不再传；贴纸面板、重绘面板换成自己的 namespace，键去掉前缀；`RepaintSettings` 保留 `settings` hook（15 处共享的 `providers.*`，和文字工具共用），自己的 9 个键写成 `t("repaint:settings.xxx")`；LUT 设置组反过来，用 `lut` hook，共享的 `openFolder` 写成 `t("settings:library.openFolder")`。
+- 清单：labelKey 全部带 namespace（`"lut:tool"`、`"sticker:sidebar"`、`"sticker:addLayer"`…），宿主的 `t(labelKey)` 不管自己的 hook 是哪个 namespace 都能解析（i18next 的 `ns:key`）。`settingsTab.key` 改名 `labelKey`，`SettingsOverlay` 对功能 tab 用它、核心 tab 照旧 `tabs.<key>`。这是 v1 冻结后的一次就地修订，没有升版本：仓库外还没有任何清单，升 v2 只会制造噪音；README 和 `manifestSchema.mjs` 的头注释都写了修订日期和内容。
+- 测试：`features/index.test.js` 加三条：每个清单两种语言都有 namespace；每个功能 en 和 zh-CN 的键集一致（忽略复数后缀，中文没有 `_one`）；清单里每个 labelKey 都在自己的 namespace 里且能解析到字串。
+
+**没动**：`EditorOverlay` 里"正在为 LUT 渲染 RAW"那句，宿主显示功能的状态，写成 `t("lut:base.rendering")`，README 里记为唯一一处宿主直接引用功能字串；`providers.*`、`handwriting.*`、`text.*` 其余键留在宿主，它们是文字工具和 AI 供应商设置的，不属于三个功能。
+
+验收：`13-i18n`、`03-editor`、`04-sticker`、`10-settings`、`43-sticker-library`、`67-lut`、`80-repaint-reference`、`19-editor-layers`、`24-handwriting`、`02-navigation`（68 过、1 跳）加 `npm run e2e:ci-skipped`（29 过）；文案一字未改，所有按文字找元素的 e2e 不受影响。
 

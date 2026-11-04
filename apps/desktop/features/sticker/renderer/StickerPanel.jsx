@@ -19,7 +19,7 @@ import { fields, hexColor, intIn } from "../../../src/utils/prefs";
 // consumption happens in the Text tool's layer system.
 
 export default function StickerPanel({ sourcePath, sourceLabel, pushToast, region, onClearRegion }) {
-  const { t } = useTranslation("editor");
+  const { t } = useTranslation("sticker");
   const [stickers, setStickers] = useState([]);
   const [highlightId, setHighlightId] = useState(null);
 
@@ -38,8 +38,8 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
     setStickers((prev) => [entry, ...prev.filter((s) => s.id !== entry.id)]);
     setHighlightId(entry.id);
     pushToast?.({
-      title: t("sticker.savedTitle"),
-      message: entry.sourceLabel || t("sticker.savedMsg"),
+      title: t("savedTitle"),
+      message: entry.sourceLabel || t("savedMsg"),
       ttl: 6000,
     });
     setTimeout(() => setHighlightId((id) => (id === entry.id ? null : id)), 2000);
@@ -72,7 +72,7 @@ export default function StickerPanel({ sourcePath, sourceLabel, pushToast, regio
 /* ─── Library tab ─────────────────────────────────────────────── */
 
 function Library({ stickers, highlightId, onChanged }) {
-  const { t } = useTranslation("editor");
+  const { t } = useTranslation("sticker");
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     if (!query.trim()) return stickers;
@@ -81,7 +81,7 @@ function Library({ stickers, highlightId, onChanged }) {
   }, [stickers, query]);
 
   async function handleDelete(sticker) {
-    if (!confirm(t("sticker.deleteConfirm", { label: stickerLabel(sticker) }))) return;
+    if (!confirm(t("deleteConfirm", { label: stickerLabel(sticker) }))) return;
     await api.stickerDelete(sticker.id);
     onChanged();
   }
@@ -93,8 +93,8 @@ function Library({ stickers, highlightId, onChanged }) {
   return (
     <div className="px-3 pb-3">
       <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-[9px] uppercase tracking-wider text-muted3">{t("sticker.library")}</h4>
-        <span className="text-[10px] text-muted3">{t("sticker.inLibrary", { count: stickers.length })}</span>
+        <h4 className="text-[9px] uppercase tracking-wider text-muted3">{t("library")}</h4>
+        <span className="text-[10px] text-muted3">{t("inLibrary", { count: stickers.length })}</span>
       </div>
       <div className="pb-2">
         <div className="relative">
@@ -103,7 +103,7 @@ function Library({ stickers, highlightId, onChanged }) {
             size="md"
             value={query}
             onChange={setQuery}
-            placeholder={t("sticker.search")}
+            placeholder={t("search")}
             className="w-full pl-7"
           />
         </div>
@@ -131,17 +131,17 @@ function Library({ stickers, highlightId, onChanged }) {
 }
 
 function EmptyState() {
-  const { t } = useTranslation("editor");
+  const { t } = useTranslation("sticker");
   return (
     <div className="mt-2 flex flex-col items-center gap-1.5 rounded-lg bg-[var(--fill)] px-4 py-6 text-center">
-      <div className="text-[12px] text-text">{t("sticker.noStickers")}</div>
-      <div className="text-[11px] leading-relaxed text-muted2">{t("sticker.emptyHint")}</div>
+      <div className="text-[12px] text-text">{t("noStickers")}</div>
+      <div className="text-[11px] leading-relaxed text-muted2">{t("emptyHint")}</div>
     </div>
   );
 }
 
 function StickerThumb({ sticker, highlight, onDelete, onStar }) {
-  const { t } = useTranslation("editor");
+  const { t } = useTranslation("sticker");
   return (
     <div className="group flex flex-col" title={stickerLabel(sticker)}>
       <div
@@ -172,7 +172,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
             type="button"
             onClick={(e) => { e.stopPropagation(); onStar(); }}
             className="flex h-4 w-4 items-center justify-center rounded text-white/80 hover:text-white"
-            title={sticker.starred ? t("sticker.unstar") : t("sticker.star")}
+            title={sticker.starred ? t("unstar") : t("star")}
           >
             <Star className={`h-3 w-3 ${sticker.starred ? "fill-current" : ""}`} />
           </button>
@@ -180,7 +180,7 @@ function StickerThumb({ sticker, highlight, onDelete, onStar }) {
             type="button"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="flex h-4 w-4 items-center justify-center rounded text-white/80 hover:text-white"
-            title={t("sticker.delete")}
+            title={t("delete")}
           >
             <Trash2 className="h-3 w-3" />
           </button>
@@ -202,7 +202,7 @@ const checkOutline = (value) => {
 };
 
 function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClearRegion }) {
-  const { t } = useTranslation("editor");
+  const { t } = useTranslation("sticker");
   const [phase, setPhase] = useState("idle"); // idle | detecting | preview | saving
   const [, setScratchDir] = useState(null);
   const [instances, setInstances] = useState([]);
@@ -254,8 +254,8 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
       if (!result.instances?.length) {
         setPhase("idle");
         pushToast?.({
-          title: t("sticker.noSubjectTitle"),
-          message: t("sticker.noSubjectMsg"),
+          title: t("noSubjectTitle"),
+          message: t("noSubjectMsg"),
           ttl: 6000,
         });
         return;
@@ -326,12 +326,12 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               disabled={!sourcePath}
               className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-app text-[11px] text-text transition-colors hover:border-[rgb(var(--accent-color))] hover:bg-hover disabled:opacity-50"
             >
-              <Sparkles className="h-3.5 w-3.5" /> {t("sticker.detectSubjects")}
+              <Sparkles className="h-3.5 w-3.5" /> {t("detectSubjects")}
             </button>
           )}
           {phase === "detecting" && (
             <div className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-app text-[11px] text-muted">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("sticker.detecting")}
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("detecting")}
             </div>
           )}
 
@@ -339,14 +339,14 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
           {region ? (
             <div className="mt-2 flex items-center gap-1.5 px-0.5 text-[10px] text-muted2">
               <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-color))]" />
-              <span>{t("sticker.limitedToSelection")}</span>
+              <span>{t("limitedToSelection")}</span>
               <span className="text-muted3">{Math.round(region.w * 100)}% × {Math.round(region.h * 100)}%</span>
-              <button type="button" onClick={onClearRegion} className="ml-auto hover:text-text" title={t("sticker.clearSelection")}>
-                {t("sticker.clear")}
+              <button type="button" onClick={onClearRegion} className="ml-auto hover:text-text" title={t("clearSelection")}>
+                {t("clear")}
               </button>
             </div>
           ) : (
-            <div className="mt-2 px-0.5 text-[10px] leading-4 text-muted3">{t("sticker.detectsFull")}</div>
+            <div className="mt-2 px-0.5 text-[10px] leading-4 text-muted3">{t("detectsFull")}</div>
           )}
         </div>
 
@@ -358,7 +358,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
 
         {phase !== "idle" && phase !== "detecting" && instances.length > 0 && (
           <>
-            <Section label={t("sticker.detected", { count: instances.length })}>
+            <Section label={t("detected", { count: instances.length })}>
               <div data-testid="detected-sticker-grid" className="grid grid-cols-4 gap-1.5">
                 {instances.map((inst, i) => (
                   <button
@@ -380,7 +380,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               </div>
             </Section>
 
-            <Section label={t("sticker.preview")}>
+            <Section label={t("preview")}>
               <div className="mb-3 aspect-square overflow-hidden rounded-app border border-border bg-checker">
                 {activeInst && (
                   <OutlinePreview
@@ -392,7 +392,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               </div>
 
               <SliderRow
-                label={t("sticker.outline")}
+                label={t("outline")}
                 min={0}
                 max={32}
                 value={outline.width}
@@ -405,12 +405,12 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
               />
             </Section>
 
-            <Section label={t("sticker.name")}>
+            <Section label={t("name")}>
               <TextInput
                 size="md"
                 value={name}
                 onChange={setName}
-                placeholder={t("sticker.stickerName")}
+                placeholder={t("stickerName")}
                 className="w-full"
               />
             </Section>
@@ -434,7 +434,7 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
             className="ml-auto flex h-7 items-center gap-1.5 rounded-md bg-[rgb(var(--accent-color))] px-3 text-[11px] font-medium text-accentInk transition-all hover:brightness-110 disabled:opacity-60"
           >
             {phase === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            {phase === "saving" ? t("sticker.saving") : t("sticker.saveSticker")}
+            {phase === "saving" ? t("saving") : t("saveSticker")}
           </button>
         </div>
       )}
@@ -445,19 +445,19 @@ function CreateNew({ sourcePath, sourceLabel, onSaved, pushToast, region, onClea
 const OUTLINE_PRESETS = ["#ffffff", "#000000", "#d2a05a", "#f55b5b", "#5bf59c", "#5b8cf5"];
 
 function OutlineColorRow({ color, onChange }) {
-  const { t } = useTranslation("editor");
+  const { t } = useTranslation("sticker");
   const swatchRef = useRef(null);
   const [open, setOpen] = useState(false);
   return (
     <div className="mb-3 mt-2 flex items-center gap-2">
-      <span className="w-12 text-[10px] uppercase tracking-wider text-muted2">{t("sticker.color")}</span>
+      <span className="w-12 text-[10px] uppercase tracking-wider text-muted2">{t("color")}</span>
       <button
         ref={swatchRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="h-5 w-5 flex-shrink-0 rounded border border-border/60 transition-shadow hover:border-border-strong"
         style={{ backgroundColor: color }}
-        title={t("sticker.pickColor")}
+        title={t("pickColor")}
       />
       <span className="font-mono text-[10px] text-muted2">{color.toUpperCase()}</span>
       {open && (

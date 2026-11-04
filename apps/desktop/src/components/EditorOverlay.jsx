@@ -635,7 +635,7 @@ export default function EditorOverlay({
     // No thumbnails of the camera's JPEG only to throw them away.
     base: lutSource.base, baseReady: !lutSource.rendering,
     discreteRotationDeg, flipX, flipY, sourcePath,
-    apply: applyState, record: recordState, pushToast, t,
+    apply: applyState, record: recordState, pushToast,
   });
 
   // The feature modules' tool hooks by rail key, for the table-driven overlay
@@ -1002,7 +1002,7 @@ export default function EditorOverlay({
             viewportSize={viewportSize}
             over={imageRect}
             label={isRaw && awaitingSource ? t("overlay.renderingRaw")
-              : lutSource.rendering || (lutSource.sourceOverride && !sourceBaked) ? t("lut.base.rendering")
+              : lutSource.rendering || (lutSource.sourceOverride && !sourceBaked) ? t("lut:base.rendering")
               : t("overlay.loading")}
             hint={isRaw && awaitingSource ? t("overlay.renderingRawHint") : null}
           />
@@ -1288,7 +1288,6 @@ export default function EditorOverlay({
             ) : tool === "lut" ? (
               <Suspense fallback={null}>
                 <LutPanel
-                  t={t}
                   tool={lutTool}
                   lut={editorState.lut}
                   base={lutTool.base}

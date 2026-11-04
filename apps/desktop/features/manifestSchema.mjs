@@ -1,6 +1,8 @@
 // Manifest v1: the shape of features/<id>/manifest.mjs, frozen once the three
 // bundled features (LUT, AI Repaint, sticker) had settled it (2026-11-02,
-// docs/feature-modules-plan.md §12). features/manifests.mjs validates the
+// docs/feature-modules-plan.md §12; amended 2026-11-03 for the features'
+// own i18n namespaces: every labelKey is "<namespace>:<key>", and
+// settingsTab names its label with labelKey like the other contributions). features/manifests.mjs validates the
 // list at import, so a wrong manifest stops both processes at startup
 // with the field named instead of a contribution that silently never
 // shows. features/README.md documents every field; a change to this file is
@@ -93,7 +95,7 @@ export function validateManifest(manifest) {
   if (settingsGroup !== undefined && fields("settingsGroup", settingsGroup, ["tab"], ["tab"])) {
     if (!SETTINGS_GROUP_TABS.includes(settingsGroup.tab)) bad(`settingsGroup.tab is one of ${SETTINGS_GROUP_TABS.join(", ")}`);
   }
-  if (settingsTab !== undefined && fields("settingsTab", settingsTab, ["id", "key"], ["id", "key"])) {
+  if (settingsTab !== undefined && fields("settingsTab", settingsTab, ["id", "labelKey"], ["id", "labelKey"])) {
     if (isText(settingsTab.id) && !IDENT.test(settingsTab.id)) bad(`settingsTab.id must match ${IDENT}`);
   }
   if (sidebarView !== undefined && fields("sidebarView", sidebarView, ["id", "labelKey", "unavailable"], ["id", "labelKey"])) {

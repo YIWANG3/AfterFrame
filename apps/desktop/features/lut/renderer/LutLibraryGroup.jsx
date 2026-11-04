@@ -12,7 +12,7 @@ import { fileName, formatBytes } from "../../../src/utils/format";
 import { Group, FieldRow, SecondaryButton, IconActionButton } from "../../../src/components/settings/SettingsPrimitives";
 
 export default function LutLibraryGroup() {
-  const { t } = useTranslation("settings");
+  const { t } = useTranslation("lut");
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,10 +31,10 @@ export default function LutLibraryGroup() {
 
   async function clear() {
     const ok = await confirm({
-      title: t("library.clearLutsTitle"),
-      message: t("library.clearLutsMessage", { count }),
-      confirmLabel: t("library.clearLutsConfirm"),
-      cancelLabel: t("library.cancel"),
+      title: t("settings.clearTitle"),
+      message: t("settings.clearMessage", { count }),
+      confirmLabel: t("settings.clearConfirm"),
+      cancelLabel: t("cancel"),
       danger: true,
     });
     if (!ok) return;
@@ -66,21 +66,21 @@ export default function LutLibraryGroup() {
   }
 
   return (
-    <Group title={t("library.lutTitle")} subtitle={t("library.lutSubtitle")}>
+    <Group title={t("settings.title")} subtitle={t("settings.subtitle")}>
       <FieldRow
-        label={t("library.lutLibrary")}
-        hint={state ? t("library.lutLibraryHint", { count, size }) : t("library.lutLibraryLoading")}
+        label={t("settings.library")}
+        hint={state ? t("settings.libraryHint", { count, size }) : t("settings.libraryLoading")}
       >
         <SecondaryButton onClick={() => void api.openCacheDir("luts")}>
-          <span className="inline-flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />{t("library.openFolder")}</span>
+          <span className="inline-flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />{t("settings:library.openFolder")}</span>
         </SecondaryButton>
         <SecondaryButton onClick={clear} disabled={busy || count === 0}>
-          <span className="inline-flex items-center gap-1.5" data-testid="settings-clear-luts"><Trash2 className="h-3.5 w-3.5" />{t("library.clearLuts")}</span>
+          <span className="inline-flex items-center gap-1.5" data-testid="settings-clear-luts"><Trash2 className="h-3.5 w-3.5" />{t("settings.clear")}</span>
         </SecondaryButton>
       </FieldRow>
-      <FieldRow label={t("library.lutFolders")} hint={t("library.lutFoldersHint")}>
+      <FieldRow label={t("settings.folders")} hint={t("settings.foldersHint")}>
         <SecondaryButton onClick={addFolder}>
-          <span className="inline-flex items-center gap-1.5"><FolderPlus className="h-3.5 w-3.5" />{t("library.addLutFolder")}</span>
+          <span className="inline-flex items-center gap-1.5"><FolderPlus className="h-3.5 w-3.5" />{t("settings.addFolder")}</span>
         </SecondaryButton>
       </FieldRow>
       {(state?.folders || []).map((folder) => (
@@ -88,18 +88,18 @@ export default function LutLibraryGroup() {
           key={folder.path}
           label={fileName(folder.path) || folder.path}
           hint={folder.available
-            ? t("library.lutFolderHint", { path: folder.path, count: folder.count })
-            : t("library.lutFolderUnavailable", { path: folder.path })}
+            ? t("settings.folderHint", { path: folder.path, count: folder.count })
+            : t("settings.folderUnavailable", { path: folder.path })}
         >
           {folder.available ? (
             <SecondaryButton onClick={() => void api.revealPath(folder.path)}>
-              <span className="inline-flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />{t("library.openFolder")}</span>
+              <span className="inline-flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />{t("settings:library.openFolder")}</span>
             </SecondaryButton>
           ) : (
-            <SecondaryButton onClick={() => relocateFolder(folder.path)}>{t("library.relocateLutFolder")}</SecondaryButton>
+            <SecondaryButton onClick={() => relocateFolder(folder.path)}>{t("settings.relocateFolder")}</SecondaryButton>
           )}
           {/* Stops reading the folder; its files are left alone. */}
-          <IconActionButton title={t("library.removeLutFolder")} onClick={() => removeFolder(folder.path)}><X /></IconActionButton>
+          <IconActionButton title={t("settings.removeFolder")} onClick={() => removeFolder(folder.path)}><X /></IconActionButton>
         </FieldRow>
       ))}
     </Group>
