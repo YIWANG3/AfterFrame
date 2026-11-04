@@ -1,0 +1,15 @@
+{
+  "name": "afterframe",
+  "repo": "YIWANG3/AfterFrame",
+  "defaultBranch": "main",
+  "specDir": "docs/specs",
+  "decisions": "docs/decisions.md",
+  "setup": "npm --prefix apps/desktop ci",
+  "quick": "npm run lint:desktop && npm run test:renderer",
+  "full": "npm test && npm run test:e2e",
+  "e2e": "npm --prefix apps/desktop run e2e -- {spec}",
+  "parallel": 1,
+  "agents": { "execute": "claude-desktop", "audit": "codex" },
+  "marketing": "marketing",
+  "release": "docs/releases/README.md"
+}

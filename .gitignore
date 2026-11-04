@@ -3,7 +3,8 @@ __pycache__/
 .DS_Store
 .pytest_cache/
 .mypy_cache/
-.claude/
+.claude/*
+!.claude/platform.json
 .codex/
 .vibepin/
 node_modules/
