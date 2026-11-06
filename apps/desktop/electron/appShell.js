@@ -30,6 +30,13 @@ function withoutMacOnlyItems(template) {
   });
 }
 
+// A reload of the page the window already shows (Settings → import, Vite's full
+// reload), as opposed to going anywhere else.
+function isReloadOf(currentUrl, targetUrl) {
+  const page = (url) => String(url || "").split("#")[0];
+  return Boolean(page(currentUrl)) && page(currentUrl) === page(targetUrl);
+}
+
 function createAppShell({
   BrowserWindow, Menu, makeT, getLocale, devServerUrl, preloadPath, indexHtml,
   screen, nativeTheme, platform = process.platform, getShortcuts = () => ({}),
@@ -75,6 +82,14 @@ function createAppShell({
       webPreferences: {
         preload: preloadPath,
       },
+    });
+    // The window only ever shows the app. A file drop the page didn't take
+    // gets Blink's default: every dropped file opens in a new tab, which here
+    // is a new BrowserWindow each (one 68-photo drop left 68 image windows),
+    // and a single file or link replaces the app itself.
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    window.webContents.on("will-navigate", (event, url) => {
+      if (!isReloadOf(window.webContents.getURL(), url)) event.preventDefault();
     });
     // Window shows immediately with splash; React replaces it when ready.
     window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
@@ -286,4 +301,4 @@ function createAppShell({
   };
 }
 
-module.exports = { createAppShell };
+module.exports = { createAppShell, isReloadOf };

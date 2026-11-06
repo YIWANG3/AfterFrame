@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { windowChromeOptions, WIN_TITLEBAR_HEIGHT } = require("./windowChrome");
-const { createAppShell } = require("./appShell");
+const { createAppShell, isReloadOf } = require("./appShell");
 
 const BIG_SCREEN = { width: 2560, height: 1415 };
 
@@ -91,4 +91,15 @@ test("the caption-button theme call is a no-op off Windows", () => {
   assert.equal(make("darwin").setTitleBarTheme(fakeWindow, "light"), false);
   assert.equal(make("win32").setTitleBarTheme(fakeWindow, "light"), true);
   assert.deepEqual(calls, [{ color: "#00000000", symbolColor: "#1d1d1f" }]);
+});
+
+test("the window may reload its own page and go nowhere else", () => {
+  const app = "file:///Applications/AfterFrame.app/Contents/Resources/app.asar/dist/index.html";
+  assert.equal(isReloadOf(app, app), true);
+  assert.equal(isReloadOf(`${app}#settings`, app), true);
+  assert.equal(isReloadOf("http://127.0.0.1:5173/", "http://127.0.0.1:5173/"), true);
+  // A dropped photo, a link, and a window that hasn't loaded anything yet.
+  assert.equal(isReloadOf(app, "file:///Volumes/Lexar/_E5A0625.jpg"), false);
+  assert.equal(isReloadOf(app, "https://example.com/"), false);
+  assert.equal(isReloadOf("", ""), false);
 });
