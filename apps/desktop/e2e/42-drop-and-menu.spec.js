@@ -163,6 +163,35 @@ test("dragging files over the gallery shows the drop affordance and leaving hide
   await expect(ctx.window.getByText("Drop to import")).toHaveCount(0);
 });
 
+// What Blink does with a file drop the page didn't take: a new tab per file,
+// or the file in place of the page.
+test("a file the page didn't take opens no window and doesn't replace the app", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-straydrop-"));
+  const file = path.join(dir, "stray.jpg");
+  fs.writeFileSync(file, TINY_JPEG);
+  try {
+    const url = require("node:url").pathToFileURL(file).href;
+    await ctx.window.evaluate((href) => { window.open(href, "_blank"); }, url);
+    await ctx.window.waitForTimeout(500);
+    expect(await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+    // The navigation is asked for the way Electron does, not started: one the
+    // app cancels leaves Playwright waiting for it to finish.
+    const navigation = await ctx.app.evaluate(({ BrowserWindow }, href) => {
+      const contents = BrowserWindow.getAllWindows()[0].webContents;
+      const stopped = (target) => {
+        let prevented = false;
+        contents.emit("will-navigate", { preventDefault() { prevented = true; } }, target);
+        return prevented;
+      };
+      return { toFile: stopped(href), reload: stopped(contents.getURL()) };
+    }, url);
+    expect(navigation).toEqual({ toFile: true, reload: false });
+    await expect(cards().first()).toBeVisible();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("files handed over by macOS open-file are batched and imported", async () => {
   test.setTimeout(90_000);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterframe-e2e-openfile-"));
