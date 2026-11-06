@@ -5,8 +5,14 @@
 // return is not a drag-finished signal; the renderer clears its source marker
 // from real input/window lifecycle events. Extracted from main.js (review
 // 2026-09-16 §2); the icon math is unit-tested.
+//
+// macOS runs the session itself (native/file-drag.mm) rather than through
+// webContents.startDrag: see there for what a drag of many files needs that
+// startDrag doesn't give it. Windows, and a Mac build without the addon, use
+// startDrag.
 
 const fs = require("node:fs");
+const path = require("node:path");
 
 // Electron starts one NSDraggingItem per file, every one carrying the same
 // icon at the same frame. macOS draws them all, so a 68-file drag stacks 68
@@ -31,7 +37,22 @@ function pileSafeDragIcon(nativeImage, icon, count) {
 // 1x1 transparent px — startDrag rejects an empty image on macOS.
 const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
-function register({ ipcMain, nativeImage }) {
+function register({
+  ipcMain, nativeImage, BrowserWindow, nativeBin,
+  addonPath = path.join(nativeBin || "", "file-drag.node"),
+  platform = process.platform, loadAddon = require,
+}) {
+  let addon;
+  function fileDrag() {
+    if (addon === undefined) {
+      addon = null;
+      if (platform === "darwin") {
+        try { addon = loadAddon(addonPath); } catch (err) { console.warn("[native-drag] addon unavailable:", err?.message || err); }
+      }
+    }
+    return addon;
+  }
+
   ipcMain.handle("workspace:native-drag", (event, payload) => {
     const files = (Array.isArray(payload?.files) ? payload.files : [])
       .filter((p) => typeof p === "string" && p && fs.existsSync(p));
@@ -45,11 +66,24 @@ function register({ ipcMain, nativeImage }) {
       icon = nativeImage.createFromPath(candidate);
       if (!icon.isEmpty()) break;
     }
-    icon = icon.isEmpty()
-      ? nativeImage.createFromDataURL(BLANK_PNG)
-      : pileSafeDragIcon(nativeImage, icon.resize({ width: 192 }), files.length);
+    const blank = icon.isEmpty();
+    icon = blank ? nativeImage.createFromDataURL(BLANK_PNG) : icon.resize({ width: 192 });
 
-    event.sender.startDrag({ files, icon });
+    const window = BrowserWindow?.fromWebContents?.(event.sender);
+    if (window && fileDrag()) {
+      try {
+        // One item draws the icon there, so it goes as it is: 192px for 96pt.
+        const size = icon.getSize();
+        fileDrag().start({
+          handle: window.getNativeWindowHandle(), files,
+          icon: icon.toPNG(), width: size.width / 2, height: size.height / 2,
+        });
+        return { ok: true, count: files.length };
+      } catch (err) {
+        console.warn("[native-drag] addon failed, using startDrag:", err?.message || err);
+      }
+    }
+    event.sender.startDrag({ files, icon: blank ? icon : pileSafeDragIcon(nativeImage, icon, files.length) });
     return { ok: true, count: files.length };
   });
 }
