@@ -57,6 +57,11 @@ xcrun -sdk macosx clang++ -std=c++17 -fobjc-arc -O2 -arch "$ARCH" \
   -mmacosx-version-min=12.0 -bundle -undefined dynamic_lookup \
   -I "$NAPI_HEADERS" -framework AppKit -framework AVFoundation -framework QuartzCore \
   "$NATIVE_DIR/video-player.mm" -o "$OUT_DIR/video-player.node"
+# Dragging photos out of the window (electron/ipc/nativeDrag.js).
+xcrun -sdk macosx clang++ -std=c++17 -fobjc-arc -O2 -arch "$ARCH" \
+  -mmacosx-version-min=12.0 -bundle -undefined dynamic_lookup \
+  -I "$NAPI_HEADERS" -framework AppKit \
+  "$NATIVE_DIR/file-drag.mm" -o "$OUT_DIR/file-drag.node"
 # The macOS 12 builds have video only: people and depth run Core ML models that
 # need macOS 14, and stickers macOS 14's Vision request. electron/capabilities.js
 # locks what's missing.
