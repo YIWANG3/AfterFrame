@@ -75,6 +75,9 @@ jobs:
           key: electron-${{ hashFiles('apps/desktop/node_modules/electron/package.json') }}-${{ runner.os }}
       - name: Fetch Electron
         run: npm run fetch:electron --prefix apps/desktop
+        env:
+          # For the script's API fallback: anonymous API calls run out on a shared runner IP.
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Build native tools
         run: npm run build:native --prefix apps/desktop
       # The bundled face model (scripts/fetch-people-model.mjs): without it
