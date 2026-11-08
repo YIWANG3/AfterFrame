@@ -21,6 +21,7 @@
     "build:native": "bash scripts/build-native.sh",
     "fetch:people-model": "node scripts/fetch-people-model.mjs",
     "fetch:exiftool": "node scripts/fetch-exiftool.mjs",
+    "fetch:electron": "node scripts/fetch-electron.mjs",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "dist:mac": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder --mac",
     "dist:mac:release": "npm run build:native && npm run fetch:people-model && npm run fetch:exiftool && npm run build:sidecar:mac && npm run build && electron-builder --mac -c.mac.notarize=true",
