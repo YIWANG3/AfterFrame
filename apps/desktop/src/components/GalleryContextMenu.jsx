@@ -200,7 +200,8 @@ export default function ContextMenu({ x, y, item, assetIds, collections, activeC
             >
               <Folder className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{targetFolder.name}</span>
-              <span className="text-[10px] text-muted2">{shortcutLabel("folder.addToTarget")}</span>
+              {/* A visual hint only: the button's name stays the folder's. */}
+              <span className="text-[10px] text-muted2" aria-hidden="true">{shortcutLabel("folder.addToTarget")}</span>
             </button>
           )}
           {targetFolder && otherFolders.length > 0 && <div className="my-1 border-t border-border/40" />}
