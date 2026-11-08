@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, RotateCcw, X } from "lucide-react";
+import { Plus, RotateCcw, Shuffle, X } from "lucide-react";
 import ColorPickerPopover from "./ColorPickerPopover";
 import { Checkbox, Chip, SliderRow, cx } from "../../ui";
 import { fileName, localFileUrl } from "../../utils/format";
@@ -36,10 +36,23 @@ export const MAX_SPACING_PX = 2000;
  * remove) plus an add button. The list caps its height and scrolls inside so
  * a long selection doesn't push the rest of the panel out of reach.
  */
-export function ImagesSection({ images, onRemove, onAdd, maxListHeight = 264 }) {
+// `onShuffle`: a random order of the pool; the button shows from two images.
+export function ImagesSection({ images, onRemove, onAdd, onShuffle = null, maxListHeight = 264 }) {
   const { t } = useTranslation("collage");
+  const shuffle = onShuffle && images.length > 1 ? (
+    <button
+      type="button"
+      data-testid="collage-shuffle"
+      className="rounded p-0.5 text-muted2 transition-colors hover:bg-hover hover:text-text"
+      title={t("shuffleOrder")}
+      aria-label={t("shuffleOrder")}
+      onClick={onShuffle}
+    >
+      <Shuffle className="h-3.5 w-3.5" />
+    </button>
+  ) : null;
   return (
-    <Section label={t("images")}>
+    <Section label={t("images")} action={shuffle}>
       <div className="-mx-1.5 space-y-0.5 overflow-y-auto pr-0.5" style={{ maxHeight: `${maxListHeight}px` }} data-testid="collage-image-list">
         {images.map((item, i) => {
           const src = item.preview_path || item.image_preview_path || item.image_path;

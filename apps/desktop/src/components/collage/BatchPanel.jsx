@@ -25,6 +25,7 @@ export default function BatchPanel({
   images,
   onRemoveImage,
   onAddImages,
+  onShuffle,
 }) {
   const { t } = useTranslation("collage");
   const [customSize, setCustomSize] = useState("");
@@ -48,6 +49,7 @@ export default function BatchPanel({
         images={images}
         onRemove={(item) => onRemoveImage(item)}
         onAdd={onAddImages}
+        onShuffle={onShuffle}
       />
 
       {/* Layout for every page. Per-page tweaks live on the page cards. */}

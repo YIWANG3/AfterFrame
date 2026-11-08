@@ -15,6 +15,7 @@ export default function CollagePanel({
   exportWidth,
   onExportWidthChange,
   onAddImages,
+  onShuffle,
   selectedCellIdx = -1,
   selectedCellZoom = 1,
   onSelectedZoomChange,
@@ -36,6 +37,7 @@ export default function CollagePanel({
         images={images}
         onRemove={(_item, i) => removeImage(i)}
         onAdd={onAddImages}
+        onShuffle={onShuffle}
       />
 
       {selectedCellIdx >= 0 && (

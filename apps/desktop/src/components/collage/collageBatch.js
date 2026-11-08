@@ -41,6 +41,26 @@ export function orderImages(images, orderBy) {
 }
 
 /**
+ * A random order of the pool (Fisher-Yates) that is never the order given:
+ * the Shuffle button should always visibly do something. `random` is
+ * Math.random, replaceable for tests.
+ */
+export function shuffleImages(images, random = Math.random) {
+  const list = [...images];
+  if (list.length < 2) return list;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    if (list.some((item, i) => item !== images[i])) return list;
+  }
+  // The dice kept landing on the same order: trade the first two.
+  [list[0], list[1]] = [list[1], list[0]];
+  return list;
+}
+
+/**
  * Split ordered images into pages of groupSize.
  * remainderMode: "own" (remainder gets its own page), "merge" (append to the
  * last full page), "drop" (remainder unused).

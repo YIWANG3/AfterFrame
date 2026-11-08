@@ -53,6 +53,7 @@
   "perCollage": "每张拼图的图片数",
   "nImages": "{{n}} 张",
   "imageOrder": "图片顺序",
+  "shuffleOrder": "随机打乱顺序",
   "orderSelection": "选择顺序",
   "orderCaptureTime": "拍摄时间",
   "orderFilename": "文件名",

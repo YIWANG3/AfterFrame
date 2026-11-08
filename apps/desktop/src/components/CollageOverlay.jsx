@@ -8,7 +8,7 @@ import CollagePanel from "./collage/CollagePanel";
 import BatchPanel from "./collage/BatchPanel";
 import { TemplateGrid } from "./collage/PanelControls";
 import { getTemplatesForCount } from "./collage/collageTemplates";
-import { computeGroups, orderImages, MAX_TEMPLATE_COUNT } from "./collage/collageBatch";
+import { computeGroups, orderImages, shuffleImages, MAX_TEMPLATE_COUNT } from "./collage/collageBatch";
 import { ensureHdInChunks, needsCollageHd } from "./collage/collageHd";
 import { hdPreviews } from "../hooks/useOnDemandHdPreviews";
 import { topLayerOpen } from "../utils/topLayer";
@@ -856,6 +856,15 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
     setImages(next);
   }
 
+  // Shuffle: a random order of the pool, baked in as manual ordering the way
+  // a swap is, so a custom sort cannot immediately undo it. Both modes.
+  function shuffleOrder() {
+    const base = orderBy === "selection" ? images : orderedImages;
+    if (base.length < 2) return;
+    if (orderBy !== "selection") setOrderBy("selection");
+    setImages(shuffleImages(base));
+  }
+
   function findDropTarget(clientX, clientY) {
     const refs = batchPageRefs.current;
     for (let p = 0; p < groups.length; p++) {
@@ -1200,6 +1209,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
               images={orderedImages}
               onRemoveImage={removeBatchImage}
               onAddImages={() => setShowPicker(true)}
+              onShuffle={shuffleOrder}
             />
           ) : (
           <CollagePanel
@@ -1212,6 +1222,7 @@ export default function CollageOverlay({ open, items, catalogKey = null, collect
             exportWidth={exportWidth}
             onExportWidthChange={setExportWidth}
             onAddImages={() => setShowPicker(true)}
+            onShuffle={shuffleOrder}
             selectedCellIdx={selectedCellIdx}
             selectedCellZoom={selectedCellState.zoom}
             onSelectedZoomChange={(z) => canvasRef.current?.setSelectedZoom(z)}

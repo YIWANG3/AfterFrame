@@ -344,6 +344,25 @@ test.describe("Batch collage", () => {
     }).toBe(false);
   });
 
+  // After the colour-reading tests above: they count on the fixture's order.
+  test("Shuffle deals the pool into another order; the pages keep their structure", async () => {
+    const listNames = () => window.locator("[data-testid='batch-panel'] [data-testid='collage-image-list'] span").allTextContents();
+    const before = await listNames();
+    await window.getByTestId("collage-shuffle").click();
+    // Another order of the same photos, every time.
+    await expect.poll(listNames).not.toEqual(before);
+    const after = await listNames();
+    expect([...after].sort()).toEqual([...before].sort());
+    await window.getByTestId("collage-shuffle").click();
+    await expect.poll(listNames).not.toEqual(after);
+    await expect(window.getByText("14 images · 7 per collage · 2 collages")).toBeVisible();
+    // A sort set afterwards wins; shuffling again drops back to a manual order.
+    await window.getByRole("button", { name: "Filename", exact: true }).click();
+    await expect.poll(listNames).toEqual([...before].sort());
+    await window.getByTestId("collage-shuffle").click();
+    await expect.poll(listNames).not.toEqual([...before].sort());
+  });
+
   test("export to folder writes one JPEG per page and registers them", async () => {
     // Stub the native directory picker (register() holds a reference to the
     // same dialog module object, so mutating it here reaches the handler).
