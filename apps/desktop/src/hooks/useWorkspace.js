@@ -134,7 +134,7 @@ export default function useWorkspace({ pushToast } = {}) {
   const importPipeline = useImportPipeline(importBridgeRef, lastFinishedJob);
   const { importTask, mirrorTask, startIncrementalImport } = importPipeline;
   const collectionsBridgeRef = useRef({});
-  const collectionsApi = useCollections(collectionsBridgeRef);
+  const collectionsApi = useCollections(collectionsBridgeRef, info?.catalogPath || null);
   const { collections, setCollections, hasSmartCollections, loadCollections } = collectionsApi;
   const mutationsBridgeRef = useRef({});
   const assetMutations = useAssetMutations(mutationsBridgeRef);
@@ -980,6 +980,7 @@ export default function useWorkspace({ pushToast } = {}) {
     deleteCollection: collectionsApi.deleteCollection,
     addToCollection: collectionsApi.addToCollection,
     removeFromCollection: collectionsApi.removeFromCollection,
+    targetFolder: collectionsApi.targetFolder,
     deleteImageAssets: assetMutations.deleteImageAssets,
     deleteImageAssetsFromDisk: assetMutations.deleteImageAssetsFromDisk,
     setAssetRating: assetMutations.setAssetRating,

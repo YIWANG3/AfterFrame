@@ -141,6 +141,7 @@
     "folders": "Folders",
     "newFolder": "New folder",
     "noFolders": "No folders yet",
+    "targetFolder": "{{keys}} adds the selected photos here",
     "viewCovers": "Show covers",
     "viewList": "Show as list",
     "folderMeta": "{{count}} items",

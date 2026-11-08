@@ -119,6 +119,13 @@
     "snapshotName": "{{name}} (snapshot)",
     "failed": "Could not save the smart collection"
   },
+  "targetFolder": {
+    "added_one": "Added {{count}} photo to “{{name}}”",
+    "added_other": "Added {{count}} photos to “{{name}}”",
+    "none": "No target folder yet",
+    "noneHint": "Make a folder, or add to one from the menu once; {{key}} then adds there.",
+    "failed": "Adding to “{{name}}” failed"
+  },
   "smartCollectionRulesLost": "Its conditions were not stored. Quit and reopen AfterFrame, then save it again.",
   "flagFailed": "Could not save flag",
   "batchTags": {

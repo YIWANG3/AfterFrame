@@ -112,6 +112,13 @@
     "snapshotName": "{{name}}(快照)",
     "failed": "保存智能合集失败"
   },
+  "targetFolder": {
+    "added_one": "已把 {{count}} 张照片加入「{{name}}」",
+    "added_other": "已把 {{count}} 张照片加入「{{name}}」",
+    "none": "还没有目标文件夹",
+    "noneHint": "新建一个文件夹，或先用右键菜单加入一次，之后按 {{key}} 就会加到那里。",
+    "failed": "加入「{{name}}」失败"
+  },
   "smartCollectionRulesLost": "筛选条件没有存进去。请完全退出并重新打开 AfterFrame,再保存一次。",
   "flagFailed": "旗标保存失败",
   "batchTags": {
