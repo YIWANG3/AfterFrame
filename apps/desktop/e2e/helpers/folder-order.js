@@ -87,7 +87,18 @@ async function exerciseFolderSearchAndSort(page) {
   };
   await sortBy('Name');
   await expect.poll(names).toEqual(['Sort alpha 2', 'Sort alpha 10', 'Sort Bravo']);
-  await expect(row('Sort Bravo')).toHaveAttribute('draggable', 'false');
+  // Under a computed order a folder still drags — into another folder
+  // (nesting) — but never before or after one: the edge of a row offers
+  // "into", not an insertion line.
+  await expect(row('Sort Bravo')).toHaveAttribute('draggable', 'true');
+  const sortedTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await row('Sort Bravo').dispatchEvent('dragstart', { dataTransfer: sortedTransfer });
+  const alphaBox = await row('Sort alpha 2').boundingBox();
+  await row('Sort alpha 2').dispatchEvent('dragover', { dataTransfer: sortedTransfer, clientY: alphaBox.y + 1 });
+  await expect(row('Sort alpha 2')).toHaveAttribute('data-folder-insertion', 'into');
+  await row('Sort Bravo').dispatchEvent('dragend', { dataTransfer: sortedTransfer });
+  await sortedTransfer.dispose();
+  await expect(scroll.locator('[data-folder-insertion]')).toHaveCount(0);
 
   await page.getByTitle('Search folders', { exact: true }).click();
   const search = page.getByPlaceholder('Search folders');

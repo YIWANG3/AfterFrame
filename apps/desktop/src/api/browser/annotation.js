@@ -1,7 +1,7 @@
 // AI annotation (Anthropic / OpenAI-compatible direct fetch, sidecar
 // annotation.py semantics), the photos' tags, and the batch annotation job.
 
-import { assets, collections, emitCatalogChanged, jobStatus, normalizeTag, persistTokens, sessionTokens, showDescription } from "./state";
+import { assets, emitCatalogChanged, folderAssetIds, jobStatus, normalizeTag, persistTokens, sessionTokens, showDescription } from "./state";
 import { aggregateTags } from "./query";
 import { buildAnnotationSystemPrompt, encodeImageForLlm, parseLlmJson } from "./llm";
 
@@ -182,14 +182,13 @@ function annotationOptsFromSettings(settings) {
   };
 }
 
-function resolveAnnotationTargets({ scope = "all", onlyMissing = true, assetIds = null, collectionId = null } = {}) {
+function resolveAnnotationTargets({ scope = "all", onlyMissing = true, assetIds = null, collectionId = null, includeDescendants = false } = {}) {
   let list = assets;
   if (Array.isArray(assetIds) && assetIds.length) {
     const wanted = new Set(assetIds);
     list = list.filter((a) => wanted.has(a.asset_id));
   } else if (scope === "collection" && collectionId) {
-    const row = collections.find((c) => c.collection_id === collectionId);
-    const member = new Set(row?.asset_ids || []);
+    const member = new Set(folderAssetIds(collectionId, includeDescendants));
     list = list.filter((a) => member.has(a.asset_id));
   }
   if (onlyMissing) list = list.filter((a) => !a.annotation);

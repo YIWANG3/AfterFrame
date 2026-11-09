@@ -84,7 +84,9 @@ test("Edit › Copy and ⌘C put the selected photos on the clipboard as files, 
 
   await clickMenu("Edit", "Copy");
   await expect(ctx.window.getByText("Copied 2 photos", { exact: true })).toBeVisible({ timeout: 5_000 });
-  expect(readClipboardFiles().sort()).toEqual([...paths].sort());
+  // The pasteboard is written and read back through separate processes; a
+  // read right behind the toast once saw one file of two on the CI Mac.
+  await expect.poll(() => readClipboardFiles().sort()).toEqual([...paths].sort());
   await expect(copiedToast()).toHaveCount(0, { timeout: 5_000 });
 
   // ⌘C in the grid is the renderer's (then prevented, so the menu's
@@ -95,7 +97,7 @@ test("Edit › Copy and ⌘C put the selected photos on the clipboard as files, 
   await ctx.window.keyboard.press("ControlOrMeta+c");
   await expect(ctx.window.getByText("Copied 1 photo", { exact: true })).toBeVisible({ timeout: 5_000 });
   await expect(copiedToast()).toHaveCount(1);
-  expect(readClipboardFiles()).toEqual([paths[0]]);
+  await expect.poll(() => readClipboardFiles()).toEqual([paths[0]]);
   await expect(copiedToast()).toHaveCount(0, { timeout: 5_000 });
 
   clearClipboard();

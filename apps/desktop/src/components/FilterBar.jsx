@@ -73,7 +73,11 @@ export default function FilterBar({ facetValues, facetsReady = true, filters, on
     const known = option || cities.find((c) => c.value === value);
     return (chinese && known?.label_zh) || String(value);
   };
-  const folderLabel = (value) => folders.find((c) => c.collection_id === value)?.name || String(value);
+  // Folders nest: the chip and the list say where a folder sits ("Trips / Japan").
+  const folderLabel = (value) => {
+    const folder = folders.find((c) => c.collection_id === value);
+    return folder?.path || folder?.name || String(value);
+  };
   const activeCount = activeFilterCount(f);
 
   const slotActive = (id) => FACET_SLOTS.find((slot) => slot.id === id).keys.some((key) => !isEmptyValue(f[key]));

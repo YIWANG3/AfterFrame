@@ -25,7 +25,7 @@ function cachePut(key, points) {
   while (pointCache.size > POINT_CACHE_MAX) pointCache.delete(pointCache.keys().next().value);
 }
 
-export default function useMapPoints({ enabled, status, collectionId, search, filters, base, catalogKey, refreshToken }) {
+export default function useMapPoints({ enabled, status, collectionId, includeDescendants = true, search, filters, base, catalogKey, refreshToken }) {
   const requestIdRef = useRef(0);
 
   const nonGeoFilters = { ...(filters || {}) };
@@ -35,6 +35,7 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
   const cacheKey = JSON.stringify({
     catalogKey: catalogKey || null,
     collectionId: collectionId || null,
+    includeDescendants: collectionId ? includeDescendants !== false : null,
     status: collectionId || base ? null : status,
     base: collectionId ? null : base || null,
     search: (search || "").trim() || null,
@@ -60,6 +61,7 @@ export default function useMapPoints({ enabled, status, collectionId, search, fi
           const rows = await api.browseMapPoints({
             status,
             collectionId: collectionId || undefined,
+            includeDescendants: collectionId ? includeDescendants !== false : undefined,
             search: (search || "").trim() || undefined,
             filters: Object.keys(nonGeoFilters).length ? nonGeoFilters : undefined,
             // The smart collection being viewed: the map mirrors the grid under it.

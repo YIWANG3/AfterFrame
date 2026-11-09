@@ -93,7 +93,7 @@ const CASES = [
     minimal: { jobId: "j1", provider: "anthropic", model: "m" },
     full: {
       jobId: "j1", provider: "anthropic", model: "m", apiKey: "k", baseUrl: "https://x", reannotate: true,
-      assetIds: ["a", "b"], collectionId: "c",
+      assetIds: ["a", "b"], collectionId: "c", includeDescendants: true,
       settings: { languages: ["en", "zh"], maxTags: 5, maxCaptionChars: 100, customInstructions: "ci", videoFrameInterval: 2, maxWorkers: 4 },
     },
     neverSent: ["--asset-type", "--limit"],

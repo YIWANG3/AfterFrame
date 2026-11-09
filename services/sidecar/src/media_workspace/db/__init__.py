@@ -54,6 +54,7 @@ from .collections import (
     create_collection,
     delete_collection,
     list_collections,
+    move_collection,
     remove_collection_items,
     reorder_collections,
     update_collection,

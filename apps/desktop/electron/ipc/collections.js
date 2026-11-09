@@ -1,6 +1,7 @@
-// Collections IPC — manual folders, smart filters, manual asset membership,
-// plus per-asset rating (lives with collections because ratings often drive
-// smart-collection rules). All work goes through the Python sidecar.
+// Collections IPC — manual folders (which nest: a folder can sit inside
+// another), smart filters, manual asset membership, plus per-asset rating
+// (lives with collections because ratings often drive smart-collection
+// rules). All work goes through the Python sidecar.
 
 const { withCatalog } = require("./guard");
 
@@ -16,12 +17,18 @@ function register({ ipcMain, commands, catalog: { state: getCatalogState } }) {
     }
   }));
 
-  ipcMain.handle("workspace:reorder-collections", async (_event, collectionIds) => {
-    return await commands.reorderCollections(collectionIds);
+  // One level at a time: the folders directly under parentId (null = top).
+  ipcMain.handle("workspace:reorder-collections", async (_event, collectionIds, parentId) => {
+    return await commands.reorderCollections(collectionIds, parentId || null);
   });
 
-  ipcMain.handle("workspace:create-collection", async (_event, name, kind, rules) => {
-    return await commands.createCollection(name, kind || "manual", rules || null);
+  ipcMain.handle("workspace:create-collection", async (_event, name, kind, rules, parentId) => {
+    return await commands.createCollection(name, kind || "manual", rules || null, parentId || null);
+  });
+
+  // Into another folder, or to the top level with no parent.
+  ipcMain.handle("workspace:move-collection", async (_event, collectionId, parentId) => {
+    return await commands.moveCollection(collectionId, parentId || null);
   });
 
   ipcMain.handle("workspace:update-collection", async (_event, collectionId, updates) => {

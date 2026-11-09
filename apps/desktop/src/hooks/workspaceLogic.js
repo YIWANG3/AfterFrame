@@ -5,9 +5,11 @@
 // races) is only covered by E2E, and two of the bugs in the 2026-09-16 review
 // lived in exactly this logic.
 
-export const browseScopeKey = ({ status, collectionId, search, sort, filters, base, similarTo }) => JSON.stringify({
+export const browseScopeKey = ({ status, collectionId, includeDescendants, search, sort, filters, base, similarTo }) => JSON.stringify({
   status, collectionId: collectionId || null, search: search || "", sort, filters: filters || {}, base: base || null,
   similarTo: similarTo || null,
+  // Only a folder has subfolders to include or not.
+  includeDescendants: collectionId ? includeDescendants !== false : null,
 });
 
 // The gallery's browse destination, as one value. Everything that decides
@@ -22,18 +24,21 @@ export const browseScopeKey = ({ status, collectionId, search, sort, filters, ba
 //                        and changing location clears it.
 // `similarTo`: the view "photos like this one" (that asset first, then the
 // look-alike index's nearest); it replaces the sort with that order.
+// `includeDescendants`: inside a folder, whether the folders under it show
+// too (a remembered choice, hooks/useWorkspace.js); meaningless elsewhere.
 // `smartCollectionId` names the smart collection (sidebar highlight, title).
 // `editingRules`: the filter bar is showing that collection's OWN conditions
 // for editing, instead of a refinement on top of them; `base` is then only
 // the nested part of its rules, which the bar cannot show.
 export const DEFAULT_SCOPE = Object.freeze({
-  status: "all", collectionId: null, smartCollectionId: null, base: null, editingRules: false, similarTo: null,
+  status: "all", collectionId: null, includeDescendants: true, smartCollectionId: null, base: null, editingRules: false, similarTo: null,
   query: "", filters: {}, sort: "imported-desc",
 });
 
 export const scopeKeyOf = (scope) => browseScopeKey({
   status: scope.status,
   collectionId: scope.collectionId,
+  includeDescendants: scope.includeDescendants,
   search: scope.query.trim() || undefined,
   sort: scope.sort,
   filters: scope.filters,
@@ -49,7 +54,7 @@ export const sortOutsideFolder = (sort) => (COLLECTION_SORTS.includes(sort) ? DE
 
 // Keys that only tune another key (sidecar db/facets.py FACET_MODIFIER_KEYS):
 // never a condition by themselves, so never counted as one.
-const FILTER_MODIFIER_KEYS = new Set(["tag_match", "color_tolerance", "exclude"]);
+const FILTER_MODIFIER_KEYS = new Set(["tag_match", "color_tolerance", "in_collection_descendants", "exclude"]);
 // How many conditions a filter dict holds; a set of "any of" groups is one.
 export const activeFilterCount = (filters) => Object.entries(filters || {})
   .filter(([key, value]) => !FILTER_MODIFIER_KEYS.has(key) && !isEmptyValue(value)).length;
@@ -68,6 +73,7 @@ export const isNarrowedScope = (scope) => scope.status !== DEFAULT_SCOPE.status
 // the grid is showing, minus the sort, which does not change any count.
 export const facetScopeOf = (scope) => ({
   collectionId: scope.collectionId || undefined,
+  includeDescendants: scope.collectionId ? scope.includeDescendants !== false : undefined,
   status: scope.collectionId || scope.base ? undefined : scope.status,
   search: scope.query.trim() || undefined,
   filters: scope.filters && Object.keys(scope.filters).length ? scope.filters : undefined,
@@ -85,6 +91,7 @@ const listOf = (value) => (value == null ? [] : Array.isArray(value) ? value : [
 const savableFilters = (filters) => {
   const kept = Object.fromEntries(Object.entries(filters || {}).filter(([key, value]) => key !== "geo" && key !== "any_of" && !isEmptyValue(value)));
   if (!Array.isArray(kept.tag)) delete kept.tag_match;
+  if (kept.in_collection === undefined) delete kept.in_collection_descendants;
   const groups = listOf(filters?.any_of).map(savableFilters).filter((group) => activeFilterCount(group) > 0);
   if (groups.length) kept.any_of = groups;
   return kept;
@@ -92,25 +99,29 @@ const savableFilters = (filters) => {
 
 // What the current view would save as: where the user is, plus the refinement.
 //   a status view      → {status, search, filters}
-//   a folder           → the refinement + in_collection (it follows the folder)
+//   a folder           → the refinement + in_collection (it follows the folder;
+//                        showing its subfolders and having some, the rule
+//                        follows the subtree: in_collection_descendants)
 //   a smart collection → the refinement ON its rules: {…, base: rules}. Nested,
 //                        not merged: both layers may hold the same key.
 //   editing one        → the bar IS its top layer: {status, search, filters, base?}
 // null when there is nothing to save (no refinement, or the plain library).
-export function rulesFromScope(scope) {
+export function rulesFromScope(scope, { hasSubfolders = false } = {}) {
   if (!scope) return null;
   const search = (scope.query || "").trim();
   const filters = savableFilters(scope.filters);
   const refined = !!search || activeFilterCount(filters) > 0;
   if (scope.collectionId) {
     if (!refined) return null;
+    const folder = { in_collection: scope.collectionId };
+    if (scope.includeDescendants !== false && hasSubfolders) folder.in_collection_descendants = true;
     // When the refinement names folders itself ("not in Published"), the
     // folder goes underneath instead of into the same key, which would
     // overwrite it or, excluded, flip it.
     if (filters.in_collection !== undefined || listOf(filters.exclude).includes("in_collection")) {
-      return { status: "all", search, filters, base: { status: "all", search: "", filters: { in_collection: scope.collectionId } } };
+      return { status: "all", search, filters, base: { status: "all", search: "", filters: folder } };
     }
-    return { status: "all", search, filters: { ...filters, in_collection: scope.collectionId } };
+    return { status: "all", search, filters: { ...filters, ...folder } };
   }
   if (scope.base && !scope.editingRules) {
     return refined ? { status: "all", search, filters, base: scope.base } : null;

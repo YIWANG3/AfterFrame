@@ -8,9 +8,11 @@
 
 // argv for the view a facet query is counted inside; shared by facet-values
 // and search-facet so the two can never disagree about it.
-function facetViewArgv({ collectionId, status, search, filters, base } = {}) {
+// `includeDescendants`: inside a folder, read the folders under it too.
+function facetViewArgv({ collectionId, includeDescendants, status, search, filters, base } = {}) {
   const argv = [];
   if (collectionId) argv.push("--collection-id", String(collectionId));
+  if (collectionId && includeDescendants) argv.push("--include-descendants");
   if (status) argv.push("--status", String(status));
   if (search) argv.push("--search", String(search));
   if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
@@ -25,9 +27,10 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     // ── Browse / read ────────────────────────────────────────────────────
     // `base`: the rules of the smart collection being viewed — the set that
     // search and filters refine (db/browse.py _view_where).
-    locateImageAsset({ assetId, status = "all", collectionId, search, sort, filters, base } = {}) {
+    locateImageAsset({ assetId, status = "all", collectionId, includeDescendants, search, sort, filters, base } = {}) {
       const argv = ["locate-image-asset", "--asset-id", String(assetId), "--status", String(status)];
       if (collectionId) argv.push("--collection-id", String(collectionId));
+      if (collectionId && includeDescendants) argv.push("--include-descendants");
       if (search) argv.push("--search", String(search));
       if (sort) argv.push("--sort", String(sort));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
@@ -52,10 +55,11 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     // Lightweight location points for the map. Mirrors the gallery scope
     // (status/collection/search/facets); the sidecar ignores filters.geo so
     // the map keeps showing clusters outside the current viewport.
-    browseMapPoints({ status = "all", collectionId, search, filters, base, minPrecision, limit = 100000 } = {}) {
+    browseMapPoints({ status = "all", collectionId, includeDescendants, search, filters, base, minPrecision, limit = 100000 } = {}) {
       const argv = ["browse-map-points", "--limit", String(limit)];
       if (collectionId) argv.push("--collection-id", String(collectionId));
       else argv.push("--status", String(status));
+      if (collectionId && includeDescendants) argv.push("--include-descendants");
       if (search) argv.push("--search", String(search));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
       if (base && !collectionId) argv.push("--base", JSON.stringify(base));
@@ -94,13 +98,15 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     },
 
     // A folder takes the same search text and facet filters the library does.
-    browseCollection(collectionId, { limit = 120, offset = 0, search, filters, sort } = {}) {
+    // `includeDescendants` reads the folders under it too, each photo once.
+    browseCollection(collectionId, { limit = 120, offset = 0, search, filters, sort, includeDescendants } = {}) {
       const argv = [
         "browse-collection",
         "--collection-id", String(collectionId),
         "--limit", String(limit),
         "--offset", String(offset),
       ];
+      if (includeDescendants) argv.push("--include-descendants");
       if (search) argv.push("--search", String(search));
       if (filters && Object.keys(filters).length) argv.push("--filters", JSON.stringify(filters));
       if (sort) argv.push("--sort", String(sort));
@@ -292,15 +298,28 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
       return callJson(["list-collections"]).then((rows) => rows || []);
     },
 
-    reorderCollections(collectionIds) {
-      return callJson(["reorder-collections", ...collectionIds.flatMap((id) => ["--collection-id", String(id)])]);
+    // The order of one level: the folders directly under `parentId` (the top
+    // level when null).
+    reorderCollections(collectionIds, parentId = null) {
+      const argv = ["reorder-collections", ...collectionIds.flatMap((id) => ["--collection-id", String(id)])];
+      if (parentId) argv.push("--parent-id", String(parentId));
+      return callJson(argv);
     },
 
     // `rules` (smart collections only) is the saved browse destination:
-    // {status, search, filters, sort?}. The sidecar validates it.
-    createCollection(name, kind = "manual", rules = null) {
+    // {status, search, filters, sort?}. The sidecar validates it. `parentId`
+    // makes a folder inside another folder.
+    createCollection(name, kind = "manual", rules = null, parentId = null) {
       const argv = ["create-collection", "--name", String(name), "--kind", String(kind)];
       if (rules) argv.push("--rules-json", JSON.stringify(rules));
+      if (parentId) argv.push("--parent-id", String(parentId));
+      return callJson(argv);
+    },
+
+    // Put a folder inside another, or at the top level (parentId null).
+    moveCollection(collectionId, parentId = null) {
+      const argv = ["move-collection", "--collection-id", String(collectionId)];
+      if (parentId) argv.push("--parent-id", String(parentId));
       return callJson(argv);
     },
 
@@ -445,12 +464,13 @@ function createSidecarCommands(callJson, callJsonOneShot = callJson) {
     },
 
     // How many assets a batch annotation would touch, before starting it.
-    annotationCount({ onlyMissing = true, assetIds, collectionId } = {}) {
+    annotationCount({ onlyMissing = true, assetIds, collectionId, includeDescendants } = {}) {
       const argv = ["annotation-count"];
       if (onlyMissing === false) argv.push("--reannotate");
       const ids = Array.isArray(assetIds) ? assetIds.filter(Boolean) : [];
       if (ids.length) argv.push("--asset-ids", ids.join(","));
       if (collectionId) argv.push("--collection-id", String(collectionId));
+      if (collectionId && includeDescendants) argv.push("--include-descendants");
       return callJson(argv).then((res) => res || { count: 0 });
     },
 

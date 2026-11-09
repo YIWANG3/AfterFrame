@@ -8,7 +8,7 @@ import useCollections from "./useCollections";
 import useAssetMutations from "./useAssetMutations";
 import useImportPipeline from "./useImportPipeline";
 import { usePref } from "./usePref";
-import { adoptLegacyPref, intIn, oneOf, readPref, writePref } from "../utils/prefs";
+import { adoptLegacyPref, bool, intIn, oneOf, readPref, writePref } from "../utils/prefs";
 import { isEmptyValue,
   DEFAULT_SCOPE, LIBRARY_SORTS, appendPage, chooseSelectionAfterReload, detailIsStale, editScopeFromRules, filterItemsByQuery, facetScopeOf, hasRefinement, isNarrowedScope, rulesDirty,
   rulesFromScope, scopeFromRules, scopeKeyOf, rejectedFilters, sortOutsideFolder,
@@ -20,6 +20,10 @@ const PAGE_SIZE = 180;
 // The library sort is remembered (utils/prefs.js): the app opens, and a
 // catalog switch lands, on All Assets in the order last picked.
 const SORT_PREF = "gallery.sort";
+// Inside a folder, whether the folders under it show too (the toolbar's
+// switch); one choice for every folder, remembered.
+const SUBFOLDERS_PREF = "folder.includeDescendants";
+const readIncludeDescendants = () => readPref(SUBFOLDERS_PREF, true, bool);
 const startScope = () => ({ ...DEFAULT_SCOPE, sort: readPref(SORT_PREF, DEFAULT_SCOPE.sort, oneOf(LIBRARY_SORTS)) });
 
 // The theme and the pane widths are remembered too. Earlier versions kept
@@ -356,6 +360,7 @@ export default function useWorkspace({ pushToast } = {}) {
           search,
           filters: activeFilters,
           sort: target.sort || undefined,
+          includeDescendants: target.includeDescendants !== false,
         });
       } else {
         payload = await api.browseImages({
@@ -523,7 +528,10 @@ export default function useWorkspace({ pushToast } = {}) {
     setBrowserLoading(true);
     setBrowserLoadingMore(false);
     try {
-      const asQuery = (s) => ({ status: s.status, collectionId: s.collectionId, search: s.query.trim() || undefined, sort: s.sort, filters: s.filters, base: s.base || undefined });
+      const asQuery = (s) => ({
+        status: s.status, collectionId: s.collectionId, includeDescendants: s.collectionId ? s.includeDescendants !== false : undefined,
+        search: s.query.trim() || undefined, sort: s.sort, filters: s.filters, base: s.base || undefined,
+      });
       // The whole library, in the current order ("added to folder" has no
       // meaning outside a folder).
       const allAssets = { ...DEFAULT_SCOPE, sort: sortOutsideFolder(startScope.sort) };
@@ -557,7 +565,7 @@ export default function useWorkspace({ pushToast } = {}) {
       const offset = resetScope || !sameLoadedScope ? 0 : browserOffset;
       const count = Math.max(0, limit - offset);
       const payload = count === 0 ? [] : target.collectionId
-        ? await api.browseCollection(target.collectionId, { limit: count, offset, search: asQuery(target).search, filters: target.filters, sort: target.sort || undefined })
+        ? await api.browseCollection(target.collectionId, { limit: count, offset, search: asQuery(target).search, filters: target.filters, sort: target.sort || undefined, includeDescendants: target.includeDescendants !== false })
         : await api.browseImages({ ...asQuery(target), limit: count, offset });
       log("page fetched", `count=${count} offset=${offset} got=${payload.length}`);
       if (!isCurrent()) { log("superseded after page"); return; }
@@ -656,7 +664,7 @@ export default function useWorkspace({ pushToast } = {}) {
     const rows = [];
     for (let offset = 0; ; offset += 500) {
       const page = scope.collectionId
-        ? await api.browseCollection(scope.collectionId, { limit: 500, offset, search, filters, sort: scope.sort || undefined })
+        ? await api.browseCollection(scope.collectionId, { limit: 500, offset, search, filters, sort: scope.sort || undefined, includeDescendants: scope.includeDescendants !== false })
         : await api.browseImages({ status: scope.status, limit: 500, offset, search, filters, base: scope.base || undefined, sort: scope.sort || undefined, similarTo: scope.similarTo || undefined });
       for (const row of page || []) rows.push({ asset_id: row.asset_id, image_path: row.image_path });
       if (!page || page.length < 500) break;
@@ -676,6 +684,8 @@ export default function useWorkspace({ pushToast } = {}) {
   function goTo(next) {
     const full = { ...DEFAULT_SCOPE, sort: scopeRef.current.sort, ...next };
     if (!full.collectionId) full.sort = sortOutsideFolder(full.sort);
+    // Opening a folder: whether its subfolders show is the remembered choice.
+    else if (next.includeDescendants === undefined) full.includeDescendants = readIncludeDescendants();
     if (scopeKeyOf(full) !== scopeKeyOf(scopeRef.current)) {
       // Drop the previous gallery right away: the grid must not paint the old
       // result set (and the inspector the old selection) for the frames until
@@ -695,6 +705,14 @@ export default function useWorkspace({ pushToast } = {}) {
 
   function selectCollection(collectionId) {
     goTo({ collectionId });
+  }
+
+  // The toolbar's switch inside a folder: with or without the folders under
+  // it. The place stays the same, so the refinement stays too.
+  function setIncludeDescendants(next) {
+    const value = next !== false;
+    writePref(SUBFOLDERS_PREF, value);
+    if (scopeRef.current.collectionId) updateScope({ includeDescendants: value });
   }
 
   // A smart collection's rules become the base set; the filter bar starts
@@ -922,6 +940,8 @@ export default function useWorkspace({ pushToast } = {}) {
     filters: scope.filters,
     setFilters: applyFilters,
     activeCollectionId: scope.collectionId,
+    includeDescendants: scope.includeDescendants !== false,
+    setIncludeDescendants,
     facetScope: facetScopeOf(scope),
     activeSmartCollectionId: scope.smartCollectionId,
     // Filter bar: "Save as smart collection" when there is something to save,
@@ -969,6 +989,7 @@ export default function useWorkspace({ pushToast } = {}) {
     browseTo,
     setStatusFilter,
     createCollection: collectionsApi.createCollection,
+    moveCollection: collectionsApi.moveCollection,
     saveSmartCollection: collectionsApi.saveSmartCollection,
     updateSmartCollectionRules: collectionsApi.updateSmartCollectionRules,
     snapshotSmartCollection: collectionsApi.snapshotSmartCollection,

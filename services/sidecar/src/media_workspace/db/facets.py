@@ -29,6 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from .. import formats
+from .collection_scope import subtree_members_subquery
 
 Clause = tuple[str, list[object]]
 
@@ -288,10 +289,14 @@ def _person_group(filters: dict) -> list[Clause]:
 
 def _in_collection(filters: dict) -> list[Clause]:
     # Membership of a folder as a condition, so a smart collection can be saved
-    # from inside one ("the five-star photos of this trip").
+    # from inside one ("the five-star photos of this trip"). With
+    # in_collection_descendants the folders under it count too, as the
+    # folder's own view does when it shows its subfolders.
     values = _values(filters.get("in_collection"))
     if not values:
         return []
+    if filters.get("in_collection_descendants") in (True, 1, "1", "true"):
+        return [subtree_members_subquery([str(value) for value in values])]
     cond, params = _in("collection_id", values)
     return [(f"assets.asset_id IN (SELECT asset_id FROM collection_items WHERE {cond})", params)]
 
@@ -410,7 +415,7 @@ FACETS: tuple[Facet, ...] = (
     _contains_facet("ocr_contains", "(SELECT ann.detected_text FROM asset_ai_annotations ann WHERE ann.asset_id = assets.asset_id)"),
     _contains_facet("path_contains", "(SELECT reg.image_path FROM image_lookup_registry reg WHERE reg.image_asset_id = assets.asset_id LIMIT 1)"),
     Facet("geo", ("geo",), _geo),
-    Facet("in_collection", ("in_collection",), _in_collection),
+    Facet("in_collection", ("in_collection", "in_collection_descendants"), _in_collection, modifiers=("in_collection_descendants",)),
 )
 
 FACET_NAMES = frozenset(facet.name for facet in FACETS)

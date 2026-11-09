@@ -91,7 +91,11 @@ function facetFiltersFrom(source, { groups = true } = {}) {
   }
   if (source.person_id) filters.person_group = String(source.person_id);
   // "The five-star photos of this folder": membership of a folder as a condition.
-  if (source.collection_id) filters.in_collection = String(source.collection_id);
+  // Folders nest; include_descendants counts the folders under it too.
+  if (source.collection_id) {
+    filters.in_collection = String(source.collection_id);
+    if (source.include_descendants === true) filters.in_collection_descendants = true;
+  }
   const excluded = oneOrMany(source.exclude).map((name) => {
     if (!EXCLUDABLE_ARGS[name]) throw new Error(`exclude: '${name}' is not a condition that can be excluded (one of ${Object.keys(EXCLUDABLE_ARGS).join(", ")}).`);
     return EXCLUDABLE_ARGS[name];
