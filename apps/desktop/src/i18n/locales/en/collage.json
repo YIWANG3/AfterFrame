@@ -54,6 +54,7 @@
   "perCollage": "Images per collage",
   "nImages": "{{n}}",
   "imageOrder": "Image order",
+  "shuffleOrder": "Shuffle order",
   "orderSelection": "Selection order",
   "orderCaptureTime": "Capture time",
   "orderFilename": "Filename",

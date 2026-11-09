@@ -170,6 +170,14 @@ test("the cell menu replaces one image through the picker; the image list remove
   await expect(ctx.window.getByTitle("Left / Right", { exact: true })).toBeVisible();
 });
 
+test("Shuffle trades the two images' places", async () => {
+  const names = () => imageRows().locator("span").allTextContents();
+  const before = await names();
+  expect(before).toHaveLength(2);
+  await ctx.window.getByTestId("collage-shuffle").click();
+  await expect.poll(names).toEqual([before[1], before[0]]);
+});
+
 test("the cell menu removes the photo under the pointer, no matching it to a list row", async () => {
   // Two photos, Left / Right: right-click the right cell, and the left one stays.
   // Back at two photos the collage restores the layout last picked for two,

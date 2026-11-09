@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeGroups, orderImages, MAX_TEMPLATE_COUNT } from "./collageBatch";
+import { computeGroups, orderImages, shuffleImages, MAX_TEMPLATE_COUNT } from "./collageBatch";
 
 function imgs(n) {
   return Array.from({ length: n }, (_, i) => ({ asset_id: `a${i + 1}`, stem: `img_${String(i + 1).padStart(2, "0")}` }));
@@ -70,5 +70,40 @@ describe("orderImages", () => {
     const input = [...base];
     orderImages(input, "filename");
     expect(input.map((i) => i.asset_id)).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("shuffleImages", () => {
+  // A small LCG: the same sequence every run.
+  function seeded(seed) {
+    let state = seed;
+    return () => {
+      state = (state * 1664525 + 1013904223) % 4294967296;
+      return state / 4294967296;
+    };
+  }
+
+  it("is a permutation of the pool in another order, leaving the pool alone", () => {
+    const pool = imgs(9);
+    const copy = [...pool];
+    const out = shuffleImages(pool, seeded(7));
+    expect(out).toHaveLength(9);
+    expect([...out].sort((a, b) => (a.asset_id < b.asset_id ? -1 : 1))).toEqual(copy);
+    expect(out.map((i) => i.asset_id)).not.toEqual(copy.map((i) => i.asset_id));
+    expect(pool).toEqual(copy);
+  });
+
+  it("never hands back the order it was given, even for two images", () => {
+    const pool = imgs(2);
+    for (let seed = 0; seed < 20; seed++) {
+      expect(shuffleImages(pool, seeded(seed)).map((i) => i.asset_id)).toEqual(["a2", "a1"]);
+    }
+    // Dice that always leave every image in place: the first two trade.
+    expect(shuffleImages(imgs(5), () => 0.999).map((i) => i.asset_id)).toEqual(["a2", "a1", "a3", "a4", "a5"]);
+  });
+
+  it("leaves fewer than two images as they are", () => {
+    expect(shuffleImages([], seeded(1))).toEqual([]);
+    expect(shuffleImages(imgs(1), seeded(1)).map((i) => i.asset_id)).toEqual(["a1"]);
   });
 });
