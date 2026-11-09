@@ -26,6 +26,8 @@ export default function useAnnotationJob(pushToast, pokeJobs) {
       onlyMissing,
       assetIds: scope === "selection" ? ids : null,
       collectionId: opts.collectionId || null,
+      // A folder's batch covers the folders under it: "this folder" is the whole thing.
+      includeDescendants: scope === "collection" && opts.includeDescendants !== false,
     };
 
     // Provider must be configured.

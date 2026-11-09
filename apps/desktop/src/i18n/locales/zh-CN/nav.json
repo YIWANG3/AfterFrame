@@ -51,7 +51,9 @@
       "show": "显示地图",
       "hide": "隐藏地图"
     },
-    "displayMode": "布局"
+    "displayMode": "布局",
+    "withSubfolders": "正在显示子文件夹的照片",
+    "thisFolderOnly": "只显示本层的照片"
   },
   "discover": {
     "recentTitle": "最近添加",
@@ -98,7 +100,8 @@
       "count": "张数",
       "captured": "拍摄时间",
       "lastAdded": "最近加入",
-      "created": "创建于"
+      "created": "创建于",
+      "location": "所在位置"
     },
     "selected_other": "已选 {{count}} 个文件夹 · 共 {{photos}} 张",
     "clearSelection": "取消选择",
@@ -119,7 +122,11 @@
     "noFolders": "还没有文件夹",
     "noFoldersHint": "把照片拖到侧栏的文件夹上，或在照片上右键选“加入文件夹”。",
     "noMatches": "没有匹配“{{query}}”的文件夹",
-    "noFilterMatches": "没有符合筛选条件的文件夹"
+    "noFilterMatches": "没有符合筛选条件的文件夹",
+    "newSubfolder": "新建子文件夹",
+    "moveTo": "移动到…",
+    "topLevel": "顶层",
+    "deleteConfirmMessageTree": "子文件夹会一起删除，照片本身不受影响。"
   },
   "sidebar": {
     "reorderHint": "拖拽排序 · Option/Alt + ↑/↓",
@@ -158,7 +165,16 @@
     "smartCollections": "智能合集",
     "snapshotToFolder": "把当前照片复制到一个文件夹",
     "smartUnreadable": "由更新版本的 AfterFrame 保存",
-    "editSmartRules": "编辑条件"
+    "editSmartRules": "编辑条件",
+    "newSubfolder": "新建子文件夹",
+    "expand": "展开",
+    "collapse": "折叠",
+    "moveToRoot": "放到这里移到顶层",
+    "deleteWithChildrenTitle": "删除“{{name}}”？",
+    "deleteWithChildren_other": "其中 {{count}} 个子文件夹会一起删除，照片本身不受影响。",
+    "deleteWithChildrenAction": "删除文件夹",
+    "deleteCancel": "取消",
+    "folderPath": "{{path}}"
   },
   "people": {
     "title": "人物",

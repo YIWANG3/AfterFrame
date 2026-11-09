@@ -8,13 +8,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Check, ChevronDown, Folder, FolderCog, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X,
+  Check, ChevronDown, CornerDownRight, Folder, FolderCog, FolderPlus, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import api from "../api";
 import { Button, cx, Z } from "../ui";
 import useDismiss from "../ui/useDismiss";
 import { localFileUrl } from "../utils/format";
 import FaceMenu from "./FaceMenu";
+import { canDropInto, descendantIds, flattenForPicker, parentIdOf, parentPathOf } from "./folderTree";
 import InlineEdit from "./InlineEdit";
 import { confirm } from "./confirm";
 import Popover, { ACTION_CHIP } from "./filters/Popover";
@@ -120,6 +122,42 @@ function ChoicePopover({ label, value, options, onSelect, testId }) {
   );
 }
 
+// "Move to…": every folder the chosen ones may go into, indented by depth,
+// with the top level first. A folder cannot go into itself or under itself.
+function MoveToMenu({ position, collections, sourceIds, onPick, onClose }) {
+  const { t, i18n } = useTranslation("nav");
+  const ref = useRef(null);
+  useDismiss(ref, onClose);
+  const options = flattenForPicker(collections, { locale: i18n.language })
+    .filter(({ folder }) => sourceIds.every((id) => canDropInto(collections, id, folder.collection_id)));
+  const left = Math.min(position.x, window.innerWidth - 248);
+  const top = Math.min(position.y, window.innerHeight - 320);
+  const row = (key, depth, icon, label, onClick, testId) => (
+    <button
+      key={key}
+      type="button"
+      data-move-target={testId}
+      className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[11.5px] text-text transition hover:bg-hover"
+      style={{ paddingLeft: `${8 + depth * 14}px` }}
+      onClick={() => { onClose(); onClick(); }}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  );
+  return createPortal(
+    <div ref={ref} data-testid="folders-move-menu" className="fixed w-[240px] rounded-lg border border-border/60 bg-chrome p-1 shadow-overlay" style={{ left, top, zIndex: Z.popover }}>
+      <div className="popover-scroll max-h-[300px] overflow-y-auto">
+        {row("root", 0, <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-muted2" />, t("folders.topLevel"), () => onPick(null), "root")}
+        {options.map(({ folder, depth }) => row(
+          folder.collection_id, depth, <Folder className="h-3.5 w-3.5 shrink-0 text-muted2" />, folder.name, () => onPick(folder.collection_id), folder.collection_id,
+        ))}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 // Up to four of the folder's newest photos, 1 whole / 2 halves / 3 one tall
 // + two stacked / 4 a 2×2; the folder icon when it has none.
 function CoverMosaic({ paths, className = "" }) {
@@ -152,7 +190,10 @@ function CoverMosaic({ paths, className = "" }) {
 export default function FoldersView({
   collections,
   onOpenFolder,
+  // (name, parentId): parentId makes the folder inside that folder.
   onCreateFolder,
+  // (collectionId, parentId): into that folder, or to the top level with null.
+  onMoveFolder,
   onRenameFolder,
   onDeleteFolder,
   onAnnotateFolder,
@@ -172,7 +213,9 @@ export default function FoldersView({
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const anchorRef = useRef(null);
   const [menu, setMenu] = useState(null); // { folder, x, y }
+  const [moveMenu, setMoveMenu] = useState(null); // { sourceIds, x, y }
   const [editingId, setEditingId] = useState(null);
+  // false, or { parentId }: the folder the new one goes in (null = top level).
   const [creating, setCreating] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const scrollRef = useRef(null);
@@ -228,9 +271,11 @@ export default function FoldersView({
     const folders = ids.map((id) => byId.get(id)).filter(Boolean);
     if (!folders.length) return;
     const many = folders.length > 1;
+    // A folder with folders inside takes them along.
+    const withChildren = folders.some((folder) => descendantIds(collections, folder.collection_id).length > 0);
     const approved = await confirm({
       title: many ? t("folders.deleteConfirmTitleMany", { count: folders.length }) : t("folders.deleteConfirmTitleOne", { name: folders[0].name }),
-      message: many ? t("folders.deleteConfirmMessageMany") : t("folders.deleteConfirmMessageOne"),
+      message: withChildren ? t("folders.deleteConfirmMessageTree") : many ? t("folders.deleteConfirmMessageMany") : t("folders.deleteConfirmMessageOne"),
       confirmLabel: many ? t("folders.deleteConfirmActionMany", { count: folders.length }) : t("folders.deleteConfirmActionOne"),
       cancelLabel: t("folders.deleteCancel"),
       danger: true,
@@ -248,6 +293,16 @@ export default function FoldersView({
     for (const id of ids) onAnnotateFolder?.(id);
   }
 
+  async function moveFolders(ids, parentId) {
+    try {
+      for (const id of ids) {
+        if (canDropInto(collections, id, parentId) && parentIdOf(collections, id) !== parentId) await onMoveFolder?.(id, parentId);
+      }
+    } catch (error) {
+      pushToast?.({ title: t("folders.deleteFailed"), message: String(error?.message || error), tone: "error", ttl: 7000 });
+    }
+  }
+
   // Esc clears; ⌘A selects what the page shows; Enter opens a lone selection;
   // Delete / Backspace asks about the selection. Not while typing in a field.
   useEffect(() => {
@@ -255,6 +310,7 @@ export default function FoldersView({
       const target = event.target;
       const typing = target instanceof HTMLElement && (target.closest("input, textarea, [contenteditable]"));
       if (event.key === "Escape") {
+        if (moveMenu) { setMoveMenu(null); return; }
         if (menu) { setMenu(null); return; }
         if (!typing && selected.length) { event.preventDefault(); clearSelection(); }
         return;
@@ -278,6 +334,8 @@ export default function FoldersView({
     const span = formatMonthRange(folder.captured_from, folder.captured_to, locale);
     return span ? `${t("sidebar.folderMeta", { count })} · ${span}` : t("sidebar.folderMeta", { count });
   };
+  // Where a nested folder sits ("Trips / Japan"); nothing at the top level.
+  const locationOf = (folder) => parentPathOf(collections, folder.collection_id);
   const createdLabel = (folder) => parseStamp(folder.created_at, { zoneless: "utc" })?.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" }) || "";
 
   // Right-clicking one of several selected folders acts on the whole
@@ -289,7 +347,9 @@ export default function FoldersView({
       ...(single ? [
         { key: "open", icon: Folder, label: t("folders.open"), onClick: () => onOpenFolder?.(folder.collection_id) },
         { key: "rename", icon: Pencil, label: t("folders.rename"), onClick: () => setEditingId(folder.collection_id) },
+        { key: "subfolder", icon: FolderPlus, label: t("folders.newSubfolder"), onClick: () => { setCreating({ parentId: folder.collection_id }); scrollRef.current?.scrollTo({ top: 0 }); } },
       ] : []),
+      ...(onMoveFolder ? [{ key: "move", icon: CornerDownRight, label: t("folders.moveTo"), onClick: () => setMoveMenu({ sourceIds: targets, x: menu?.x || 0, y: menu?.y || 0 }) }] : []),
       ...(canAnnotate ? [{ key: "annotate", icon: Sparkles, label: single ? t("folders.annotateFolder") : t("folders.annotateHint"), onClick: () => annotateFolders(targets) }] : []),
       { key: "delete", icon: Trash2, label: single ? t("folders.delete") : t("folders.deleteConfirmActionMany", { count: targets.length }), danger: true, onClick: () => void deleteFolders(targets) },
     ];
@@ -335,7 +395,7 @@ export default function FoldersView({
   return (
     <div data-testid="workspace-split" className="library-view relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="app-toolbar library-toolbar relative z-50 flex h-11 items-center gap-1 bg-chrome px-2.5">
-        <IconButton title={t("folders.newFolder")} aria-label={t("folders.newFolder")} data-testid="folders-new" onClick={() => { setCreating(true); scrollRef.current?.scrollTo({ top: 0 }); }}>
+        <IconButton title={t("folders.newFolder")} aria-label={t("folders.newFolder")} data-testid="folders-new" onClick={() => { setCreating({ parentId: null }); scrollRef.current?.scrollTo({ top: 0 }); }}>
           <Plus className="h-4 w-4 stroke-[1.8]" />
         </IconButton>
         <div className="ml-2 mr-2 flex min-w-0 flex-1 items-center gap-2 text-muted2">
@@ -424,12 +484,15 @@ export default function FoldersView({
 
       <main ref={scrollRef} data-testid="gallery-scroll" className="min-h-0 flex-1 overflow-y-auto p-6 pb-24">
         {creating && (
-          <div className="mb-4 max-w-[320px]" data-testid="folders-create">
+          <div className="mb-4 max-w-[320px]" data-testid="folders-create" data-parent-id={creating.parentId || undefined}>
+            {creating.parentId && byId.get(creating.parentId) && (
+              <div className="mb-1 truncate text-[11px] text-muted2">{byId.get(creating.parentId).path || byId.get(creating.parentId).name} /</div>
+            )}
             <InlineEdit
               initial=""
               placeholder={t("folders.newFolderPlaceholder")}
               onConfirm={async (name) => {
-                const created = await onCreateFolder?.(name);
+                const created = await onCreateFolder?.(name, creating.parentId || null);
                 setCreating(false);
                 if (created?.collection_id) { setSelectedIds(new Set([created.collection_id])); anchorRef.current = created.collection_id; }
               }}
@@ -443,7 +506,7 @@ export default function FoldersView({
             <Folder className="h-8 w-8 stroke-[1.4] text-muted2" />
             <div className="text-[13px] text-text">{t("folders.noFolders")}</div>
             <div className="max-w-[360px] text-[12px] text-muted2">{t("folders.noFoldersHint")}</div>
-            <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>{t("folders.newFolder")}</Button>
+            <Button variant="secondary" size="sm" onClick={() => setCreating({ parentId: null })}>{t("folders.newFolder")}</Button>
           </div>
         ) : !cards.length ? (
           <div className="px-1 py-6 text-[12px] text-muted2">
@@ -489,7 +552,10 @@ export default function FoldersView({
                   </div>
                   <div className="mt-2 min-w-0">
                     {editingId === folder.collection_id ? nameEditor(folder) : (
-                      <div className="truncate text-[13px] text-text" title={folder.name}>{folder.name}</div>
+                      <div data-folder-name="true" className="truncate text-[13px] text-text" title={folder.name}>{folder.name}</div>
+                    )}
+                    {locationOf(folder) && (
+                      <div data-folder-location="true" className="truncate text-[10px] text-muted2" title={locationOf(folder)}>{locationOf(folder)}</div>
                     )}
                     <div className="mt-0.5 truncate text-[11px] text-muted2">{metaLine(folder)}</div>
                   </div>
@@ -505,7 +571,7 @@ export default function FoldersView({
                 <th className="w-7 px-2 py-1.5 font-medium" />
                 <th className="w-10 px-2 py-1.5 font-medium" />
                 {[
-                  ["name", "name"], ["count", "largest"], ["captured", "captured"], ["lastAdded", "lastAdded"], ["created", "newest"],
+                  ["name", "name"], ["location", "name"], ["count", "largest"], ["captured", "captured"], ["lastAdded", "lastAdded"], ["created", "newest"],
                 ].map(([column, sortKey]) => (
                   <th key={column} className={cx("whitespace-nowrap px-2 py-1.5 font-medium", column === "count" ? "text-right" : "")}>
                     <button
@@ -545,8 +611,9 @@ export default function FoldersView({
                     </td>
                     <td className="px-2 py-1.5"><CoverMosaic paths={folder.cover_preview_paths?.slice(0, 1)} className="h-7 w-7 overflow-hidden rounded-md" /></td>
                     <td className="max-w-[320px] px-2 py-1.5 text-text">
-                      {editingId === folder.collection_id ? nameEditor(folder) : <span className="block truncate">{folder.name}</span>}
+                      {editingId === folder.collection_id ? nameEditor(folder) : <span data-folder-name="true" className="block truncate">{folder.name}</span>}
                     </td>
+                    <td className="max-w-[240px] px-2 py-1.5"><span className="block truncate" title={locationOf(folder) || undefined}>{locationOf(folder) || "—"}</span></td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{folder.item_count || 0}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap">{formatMonthRange(folder.captured_from, folder.captured_to, locale) || t("folders.captureUnknown")}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap" title={folder.last_added_at ? parseStamp(folder.last_added_at, { zoneless: "utc" })?.toLocaleString(locale) : undefined}>
@@ -556,7 +623,7 @@ export default function FoldersView({
                   </tr>
                 );
               })}
-              {hasMore && <tr><td colSpan={7}><div ref={sentinelRef} className="h-px w-full" /></td></tr>}
+              {hasMore && <tr><td colSpan={8}><div ref={sentinelRef} className="h-px w-full" /></td></tr>}
             </tbody>
           </table>
         )}
@@ -585,6 +652,15 @@ export default function FoldersView({
 
       {menu && (
         <FaceMenu position={menu} items={menuItems(menu.folder)} onClose={() => setMenu(null)} />
+      )}
+      {moveMenu && (
+        <MoveToMenu
+          position={moveMenu}
+          collections={collections}
+          sourceIds={moveMenu.sourceIds}
+          onPick={(parentId) => void moveFolders(moveMenu.sourceIds, parentId)}
+          onClose={() => setMoveMenu(null)}
+        />
       )}
     </div>
   );

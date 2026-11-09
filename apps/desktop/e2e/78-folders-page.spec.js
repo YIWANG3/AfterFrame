@@ -112,8 +112,10 @@ test("the list view is a table with the same rows, sortable by its headers", asy
   await expect(cards()).toHaveCount(3);
   await expect.poll(names).toEqual(["Trip Tokyo", "Trip Kyoto", "Scratch"]);
   const tokyo = table.locator("tr[data-folder-id]").filter({ hasText: "Trip Tokyo" });
-  await expect(tokyo.locator("td").nth(3)).toHaveText("2");
-  await expect(tokyo.locator("td").nth(5)).toContainText(/now|ago|minute/);
+  // Columns: select, cover, name, location (nested folders), count, capture span, last added, created.
+  await expect(tokyo.locator("td").nth(3)).toHaveText("—");
+  await expect(tokyo.locator("td").nth(4)).toHaveText("2");
+  await expect(tokyo.locator("td").nth(6)).toContainText(/now|ago|minute/);
   await table.getByRole("button", { name: "Name" }).click();
   await expect.poll(names).toEqual(["Scratch", "Trip Kyoto", "Trip Tokyo"]);
   await expect(w().getByTestId("folders-sort")).toHaveText("Name");

@@ -259,9 +259,23 @@ describe("two layers: where the user is, and the refinement inside it", () => {
   });
 
   it("a refined folder saves as membership plus the refinement; an unrefined one has nothing to save", () => {
+    // A folder with folders under it, showing them (the default): the rule
+    // follows the subtree. A leaf, or "this folder only", names the folder alone.
+    expect(rulesFromScope(scope({ collectionId: "col_f", filters: { rating_min: 5 } }), { hasSubfolders: true }))
+      .toEqual({ status: "all", search: "", filters: { rating_min: 5, in_collection: "col_f", in_collection_descendants: true } });
     expect(rulesFromScope(scope({ collectionId: "col_f", filters: { rating_min: 5 } })))
       .toEqual({ status: "all", search: "", filters: { rating_min: 5, in_collection: "col_f" } });
+    expect(rulesFromScope(scope({ collectionId: "col_f", includeDescendants: false, filters: { rating_min: 5 } }), { hasSubfolders: true }))
+      .toEqual({ status: "all", search: "", filters: { rating_min: 5, in_collection: "col_f" } });
     expect(rulesFromScope(scope({ collectionId: "col_f" }))).toBeNull();
+    // The modifier is no condition by itself.
+    expect(rulesFromScope(scope({ filters: { in_collection_descendants: true } }))).toBeNull();
+  });
+
+  it("whether the subfolders show is part of a folder's scope key, and only a folder's", () => {
+    const folder = scope({ collectionId: "col_f" });
+    expect(scopeKeyOf(folder)).not.toBe(scopeKeyOf({ ...folder, includeDescendants: false }));
+    expect(scopeKeyOf(DEFAULT_SCOPE)).toBe(scopeKeyOf({ ...DEFAULT_SCOPE, includeDescendants: false }));
   });
 
   it("a refinement inside a smart collection saves NESTED on its rules, never merged into them", () => {
@@ -286,9 +300,9 @@ describe("two layers: where the user is, and the refinement inside it", () => {
 
   it("facet counts are taken inside the base, and a folder needs neither a status nor a base", () => {
     expect(facetScopeOf({ ...scopeFromRules(collection, "imported-desc"), filters: { extension: "png" } }))
-      .toEqual({ collectionId: undefined, status: undefined, search: undefined, filters: { extension: "png" }, base: urban });
+      .toEqual({ collectionId: undefined, includeDescendants: undefined, status: undefined, search: undefined, filters: { extension: "png" }, base: urban });
     expect(facetScopeOf(scope({ collectionId: "col_f", status: "rated" })))
-      .toEqual({ collectionId: "col_f", status: undefined, search: undefined, filters: undefined, base: undefined });
+      .toEqual({ collectionId: "col_f", includeDescendants: true, status: undefined, search: undefined, filters: undefined, base: undefined });
   });
 
   it("a facet value may be a list: an empty one is no condition, and tick order is not a difference", () => {
@@ -337,10 +351,10 @@ describe("smart collections v2: exclude, rating, any-of groups", () => {
     expect(rulesFromScope(scope({ collectionId: "trip", filters: { rating_min: 5 } })).filters)
       .toEqual({ rating_min: 5, in_collection: "trip" });
     // "In Trip, not in Published": merging would turn it into "not in Trip".
-    const notPublished = rulesFromScope(scope({ collectionId: "trip", filters: { in_collection: "pub", exclude: "in_collection" } }));
+    const notPublished = rulesFromScope(scope({ collectionId: "trip", filters: { in_collection: "pub", exclude: "in_collection" } }), { hasSubfolders: true });
     expect(notPublished).toEqual({
       status: "all", search: "", filters: { in_collection: "pub", exclude: "in_collection" },
-      base: { status: "all", search: "", filters: { in_collection: "trip" } },
+      base: { status: "all", search: "", filters: { in_collection: "trip", in_collection_descendants: true } },
     });
   });
 });

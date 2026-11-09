@@ -91,9 +91,10 @@ export const CORE_IPC_METHODS = [
   ["listSystemFonts", "workspace:list-system-fonts", 0],
   ["startNativeDrag", "workspace:native-drag", 1],
   // ── collections ──
-  ["reorderCollections", "workspace:reorder-collections", 1],
+  ["reorderCollections", "workspace:reorder-collections", 2],
   ["listCollections", "workspace:list-collections", 0],
-  ["createCollection", "workspace:create-collection", 3],
+  ["createCollection", "workspace:create-collection", 4],
+  ["moveCollection", "workspace:move-collection", 2],
   ["updateCollection", "workspace:update-collection", 2],
   ["deleteCollection", "workspace:delete-collection", 1],
   ["collectionAddItems", "workspace:collection-add-items", 2],

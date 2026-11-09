@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from ..models import ImageCandidate, MatchDecision, RawMetadata
+from .collection_scope import members_subquery, scope_collection_ids
 from .core import RESOLVER_VERSION, _file_id, _json, _preview_cache_key
 from .locations import upsert_asset_location_from_metadata
 from .resource_sets import get_resource_set_for_asset, link_assets
@@ -569,13 +570,15 @@ def list_assets_for_annotation(
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
     limit: int | None = None,
+    include_descendants: bool = False,
 ) -> list[sqlite3.Row]:
     """Assets eligible for AI annotation, with their best preview path.
 
     - only_missing=True restricts to assets that have NO annotation row yet
       (the default for "annotate all" / "annotate un-annotated").
     - asset_ids scopes to an explicit selection (multi-select right-click).
-    - collection_id scopes to a folder/collection.
+    - collection_id scopes to a folder/collection; include_descendants takes
+      the folders under it too.
     Returns rows with asset_id, canonical_path, extension, and ready preview
     relative paths (preview-hd preferred) for the batch encoder.
     """
@@ -588,9 +591,9 @@ def list_assets_for_annotation(
     params: list[object] = []
 
     if collection_id:
-        joins.append("JOIN collection_items AS ci ON ci.asset_id = assets.asset_id")
-        where.append("ci.collection_id = ?")
-        params.append(collection_id)
+        members_sql, members_params = members_subquery(scope_collection_ids(connection, collection_id, include_descendants))
+        where.append(members_sql)
+        params.extend(members_params)
     # "image" (the default) means annotatable media — images AND videos; only
     # an explicit "raw" narrows to raw. Videos go through the multi-frame path.
     if asset_type == "raw":
@@ -630,6 +633,7 @@ def count_assets_for_annotation(
     only_missing: bool = True,
     asset_ids: list[str] | None = None,
     collection_id: str | None = None,
+    include_descendants: bool = False,
 ) -> int:
     """How many assets a batch-annotation job would process (for UI counts)."""
     rows = list_assets_for_annotation(
@@ -638,6 +642,7 @@ def count_assets_for_annotation(
         only_missing=only_missing,
         asset_ids=asset_ids,
         collection_id=collection_id,
+        include_descendants=include_descendants,
     )
     return len(rows)
 

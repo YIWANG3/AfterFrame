@@ -37,6 +37,7 @@ from .db import (
     list_similar_person_groups,
     locate_image_asset,
     merge_person_groups,
+    move_collection,
     relink_asset,
     remove_collection_items,
     remove_faces_from_group,
@@ -230,6 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
     locate.add_argument("--asset-id", required=True)
     locate.add_argument("--status", default="all")
     locate.add_argument("--collection-id", default=None)
+    locate.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     locate.add_argument("--search", default=None)
     locate.add_argument("--sort", default=None)
     locate.add_argument("--filters", default=None)
@@ -241,6 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
     map_points = subparsers.add_parser("browse-map-points", parents=[common])
     map_points.add_argument("--status", choices=["all", "matched", "unmatched", "rated", "recent", "lookalikes"], default="all")
     map_points.add_argument("--collection-id", default=None)
+    map_points.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     map_points.add_argument("--search", default=None)
     map_points.add_argument("--filters", default=None, help="JSON object of facet filters (geo key is ignored)")
     map_points.add_argument("--base", default=None, help="JSON rules of the smart collection being viewed (the base set the filters refine)")
@@ -272,6 +275,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     facet_values_p = subparsers.add_parser("facet-values", parents=[common])
     facet_values_p.add_argument("--collection-id", default=None, help="Describe this folder instead of the library")
+    facet_values_p.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     # The view the counts are taken inside: a number beside an option is how
     # many photos picking it would show, given everything else that is active.
     facet_values_p.add_argument("--status", default="all")
@@ -286,6 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_facet_p.add_argument("--q", default="")
     search_facet_p.add_argument("--limit", type=int, default=50)
     search_facet_p.add_argument("--collection-id", default=None)
+    search_facet_p.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     search_facet_p.add_argument("--status", default="all")
     search_facet_p.add_argument("--search", default=None)
     search_facet_p.add_argument("--filters", default=None)
@@ -307,11 +312,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     reorder_col = subparsers.add_parser("reorder-collections", parents=[common])
     reorder_col.add_argument("--collection-id", action="append", required=True)
+    reorder_col.add_argument("--parent-id", default=None, help="The level being reordered: the folders directly under this one (default: the top level)")
 
     create_col = subparsers.add_parser("create-collection", parents=[common])
     create_col.add_argument("--name", required=True)
     create_col.add_argument("--kind", choices=["manual", "smart"], default="manual")
     create_col.add_argument("--rules-json", default="[]")
+    create_col.add_argument("--parent-id", default=None, help="Make the folder inside this folder (folders only)")
+
+    move_col = subparsers.add_parser("move-collection", parents=[common])
+    move_col.add_argument("--collection-id", required=True)
+    move_col.add_argument("--parent-id", default=None, help="The folder to move it into; omit for the top level")
 
     update_col = subparsers.add_parser("update-collection", parents=[common])
     update_col.add_argument("--collection-id", required=True)
@@ -345,6 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     browse_col = subparsers.add_parser("browse-collection", parents=[common])
     browse_col.add_argument("--collection-id", required=True)
+    browse_col.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     browse_col.add_argument("--limit", type=int, default=120)
     browse_col.add_argument("--offset", type=int, default=0)
     browse_col.add_argument("--search", default=None)
@@ -612,6 +624,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_annotation_job_parser.add_argument("--reannotate", action="store_true")
     run_annotation_job_parser.add_argument("--asset-ids", help="Comma-separated asset_ids to scope the batch (multi-select).")
     run_annotation_job_parser.add_argument("--collection-id", help="Scope the batch to a collection/folder.")
+    run_annotation_job_parser.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
     run_annotation_job_parser.add_argument("--languages", default="en,zh")
     run_annotation_job_parser.add_argument("--max-tags", type=int, default=10)
     run_annotation_job_parser.add_argument("--max-caption-chars", type=int, default=200)
@@ -627,6 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_count_p.add_argument("--reannotate", action="store_true")
     annotation_count_p.add_argument("--asset-ids")
     annotation_count_p.add_argument("--collection-id")
+    annotation_count_p.add_argument("--include-descendants", action="store_true", help="Read the folders under --collection-id too (each photo once)")
 
     get_annotation_p = subparsers.add_parser("get-annotation", parents=[common])
     get_annotation_p.add_argument("--asset-id", required=True)
@@ -1002,6 +1016,7 @@ def _cmd_run_annotation_job(args, connection, catalog, parser):
         only_missing=not args.reannotate,
         asset_ids=asset_ids,
         collection_id=args.collection_id or None,
+        include_descendants=bool(args.include_descendants),
         languages=langs,
         max_tags=args.max_tags,
         max_caption_chars=args.max_caption_chars,
@@ -1023,6 +1038,7 @@ def _cmd_annotation_count(args, connection, catalog, parser):
         only_missing=not args.reannotate,
         asset_ids=asset_ids,
         collection_id=args.collection_id or None,
+        include_descendants=bool(args.include_descendants),
     )
     print(json.dumps({"count": count}, ensure_ascii=False))
     return 0
@@ -1368,6 +1384,7 @@ def _cmd_facet_values(args, connection, catalog, parser):
     print(json.dumps(get_facet_values(
         connection, args.collection_id, status=args.status, search=args.search,
         filters=json.loads(args.filters) if args.filters else None, base=json.loads(args.base) if args.base else None,
+        include_descendants=bool(args.include_descendants),
     ), ensure_ascii=False))
     return 0
 
@@ -1383,6 +1400,7 @@ def _cmd_search_facet(args, connection, catalog, parser):
     print(json.dumps(search_facet_values(
         connection, args.field, args.q, args.limit, args.collection_id, status=args.status, search=args.search,
         filters=json.loads(args.filters) if args.filters else None, base=json.loads(args.base) if args.base else None,
+        include_descendants=bool(args.include_descendants),
     ), ensure_ascii=False))
     return 0
 
@@ -1415,7 +1433,8 @@ def _cmd_locate_image_asset(args, connection, catalog, parser):
                                   search=args.search, sort=args.sort,
                                   filters=json.loads(args.filters) if args.filters else None,
                                   collection_id=args.collection_id,
-                                  base=json.loads(args.base) if args.base else None)
+                                  base=json.loads(args.base) if args.base else None,
+                                  include_descendants=bool(args.include_descendants))
     print(json.dumps({"index": position}))
     return 0
 
@@ -1543,6 +1562,7 @@ def _cmd_browse_map_points(args, connection, catalog, parser):
         base=json.loads(args.base) if args.base else None,
         min_precision=args.min_precision,
         limit=args.limit,
+        include_descendants=bool(args.include_descendants),
     ):
         preview_path = None
         if row["preview_relative_path"]:
@@ -1762,6 +1782,12 @@ def _cmd_list_collections(args, connection, catalog, parser):
                 "rules": row.get("rules"),
                 "sort_order": row["sort_order"],
                 "item_count": row["item_count"],
+                # Nesting (db/collections.py): where the folder sits and what
+                # its whole subtree holds. Smart collections are top-level and
+                # their subtree is themselves.
+                "path": row.get("path"),
+                "depth": row.get("depth", 0),
+                "subtree_count": row.get("subtree_count", row["item_count"]),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
                 # The folder page's columns (db/collections.py collection_stats);
@@ -1782,14 +1808,19 @@ def _cmd_list_collections(args, connection, catalog, parser):
 
 
 def _cmd_reorder_collections(args, connection, catalog, parser):
-    reorder_collections(connection, args.collection_id)
+    reorder_collections(connection, args.collection_id, parent_id=args.parent_id or None)
     print(json.dumps({"ok": True}))
     return 0
 
 
 def _cmd_create_collection(args, connection, catalog, parser):
-    col = create_collection(connection, args.name, args.kind, args.rules_json)
+    col = create_collection(connection, args.name, args.kind, args.rules_json, parent_id=args.parent_id or None)
     print(json.dumps(col, indent=2))
+    return 0
+
+
+def _cmd_move_collection(args, connection, catalog, parser):
+    print(json.dumps(move_collection(connection, args.collection_id, args.parent_id or None), indent=2))
     return 0
 
 
@@ -1806,8 +1837,8 @@ def _cmd_update_collection(args, connection, catalog, parser):
 
 
 def _cmd_delete_collection(args, connection, catalog, parser):
-    delete_collection(connection, args.collection_id)
-    print(json.dumps({"ok": True, "collection_id": args.collection_id}))
+    deleted = delete_collection(connection, args.collection_id)
+    print(json.dumps({"ok": True, "collection_id": args.collection_id, "deleted": deleted}))
     return 0
 
 
@@ -1849,6 +1880,7 @@ def _cmd_browse_collection(args, connection, catalog, parser):
     rows = browse_collection(
         connection, args.collection_id, limit=args.limit, offset=args.offset,
         search=args.search, filters=json.loads(args.filters) if args.filters else None, sort=args.sort,
+        include_descendants=bool(args.include_descendants),
     )
     for row in rows:
         payload.append(_browse_row_payload(row, catalog))
@@ -1935,6 +1967,7 @@ COMMAND_HANDLERS = {
     "list-collections": _cmd_list_collections,
     "reorder-collections": _cmd_reorder_collections,
     "create-collection": _cmd_create_collection,
+    "move-collection": _cmd_move_collection,
     "update-collection": _cmd_update_collection,
     "delete-collection": _cmd_delete_collection,
     "collection-add-items": _cmd_collection_add_items,

@@ -1,5 +1,7 @@
 # 文件夹管理页设计方案
 
+> **更新（2026-11-09）**：用户改定，文件夹支持多级嵌套（`collections.parent_collection_id` 启用，schema 13）。侧栏成树（`folderTree.js`，拖到行中间=放入、拖到顶部区域=移到顶层），父文件夹默认显示含子文件夹的照片（工具栏开关可切，记住选择），删父级连同子树一起删；本页仍是扁平墙，卡片与列表多了「所在位置」，右键有「新建子文件夹」「移动到…」。下文 §2「不做嵌套」与 §7 的对应决定作废。
+>
 > **状态（2026-10-15）**：P1 已在 `feat/folders-page` 实现。页面是 `src/components/FoldersView.jsx`（纯逻辑在 `foldersPage.js`，单测同名），
 > sidecar 的统计在 `db/collections.py collection_stats`（`tests/test_collection_stats.py`），e2e 是 `e2e/78-folders-page.spec.js`。
 > 原型见 [prototypes/folders-page.html](prototypes/folders-page.html)。第 7 节的决定已于 2026-10-15 全部拍板：侧栏不截断、不做分组（保持扁平）、不做合并、封面取最近加入的那张。

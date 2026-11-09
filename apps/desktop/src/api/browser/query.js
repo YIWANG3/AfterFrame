@@ -3,7 +3,7 @@
 // db/facets.py), as predicates over asset records.
 
 import { filterExtensions } from "../../../shared/formats.mjs";
-import { assets, collections, fileExt, normalizeTag } from "./state";
+import { assets, fileExt, folderAssetIds, normalizeTag } from "./state";
 
 // The toolbar's sort orders. `assets` is in import order, oldest first.
 export function sortAssets(list, sort) {
@@ -141,7 +141,8 @@ function matchesFacetConditions(asset, filters) {
   if (String(filters.ocr_contains || "").trim() && !contains(asset.annotation?.detected_text, filters.ocr_contains)) return false;
   if (String(filters.path_contains || "").trim() && !contains(asset.image_path || asset.file_name, filters.path_contains)) return false;
   const folders = facetValues(filters.in_collection);
-  if (folders.length && !folders.some((id) => (collections.find((c) => c.collection_id === id)?.asset_ids || []).includes(asset.asset_id))) return false;
+  const withDescendants = filters.in_collection_descendants === true;
+  if (folders.length && !folders.some((id) => folderAssetIds(id, withDescendants).includes(asset.asset_id))) return false;
   if (filters.geo && !matchesGeo(meta, filters.geo)) return false;
   return true;
 }
@@ -168,11 +169,11 @@ function matchesGeo(meta, geo) {
 // folder or status, the search text and every OTHER active filter. A facet's
 // own keys (FACET_OWN_KEYS) are dropped so its dropdown can still be used to
 // switch value.
-export function facetUniverse(facet, { collectionId, status = "all", search, filters, base } = {}) {
+export function facetUniverse(facet, { collectionId, includeDescendants, status = "all", search, filters, base } = {}) {
   let list = assets;
   if (base && !collectionId) list = list.filter((a) => matchesRules(a, base));
   if (collectionId) {
-    const member = new Set(collections.find((c) => c.collection_id === collectionId)?.asset_ids || []);
+    const member = new Set(folderAssetIds(collectionId, includeDescendants));
     list = list.filter((a) => member.has(a.asset_id));
   } else if (!base && status === "rated") list = list.filter((a) => a.app_rating > 0);
   else if (!base && status === "matched") list = [];

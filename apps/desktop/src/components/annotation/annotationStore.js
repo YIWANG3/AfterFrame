@@ -123,6 +123,7 @@ export async function startAnnotationJob(opts = {}) {
     onlyMissing: opts.onlyMissing !== false,
     assetIds: Array.isArray(opts.assetIds) ? opts.assetIds : null,
     collectionId: opts.collectionId || null,
+    includeDescendants: opts.includeDescendants === true,
   });
 }
 
