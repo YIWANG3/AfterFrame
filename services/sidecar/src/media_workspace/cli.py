@@ -284,6 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
     search_facet_p = subparsers.add_parser("search-facet", parents=[common])
     search_facet_p.add_argument("--field", choices=["tag", "camera", "lens", "city"], required=True)
     search_facet_p.add_argument("--q", default="")
+    search_facet_p.add_argument("--group", default=None, help="Tags only: one group id, or 'ungrouped'")
     search_facet_p.add_argument("--limit", type=int, default=50)
     search_facet_p.add_argument("--collection-id", default=None)
     search_facet_p.add_argument("--status", default="all")
@@ -638,11 +639,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_tag_p = subparsers.add_parser("add-asset-tag", parents=[common])
     add_tag_p.add_argument("--asset-id", required=True)
     add_tag_p.add_argument("--tag", required=True)
+    add_tag_p.add_argument("--group", help="Where a NEW tag goes; an existing tag keeps its group")
 
     # Several photos, several tags, one write: the gallery's "Add Tags…".
     add_tags_p = subparsers.add_parser("add-asset-tags", parents=[common])
     add_tags_p.add_argument("--asset-id", action="append", required=True)
     add_tags_p.add_argument("--tag", action="append", required=True)
+    add_tags_p.add_argument("--group", help="Where a NEW tag goes; an existing tag keeps its group")
 
     get_tags_p = subparsers.add_parser("get-asset-tags", parents=[common])
     get_tags_p.add_argument("--asset-id", required=True)
@@ -651,8 +654,51 @@ def build_parser() -> argparse.ArgumentParser:
     remove_tag_p.add_argument("--asset-id", required=True)
     remove_tag_p.add_argument("--tag", required=True)
 
+    # The library's tags by group with use counts (db/tags.py): the Tags
+    # page and MCP list_tags. --limit caps each group's list.
     list_tags_p = subparsers.add_parser("list-tags", parents=[common])
-    list_tags_p.add_argument("--limit", type=int, default=200)
+    list_tags_p.add_argument("--limit", type=int)
+    list_tags_p.add_argument("--query")
+    list_tags_p.add_argument("--group", help="One group id, or 'ungrouped'")
+    list_tags_p.add_argument("--flat", action="store_true", help="Names only, most used first (the old shape)")
+
+    subparsers.add_parser("list-tag-groups", parents=[common])
+
+    manage_groups_p = subparsers.add_parser("manage-tag-groups", parents=[common])
+    manage_groups_p.add_argument("--action", choices=["create", "rename", "delete", "ai-fill"], required=True)
+    manage_groups_p.add_argument("--group")
+    manage_groups_p.add_argument("--name")
+    manage_groups_p.add_argument("--ai-fill", choices=["0", "1"])
+
+    # Library-level edits of a tag, every photo carrying it following.
+    set_group_p = subparsers.add_parser("set-tag-group", parents=[common])
+    set_group_p.add_argument("--tag", action="append", required=True)
+    set_group_p.add_argument("--group", help="Omit to make the tags ungrouped")
+
+    rename_tag_p = subparsers.add_parser("rename-tag", parents=[common])
+    rename_tag_p.add_argument("--tag", required=True)
+    rename_tag_p.add_argument("--to", required=True)
+
+    merge_tags_p = subparsers.add_parser("merge-tags", parents=[common])
+    merge_tags_p.add_argument("--tag", action="append", required=True, help="A tag to merge away (repeatable)")
+    merge_tags_p.add_argument("--into", required=True)
+
+    delete_tag_p = subparsers.add_parser("delete-tag", parents=[common])
+    delete_tag_p.add_argument("--tag", required=True)
+
+    pin_tag_p = subparsers.add_parser("pin-tag", parents=[common])
+    pin_tag_p.add_argument("--tag", required=True)
+    pin_tag_p.add_argument("--pinned", choices=["0", "1"], required=True)
+
+    subparsers.add_parser("regroup-tags", parents=[common], help="Give ungrouped vocabulary tags their group")
+
+    # The batch "Remove Tags…": its candidates, then the write.
+    selection_tags_p = subparsers.add_parser("list-selection-tags", parents=[common])
+    selection_tags_p.add_argument("--asset-id", action="append", required=True)
+
+    remove_tags_p = subparsers.add_parser("remove-asset-tags", parents=[common])
+    remove_tags_p.add_argument("--asset-id", action="append", required=True)
+    remove_tags_p.add_argument("--tag", action="append", required=True)
 
     test_conn_p = subparsers.add_parser("annotation-test-connection", parents=[common])
     test_conn_p.add_argument("--provider", choices=["anthropic", "openai", "openai_compatible"], required=True)
@@ -948,7 +994,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
     from . import video as _video
 
     langs = [s.strip() for s in (args.languages or "").split(",") if s.strip()]
-    existing = _annotation.list_top_tags(connection)
+    tag_groups = _annotation.reuse_hints(connection)
 
     src = _Path(args.image)
     tmp_dir = None
@@ -974,7 +1020,7 @@ def _cmd_annotate_asset(args, connection, catalog, parser):
             max_tags=args.max_tags,
             max_caption_chars=args.max_caption_chars,
             custom_instructions=args.custom_instructions,
-            existing_tags=existing,
+            tag_groups=tag_groups,
             is_video=is_video,
             location_hint=args.hint,
             location_context=_annotation.asset_gps_location(connection, args.asset_id),
@@ -1036,36 +1082,136 @@ def _cmd_get_annotation(args, connection, catalog, parser):
 
 
 def _cmd_add_asset_tag(args, connection, catalog, parser):
-    from . import annotation as _annotation
-    payload = _annotation.add_asset_tag(connection, args.asset_id, args.tag)
+    from .db import tags as _tags
+    payload = _tags.add_asset_tag(connection, args.asset_id, args.tag, group_id=args.group or None)
     print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 
 def _cmd_get_asset_tags(args, connection, catalog, parser):
-    from . import annotation as _annotation
-    print(json.dumps({"asset_id": args.asset_id, "tags": _annotation.get_asset_tags(connection, args.asset_id)}, ensure_ascii=False))
+    from .db import tags as _tags
+    print(json.dumps({"asset_id": args.asset_id, "tags": _tags.get_asset_tags(connection, args.asset_id)}, ensure_ascii=False))
     return 0
 
 
 def _cmd_add_asset_tags(args, connection, catalog, parser):
-    from . import annotation as _annotation
-    result = _annotation.add_asset_tags(connection, args.asset_id, args.tag)
+    from .db import tags as _tags
+    result = _tags.add_asset_tags(connection, args.asset_id, args.tag, group_id=args.group or None)
     print(json.dumps(result, ensure_ascii=False))
     return 0
 
 
 def _cmd_remove_asset_tag(args, connection, catalog, parser):
-    from . import annotation as _annotation
-    payload = _annotation.remove_asset_tag(connection, args.asset_id, args.tag)
+    from .db import tags as _tags
+    payload = _tags.remove_asset_tag(connection, args.asset_id, args.tag)
     print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 
+def _cmd_remove_asset_tags(args, connection, catalog, parser):
+    from .db import tags as _tags
+    print(json.dumps(_tags.remove_asset_tags(connection, args.asset_id, args.tag), ensure_ascii=False))
+    return 0
+
+
+def _cmd_list_selection_tags(args, connection, catalog, parser):
+    from .db import tags as _tags
+    print(json.dumps({"tags": _tags.list_selection_tags(connection, args.asset_id)}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_list_tag_groups(args, connection, catalog, parser):
+    from .db import tags as _tags
+    print(json.dumps({"groups": _tags.list_tag_groups(connection)}, ensure_ascii=False))
+    return 0
+
+
+def _cmd_manage_tag_groups(args, connection, catalog, parser):
+    from .db import tags as _tags
+    try:
+        if args.action == "create":
+            payload = _tags.create_group(connection, args.name or "", ai_fill=args.ai_fill != "0")
+        elif args.action == "rename":
+            payload = _tags.update_group(connection, args.group or "", name=args.name)
+        elif args.action == "ai-fill":
+            payload = _tags.update_group(connection, args.group or "", ai_fill=args.ai_fill == "1")
+        else:
+            payload = _tags.delete_group(connection, args.group or "")
+    except ValueError as error:
+        parser.error(str(error))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_set_tag_group(args, connection, catalog, parser):
+    from .db import tags as _tags
+    try:
+        payload = _tags.set_tag_group(connection, args.tag, args.group or None)
+    except ValueError as error:
+        parser.error(str(error))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_rename_tag(args, connection, catalog, parser):
+    from .db import tags as _tags
+    try:
+        payload = _tags.rename_tag(connection, args.tag, args.to)
+    except ValueError as error:
+        parser.error(str(error))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_merge_tags(args, connection, catalog, parser):
+    from .db import tags as _tags
+    try:
+        payload = _tags.merge_tags(connection, args.tag, args.into)
+    except ValueError as error:
+        parser.error(str(error))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_delete_tag(args, connection, catalog, parser):
+    from .db import tags as _tags
+    try:
+        payload = _tags.delete_tag(connection, args.tag)
+    except ValueError as error:
+        parser.error(str(error))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_pin_tag(args, connection, catalog, parser):
+    from .db import tags as _tags
+    try:
+        payload = _tags.pin_tag(connection, args.tag, args.pinned == "1")
+    except ValueError as error:
+        parser.error(str(error))
+        return 2
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def _cmd_regroup_tags(args, connection, catalog, parser):
+    from .db import tags as _tags
+    print(json.dumps(_tags.regroup_by_vocabulary(connection), ensure_ascii=False))
+    return 0
+
+
 def _cmd_list_tags(args, connection, catalog, parser):
-    from . import annotation as _annotation
-    tags = _annotation.list_top_tags(connection, limit=args.limit)
-    print(json.dumps(tags, ensure_ascii=False))
+    from .db import tags as _tags
+    if args.flat:
+        print(json.dumps(_tags.list_top_tags(connection, limit=args.limit or 200), ensure_ascii=False))
+        return 0
+    payload = _tags.list_tags_grouped(connection, limit=args.limit, query=args.query, group=args.group)
+    print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 
@@ -1383,6 +1529,7 @@ def _cmd_search_facet(args, connection, catalog, parser):
     print(json.dumps(search_facet_values(
         connection, args.field, args.q, args.limit, args.collection_id, status=args.status, search=args.search,
         filters=json.loads(args.filters) if args.filters else None, base=json.loads(args.base) if args.base else None,
+        group=args.group or None,
     ), ensure_ascii=False))
     return 0
 
@@ -1870,7 +2017,17 @@ COMMAND_HANDLERS = {
     "add-asset-tags": _cmd_add_asset_tags,
     "get-asset-tags": _cmd_get_asset_tags,
     "remove-asset-tag": _cmd_remove_asset_tag,
+    "remove-asset-tags": _cmd_remove_asset_tags,
+    "list-selection-tags": _cmd_list_selection_tags,
     "list-tags": _cmd_list_tags,
+    "list-tag-groups": _cmd_list_tag_groups,
+    "manage-tag-groups": _cmd_manage_tag_groups,
+    "set-tag-group": _cmd_set_tag_group,
+    "rename-tag": _cmd_rename_tag,
+    "merge-tags": _cmd_merge_tags,
+    "delete-tag": _cmd_delete_tag,
+    "pin-tag": _cmd_pin_tag,
+    "regroup-tags": _cmd_regroup_tags,
     "scan-raw": _cmd_scan_raw,
     "enrich-raw": _cmd_enrich_raw,
     "create-job": _cmd_create_job,

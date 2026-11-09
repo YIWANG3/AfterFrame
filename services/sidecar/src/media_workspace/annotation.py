@@ -27,7 +27,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +35,17 @@ from typing import Any
 from . import video
 from .ai_repaint import fetch_openai_model_ids
 from .annotation_location import asset_gps_location, effective_location
+from .db.tags import (  # noqa: F401 — the tag writes live in db/tags.py; re-exported for callers and tests
+    TagResolver,
+    add_asset_tag,
+    add_asset_tags,
+    ensure_tag,
+    get_asset_tags,
+    list_top_tags,
+    normalize_tag,
+    remove_asset_tag,
+    reuse_hints,
+)
 
 try:
     from PIL import Image, ImageOps  # noqa: F401 — needed for image preprocessing
@@ -81,11 +92,14 @@ TAG_REUSE_HINT_LIMIT = int(_PROMPT["tag_reuse_hint_limit"])
 class AnnotationResult:
     caption: str
     tags: list[str]
-    location: dict[str, Any] | None  # v2: {"country", "admin1", "locality", "landmark", "confidence"}
-    detected_text: str | None
-    raw_response: str
-    provider: str
-    model: str
+    # The group the model put each tag under (a tag_groups id), when it
+    # answered in groups; a tag it filed under "other" is absent here.
+    tag_groups: dict[str, str] = field(default_factory=dict)
+    location: dict[str, Any] | None = None  # v2: {"country", "admin1", "locality", "landmark", "confidence"}
+    detected_text: str | None = None
+    raw_response: str = ""
+    provider: str = ""
+    model: str = ""
 
 
 # ── Image preprocessing ──────────────────────────────────────────────────────
@@ -142,26 +156,45 @@ def build_system_prompt(
     languages: list[str],
     max_tags: int,
     max_caption_chars: int,
-    existing_tags: list[str],
+    existing_tags: list[str] | None = None,
     custom_instructions: str | None,
+    tag_groups: list[dict[str, Any]] | None = None,
 ) -> str:
     """The annotation system prompt: data/annotation_prompt.json filled in.
 
-    Mirrored line for line by buildAnnotationSystemPrompt in the web build's
-    llm.js — keep the two in step when the interpolation changes.
+    With `tag_groups` (db.tags.reuse_hints: [{id, name, examples}]) the model
+    answers tags by group and the groups are listed with the library's own
+    tags in each; without, it answers a flat list and `existing_tags` is the
+    flat reuse hint. Mirrored line for line by buildAnnotationSystemPrompt in
+    the web build's llm.js — keep the two in step when the interpolation
+    changes.
     """
     want_en = "en" in languages
     want_zh = "zh" in languages
     lang_clause = _PROMPT["lang_clause"]["en+zh" if want_en and want_zh else "en" if want_en else "zh"]
+    shape = str(_PROMPT["tags_grouped" if tag_groups is not None else "tags_flat"]).replace("{max_tags}", str(max_tags))
 
     prompt = (
         str(_PROMPT["template"])
         .replace("{max_caption_chars}", str(max_caption_chars))
-        .replace("{max_tags}", str(max_tags))
+        .replace("{tags_shape}", shape)
         .replace("{lang_clause}", lang_clause)
     )
 
-    if existing_tags:
+    if tag_groups is not None:
+        lines = []
+        for group in tag_groups:
+            if str(group.get("id")) == "other":
+                continue
+            examples = filter_tags_by_language([str(t) for t in group.get("examples") or []], languages)
+            line = str(_PROMPT["group_line" if examples else "group_line_bare"])
+            lines.append(
+                line.replace("{id}", str(group["id"])).replace("{name}", str(group.get("name") or group["id"]))
+                .replace("{examples}", ", ".join(examples))
+            )
+        if lines:
+            prompt += _PROMPT["groups_intro"] + "\n".join(lines)
+    elif existing_tags:
         sample = filter_tags_by_language(existing_tags, languages)[:TAG_REUSE_HINT_LIMIT]
         if sample:
             prompt += _PROMPT["tag_pool_intro"] + ", ".join(sample)
@@ -281,36 +314,48 @@ def parse_llm_json(text: str) -> dict[str, Any]:
         return json.loads(match.group(0))
 
 
-# ── Tag fuzzy-merge ──────────────────────────────────────────────────────────
-
-def normalize_tag(tag: str) -> str:
-    """Lowercase, strip, collapse whitespace. Used as the equality key."""
-    return re.sub(r"\s+", " ", tag.lower().strip())
-
+# ── Tag spellings ────────────────────────────────────────────────────────────
 
 def merge_with_existing_tags(connection: sqlite3.Connection, raw_tags: list[str]) -> list[str]:
-    """Map LLM tags to existing-library tags where possible.
-
-    Strategy: case-insensitive exact match first. If no hit, return as-is.
-    Levenshtein/stem-based fuzzy is intentionally NOT implemented in v1 — exact
-    match plus the "prefer these" prompt hint covers the common cases without
-    surprise rewrites.
-    """
-    rows = connection.execute("SELECT tag FROM asset_tags GROUP BY tag").fetchall()
-    by_norm = {normalize_tag(r["tag"]): r["tag"] for r in rows}
+    """The library's spelling for each tag (db.tags.TagResolver: alias, the
+    library's own case, the vocabulary's other language), duplicates folded.
+    Writes nothing."""
+    resolver = TagResolver(connection)
     out: list[str] = []
-    seen: set[str] = set()
     for raw in raw_tags:
-        norm = normalize_tag(raw)
-        if not norm:
-            continue
-        canonical = by_norm.get(norm, raw.strip())
-        # One per tag whatever the case: "Trip" and "trip" are the same tag.
-        if norm in seen:
-            continue
-        seen.add(norm)
-        out.append(canonical)
+        resolved = resolver.resolve(raw)
+        if resolved is not None and resolved.tag not in out:
+            out.append(resolved.tag)
     return out
+
+
+def parse_tags(raw: Any, max_tags: int) -> tuple[list[str], dict[str, str]]:
+    """The model's tags as (tags in order, tag → group id). Grouped output
+    is an object keyed by group id; a flat array (an older prompt, a model
+    that ignored the shape) has no groups. "other" is no group. Capped at
+    max_tags over everything."""
+    tags: list[str] = []
+    groups_of: dict[str, str] = {}
+
+    def take(value: Any, group: str | None) -> None:
+        text = str(value).strip() if value is not None else ""
+        if not text or text in tags or len(tags) >= max_tags:
+            return
+        tags.append(text)
+        if group and group != "other":
+            groups_of[text] = group
+
+    if isinstance(raw, dict):
+        for group, values in raw.items():
+            if isinstance(values, list):
+                for value in values:
+                    take(value, str(group))
+            elif isinstance(values, str):
+                take(values, str(group))
+    elif isinstance(raw, list):
+        for value in raw:
+            take(value, None)
+    return tags, groups_of
 
 
 # ── Top-level annotate entry point ───────────────────────────────────────────
@@ -327,6 +372,7 @@ def annotate(
     max_caption_chars: int = DEFAULT_MAX_CAPTION_CHARS,
     custom_instructions: str | None = None,
     existing_tags: list[str] | None = None,
+    tag_groups: list[dict[str, Any]] | None = None,
     is_video: bool = False,
     location_hint: str | None = None,
     location_context: dict[str, Any] | None = None,
@@ -347,6 +393,7 @@ def annotate(
         max_tags=max_tags,
         max_caption_chars=max_caption_chars,
         existing_tags=existing_tags,
+        tag_groups=tag_groups,
         custom_instructions=custom_instructions,
     )
     prompt_text = (
@@ -387,10 +434,7 @@ def annotate(
     parsed = parse_llm_json(text)
 
     caption = str(parsed.get("caption") or "").strip()[:max_caption_chars]
-    raw_tags = parsed.get("tags") or []
-    if not isinstance(raw_tags, list):
-        raw_tags = []
-    tags = [str(t).strip() for t in raw_tags if str(t).strip()][:max_tags]
+    tags, groups_of = parse_tags(parsed.get("tags"), max_tags)
 
     location = parsed.get("location")
     if not isinstance(location, dict):
@@ -409,6 +453,7 @@ def annotate(
     return AnnotationResult(
         caption=caption,
         tags=tags,
+        tag_groups=groups_of,
         location=location,
         detected_text=detected_text,
         raw_response=text,
@@ -422,7 +467,21 @@ def annotate(
 def save_annotation(connection: sqlite3.Connection, asset_id: str, result: AnnotationResult) -> dict[str, Any]:
     """Write annotation + tags. Replaces any existing annotation for the asset."""
     now = datetime.now(UTC).isoformat()
-    merged_tags = merge_with_existing_tags(connection, result.tags)
+    # Each tag in the library's spelling, with a `tags` row. The model's
+    # group only places a tag that has none yet, and only into a group the
+    # model may fill (ai_fill); a vocabulary tag takes the vocabulary's group.
+    fillable = {row[0] for row in connection.execute("SELECT group_id FROM tag_groups WHERE ai_fill = 1")}
+    resolver = TagResolver(connection)
+    merged_tags: list[str] = []
+    for raw in result.tags:
+        resolved = resolver.resolve(raw)
+        if resolved is None or resolved.tag in merged_tags:
+            continue
+        suggested = result.tag_groups.get(raw)
+        if resolved.is_new and resolved.group_id not in fillable:
+            resolved.group_id = None  # a vocabulary concept of a group the model may not fill lands ungrouped
+        ensure_tag(connection, resolved, group_id=suggested if suggested in fillable else None, resolver=resolver)
+        merged_tags.append(resolved.tag)
     location = asset_gps_location(connection, asset_id) or result.location
 
     connection.execute(
@@ -549,8 +608,8 @@ def annotate_batch(
     failed = 0
     processed = 0
     errors: list[dict[str, str]] = []
-    # Fetch the tag-reuse hint once and share it across all workers.
-    existing_tags = list_top_tags(connection)
+    # The tag groups and their reuse hints, fetched once and shared by all workers.
+    tag_groups = reuse_hints(connection)
     # Resolve before worker threads start: SQLite stays on the caller thread.
     gps_contexts = {str(row["asset_id"]): asset_gps_location(connection, str(row["asset_id"])) for row in assets}
 
@@ -594,7 +653,7 @@ def annotate_batch(
                 max_tags=max_tags,
                 max_caption_chars=max_caption_chars,
                 custom_instructions=custom_instructions,
-                existing_tags=existing_tags,
+                tag_groups=tag_groups,
                 is_video=is_video,
                 location_context=gps_contexts[str(row["asset_id"])],
             )
@@ -679,104 +738,6 @@ def clear_ai_location(connection: sqlite3.Connection, asset_id: str) -> dict[str
     )
     connection.commit()
     return get_annotation(connection, asset_id)
-
-
-# ── A photo's tags ───────────────────────────────────────────────────────────
-#
-# One list per photo, in asset_tags: what the user typed and what an
-# annotation run proposed, each row saying which (source 'user' / 'ai').
-# Search, the tag filter, the Inspector and MCP all read it. A run replaces
-# its own earlier proposals and never touches the user's; a tag the user adds
-# that the AI had proposed becomes theirs. asset_ai_annotations.tags_json is
-# only the record of what the last run proposed.
-
-def get_asset_tags(connection: sqlite3.Connection, asset_id: str) -> list[str]:
-    """The photo's tags, in the order they were put on it."""
-    rows = connection.execute(
-        "SELECT tag FROM asset_tags WHERE asset_id = ? ORDER BY created_at, rowid", (asset_id,)
-    ).fetchall()
-    return [row["tag"] for row in rows]
-
-
-def _put_user_tag(connection: sqlite3.Connection, asset_id: str, tag: str, now: str) -> None:
-    """`tag` (already in the library's spelling) onto the photo as the user's.
-    One the photo has in another case is that one, made the user's."""
-    norm = normalize_tag(tag)
-    rows = connection.execute("SELECT tag FROM asset_tags WHERE asset_id = ?", (asset_id,)).fetchall()
-    same = next((row["tag"] for row in rows if normalize_tag(row["tag"]) == norm), None)
-    if same is not None:
-        connection.execute("UPDATE asset_tags SET source = 'user' WHERE asset_id = ? AND tag = ?", (asset_id, same))
-    else:
-        connection.execute(
-            "INSERT INTO asset_tags (asset_id, tag, source, created_at) VALUES (?, ?, 'user', ?)",
-            (asset_id, tag, now),
-        )
-
-
-def add_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any]:
-    """A tag onto a photo by hand. It makes no annotation row: a hand-tagged
-    photo is still one AI hasn't described, so "annotate missing" still
-    takes it and the "AI annotated" filter doesn't count it."""
-    tag = (tag or "").strip()
-    if tag:
-        spelled = merge_with_existing_tags(connection, [tag])
-        if spelled:
-            _put_user_tag(connection, asset_id, spelled[0], datetime.now(UTC).isoformat())
-    if commit:
-        connection.commit()
-    return {"asset_id": asset_id, "tags": get_asset_tags(connection, asset_id)}
-
-
-def add_asset_tags(connection: sqlite3.Connection, asset_ids: list[str], tags: list[str]) -> dict[str, Any]:
-    """Add every tag to every asset in one transaction (the gallery's batch
-    "Add Tags…"). Ids the catalog doesn't hold are skipped, not created."""
-    # The library's spelling for each, looked up once, duplicates folded.
-    clean = merge_with_existing_tags(connection, [(tag or "").strip() for tag in tags or []])
-    wanted = list(dict.fromkeys(a for a in asset_ids or [] if a))
-    known = {
-        row["asset_id"]
-        for start in range(0, len(wanted), 500)
-        for row in connection.execute(
-            f"SELECT asset_id FROM assets WHERE asset_id IN ({','.join('?' * len(wanted[start:start + 500]))})",
-            wanted[start:start + 500],
-        )
-    } if wanted else set()
-    updated = [a for a in wanted if a in known]
-    if clean:
-        now = datetime.now(UTC).isoformat()
-        for asset_id in updated:
-            for tag in clean:
-                _put_user_tag(connection, asset_id, tag, now)
-        connection.commit()
-    return {
-        "ok": True,
-        "asset_ids": updated,
-        "tags": clean,
-        "missing": [a for a in wanted if a not in known],
-    }
-
-
-def remove_asset_tag(connection: sqlite3.Connection, asset_id: str, tag: str, *, commit: bool = True) -> dict[str, Any]:
-    """Take a tag off a photo, whoever put it there."""
-    tag = (tag or "").strip()
-    if tag:
-        norm = normalize_tag(tag)
-        rows = connection.execute("SELECT tag FROM asset_tags WHERE asset_id = ?", (asset_id,)).fetchall()
-        for row in rows:
-            if normalize_tag(row["tag"]) == norm:
-                connection.execute("DELETE FROM asset_tags WHERE asset_id = ? AND tag = ?", (asset_id, row["tag"]))
-    if commit:
-        connection.commit()
-    return {"asset_id": asset_id, "tags": get_asset_tags(connection, asset_id)}
-
-
-def list_top_tags(connection: sqlite3.Connection, limit: int = TAG_REUSE_HINT_LIMIT) -> list[str]:
-    """Most-used tags first, for prompt reuse hints."""
-    rows = connection.execute(
-        "SELECT tag, COUNT(*) AS uses FROM asset_tags GROUP BY tag ORDER BY uses DESC, tag ASC LIMIT ?",
-        (limit,),
-    ).fetchall()
-    return [r["tag"] for r in rows]
 
 
 # ── Provider health checks + model listing ───────────────────────────────────

@@ -251,6 +251,52 @@ class CaptureTimeMigrationTest(unittest.TestCase):
         self.assertEqual(connection.execute("SELECT capture_time FROM raw_metadata_cache").fetchone()[0], "2024-07-13T18:06:00")
 
 
+class TagGroupsMigrationTest(unittest.TestCase):
+    def test_v12_tags_get_groups_aliases_and_one_spelling_per_concept(self) -> None:
+        # A library with both spellings of a vocabulary concept, one lone
+        # spelling of another, and a tag the vocabulary does not know.
+        connection = sqlite3.connect(":memory:")
+        self.addCleanup(connection.close)
+        connection.row_factory = sqlite3.Row
+        init_db(connection)
+        connection.executescript("DROP TABLE tag_aliases; DROP TABLE tags; DROP TABLE tag_groups_deleted; DROP TABLE tag_groups;")
+        for asset_id in ("p1", "p2", "p3"):
+            connection.execute(
+                "INSERT INTO assets (asset_id, asset_type, canonical_path, stem, normalized_stem, stem_key, extension,"
+                " fingerprint, file_size, modified_time) VALUES (?, 'image', ?, ?, ?, ?, '.jpg', 'f', 1, 'm')",
+                (asset_id, f"/p/{asset_id}", asset_id, asset_id, asset_id),
+            )
+        rows = [("p1", "sunset", "ai"), ("p2", "sunset", "ai"), ("p2", "日落", "user"), ("p3", "日落", "ai"),
+                ("p1", "海滩", "ai"), ("p3", "Grandma", "user")]
+        for asset_id, tag, source in rows:
+            connection.execute("INSERT INTO asset_tags (asset_id, tag, source) VALUES (?, ?, ?)", (asset_id, tag, source))
+        connection.execute(
+            "INSERT INTO collections (collection_id, name, kind, rules_json) VALUES ('smart1', 'Dusk', 'smart', ?)",
+            (json.dumps({"version": 1, "status": "all", "search": "", "filters": {"tag": ["日落", "海滩"]}}),),
+        )
+        connection.execute("UPDATE catalog_info SET schema_version = 12")
+        connection.commit()
+
+        init_db(connection)
+
+        self.assertEqual(connection.execute("SELECT schema_version FROM catalog_info").fetchone()[0], SCHEMA_VERSION)
+        groups = {row["tag"]: row["group_id"] for row in connection.execute("SELECT tag, group_id FROM tags")}
+        # 日落 (2 photos) merged into sunset (2 photos, the English spelling breaks the tie) and stays an alias.
+        self.assertEqual(groups, {"sunset": "time", "海滩": "place", "Grandma": None})
+        tags = {asset: set() for asset in ("p1", "p2", "p3")}
+        sources = {}
+        for row in connection.execute("SELECT asset_id, tag, source FROM asset_tags"):
+            tags[row["asset_id"]].add(row["tag"])
+            sources[(row["asset_id"], row["tag"])] = row["source"]
+        self.assertEqual(tags, {"p1": {"sunset", "海滩"}, "p2": {"sunset"}, "p3": {"sunset", "Grandma"}})
+        self.assertEqual(sources[("p2", "sunset")], "user")  # the user's claim on 日落 carries over
+        aliases = {row["alias"]: row["tag"] for row in connection.execute("SELECT alias, tag FROM tag_aliases")}
+        self.assertEqual(aliases, {"日落": "sunset", "beach": "海滩"})
+        rules = json.loads(connection.execute("SELECT rules_json FROM collections WHERE collection_id = 'smart1'").fetchone()[0])
+        self.assertEqual(rules["filters"]["tag"], ["sunset", "海滩"])
+        self.assertEqual(connection.execute("SELECT COUNT(*) FROM tag_groups WHERE kind = 'builtin'").fetchone()[0], 13)
+
+
 class SchemaMigrationTest(unittest.TestCase):
     def test_all_supported_pre_rename_versions_follow_the_ordered_chain(self) -> None:
         for version in range(2, 6):

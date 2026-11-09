@@ -13,7 +13,10 @@ Semantics, the usual ones for faceted search:
     drone). A facet's value may be a scalar or a list; a scalar is a list of
     one, so filters saved before multi-select read unchanged;
   - tags are the one facet where "all of these" is as natural as "any of
-    these" (night AND neon), so `tag_match: "all"` switches it;
+    these" (night AND neon), so `tag_match: "all"` switches it, and
+    `tag_match: "by_group"` makes tags of one group alternatives while the
+    groups stack ((sunny OR cloudy) AND street); `tag_group` asks for any
+    tag of a group at all;
   - `exclude` lists facets whose sense is flipped: "not this camera", "none of
     these tags", "not in this folder". The facet keeps its values;
   - `any_of` is a list of groups, each an ordinary filter dict: a photo must
@@ -240,11 +243,45 @@ def _tag(filters: dict) -> list[Clause]:
     if not values:
         return []
     exists = "EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = assets.asset_id AND {cond})"
-    if filters.get("tag_match") == "all":
+    match = filters.get("tag_match")
+    if match == "all":
         # Every tag must be present: one EXISTS per tag, AND-combined.
         return [(exists.format(cond="t.tag = ?"), [value]) for value in values]
+    if match == "by_group":
+        # Tags of one group are alternatives (sunny OR cloudy); groups stack
+        # (AND street). An ungrouped tag is a condition of its own. The
+        # grouping is read from `tags` at query time: one EXISTS per bucket.
+        return _tag_buckets(values)
     cond, params = _in("t.tag", values)
     return [(exists.format(cond=cond), params)]
+
+
+def _tag_buckets(values: Sequence[object]) -> list[Clause]:
+    """`by_group`: for every picked tag, the photo must carry SOME picked tag
+    of the same bucket (its tags.group_id, or itself when ungrouped). Tags of
+    one bucket produce identical clauses, which AND together harmlessly, so
+    the buckets need not be known here: no connection, like every facet."""
+    picked = ", ".join("?" for _ in values)
+    clause = (
+        "EXISTS (SELECT 1 FROM asset_tags t LEFT JOIN tags tg ON tg.tag = t.tag "
+        f"WHERE t.asset_id = assets.asset_id AND t.tag IN ({picked}) "
+        "AND COALESCE(tg.group_id, 'tag:' || t.tag) = "
+        "COALESCE((SELECT pg.group_id FROM tags pg WHERE pg.tag = ?), 'tag:' || ?))"
+    )
+    return [(clause, [*values, value, value]) for value in values]
+
+
+def _tag_group(filters: dict) -> list[Clause]:
+    """Photos with at least one tag in the group(s); `exclude` makes it none."""
+    values = [str(v) for v in _values(filters.get("tag_group"))]
+    if not values:
+        return []
+    cond, params = _in("tags.group_id", values)
+    return [(
+        "EXISTS (SELECT 1 FROM asset_tags t JOIN tags ON tags.tag = t.tag "
+        f"WHERE t.asset_id = assets.asset_id AND {cond})",
+        params,
+    )]
 
 
 def _people(filters: dict) -> list[Clause]:
@@ -397,6 +434,7 @@ FACETS: tuple[Facet, ...] = (
     Facet("orientation", ("orientation",), _orientation),
     Facet("asset_type", ("asset_type",), _asset_type),
     Facet("tag", ("tag", "tag_match"), _tag, modifiers=("tag_match",)),
+    Facet("tag_group", ("tag_group",), _tag_group),
     Facet("extension", ("extension",), _extension),
     Facet("people", ("people",), _people),
     Facet("annotated", ("annotated",), _annotated),

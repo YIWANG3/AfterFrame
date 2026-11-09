@@ -120,3 +120,33 @@ from .resource_sets import (
     split_shared_asset_ids,
 )
 from .settings import get_app_setting
+from .tags import (
+    add_asset_tag,
+    add_asset_tags,
+    delete_tag,
+    get_asset_tags,
+    list_selection_tags,
+    list_tag_groups,
+    list_tags_grouped,
+    list_top_tags,
+    merge_tags,
+    pin_tag,
+    regroup_by_vocabulary,
+    remove_asset_tag,
+    remove_asset_tags,
+    rename_tag,
+    set_tag_group,
+    tag_groups_for,
+)
+from .tags import (
+    create_group as create_tag_group,
+)
+from .tags import (
+    delete_group as delete_tag_group,
+)
+from .tags import (
+    reuse_hints as tag_reuse_hints,
+)
+from .tags import (
+    update_group as update_tag_group,
+)

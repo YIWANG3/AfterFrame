@@ -10,8 +10,13 @@ import sqlite3
 # The facet filters (what the filter bar sends) live in facets.py: one registry
 # that the WHERE builder, the rules validation and the option counts all read.
 from .. import formats
-from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses
+from .facets import _LOCATION_OWNER, LOCATION_SOURCES, _facet_clauses, _values
 from .facets import FACET_OWN_KEYS as _FACET_OWN_KEYS
+from .tags import list_tag_groups
+
+# How many of a group's tags the filter bar lists before "N more" (the rest
+# through search_facet_values with group=).
+TAGS_PER_GROUP = 12
 
 # What a row says about the photo itself — EXIF, rating, flag, shape, tags,
 # descriptions. The browse rows and the detail rows read it the same way.
@@ -186,10 +191,16 @@ def _search_clause(search: str | None) -> tuple[str, list[object]]:
         "OR assets.meta_camera_model LIKE ? OR assets.meta_lens_model LIKE ? "
         "OR assets.user_description LIKE ? "
         "OR anno.caption LIKE ? OR anno.detected_text LIKE ? "
-        "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?))"
+        "OR EXISTS (SELECT 1 FROM asset_tags st WHERE st.asset_id = assets.asset_id AND st.tag LIKE ?) "
+        # A tag's other spellings (the vocabulary's other language, a merged-away
+        # name): searching 日落 finds the photos tagged sunset.
+        "OR EXISTS (SELECT 1 FROM asset_tags st JOIN tag_aliases al ON al.tag = st.tag "
+        "WHERE st.asset_id = assets.asset_id AND al.alias LIKE ?))"
     )
     like_pattern = f"%{search}%"
-    return clause, [like_pattern] * 8
+    params: list[object] = [like_pattern] * 8
+    params.append(f"%{search.lower()}%")
+    return clause, params
 
 
 def _view_where(
@@ -383,24 +394,60 @@ def get_facet_values(
         ).fetchone()
         return {"min": r["lo"], "max": r["hi"]}
 
-    # Only the most-used tags for the default dropdown; the rest are reachable
-    # via server-side search (search_facet_values) so this stays bounded even
-    # with thousands of tags.
+    # Tags by group: each group's most-used (pinned first), the rest reachable
+    # through search_facet_values; a picked tag is always listed, so the row
+    # to untick is there even when it has run out. Groups also say how many
+    # photos in view carry any tag of theirs (the "any in group" option).
     tag_where, tag_params = scope_for("tag")
     tag_rows = connection.execute(
         f"""
-        SELECT t.tag AS v, COUNT(*) AS c
+        SELECT t.tag AS v, COUNT(*) AS c, tg.group_id AS group_id, COALESCE(tg.pinned, 0) AS pinned
         FROM asset_tags AS t
         JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
         JOIN assets ON assets.asset_id = registry.image_asset_id
         LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id
+        LEFT JOIN tags AS tg ON tg.tag = t.tag
         WHERE {tag_where}
         GROUP BY t.tag
-        ORDER BY c DESC, t.tag
-        LIMIT 60
+        ORDER BY pinned DESC, c DESC, t.tag
         """,
         tag_params,
     ).fetchall()
+    picked_tags = {str(v) for v in _values((filters or {}).get("tag"))}
+    tags_by_group: dict[str | None, list[dict[str, object]]] = {}
+    group_tag_totals: dict[str | None, int] = {}
+    for row in tag_rows:
+        bucket = tags_by_group.setdefault(row["group_id"], [])
+        group_tag_totals[row["group_id"]] = group_tag_totals.get(row["group_id"], 0) + 1
+        if len(bucket) < TAGS_PER_GROUP or row["v"] in picked_tags or row["pinned"]:
+            bucket.append({"value": row["v"], "count": row["c"], "group_id": row["group_id"], "pinned": bool(row["pinned"])})
+    group_where, group_params = scope_for("tag_group")
+    group_asset_counts = {
+        row["group_id"]: row["c"]
+        for row in connection.execute(
+            f"""
+            SELECT tg.group_id AS group_id, COUNT(DISTINCT t.asset_id) AS c
+            FROM asset_tags AS t
+            JOIN tags AS tg ON tg.tag = t.tag
+            JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
+            JOIN assets ON assets.asset_id = registry.image_asset_id
+            LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id
+            WHERE {group_where} AND tg.group_id IS NOT NULL
+            GROUP BY tg.group_id
+            """,
+            group_params,
+        ).fetchall()
+    }
+    tag_group_options = [
+        {
+            **group,
+            "asset_count": group_asset_counts.get(group["group_id"], 0),
+            "shown_count": group_tag_totals.get(group["group_id"], 0),
+        }
+        for group in list_tag_groups(connection)
+    ]
+    tag_options = [entry for group in tag_group_options for entry in tags_by_group.get(group["group_id"], [])]
+    tag_options += tags_by_group.get(None, [])
 
     # What each photo's location is based on, including "none" — counted over
     # the effective location (the paired RAW's first), like the filter itself.
@@ -439,7 +486,11 @@ def get_facet_values(
         "cities": _city_options(connection, *scope_for("city"), like="%", limit=60),
         "cameras": value_counts("camera", "assets.meta_camera_model"),
         "lenses": value_counts("lens", "assets.meta_lens_model"),
-        "tags": [{"value": r["v"], "count": r["c"]} for r in tag_rows],
+        "tags": tag_options,
+        # The groups in display order, each with the photos in view that carry
+        # any of its tags and how many distinct tags of it are in view.
+        "tag_groups": tag_group_options,
+        "ungrouped_tag_count": group_tag_totals.get(None, 0),
         # By format family (jpeg, heif, png, mp4, cr3, …): .jpg and .jpeg are
         # one JPEG, .heic and .hif one HEIF. `label` is what to show.
         "extensions": [
@@ -492,10 +543,13 @@ def search_facet_values(
     search: str | None = None,
     filters: dict | None = None,
     base: dict | None = None,
+    group: str | None = None,
 ) -> list[dict[str, object]]:
     """Server-side facet search, so a dropdown never loads more than `limit`
     rows regardless of how many distinct values exist. Matches substring,
-    ordered by frequency, counted inside the same view as get_facet_values."""
+    ordered by frequency, counted inside the same view as get_facet_values.
+    For tags, `group` narrows to one group id ("ungrouped" for none) and a
+    tag's other spellings match too."""
     if field not in ("tag", "camera", "lens", "city"):
         return []
     like = f"%{q}%" if q else "%"
@@ -503,20 +557,30 @@ def search_facet_values(
     if field == "city":
         return _city_options(connection, where, params, like=like, limit=limit)
     if field == "tag":
+        group_clause = ""
+        group_params: list[object] = []
+        if group == "ungrouped":
+            group_clause = "AND tg.group_id IS NULL"
+        elif group:
+            group_clause = "AND tg.group_id = ?"
+            group_params.append(group)
         rows = connection.execute(
             f"""
-            SELECT t.tag AS v, COUNT(*) AS c
+            SELECT t.tag AS v, COUNT(*) AS c, tg.group_id AS group_id, COALESCE(tg.pinned, 0) AS pinned
             FROM asset_tags AS t
             JOIN image_lookup_registry AS registry ON registry.image_asset_id = t.asset_id
             JOIN assets ON assets.asset_id = registry.image_asset_id
             LEFT JOIN asset_ai_annotations AS anno ON anno.asset_id = assets.asset_id
-            WHERE {where} AND t.tag LIKE ?
+            LEFT JOIN tags AS tg ON tg.tag = t.tag
+            WHERE {where} {group_clause}
+              AND (t.tag LIKE ? OR EXISTS (SELECT 1 FROM tag_aliases al WHERE al.tag = t.tag AND al.alias LIKE ?))
             GROUP BY t.tag
-            ORDER BY c DESC, t.tag
+            ORDER BY pinned DESC, c DESC, t.tag
             LIMIT ?
             """,
-            [*params, like, limit],
+            [*params, *group_params, like, like.lower(), limit],
         ).fetchall()
+        return [{"value": r["v"], "count": r["c"], "group_id": r["group_id"], "pinned": bool(r["pinned"])} for r in rows]
     else:
         col = "meta_camera_model" if field == "camera" else "meta_lens_model"
         rows = connection.execute(

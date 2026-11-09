@@ -14,9 +14,9 @@ class AnnotationPromptTest(unittest.TestCase):
         )
         self.assertTrue(prompt.startswith("You are an image annotator"))
         self.assertIn("Max 200 characters.", prompt)
-        self.assertIn("up to 10 short tags. " + _PROMPT["lang_clause"]["en+zh"] + " Lowercase.", prompt)
+        self.assertIn('"tags": an array of up to 10 short tags. ' + _PROMPT["lang_clause"]["en+zh"] + " Lowercase.", prompt)
         self.assertTrue(prompt.endswith("Respond with ONLY the JSON object, no commentary."))
-        for placeholder in ("{max_caption_chars}", "{max_tags}", "{lang_clause}"):
+        for placeholder in ("{max_caption_chars}", "{max_tags}", "{lang_clause}", "{tags_shape}"):
             self.assertNotIn(placeholder, prompt)
         # The location schema's braces are literal, not placeholders.
         self.assertIn('{"country": str|null', prompt)
@@ -50,3 +50,23 @@ class AnnotationPromptTest(unittest.TestCase):
         self.assertEqual(filter_tags_by_language(["a", "海"], ["en", "zh"]), ["a", "海"])
         self.assertEqual(filter_tags_by_language(["a", "海"], ["en"]), ["a"])
         self.assertEqual(filter_tags_by_language(["a", "海"], ["zh"]), ["海"])
+
+    def test_grouped_shape_lists_the_groups_and_their_examples(self):
+        groups = [
+            {"id": "weather", "name": "Weather", "examples": ["sunny", "雨"]},
+            {"id": "mood", "name": "Mood", "examples": []},
+            {"id": "other", "name": "Other", "examples": ["mystery"]},
+        ]
+        prompt = build_system_prompt(
+            languages=["en"], max_tags=6, max_caption_chars=120, custom_instructions="Short.", tag_groups=groups,
+        )
+        self.assertIn(_PROMPT["tags_grouped"].replace("{max_tags}", "6"), prompt)
+        self.assertIn(_PROMPT["groups_intro"] + "- weather (Weather): sunny\n- mood (Mood)", prompt)
+        # "other" is the catch-all key, not a group to list; the flat pool is not used.
+        self.assertNotIn("mystery", prompt)
+        self.assertNotIn(_PROMPT["tag_pool_intro"], prompt)
+        self.assertTrue(prompt.endswith(_PROMPT["custom_instructions_intro"] + "Short."))
+
+
+if __name__ == "__main__":
+    unittest.main()

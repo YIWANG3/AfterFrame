@@ -90,11 +90,13 @@ class TagMergeTest(unittest.TestCase):
         self.assertEqual(self.sources(), {"family": "user", "sunset": "user", "sea": "ai"})
 
     def test_an_ai_tag_spelled_like_the_users_is_the_users(self):
-        ann.add_asset_tag(self.connection, "image_b", "Beach")
+        ann.add_asset_tag(self.connection, "image_b", "Keepers")
         ann.add_asset_tag(self.connection, "image_a", "family")
-        saved = ann.save_annotation(self.connection, "image_a", result("beach"))
-        # Library spelling: the run's "beach" is the library's "Beach".
-        self.assertEqual(saved["tags"], ["family", "Beach"])
+        saved = ann.save_annotation(self.connection, "image_a", result("keepers"))
+        # Library spelling: the run's "keepers" is the library's "Keepers".
+        self.assertEqual(saved["tags"], ["family", "Keepers"])
+        # A vocabulary concept is spelled the vocabulary's way whoever writes it.
+        self.assertEqual(ann.add_asset_tag(self.connection, "image_b", "Beach")["tags"], ["Keepers", "beach"])
 
     def test_removing_takes_off_either_kind(self):
         ann.add_asset_tag(self.connection, "image_a", "family")

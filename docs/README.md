@@ -23,6 +23,7 @@
 
 | 文档 | 状态 |
 |---|---|
+| [tags-redesign.md](tags-redesign.md) | 标签分组 / 同义归并 / 管理页设计稿（2026-11-09），待确认后实现（schema 13） |
 | [geo-map-design.md](geo-map-design.md) | Phase 1（GPS）+ Phase 2（AI 地名离线解析）已实现；Phase 3 未开始 |
 | [mcp-parity-plan.md](mcp-parity-plan.md) | Phase 1–2 已实现（17→34 tools）；Phase 3–4 未开始 |
 | [web-app-plan.md](web-app-plan.md) | Phase 0 + Phase 1 骨架已实现 |
